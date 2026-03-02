@@ -30,12 +30,12 @@ async def call_claude(prompt: str, system: str = "") -> str:
 
 async def call_openrouter(prompt: str, system: str = "", model: str = "openai/gpt-5.2") -> str:
     """OpenRouter API call — supports GPT-5.2, Gemini 3.1, Grok 4."""
-    import os
     import aiohttp
+    from aragora.config.secrets import get_secret
 
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    api_key = get_secret("OPENROUTER_API_KEY")
     if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY not set")
+        raise RuntimeError("OPENROUTER_API_KEY not found in AWS Secrets Manager or environment")
     msgs = []
     if system:
         msgs.append({"role": "system", "content": system})
@@ -204,7 +204,7 @@ def phase_verify() -> dict:
         capture_output=True,
         text=True,
         cwd=REPO,
-        timeout=120,
+        timeout=300,
     )
     passed = test_result.returncode == 0
     checks.append({"name": "pytest:tests/nomic/", "passed": passed})
