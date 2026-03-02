@@ -127,44 +127,35 @@ Recent changes:
         context=context,
     )
 
-    # Heterogeneous agents: 3 competing visionaries from different AI providers
-    gemini_visionary = GeminiCLIAgent(
-        name="gemini-visionary",
-        model="gemini-3.1-pro-preview",
-        role="proposer",
-        timeout=360,  # Doubled from 180
-    )
-    gemini_visionary.system_prompt = """You are a visionary strategist representing Google's perspective.
-Propose ONE bold, specific improvement for aragora.
-Focus on: scalability, integration, enterprise readiness, novel ML applications.
-Argue passionately for your proposal. Challenge other proposals directly."""
+    # API-based agents: reliable HTTP calls, no CLI dependencies.
+    # Uses Claude Opus 4.6 and OpenAI GPT-5.2 via API (with OpenRouter fallback).
+    # When OPENROUTER_API_KEY is configured, Gemini 3.1 Pro and Grok 4 also participate.
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+    from aragora.agents.api_agents.openai import OpenAIAPIAgent
 
-    codex_visionary = CodexAgent(
-        name="codex-visionary",
-        model="o3",  # GPT model via codex CLI
-        role="proposer",
-        timeout=360,  # Doubled from 180
-    )
-    codex_visionary.system_prompt = """You are a visionary strategist representing OpenAI's perspective.
-Propose ONE bold, specific improvement for aragora.
-Focus on: developer experience, code quality, practical utility, elegance.
-Argue passionately for your proposal. Challenge other proposals directly."""
+    agents = [
+        AnthropicAPIAgent(
+            name="claude-architect",
+            model="claude-opus-4-6",
+            role="proposer",
+            timeout=120,
+        ),
+        OpenAIAPIAgent(
+            name="gpt-architect",
+            model="gpt-5.2",
+            role="proposer",
+            timeout=120,
+        ),
+        AnthropicAPIAgent(
+            name="synthesizer",
+            model="claude-opus-4-6",
+            role="synthesizer",
+            timeout=120,
+        ),
+    ]
 
-    claude_visionary = ClaudeAgent(
-        name="claude-visionary",
-        model="claude-sonnet-4-20250514",
-        role="proposer",
-        timeout=360,  # Doubled from 180
-    )
-    claude_visionary.system_prompt = """You are a visionary strategist representing Anthropic's perspective.
-Propose ONE bold, specific improvement for aragora.
-Focus on: safety, interpretability, thoughtful design, philosophical depth.
-Argue passionately for your proposal. Challenge other proposals directly."""
-
-    agents = [gemini_visionary, codex_visionary, claude_visionary]
-
-    print("Agents: Gemini vs GPT/Codex vs Claude - ALL COMPETING VISIONARIES")
-    print("TRUE heterogeneous debate - 3 different AI providers each proposing their vision.\n")
+    print("Agents: Claude Opus 4.6 vs GPT-5.2 vs Claude Opus 4.6 (synthesizer)")
+    print("API-based heterogeneous debate.\n")
 
     # Staged runner uses a short debate for speed and repeatability.
     protocol = DebateProtocol(rounds=2, consensus="judge")
@@ -221,18 +212,20 @@ Be specific enough that an engineer could implement it.""",
         context=f"aragora path: {ARAGORA_PATH}",
     )
 
+    from aragora.agents.api_agents.anthropic import AnthropicAPIAgent
+
     agents = [
-        ClaudeAgent(
+        AnthropicAPIAgent(
             name="architect",
-            model="claude-sonnet-4-20250514",
+            model="claude-opus-4-6",
             role="proposer",
-            timeout=600,  # 10 min for complex design work (doubled from 300)
+            timeout=120,
         ),
-        ClaudeAgent(
+        AnthropicAPIAgent(
             name="reviewer",
-            model="claude-sonnet-4-20250514",
+            model="claude-opus-4-6",
             role="synthesizer",
-            timeout=600,  # Doubled from 300
+            timeout=120,
         ),
     ]
 
@@ -675,8 +668,9 @@ def _collect_metrics_after(baseline_data: dict | None) -> dict | None:
 
         config = MetricsCollectorConfig(working_dir=str(ARAGORA_PATH))
         collector = MetricsCollector(config=config)
-        after = asyncio.get_event_loop().run_until_complete(collector.collect_baseline())
-        # Delta comparison not available without persistent collector instance
+        after = asyncio.get_event_loop().run_until_complete(
+            collector.collect_baseline(goal="self-improvement", file_scope=None)
+        )
         improvement = 0.0
         print(
             f"  ✓ After metrics: {after.tests_passed} tests passing, "

@@ -210,6 +210,7 @@ class ArenaInitializer:
         stability_agreement_threshold: float = 0.75,
         stability_conflict_confidence: float = 0.7,
         enable_cartographer: bool = True,
+        enable_chaos_theater: bool = True,
     ) -> CoreComponents:
         """Initialize core Arena components.
 
@@ -250,7 +251,8 @@ class ArenaInitializer:
         immune_system = get_immune_system()
 
         # Chaos director for theatrical failure messages
-        chaos_director = get_chaos_director(DramaLevel.MODERATE)
+        # Can be disabled for programmatic/Nomic Loop usage where real errors matter
+        chaos_director = get_chaos_director(DramaLevel.MODERATE) if enable_chaos_theater else None
 
         # Performance monitor for agent telemetry
         if performance_monitor:

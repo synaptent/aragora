@@ -310,8 +310,9 @@ class CodeAnalysisHarness(ABC):
         """End an interactive session and clean up resources."""
         pass
 
-    def _validate_path(self, path: Path) -> None:
+    def _validate_path(self, path: Path | str) -> None:
         """Validate a path before analysis."""
+        path = Path(path) if isinstance(path, str) else path
         if not path.exists():
             raise HarnessConfigError(f"Path does not exist: {path}", self.name)
 

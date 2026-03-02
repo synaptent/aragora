@@ -468,7 +468,7 @@ I'll ask you questions about the codebase. Provide helpful, accurate answers."""
 
         # Read CLAUDE.md from repo root
         if self.config.inject_claude_md:
-            claude_md_path = repo_path / "CLAUDE.md"
+            claude_md_path = Path(repo_path) / "CLAUDE.md"
             try:
                 content = claude_md_path.read_text(encoding="utf-8")
                 # Extract key sections, truncate to 2000 chars

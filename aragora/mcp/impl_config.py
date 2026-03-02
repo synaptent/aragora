@@ -27,6 +27,7 @@ def generate_impl_mcp_config(repo_path: Path) -> Path:
     Returns:
         Path to the generated config JSON file
     """
+    repo_path = Path(repo_path) if isinstance(repo_path, str) else repo_path
     config_dir = repo_path / _IMPL_CONFIG_SUBDIR
     config_dir.mkdir(parents=True, exist_ok=True)
 
