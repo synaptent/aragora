@@ -114,7 +114,7 @@ For full runtime configuration, see [ENVIRONMENT](../getting-started/environment
 | `verify` | - | Verify a decision receipt's integrity | - |
 | `verticals` | - | Manage vertical specialist configurations | - |
 | `workflow` | - | Workflow engine commands | `categories`, `list`, `patterns`, `run`, `status`, `templates` |
-| `worktree` | - | Manage git worktrees for parallel agent sessions | `autopilot`, `cleanup`, `conflicts`, `create`, `list`, `merge`, `merge-all` |
+| `worktree` | - | Manage git worktrees for parallel agent sessions | `autopilot`, `cleanup`, `conflicts`, `create`, `fleet-claim`, `fleet-claims`, `fleet-queue-add`, `fleet-queue-list`, `fleet-release`, `fleet-status`, `list`, `merge`, `merge-all` |
 
 ## Core Workflows
 

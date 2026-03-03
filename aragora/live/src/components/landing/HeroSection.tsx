@@ -26,12 +26,6 @@ const PROGRESS_MESSAGES = [
   'Generating verdict...',
 ];
 
-const EXAMPLE_TOPICS = [
-  'Should we build or buy our analytics platform?',
-  'Is remote work better for a 50-person company?',
-  'Should we adopt microservices or keep our monolith?',
-];
-
 /**
  * HeroSection supports two modes:
  * - Landing mode (no props): self-contained debate form with tri-theme styling

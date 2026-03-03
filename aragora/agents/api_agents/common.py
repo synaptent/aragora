@@ -288,20 +288,23 @@ async def close_shared_connector() -> None:
 
     Also awaits any pending connector close tasks to ensure clean shutdown.
     """
-    # First, await any pending close tasks from previous connector swaps
-    if _pool_state.pending_close_tasks:
-        pending: list[asyncio.Task[Any]] = list(_pool_state.pending_close_tasks)
-        if pending:
-            logger.debug("Awaiting %s pending connector close tasks", len(pending))
-            await asyncio.gather(*pending, return_exceptions=True)
-            _pool_state.pending_close_tasks.clear()
-
+    # Snapshot mutable global state while locked, then perform awaits outside the lock.
+    # Holding a threading.Lock across await can block other threads/tasks and cause
+    # shutdown deadlocks under contention.
     with _pool_state.lock:
-        if _pool_state.connector is not None and not _pool_state.connector.closed:
-            await _pool_state.connector.close()
-            _pool_state.connector = None
-            _pool_state.loop_id = None
-            logger.debug("Closed shared TCP connector")
+        pending: list[asyncio.Task[Any]] = list(_pool_state.pending_close_tasks)
+        _pool_state.pending_close_tasks.clear()
+        connector_to_close: aiohttp.TCPConnector | None = _pool_state.connector
+        _pool_state.connector = None
+        _pool_state.loop_id = None
+
+    if pending:
+        logger.debug("Awaiting %s pending connector close tasks", len(pending))
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    if connector_to_close is not None and not connector_to_close.closed:
+        await connector_to_close.close()
+        logger.debug("Closed shared TCP connector")
 
 
 # Maximum buffer size for streaming responses (prevents DoS via memory exhaustion)
