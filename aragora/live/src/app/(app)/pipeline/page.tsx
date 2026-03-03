@@ -96,8 +96,8 @@ function PipelinePageContent() {
 
   const [showIdeaInput, setShowIdeaInput] = useState(false);
   const [showDebateInput, setShowDebateInput] = useState(false);
-  const [showBrainDump, setShowBrainDump] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  const [showAdvancedStart, setShowAdvancedStart] = useState(false);
   const [ideaText, setIdeaText] = useState('');
   const [brainDumpText, setBrainDumpText] = useState('');
   const [debateJson, setDebateJson] = useState('');
@@ -236,7 +236,6 @@ function PipelinePageContent() {
   const handleBrainDump = useCallback(async () => {
     if (brainDumpText.trim()) {
       await createFromBrainDump(brainDumpText);
-      setShowBrainDump(false);
       setBrainDumpText('');
       setKey((k) => k + 1);
     }
@@ -466,37 +465,41 @@ function PipelinePageContent() {
             </div>
           )}
 
-          <div className="flex items-center bg-surface border border-border rounded overflow-hidden">
-            {(['stages', 'unified', 'fractal', 'provenance', 'scenario', 'dag'] as const).map((mode) => (
+          {pipelineData && (
+            <>
+              <div className="flex items-center bg-surface border border-border rounded overflow-hidden">
+                {(['stages', 'unified', 'fractal', 'provenance', 'scenario', 'dag'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`px-3 py-2 text-sm font-mono transition-colors ${
+                      viewMode === mode
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </button>
+                ))}
+              </div>
+
               <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={`px-3 py-2 text-sm font-mono transition-colors ${
-                  viewMode === mode
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-text-muted hover:text-text'
-                }`}
+                onClick={() => { setShowIdeaInput(!showIdeaInput); setShowDebateInput(false); }}
+                disabled={loading}
+                className="px-4 py-2 bg-indigo-600 text-white font-mono text-sm hover:bg-indigo-500 transition-colors rounded"
               >
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                From Ideas
               </button>
-            ))}
-          </div>
 
-          <button
-            onClick={() => { setShowIdeaInput(!showIdeaInput); setShowDebateInput(false); }}
-            disabled={loading}
-            className="px-4 py-2 bg-indigo-600 text-white font-mono text-sm hover:bg-indigo-500 transition-colors rounded"
-          >
-            From Ideas
-          </button>
-
-          <button
-            onClick={() => { setShowDebateInput(!showDebateInput); setShowIdeaInput(false); }}
-            disabled={loading}
-            className="px-4 py-2 bg-violet-600 text-white font-mono text-sm hover:bg-violet-500 transition-colors rounded"
-          >
-            From Debate
-          </button>
+              <button
+                onClick={() => { setShowDebateInput(!showDebateInput); setShowIdeaInput(false); }}
+                disabled={loading}
+                className="px-4 py-2 bg-violet-600 text-white font-mono text-sm hover:bg-violet-500 transition-colors rounded"
+              >
+                From Debate
+              </button>
+            </>
+          )}
 
           <button
             onClick={handleDemo}
@@ -809,96 +812,103 @@ function PipelinePageContent() {
         ) : (
           <div className="flex items-center justify-center h-full">
             <div className="w-full max-w-2xl px-6">
-              {showBrainDump ? (
-                <div className="space-y-4">
-                  <h2 className="text-2xl font-mono font-bold text-text">
-                    What&apos;s on your mind?
+              <div className="space-y-5">
+                <div className="text-center">
+                  <h2 className="text-2xl font-mono font-bold text-text mb-2">
+                    Prompt to Execution
                   </h2>
-                  <p className="text-text-muted text-sm font-mono">
-                    Paste your thoughts, meeting notes, or brainstorm &mdash; we&apos;ll organize
-                    them into ideas, goals, actions, and an execution plan.
+                  <p className="text-text-muted font-mono text-sm">
+                    Start with one prompt. Aragora maps ideas, goals, actions, and orchestration.
                   </p>
+                </div>
+
+                <div className="bg-surface border border-border rounded-xl p-4 md:p-5 space-y-4">
+                  <label className="block text-xs font-mono uppercase tracking-wide text-text-muted">
+                    1. Describe what you want to achieve
+                  </label>
                   <textarea
                     className="w-full min-h-[200px] bg-bg border border-border rounded-lg p-4 text-sm text-text font-mono resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder={"I've been thinking about... We need to... The problem is... What if we..."}
+                    placeholder={"Build me an execution plan for...\n\nContext:\n- Current constraints\n- Success criteria\n- Risks to avoid"}
                     value={brainDumpText}
                     onChange={(e) => setBrainDumpText(e.target.value)}
                   />
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <span className="text-sm text-text-muted font-mono">
                       ~{estimatedIdeaCount} idea{estimatedIdeaCount !== 1 ? 's' : ''} detected
                     </span>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => { setShowBrainDump(false); setShowIdeaInput(true); }}
-                        className="text-sm font-mono text-text-muted hover:text-text underline"
-                      >
-                        I have structured ideas
-                      </button>
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={handleBrainDump}
                         disabled={!brainDumpText.trim() || loading}
-                        className="px-6 py-2 bg-indigo-600 text-white font-mono text-sm rounded-lg hover:bg-indigo-500 disabled:opacity-50 transition-colors"
+                        className="px-5 py-2.5 bg-indigo-600 text-white font-mono text-sm rounded-lg hover:bg-indigo-500 disabled:opacity-50 transition-colors"
                       >
-                        {loading ? 'Organizing...' : 'Organize My Thoughts'}
+                        {loading ? 'Organizing...' : 'Generate Pipeline'}
+                      </button>
+                      <button
+                        onClick={() => setShowWizard(true)}
+                        className="px-5 py-2.5 bg-amber-600 text-white font-mono text-sm rounded-lg hover:bg-amber-500 transition-colors"
+                      >
+                        Use Template
+                      </button>
+                      <button
+                        onClick={handleDemo}
+                        className="px-5 py-2.5 bg-emerald-600 text-white font-mono text-sm rounded-lg hover:bg-emerald-500 transition-colors"
+                      >
+                        Try Demo
                       </button>
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="text-center">
-                  <h2 className="text-2xl font-mono font-bold text-text mb-2">
-                    Idea-to-Execution Pipeline
-                  </h2>
-                  <p className="text-text-muted mb-8 font-mono text-sm">
-                    Turn scattered thoughts into organized execution plans
-                  </p>
-                  <div className="flex flex-wrap gap-3 justify-center">
-                    <button
-                      onClick={() => setShowBrainDump(true)}
-                      className="px-6 py-3 bg-indigo-600 text-white font-mono text-sm rounded hover:bg-indigo-500 transition-colors"
-                    >
-                      Brain Dump
-                    </button>
-                    <button
-                      onClick={() => setShowIdeaInput(true)}
-                      className="px-6 py-3 bg-surface border border-border text-text font-mono text-sm rounded hover:border-text transition-colors"
-                    >
-                      Structured Ideas
-                    </button>
-                    <button
-                      onClick={() => setShowDebateInput(true)}
-                      className="px-6 py-3 bg-violet-600 text-white font-mono text-sm rounded hover:bg-violet-500 transition-colors"
-                    >
-                      From Debate
-                    </button>
-                    <button
-                      onClick={() => setShowWizard(true)}
-                      className="px-6 py-3 bg-amber-600 text-white font-mono text-sm rounded hover:bg-amber-500 transition-colors"
-                    >
-                      Use Template
-                    </button>
-                    <button
-                      onClick={handleDemo}
-                      className="px-6 py-3 bg-emerald-600 text-white font-mono text-sm rounded hover:bg-emerald-500 transition-colors"
-                    >
-                      Try Demo
-                    </button>
-                  </div>
 
-                  {showWizard && (
-                    <div className="mt-8 max-w-2xl mx-auto">
-                      <UseCaseWizard
-                        onComplete={(id) => {
-                          setShowWizard(false);
-                          router.push(`/debates/${id}`);
-                        }}
-                        onCancel={() => setShowWizard(false)}
-                      />
+                <div className="bg-surface/40 border border-border rounded-lg p-4">
+                  <button
+                    onClick={() => setShowAdvancedStart((v) => !v)}
+                    className="w-full flex items-center justify-between text-left"
+                  >
+                    <span className="text-sm font-mono text-text">
+                      Advanced Input Options
+                    </span>
+                    <span className="text-xs font-mono text-text-muted">
+                      {showAdvancedStart ? 'Hide' : 'Show'}
+                    </span>
+                  </button>
+
+                  {showAdvancedStart && (
+                    <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
+                      <button
+                        onClick={() => { setShowIdeaInput(true); setShowDebateInput(false); }}
+                        className="px-3 py-2 bg-surface border border-border text-text font-mono text-xs rounded hover:border-text transition-colors"
+                      >
+                        Structured Ideas
+                      </button>
+                      <button
+                        onClick={() => { setShowDebateInput(true); setShowIdeaInput(false); }}
+                        className="px-3 py-2 bg-violet-600/90 text-white font-mono text-xs rounded hover:bg-violet-500 transition-colors"
+                      >
+                        Import Debate JSON
+                      </button>
+                      <button
+                        onClick={() => setShowWizard(true)}
+                        className="px-3 py-2 bg-amber-600/90 text-white font-mono text-xs rounded hover:bg-amber-500 transition-colors"
+                      >
+                        Wizard Templates
+                      </button>
                     </div>
                   )}
                 </div>
-              )}
+
+                {showWizard && (
+                  <div className="max-w-2xl mx-auto">
+                    <UseCaseWizard
+                      onComplete={(id) => {
+                        setShowWizard(false);
+                        router.push(`/debates/${id}`);
+                      }}
+                      onCancel={() => setShowWizard(false)}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
