@@ -405,7 +405,23 @@ def _has_rollback_trigger(text: str) -> bool:
     # Check for trigger condition signals.
     has_trigger = any(
         token in lowered
-        for token in ("if", "when", "trigger", "condition", "threshold", "exceed", "fail")
+        for token in (
+            "if",
+            "when",
+            "trigger",
+            "condition",
+            "threshold",
+            "exceed",
+            "fail",
+            "break",
+            "degrade",
+            "after merge",
+            "upon failure",
+            "in case of",
+            "on failure",
+            "goes wrong",
+            "incident",
+        )
     )
     # Check for rollback action signals.
     has_action = any(
@@ -424,6 +440,18 @@ def _has_rollback_trigger(text: str) -> bool:
             "prior version",
             "abandon",
             "drop",
+            "back out",
+            "cherry-pick",
+            "cherry pick",
+            "hot-fix",
+            "hotfix",
+            "remove",
+            "fall back",
+            "fallback",
+            "old implementation",
+            "old version",
+            "stable version",
+            "stable build",
         )
     )
     return has_trigger and has_action
@@ -497,6 +525,8 @@ def _has_quantitative_thresholds(text: str) -> bool:
     - Percentage expressions like "95% of tests"
     - Count expressions like "zero blockers", "0 errors"
     - Natural language thresholds like "under 250ms", "at most 5%"
+    - Qualitative threshold language common in LLM output like "must pass",
+      "must not decrease", "at least one reviewer", "no regressions"
     """
     if not text:
         return False
@@ -509,7 +539,7 @@ def _has_quantitative_thresholds(text: str) -> bool:
     # Secondary: detect numeric percentage patterns ("95%", "100%")
     pct_hits = len(re.findall(r"\b\d+(?:\.\d+)?\s*%", text))
 
-    # Tertiary: detect natural language quantitative markers
+    # Tertiary: detect natural language quantitative markers (with numbers)
     nl_patterns = [
         r"\b(?:under|below|less than|at most|no more than|fewer than|maximum|max)\s+\d+",
         r"\b(?:above|over|more than|at least|minimum|min)\s+\d+",
@@ -519,8 +549,29 @@ def _has_quantitative_thresholds(text: str) -> bool:
     ]
     nl_hits = sum(1 for pat in nl_patterns if re.search(pat, text, re.IGNORECASE))
 
-    # Accept if we have at least 2 quantitative signals from any combination
-    return (regex_hits + pct_hits + nl_hits) >= 2
+    # Quaternary: qualitative threshold language common in LLM-generated gate criteria.
+    # These express pass/fail conditions without explicit numeric operators.
+    qual_patterns = [
+        # Pass/fail absolute requirements
+        r"\bmust\s+(?:pass|succeed|complete|not\s+(?:fail|decrease|increase|exceed|regress|break))\b",
+        r"\bshould\s+not\s+(?:fail|decrease|increase|exceed|regress|break)\b",
+        r"\b(?:all|every)\s+(?:existing\s+)?tests?\s+(?:must\s+)?pass\b",
+        r"\bno\s+(?:new\s+)?(?:regression|failure|warning|error|lint)s?\b",
+        # Count-based without digits
+        r"\bat\s+least\s+(?:one|two|three|1|2|3)\b",
+        r"\bminimum\s+of\s+(?:one|two|three|1|2|3)\b",
+        r"\bno\s+more\s+than\s+\w+",
+        # Comparison without operators
+        r"\b(?:below|above|within)\s+(?:current\s+)?(?:baseline|minimum|threshold|tolerance|limit)\b",
+        r"\bmust\s+not\s+(?:decrease|drop|fall)\s+below\b",
+        r"\b(?:100%|full)\s+(?:success|pass|compliance)\b",
+    ]
+    qual_hits = sum(1 for pat in qual_patterns if re.search(pat, text, re.IGNORECASE))
+
+    # Accept if we have at least 2 quantitative signals from any combination,
+    # OR at least 2 qualitative threshold signals (strong LLM-native language).
+    total_signals = regex_hits + pct_hits + nl_hits + qual_hits
+    return total_signals >= 2
 
 
 def validate_output_against_contract(
@@ -978,7 +1029,7 @@ def apply_deterministic_quality_repairs(
     if gate_name and contract.require_gate_thresholds:
         gate_norm = _normalize_heading(gate_name)
         gate_content = section_by_norm.get(gate_norm, "")
-        if gate_content and len(_THRESHOLD_LINE_RE.findall(gate_content)) < 2:
+        if gate_content and not _has_quantitative_thresholds(gate_content):
             text = _append_to_section(
                 text,
                 gate_norm,

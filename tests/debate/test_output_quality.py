@@ -700,3 +700,38 @@ def test_expanded_placeholder_detection():
     # "needed" alone should not trigger "as_needed"
     hits_needed = _collect_placeholder_hits("This is needed for production deployment.")
     assert "as_needed" not in hits_needed
+
+
+def test_qualitative_thresholds_detected():
+    """LLM-native threshold language should be recognized."""
+    from aragora.debate.output_quality import _has_quantitative_thresholds
+
+    text = """Gate Criteria:
+- All existing tests must pass
+- No new lint warnings introduced
+- Code review approval from at least one reviewer
+- Coverage must not decrease below current baseline"""
+    # "must pass", "must not decrease", "at least one" are threshold language
+    assert _has_quantitative_thresholds(text) is True
+
+
+def test_qualitative_rollback_detected():
+    """LLM-native rollback language should be recognized."""
+    from aragora.debate.output_quality import _has_rollback_trigger
+
+    # This example uses "cherry-pick" and "back out" which are common LLM rollback language
+    # but "cherry-pick", "back out", and "fall back" were not in the original action list
+    text = """Rollback Plan:
+- Cherry-pick the fix commit and back out the feature branch
+- If tests fail after merge, fall back to the previous implementation
+- Keep the old implementation until the new one is validated"""
+    assert _has_rollback_trigger(text) is True
+
+    # Additional: "degrade" trigger + "cherry-pick" action
+    text2 = """Rollback Plan:
+- If performance degrades, cherry-pick the hotfix onto the release branch"""
+    assert _has_rollback_trigger(text2) is True
+
+    # "in case of" trigger + "fall back" action
+    text3 = """In case of test failures, fall back to the previous stable version."""
+    assert _has_rollback_trigger(text3) is True

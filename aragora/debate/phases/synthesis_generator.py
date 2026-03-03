@@ -521,13 +521,13 @@ class SynthesisGenerator:
         """
         return """### Output Contract (Deterministic Quality Gates)
 Required sections:
-1. Ranked High-Level Tasks
-2. Suggested Subtasks
-3. Owner module / file paths
-4. Test Plan
-5. Rollback Plan
-6. Gate Criteria
-7. JSON Payload"""
+1. Ranked High-Level Tasks — prioritized with action verbs
+2. Suggested Subtasks — independently testable items
+3. Owner module / file paths — reference existing repo paths
+4. Test Plan — specific test commands and assertions
+5. Rollback Plan — MUST include trigger condition (e.g. "if tests fail") AND action (e.g. "revert commit")
+6. Gate Criteria — MUST include at least 2 numeric thresholds (e.g. "coverage >= 80%", "zero lint errors", "p95 < 250ms")
+7. JSON Payload — machine-readable summary"""
 
     @staticmethod
     def _get_repo_path_hint() -> str:
