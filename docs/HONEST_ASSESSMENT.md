@@ -166,9 +166,9 @@ These are areas where claims need honest qualification. The code exists, but the
 |---|---|
 | Autonomous self-improvement | 80K+ LOC infrastructure exists; individual components are well-tested |
 | 21+ self-improvement phases | More accurately describes manual development iterations, not autonomous agent-driven cycles |
-| Proven autonomous cycles | The system has never autonomously completed a full improvement cycle in production |
+| Proven autonomous cycles | First proof run completed 2026-03-02: debate phase produced real multi-agent consensus (Claude Opus 4.6 + GPT-5.2, 80% agreement); design phase hit a 120s agent timeout; implement/verify/commit phases skipped due to upstream failure. The pipeline correctly detected and halted on failure. |
 
-**Honest framing:** Aragora has the most sophisticated self-improvement infrastructure of any open agent framework. The pieces individually work and are tested. The end-to-end autonomous cycle is not yet proven. This is a wiring problem, not an architecture problem.
+**Honest framing:** Aragora has the most sophisticated self-improvement infrastructure of any open agent framework. The pieces individually work and are tested. The first autonomous proof run (2026-03-02) demonstrated that the debate phase produces high-quality multi-agent output, the pipeline stages chain correctly, and failure detection works as designed. The end-to-end cycle has not yet completed all 5 phases autonomously -- the design phase timeout and ChaosTheater noise leaking into design output are the immediate blockers. This is now a reliability tuning problem (agent timeouts, output filtering), not a wiring or architecture problem.
 
 ---
 
@@ -249,7 +249,7 @@ Be honest about where Aragora should NOT try to compete:
 
 | Priority | Action | Effort | Impact |
 |---|---|---|---|
-| 1 | Wire the self-improvement loop: replace `loop.py` stubs with real phase instantiation | ~50 LOC | Transforms "we have self-improvement infrastructure" into "we can self-improve" |
+| 1 | Fix design-phase reliability: increase agent timeout beyond 120s, filter ChaosTheater noise from phase outputs | ~20 LOC | Unblocks end-to-end autonomous cycles (debate phase already proven 2026-03-02) |
 | 2 | Ship PyPI package: `pip install aragora-debate` | Package config | Developer adoption wedge; standalone debate engine with zero configuration |
 | 3 | GitHub Actions integration: pre-built CI gate for PR review | ~200 LOC | Gets Aragora into developer workflows where decisions happen daily |
 
@@ -290,7 +290,7 @@ This combination is unique. No funded competitor does it. It represents a new ca
 
 | Gap | Severity | Fix Effort |
 |---|---|---|
-| Self-improvement loop not wired end-to-end | Medium | ~50 LOC of integration code |
+| Self-improvement loop: debate works, design-phase timeouts block full cycle | Medium | Increase agent timeout + filter ChaosTheater from design output (~20 LOC) |
 | Convergence detection is syntactic only | Low | Swap difflib for sentence-transformers |
 | "Blockchain" receipts are SHA-256 hashing | Low | Reframe messaging; the audit trail is the value |
 | 43-agent parallelism is theoretical | Low | Reframe around heterogeneity, not parallelism |
