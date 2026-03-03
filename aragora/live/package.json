@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@aragora/sdk": "file:../../sdk/typescript",
-    "@supabase/supabase-js": "^2.97.0",
+    "@supabase/supabase-js": "^2.98.0",
     "@types/d3-drag": "^3.0.7",
     "@types/d3-force": "^3.0.10",
     "@types/d3-selection": "^3.0.11",
