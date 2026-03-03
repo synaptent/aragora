@@ -1152,6 +1152,11 @@ input:focus, textarea:focus {
   padding-right: max(0.5rem, env(safe-area-inset-right));
 }
 
+/* Smooth anchor scrolling for landing page nav links */
+html {
+  scroll-behavior: smooth;
+}
+
 /* Pull-to-refresh prevention for mobile */
 body {
   overscroll-behavior-y: none;

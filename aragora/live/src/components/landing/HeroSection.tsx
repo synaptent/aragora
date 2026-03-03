@@ -306,6 +306,41 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
           </button>
         </form>
 
+        {/* Example topic chips — reduce blank-textarea friction */}
+        {!isRunning && !result && (
+          <div className="flex flex-wrap justify-center gap-2 mt-6 max-w-xl mx-auto">
+            {EXAMPLE_TOPICS.map((topic) => (
+              <button
+                key={topic}
+                type="button"
+                onClick={() => { setQuestion(topic); }}
+                className="text-xs transition-all hover:scale-[1.02] cursor-pointer"
+                style={{
+                  fontFamily: 'var(--font-landing)',
+                  color: 'var(--text-muted)',
+                  backgroundColor: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-button)',
+                  padding: '8px 14px',
+                  opacity: 0.7,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--accent)';
+                  e.currentTarget.style.color = 'var(--accent)';
+                  e.currentTarget.style.opacity = '1';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--border)';
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                  e.currentTarget.style.opacity = '0.7';
+                }}
+              >
+                {isDark ? `> ${topic}` : topic}
+              </button>
+            ))}
+          </div>
+        )}
+
                 {/* Loading state */}
         {isRunning && (
           <div className="flex flex-col items-center py-8 gap-3">
