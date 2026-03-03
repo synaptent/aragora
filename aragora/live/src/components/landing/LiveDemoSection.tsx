@@ -53,8 +53,11 @@ export function LiveDemoSection() {
             backgroundColor: 'var(--surface)',
             borderRadius: 'var(--radius-card)',
             border: '1px solid var(--border)',
+            borderTopColor: 'var(--accent)',
+            borderTopWidth: '3px',
             boxShadow: 'var(--shadow-card)',
             overflow: 'hidden',
+            margin: '0 24px',
           }}
         >
           <div
@@ -62,8 +65,9 @@ export function LiveDemoSection() {
             style={{ borderBottom: '1px solid var(--border)' }}
           >
             <span
-              className="text-xs font-bold px-2 py-0.5 uppercase tracking-wider"
+              className="font-bold px-2 py-0.5 uppercase tracking-wider"
               style={{
+                fontSize: '10px',
                 backgroundColor: 'var(--accent)',
                 color: 'var(--bg)',
                 borderRadius: 'var(--radius-button)',
@@ -72,14 +76,14 @@ export function LiveDemoSection() {
               Approved with conditions
             </span>
             <span
-              className="text-sm font-medium"
-              style={{ color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
+              className="font-medium"
+              style={{ fontSize: '12px', color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
             >
               Should we adopt microservices or keep our monolith?
             </span>
             <span
-              className="text-xs ml-auto"
-              style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}
+              className="ml-auto"
+              style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}
             >
               78% confidence · 6 agents · 3 rounds
             </span>
@@ -89,7 +93,7 @@ export function LiveDemoSection() {
             {DEMO_AGENTS.map((agent, i) => (
               <div
                 key={agent.name}
-                className="p-5"
+                className="p-4"
                 style={{
                   borderRight: i < DEMO_AGENTS.length - 1 ? '1px solid var(--border)' : 'none',
                   borderBottom: '1px solid var(--border)',
@@ -108,8 +112,8 @@ export function LiveDemoSection() {
                   </span>
                 </div>
                 <p
-                  className="text-sm leading-relaxed"
-                  style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}
+                  className="leading-relaxed"
+                  style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', lineHeight: '1.7' }}
                 >
                   {agent.content}
                 </p>
@@ -118,16 +122,17 @@ export function LiveDemoSection() {
           </div>
         </div>
 
-        <div className="text-center mt-8">
+        <div className="text-center mt-12">
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="text-sm font-semibold py-3 px-8 transition-all hover:scale-[1.02] cursor-pointer"
+            className="text-sm font-semibold transition-all hover:scale-[1.02] cursor-pointer"
             style={{
               border: '1px solid var(--accent)',
               borderRadius: 'var(--radius-button)',
               color: 'var(--accent)',
               backgroundColor: 'transparent',
               fontFamily: 'var(--font-landing)',
+              padding: '18px 48px',
             }}
           >
             Run your own debate

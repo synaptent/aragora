@@ -157,6 +157,33 @@ class TestCloseSharedConnector:
         # Should not raise
         await close_shared_connector()
 
+    @pytest.mark.asyncio
+    async def test_close_does_not_await_with_pool_lock_held(self):
+        """close_shared_connector should release pool lock before awaiting close."""
+        import aragora.agents.api_agents.common as common_module
+
+        class ProbeConnector:
+            def __init__(self):
+                self.closed = False
+                self.lock_held_during_close = False
+
+            async def close(self):
+                acquired = common_module._pool_state.lock.acquire(blocking=False)
+                if acquired:
+                    common_module._pool_state.lock.release()
+                else:
+                    self.lock_held_during_close = True
+                self.closed = True
+
+        probe = ProbeConnector()
+        common_module._pool_state.connector = probe  # type: ignore[assignment]
+        common_module._pool_state.loop_id = 999
+
+        await close_shared_connector()
+
+        assert probe.closed is True
+        assert probe.lock_held_during_close is False
+
 
 class TestCalculateRetryDelay:
     """Test exponential backoff with jitter."""

@@ -533,33 +533,57 @@ Required sections:
     def _get_repo_path_hint() -> str:
         """Generate a compact listing of real repo paths for grounding.
 
-        Returns a short block of key module paths the synthesizer can reference
-        instead of hallucinating paths.  Kept small to avoid bloating the prompt.
+        Dynamically discovers all subdirectories under ``aragora/`` plus key
+        test/script directories.  Returns up to 60 lines so agents can
+        reference real paths instead of hallucinating them.
         """
         try:
             from pathlib import Path
 
             repo_root = Path(os.getcwd())
-            # Key directories agents are likely to reference.
-            key_dirs = [
-                "aragora/debate",
-                "aragora/cli/commands",
-                "aragora/server/handlers",
-                "aragora/pipeline",
-                "aragora/nomic",
-                "aragora/agents",
-                "tests/debate",
-                "tests/cli",
-                "tests/pipeline",
-                "scripts",
-            ]
             lines: list[str] = []
-            for d in key_dirs:
+            max_lines = 60
+
+            # 1. Top-level project files
+            top_files = [
+                n for n in ("pyproject.toml", "CLAUDE.md", "Makefile") if (repo_root / n).is_file()
+            ]
+            if top_files:
+                lines.append(f"  ./: {', '.join(top_files)}")
+
+            # 2. Dynamically discover all immediate subdirs under aragora/
+            aragora_root = repo_root / "aragora"
+            if aragora_root.is_dir():
+                subdirs = sorted(
+                    d.relative_to(repo_root)
+                    for d in aragora_root.iterdir()
+                    if d.is_dir() and d.name != "__pycache__"
+                )
+                for subdir in subdirs:
+                    if len(lines) >= max_lines:
+                        break
+                    dp = repo_root / subdir
+                    suffixes = {".py"}
+                    if "live" in str(subdir):
+                        suffixes.update({".ts", ".tsx"})
+                    files = sorted(
+                        f.name
+                        for f in dp.iterdir()
+                        if f.is_file() and f.suffix in suffixes and f.name != "__init__.py"
+                    )[:5]
+                    if files:
+                        lines.append(f"  {subdir}/: {', '.join(files)}")
+
+            # 3. Key test and script directories
+            for d in ("tests/debate", "tests/cli", "tests/pipeline", "scripts"):
+                if len(lines) >= max_lines:
+                    break
                 dp = repo_root / d
                 if dp.is_dir():
-                    files = sorted(f.name for f in dp.iterdir() if f.suffix == ".py")[:8]
+                    files = sorted(f.name for f in dp.iterdir() if f.suffix == ".py")[:5]
                     if files:
                         lines.append(f"  {d}/: {', '.join(files)}")
+
             if lines:
                 return "Key repository paths (use these, not invented paths):\n" + "\n".join(lines)
         except (OSError, ValueError):

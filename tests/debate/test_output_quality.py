@@ -744,3 +744,108 @@ def test_qualitative_rollback_detected():
     # "in case of" trigger + "fall back" action
     text3 = """In case of test failures, fall back to the previous stable version."""
     assert _has_rollback_trigger(text3) is True
+
+
+def test_derive_contract_short_task_no_context_returns_minimal():
+    """Short tasks without context get the minimal contract."""
+    contract = derive_output_contract_from_task("What is X?")
+    assert contract is not None
+    assert contract.required_sections == []
+    assert contract.require_practicality_checks is True
+    assert contract.require_json_payload is False
+
+
+def test_derive_contract_long_task_returns_standard():
+    """Substantial tasks (>200 chars) without section keywords get the standard contract."""
+    long_task = (
+        "Using the canonical goals as context, identify the single highest-impact "
+        "improvement that would advance the self-repair and self-improvement pillar. "
+        "Produce a detailed analysis with specific file paths in the aragora codebase, "
+        "acceptance criteria, estimated effort, and concrete implementation steps."
+    )
+    assert len(long_task) > 200
+    contract = derive_output_contract_from_task(long_task)
+    assert contract is not None
+    assert len(contract.required_sections) == 7
+    assert "Ranked High-Level Tasks" in contract.required_sections
+    assert contract.require_json_payload is True
+    assert contract.require_gate_thresholds is True
+
+
+def test_derive_contract_has_context_returns_standard():
+    """Tasks with has_context=True get the standard 7-section contract."""
+    contract = derive_output_contract_from_task("Improve test coverage", has_context=True)
+    assert contract is not None
+    assert len(contract.required_sections) == 7
+    assert contract.require_json_payload is True
+
+
+def test_derive_contract_short_without_context_stays_minimal():
+    """Short tasks with has_context=False keep the minimal contract."""
+    contract = derive_output_contract_from_task("Improve test coverage", has_context=False)
+    assert contract is not None
+    assert contract.required_sections == []
+
+
+# ---------------------------------------------------------------------------
+# Deterministic path repair tests
+# ---------------------------------------------------------------------------
+
+
+def test_path_repair_replaces_hallucinated_paths(tmp_path):
+    """Hallucinated paths whose filename exists elsewhere are replaced."""
+    from aragora.debate.output_quality import _repair_owner_paths
+    import aragora.debate.output_quality as oq_module
+
+    (tmp_path / "aragora" / "debate").mkdir(parents=True)
+    (tmp_path / "aragora" / "debate" / "orchestrator.py").write_text("# real")
+    (tmp_path / "aragora" / "agents").mkdir(parents=True)
+    (tmp_path / "aragora" / "agents" / "cli_agents.py").write_text("# real")
+
+    oq_module._FILENAME_CACHE = None
+
+    answer = """\
+## Owner module / file paths
+- `src/aragora/core/orchestrator.py` — main orchestrator
+- `aragora/debate/cli_agents.py` — agent definitions
+"""
+    repaired = _repair_owner_paths(answer, tmp_path)
+    assert "aragora/debate/orchestrator.py" in repaired
+    assert "aragora/agents/cli_agents.py" in repaired
+    assert "src/aragora/core/orchestrator.py" not in repaired
+    oq_module._FILENAME_CACHE = None
+
+
+def test_path_repair_leaves_valid_paths_unchanged(tmp_path):
+    """Paths that actually exist on disk are not modified."""
+    from aragora.debate.output_quality import _repair_owner_paths
+    import aragora.debate.output_quality as oq_module
+
+    (tmp_path / "aragora" / "debate").mkdir(parents=True)
+    (tmp_path / "aragora" / "debate" / "consensus.py").write_text("# real")
+    oq_module._FILENAME_CACHE = None
+
+    answer = """\
+## Owner module / file paths
+- `aragora/debate/consensus.py` — consensus detection
+"""
+    repaired = _repair_owner_paths(answer, tmp_path)
+    assert "aragora/debate/consensus.py" in repaired
+    oq_module._FILENAME_CACHE = None
+
+
+def test_path_repair_preserves_no_match_paths(tmp_path):
+    """Paths whose filenames don't exist anywhere are left as-is."""
+    from aragora.debate.output_quality import _repair_owner_paths
+    import aragora.debate.output_quality as oq_module
+
+    (tmp_path / "aragora").mkdir(parents=True)
+    oq_module._FILENAME_CACHE = None
+
+    answer = """\
+## Owner module / file paths
+- `aragora/brand_new_module/totally_novel.py` — new module
+"""
+    repaired = _repair_owner_paths(answer, tmp_path)
+    assert "aragora/brand_new_module/totally_novel.py" in repaired
+    oq_module._FILENAME_CACHE = None

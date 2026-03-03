@@ -38,7 +38,7 @@ export function Footer() {
         </p>
 
         {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-8">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="text-sm font-semibold transition-opacity hover:opacity-80 cursor-pointer"

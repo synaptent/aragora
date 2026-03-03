@@ -233,12 +233,12 @@ def assess_repo_grounding(
         first_batch_concreteness = 0.0
 
     no_placeholder_factor = max(0.0, 1.0 - placeholder_rate)
-    # Rebalanced weights: path existence de-emphasized because LLM agents
-    # don't have filesystem access and will always hallucinate some paths.
-    # Content concreteness and placeholder absence are better indicators of
-    # execution readiness for LLM-generated debate output.
+    # Rebalanced weights: path existence further de-emphasized because LLM
+    # agents don't have filesystem access.  After deterministic path repair,
+    # existence is a supplementary signal.  Content concreteness (action verbs,
+    # specificity, measurability) is the primary indicator of execution readiness.
     practicality_score = (
-        0.25 * path_existence_rate + 0.45 * first_batch_concreteness + 0.30 * no_placeholder_factor
+        0.15 * path_existence_rate + 0.55 * first_batch_concreteness + 0.30 * no_placeholder_factor
     ) * 10.0
 
     return RepoGroundingReport(

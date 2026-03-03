@@ -97,30 +97,33 @@ export function FeatureShowcase() {
         >
           Everything you need to make decisions you can defend.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {FEATURES.map((feature) => (
             <div
               key={feature.title}
-              className="p-6 transition-all hover:translate-y-[-2px]"
+              className="transition-all hover:translate-y-[-2px]"
               style={{
                 backgroundColor: 'var(--surface)',
                 borderRadius: 'var(--radius-card)',
                 border: '1px solid var(--border)',
+                borderTopColor: 'var(--accent)',
+                borderTopWidth: '3px',
                 boxShadow: 'var(--shadow-card)',
+                padding: '32px 24px',
               }}
             >
-              <div className="mb-3" style={{ color: 'var(--accent)' }}>
+              <div className="flex items-center gap-3" style={{ marginBottom: '16px', color: 'var(--accent)' }}>
                 {feature.icon}
+                <h3
+                  className="font-semibold"
+                  style={{ fontSize: '13px', color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
+                >
+                  {feature.title}
+                </h3>
               </div>
-              <h3
-                className="text-sm font-semibold mb-1"
-                style={{ color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
-              >
-                {feature.title}
-              </h3>
               <p
-                className="text-sm leading-relaxed"
-                style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}
+                className="leading-relaxed"
+                style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', lineHeight: '1.7' }}
               >
                 {feature.description}
               </p>

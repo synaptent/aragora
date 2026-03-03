@@ -43,6 +43,10 @@ class QualityPipelineConfig:
     # Repo root for path-existence checks (defaults to cwd).
     repo_root: str | None = None
 
+    # Whether the debate has additional context (--context flag).
+    # Substantial tasks get the standard 7-section contract.
+    has_context: bool = False
+
     # Score thresholds -- used only for the ``passes_gate`` flag in the
     # result; the deterministic pipeline always runs.
     quality_min_score: float = 9.0
@@ -66,6 +70,7 @@ class QualityPipelineConfig:
             output_contract_file=data.get("output_contract_file"),
             required_sections=sections,
             repo_root=data.get("repo_root"),
+            has_context=bool(data.get("has_context", False)),
             quality_min_score=float(data.get("quality_min_score", 9.0)),
             practicality_min_score=float(data.get("practicality_min_score", 6.0)),
         )
@@ -122,8 +127,8 @@ def _resolve_contract(
         normalized = ", ".join(config.required_sections)
         return derive_output_contract_from_task(f"output sections {normalized}")
 
-    # 3. Derive from task text
-    return derive_output_contract_from_task(task)
+    # 3. Derive from task text (pass context hint for smart defaulting)
+    return derive_output_contract_from_task(task, has_context=config.has_context)
 
 
 def _quality_gate_passes(

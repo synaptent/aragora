@@ -411,6 +411,35 @@ class TestCloseSharedConnector:
         assert _pool_state.loop_id is None
 
     @pytest.mark.asyncio
+    async def test_does_not_hold_lock_while_awaiting_close(self):
+        """Connector close should run after lock release to avoid lock contention."""
+        from aragora.agents.api_agents.common import _pool_state, close_shared_connector
+
+        class ProbeConnector:
+            def __init__(self):
+                self.closed = False
+                self.lock_held_during_close = False
+
+            async def close(self):
+                acquired = _pool_state.lock.acquire(blocking=False)
+                if acquired:
+                    _pool_state.lock.release()
+                else:
+                    self.lock_held_during_close = True
+                self.closed = True
+
+        probe = ProbeConnector()
+        _pool_state.connector = probe  # type: ignore[assignment]
+        _pool_state.loop_id = 12345
+
+        await close_shared_connector()
+
+        assert probe.closed is True
+        assert probe.lock_held_during_close is False
+        assert _pool_state.connector is None
+        assert _pool_state.loop_id is None
+
+    @pytest.mark.asyncio
     async def test_safe_to_call_multiple_times(self):
         """Should be safe to call close multiple times."""
         from aragora.agents.api_agents.common import close_shared_connector

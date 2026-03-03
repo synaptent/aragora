@@ -11,6 +11,7 @@ This module provides:
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -246,8 +247,20 @@ class OutputQualityReport:
         }
 
 
-def derive_output_contract_from_task(task: str) -> OutputContract | None:
-    """Infer a section contract from tasks that request explicit output sections."""
+def derive_output_contract_from_task(
+    task: str,
+    *,
+    has_context: bool = False,
+) -> OutputContract | None:
+    """Infer a section contract from tasks that request explicit output sections.
+
+    Args:
+        task: The task/question text to analyze for section hints.
+        has_context: Whether the debate has additional context (``--context``).
+            Substantial tasks (long text or context-aware) get the standard
+            7-section contract that aligns with what the SynthesisGenerator
+            prompts for, so validation and synthesis agree on structure.
+    """
     if not task:
         return None
 
@@ -289,18 +302,35 @@ def derive_output_contract_from_task(task: str) -> OutputContract | None:
             sections = sorted(present, key=lambda name: task_norm.find(name.lower()))
 
     if not sections:
-        # Default fallback: derive a minimal contract for any task so
-        # quality assessment always runs. Callers who truly want no
-        # contract should pass --no-post-consensus-quality instead.
-        return OutputContract(
-            required_sections=[],
-            require_json_payload=False,
-            require_gate_thresholds=False,
-            require_rollback_triggers=False,
-            require_owner_paths=False,
-            require_repo_path_existence=False,
-            require_practicality_checks=True,
-        )
+        # Determine whether this is a substantial task that warrants
+        # the full structured output contract.  Signals:
+        #   - has_context: caller provided --context (structured debate)
+        #   - task length > 200 chars: detailed multi-step request
+        # Substantial tasks get the standard 7-section contract that
+        # matches what SynthesisGenerator._default_output_contract()
+        # prompts for, so validation and synthesis agree on structure.
+        _STANDARD_SECTIONS = [
+            "Ranked High-Level Tasks",
+            "Suggested Subtasks",
+            "Owner module / file paths",
+            "Test Plan",
+            "Rollback Plan",
+            "Gate Criteria",
+            "JSON Payload",
+        ]
+        if has_context or len(task) > 200:
+            sections = _STANDARD_SECTIONS
+        else:
+            # Short/simple task -- minimal contract (practicality only).
+            return OutputContract(
+                required_sections=[],
+                require_json_payload=False,
+                require_gate_thresholds=False,
+                require_rollback_triggers=False,
+                require_owner_paths=False,
+                require_repo_path_existence=False,
+                require_practicality_checks=True,
+            )
 
     normalized = {_normalize_heading(section) for section in sections}
     return OutputContract(
@@ -1070,3 +1100,121 @@ def _append_to_section(text: str, section_norm: str, suffix: str) -> str:
             insert_pos = section["end"]
             return text[:insert_pos].rstrip() + suffix + "\n" + text[insert_pos:]
     return text
+
+
+# ---------------------------------------------------------------------------
+# Deterministic path repair for hallucinated file paths
+# ---------------------------------------------------------------------------
+
+_FILENAME_CACHE: dict[str, list[str]] | None = None
+
+
+def _build_filename_cache(repo_root: Path) -> dict[str, list[str]]:
+    """Map filenames to their real relative paths in the repo.
+
+    Scans ``aragora/``, ``tests/``, and ``scripts/`` for code files.
+    Cached at module level so the expensive rglob only runs once per process.
+    """
+    global _FILENAME_CACHE
+    if _FILENAME_CACHE is not None:
+        return _FILENAME_CACHE
+
+    cache: dict[str, list[str]] = {}
+    scan_dirs = ["aragora", "tests", "scripts"]
+    scan_suffixes = {".py", ".ts", ".tsx", ".json", ".yaml", ".yml", ".md", ".toml"}
+
+    for scan_dir in scan_dirs:
+        base = repo_root / scan_dir
+        if not base.is_dir():
+            continue
+        try:
+            for f in base.rglob("*"):
+                if f.is_file() and f.suffix in scan_suffixes and "__pycache__" not in str(f):
+                    rel = str(f.relative_to(repo_root))
+                    fname = f.name
+                    if fname not in cache:
+                        cache[fname] = []
+                    cache[fname].append(rel)
+        except OSError:
+            continue
+
+    _FILENAME_CACHE = cache
+    return cache
+
+
+def _find_best_path_match(hallucinated: str, filename_cache: dict[str, list[str]]) -> str | None:
+    """Find the best real path matching a hallucinated one.
+
+    Extracts the filename, looks it up in the cache, and picks the candidate
+    with the most directory-component overlap.
+    """
+    parts = hallucinated.rstrip("/").split("/")
+    filename = parts[-1]
+
+    candidates = filename_cache.get(filename)
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    hallucinated_dirs = set(parts[:-1])
+    best_score = -1
+    best_candidate = candidates[0]
+    for candidate in candidates:
+        cand_dirs = set(candidate.split("/")[:-1])
+        overlap = len(hallucinated_dirs & cand_dirs)
+        if overlap > best_score:
+            best_score = overlap
+            best_candidate = candidate
+    return best_candidate
+
+
+def _repair_owner_paths(text: str, repo_root: Path) -> str:
+    """Replace hallucinated paths in the Owner section with real repo paths.
+
+    Only modifies paths inside the Owner module / file paths section.
+    Fast: no LLM calls, uses cached filename lookups.
+    """
+    from aragora.debate.repo_grounding import extract_repo_paths
+
+    sections = _extract_sections(text)
+    owner_section = None
+    for section in sections:
+        norm = section["normalized"]
+        if "owner" in norm and ("file" in norm or "module" in norm or "path" in norm):
+            owner_section = section
+            break
+
+    if owner_section is None:
+        return text
+
+    start = owner_section["start"]
+    end = owner_section["end"]
+    owner_span = text[start:end]
+
+    if not owner_span.strip():
+        return text
+
+    mentioned = extract_repo_paths(owner_span)
+    if not mentioned:
+        return text
+
+    filename_cache = _build_filename_cache(repo_root)
+
+    replacements: list[tuple[str, str]] = []
+    for path in mentioned:
+        full = repo_root / path
+        if full.exists():
+            continue
+        best = _find_best_path_match(path, filename_cache)
+        if best and best != path:
+            replacements.append((path, best))
+
+    if not replacements:
+        return text
+
+    repaired_span = owner_span
+    for old_path, new_path in replacements:
+        repaired_span = repaired_span.replace(old_path, new_path)
+
+    return text[:start] + repaired_span + text[end:]

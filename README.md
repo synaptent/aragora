@@ -149,7 +149,7 @@ Aragora is useful to a 5-person startup on day one and scales to regulated enter
 
 ### 2. Leading-Edge Memory and Context
 
-Single agents lose context. Aragora's 4-tier Continuum Memory (fast / medium / slow / glacial) and Knowledge Mound with 34 registered adapters give every debate access to institutional history, cross-session learning, and evidence provenance. The RLM (Recursive Language Models) system compresses and structures context to reduce prompt bloat, enabling debates that sustain coherence across long multi-round sessions and large document sets where individual models would degrade.
+Single agents lose context. Aragora's 4-tier Continuum Memory (fast / medium / slow / glacial) and Knowledge Mound with 0 registered adapters give every debate access to institutional history, cross-session learning, and evidence provenance. The RLM (Recursive Language Models) system compresses and structures context to reduce prompt bloat, enabling debates that sustain coherence across long multi-round sessions and large document sets where individual models would degrade.
 
 ### 3. Extensible and Modular
 
@@ -299,7 +299,7 @@ aragora/
 │   ├── cli_agents.py     # Claude Code, Codex, Gemini CLI, Grok CLI
 │   └── fallback.py       # OpenRouter fallback on quota errors
 ├── gauntlet/       # Adversarial stress testing
-├── knowledge/      # Knowledge Mound with 34 registered adapters
+├── knowledge/      # Knowledge Mound with 0 registered adapters
 ├── memory/         # 4-tier memory (fast/medium/slow/glacial)
 ├── server/         # 3,000+ API operations, 260+ WebSocket event types
 ├── pipeline/       # Decision-to-PR generation
@@ -310,7 +310,7 @@ aragora/
 └── workflow/       # DAG-based automation engine
 ```
 
-**Scale:** 3,000+ Python modules | 207,000+ tests
+**Scale:** 3,000+ Python modules | 208,000+ tests
 
 ### Performance and Costs
 

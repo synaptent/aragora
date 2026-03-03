@@ -156,7 +156,7 @@ class TestApplyPostConsensusQuality:
         result = apply_post_consensus_quality("some answer", "hello world", cfg)
         # "hello world" has no section hints, so a minimal default contract is
         # used (practicality checks only, no required sections).
-        assert result.answer == "some answer"
+        assert result.answer.strip() == "some answer"
         assert result.contract_dict is not None
         assert result.contract_dict["required_sections"] == []
         assert result.contract_dict["require_practicality_checks"] is True
@@ -194,7 +194,7 @@ class TestApplyPostConsensusQuality:
 
     def test_none_config_uses_defaults(self):
         result = apply_post_consensus_quality("answer", "hello world", config=None)
-        assert result.answer == "answer"
+        assert result.answer.strip() == "answer"
 
     def test_json_finalization_applied(self):
         cfg = QualityPipelineConfig(
@@ -207,3 +207,11 @@ class TestApplyPostConsensusQuality:
         result = apply_post_consensus_quality(answer, "anything", cfg)
         # JSON payload should be finalized with valid JSON
         assert "```json" in result.answer
+
+    def test_has_context_gets_standard_contract(self):
+        """Debates with has_context=True get the standard 7-section contract."""
+        cfg = QualityPipelineConfig(has_context=True)
+        long_task = "Dogfood the system and produce an improvement plan"
+        result = apply_post_consensus_quality("some answer", long_task, cfg)
+        assert result.contract_dict is not None
+        assert len(result.contract_dict["required_sections"]) == 7
