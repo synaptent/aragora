@@ -365,6 +365,67 @@ class TestEmitSynthesisEvents:
         gen._emit_synthesis_events(ctx, "Text", "opus")
 
 
+class TestContractGuidedDefault:
+    """Tests that contract-guided synthesis is the default path."""
+
+    def test_contract_guided_default_without_explicit_contract(self):
+        """Synthesis uses contract-guided structure even when no contract is in the task."""
+        ctx = MockDebateContext()
+        ctx.env.task = "Should we use microservices or monolith?"
+        ctx.proposals = {
+            "claude": "Use monolith for simplicity",
+            "gpt4": "Microservices for scalability",
+        }
+        ctx.critiques = []
+
+        gen = SynthesisGenerator()
+        prompt = gen._build_synthesis_prompt(ctx)
+
+        # Contract-guided prompt markers (from _build_contract_guided_prompt)
+        assert "OUTPUT FORMAT REQUIREMENTS (MANDATORY)" in prompt
+        assert "Ranked High-Level Tasks" in prompt
+        assert "Gate Criteria" in prompt
+        assert "JSON Payload" in prompt
+        # Should NOT contain the default synthesis prompt markers
+        assert "approximately 1200 words" not in prompt
+        assert "DEFINITIVE ANSWER" not in prompt
+
+    def test_contract_guided_default_still_uses_explicit_contract(self):
+        """When an explicit contract is in the context, it is used instead of the default."""
+        ctx = MockDebateContext()
+        ctx.env = MagicMock()
+        ctx.env.task = "Design a rate limiter"
+        ctx.env.context = (
+            "Some preamble.\n"
+            "### Output Contract (Deterministic Quality Gates)\n"
+            "Required sections:\n"
+            "1. Custom Section A\n"
+            "2. Custom Section B\n"
+        )
+        ctx.proposals = {"agent1": "Proposal text"}
+        ctx.critiques = []
+
+        gen = SynthesisGenerator()
+        prompt = gen._build_synthesis_prompt(ctx)
+
+        assert "Custom Section A" in prompt
+        assert "Custom Section B" in prompt
+        assert "OUTPUT FORMAT REQUIREMENTS (MANDATORY)" in prompt
+
+    def test_default_output_contract_content(self):
+        """The default output contract contains the expected required sections."""
+        contract = SynthesisGenerator._default_output_contract()
+
+        assert "Output Contract (Deterministic Quality Gates)" in contract
+        assert "Ranked High-Level Tasks" in contract
+        assert "Suggested Subtasks" in contract
+        assert "Owner module / file paths" in contract
+        assert "Test Plan" in contract
+        assert "Rollback Plan" in contract
+        assert "Gate Criteria" in contract
+        assert "JSON Payload" in contract
+
+
 class TestGenerateMandatorySynthesis:
     """Tests for generate_mandatory_synthesis method."""
 

@@ -491,13 +491,15 @@ class SynthesisGenerator:
             critiques_text = "\n".join(critique_items)
 
         # Check if a quality output contract is available in the context.
+        # If none is explicitly provided, use the default contract so that
+        # every synthesis goes through the contract-guided path.
         contract_block = self._extract_contract_block(ctx)
-        if contract_block:
-            return self._build_contract_guided_prompt(
-                task, proposals_text, critiques_text, contract_block
-            )
+        if not contract_block:
+            contract_block = self._default_output_contract()
 
-        return self._build_default_synthesis_prompt(task, proposals_text, critiques_text)
+        return self._build_contract_guided_prompt(
+            task, proposals_text, critiques_text, contract_block
+        )
 
     def _extract_contract_block(self, ctx: DebateContext) -> str | None:
         """Extract output contract instructions from the debate context, if present."""
@@ -509,6 +511,23 @@ class SynthesisGenerator:
             idx = context.index(marker)
             return context[idx:].strip()
         return None
+
+    @staticmethod
+    def _default_output_contract() -> str:
+        """Return the default output contract used when none is explicitly provided.
+
+        This ensures every synthesis follows the contract-guided path, producing
+        structured output that satisfies the post-consensus quality validator.
+        """
+        return """### Output Contract (Deterministic Quality Gates)
+Required sections:
+1. Ranked High-Level Tasks
+2. Suggested Subtasks
+3. Owner module / file paths
+4. Test Plan
+5. Rollback Plan
+6. Gate Criteria
+7. JSON Payload"""
 
     @staticmethod
     def _get_repo_path_hint() -> str:
