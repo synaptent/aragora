@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, FormEvent } from 'react';
+import { useState, useCallback, useRef, useEffect, FormEvent } from 'react';
 import Link from 'next/link';
 import { DebateResultPreview, RETURN_URL_KEY, PENDING_DEBATE_KEY, type DebateResponse } from './DebateResultPreview';
 import { getCurrentReturnUrl, normalizeReturnUrl } from '@/utils/returnUrl';
@@ -20,15 +20,40 @@ const PROGRESS_MESSAGES = [
   'Generating verdict...',
 ];
 
+function parseRetryAfterSeconds(retryAfter: string | null): number {
+  if (!retryAfter) return 60;
+
+  const deltaSeconds = Number.parseInt(retryAfter, 10);
+  if (Number.isFinite(deltaSeconds) && deltaSeconds >= 0) {
+    return deltaSeconds;
+  }
+
+  const retryTime = Date.parse(retryAfter);
+  if (Number.isNaN(retryTime)) return 60;
+
+  return Math.max(1, Math.ceil((retryTime - Date.now()) / 1000));
+}
+
 export function LandingPage({ apiBase, onEnterDashboard }: LandingPageProps) {
   const [question, setQuestion] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<DebateResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lastTopic, setLastTopic] = useState('');
   const [progressMsg, setProgressMsg] = useState(PROGRESS_MESSAGES[0]);
   const abortRef = useRef<AbortController | null>(null);
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const resolvedApiBase = apiBase || 'https://api.aragora.ai';
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      if (progressRef.current) {
+        clearInterval(progressRef.current);
+      }
+    };
+  }, []);
 
   const saveDebateBeforeLogin = useCallback(() => {
     if (result) {
@@ -39,13 +64,20 @@ export function LandingPage({ apiBase, onEnterDashboard }: LandingPageProps) {
   }, [result]);
 
   async function runDebate(topic: string) {
+    abortRef.current?.abort();
+    if (progressRef.current) {
+      clearInterval(progressRef.current);
+    }
+
     setIsRunning(true);
     setError(null);
     setResult(null);
+    setLastTopic(topic);
+    setProgressMsg(PROGRESS_MESSAGES[0]);
 
     // Rotate progress messages
     let progressIdx = 0;
-    const progressInterval = setInterval(() => {
+    progressRef.current = setInterval(() => {
       progressIdx = (progressIdx + 1) % PROGRESS_MESSAGES.length;
       setProgressMsg(PROGRESS_MESSAGES[progressIdx]);
     }, 4000);
@@ -62,25 +94,33 @@ export function LandingPage({ apiBase, onEnterDashboard }: LandingPageProps) {
       });
 
       if (res.status === 429) {
-        const data = await res.json().catch(() => null);
-        const retryAfter = data?.retry_after || 60;
-        setError(`Rate limit reached. Please try again in ${retryAfter} seconds.`);
+        const retryAfter = parseRetryAfterSeconds(res.headers.get('Retry-After'));
+        const waitText = retryAfter > 60 ? `${Math.ceil(retryAfter / 60)} minutes` : `${retryAfter} seconds`;
+        setError(`Rate limit reached. Please try again in ${waitText}.`);
         return;
       }
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        setError(data?.error || 'Something went wrong. Please try again.');
+        setError(data?.error || `Something went wrong (${res.status}). Please try again.`);
         return;
       }
 
       setResult(await res.json());
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      setError('Could not connect to the server. Check your connection and try again.');
+      if (err instanceof Error && err.message.includes('Failed to fetch')) {
+        setError('Could not connect to the server. Check your connection and try again.');
+        return;
+      }
+      setError('Network error. Please try again.');
     } finally {
-      clearInterval(progressInterval);
+      if (progressRef.current) {
+        clearInterval(progressRef.current);
+        progressRef.current = null;
+      }
       setIsRunning(false);
+      setProgressMsg('');
     }
   }
 
@@ -202,12 +242,14 @@ export function LandingPage({ apiBase, onEnterDashboard }: LandingPageProps) {
           {error && (
             <div className="border border-crimson/40 bg-crimson/5 p-4 mt-6 text-left max-w-xl mx-auto">
               <p className="text-sm text-crimson font-mono mb-3">{error}</p>
-              <button
-                onClick={() => { setError(null); if (question.trim()) runDebate(question.trim()); }}
-                className="font-mono text-xs px-4 py-2 border border-crimson/40 text-crimson hover:bg-crimson/10 transition-colors"
-              >
-                Try again
-              </button>
+              {lastTopic && (
+                <button
+                  onClick={() => { setError(null); runDebate(lastTopic); }}
+                  className="font-mono text-xs px-4 py-2 border border-crimson/40 text-crimson hover:bg-crimson/10 transition-colors"
+                >
+                  Try again
+                </button>
+              )}
             </div>
           )}
 
