@@ -1161,6 +1161,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
     quality_fail_closed = bool(getattr(args, "quality_fail_closed", False))
 
     quality_contract = None
+    quality_contract_source = "none"
     if post_consensus_quality:
         from aragora.debate.output_quality import (
             build_contract_context_block,
@@ -1173,6 +1174,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
         if isinstance(output_contract_file, str) and output_contract_file.strip():
             try:
                 quality_contract = load_output_contract_from_file(output_contract_file.strip())
+                quality_contract_source = "file"
             except ValueError as e:
                 print(f"Debate configuration invalid: {e}", file=sys.stderr)
                 raise SystemExit(2)
@@ -1181,10 +1183,17 @@ def cmd_ask(args: argparse.Namespace) -> None:
                 p.strip() for p in required_sections.strip().split(",") if p.strip()
             )
             quality_contract = derive_output_contract_from_task(f"output sections {normalized}")
+            quality_contract_source = "required_sections"
         else:
             quality_contract = derive_output_contract_from_task(args.task)
+            if quality_contract is None:
+                quality_contract_source = "none"
+            elif quality_contract.required_sections:
+                quality_contract_source = "task"
+            else:
+                quality_contract_source = "fallback"
 
-        if quality_fail_closed and quality_contract is None:
+        if quality_fail_closed and quality_contract_source in {"none", "fallback"}:
             print(
                 "Debate configuration invalid: --quality-fail-closed requires an explicit "
                 "output contract. Add output sections to the task or pass --required-sections "

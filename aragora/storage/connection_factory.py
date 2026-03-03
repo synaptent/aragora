@@ -43,6 +43,26 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_STORE_INIT_ERROR_TYPES: tuple[type[BaseException], ...] = (
+    OSError,
+    RuntimeError,
+    ConnectionError,
+    TimeoutError,
+    ValueError,
+)
+try:
+    # asyncpg emits driver-specific errors during pool/connection teardown races.
+    # Treat them as backend init failures so caller-level SQLite fallback can proceed.
+    from asyncpg.exceptions import InterfaceError as _AsyncpgInterfaceError
+    from asyncpg.exceptions import PostgresError as _AsyncpgPostgresError
+except ImportError:
+    pass
+else:
+    _STORE_INIT_ERROR_TYPES = _STORE_INIT_ERROR_TYPES + (
+        _AsyncpgInterfaceError,
+        _AsyncpgPostgresError,
+    )
+
 
 class StorageBackendType(str, Enum):
     """Available storage backend types in preference order."""
@@ -522,7 +542,7 @@ def create_persistent_store(
                         backend_name = "Supabase" if config.is_supabase else "PostgreSQL"
                         logger.info("[%s] Using shared pool (%s)", store_name, backend_name)
                         return store
-                    except (OSError, RuntimeError, ConnectionError, TimeoutError, ValueError) as e:
+                    except _STORE_INIT_ERROR_TYPES as e:
                         logger.warning("[%s] Shared pool store creation failed: %s", store_name, e)
         except ImportError:
             pass  # pool_manager not available
@@ -562,7 +582,7 @@ def create_persistent_store(
                     backend_name = "Supabase" if config.is_supabase else "PostgreSQL"
                     logger.info("[%s] Initialized with %s", store_name, backend_name)
                     return store
-            except (OSError, RuntimeError, ConnectionError, TimeoutError, ImportError) as e:
+            except _STORE_INIT_ERROR_TYPES + (ImportError,) as e:
                 logger.warning("[%s] PostgreSQL unavailable: %s", store_name, e)
                 if not allow_sqlite:
                     raise RuntimeError(
