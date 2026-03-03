@@ -185,6 +185,9 @@ repl:
 doctor:
 	python -m aragora.cli.doctor
 
+claude-wt:
+	./scripts/claude-wt
+
 codex-session:
 	./scripts/codex_session.sh
 

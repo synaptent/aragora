@@ -6,18 +6,27 @@ Context for Claude Code when working with the Aragora codebase.
 > check `docs/COORDINATION.md` before starting. See `docs/AGENT_ASSIGNMENTS.md`
 > for recommended focus areas by track.
 
-## Default Worktree Recovery Policy
+## Worktree Isolation (CRITICAL)
 
-For high-churn parallel sessions, use managed disposable worktrees and auto-recovery.
+**Every Claude Code session MUST run in an isolated worktree.** Multiple sessions share this
+repo — editing files in the main directory causes concurrent overwrites.
 
-- Before starting a Codex session, run `./scripts/codex_session.sh` (or `make codex-session`).
-  This writes an active-session lock so the maintainer skips in-use worktrees.
-- If branch/worktree state changes unexpectedly, do **not** pause for manual routing by default:
-  run `python3 scripts/codex_worktree_autopilot.py ensure --agent codex --base main --reconcile --print-path`
-  and continue work in the returned path.
-- For one-command drift recovery, run
-  `python3 scripts/codex_worktree_autopilot.py maintain --base main --strategy merge --ttl-hours 24`.
-- Reconcile frequently via `python3 scripts/codex_worktree_autopilot.py reconcile --all --base main`.
+### Automatic isolation (3 layers)
+
+1. **Preferred: `claude-wt` wrapper** — Launch Claude via `./scripts/claude-wt` instead of `claude`.
+   Creates a fresh worktree automatically. Pass `--resume` to reuse an existing one.
+2. **Fallback: SessionStart hook** — If launched without the wrapper, a hook detects you're in
+   the main directory and outputs a warning. **When you see this warning, call `EnterWorktree`
+   before making any file edits.**
+3. **Background cleanup** — A LaunchAgent runs every 5 minutes, reconciling worktrees with main
+   (merge strategy) and cleaning up stale ones after 24h. Branches are auto-deleted after merge.
+
+### Manual worktree commands
+
+- `./scripts/codex_session.sh` — Legacy session bootstrap (creates worktree + metadata)
+- `python3 scripts/codex_worktree_autopilot.py ensure --agent claude --base main --force-new --print-path`
+- `python3 scripts/codex_worktree_autopilot.py maintain --base main --strategy merge --ttl-hours 24`
+- `python3 scripts/codex_worktree_autopilot.py cleanup --base main --ttl-hours 24 --delete-branches`
 - Cleanup stale session worktrees via `python3 scripts/codex_worktree_autopilot.py cleanup --base main --ttl-hours 24`.
 - Optional macOS automation: `make worktree-maintainer-install` to run background reconcile-only upkeep every 5 minutes.
 
