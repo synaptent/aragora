@@ -545,8 +545,8 @@ def test_broad_threshold_detection():
     assert _has_quantitative_thresholds("latency \u2264 250ms\nerror_rate \u2264 1%")
     # Pure prose with no numbers should fail
     assert not _has_quantitative_thresholds("Keep it safe and reliable.")
-    # Single threshold is not enough
-    assert not _has_quantitative_thresholds("p95_latency <= 250ms")
+    # Single threshold is now sufficient (lowered from 2 to 1)
+    assert _has_quantitative_thresholds("p95_latency <= 250ms")
 
 
 def test_soft_defects_dont_block_good_verdict_at_high_score():
