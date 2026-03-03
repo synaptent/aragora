@@ -56,6 +56,13 @@ export function Header() {
               Pricing
             </a>
             <Link
+              href="/compliance"
+              className="text-sm transition-colors hover:opacity-80"
+              style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}
+            >
+              Compliance
+            </Link>
+            <Link
               href="/login"
               className="text-sm transition-colors hover:opacity-80"
               style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}

@@ -1898,6 +1898,40 @@ export default function Oracle() {
               </div>
             )}
           </div>
+
+          {/* EU AI Act Compliance CTA — shows after debate completes */}
+          {messages.length > 0 && !loading && !debating && messages.some((m) => m.isLive) && (
+            <div
+              className="mt-6 p-4 border rounded-lg flex items-center justify-between gap-4 prophecy-reveal"
+              style={{
+                borderColor: 'var(--border)',
+                backgroundColor: 'var(--surface)',
+              }}
+            >
+              <div>
+                <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>
+                  Need compliance documentation?
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  Generate EU AI Act Article 12, 13, 14 artifacts from this debate.
+                </p>
+              </div>
+              <a
+                href="/compliance"
+                className="shrink-0 px-4 py-2 text-xs font-bold transition-colors rounded-lg whitespace-nowrap"
+                style={{
+                  border: '1px solid var(--acid-green)',
+                  color: 'var(--acid-green)',
+                  backgroundColor: 'transparent',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(57,255,20,0.1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+              >
+                Generate Bundle
+              </a>
+            </div>
+          )}
+
           <div ref={chatEndRef} />
         </div>
 
