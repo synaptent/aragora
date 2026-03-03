@@ -15,6 +15,11 @@ interface DebateResult {
   verdict: string;
   confidence: number;
   explanation: string;
+  debateId?: string;
+  topic?: string;
+  participants?: string[];
+  proposals?: Record<string, string>;
+  receiptHash?: string;
 }
 
 export default function TryPage() {
@@ -113,6 +118,11 @@ export default function TryPage() {
                     verdict: r.verdict ?? r.consensus ?? 'Analysis Complete',
                     confidence: r.confidence ?? r.consensus_confidence ?? 0.75,
                     explanation: r.explanation ?? r.summary ?? r.consensus_text ?? '',
+                    debateId: r.id,
+                    topic: r.topic,
+                    participants: r.participants,
+                    proposals: r.proposals,
+                    receiptHash: r.receipt_hash,
                   });
                 }
               } catch {
@@ -139,6 +149,11 @@ export default function TryPage() {
           verdict: r.verdict ?? r.consensus ?? 'Analysis Complete',
           confidence: r.confidence ?? r.consensus_confidence ?? 0.75,
           explanation: r.explanation ?? r.summary ?? r.consensus_text ?? '',
+          debateId: r.id,
+          topic: r.topic,
+          participants: r.participants,
+          proposals: r.proposals,
+          receiptHash: r.receipt_hash,
         });
       }
     } catch (e) {
@@ -247,6 +262,11 @@ export default function TryPage() {
                 verdict={result.verdict}
                 confidence={result.confidence}
                 explanation={result.explanation}
+                debateId={result.debateId}
+                topic={result.topic}
+                participants={result.participants}
+                proposals={result.proposals}
+                receiptHash={result.receiptHash}
               />
 
               {/* Share + Upgrade CTAs */}
