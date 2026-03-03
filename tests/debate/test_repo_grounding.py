@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from aragora.debate.repo_grounding import assess_repo_grounding
 
 
@@ -44,3 +46,27 @@ def test_assess_repo_grounding_penalizes_placeholders_and_missing_paths():
     assert "new_marker" in report.placeholder_hits
     assert report.placeholder_rate > 0.0
     assert report.practicality_score_10 < 5.0
+
+
+def test_assess_repo_grounding_handles_absolute_paths_under_repo():
+    repo_root = Path(__file__).resolve().parents[2]
+    absolute = repo_root / "aragora/debate/orchestrator.py"
+    answer = f"""
+## Owner module / file paths
+- {absolute}
+"""
+    report = assess_repo_grounding(answer, repo_root=str(repo_root))
+    assert report.path_existence_rate == 1.0
+    assert "aragora/debate/orchestrator.py" in report.existing_paths
+    assert all(not p.startswith("Users/") for p in report.mentioned_paths)
+
+
+def test_assess_repo_grounding_handles_markdown_link_absolute_paths():
+    repo_root = Path(__file__).resolve().parents[2]
+    absolute = repo_root / "aragora/debate/orchestrator.py"
+    answer = f"""
+## Owner module / file paths
+- [orchestrator.py]({absolute})
+"""
+    report = assess_repo_grounding(answer, repo_root=str(repo_root))
+    assert "aragora/debate/orchestrator.py" in report.existing_paths
