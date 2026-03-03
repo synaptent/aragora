@@ -378,6 +378,8 @@ jobs:
     timeout-minutes: 10
     name: Secret Scanning
     if: github.event_name != 'pull_request'
+    env:
+      GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
     steps:
       - name: Checkout
@@ -386,17 +388,17 @@ jobs:
           fetch-depth: 0  # Full history for comprehensive scanning
 
       - name: Skip Gitleaks when license is missing
-        if: ${{ secrets.GITLEAKS_LICENSE == '' }}
+        if: env.GITLEAKS_LICENSE == ''
         run: |
           echo "::warning::GITLEAKS_LICENSE is not configured; skipping gitleaks action."
 
       - name: Run Gitleaks
-        if: ${{ secrets.GITLEAKS_LICENSE != '' }}
+        if: env.GITLEAKS_LICENSE != ''
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: false
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_LICENSE: ${{ env.GITLEAKS_LICENSE }}
 
   helm-lint:
     runs-on: aragora
