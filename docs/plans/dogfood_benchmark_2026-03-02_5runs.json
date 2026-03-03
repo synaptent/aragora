@@ -1,0 +1,149 @@
+{
+  "generated_at": "2026-03-03T01:54:08.498158+00:00",
+  "benchmark_date": "2026-03-02",
+  "branch": "feat/shareable-demo",
+  "fixes_under_test": [
+    "Best-of-5 lines for concreteness scoring (was first-only) -- aragora/debate/repo_grounding.py",
+    "Expanded placeholder detection: tk, as needed, to be determined, future enhancement, as appropriate -- aragora/debate/repo_grounding.py",
+    "Contract-guided synthesis default: _default_output_contract() always injected -- aragora/debate/phases/synthesis_generator.py"
+  ],
+  "command_template": {
+    "cli": "python3 -m aragora.cli.main ask",
+    "task": "Improve the aragora debate output quality gate: add expanded placeholder detection patterns for LLM hedging phrases like 'as needed' and 'to be determined', and score actionability of first 5 task lines instead of just the first line. Include ranked high-level tasks, suggested subtasks, owner modules/file paths, test plan, rollback plan, and explicit gate criteria.",
+    "agents": "anthropic-api,openai-api",
+    "rounds": 2,
+    "mode": "--local",
+    "timeout": 500,
+    "output_contract": "docs/plans/dogfood_output_contract_v1.json"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "verdict": "needs_work",
+      "quality_score_10": 7.27,
+      "practicality_score_10": 3.45,
+      "loops": 5,
+      "upgraded": false,
+      "pass": false,
+      "hard_defects": [
+        "Gate Criteria is missing explicit quantitative thresholds.",
+        "Rollback Plan is missing explicit trigger -> action mapping.",
+        "Owner module / file paths is missing concrete repo paths."
+      ],
+      "soft_defects": [
+        "Owner module / file paths are weakly grounded to existing repo files.",
+        "Output practicality is too low for execution handoff."
+      ],
+      "failure_mode": "Gate criteria qualitative-only + rollback missing trigger-action mapping"
+    },
+    {
+      "run": 2,
+      "verdict": "good",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 6.72,
+      "loops": 1,
+      "upgraded": true,
+      "pass": true,
+      "hard_defects": [],
+      "soft_defects": [
+        "Owner module / file paths are weakly grounded to existing repo files."
+      ],
+      "failure_mode": null
+    },
+    {
+      "run": 3,
+      "verdict": "good",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 7.36,
+      "loops": 1,
+      "upgraded": true,
+      "pass": true,
+      "hard_defects": [],
+      "soft_defects": [
+        "Owner module / file paths are weakly grounded to existing repo files."
+      ],
+      "failure_mode": null
+    },
+    {
+      "run": 4,
+      "verdict": "needs_work",
+      "quality_score_10": 9.09,
+      "practicality_score_10": 7.73,
+      "loops": 3,
+      "upgraded": false,
+      "pass": false,
+      "hard_defects": [
+        "Gate Criteria is missing explicit quantitative thresholds."
+      ],
+      "soft_defects": [
+        "Owner module / file paths are weakly grounded to existing repo files."
+      ],
+      "failure_mode": "Gate criteria section lacks numeric thresholds (qualitative descriptions only)"
+    },
+    {
+      "run": 5,
+      "verdict": "needs_work",
+      "quality_score_10": 7.27,
+      "practicality_score_10": 3.35,
+      "loops": 5,
+      "upgraded": false,
+      "pass": false,
+      "hard_defects": [
+        "Gate Criteria is missing explicit quantitative thresholds.",
+        "Rollback Plan is missing explicit trigger -> action mapping.",
+        "Owner module / file paths is missing concrete repo paths."
+      ],
+      "soft_defects": [
+        "Owner module / file paths are weakly grounded to existing repo files.",
+        "Output practicality is too low for execution handoff."
+      ],
+      "failure_mode": "Gate criteria qualitative-only + rollback missing trigger-action mapping + no paths"
+    }
+  ],
+  "summary": {
+    "total_runs": 5,
+    "passed": 2,
+    "failed": 3,
+    "pass_rate": "2/5 (40%)",
+    "target_pass_rate": "4/5 (80%)",
+    "target_met": false,
+    "quality_score": {
+      "mean": 8.73,
+      "min": 7.27,
+      "max": 10.0
+    },
+    "practicality_score": {
+      "mean": 5.72,
+      "min": 3.35,
+      "max": 7.73
+    },
+    "loops_used": {
+      "mean": 3.0,
+      "min": 1,
+      "max": 5
+    }
+  },
+  "comparison_vs_pre_fix": {
+    "practicality_improvement": "Pre-fix mean=4.12 -> Post-fix mean=5.72 (+39%)",
+    "passing_runs_practicality": "Post-fix passing runs avg 7.04 vs pre-fix 4.36",
+    "concreteness_scoring_impact": "Best-of-5 significantly improved practicality for well-structured outputs",
+    "contract_guided_synthesis": "Default contract injection produces more structured output (runs 2-4 all have valid sections)",
+    "binding_constraint_shift": "Binding constraint shifted from low practicality to hard structural defects (missing thresholds/rollback triggers)"
+  },
+  "hard_defect_breakdown": {
+    "gate_criteria_missing_thresholds": 3,
+    "rollback_missing_trigger_action": 2,
+    "missing_paths": 2
+  },
+  "analysis": {
+    "fixes_are_working": "The 3 fixes demonstrably improved output quality. Practicality went from avg 4.12 to 5.72. Passing runs show 6.72-7.73 practicality.",
+    "new_binding_constraint": "Gate Criteria threshold detection is the dominant failure mode (3/3 failures). The _has_quantitative_thresholds() function requires 2+ quantitative signals, but LLM outputs often describe criteria qualitatively.",
+    "upgrade_loop_effectiveness": "Runs 2-3 passed after just 1 loop. Runs 1+5 exhausted all 5 loops without fixing hard defects. The repair prompt may need stronger guidance on numeric thresholds.",
+    "recommended_next_steps": [
+      "Strengthen the contract prompt to explicitly demand numeric thresholds (e.g., 'Gate Criteria MUST include >= 2 quantitative comparisons like p95 < 250ms')",
+      "Broaden _has_quantitative_thresholds() to detect more LLM-native threshold formats",
+      "Add exemplar output to the contract block showing what a passing Gate Criteria section looks like",
+      "Consider --codebase-context to improve path grounding"
+    ]
+  }
+}
