@@ -615,6 +615,36 @@ Here is the orchestration payload:
     assert report.has_valid_json_payload is True
 
 
+def test_first_batch_concreteness_best_of_5_lines():
+    """Generic intro on line 1 should not tank concreteness when later lines are actionable."""
+    from aragora.debate.repo_grounding import assess_repo_grounding
+
+    answer = """
+## Ranked High-Level Tasks
+We propose a comprehensive approach to improving the system quality and reliability.
+- Implement the settlement tracker integration with ERC-8004 reputation scoring in aragora/debate/settlement_hooks.py
+- Add automated data-feed verification for time-delayed claim resolution across consensus outcomes
+- Wire post-debate receipt generation into the Nomic Loop for self-improvement feedback
+
+## Suggested Subtasks
+The following subtasks break down the above goals into manageable pieces for the team.
+- Create unit tests for settlement hook dispatch covering extract and settle lifecycle events in tests/debate/test_settlement_hooks.py
+- Validate ERC-8004 Brier score calculation against known calibration datasets for accuracy
+- Add integration smoke test verifying receipt hash chain integrity end-to-end
+
+## Owner module / file paths
+- aragora/debate/settlement_hooks.py
+- aragora/debate/orchestrator.py
+"""
+    report = assess_repo_grounding(answer, require_owner_paths=False)
+    # The generic first lines ("We propose..." / "The following subtasks...")
+    # score low (~0.1), but actionable lines below them score high (>= 0.5).
+    # With best-of-5, the high-scoring lines should win.
+    assert report.first_batch_concreteness >= 0.5, (
+        f"Expected >= 0.5 with best-of-5, got {report.first_batch_concreteness}"
+    )
+
+
 def test_rollback_trigger_broader_detection():
     """Rollback trigger detection should handle 'abandon in place', 'feature flag', etc."""
     from aragora.debate.output_quality import _has_rollback_trigger

@@ -211,10 +211,19 @@ def assess_repo_grounding(
 
     ranked_text = _find_section_content(sections, _normalize_heading("Ranked High-Level Tasks"))
     subtasks_text = _find_section_content(sections, _normalize_heading("Suggested Subtasks"))
-    candidate_lines = [_first_nonempty_line(ranked_text), _first_nonempty_line(subtasks_text)]
-    line_scores = [_line_concreteness(line) for line in candidate_lines if line]
-    if line_scores:
-        first_batch_concreteness = round(sum(line_scores) / len(line_scores), 4)
+    # Score best of top 5 lines per section, take max across sections.
+    # LLMs often write a generic intro on the first line and put actionable
+    # content on subsequent lines, so first-only scoring is too pessimistic.
+    section_best_scores: list[float] = []
+    for section_text in [ranked_text, subtasks_text]:
+        if not section_text:
+            continue
+        lines = [l.strip() for l in section_text.split("\n") if l.strip()]
+        per_line = [_line_concreteness(l) for l in lines[:5]]
+        if per_line:
+            section_best_scores.append(max(per_line))
+    if section_best_scores:
+        first_batch_concreteness = round(max(section_best_scores), 4)
     else:
         first_batch_concreteness = 0.0
 
