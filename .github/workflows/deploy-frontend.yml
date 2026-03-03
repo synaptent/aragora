@@ -44,6 +44,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate checkout integrity
+        run: |
+          git sparse-checkout disable || true
+          test -f aragora/live/package-lock.json || {
+            echo "::error::aragora/live/package-lock.json missing after checkout on runner ${RUNNER_NAME:-unknown}"
+            git status --short || true
+            ls -la aragora/live || true
+            exit 1
+          }
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -90,6 +100,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate checkout integrity
+        run: |
+          git sparse-checkout disable || true
+          test -f aragora/live/package-lock.json || {
+            echo "::error::aragora/live/package-lock.json missing after checkout on runner ${RUNNER_NAME:-unknown}"
+            git status --short || true
+            ls -la aragora/live || true
+            exit 1
+          }
 
       - name: Skip if already deployed (scheduled runs only)
         if: github.event_name == 'schedule'
@@ -198,6 +218,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate checkout integrity
+        run: |
+          git sparse-checkout disable || true
+          test -f aragora/live/package-lock.json || {
+            echo "::error::aragora/live/package-lock.json missing after checkout on runner ${RUNNER_NAME:-unknown}"
+            git status --short || true
+            ls -la aragora/live || true
+            exit 1
+          }
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
