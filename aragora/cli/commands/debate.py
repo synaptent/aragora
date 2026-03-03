@@ -1355,7 +1355,9 @@ def cmd_ask(args: argparse.Namespace) -> None:
         quality_score = float(getattr(report, "quality_score_10", 0.0))
         practicality_score = float(getattr(report, "practicality_score_10", 0.0))
         defect_penalty = float(len(getattr(report, "defects", []) or []))
-        return (quality_score, practicality_score, -defect_penalty)
+        # Fewer defects > higher practicality — prevents rejecting a
+        # defect-free repair just because practicality dipped slightly.
+        return (quality_score, -defect_penalty, practicality_score)
 
     def _is_better_report(candidate: Any, incumbent: Any) -> bool:
         return _report_rank(candidate) > _report_rank(incumbent)
