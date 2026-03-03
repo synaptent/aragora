@@ -28,14 +28,46 @@ async def call_claude(prompt: str, system: str = "") -> str:
     return resp.content[0].text
 
 
+def _resolve_openrouter_key() -> str:
+    """Resolve OpenRouter API key: env → dedicated AWS secret → bundled secret."""
+    import os
+
+    # 1. Environment variable (fastest)
+    key = os.getenv("OPENROUTER_API_KEY", "")
+    if key and not key.startswith("new-key"):
+        return key
+
+    # 2. Dedicated AWS secret at aragora/api/openrouter
+    try:
+        import boto3
+
+        client = boto3.client("secretsmanager")
+        resp = client.get_secret_value(SecretId="aragora/api/openrouter")
+        key = resp["SecretString"].strip()
+        if key:
+            return key
+    except Exception:
+        pass
+
+    # 3. Bundled production secret
+    try:
+        from aragora.config.secrets import get_secret
+
+        key = get_secret("OPENROUTER_API_KEY") or ""
+        if key and not key.startswith("new-key"):
+            return key
+    except Exception:
+        pass
+
+    msg = "OPENROUTER_API_KEY not found in env, AWS (aragora/api/openrouter), or bundled secrets"
+    raise RuntimeError(msg)
+
+
 async def call_openrouter(prompt: str, system: str = "", model: str = "openai/gpt-5.2") -> str:
     """OpenRouter API call — supports GPT-5.2, Gemini 3.1, Grok 4."""
     import aiohttp
-    from aragora.config.secrets import get_secret
 
-    api_key = get_secret("OPENROUTER_API_KEY")
-    if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY not found in AWS Secrets Manager or environment")
+    api_key = _resolve_openrouter_key()
     msgs = []
     if system:
         msgs.append({"role": "system", "content": system})
