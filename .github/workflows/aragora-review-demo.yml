@@ -1,0 +1,28 @@
+name: Aragora Code Review (Demo)
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+concurrency:
+  group: aragora-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: "!github.event.pull_request.draft"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Aragora Multi-Agent Code Review
+        uses: ./.github/actions/aragora-code-review
+        with:
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          rounds: 2
+          focus: security,performance,quality
+          output-format: github
+          post-comment: true
