@@ -74,6 +74,28 @@ def _normalize_repo_path(candidate: str) -> str | None:
     return value
 
 
+def _resolve_path_against_repo(candidate: str, repo_root: Path) -> tuple[str, Path]:
+    """Resolve extracted path against repo root, handling stripped absolute paths."""
+    raw = candidate.strip()
+    root = repo_root.resolve()
+    root_prefix = str(root).lstrip("/")
+
+    # Absolute paths are normalized by _normalize_repo_path() via lstrip("/"),
+    # so remap `<root>/...` back to a repo-relative path when possible.
+    if root_prefix and (raw == root_prefix or raw.startswith(f"{root_prefix}/")):
+        rel = "." if raw == root_prefix else raw[len(root_prefix) + 1 :]
+        return rel, root / rel
+
+    abs_candidate = Path("/" + raw)
+    try:
+        rel = str(abs_candidate.relative_to(root))
+        return rel, abs_candidate
+    except ValueError:
+        pass
+
+    return raw, root / raw
+
+
 def extract_repo_paths(text: str) -> list[str]:
     """Extract normalized candidate repository paths from text."""
     if not text:
@@ -180,15 +202,22 @@ def assess_repo_grounding(
 
     owner_text = _find_section_content(sections, _normalize_heading("Owner module / file paths"))
     path_source = owner_text or text
-    mentioned_paths = extract_repo_paths(path_source)
+    extracted_paths = extract_repo_paths(path_source)
 
     root = Path(repo_root or os.getcwd())
+    mentioned_paths: list[str] = []
+    _seen_mentioned: set[str] = set()
     existing_paths: list[str] = []
     missing_paths: list[str] = []
     new_paths: list[str] = []
     _NEW_FILE_EXTENSIONS = {".py", ".ts", ".tsx", ".js", ".json", ".yaml", ".yml", ".md"}
-    for rel_path in mentioned_paths:
-        full = root / rel_path
+    for extracted in extracted_paths:
+        rel_path, full = _resolve_path_against_repo(extracted, root)
+        if rel_path in _seen_mentioned:
+            continue
+        _seen_mentioned.add(rel_path)
+        mentioned_paths.append(rel_path)
+
         if full.exists():
             existing_paths.append(rel_path)
         elif full.suffix in _NEW_FILE_EXTENSIONS:
