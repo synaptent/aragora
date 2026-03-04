@@ -546,45 +546,65 @@ export default function DeveloperPortal() {
         <div className="border border-acid-green/30 bg-surface/30 p-6 mb-6">
           <h2 className="text-lg font-mono text-acid-cyan mb-4">QUICK START</h2>
 
-          <div className="space-y-4">
+          <div className="space-y-6">
+            {/* Zero-dependency debate */}
             <div>
-              <h3 className="text-sm font-mono text-text mb-2">Authentication</h3>
-              <p className="text-xs font-mono text-text-muted mb-2">
-                Include your API key in the Authorization header:
-              </p>
+              <h3 className="text-sm font-mono text-text mb-2">Run a Debate (no server needed)</h3>
               <pre className="text-xs font-mono bg-background p-3 border border-acid-green/20 text-acid-green overflow-x-auto">
-{`curl -H "Authorization: Bearer YOUR_API_KEY" \\
-  ${API_BASE}/api/debates`}
+{`pip install aragora-debate`}
               </pre>
+              <pre className="text-xs font-mono bg-background p-3 mt-2 border border-acid-green/20 text-acid-green overflow-x-auto whitespace-pre">
+{`from aragora_debate import Debate, create_agent
+import asyncio
+
+async def main():
+    debate = Debate(topic="Should we use K8s or VMs?", rounds=2)
+    debate.add_agent(create_agent("mock", name="analyst",
+        proposal="K8s enables auto-scaling and self-healing."))
+    debate.add_agent(create_agent("mock", name="skeptic",
+        proposal="VMs are simpler; our team lacks K8s expertise."))
+    result = await debate.run()
+    print(f"Consensus: {result.consensus_reached}")
+
+asyncio.run(main())`}
+              </pre>
+              <p className="text-[10px] font-mono text-text-muted mt-1">
+                Zero dependencies. No API keys. Works offline. Add real LLMs with{' '}
+                <code className="text-acid-green">pip install aragora-debate[anthropic]</code>
+              </p>
             </div>
 
+            {/* API Authentication */}
             <div>
-              <h3 className="text-sm font-mono text-text mb-2">Create a Debate</h3>
+              <h3 className="text-sm font-mono text-text mb-2">REST API (requires server)</h3>
               <pre className="text-xs font-mono bg-background p-3 border border-acid-green/20 text-acid-green overflow-x-auto">
 {`curl -X POST ${API_BASE}/api/debates \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{
-    "topic": "Should AI be regulated?",
-    "agents": ["claude", "gpt4"],
-    "rounds": 3
-  }'`}
+  -d '{"topic": "Should AI be regulated?", "agents": ["claude", "gpt4"], "rounds": 3}'`}
               </pre>
             </div>
 
+            {/* SDK install */}
             <div>
               <h3 className="text-sm font-mono text-text mb-2">SDK Installation</h3>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-text-muted">Python:</span>
+                  <span className="text-xs font-mono text-text-muted">Debate engine:</span>
                   <code className="text-xs font-mono bg-background px-2 py-1 border border-acid-green/20 text-acid-green">
-                    pip install aragora
+                    pip install aragora-debate
                   </code>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono text-text-muted">JavaScript:</span>
+                  <span className="text-xs font-mono text-text-muted">Python SDK:</span>
                   <code className="text-xs font-mono bg-background px-2 py-1 border border-acid-green/20 text-acid-green">
-                    npm install aragora
+                    pip install aragora-sdk
+                  </code>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-text-muted">TypeScript:</span>
+                  <code className="text-xs font-mono bg-background px-2 py-1 border border-acid-green/20 text-acid-green">
+                    npm install @aragora/sdk
                   </code>
                 </div>
               </div>
@@ -592,30 +612,36 @@ export default function DeveloperPortal() {
           </div>
         </div>
 
-        {/* API Reference Link */}
+        {/* Documentation Links */}
         <div className="border border-acid-green/30 bg-surface/30 p-6">
           <h2 className="text-lg font-mono text-acid-cyan mb-4">DOCUMENTATION</h2>
           <div className="flex flex-wrap gap-4">
             <a
-              href="/docs/api"
+              href="https://github.com/synaptent/aragora/blob/main/docs/api/API_REFERENCE.md"
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-4 py-2 text-xs font-mono border border-acid-green/50 text-acid-green hover:bg-acid-green/10 transition-colors"
             >
               API REFERENCE
             </a>
             <a
-              href="/docs/sdk"
+              href="https://github.com/synaptent/aragora/blob/main/docs/SDK_GUIDE.md"
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-4 py-2 text-xs font-mono border border-acid-green/50 text-acid-green hover:bg-acid-green/10 transition-colors"
             >
               SDK GUIDE
             </a>
             <a
-              href="/docs/webhooks"
+              href="https://github.com/synaptent/aragora/blob/main/docs/START_HERE.md"
+              target="_blank"
+              rel="noopener noreferrer"
               className="px-4 py-2 text-xs font-mono border border-acid-green/50 text-acid-green hover:bg-acid-green/10 transition-colors"
             >
-              WEBHOOKS
+              START HERE
             </a>
             <a
-              href="https://github.com/aragora/examples"
+              href="https://github.com/synaptent/aragora/tree/main/examples"
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 text-xs font-mono border border-acid-green/50 text-acid-green hover:bg-acid-green/10 transition-colors"
