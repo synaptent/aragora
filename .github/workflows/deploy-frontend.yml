@@ -117,37 +117,25 @@ jobs:
             exit 1
           fi
 
-      - name: Ensure GitHub CLI is available
+      - name: Check if SHA already deployed (scheduled runs only)
         if: github.event_name == 'schedule'
-        run: |
-          if command -v gh >/dev/null 2>&1; then
-            gh --version | head -1
-            exit 0
-          fi
-          echo "::warning::gh CLI missing on runner; installing fallback package"
-          if command -v sudo >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y gh
-          else
-            apt-get update
-            apt-get install -y gh
-          fi
-          gh --version | head -1
+        id: deploy-cache
+        uses: actions/cache/restore@v4
+        with:
+          key: frontend-deployed-${{ github.sha }}
+          path: .deploy-marker
 
-      - name: Skip if already deployed (scheduled runs only)
+      - name: Set skip output
         if: github.event_name == 'schedule'
         id: skip-check
         run: |
-          LAST_DEPLOY_SHA=$(gh run list --workflow=deploy-frontend.yml --status=success --limit=1 --json headSha -q '.[0].headSha' 2>/dev/null || echo "")
-          if [ -n "$LAST_DEPLOY_SHA" ] && [ "$LAST_DEPLOY_SHA" = "${{ github.sha }}" ]; then
+          if [ "${{ steps.deploy-cache.outputs.cache-hit }}" = "true" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Already deployed this SHA (${{ github.sha }}), skipping"
+            echo "SHA ${{ github.sha }} was previously deployed, skipping"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "New commit detected, proceeding"
+            echo "SHA ${{ github.sha }} not yet deployed, proceeding"
           fi
-        env:
-          GH_TOKEN: ${{ github.token }}
 
       - name: Validate Vercel configuration
         if: steps.skip-check.outputs.skip != 'true'
@@ -230,6 +218,17 @@ jobs:
             VERIFY_FRONTEND_SOFT_FAIL=1 \
               bash scripts/verify_frontend_routes.sh "$DEPLOY_URL"
           fi
+
+      - name: Mark SHA as deployed
+        if: steps.skip-check.outputs.skip != 'true'
+        run: echo "${{ github.sha }}" > .deploy-marker
+
+      - name: Cache deploy marker
+        if: steps.skip-check.outputs.skip != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: frontend-deployed-${{ github.sha }}
+          path: .deploy-marker
 
   deploy-docker:
     name: Build & Push Frontend Docker Image
