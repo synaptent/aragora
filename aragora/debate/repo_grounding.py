@@ -252,3 +252,40 @@ def assess_repo_grounding(
         first_batch_concreteness=first_batch_concreteness,
         practicality_score_10=round(min(10.0, max(0.0, practicality_score)), 2),
     )
+
+
+def format_path_verification_summary(report: RepoGroundingReport) -> str:
+    """Format a RepoGroundingReport into a human-readable CLI summary.
+
+    Args:
+        report: The grounding report from assess_repo_grounding().
+
+    Returns:
+        Multi-line string suitable for printing to stderr.
+    """
+    lines: list[str] = []
+    total = len(report.mentioned_paths)
+    verified = len(report.existing_paths)
+    new = len(report.new_paths)
+    missing = len(report.missing_paths)
+
+    lines.append(
+        f"[path-check] {verified}/{total} paths verified ({report.path_existence_rate:.0%})"
+    )
+
+    if new:
+        lines.append(f"[path-check] {new} new file(s) proposed (parent dir exists)")
+    if missing:
+        lines.append(f"[path-check] {missing} path(s) NOT FOUND:")
+        for p in report.missing_paths:
+            lines.append(f"  - {p}")
+
+    lines.append(
+        f"[path-check] practicality={report.practicality_score_10}/10"
+        f" concreteness={report.first_batch_concreteness:.2f}"
+    )
+
+    if report.placeholder_hits:
+        lines.append(f"[path-check] placeholders detected: {', '.join(report.placeholder_hits)}")
+
+    return "\n".join(lines)

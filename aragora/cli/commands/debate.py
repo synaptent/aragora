@@ -961,7 +961,30 @@ def cmd_ask(args: argparse.Namespace) -> None:
                 "This task was interpreted from an ambiguous input and requires confirmation."
             )
 
-    codebase_context_requested = bool(getattr(args, "codebase_context", False))
+    # Auto-detect self-improvement tasks and enable codebase context injection
+    _SELF_IMPROVEMENT_KEYWORDS = {
+        "improve",
+        "refactor",
+        "codebase",
+        "aragora",
+        "architecture",
+        "module",
+        "component",
+        "self-improve",
+        "dogfood",
+    }
+    task_lower = task.lower()
+    auto_codebase_context = getattr(args, "mode", None) == "orchestrator" or any(
+        kw in task_lower for kw in _SELF_IMPROVEMENT_KEYWORDS
+    )
+    codebase_context_requested = (
+        bool(getattr(args, "codebase_context", False)) or auto_codebase_context
+    )
+    if auto_codebase_context and not getattr(args, "codebase_context", False):
+        print(
+            "[context] auto-enabling codebase context (self-improvement task detected)",
+            file=sys.stderr,
+        )
     codebase_context_repo: Path | None = None
     if codebase_context_requested:
         from aragora.debate.context_engineering import (
@@ -1030,6 +1053,26 @@ def cmd_ask(args: argparse.Namespace) -> None:
                     f"[context-engineering] no context injected ({reason})",
                     file=sys.stderr,
                 )
+
+    # Always inject static inventory for codebase-context tasks as a lightweight fallback
+    if codebase_context_requested:
+        try:
+            from aragora.debate.codebase_context import build_static_inventory
+
+            repo_raw = getattr(args, "codebase_context_path", None) or os.getcwd()
+            inventory = build_static_inventory(repo_root=str(repo_raw))
+            if inventory:
+                if context:
+                    context = f"{inventory}\n\n{context}"
+                else:
+                    context = inventory
+                if args.verbose:
+                    print(
+                        f"[context] static inventory injected chars={len(inventory)}",
+                        file=sys.stderr,
+                    )
+        except Exception as e:  # noqa: BLE001 - best-effort enrichment
+            print(f"[context] static inventory failed: {e}", file=sys.stderr)
 
     agents = args.agents
     rounds = args.rounds
@@ -1847,6 +1890,21 @@ def cmd_ask(args: argparse.Namespace) -> None:
                 print(f"[quality] defect: {defect}")
     elif post_consensus_quality:
         print("[quality] skipped=no_contract reason=no_explicit_output_contract_detected")
+
+    # Post-debate path verification for codebase-context tasks
+    if codebase_context_requested and hasattr(result, "final_answer") and result.final_answer:
+        try:
+            from aragora.debate.repo_grounding import (
+                assess_repo_grounding,
+                format_path_verification_summary,
+            )
+
+            repo_raw = getattr(args, "codebase_context_path", None) or os.getcwd()
+            grounding_report = assess_repo_grounding(result.final_answer, repo_root=str(repo_raw))
+            summary = format_path_verification_summary(grounding_report)
+            print(f"\n{summary}")
+        except Exception as e:  # noqa: BLE001 - best-effort post-debate check
+            logger.debug("Post-debate path verification failed: %s", e)
 
     # Display explanation if --explain was requested
     if explain:
