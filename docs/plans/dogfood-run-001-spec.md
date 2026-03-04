@@ -387,3 +387,49 @@ The synthesizer preserved one dissenting position:
 > "I respectfully maintain that the current task breakdown is optimal... these represent distinct technical domains (DAG infrastructure, NLP processing, knowledge integration, spec generation, cryptography) that benefit from focused implementation and testing."
 
 This dissent is wrong in the specific case (the tasks duplicate existing work) but correct in general principle (distinct technical domains do benefit from focused implementation). The error is in not knowing the domains were already implemented, not in the decomposition strategy.
+
+---
+
+## Dogfood Run 003 Results (Context Injection + Harnesses)
+
+### Date
+- 2026-03-03
+
+### Goal
+- Re-run baseline vs enhanced debate generation after wiring static codebase inventory + path-grounding checks.
+- Compare practical output quality and path realism.
+
+### Benchmark Configuration
+- Baseline: `aragora ask ... --agents codex,gemini-cli,codex --rounds 1 --consensus majority --no-learn`
+- Enhanced: same command + `--codebase-context --codebase-context-path <repo> --codebase-context-harnesses`
+- Both runs used strict CLI timeout and external watchdog timeout.
+
+### Outcome
+
+| Variant | Return | Timed Out | Stdout chars | Practicality | Path existence |
+|---|---:|---:|---:|---:|---:|
+| Baseline | 1 / -15 (across attempts) | Yes | 0-431 | 3.0 | 0.0 |
+| Enhanced | 1 | No at wrapper level, but internal strict timeout hit | 0 | 3.0 | 0.0 |
+
+### Key Findings
+1. No final debate/spec payload was emitted before timeout in either variant, so there was no usable baseline-vs-enhanced quality delta.
+2. Baseline occasionally emitted only pipeline lifecycle logs (`[PIPE_START] ... [PIPE_DONE]`) without final answer content.
+3. Enhanced runs with harness-backed context frequently reached strict wall-clock timeout during/after orchestration.
+4. Error traces indicate timeout/cleanup instability in async subprocess handling (`_StrictWallClockTimeout`, `Event loop is closed`, unclosed subprocess transports/sockets).
+
+### Artifacts
+- `/tmp/dogfood_bestorder_summary.json`
+- `/tmp/dogfood_bestorder_baseline_stderr.txt`
+- `/tmp/dogfood_bestorder_enhanced_stderr.txt`
+- `/tmp/dogfood_bestorder2_summary.json`
+- `/tmp/dogfood_fallback_summary.json`
+- `/tmp/dogfood_fallback_baseline_stdout.txt`
+
+### Gate Decision
+- **NO-GO for quality comparison**: benchmark infrastructure did not produce final answer payloads reliably.
+
+### Required Follow-up (Run 004 Preconditions)
+1. Harden timeout path in `cmd_ask`/`run_debate` so cancellation cleanly terminates child CLI processes and still returns best-available answer text.
+2. Ensure post-timeout behavior emits a deterministic failure payload (not empty stdout) so scoring harness can distinguish infra failure from low-quality output.
+3. Add a focused regression test around strict timeout + child subprocess cleanup for CLI agent runs.
+4. Re-run A/B benchmark only after timeout regression is fixed.
