@@ -335,6 +335,7 @@ class AuthChecksMixin:
     # Path prefixes exempt ONLY for GET requests (read-only access)
     # These are public dashboard data endpoints that don't require auth for viewing
     AUTH_EXEMPT_GET_PREFIXES: tuple[str, ...] = (
+        "/api/v1/playground/debate/",  # Public shareable debate links (GET only)
         "/api/evidence/",  # Evidence read-only access
         "/api/v1/evidence/",  # Evidence read-only access (v1)
         "/api/evolution/",  # Public evolution data
