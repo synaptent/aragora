@@ -1164,14 +1164,21 @@ async def handle_debate_completion(
             if trace:
                 thinking_traces[agent.name] = trace
         if thinking_traces:
-            if not isinstance(ctx.result.metadata, dict):
-                ctx.result.metadata = {}
-            ctx.result.metadata["thinking_traces"] = thinking_traces
-            logger.info(
-                "thinking_traces_attached debate_id=%s agents=%s",
-                state.debate_id,
-                len(thinking_traces),
-            )
+            metadata = getattr(ctx.result, "metadata", None)
+            if not isinstance(metadata, dict):
+                try:
+                    setattr(ctx.result, "metadata", {})
+                except (AttributeError, TypeError):
+                    metadata = None
+                else:
+                    metadata = getattr(ctx.result, "metadata", None)
+            if isinstance(metadata, dict):
+                metadata["thinking_traces"] = thinking_traces
+                logger.info(
+                    "thinking_traces_attached debate_id=%s agents=%s",
+                    state.debate_id,
+                    len(thinking_traces),
+                )
 
     # Queue for Supabase background sync
     arena._queue_for_supabase_sync(ctx, ctx.result)

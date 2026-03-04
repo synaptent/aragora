@@ -18,13 +18,6 @@ const ASCII_BANNER = `    \u2584\u2584\u2584       \u2588\u2588\u2580\u2588\u258
      \u2591   \u2592     \u2591\u2591   \u2591   \u2591   \u2592   \u2591 \u2591   \u2591 \u2591 \u2591 \u2591 \u2592    \u2591\u2591   \u2591   \u2591   \u2592
          \u2591  \u2591   \u2591           \u2591  \u2591      \u2591     \u2591 \u2591     \u2591           \u2591  \u2591`;
 
-const EXAMPLE_TOPICS = [
-  'Should we adopt microservices?',
-  'Build vs buy our auth system',
-  'Is remote-first the right policy?',
-  'Should we raise a Series A now?',
-];
-
 const PROGRESS_MESSAGES = [
   'Assembling analyst panel...',
   'Agents debating your question...',
@@ -306,41 +299,6 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
             {isRunning ? 'Agents debating...' : isDark ? '> Start Debate' : 'Start Debate'}
           </button>
         </form>
-
-        {/* Example topic chips — reduce blank-textarea friction */}
-        {!isRunning && !result && (
-          <div className="flex flex-wrap justify-center gap-2 mt-6 max-w-xl mx-auto">
-            {EXAMPLE_TOPICS.map((topic) => (
-              <button
-                key={topic}
-                type="button"
-                onClick={() => { setQuestion(topic); }}
-                className="text-xs transition-all hover:scale-[1.02] cursor-pointer"
-                style={{
-                  fontFamily: 'var(--font-landing)',
-                  color: 'var(--text-muted)',
-                  backgroundColor: 'var(--surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-button)',
-                  padding: '8px 14px',
-                  opacity: 0.7,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                  e.currentTarget.style.color = 'var(--accent)';
-                  e.currentTarget.style.opacity = '1';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--border)';
-                  e.currentTarget.style.color = 'var(--text-muted)';
-                  e.currentTarget.style.opacity = '0.7';
-                }}
-              >
-                {isDark ? `> ${topic}` : topic}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Loading state */}
         {isRunning && (

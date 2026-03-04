@@ -66,7 +66,7 @@ def cmd_swarm(args: argparse.Namespace) -> None:
     autonomy_level = autonomy_map.get(autonomy_str, AutonomyLevel.PROPOSE_APPROVE)
 
     if not goal and not spec_file and not from_obsidian:
-        print("Error: provide a goal, --spec file, or --from-obsidian vault")
+        print("Error: provide a goal or --spec file (or --from-obsidian vault)")
         print('Usage: aragora swarm "your goal here"')
         return
 

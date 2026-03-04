@@ -219,13 +219,13 @@ Be specific enough that an engineer could implement it.""",
             name="architect",
             model="claude-opus-4-6",
             role="proposer",
-            timeout=120,
+            timeout=300,
         ),
         AnthropicAPIAgent(
             name="reviewer",
             model="claude-opus-4-6",
             role="synthesizer",
-            timeout=120,
+            timeout=300,
         ),
     ]
 
@@ -234,10 +234,27 @@ Be specific enough that an engineer could implement it.""",
     arena = Arena(env, agents, protocol)
     result = await arena.run()
 
+    # Filter ChaosTheater noise from design output
+    _CHAOS_MARKERS = (
+        "[System:",
+        "wild bug appeared",
+        "cognitive hiccup",
+        "FATAL EXCEPTION",
+        "brain.exe",
+        "is a teapot",
+        "thinking credits",
+        "QUOTA POLICE",
+        "NaN stares back",
+    )
+    design_text = result.final_answer or ""
+    if any(marker in design_text for marker in _CHAOS_MARKERS) or len(design_text) < 80:
+        print("[WARN] Design output appears to be ChaosTheater noise — filtering.")
+        design_text = ""
+
     data = {
         "timestamp": datetime.now().isoformat(),
         "improvement": improvement,
-        "design": result.final_answer,
+        "design": design_text,
         "consensus_reached": result.consensus_reached,
     }
 

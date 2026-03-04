@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { RETURN_URL_STORAGE_KEY } from '@/utils/returnUrl';
 
@@ -106,6 +107,40 @@ export function DebateResultPreview({ result }: DebateResultPreviewProps) {
 
   const handleSignup = saveDebateAndReturnUrl;
   const handleLogin = saveDebateAndReturnUrl;
+
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/debate/${result.id}`;
+    const shareText = `I stress-tested "${result.topic}" with AI agents on Aragora.`;
+
+    // Prefer Web Share API on mobile
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'Aragora Debate', text: shareText, url: shareUrl });
+        return;
+      } catch {
+        // User cancelled or share failed — fall through to clipboard
+      }
+    }
+
+    // Clipboard fallback
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      // Fallback for older browsers without clipboard API
+      const textarea = document.createElement('textarea');
+      textarea.value = shareUrl;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="text-left space-y-4 mt-8">
@@ -256,6 +291,24 @@ export function DebateResultPreview({ result }: DebateResultPreviewProps) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Share bar — between Verdict and Receipt */}
+      {result.id && (
+        <div className="flex items-center gap-3 p-3 border border-[var(--border)]">
+          <button
+            onClick={handleShare}
+            className="flex-1 font-mono text-xs py-2 border border-[var(--acid-green)] text-[var(--acid-green)] hover:bg-[var(--acid-green)]/10 transition-colors font-bold"
+          >
+            {copied ? 'LINK COPIED!' : 'SHARE THIS DEBATE'}
+          </button>
+          <Link
+            href={`/debate/${result.id}`}
+            className="font-mono text-xs text-[var(--text-muted)] hover:text-[var(--acid-green)] transition-colors"
+          >
+            View full debate &rarr;
+          </Link>
         </div>
       )}
 

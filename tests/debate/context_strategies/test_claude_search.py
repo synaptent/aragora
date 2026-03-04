@@ -24,8 +24,8 @@ class TestClaudeSearchStrategyAttributes:
         assert s.default_timeout == CLAUDE_SEARCH_TIMEOUT
 
     def test_default_timeout_value(self) -> None:
-        # Default from env is 120.0
-        assert CLAUDE_SEARCH_TIMEOUT == 120.0
+        # Module default is 240.0 unless overridden via environment.
+        assert CLAUDE_SEARCH_TIMEOUT == 240.0
 
 
 class TestClaudeSearchIsAvailable:
