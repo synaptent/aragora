@@ -32,6 +32,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate checkout integrity
+        run: |
+          git sparse-checkout disable || true
+          if [ ! -f pyproject.toml ]; then
+            echo "::error::Missing pyproject.toml after checkout"
+            echo "pwd: $(pwd)"
+            echo "Top-level files:"
+            ls -la
+            exit 1
+          fi
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
