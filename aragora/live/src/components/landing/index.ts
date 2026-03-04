@@ -22,3 +22,4 @@ export {
 export { FeatureShowcase } from './FeatureShowcase';
 export { IntegrationsGrid } from './IntegrationsGrid';
 export { LiveDemoSection } from './LiveDemoSection';
+export { DeveloperSection } from './DeveloperSection';
