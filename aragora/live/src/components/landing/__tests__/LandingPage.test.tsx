@@ -32,6 +32,10 @@ jest.mock('../IntegrationsGrid', () => ({
   IntegrationsGrid: () => <section data-testid="integrations">Integrations</section>,
 }));
 
+jest.mock('../OracleSection', () => ({
+  OracleSection: () => <section data-testid="oracle">Oracle</section>,
+}));
+
 jest.mock('../LiveDemoSection', () => ({
   LiveDemoSection: () => <section data-testid="live-demo">Live Demo</section>,
 }));
@@ -59,6 +63,7 @@ describe('LandingPage', () => {
       expect(screen.getByTestId('problem')).toBeInTheDocument();
       expect(screen.getByTestId('features')).toBeInTheDocument();
       expect(screen.getByTestId('integrations')).toBeInTheDocument();
+      expect(screen.getByTestId('oracle')).toBeInTheDocument();
       expect(screen.getByTestId('live-demo')).toBeInTheDocument();
       expect(screen.getByTestId('pricing-section')).toBeInTheDocument();
       expect(screen.getByTestId('footer')).toBeInTheDocument();

@@ -9,6 +9,7 @@ import { ThemeSelector } from './ThemeSelector';
 
 const NAV_LINKS = [
   { href: '#how-it-works', label: 'How it works', anchor: true },
+  { href: '/oracle', label: 'Oracle', anchor: false },
   { href: '/pricing', label: 'Pricing', anchor: false },
   { href: '/eu-ai-act', label: 'Compliance', anchor: false },
   { href: '/login', label: 'Log in', anchor: false },
