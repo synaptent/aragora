@@ -1,6 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import { LandingPage } from '../LandingPage';
 
+jest.mock('@/context/ThemeContext', () => ({
+  useTheme: () => ({ theme: 'dark', setTheme: jest.fn() }),
+}));
+
 // Mock all child components to isolate LandingPage logic
 jest.mock('../Header', () => ({
   Header: () => <header data-testid="header">Header</header>,
@@ -8,43 +12,36 @@ jest.mock('../Header', () => ({
 
 jest.mock('../HeroSection', () => ({
   HeroSection: () => (
-    <div data-testid="hero-section">
-      <a href="/playground">TRY A FREE DEBATE</a>
-      <a href="/login">SIGN IN FOR REAL AI MODELS</a>
-    </div>
+    <div data-testid="hero-section">Hero</div>
   ),
 }));
 
-jest.mock('../VerticalCards', () => ({
-  VerticalCards: () => <section data-testid="vertical-cards">Vertical Cards</section>,
+jest.mock('../HowItWorksSection', () => ({
+  HowItWorksSection: () => <section data-testid="how-it-works">How It Works</section>,
 }));
 
-jest.mock('../WhyAragoraSection', () => ({
-  WhyAragoraSection: () => <section data-testid="why-aragora">Why Aragora</section>,
+jest.mock('../ProblemSection', () => ({
+  ProblemSection: () => <section data-testid="problem">Problem</section>,
 }));
 
-jest.mock('../DebateProtocolSection', () => ({
-  DebateProtocolSection: () => (
-    <section data-testid="debate-protocol">Debate Protocol</section>
-  ),
+jest.mock('../FeatureShowcase', () => ({
+  FeatureShowcase: () => <section data-testid="features">Features</section>,
 }));
 
-jest.mock('../CapabilitiesSection', () => ({
-  CapabilitiesSection: () => (
-    <section data-testid="capabilities">Capabilities</section>
-  ),
+jest.mock('../IntegrationsGrid', () => ({
+  IntegrationsGrid: () => <section data-testid="integrations">Integrations</section>,
 }));
 
-jest.mock('../TrustSection', () => ({
-  TrustSection: () => <section data-testid="trust">Trust</section>,
-}));
-
-jest.mock('../Footer', () => ({
-  Footer: () => <footer data-testid="footer">Footer</footer>,
+jest.mock('../LiveDemoSection', () => ({
+  LiveDemoSection: () => <section data-testid="live-demo">Live Demo</section>,
 }));
 
 jest.mock('../PricingSection', () => ({
   PricingSection: () => <section data-testid="pricing-section">Pricing</section>,
+}));
+
+jest.mock('../Footer', () => ({
+  Footer: () => <footer data-testid="footer">Footer</footer>,
 }));
 
 describe('LandingPage', () => {
@@ -53,45 +50,32 @@ describe('LandingPage', () => {
   });
 
   describe('initial render', () => {
-    it('renders all page sections in correct order', () => {
+    it('renders all page sections', () => {
       render(<LandingPage />);
 
       expect(screen.getByTestId('header')).toBeInTheDocument();
       expect(screen.getByTestId('hero-section')).toBeInTheDocument();
-      expect(screen.getByTestId('vertical-cards')).toBeInTheDocument();
-      expect(screen.getByTestId('why-aragora')).toBeInTheDocument();
-      expect(screen.getByTestId('debate-protocol')).toBeInTheDocument();
-      expect(screen.getByTestId('capabilities')).toBeInTheDocument();
-      expect(screen.getByTestId('trust')).toBeInTheDocument();
+      expect(screen.getByTestId('how-it-works')).toBeInTheDocument();
+      expect(screen.getByTestId('problem')).toBeInTheDocument();
+      expect(screen.getByTestId('features')).toBeInTheDocument();
+      expect(screen.getByTestId('integrations')).toBeInTheDocument();
+      expect(screen.getByTestId('live-demo')).toBeInTheDocument();
+      expect(screen.getByTestId('pricing-section')).toBeInTheDocument();
       expect(screen.getByTestId('footer')).toBeInTheDocument();
     });
 
-    it('renders main element with proper classes', () => {
-      render(<LandingPage />);
+    it('renders container with min-h-screen', () => {
+      const { container } = render(<LandingPage />);
 
-      const main = screen.getByRole('main');
-      expect(main).toHaveClass('min-h-screen');
+      const wrapper = container.firstElementChild;
+      expect(wrapper).toHaveClass('min-h-screen');
     });
 
-    it('renders dual CTA buttons in hero section', () => {
+    it('does not render a sidebar', () => {
       render(<LandingPage />);
 
-      expect(screen.getByText('TRY A FREE DEBATE')).toBeInTheDocument();
-      expect(screen.getByText('SIGN IN FOR REAL AI MODELS')).toBeInTheDocument();
-    });
-
-    it('links playground CTA to /playground', () => {
-      render(<LandingPage />);
-
-      const playgroundLink = screen.getByText('TRY A FREE DEBATE').closest('a');
-      expect(playgroundLink).toHaveAttribute('href', '/playground');
-    });
-
-    it('links sign-in CTA to /login', () => {
-      render(<LandingPage />);
-
-      const loginLink = screen.getByText('SIGN IN FOR REAL AI MODELS').closest('a');
-      expect(loginLink).toHaveAttribute('href', '/login');
+      // Landing page should not include any sidebar
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
     });
   });
 });
