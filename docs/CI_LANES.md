@@ -8,7 +8,7 @@ The lane system is now enforced by automation, not just convention:
 
 - **PR admission controller:** `.github/workflows/pr-admission-controller.yml` runs `scripts/pr_admission_controller.py` and blocks PRs when ready-lane policy is violated.
 - **Stale-run GC:** `.github/workflows/pr-stale-run-gc.yml` runs `scripts/pr_stale_run_gc.py` to cancel orphaned or stale-SHA runs that consume runner capacity.
-- **Single ready lane per stream:** only one non-draft PR should remain active per stream; all other PRs in that stream stay draft until promoted.
+- **Single ready lane:** only one non-draft PR should remain active at a time; all other PRs stay draft until promoted.
 
 Operator quick commands:
 

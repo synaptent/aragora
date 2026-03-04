@@ -6,12 +6,13 @@
 
 Use these rules before reading track-level assignments:
 
-1. One active ready PR at a time per stream. All other PRs must be draft with auto-merge disabled.
-2. CI lane ownership is policy-driven (not person-driven): the PR Admission Controller allows only one ready PR per stream at a time.
-3. Context-engineering baseline is already in `main`; do not open derivative PRs for `codebase_context.py`, `repo_grounding.py`, or `cli/commands/debate.py` without explicit owner handoff.
+1. Repository-wide single ready lane: only one non-draft PR may be "ready for review" at a time. All other PRs must stay draft with auto-merge disabled.
+2. Admission controller is authoritative: `.github/workflows/pr-admission-controller.yml` and `scripts/pr_admission_controller.py` enforce ready-lane policy.
+3. Stale-run GC is mandatory before retriggers: run `python3 scripts/pr_stale_run_gc.py --repo synaptent/aragora --max-runs 500` (with `GITHUB_TOKEN`) to clear stale queued runs.
 4. Before starting work, post ownership in this file (branch, PR number, touched paths, owner handle, timestamp).
 5. If repo state changes unexpectedly (detached HEAD, unknown edits, disappearing worktree), stop and move to a fresh worktree from `origin/main` before continuing.
-6. CI queue hygiene is automated by scheduled stale-run GC; still verify queue health before retriggering checks manually.
+6. No derivative PRs touching the same files as an active owner without explicit handoff in writing.
+7. If checks fail before test logic (missing local action path, missing runner tools, workspace corruption), pause PR fan-out and fix runner/workspace baseline first.
 
 ---
 
