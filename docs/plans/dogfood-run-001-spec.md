@@ -613,3 +613,72 @@ Summary:
 - **GO** for quality-comparable A/B benchmarking under strict section contract.
 - **Partial GO** for grounding: floor gate passed, but path quality still has synthetic-token noise.
 - **NO-GO** for duplicate suppression target until deterministic duplicate-create checks are added to quality defects.
+
+---
+
+## Dogfood Run 007 Results (Duplicate-Suppression Focus)
+
+### Date
+- 2026-03-03
+
+### Goal
+- Test whether prompt-only duplicate-suppression rules can reduce `duplicate_existing_create_ratio` without regressing quality or grounding.
+
+### Configuration
+- **Team**: 2 agents via OpenRouter (`gemini-2.0-flash-001` proposer, `gpt-4o` synthesizer)
+- **Rounds**: 1
+- **Consensus**: majority
+- **Common guardrails**:
+  - `--required-sections "Ranked High-Level Tasks,Suggested Subtasks,Owner module / file paths,Test Plan,Rollback Plan,Gate Criteria"`
+  - `--mode orchestrator --codebase-context --codebase-context-max-chars 60000`
+  - `--quality-min-score 7 --quality-practical-min-score 5 --quality-upgrade-max-loops 1` (focused retry used 2 loops)
+- **Comparison setup**:
+  - **Control**: standard run-006 style task prompt
+  - **Focused**: added explicit anti-duplicate language (`modify/refactor/extend`, no `create/add/build` against existing paths)
+
+### Execution Results
+
+| Variant | Exit | Duration | Final answer present | Notes |
+|---|---:|---:|---:|---|
+| Control | 0 | 321.87s | Yes | Stable structured output |
+| Focused (attempt 1) | 1 | 364.24s | Yes | Grounding fail-closed tripped on placeholder output |
+| Focused (retry) | 0 | 358.70s | Yes | Valid structured output, used for scoring |
+
+### Objective Score (Control vs Focused Retry)
+
+| Metric | Control | Focused Retry |
+|---|---:|---:|
+| Composite score | **0.8839** | 0.8014 |
+| Verified existing path ratio | 1.0000 | 1.0000 |
+| Duplicate existing create-ratio (lower is better) | **0.3846** | 0.7143 |
+| Practicality score (deterministic) | 10.0 | 10.0 |
+| Quality score (section-contract) | 9.0 | 9.0 |
+
+Summary:
+- **Winner by composite score**: Control
+- **Timeout rate**: 0.0
+- **Blocker result**: Prompt-only duplicate-suppression **failed** (duplicate ratio worsened by +0.3297).
+
+### Interpretation
+1. Prompt-only wording is insufficient for duplicate suppression and can backfire while still producing high-quality, fully grounded text.
+2. Quality and grounding remained excellent, so the regression isolates specifically to duplicate-create behavior.
+3. Deterministic enforcement in code (quality defects + repair) is required for the blocker, not stronger prompt phrasing alone.
+
+### Artifacts
+- `/tmp/dogfood_run007/run007_control_stdout.txt`
+- `/tmp/dogfood_run007/run007_control_stderr.txt`
+- `/tmp/dogfood_run007/run007_control_status.json`
+- `/tmp/dogfood_run007/run007_focused_stdout.txt`
+- `/tmp/dogfood_run007/run007_focused_stderr.txt`
+- `/tmp/dogfood_run007/run007_focused_status.json`
+- `/tmp/dogfood_run007/run007_focused_retry_stdout.txt`
+- `/tmp/dogfood_run007/run007_focused_retry_stderr.txt`
+- `/tmp/dogfood_run007/run007_focused_retry_status.json`
+- `/tmp/dogfood_run007/run007_score.json` (control vs focused attempt 1)
+- `/tmp/dogfood_run007/run007_score_retry.json` (control vs focused retry; canonical)
+- `/tmp/dogfood_run007/run007_score_retry.md`
+
+### Gate Decision
+- **GO** for continued strict section + grounding gates (stable).
+- **NO-GO** for prompt-only duplicate suppression.
+- **Next required change**: add deterministic duplicate-create defecting/repair in `aragora/debate/output_quality.py` and gate on `duplicate_existing_create_ratio <= 0.25`.

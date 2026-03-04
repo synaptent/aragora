@@ -119,7 +119,7 @@ Every stage transition creates a `ProvenanceLink` with SHA-256 content hashes. A
 
 See `docs/plans/IDEA_TO_EXECUTION_PIPELINE.md` for the detailed implementation plan and `docs/plans/prompt-to-spec-market-analysis.md` Part 6 for the complete vision with market analysis.
 
-### Dogfood Telemetry (Runs 003-006)
+### Dogfood Telemetry (Runs 003-007)
 
 | Run | Objective | Result | Blocking Metric |
 |---|---|---|---|
@@ -127,6 +127,7 @@ See `docs/plans/IDEA_TO_EXECUTION_PIPELINE.md` for the detailed implementation p
 | Run 004 | Re-test with timeout hardening + deterministic timeout receipts | **No-go (quality delta)** | Timeout rate = **1.0** (both variants timed out) |
 | Run 005 | Reduced-latency A/B to force completion + scoring | **Partial go** | Quality score remained **0.0** for both variants under strict section contract |
 | Run 006 | Enforce required output sections + grounding fail-closed, then rescore | **Partial go** | Duplicate existing create-ratio remains high (**0.4643** enhanced) |
+| Run 007 | Prompt-only duplicate suppression experiment (control vs focused) | **No-go (blocker regression)** | Duplicate existing create-ratio worsened (**0.3846 -> 0.7143**) |
 
 What improved in Run 004:
 - Timeout failures are now machine-parseable (`ARAGORA_TIMEOUT_JSON` + timeout report files).
@@ -142,13 +143,17 @@ What improved in Run 006:
 - Grounded-path quality improved in the enhanced variant (`verified_paths_ratio` 0.7647 -> **0.8235**).
 - Timeout rate stayed at **0.0** with fail-closed grounding enabled.
 
+What improved in Run 007:
+- Strict structure and practicality held (`quality_score_10 = 9.0`, `practicality_score_10 = 10.0`) in both control and focused-retry runs.
+- Grounding stayed strong (`verified_paths_ratio = 1.0` in both scored variants).
+
 What still blocks production-grade planning quality:
-- Duplicate existing create proposals remain too high (baseline **0.6923**, enhanced **0.4643**).
-- Output still contains synthetic path-like tokens that degrade grounding signal quality.
+- Duplicate existing create proposals remain the primary blocker, and prompt-only suppression made it worse in run-007.
+- The pipeline still needs deterministic duplicate-create detection/repair rather than relying on instruction wording.
 
 Roadmap implication:
 - Keep strict required-section headings and grounding fail-closed gates as benchmark defaults.
-- Add deterministic defects for duplicate-create proposals against existing repo paths.
+- Add deterministic defects for duplicate-create proposals against existing repo paths (next gating milestone).
 - Add normalization/cleanup for synthetic path-like tokens before grounding assessment.
 
 ---
