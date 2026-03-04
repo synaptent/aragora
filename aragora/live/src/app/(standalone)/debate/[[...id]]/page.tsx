@@ -51,6 +51,7 @@ export async function generateMetadata(
 
   const confidencePercent = Math.round(debate.confidence * 100);
   const ogDescription = `${debate.verdict} (${confidencePercent}% confidence) — Multi-agent AI debate on Aragora`;
+  const ogImageUrl = `/api/og/debate/${debateId}`;
 
   return {
     title: `${debate.topic} | ARAGORA`,
@@ -60,11 +61,13 @@ export async function generateMetadata(
       description: ogDescription,
       type: 'website',
       siteName: 'ARAGORA // LIVE',
+      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: debate.topic }],
     },
     twitter: {
       card: 'summary_large_image',
       title: debate.topic,
       description: ogDescription,
+      images: [ogImageUrl],
     },
   };
 }
