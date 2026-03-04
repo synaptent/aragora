@@ -484,3 +484,63 @@ This dissent is wrong in the specific case (the tasks duplicate existing work) b
 1. Add grounding fail-closed guardrails (`--grounding-fail-closed`, min verified path ratio) so completed runs can be auto-gated for practical utility.
 2. Keep timeout report emission as mandatory benchmark artifact.
 3. Raise per-run timeout and/or reduce agent/round load until at least one run completes with final answer text.
+
+---
+
+## Dogfood Run 005 Results (Reduced-Latency Completion A/B)
+
+### Date
+- 2026-03-03
+
+### Goal
+- Achieve completed baseline and enhanced runs with real final answer payloads, then score objectively.
+
+### Configuration
+- **Team**: 2 agents via OpenRouter (`gemini-2.0-flash-001` proposer, `gpt-4o` synthesizer)
+- **Rounds**: 1
+- **Consensus**: majority
+- **Runtime controls**: `--no-post-consensus-quality --no-learn --no-calibration --no-evidence-weighting --no-trending`
+- **Baseline timeout**: 420s
+- **Enhanced timeout**: 420s
+- **Enhanced context mode**: `--mode orchestrator --codebase-context` (static context only; no harness/rlm expansion)
+
+### Execution Results
+
+| Variant | Exit | Duration | Final answer present | Timeout |
+|---|---:|---:|---:|---:|
+| Baseline | 0 | 160.15s | Yes | No |
+| Enhanced | 0 | 193.76s | Yes | No |
+
+### Objective Score (`scripts/dogfood_score.py`)
+
+| Metric | Baseline | Enhanced |
+|---|---:|---:|
+| Composite score | 0.3794 | **0.4468** |
+| Verified existing path ratio | **0.5000** | 0.3571 |
+| Duplicate existing create-ratio (lower is better) | 0.5000 | **0.0000** |
+| Practicality score (deterministic) | **3.97** | 3.59 |
+| Quality score (section-contract) | 0.0 | 0.0 |
+
+Summary:
+- **Winner by composite score**: Enhanced
+- **Timeout rate**: 0.0 (both runs completed)
+
+### Interpretation
+1. Runtime stability goal succeeded: both runs completed and produced scoreable outputs.
+2. Enhanced context reduced “create-new-when-already-exists” behavior (duplicate-create ratio improved from 0.50 to 0.00).
+3. Enhanced context did not improve structured output compliance: both outputs missed required section headings under the strict score contract, leaving quality score at 0.0.
+4. Path grounding is still mixed: enhanced output referenced fewer verifiable existing paths in this run.
+
+### Artifacts
+- `/tmp/dogfood_run005/a_baseline_stdout.txt`
+- `/tmp/dogfood_run005/a_baseline_stderr.txt`
+- `/tmp/dogfood_run005/a_baseline_status.json`
+- `/tmp/dogfood_run005/a_enhanced_stdout.txt`
+- `/tmp/dogfood_run005/a_enhanced_stderr.txt`
+- `/tmp/dogfood_run005/a_enhanced_status.json`
+- `/tmp/dogfood_run005/score_a.json`
+- `/tmp/dogfood_run005/score_a.md`
+
+### Gate Decision
+- **Partial GO**: runtime and scoring harness are now usable for A/B.
+- **No GO for quality claims** until output structure contract is enforced at generation time (e.g., required section headings + grounding fail-closed).

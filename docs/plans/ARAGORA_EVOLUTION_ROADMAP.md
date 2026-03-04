@@ -119,23 +119,31 @@ Every stage transition creates a `ProvenanceLink` with SHA-256 content hashes. A
 
 See `docs/plans/IDEA_TO_EXECUTION_PIPELINE.md` for the detailed implementation plan and `docs/plans/prompt-to-spec-market-analysis.md` Part 6 for the complete vision with market analysis.
 
-### Dogfood Telemetry (Runs 003-004)
+### Dogfood Telemetry (Runs 003-005)
 
 | Run | Objective | Result | Blocking Metric |
 |---|---|---|---|
 | Run 003 | Baseline vs enhanced quality comparison after context injection wiring | **No-go** | Final answer payload missing in both variants |
 | Run 004 | Re-test with timeout hardening + deterministic timeout receipts | **No-go (quality delta)** | Timeout rate = **1.0** (both variants timed out) |
+| Run 005 | Reduced-latency A/B to force completion + scoring | **Partial go** | Quality score remained **0.0** for both variants under strict section contract |
 
 What improved in Run 004:
 - Timeout failures are now machine-parseable (`ARAGORA_TIMEOUT_JSON` + timeout report files).
 - Benchmark classification is deterministic (infra timeout vs low-quality output).
 
+What improved in Run 005:
+- Both baseline and enhanced variants completed with final answer payloads (timeout rate **0.0**).
+- Objective scorer (`scripts/dogfood_score.py`) produced comparable A/B outputs.
+- Enhanced variant reduced duplicate existing-component create proposals (0.50 -> 0.00 in the scored run).
+
 What still blocks meaningful quality comparison:
-- Debate runs frequently exceed wall-clock budget before final synthesis payload is emitted.
+- Structured section contract compliance is inconsistent (both runs scored 0.0 quality under strict required-section headings).
+- Grounded path quality still varies run-to-run and requires fail-closed gating to enforce floor quality.
 
 Roadmap implication:
 - Treat runtime stability as a gating dependency for context-quality A/B claims.
 - Enforce grounding gates on completed outputs (`--grounding-fail-closed`, verified path ratio threshold) before accepting benchmark wins.
+- Add explicit output-section contract requirements to dogfood prompts so quality scoring is apples-to-apples.
 
 ---
 
