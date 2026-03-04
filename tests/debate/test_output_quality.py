@@ -647,11 +647,10 @@ The following subtasks break down the above goals into manageable pieces for the
 - aragora/debate/orchestrator.py
 """
     report = assess_repo_grounding(answer, require_owner_paths=False)
-    # The generic first lines ("We propose..." / "The following subtasks...")
-    # score low (~0.1), but actionable lines below them score high (>= 0.5).
-    # With best-of-5, the high-scoring lines should win.
-    assert report.first_batch_concreteness >= 0.5, (
-        f"Expected >= 0.5 with best-of-5, got {report.first_batch_concreteness}"
+    # With mean-of-N, the generic intro line drags the average down.
+    # A mix of 1 generic + 3 concrete lines should produce a moderate score.
+    assert report.first_batch_concreteness >= 0.35, (
+        f"Expected >= 0.35 with mean-of-N, got {report.first_batch_concreteness}"
     )
 
 

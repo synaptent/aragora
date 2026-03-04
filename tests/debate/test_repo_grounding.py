@@ -7,6 +7,7 @@ from pathlib import Path
 from aragora.debate.repo_grounding import (
     _is_subheader_line,
     _line_concreteness,
+    _line_hedging_penalty,
     assess_repo_grounding,
 )
 
@@ -212,4 +213,67 @@ def test_realistic_benchmark_output_scores_above_threshold():
     assert report.first_batch_concreteness >= 0.55
     assert report.practicality_score_10 >= 6.0, (
         f"Practicality {report.practicality_score_10} < 6.0 threshold"
+    )
+
+
+def test_hedging_penalty_reduces_line_concreteness():
+    """Lines with hedging phrases score lower than equivalent lines without."""
+    concrete = _line_concreteness("Add validation in aragora/debate/output_quality.py")
+    hedged = _line_concreteness(
+        "Consider adding validation in aragora/debate/output_quality.py as needed"
+    )
+    assert hedged < concrete
+
+
+def test_tiered_hedging_severity():
+    """HIGH-tier placeholders penalize more than LOW-tier weak commitment."""
+    high = _line_hedging_penalty("Implement TBD module")
+    medium = _line_hedging_penalty("Implement module as needed")
+    low = _line_hedging_penalty("Should consider various approaches")
+    assert high > medium > low
+
+
+def test_hedging_penalty_capped_at_half():
+    """Even many hedging matches can't reduce score below 50% of raw."""
+    penalty = _line_hedging_penalty("[NEW] TBD placeholder TODO tk <fill>...")
+    assert penalty == 0.5  # capped
+
+
+def test_multi_line_averaging_penalizes_one_good_among_vague():
+    """Mean-of-N scoring: one concrete line + vague lines scores lower than all concrete."""
+    answer_one_good = """
+## Ranked High-Level Tasks
+- Implement rate limiter in aragora/debate/orchestrator.py with threshold p95 <= 200ms
+- Improve system performance
+- Enhance user experience
+- Make things better
+- Optimize code
+"""
+    answer_all_good = """
+## Ranked High-Level Tasks
+- Implement rate limiter in aragora/debate/orchestrator.py with threshold p95 <= 200ms
+- Add circuit breaker to aragora/resilience/circuit_breaker.py for timeout >= 5s
+- Create tests in tests/debate/test_orchestrator.py for arena timeout scenarios
+- Wire health check in aragora/resilience/health.py with interval <= 30s
+- Update aragora/server/startup.py to register new health endpoint
+"""
+    report_mixed = assess_repo_grounding(answer_one_good)
+    report_all = assess_repo_grounding(answer_all_good)
+    assert report_all.first_batch_concreteness > report_mixed.first_batch_concreteness
+
+
+def test_llm_hedging_patterns_detected():
+    """New LLM hedging patterns are flagged in placeholder hits."""
+    answer = """
+## Ranked High-Level Tasks
+- Consider implementing a caching layer if applicable
+- May require additional infrastructure depending on requirements
+
+## Owner module / file paths
+- aragora/debate/orchestrator.py
+"""
+    report = assess_repo_grounding(answer)
+    assert any(
+        h in report.placeholder_hits
+        for h in ["consider_adding", "if_applicable", "may_require", "depending_on"]
     )
