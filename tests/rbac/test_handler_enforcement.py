@@ -417,6 +417,8 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "notifications/history",
         # Pipeline re-export module (actual handler is in pipeline/plans.py)
         "pipeline/__init__",
+        # Prompt engine package re-export (handler.py provides protection)
+        "prompt_engine/__init__",
         # Demo/example handlers (non-production, no auth required)
         "demo/__init__",
         "demo/adversarial_demo",
