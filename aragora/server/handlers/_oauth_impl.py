@@ -107,8 +107,9 @@ _logger = _logging.getLogger(__name__)
 def _validate_redirect_url(redirect_url: str) -> bool:
     """Validate that redirect URL is in the allowed hosts list.
 
-    Defined here (rather than re-exported) so that tests patching
-    ``_oauth_impl._get_allowed_redirect_hosts`` have the patch visible.
+    Defined here (rather than re-exported) so tests can patch either
+    ``_oauth_impl._get_allowed_redirect_hosts`` or the public
+    ``oauth._get_allowed_redirect_hosts`` symbol.
     """
     try:
         parsed = _urlparse(redirect_url)
@@ -119,9 +120,30 @@ def _validate_redirect_url(redirect_url: str) -> bool:
         if not host:
             return False
         host = host.lower()
-        # Look up _get_allowed_redirect_hosts from this module so patches are visible
+        # Collect hosts from either patch point used in tests:
+        # - public oauth module symbol
+        # - _oauth_impl module symbol
+        allowed_hosts: set[str] = set()
+        oauth_module = _sys.modules.get("aragora.server.handlers.oauth")
+        oauth_getter = getattr(oauth_module, "_get_allowed_redirect_hosts", None)
         _self = _sys.modules[__name__]
-        allowed_hosts = _self._get_allowed_redirect_hosts()
+        impl_getter = _self._get_allowed_redirect_hosts
+
+        getters = []
+        if callable(oauth_getter):
+            getters.append(oauth_getter)
+        if callable(impl_getter) and impl_getter is not oauth_getter:
+            getters.append(impl_getter)
+
+        for getter in getters:
+            try:
+                allowed_hosts.update(str(h).lower() for h in getter())
+            except Exception:
+                continue
+
+        if not allowed_hosts:
+            _logger.warning("oauth_redirect_blocked: allowlist is empty")
+            return False
         if host in allowed_hosts:
             return True
         for allowed in allowed_hosts:
