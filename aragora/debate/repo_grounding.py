@@ -20,19 +20,63 @@ _ACTION_VERB_RE = re.compile(
     r"|initialize|instantiate|enable|monitor|track|define|connect|aggregate|extract|detect|optimize|fix|resolve"
     r"|extend|introduce|scaffold|verify|ensure|check)\b"
 )
-_PLACEHOLDER_PATTERNS: dict[str, re.Pattern[str]] = {
-    "new_marker": re.compile(r"\[new\]", re.IGNORECASE),
-    "inferred_marker": re.compile(r"\[inferred\]", re.IGNORECASE),
-    "tbd": re.compile(r"\btbd\b", re.IGNORECASE),
-    "todo": re.compile(r"\btodo\b", re.IGNORECASE),
-    "placeholder": re.compile(r"\bplaceholder\b", re.IGNORECASE),
-    "fill_me": re.compile(r"<\s*fill[^>]*>", re.IGNORECASE),
-    "tk": re.compile(r"\btk\b", re.IGNORECASE),
-    "as_needed": re.compile(r"\bas needed\b", re.IGNORECASE),
-    "to_be_determined": re.compile(r"\bto be determined\b", re.IGNORECASE),
-    "future_enhancement": re.compile(r"\bfuture enhancement\b", re.IGNORECASE),
-    "as_appropriate": re.compile(r"\bas appropriate\b", re.IGNORECASE),
-}
+# Tiered placeholder/hedging patterns with severity weights.
+# HIGH (0.30): hard placeholders that indicate missing content.
+# MEDIUM (0.15): LLM hedging phrases that weaken actionability.
+# LOW (0.05): weak commitment language (common but less harmful).
+_HEDGING_TIERS: list[tuple[float, dict[str, re.Pattern[str]]]] = [
+    # --- Tier HIGH (weight 0.30): hard placeholders ---
+    (
+        0.30,
+        {
+            "new_marker": re.compile(r"\[new\]", re.IGNORECASE),
+            "inferred_marker": re.compile(r"\[inferred\]", re.IGNORECASE),
+            "tbd": re.compile(r"\btbd\b", re.IGNORECASE),
+            "todo": re.compile(r"\btodo\b", re.IGNORECASE),
+            "placeholder": re.compile(r"\bplaceholder\b", re.IGNORECASE),
+            "fill_me": re.compile(r"<\s*fill[^>]*>", re.IGNORECASE),
+            "tk": re.compile(r"\btk\b", re.IGNORECASE),
+            "ellipsis_trail": re.compile(r"\.\.\.\s*$"),
+        },
+    ),
+    # --- Tier MEDIUM (weight 0.15): LLM hedging phrases ---
+    (
+        0.15,
+        {
+            "as_needed": re.compile(r"\bas needed\b", re.IGNORECASE),
+            "to_be_determined": re.compile(r"\bto be determined\b", re.IGNORECASE),
+            "as_appropriate": re.compile(r"\bas appropriate\b", re.IGNORECASE),
+            "future_enhancement": re.compile(r"\bfuture enhancement\b", re.IGNORECASE),
+            "consider_adding": re.compile(
+                r"\bconsider (?:adding|implementing|using)\b", re.IGNORECASE
+            ),
+            "if_applicable": re.compile(r"\bif (?:applicable|necessary|desired)\b", re.IGNORECASE),
+            "may_require": re.compile(r"\bmay (?:require|need|involve)\b", re.IGNORECASE),
+            "could_potentially": re.compile(r"\bcould potentially\b", re.IGNORECASE),
+            "depending_on": re.compile(
+                r"\bdepending on (?:requirements|needs|context)\b", re.IGNORECASE
+            ),
+            "optional_step": re.compile(r"\b(?:optional|optionally)\b", re.IGNORECASE),
+        },
+    ),
+    # --- Tier LOW (weight 0.05): weak commitment ---
+    (
+        0.05,
+        {
+            "should_consider": re.compile(r"\bshould consider\b", re.IGNORECASE),
+            "might_want": re.compile(r"\bmight want to\b", re.IGNORECASE),
+            "various": re.compile(
+                r"\bvarious (?:approaches|methods|options|strategies)\b", re.IGNORECASE
+            ),
+            "etc_trailing": re.compile(r"\betc\.?\s*$", re.IGNORECASE),
+        },
+    ),
+]
+
+# Flat lookup for backwards-compatible _collect_placeholder_hits().
+_PLACEHOLDER_PATTERNS: dict[str, re.Pattern[str]] = {}
+for _weight, _tier_patterns in _HEDGING_TIERS:
+    _PLACEHOLDER_PATTERNS.update(_tier_patterns)
 
 
 def _normalize_heading(text: str) -> str:
@@ -159,6 +203,16 @@ def _is_subheader_line(line: str) -> bool:
     return bool(_SUBHEADER_RE.match(line))
 
 
+def _line_hedging_penalty(line: str) -> float:
+    """Compute a tiered hedging penalty for a single line, capped at 0.5."""
+    penalty = 0.0
+    for weight, patterns in _HEDGING_TIERS:
+        for _label, pattern in patterns.items():
+            if pattern.search(line):
+                penalty += weight
+    return min(0.5, penalty)
+
+
 def _line_concreteness(line: str) -> float:
     if not line:
         return 0.0
@@ -174,7 +228,10 @@ def _line_concreteness(line: str) -> float:
         score += 0.2
     if len(line.split()) >= 6:
         score += 0.1
-    return min(1.0, score)
+    raw = min(1.0, score)
+    # Apply per-line hedging penalty so lines with vague language score lower.
+    penalty = _line_hedging_penalty(line)
+    return max(0.0, raw - penalty)
 
 
 @dataclass
@@ -294,12 +351,12 @@ def assess_repo_grounding(
         "Rollback Plan",
         "Gate Criteria",
     ]
-    # Score best of top 8 lines per section, take max across sections.
-    # LLMs often write a generic intro on the first line and put actionable
-    # content on subsequent lines, so first-only scoring is too pessimistic.
+    # Score top lines per section and average their concreteness.
+    # Using mean instead of max gives a better signal: one good line among
+    # several vague lines should not produce a high score.
     # Scanning 5 sections (including Test Plan, Rollback Plan, Gate Criteria)
     # captures lines with thresholds and test filenames that reliably score high.
-    section_best_scores: list[float] = []
+    section_avg_scores: list[float] = []
     for heading in _CONCRETENESS_SECTIONS:
         section_text = _find_section_content(sections, _normalize_heading(heading))
         if not section_text:
@@ -311,9 +368,9 @@ def assess_repo_grounding(
         ]
         per_line = [_line_concreteness(l) for l in lines[:8]]
         if per_line:
-            section_best_scores.append(max(per_line))
-    if section_best_scores:
-        first_batch_concreteness = round(max(section_best_scores), 4)
+            section_avg_scores.append(sum(per_line) / len(per_line))
+    if section_avg_scores:
+        first_batch_concreteness = round(max(section_avg_scores), 4)
     else:
         first_batch_concreteness = 0.0
 
