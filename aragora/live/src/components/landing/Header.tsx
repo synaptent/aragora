@@ -11,10 +11,7 @@ const NAV_LINKS = [
   { href: '#how-it-works', label: 'How it works', anchor: true },
   { href: '/quickstart', label: 'Quickstart', anchor: false },
   { href: '/docs', label: 'Docs', anchor: false },
-<<<<<<< HEAD
   { href: '/oracle', label: 'Oracle', anchor: false },
-=======
->>>>>>> bbc5672a0 (feat: public quickstart page + docs/quickstart nav links)
   { href: '/pricing', label: 'Pricing', anchor: false },
   { href: '/login', label: 'Log in', anchor: false },
 ];
