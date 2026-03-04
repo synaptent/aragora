@@ -7,7 +7,6 @@ import { Footer } from '@/components/landing/Footer';
 import { Logo } from '@/components/Logo';
 import { WhyAragoraSection } from '@/components/landing/WhyAragoraSection';
 import { CapabilitiesSection } from '@/components/landing/CapabilitiesSection';
-import { UseCaseCards } from '@/components/landing/UseCaseCards';
 import { USE_CASES, CAPABILITIES } from '../../(app)/about/constants';
 
 export default function AboutPage() {
