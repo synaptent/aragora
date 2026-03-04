@@ -16,19 +16,19 @@ import logging
 from typing import Any
 
 from ..base import (
-    BaseHandler,
     HandlerResult,
     error_response,
     handle_errors,
     json_response,
 )
+from ..secure import SecureHandler
 
 logger = logging.getLogger(__name__)
 
 _MAX_BODY = 1 * 1024 * 1024  # 1 MB
 
 
-class PromptEngineHandler(BaseHandler):
+class PromptEngineHandler(SecureHandler):
     """Handler for the prompt-to-specification engine."""
 
     ROUTES = [
