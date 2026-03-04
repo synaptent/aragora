@@ -29,6 +29,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Ensure checkout-integrity action exists
+        shell: bash
+        run: |
+          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
+            echo "::warning::checkout-integrity action missing after checkout; attempting recovery"
+            git reset --hard || true
+            git clean -ffdx || true
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}" || true
+            git checkout -f "${GITHUB_SHA:-HEAD}" || true
+            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
+              git reset --hard FETCH_HEAD
+            else
+              git reset --hard HEAD
+            fi
+            git clean -ffdx || true
+          fi
+          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
+            echo "::error::Repository checkout is incomplete (.github/actions/checkout-integrity/action.yml missing)"
+            ls -la .github/actions || true
+            exit 1
+          fi
+
       - uses: ./.github/actions/checkout-integrity
 
       - uses: dorny/paths-filter@v3
@@ -54,6 +84,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Ensure checkout-integrity action exists
+        shell: bash
+        run: |
+          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
+            echo "::warning::checkout-integrity action missing after checkout; attempting recovery"
+            git reset --hard || true
+            git clean -ffdx || true
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}" || true
+            git checkout -f "${GITHUB_SHA:-HEAD}" || true
+            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
+              git reset --hard FETCH_HEAD
+            else
+              git reset --hard HEAD
+            fi
+            git clean -ffdx || true
+          fi
+          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
+            echo "::error::Repository checkout is incomplete (.github/actions/checkout-integrity/action.yml missing)"
+            ls -la .github/actions || true
+            exit 1
+          fi
 
       - uses: ./.github/actions/checkout-integrity
 
