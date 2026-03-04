@@ -14,6 +14,21 @@
           {
             "type": "command",
             "command": ".claude/hooks/worktree-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/worktree-project-link.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/worktree-project-link.sh"
           }
         ]
       }
@@ -24,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/worktree-transcript-link.sh"
+            "command": ".claude/hooks/worktree-project-link.sh"
           }
         ]
       }
