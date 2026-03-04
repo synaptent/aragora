@@ -2,13 +2,11 @@
 
 import Link from 'next/link';
 import { useTheme } from '@/context/ThemeContext';
-import { useLayout } from '@/context/LayoutContext';
 import { Logo } from '@/components/Logo';
 import { ThemeSelector } from './ThemeSelector';
 
 export function Header() {
   const { theme } = useTheme();
-  const { toggleLeftSidebar } = useLayout();
 
   return (
     <header
@@ -22,7 +20,7 @@ export function Header() {
       <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
         {/* Logo mark + Wordmark */}
         <div className="flex items-center gap-3">
-          <Logo size="lg" pixelSize={28} onClick={toggleLeftSidebar} />
+          <Logo size="lg" pixelSize={28} />
           <Link href="/landing" className="flex items-center">
             <span
             className="font-bold"
