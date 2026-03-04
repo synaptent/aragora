@@ -542,7 +542,7 @@ Required sections:
 
             repo_root = Path(os.getcwd())
             lines: list[str] = []
-            max_lines = 60
+            max_lines = 150
 
             # 1. Top-level project files
             top_files = [
@@ -570,7 +570,7 @@ Required sections:
                         f.name
                         for f in dp.iterdir()
                         if f.is_file() and f.suffix in suffixes and f.name != "__init__.py"
-                    )[:5]
+                    )[:12]
                     if files:
                         lines.append(f"  {subdir}/: {', '.join(files)}")
 
@@ -580,7 +580,7 @@ Required sections:
                     break
                 dp = repo_root / d
                 if dp.is_dir():
-                    files = sorted(f.name for f in dp.iterdir() if f.suffix == ".py")[:5]
+                    files = sorted(f.name for f in dp.iterdir() if f.suffix == ".py")[:12]
                     if files:
                         lines.append(f"  {d}/: {', '.join(files)}")
 
@@ -621,13 +621,18 @@ Synthesize the debate into a single comprehensive answer that EXACTLY follows th
 Critical rules:
 - Use EXACTLY the required section headings as `## Heading` markdown headers, in the specified order.
 - Each section must have **substantive content** — at least 2-3 specific, actionable items drawn from the debate.
-- For "Ranked High-Level Tasks": prioritize by impact and feasibility, with concrete rationale from the debate.
-- For "Owner module / file paths": reference ONLY paths from the REPOSITORY FILE REFERENCE above. Do NOT invent paths.
-- For "Gate Criteria": include specific, measurable thresholds (operators + numbers + units).
-- For "Rollback Plan": include explicit trigger conditions and rollback actions.
+- For "Ranked High-Level Tasks": The FIRST task must be immediately executable:
+  - Start with an action verb (add, create, implement, update, refactor, wire, test)
+  - Reference an EXISTING file path from the REPOSITORY FILE REFERENCE (not a new file)
+  - Include a specific method/class/function name to modify
+  - Include a test command to verify (e.g., "pytest tests/debate/test_X.py::test_name")
+- For "Suggested Subtasks": Each must be independently testable with a specific pytest command.
+- For "Owner module / file paths": reference ONLY paths from the REPOSITORY FILE REFERENCE above. Do NOT invent paths. For new modules, clearly mark them with "NEW:" prefix.
+- For "Gate Criteria": include specific, measurable thresholds (operators + numbers + units, e.g., "p95 < 250ms", "coverage >= 80%").
+- For "Rollback Plan": include explicit trigger conditions AND rollback actions (e.g., "If error_rate > 2% for 10m, revert commit abc123").
 - For "JSON Payload": produce valid JSON that mirrors the section content.
 - Preserve DISSENT: if agents disagreed, note it in the relevant section.
-- Do NOT use placeholder text. Every item must be specific and substantive.
+- Do NOT use placeholder text like TBD, TODO, [NEW], "as needed", or "to be determined". Every item must be specific and substantive.
 
 Write authoritatively. This is the FINAL WORD on this debate."""
 
