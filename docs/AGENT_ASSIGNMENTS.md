@@ -6,7 +6,7 @@
 
 Use these rules before reading track-level assignments:
 
-1. Repository-wide single ready lane: only one non-draft PR may be "ready for review" at a time. All other PRs must stay draft with auto-merge disabled.
+1. One active ready PR at a time per stream. All other PRs in that stream must stay draft with auto-merge disabled.
 2. Admission controller is authoritative: `.github/workflows/pr-admission-controller.yml` and `scripts/pr_admission_controller.py` enforce ready-lane policy.
 3. Stale-run GC is mandatory before retriggers: run `python3 scripts/pr_stale_run_gc.py --repo synaptent/aragora --max-runs 500` (with `GITHUB_TOKEN`) to clear stale queued runs.
 4. Before starting work, post ownership in this file (branch, PR number, touched paths, owner handle, timestamp).
