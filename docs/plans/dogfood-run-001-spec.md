@@ -822,3 +822,134 @@ Summary:
 ### Gate Decision
 - **GO** to adopt `--timeout 480` as the benchmark default for this run class.
 - **NO-GO** on focused prompt contract until path-grounding/section regressions are corrected.
+
+---
+
+## Dogfood Run 010 Results (Strict Focused Fail-Closed Stress)
+
+### Date
+- 2026-03-04
+
+### Goal
+- Validate whether a very strict focused profile (contract + grounding + quality fail-closed) can outperform baseline while preserving timeout reliability.
+
+### Configuration
+- **Pairs**: 3 control/focused pairs
+- **Timeout**: `960s`
+- **Focused profile**:
+  - contract + grounding enabled
+  - post-consensus quality upgrades enabled
+  - `--quality-fail-closed` enabled
+  - harness-backed context enabled
+
+### Outcome
+- **Timeout reliability**: stable (`mean_timeout_rate=0.0`)
+- **Quality outcome**: focused failed all 3 pairs (`median baseline 0.461` vs `median focused 0.0`)
+- **Primary failure mode**: focused runs exited non-zero without final payload under fail-closed quality gates; duplicate-create ratio violations remained.
+
+### Gate Decision
+- **NO-GO** for strict fail-closed focused profile in benchmark scoring mode.
+- Keep timeout settings; tune focused profile to emit scoreable outputs while retaining grounding constraints.
+
+---
+
+## Dogfood Run 011 Results (Tuned Focused Profile, Promotion Pass)
+
+### Date
+- 2026-03-04
+
+### Goal
+- Apply tuned focused settings to fix run-010 regressions:
+  - remove `--quality-fail-closed` for benchmark scoring runs
+  - keep grounded contract checks
+  - use realistic grounding threshold
+  - strengthen anti-duplicate and anti-empty-section prompt constraints
+
+### Configuration
+- **Pairs**: 3 control/focused pairs
+- **Timeout**: `960s`
+- **Focused profile**:
+  - `--output-contract-file docs/plans/dogfood_output_contract_v2.json`
+  - `--grounding-fail-closed --grounding-min-verified-paths 0.1`
+  - `--quality-upgrade-max-loops 1`
+  - `--quality-concretize-max-rounds 1`
+  - `--quality-extra-assessment-rounds 0`
+  - no `--quality-fail-closed`
+
+### Outcome
+
+| Metric | Value |
+|---|---:|
+| Median composite (baseline) | 0.4600 |
+| Median composite (focused) | **0.5326** |
+| Promotion delta | **+0.0726** |
+| Timeout rate | 0.0 |
+| Pair winners | focused, focused, baseline |
+
+Focused profile exceeded the promotion threshold (`>= +0.05`) while maintaining timeout stability.
+
+### Codified Runner
+- Use `scripts/run_dogfood_ab_pairs.py` as the default A/B benchmark runner for this class.
+- Default contract: `docs/plans/dogfood_output_contract_v2.json`
+- Default timeout: `960s`
+- Suggested confidence run:
+  - `python3 scripts/run_dogfood_ab_pairs.py --pairs 5 --timeout-seconds 960 --output-root /tmp/dogfood_run_next`
+
+### Gate Decision
+- **GO** to promote the tuned focused profile as default benchmark-focused settings for this run class.
+- **Follow-up**: run 5 pairs for higher-confidence median stability and continue reducing residual duplicate-create defects.
+
+---
+
+## Dogfood Run 012 Results (5-Pair Confidence Run)
+
+### Date
+- 2026-03-04
+
+### Goal
+- Validate run-011 focused profile on a larger sample (`5` pairs) for higher-confidence promotion decision.
+- Measure duplicate-create ratio stability (pre-fix: "add" verb still counted as create).
+
+### Benchmark Runner
+- `scripts/run_dogfood_ab_pairs.py`
+- Contract: `docs/plans/dogfood_output_contract_v2.json`
+- Command:
+  - `python3 scripts/run_dogfood_ab_pairs.py --pairs 5 --timeout-seconds 960 --output-root /tmp/dogfood_run012`
+
+### Aggregate Outcome
+
+| Metric | Value |
+|---|---:|
+| Pairs | 5 |
+| Timeout rate | 0.0 |
+| Median composite (baseline) | 0.4610 |
+| Median composite (focused) | **0.8443** |
+| Promotion threshold | +0.0500 |
+| Observed delta | **+0.3833** |
+| Pair winners | focused ×5 (100%) |
+
+### Per-Pair Breakdown
+
+| Pair | Enhanced | Baseline | Quality | Practicality | Path Ratio | Dup-Create |
+|------|----------|----------|---------|--------------|------------|------------|
+| 1 | 0.8443 | 0.4594 | 9.0 | 8.84 | 0.9167 | 0.3333 |
+| 2 | 0.6965 | 0.4610 | 8.0 | 8.75 | 0.9375 | 0.8667 |
+| 3 | 0.9124 | 0.4592 | 9.0 | 8.81 | 0.8750 | 0.0 |
+| 4 | 0.8976 | 0.4610 | 9.0 | 8.38 | — | 0.0 |
+| 5 | 0.6778 | 0.4610 | 7.0 | 9.39 | 1.0 | 1.0 |
+
+### Key Observations
+- **Enhanced profile is decisively superior**: 5/5 wins with +0.3833 median delta.
+- **Quality consistently high**: 7.0–9.0 range (mean ~8.4) vs baseline's flat 7.0.
+- **Practicality breakthrough**: 8.38–9.39 range vs baseline's 3.46–3.55.
+- **Duplicate-create residual**: Pairs 2 and 5 still show high dup_ratio (0.87, 1.0) due to "add" verb false positives. PR #594 (`fix/duplicate-create-scoring`) excludes "add" from the scoring regex, which will eliminate these false positives in future runs.
+- **Path grounding strong**: 87.5%–100% verified path ratios when measured.
+
+### Artifacts
+- `/tmp/dogfood_run012/aggregate_summary.json`
+- `/tmp/dogfood_run012/<pair>/pair_<n>_summary.json`
+
+### Gate Decision
+- **GO**: Focused profile confirmed with 100% win rate across 5 pairs.
+- **GO**: Promote as default benchmark-focused settings.
+- **FOLLOW-UP**: Re-run after PR #594 merges to validate dup-create ratio improvement.
