@@ -7,11 +7,11 @@
 Use these rules before reading track-level assignments:
 
 1. One active ready PR at a time per stream. All other PRs must be draft with auto-merge disabled.
-2. Current CI lane owner: `#540` (`fix/ci-integrity-consolidated`). Do not open parallel CI-hardening PRs until `#540` lands or is explicitly replaced.
-3. Context-engineering baseline already landed in `main` via `#529`. Do not open derivative PRs for `codebase_context.py`, `repo_grounding.py`, or `cli/commands/debate.py` without explicit owner handoff.
+2. CI lane ownership is policy-driven (not person-driven): the PR Admission Controller allows only one ready PR per stream at a time.
+3. Context-engineering baseline is already in `main`; do not open derivative PRs for `codebase_context.py`, `repo_grounding.py`, or `cli/commands/debate.py` without explicit owner handoff.
 4. Before starting work, post ownership in this file (branch, PR number, touched paths, owner handle, timestamp).
 5. If repo state changes unexpectedly (detached HEAD, unknown edits, disappearing worktree), stop and move to a fresh worktree from `origin/main` before continuing.
-6. CI queue hygiene: cancel queued PR runs for closed branches before retriggering checks on the active lane.
+6. CI queue hygiene is automated by scheduled stale-run GC; still verify queue health before retriggering checks manually.
 
 ---
 

@@ -1,0 +1,63 @@
+name: PR Stale Run GC
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+    inputs:
+      max_runs:
+        description: "Maximum recent runs to inspect"
+        required: false
+        default: "300"
+        type: string
+      keep_draft_runs:
+        description: "Keep draft PR branch runs active"
+        required: false
+        default: false
+        type: boolean
+      dry_run:
+        description: "Report actions without cancelling runs"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  actions: write
+  pull-requests: read
+  contents: read
+
+concurrency:
+  group: pr-stale-run-gc
+  cancel-in-progress: true
+
+jobs:
+  cancel-stale-pr-runs:
+    name: Cancel stale PR runs
+    runs-on: aragora
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run stale-run GC
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          MAX_RUNS="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.max_runs || '300' }}"
+          EXTRA_ARGS=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.keep_draft_runs }}" = "true" ]; then
+              EXTRA_ARGS="${EXTRA_ARGS} --keep-draft-runs"
+            fi
+            if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+              EXTRA_ARGS="${EXTRA_ARGS} --dry-run"
+            fi
+          fi
+
+          python scripts/pr_stale_run_gc.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --max-runs "${MAX_RUNS}" \
+            ${EXTRA_ARGS}

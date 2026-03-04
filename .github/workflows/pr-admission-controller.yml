@@ -1,0 +1,73 @@
+name: PR Admission Controller
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft, labeled, unlabeled]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to evaluate"
+        required: true
+        type: number
+      max_ready_per_stream:
+        description: "Maximum ready PRs allowed per stream"
+        required: false
+        default: "1"
+        type: string
+      enforce:
+        description: "Apply enforcement actions"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr-admission-controller-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  enforce-admission:
+    name: Enforce PR Admission Policy
+    runs-on: aragora
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve PR number
+        id: resolve
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enforce admission controller
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          MAX_READY="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.max_ready_per_stream || '1' }}"
+          ENFORCE_FLAG=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.enforce }}" = "true" ]; then
+              ENFORCE_FLAG="--enforce"
+            fi
+          else
+            ENFORCE_FLAG="--enforce"
+          fi
+
+          python scripts/pr_admission_controller.py \
+            --repo "${GITHUB_REPOSITORY}" \
+            --pr-number "${{ steps.resolve.outputs.pr_number }}" \
+            --max-ready-per-stream "${MAX_READY}" \
+            ${ENFORCE_FLAG}
