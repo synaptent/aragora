@@ -35,7 +35,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Validate Docker Compose
         run: |
@@ -98,7 +98,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Deploy to staging
         run: |
@@ -117,7 +117,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Check deployment secrets
         id: deploy_secrets
@@ -241,7 +241,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Set up Python
         uses: actions/setup-python@v5

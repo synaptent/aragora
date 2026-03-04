@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

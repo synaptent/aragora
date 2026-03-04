@@ -57,7 +57,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -88,7 +88,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Validate Vercel configuration
         run: |
@@ -172,7 +172,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -563,7 +563,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4

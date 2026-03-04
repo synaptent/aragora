@@ -38,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Resolve deploy mode
         id: mode

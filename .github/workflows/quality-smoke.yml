@@ -59,7 +59,7 @@ jobs:
             exit 1
           fi
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - uses: dorny/paths-filter@v3
         id: filter
@@ -115,7 +115,7 @@ jobs:
             exit 1
           fi
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5

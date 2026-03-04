@@ -55,7 +55,7 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
+      - uses: ./.github/actions/checkout-integrity
         if: github.event_name == 'workflow_dispatch'
 
       - name: Setup Python
