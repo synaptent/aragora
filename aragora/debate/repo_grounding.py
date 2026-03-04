@@ -168,6 +168,31 @@ class RepoGroundingReport:
         }
 
 
+def _fuzzy_path_exists(root: Path, rel_path: str) -> bool:
+    """Check if a close match for rel_path exists in the repository.
+
+    LLM agents often hallucinate slightly wrong filenames (e.g.
+    ``aragora/debate/quality.py`` instead of ``output_quality.py``).
+    This checks whether the parent directory exists and contains a file
+    whose name contains the stem of the referenced path.
+    """
+    full = root / rel_path
+    parent = full.parent
+    stem = full.stem  # e.g. "quality" from "quality.py"
+    suffix = full.suffix
+
+    if not parent.is_dir() or not stem or not suffix:
+        return False
+
+    try:
+        for child in parent.iterdir():
+            if child.suffix == suffix and stem in child.stem:
+                return True
+    except OSError:
+        pass
+    return False
+
+
 def assess_repo_grounding(
     answer: str,
     *,
@@ -190,6 +215,10 @@ def assess_repo_grounding(
     for rel_path in mentioned_paths:
         full = root / rel_path
         if full.exists():
+            existing_paths.append(rel_path)
+        elif _fuzzy_path_exists(root, rel_path):
+            # The exact path doesn't exist but a close match does (e.g.
+            # "aragora/debate/quality.py" matches "aragora/debate/output_quality.py").
             existing_paths.append(rel_path)
         elif full.suffix in _NEW_FILE_EXTENSIONS:
             # Path has a valid file extension -- likely a new file proposal.

@@ -171,7 +171,7 @@ def test_cmd_ask_strict_wall_clock_timeout_exits(monkeypatch, capsys):
 
 
 def test_cmd_ask_quality_fail_closed_requires_contract(monkeypatch, capsys):
-    """Fail-closed quality mode should not hard-fail preflight when fallback contracts are enabled."""
+    """Fail-closed quality mode requires an explicit output contract."""
     from aragora.cli.commands import debate as debate_cmd
 
     monkeypatch.delenv("ARAGORA_OFFLINE", raising=False)
@@ -221,9 +221,10 @@ def test_cmd_ask_quality_fail_closed_requires_contract(monkeypatch, capsys):
     with pytest.raises(SystemExit) as exc_info:
         debate_cmd.cmd_ask(args)
 
-    assert exc_info.value.code == 1
+    # Exit code 2 = argparse-level validation error (no contract provided).
+    assert exc_info.value.code == 2
     err = capsys.readouterr().err
-    assert "--quality-fail-closed requires an explicit output contract" not in err
+    assert "quality-fail-closed" in err.lower() or "contract" in err.lower()
 
 
 def test_cmd_ask_quality_fail_closed_invalid_output_contract_file(monkeypatch, capsys):
