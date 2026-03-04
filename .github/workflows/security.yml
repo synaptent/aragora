@@ -54,7 +54,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -80,7 +80,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -114,7 +114,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -146,7 +146,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -245,7 +245,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -265,7 +265,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -287,7 +287,7 @@ jobs:
         with:
           fetch-depth: 0  # Full history for scanning all commits
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2

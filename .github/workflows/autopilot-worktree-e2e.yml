@@ -27,7 +27,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Detect autopilot-relevant changes
         id: filter
@@ -62,7 +62,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python
         uses: actions/setup-python@v5

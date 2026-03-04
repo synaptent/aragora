@@ -20,7 +20,7 @@ jobs:
           sparse-checkout: scripts/verify_frontend_routes.sh
           sparse-checkout-cone-mode: false
 
-      - uses: ./.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Check Frontend Critical Routes
         run: |

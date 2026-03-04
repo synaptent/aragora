@@ -38,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -84,7 +84,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -122,7 +122,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -150,7 +150,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -208,7 +208,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

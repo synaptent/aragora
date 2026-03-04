@@ -30,7 +30,7 @@ jobs:
             scripts/extract_weekly_epistemic_kpis.py
           sparse-checkout-cone-mode: false
 
-      - uses: ./.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Setup Python
         uses: actions/setup-python@v5

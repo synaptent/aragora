@@ -80,7 +80,7 @@ jobs:
             exit 1
           fi
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Checkout main for baseline
         uses: actions/checkout@v4
@@ -97,7 +97,7 @@ jobs:
             exit 1
           fi
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - uses: synaptent/aragora/.github/actions/checkout-integrity@main
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
