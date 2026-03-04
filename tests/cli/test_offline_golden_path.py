@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import argparse
+import json
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -165,9 +167,79 @@ def test_cmd_ask_strict_wall_clock_timeout_exits(monkeypatch, capsys):
             debate_cmd.cmd_ask(args)
 
     assert exc_info.value.code == 1
-    err = capsys.readouterr().err
+    captured = capsys.readouterr()
+    err = captured.err
+    timeout_line = next(
+        line for line in captured.out.splitlines() if line.startswith("ARAGORA_TIMEOUT_JSON=")
+    )
+    payload = json.loads(timeout_line.split("=", 1)[1])
     assert "Debate timed out after 1s" in err
     assert "strict wall-clock" in err
+    assert payload["status"] == "timeout"
+    assert payload["error_type"] == "strict_wall_clock_timeout"
+    assert payload["timeout_seconds"] == 1
+    assert payload["final_answer"] == ""
+
+
+def test_cmd_ask_async_timeout_emits_machine_payload(monkeypatch, capsys):
+    """Async wait_for timeout should emit machine-readable timeout JSON."""
+    from aragora.cli.commands import debate as debate_cmd
+
+    monkeypatch.delenv("ARAGORA_OFFLINE", raising=False)
+
+    args = argparse.Namespace(
+        task="async timeout test",
+        agents="claude,openai",
+        rounds=2,
+        consensus="judge",
+        context="",
+        learn=True,
+        db=":memory:",
+        demo=False,
+        api=False,
+        local=True,
+        graph=False,
+        matrix=False,
+        decision_integrity=False,
+        auto_select=False,
+        auto_select_config=None,
+        enable_verticals=False,
+        vertical=None,
+        calibration=True,
+        evidence_weighting=True,
+        trending=True,
+        mode=None,
+        api_url="http://localhost:8080",
+        api_key=None,
+        verbose=False,
+        graph_rounds=3,
+        branch_threshold=0.7,
+        max_branches=3,
+        scenario=None,
+        matrix_rounds=3,
+        di_include_context=False,
+        di_plan_strategy="single_task",
+        di_execution_mode=None,
+        timeout=1,
+    )
+
+    with patch.object(debate_cmd.asyncio, "run", side_effect=asyncio.TimeoutError()):
+        with pytest.raises(SystemExit) as exc_info:
+            debate_cmd.cmd_ask(args)
+
+    assert exc_info.value.code == 1
+    captured = capsys.readouterr()
+    err = captured.err
+    timeout_line = next(
+        line for line in captured.out.splitlines() if line.startswith("ARAGORA_TIMEOUT_JSON=")
+    )
+    payload = json.loads(timeout_line.split("=", 1)[1])
+    assert "Debate timed out after 1s" in err
+    assert "async wait_for" in err
+    assert payload["status"] == "timeout"
+    assert payload["error_type"] == "async_wait_for_timeout"
+    assert payload["timeout_seconds"] == 1
+    assert payload["final_answer"] == ""
 
 
 def test_cmd_ask_quality_fail_closed_requires_contract(monkeypatch, capsys):

@@ -18,6 +18,9 @@ import json
 import logging
 import os
 import re
+import signal
+import threading
+import time
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
@@ -42,6 +45,10 @@ if TYPE_CHECKING:
 # Configurable via ARAGORA_MAX_CLI_SUBPROCESSES environment variable
 _MAX_CLI_SUBPROCESSES = int(os.environ.get("ARAGORA_MAX_CLI_SUBPROCESSES", "10"))
 _subprocess_semaphore = asyncio.Semaphore(_MAX_CLI_SUBPROCESSES)
+
+# Track active CLI subprocess PIDs so timeout handlers can perform best-effort cleanup.
+_tracked_cli_pids: set[int] = set()
+_tracked_cli_pids_lock = threading.Lock()
 
 # Maximum prompt size to pass as CLI argument (avoids E2BIG error)
 # Prompts larger than this should be passed via stdin where supported
@@ -69,6 +76,7 @@ __all__ = [
     "QwenCLIAgent",
     "DeepseekCLIAgent",
     "KiloCodeAgent",
+    "terminate_tracked_cli_processes",
     "MAX_CLI_PROMPT_CHARS",
     "MAX_CONTEXT_CHARS",
     "MAX_MESSAGE_CHARS",
@@ -77,6 +85,109 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+def _track_cli_pid(pid: int | None) -> None:
+    if not isinstance(pid, int) or pid <= 0:
+        return
+    with _tracked_cli_pids_lock:
+        _tracked_cli_pids.add(pid)
+
+
+def _untrack_cli_pid(pid: int | None) -> None:
+    if not isinstance(pid, int) or pid <= 0:
+        return
+    with _tracked_cli_pids_lock:
+        _tracked_cli_pids.discard(pid)
+
+
+def terminate_tracked_cli_processes(grace_seconds: float = 0.2) -> dict[str, int]:
+    """Best-effort cleanup of tracked CLI subprocesses.
+
+    This is intentionally synchronous so timeout handlers can call it from
+    non-async contexts (for example strict wall-clock signal paths).
+    """
+    with _tracked_cli_pids_lock:
+        tracked = list(_tracked_cli_pids)
+
+    if not tracked:
+        return {"tracked": 0, "terminated": 0, "killed": 0, "remaining": 0}
+
+    terminated = 0
+    killed = 0
+    remaining_pids: set[int] = set()
+    unknown_state_pids: set[int] = set()
+
+    # First attempt a graceful terminate.
+    for pid in tracked:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            terminated += 1
+        except ProcessLookupError:
+            _untrack_cli_pid(pid)
+            continue
+        except (PermissionError, OSError):
+            unknown_state_pids.add(pid)
+
+    # Allow a brief grace period for process exit.
+    if grace_seconds > 0:
+        time.sleep(min(grace_seconds, 1.0))
+
+    # Force-kill any process still alive (or whose state is unknown).
+    for pid in tracked:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            _untrack_cli_pid(pid)
+            continue
+        except (PermissionError, OSError):
+            # Cannot verify state; keep as remaining and do not attempt further signals.
+            unknown_state_pids.add(pid)
+            continue
+
+        try:
+            os.kill(pid, signal.SIGKILL)
+            killed += 1
+        except ProcessLookupError:
+            _untrack_cli_pid(pid)
+            continue
+        except (PermissionError, OSError):
+            unknown_state_pids.add(pid)
+            continue
+
+        # After SIGKILL, check if process is gone and clear tracking.
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            _untrack_cli_pid(pid)
+        except (PermissionError, OSError):
+            unknown_state_pids.add(pid)
+        else:
+            remaining_pids.add(pid)
+
+    # Final pass: capture any remaining live tracked PIDs.
+    for pid in tracked:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            _untrack_cli_pid(pid)
+            continue
+        except (PermissionError, OSError):
+            unknown_state_pids.add(pid)
+            continue
+        else:
+            remaining_pids.add(pid)
+
+    with _tracked_cli_pids_lock:
+        current_remaining = len(_tracked_cli_pids)
+    remaining = max(current_remaining, len(remaining_pids) + len(unknown_state_pids))
+
+    return {
+        "tracked": len(tracked),
+        "terminated": terminated,
+        "killed": killed,
+        "remaining": remaining,
+    }
 
 
 class CLIAgent(CritiqueMixin, Agent):
@@ -289,6 +400,7 @@ class CLIAgent(CritiqueMixin, Agent):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
+                _track_cli_pid(getattr(proc, "pid", None))
 
                 # Also sanitize stdin input (used by ClaudeAgent)
                 sanitized_input = self._sanitize_cli_arg(input_text) if input_text else None
@@ -350,6 +462,14 @@ class CLIAgent(CritiqueMixin, Agent):
                     proc.kill()
                     await proc.wait()  # Ensure process is fully cleaned up
                 raise TimeoutError(f"CLI command timed out after {self.timeout}s")
+            except asyncio.CancelledError:
+                # Ensure subprocess cleanup when outer timeout/cancellation interrupts.
+                if self._circuit_breaker is not None:
+                    self._circuit_breaker.record_failure()
+                if proc and proc.returncode is None:
+                    proc.kill()
+                    await proc.wait()
+                raise
             except AgentCircuitOpenError:
                 # Don't record circuit open errors as failures - just re-raise
                 raise
@@ -362,6 +482,9 @@ class CLIAgent(CritiqueMixin, Agent):
                     proc.kill()
                     await proc.wait()  # Cleanup zombie processes
                 raise
+            finally:
+                if proc is not None:
+                    _untrack_cli_pid(getattr(proc, "pid", None))
 
     def _build_context_prompt(
         self,

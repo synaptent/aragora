@@ -252,6 +252,52 @@ def _append_context_file(context: str, context_file: str) -> str:
     return content
 
 
+def _cleanup_cli_subprocesses_for_timeout() -> dict[str, int]:
+    """Best-effort cleanup for CLI subprocesses after timeout."""
+    try:
+        from aragora.agents.cli_agents import terminate_tracked_cli_processes
+
+        return terminate_tracked_cli_processes()
+    except Exception as e:  # noqa: BLE001 - timeout cleanup must never crash CLI
+        logger.warning("Failed to clean up tracked CLI subprocesses: %s", e)
+        return {"tracked": 0, "terminated": 0, "killed": 0, "remaining": 0}
+
+
+def _emit_timeout_failure_payload(
+    *,
+    error_type: str,
+    timeout_seconds: int,
+    elapsed_seconds: float,
+    task: str,
+    agents_str: str,
+    mode: str | None,
+    cleanup: dict[str, int],
+) -> None:
+    """Emit machine-parseable timeout payload for benchmark/scoring harnesses."""
+    task_value = str(task or "")
+    payload = {
+        "status": "timeout",
+        "error_type": error_type,
+        "timeout_seconds": int(timeout_seconds),
+        "elapsed_seconds": round(max(0.0, float(elapsed_seconds)), 3),
+        "task_preview": task_value[:240],
+        "task_length": len(task_value),
+        "agents": _split_agents_list(agents_str),
+        "mode": mode or "default",
+        "cleanup": cleanup,
+        "final_answer": "",
+    }
+    encoded = json.dumps(payload, sort_keys=True)
+    print(f"ARAGORA_TIMEOUT_JSON={encoded}")
+
+    report_path_raw = os.environ.get("ARAGORA_ASK_TIMEOUT_REPORT_PATH")
+    if report_path_raw:
+        try:
+            Path(report_path_raw).expanduser().write_text(encoded + "\n", encoding="utf-8")
+        except OSError as e:
+            logger.warning("Failed to write timeout report %s: %s", report_path_raw, e)
+
+
 def _looks_like_self_improvement_task(task: str) -> bool:
     """Heuristic detection for codebase self-improvement prompts."""
     lowered = (task or "").lower()
@@ -1903,6 +1949,16 @@ def cmd_ask(args: argparse.Namespace) -> None:
             result = asyncio.run(_run_with_timeout())
     except _StrictWallClockTimeout:
         elapsed = time.monotonic() - start_time
+        cleanup = _cleanup_cli_subprocesses_for_timeout()
+        _emit_timeout_failure_payload(
+            error_type="strict_wall_clock_timeout",
+            timeout_seconds=debate_timeout,
+            elapsed_seconds=elapsed,
+            task=raw_task,
+            agents_str=agents,
+            mode=getattr(args, "mode", None),
+            cleanup=cleanup,
+        )
         print(
             f"Debate timed out after {debate_timeout}s (strict wall-clock; elapsed={elapsed:.2f}s)",
             file=sys.stderr,
@@ -1910,6 +1966,16 @@ def cmd_ask(args: argparse.Namespace) -> None:
         raise SystemExit(1)
     except asyncio.TimeoutError:
         elapsed = time.monotonic() - start_time
+        cleanup = _cleanup_cli_subprocesses_for_timeout()
+        _emit_timeout_failure_payload(
+            error_type="async_wait_for_timeout",
+            timeout_seconds=debate_timeout,
+            elapsed_seconds=elapsed,
+            task=raw_task,
+            agents_str=agents,
+            mode=getattr(args, "mode", None),
+            cleanup=cleanup,
+        )
         print(
             f"Debate timed out after {debate_timeout}s (async wait_for; elapsed={elapsed:.2f}s)",
             file=sys.stderr,

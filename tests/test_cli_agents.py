@@ -11,10 +11,12 @@ Tests cover:
 
 import asyncio
 import json
+import signal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import aragora.agents.cli_agents as cli_agents_mod
 from aragora.agents.cli_agents import (
     CLIAgent,
     ClaudeAgent,
@@ -122,6 +124,25 @@ class TestCLIAgentRunCli:
             mock_proc.wait.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_cancelled_error_kills_process(self, agent):
+        """Should kill process when coroutine is cancelled."""
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            mock_proc = AsyncMock()
+            mock_proc.pid = 4242
+            mock_proc.returncode = None
+            mock_proc.communicate = AsyncMock(side_effect=asyncio.CancelledError())
+            mock_proc.kill = MagicMock()
+            mock_proc.wait = AsyncMock()
+            mock_exec.return_value = mock_proc
+
+            with pytest.raises(asyncio.CancelledError):
+                await agent._run_cli(["sleep", "100"])
+
+            mock_proc.kill.assert_called_once()
+            mock_proc.wait.assert_called_once()
+            assert 4242 not in cli_agents_mod._tracked_cli_pids
+
+    @pytest.mark.asyncio
     async def test_error_kills_process(self, agent):
         """Should kill process on error."""
         with patch("asyncio.create_subprocess_exec") as mock_exec:
@@ -208,6 +229,51 @@ class TestCLIAgentBuildContextPrompt:
 
         # Total should not exceed limit significantly
         assert len(result) <= MAX_CONTEXT_CHARS + 1000
+
+
+class TestTrackedCLISubprocessCleanup:
+    """Tests for tracked subprocess cleanup helpers."""
+
+    def test_terminate_tracked_cli_processes_noop_when_empty(self):
+        """Cleanup should return zeroed summary when nothing is tracked."""
+        with cli_agents_mod._tracked_cli_pids_lock:
+            cli_agents_mod._tracked_cli_pids.clear()
+        summary = cli_agents_mod.terminate_tracked_cli_processes(grace_seconds=0.0)
+        assert summary == {"tracked": 0, "terminated": 0, "killed": 0, "remaining": 0}
+
+    def test_terminate_tracked_cli_processes_sends_term_then_kill(self, monkeypatch):
+        """Cleanup should send SIGTERM then SIGKILL for stuck processes."""
+        with cli_agents_mod._tracked_cli_pids_lock:
+            cli_agents_mod._tracked_cli_pids.clear()
+            cli_agents_mod._tracked_cli_pids.add(11111)
+
+        alive = {"value": True}
+        calls: list[tuple[int, int]] = []
+
+        def _fake_kill(pid: int, sig: int) -> None:
+            calls.append((pid, sig))
+            if sig == 0:
+                if alive["value"]:
+                    return
+                raise ProcessLookupError()
+            if sig == signal.SIGTERM:
+                return
+            if sig == signal.SIGKILL:
+                alive["value"] = False
+                return
+            raise AssertionError(f"Unexpected signal {sig}")
+
+        monkeypatch.setattr(cli_agents_mod.os, "kill", _fake_kill)
+        monkeypatch.setattr(cli_agents_mod.time, "sleep", lambda _s: None)
+
+        summary = cli_agents_mod.terminate_tracked_cli_processes(grace_seconds=0.0)
+
+        assert summary["tracked"] == 1
+        assert summary["terminated"] == 1
+        assert summary["killed"] == 1
+        assert summary["remaining"] == 0
+        assert (11111, signal.SIGTERM) in calls
+        assert (11111, signal.SIGKILL) in calls
 
 
 class TestCLIAgentParseCritique:
