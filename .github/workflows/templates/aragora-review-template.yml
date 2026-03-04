@@ -52,6 +52,22 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Ensure GitHub CLI is available
+        run: |
+          if command -v gh >/dev/null 2>&1; then
+            gh --version | head -1
+            exit 0
+          fi
+          echo "::warning::gh CLI missing on runner; installing fallback package"
+          if command -v sudo >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y gh
+          else
+            apt-get update
+            apt-get install -y gh
+          fi
+          gh --version | head -1
+
       - name: Install Aragora
         run: pip install aragora
 
