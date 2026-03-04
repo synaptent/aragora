@@ -24,20 +24,12 @@ jest.mock('../ProblemSection', () => ({
   ProblemSection: () => <section data-testid="problem">Problem</section>,
 }));
 
-jest.mock('../FeatureShowcase', () => ({
-  FeatureShowcase: () => <section data-testid="features">Features</section>,
-}));
-
-jest.mock('../IntegrationsGrid', () => ({
-  IntegrationsGrid: () => <section data-testid="integrations">Integrations</section>,
+jest.mock('../SocialProofStrip', () => ({
+  SocialProofStrip: () => <section data-testid="social-proof">Social Proof</section>,
 }));
 
 jest.mock('../OracleSection', () => ({
   OracleSection: () => <section data-testid="oracle">Oracle</section>,
-}));
-
-jest.mock('../LiveDemoSection', () => ({
-  LiveDemoSection: () => <section data-testid="live-demo">Live Demo</section>,
 }));
 
 jest.mock('../PricingSection', () => ({
@@ -59,12 +51,10 @@ describe('LandingPage', () => {
 
       expect(screen.getByTestId('header')).toBeInTheDocument();
       expect(screen.getByTestId('hero-section')).toBeInTheDocument();
+      expect(screen.getByTestId('social-proof')).toBeInTheDocument();
       expect(screen.getByTestId('how-it-works')).toBeInTheDocument();
       expect(screen.getByTestId('problem')).toBeInTheDocument();
-      expect(screen.getByTestId('features')).toBeInTheDocument();
-      expect(screen.getByTestId('integrations')).toBeInTheDocument();
       expect(screen.getByTestId('oracle')).toBeInTheDocument();
-      expect(screen.getByTestId('live-demo')).toBeInTheDocument();
       expect(screen.getByTestId('pricing-section')).toBeInTheDocument();
       expect(screen.getByTestId('footer')).toBeInTheDocument();
     });
