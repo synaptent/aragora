@@ -217,8 +217,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=1800,
-        help="Fixed timeout (seconds) applied to every run (default: 1800).",
+        default=3600,
+        help="Fixed timeout (seconds) applied to every run (default: 3600).",
     )
     parser.add_argument(
         "--output",
