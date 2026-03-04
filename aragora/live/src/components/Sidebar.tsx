@@ -54,6 +54,7 @@ const pipelineItems: NavItem[] = [
   { label: 'Mission Control', href: '/mission-control', icon: '\u25A3', minMode: 'standard' },
   { label: 'Pipeline', href: '/pipeline', icon: '|' },
   { label: 'Interrogate', href: '/interrogate', icon: '?' },
+  { label: 'Spec Generator', href: '/prompt-engine', icon: '\u2261' },
   { label: 'Ideas', href: '/ideas', icon: '~', minMode: 'standard' },
   { label: 'Goals', href: '/goals', icon: 'G', minMode: 'standard' },
   { label: 'Actions', href: '/actions', icon: 'A', minMode: 'standard' },

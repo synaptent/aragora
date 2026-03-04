@@ -230,6 +230,31 @@ _EXPORTS = {
         "aragora.server.stream.pipeline_stream",
         "register_pipeline_stream_routes",
     ),
+    # Prompt engine stream (prompt-to-spec pipeline)
+    "PromptEngineStreamEmitter": (
+        "aragora.server.stream.prompt_engine_stream",
+        "PromptEngineStreamEmitter",
+    ),
+    "PromptEngineStreamClient": (
+        "aragora.server.stream.prompt_engine_stream",
+        "PromptEngineStreamClient",
+    ),
+    "get_prompt_engine_emitter": (
+        "aragora.server.stream.prompt_engine_stream",
+        "get_prompt_engine_emitter",
+    ),
+    "set_prompt_engine_emitter": (
+        "aragora.server.stream.prompt_engine_stream",
+        "set_prompt_engine_emitter",
+    ),
+    "prompt_engine_websocket_handler": (
+        "aragora.server.stream.prompt_engine_stream",
+        "prompt_engine_websocket_handler",
+    ),
+    "register_prompt_engine_stream_routes": (
+        "aragora.server.stream.prompt_engine_stream",
+        "register_prompt_engine_stream_routes",
+    ),
     # Workflow stream (WorkflowEngine execution)
     "WorkflowStreamEmitter": (
         "aragora.server.stream.workflow_stream",
