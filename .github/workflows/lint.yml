@@ -49,6 +49,13 @@ jobs:
             git clean -ffdx || true
           fi
           if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
             echo "PWD=$(pwd)"
             ls -la
@@ -97,6 +104,13 @@ jobs:
               git reset --hard HEAD
             fi
             git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
           fi
           if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
@@ -176,6 +190,13 @@ jobs:
             git clean -ffdx || true
           fi
           if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
             echo "PWD=$(pwd)"
             ls -la
@@ -221,6 +242,13 @@ jobs:
               git reset --hard HEAD
             fi
             git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
           fi
           if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
@@ -278,6 +306,13 @@ jobs:
               git reset --hard HEAD
             fi
             git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
           fi
           if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
@@ -342,6 +377,13 @@ jobs:
               git reset --hard HEAD
             fi
             git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
           fi
           if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
@@ -451,6 +493,13 @@ jobs:
             git clean -ffdx || true
           fi
           if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
             echo "PWD=$(pwd)"
             ls -la
@@ -500,6 +549,13 @@ jobs:
               git reset --hard HEAD
             fi
             git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
           fi
           if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
@@ -564,6 +620,13 @@ jobs:
             git clean -ffdx || true
           fi
           if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
             echo "PWD=$(pwd)"
             ls -la
@@ -609,6 +672,13 @@ jobs:
               git reset --hard HEAD
             fi
             git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
           fi
           if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
@@ -725,6 +795,13 @@ jobs:
             git clean -ffdx || true
           fi
           if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
             echo "PWD=$(pwd)"
             ls -la
@@ -784,6 +861,13 @@ jobs:
               git reset --hard HEAD
             fi
             git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
           fi
           if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
