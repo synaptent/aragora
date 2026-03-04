@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { useTheme } from '@/context/ThemeContext';
 
 const NAV_LINKS = [
-  { href: '/about', label: 'About' },
+  { href: '/quickstart', label: 'Quickstart' },
   { href: '/pricing', label: 'Pricing' },
-  { href: '/developer', label: 'Docs' },
+  { href: '/try', label: 'Playground' },
   { href: 'mailto:support@aragora.ai', label: 'Support' },
 ];
 

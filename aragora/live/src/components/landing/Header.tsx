@@ -9,8 +9,8 @@ import { ThemeSelector } from './ThemeSelector';
 
 const NAV_LINKS = [
   { href: '#how-it-works', label: 'How it works', anchor: true },
+  { href: '/try', label: 'Playground', anchor: false },
   { href: '/quickstart', label: 'Quickstart', anchor: false },
-  { href: '/docs', label: 'Docs', anchor: false },
   { href: '/pricing', label: 'Pricing', anchor: false },
   { href: '/login', label: 'Log in', anchor: false },
 ];

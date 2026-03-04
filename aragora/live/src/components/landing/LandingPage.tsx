@@ -27,8 +27,8 @@ export function LandingPage() {
     >
       <Header />
       <HeroSection />
-      <HowItWorksSection />
       <ProblemSection />
+      <HowItWorksSection />
       <FeatureShowcase />
       <IntegrationsGrid />
       <LiveDemoSection />
