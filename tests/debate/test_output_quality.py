@@ -885,6 +885,39 @@ If error_rate > 2% for 10m, rollback by disabling feature flag.
     assert ratio_after is None or ratio_after <= 0.25
 
 
+def test_add_to_existing_file_not_counted_as_duplicate_create(tmp_path):
+    """'Add X to existing_file.py' is a modify action, not a duplicate-create."""
+    (tmp_path / "aragora" / "analytics").mkdir(parents=True)
+    (tmp_path / "aragora" / "analytics" / "dashboard.py").write_text("# existing")
+    (tmp_path / "aragora" / "audit").mkdir(parents=True)
+    (tmp_path / "aragora" / "audit" / "orchestrator.py").write_text("# existing")
+    (tmp_path / "aragora" / "resilience").mkdir(parents=True)
+    (tmp_path / "aragora" / "resilience" / "circuit_breaker.py").write_text("# existing")
+
+    answer = """\
+## Owner module / file paths
+- `aragora/analytics/dashboard.py` (add real-time quality dashboards)
+- `aragora/audit/orchestrator.py` (add mode transition logging)
+- `aragora/resilience/circuit_breaker.py` (add debate-specific patterns)
+"""
+    ratio = compute_duplicate_existing_create_ratio(answer, tmp_path)
+    # "add" to existing files is a modify action — should NOT be counted as
+    # duplicate-create.  Ratio should be None (no create-verb lines) or 0.
+    assert ratio is None or ratio == 0.0
+
+
+def test_repair_still_rewrites_add_targeting_existing_paths(tmp_path):
+    """Repair function still rewrites 'add' to 'modify' for existing paths."""
+    from aragora.debate.output_quality import _repair_duplicate_create_lines
+
+    (tmp_path / "aragora" / "debate").mkdir(parents=True)
+    (tmp_path / "aragora" / "debate" / "quality.py").write_text("# existing")
+
+    text = "- Add aragora/debate/quality.py new validation checks."
+    repaired = _repair_duplicate_create_lines(text, tmp_path)
+    assert "modify" in repaired.lower()
+
+
 # ---------------------------------------------------------------------------
 # Deterministic path repair tests
 # ---------------------------------------------------------------------------

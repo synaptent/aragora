@@ -48,7 +48,16 @@ _THRESHOLD_LINE_RE = re.compile(
 )
 _JSON_BLOCK_RE = re.compile(r"```json\s*(.*?)```", re.DOTALL | re.IGNORECASE)
 _GENERIC_CODE_BLOCK_RE = re.compile(r"```\s*(.*?)```", re.DOTALL)
+# Verbs that unambiguously mean "make something new from scratch".
+# NOTE: "add" is intentionally EXCLUDED — it usually means "add feature to
+# existing file" (modify), not "create a new file".  Including it caused
+# massive false-positive duplicate-create scoring (runs 008h–011).
 _CREATE_ACTION_RE = re.compile(
+    r"(?i)\b(create|build|scaffold|introduce|implement\s+new|spin\s+up)\b"
+)
+# Broader set including "add" — only used for _repair_duplicate_create_lines
+# where the context (line references an existing path) disambiguates.
+_CREATE_OR_ADD_ACTION_RE = re.compile(
     r"(?i)\b(create|add|build|scaffold|introduce|implement\s+new|spin\s+up)\b"
 )
 _DUPLICATE_CREATE_MAX_RATIO = 0.25
@@ -1190,7 +1199,11 @@ def _repair_duplicate_create_lines(text: str, repo_root: Path) -> str:
     for raw_line in text.splitlines():
         line = raw_line
         stripped = line.strip()
-        if not stripped or "new file" in stripped.lower() or not _CREATE_ACTION_RE.search(line):
+        if (
+            not stripped
+            or "new file" in stripped.lower()
+            or not _CREATE_OR_ADD_ACTION_RE.search(line)
+        ):
             out_lines.append(line)
             continue
 
