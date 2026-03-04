@@ -424,15 +424,18 @@ class AuthHandler(SecureHandler):
 
         login_tracker = getattr(login_module, "get_lockout_tracker", None)
         handler_tracker = get_lockout_tracker
+        module_tracker = getattr(_lockout_module, "get_lockout_tracker", None)
 
-        if handler_tracker is not _ORIGINAL_LOCKOUT_TRACKER and callable(handler_tracker):
-            return handler_tracker()
-        if login_tracker is not _ORIGINAL_LOCKOUT_TRACKER and callable(login_tracker):
-            return login_tracker()
-        if callable(handler_tracker):
-            return handler_tracker()
-        if callable(login_tracker):
-            return login_tracker()
+        # Prefer explicitly patched call sites used in tests and runtime injection.
+        for tracker_factory in (handler_tracker, login_tracker, module_tracker):
+            if tracker_factory is not _ORIGINAL_LOCKOUT_TRACKER and callable(tracker_factory):
+                return tracker_factory()
+
+        # Fallback to canonical factories.
+        for tracker_factory in (handler_tracker, login_tracker, module_tracker):
+            if callable(tracker_factory):
+                return tracker_factory()
+
         return _ORIGINAL_LOCKOUT_TRACKER()
 
     def _check_permission(

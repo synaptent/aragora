@@ -410,7 +410,9 @@ def _init_persistent_store() -> bool:
         _use_persistent_store = True
         logger.info("Template marketplace using persistent SQLite storage")
         return True
-    except (ImportError, RuntimeError, OSError, ValueError) as e:
+    except Exception as e:
+        # Database adapter initialization may raise implementation-specific
+        # exceptions (including asyncpg teardown/loop-close errors).
         # Check if distributed state is required (multi-instance or production)
         if is_distributed_state_required():
             raise DistributedStateError(

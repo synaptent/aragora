@@ -360,7 +360,7 @@ def test_cmd_ask_grounding_fail_closed_accepts_grounded_output(monkeypatch, caps
 
 
 def test_cmd_ask_quality_fail_closed_requires_contract(monkeypatch, capsys):
-    """Fail-closed quality mode should reject runs without an explicit contract."""
+    """Fail-closed quality mode should require an explicit/derivable output contract."""
     from aragora.cli.commands import debate as debate_cmd
 
     monkeypatch.delenv("ARAGORA_OFFLINE", raising=False)

@@ -526,7 +526,14 @@ Required sections:
 3. Owner module / file paths — reference existing repo paths
 4. Test Plan — specific test commands and assertions
 5. Rollback Plan — MUST include trigger condition (e.g. "if tests fail") AND action (e.g. "revert commit")
-6. Gate Criteria — MUST include at least 2 numeric thresholds (e.g. "coverage >= 80%", "zero lint errors", "p95 < 250ms")
+6. Gate Criteria — MUST include at least 2 numeric thresholds with explicit comparison operators.
+   Example (yours MUST be similar — use numbers, not just words):
+   - coverage >= 80% on modified files
+   - p95 latency <= 250ms
+   - zero new lint errors (0 errors)
+   - all 7 required section headers present
+   - error rate < 1.0%
+   Do NOT write qualitative-only criteria like "tests should pass" — always include a number.
 7. JSON Payload — machine-readable summary"""
 
     @staticmethod
@@ -534,15 +541,16 @@ Required sections:
         """Generate a compact listing of real repo paths for grounding.
 
         Dynamically discovers all subdirectories under ``aragora/`` plus key
-        test/script directories.  Returns up to 60 lines so agents can
-        reference real paths instead of hallucinating them.
+        test/script directories. Caps output by line and character budgets so
+        repo hints do not starve the synthesis prompt.
         """
         try:
             from pathlib import Path
 
             repo_root = Path(os.getcwd())
             lines: list[str] = []
-            max_lines = 60
+            max_lines = 24
+            max_chars = 1800
 
             # 1. Top-level project files
             top_files = [
@@ -570,9 +578,11 @@ Required sections:
                         f.name
                         for f in dp.iterdir()
                         if f.is_file() and f.suffix in suffixes and f.name != "__init__.py"
-                    )[:5]
+                    )[:3]
                     if files:
                         lines.append(f"  {subdir}/: {', '.join(files)}")
+                        if sum(len(line) + 1 for line in lines) >= max_chars:
+                            break
 
             # 3. Key test and script directories
             for d in ("tests/debate", "tests/cli", "tests/pipeline", "scripts"):
@@ -580,9 +590,11 @@ Required sections:
                     break
                 dp = repo_root / d
                 if dp.is_dir():
-                    files = sorted(f.name for f in dp.iterdir() if f.suffix == ".py")[:5]
+                    files = sorted(f.name for f in dp.iterdir() if f.suffix == ".py")[:3]
                     if files:
                         lines.append(f"  {d}/: {', '.join(files)}")
+                        if sum(len(line) + 1 for line in lines) >= max_chars:
+                            break
 
             if lines:
                 return "Key repository paths (use these, not invented paths):\n" + "\n".join(lines)
@@ -621,13 +633,18 @@ Synthesize the debate into a single comprehensive answer that EXACTLY follows th
 Critical rules:
 - Use EXACTLY the required section headings as `## Heading` markdown headers, in the specified order.
 - Each section must have **substantive content** — at least 2-3 specific, actionable items drawn from the debate.
-- For "Ranked High-Level Tasks": prioritize by impact and feasibility, with concrete rationale from the debate.
-- For "Owner module / file paths": reference ONLY paths from the REPOSITORY FILE REFERENCE above. Do NOT invent paths.
-- For "Gate Criteria": include specific, measurable thresholds (operators + numbers + units).
-- For "Rollback Plan": include explicit trigger conditions and rollback actions.
+- For "Ranked High-Level Tasks": The FIRST task must be immediately executable:
+  - Start with an action verb (add, create, implement, update, refactor, wire, test)
+  - Reference an EXISTING file path from the REPOSITORY FILE REFERENCE (not a new file)
+  - Include a specific method/class/function name to modify
+  - Include a test command to verify (e.g., "pytest tests/debate/test_X.py::test_name")
+- For "Suggested Subtasks": Each must be independently testable with a specific pytest command.
+- For "Owner module / file paths": reference ONLY paths from the REPOSITORY FILE REFERENCE above. Do NOT invent paths. For new modules, clearly mark them with "NEW:" prefix.
+- For "Gate Criteria": include specific, measurable thresholds (operators + numbers + units, e.g., "p95 < 250ms", "coverage >= 80%").
+- For "Rollback Plan": include explicit trigger conditions AND rollback actions (e.g., "If error_rate > 2% for 10m, revert commit abc123").
 - For "JSON Payload": produce valid JSON that mirrors the section content.
 - Preserve DISSENT: if agents disagreed, note it in the relevant section.
-- Do NOT use placeholder text. Every item must be specific and substantive.
+- Do NOT use placeholder text like TBD, TODO, [NEW], "as needed", or "to be determined". Every item must be specific and substantive.
 
 Write authoritatively. This is the FINAL WORD on this debate."""
 
