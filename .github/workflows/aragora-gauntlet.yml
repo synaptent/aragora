@@ -34,14 +34,17 @@ jobs:
         run: |
           if [[ ! -f pyproject.toml ]]; then
             echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git reset --hard || true
+            git clean -ffdx || true
             git sparse-checkout disable || true
             git fetch --no-tags origin "${GITHUB_SHA:-HEAD}" || true
+            git checkout -f "${GITHUB_SHA:-HEAD}" || true
             if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
               git reset --hard FETCH_HEAD
             else
               git reset --hard HEAD
             fi
-            git clean -ffd || true
+            git clean -ffdx || true
           fi
           if [[ ! -f pyproject.toml ]]; then
             echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
