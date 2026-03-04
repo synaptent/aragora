@@ -869,24 +869,6 @@ async def run_debate(
         if mode_system_prompt:
             agent.system_prompt = mode_system_prompt
 
-        # Lightweight role emphasis for higher-quality team outputs.
-        # Keep this advisory so base model behaviors remain unconstrained.
-        role_hint = ""
-        if role == "critic":
-            role_hint = (
-                "Quality audit focus: identify missing quantitative gates, rollback trigger/action "
-                "gaps, and markdown/JSON consistency defects."
-            )
-        elif role == "synthesizer":
-            role_hint = (
-                "Synthesis focus: preserve diverse model input while producing a structurally "
-                "complete answer with explicit thresholds, rollback triggers, and consistent JSON."
-            )
-        if role_hint:
-            existing_prompt = getattr(agent, "system_prompt", "") or ""
-            if role_hint not in existing_prompt:
-                agent.system_prompt = f"{existing_prompt}\n\n{role_hint}".strip()
-
         agents.append(agent)
 
     if failed_agents:
@@ -1375,7 +1357,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
             else:
                 quality_contract_source = "fallback"
 
-        if quality_fail_closed and quality_contract_source in {"none", "fallback"}:
+        if quality_fail_closed and quality_contract_source == "none":
             print(
                 "Debate configuration invalid: --quality-fail-closed requires an explicit "
                 "output contract. Add output sections to the task or pass --required-sections "
