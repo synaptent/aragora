@@ -526,7 +526,14 @@ Required sections:
 3. Owner module / file paths — reference existing repo paths
 4. Test Plan — specific test commands and assertions
 5. Rollback Plan — MUST include trigger condition (e.g. "if tests fail") AND action (e.g. "revert commit")
-6. Gate Criteria — MUST include at least 2 numeric thresholds (e.g. "coverage >= 80%", "zero lint errors", "p95 < 250ms")
+6. Gate Criteria — MUST include at least 2 numeric thresholds with explicit comparison operators.
+   Example (yours MUST be similar — use numbers, not just words):
+   - coverage >= 80% on modified files
+   - p95 latency <= 250ms
+   - zero new lint errors (0 errors)
+   - all 7 required section headers present
+   - error rate < 1.0%
+   Do NOT write qualitative-only criteria like "tests should pass" — always include a number.
 7. JSON Payload — machine-readable summary"""
 
     @staticmethod
