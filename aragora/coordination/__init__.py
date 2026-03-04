@@ -14,8 +14,22 @@ Features:
 - Hierarchical task dispatch with dependencies
 - Health watchdog with stall detection and auto-recovery
 - Safe git reconciliation with conflict classification
+- File-based event bus for agent coordination
+- Session registry with PID-based liveness checks
+- Advisory file claim protocol
+- Conflict resolution via Arena debates
 """
 
+from aragora.coordination.bus import (
+    CoordinationBus,
+    CoordinationEvent,
+)
+from aragora.coordination.claims import (
+    ClaimManager,
+    ClaimResult,
+    ClaimStatus,
+    FileClaim,
+)
 from aragora.coordination.cross_workspace import (
     CrossWorkspaceCoordinator,
     FederatedWorkspace,
@@ -48,8 +62,25 @@ from aragora.coordination.reconciler import (
     ConflictInfo,
     ConflictCategory,
 )
+from aragora.coordination.registry import (
+    SessionRegistry,
+    SessionInfo,
+)
+from aragora.coordination.resolver import (
+    ConflictResolver,
+    Resolution,
+    ResolutionResult,
+)
 
 __all__ = [
+    # Event bus
+    "CoordinationBus",
+    "CoordinationEvent",
+    # File claims
+    "ClaimManager",
+    "ClaimResult",
+    "ClaimStatus",
+    "FileClaim",
     # Cross-workspace
     "CrossWorkspaceCoordinator",
     "FederatedWorkspace",
@@ -77,4 +108,11 @@ __all__ = [
     "MergeAttempt",
     "ConflictInfo",
     "ConflictCategory",
+    # Session registry
+    "SessionRegistry",
+    "SessionInfo",
+    # Conflict resolver
+    "ConflictResolver",
+    "Resolution",
+    "ResolutionResult",
 ]
