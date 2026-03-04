@@ -536,13 +536,31 @@ Required sections:
    Do NOT write qualitative-only criteria like "tests should pass" — always include a number.
 7. JSON Payload — machine-readable summary"""
 
+    # Directories most relevant to self-improvement tasks get more file slots.
+    _PRIORITY_DIRS = frozenset(
+        {
+            "debate",
+            "nomic",
+            "pipeline",
+            "cli",
+            "server",
+            "agents",
+            "knowledge",
+            "memory",
+            "control_plane",
+            "audit",
+            "gauntlet",
+        }
+    )
+
     @staticmethod
     def _get_repo_path_hint() -> str:
         """Generate a compact listing of real repo paths for grounding.
 
         Dynamically discovers all subdirectories under ``aragora/`` plus key
-        test/script directories. Caps output by line and character budgets so
-        repo hints do not starve the synthesis prompt.
+        test/script directories. Priority directories (debate, nomic, pipeline,
+        etc.) get more file slots so synthesis agents can reference real paths
+        instead of inventing them.
         """
         try:
             from pathlib import Path
@@ -574,23 +592,34 @@ Required sections:
                     suffixes = {".py"}
                     if "live" in str(subdir):
                         suffixes.update({".ts", ".tsx"})
+                    is_priority = subdir.name in SynthesisGenerator._PRIORITY_DIRS
+                    file_limit = 12 if is_priority else 8
                     files = sorted(
                         f.name
                         for f in dp.iterdir()
                         if f.is_file() and f.suffix in suffixes and f.name != "__init__.py"
-                    )[:12]
+                    )[:file_limit]
                     if files:
                         lines.append(f"  {subdir}/: {', '.join(files)}")
                         if sum(len(line) + 1 for line in lines) >= max_chars:
                             break
 
             # 3. Key test and script directories
-            for d in ("tests/debate", "tests/cli", "tests/pipeline", "scripts"):
+            for d in (
+                "tests/debate",
+                "tests/cli",
+                "tests/pipeline",
+                "tests/nomic",
+                "tests/agents",
+                "tests/server",
+                "tests/knowledge",
+                "scripts",
+            ):
                 if len(lines) >= max_lines:
                     break
                 dp = repo_root / d
                 if dp.is_dir():
-                    files = sorted(f.name for f in dp.iterdir() if f.suffix == ".py")[:12]
+                    files = sorted(f.name for f in dp.iterdir() if f.suffix == ".py")[:8]
                     if files:
                         lines.append(f"  {d}/: {', '.join(files)}")
                         if sum(len(line) + 1 for line in lines) >= max_chars:

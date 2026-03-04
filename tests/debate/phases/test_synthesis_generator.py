@@ -197,8 +197,10 @@ class TestBuildSynthesisPrompt:
         gen = SynthesisGenerator()
         prompt = gen._build_synthesis_prompt(ctx)
 
-        # Should be truncated to 1500 chars
-        assert len(prompt) < 6000
+        # Proposal should be truncated to ~1500 chars; total prompt includes
+        # repo path hints (~12K) plus base template, so verify the full 5000-
+        # char proposal is not present (i.e. it was actually truncated).
+        assert "x" * 5000 not in prompt
 
 
 class TestCombineProposalsAsSynthesis:
