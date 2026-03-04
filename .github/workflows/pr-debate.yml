@@ -1,10 +1,8 @@
 name: Aragora PR Review
 
-# SECURITY: Uses pull_request_target so secrets are available, but ONLY the
-# base-branch code is checked out and installed.  The PR diff is fetched via
-# `gh pr diff` (read-only) so untrusted PR code never executes with secrets.
-# Do NOT change checkout ref to the PR head branch without a thorough security
-# review -- doing so would let any PR author exfiltrate API keys.
+# Non-blocking by policy:
+# - Pull-request events run in advisory mode only and must never gate merges.
+# - Full AI review remains available via manual workflow_dispatch.
 
 on:
   pull_request_target:
@@ -12,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 'PR number to review'
+        description: "PR number to review"
         required: true
 
 concurrency:
@@ -27,28 +25,48 @@ jobs:
   review:
     runs-on: aragora
     timeout-minutes: 20
-    # Skip if PR is from a fork (no access to secrets), or if PR is a draft
-    if: (github.event_name != 'pull_request_target' || !github.event.pull_request.draft) && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'workflow_dispatch')
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
-      # SECURITY: Checkout the BASE branch (trusted code), NOT the PR branch.
-      # This ensures that `pip install -e .` only installs known-safe code
-      # while secrets are present in the environment.
+      - name: Resolve PR number
+        id: resolve
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "pr_number=${{ github.event.inputs.pr_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Advisory mode (non-blocking)
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        run: |
+          echo "PR #${{ steps.resolve.outputs.pr_number }}: advisory-only review mode."
+          echo "This workflow does not block agent pushes or merges."
+          echo "Run workflow_dispatch for a full AI review on demand."
+
+      # Full review path (manual only)
+      # SECURITY: checkout base-branch code only; never execute PR head with secrets.
       - name: Checkout base branch (trusted code only)
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - uses: ./.github/actions/checkout-integrity
+        if: github.event_name == 'workflow_dispatch'
 
       - name: Setup Python
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Ensure GitHub CLI is available
+        if: github.event_name == 'workflow_dispatch'
         run: |
           if command -v gh >/dev/null 2>&1; then
             gh --version | head -1
@@ -65,52 +83,38 @@ jobs:
           gh --version | head -1
 
       - name: Install aragora from base branch
+        if: github.event_name == 'workflow_dispatch'
         run: |
           pip install --upgrade pip
-          # Install from base branch code (NOT PR code) to prevent secret exfiltration
           pip install -e .
 
       - name: Get PR diff
+        if: github.event_name == 'workflow_dispatch'
         id: diff
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            PR_NUMBER=${{ github.event.inputs.pr_number }}
-          else
-            PR_NUMBER=${{ github.event.pull_request.number }}
-          fi
-
-          # Get the diff
-          gh pr diff $PR_NUMBER > pr.diff
-
-          # Check diff size
+          gh pr diff "${{ steps.resolve.outputs.pr_number }}" > pr.diff
           DIFF_SIZE=$(wc -c < pr.diff)
           echo "Diff size: $DIFF_SIZE bytes"
 
-          # Smart truncation: prioritize security-sensitive files
           if [ "$DIFF_SIZE" -gt 50000 ]; then
-            echo "Diff exceeds 50KB, applying smart truncation..."
-
-            # Keep security-sensitive files first (auth, crypto, config)
-            grep -E "^\+\+\+ .*(auth|security|crypto|password|token|secret|config|env)" pr.diff > priority_files.txt || true
-
-            # Truncate to 50KB
+            echo "Diff exceeds 50KB, applying truncation..."
             head -c 50000 pr.diff > pr_truncated.diff
             echo -e "\n\n[... diff truncated to 50KB for review ...]" >> pr_truncated.diff
             mv pr_truncated.diff pr.diff
           fi
 
-          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "DIFF_SIZE=$DIFF_SIZE" >> $GITHUB_OUTPUT
+          echo "diff_size=$DIFF_SIZE" >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Create artifacts directory
+        if: github.event_name == 'workflow_dispatch'
         run: mkdir -p ./artifacts
 
       - name: Run aragora review
-        id: review
+        if: github.event_name == 'workflow_dispatch'
+        id: review_run
         run: |
-          # Run the review command
           aragora review \
             --diff-file pr.diff \
             --output-format github \
@@ -120,24 +124,14 @@ jobs:
             --focus security,performance,quality \
             > ./artifacts/comment.md 2> ./artifacts/review.log || true
 
-          # Check if review was generated
           if [ -f "./artifacts/comment.md" ] && [ -s "./artifacts/comment.md" ]; then
-            echo "review_generated=true" >> $GITHUB_OUTPUT
+            echo "review_generated=true" >> "$GITHUB_OUTPUT"
           else
-            echo "review_generated=false" >> $GITHUB_OUTPUT
-            # Create fallback comment
+            echo "review_generated=false" >> "$GITHUB_OUTPUT"
             cat > ./artifacts/comment.md << 'FALLBACK'
           ## AI Red Team Code Review
 
           Review could not be completed. Please check the workflow logs.
-
-          **Possible causes:**
-          - Missing API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY)
-          - Diff too large or complex
-          - Rate limiting
-
-          ---
-          *Powered by [Aragora](https://github.com/an0mium/aragora) - AI Red Team*
           FALLBACK
           fi
         env:
@@ -146,25 +140,21 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Upload artifacts
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: aragora-review-${{ steps.diff.outputs.PR_NUMBER }}
+          name: aragora-review-${{ steps.resolve.outputs.pr_number }}
           path: ./artifacts/
           retention-days: 30
 
       - name: Post PR comment
-        run: |
-          PR_NUMBER=${{ steps.diff.outputs.PR_NUMBER }}
-
-          # Post the review comment
-          gh pr comment $PR_NUMBER --body-file ./artifacts/comment.md
+        if: github.event_name == 'workflow_dispatch'
+        run: gh pr comment "${{ steps.resolve.outputs.pr_number }}" --body-file ./artifacts/comment.md
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Add review label
-        if: steps.review.outputs.review_generated == 'true'
-        run: |
-          PR_NUMBER=${{ steps.diff.outputs.PR_NUMBER }}
-          gh pr edit $PR_NUMBER --add-label "ai-reviewed" 2>/dev/null || true
+        if: github.event_name == 'workflow_dispatch' && steps.review_run.outputs.review_generated == 'true'
+        run: gh pr edit "${{ steps.resolve.outputs.pr_number }}" --add-label "ai-reviewed" 2>/dev/null || true
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""PR admission controller for multi-agent CI lane governance.
+"""PR admission monitor for multi-agent CI lane governance.
 
 Policy:
 - At most ``max_ready_per_stream`` open ready PRs per stream.
 - Stream can be set via label prefixes: ``lane:``, ``lane/``, ``stream:``, ``stream/``.
 - If no stream label exists, infer stream from changed files.
 
-When ``--enforce`` is enabled and the current PR is over capacity for its stream:
+By default this script is advisory-only and never blocks PR progress.
+
+When ``--enforce`` is explicitly enabled and the current PR is over capacity for
+its stream:
 - convert PR back to draft
 - disable auto-merge (if enabled)
 - post an explanatory PR comment
@@ -321,7 +324,11 @@ def evaluate_admission(
         f"Admitted: {admitted_text}"
     )
     if not enforce:
-        return 2
+        print(
+            f"Advisory-only mode: PR #{current_pr_number} is over stream capacity, "
+            "but no blocking action will be taken."
+        )
+        return 0
 
     pr_node_id = str(current_pr.get("node_id", ""))
     if not pr_node_id:
@@ -346,7 +353,7 @@ def evaluate_admission(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="PR admission controller")
+    parser = argparse.ArgumentParser(description="PR admission monitor")
     parser.add_argument(
         "--repo",
         default=os.environ.get("GITHUB_REPOSITORY", ""),

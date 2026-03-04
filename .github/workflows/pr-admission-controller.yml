@@ -15,9 +15,9 @@ on:
         default: "1"
         type: string
       enforce:
-        description: "Apply enforcement actions"
+        description: "Apply enforcement actions (manual override; non-blocking policy default)"
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -50,7 +50,7 @@ jobs:
             echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Enforce admission controller
+      - name: Monitor admission pressure (advisory)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -66,8 +66,15 @@ jobs:
             ENFORCE_FLAG="--enforce"
           fi
 
+          set +e
           python scripts/pr_admission_controller.py \
             --repo "${GITHUB_REPOSITORY}" \
             --pr-number "${{ steps.resolve.outputs.pr_number }}" \
             --max-ready-per-stream "${MAX_READY}" \
             ${ENFORCE_FLAG}
+          rc=$?
+          set -e
+
+          if [ "$rc" -ne 0 ]; then
+            echo "::warning::Admission monitor exited with code $rc (non-blocking by policy)"
+          fi

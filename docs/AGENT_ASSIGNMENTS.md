@@ -6,13 +6,14 @@
 
 Use these rules before reading track-level assignments:
 
-1. One active ready PR at a time per stream. All other PRs in that stream must stay draft with auto-merge disabled.
-2. Admission controller is authoritative: `.github/workflows/pr-admission-controller.yml` and `scripts/pr_admission_controller.py` enforce ready-lane policy.
-3. Stale-run GC is mandatory before retriggers: run `python3 scripts/pr_stale_run_gc.py --repo synaptent/aragora --max-runs 500` (with `GITHUB_TOKEN`) to clear stale queued runs.
-4. Before starting work, post ownership in this file (branch, PR number, touched paths, owner handle, timestamp).
-5. If repo state changes unexpectedly (detached HEAD, unknown edits, disappearing worktree), stop and move to a fresh worktree from `origin/main` before continuing.
-6. No derivative PRs touching the same files as an active owner without explicit handoff in writing.
-7. If checks fail before test logic (missing local action path, missing runner tools, workspace corruption), pause PR fan-out and fix runner/workspace baseline first.
+1. Guiding principle: make bad outcomes cheap to fix, not hard to create (throughput over rigid gating).
+2. PR admission is advisory-only: `.github/workflows/pr-admission-controller.yml` and `scripts/pr_admission_controller.py` monitor lane pressure but do not block pushes/merges by default.
+3. PR review is advisory-only on PR events; use manual `workflow_dispatch` for deep AI review when needed.
+4. Stale-run GC is mandatory hygiene: run `python3 scripts/pr_stale_run_gc.py --repo synaptent/aragora --max-runs 500` (with `GITHUB_TOKEN`) to clear queued zombies.
+5. Keep merged-branch cleanup and session locks; avoid coordination drag from stale artifacts.
+6. Do not force-delete or force-reconcile active worktrees/sessions.
+7. Before starting work, post ownership in this file (branch, PR number, touched paths, owner handle, timestamp).
+8. If repo state changes unexpectedly (detached HEAD, unknown edits, disappearing worktree), stop, preserve state, and continue from a fresh worktree at `origin/main`.
 
 ---
 

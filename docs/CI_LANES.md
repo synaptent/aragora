@@ -4,11 +4,11 @@ Aragora uses a two-lane CI architecture to balance fast feedback for development
 
 ## Control Plane Guardrails
 
-The lane system is now enforced by automation, not just convention:
+The lane system is automation-assisted, not merge-blocking:
 
-- **PR admission controller:** `.github/workflows/pr-admission-controller.yml` runs `scripts/pr_admission_controller.py` and blocks PRs when ready-lane policy is violated.
+- **PR admission monitor (advisory):** `.github/workflows/pr-admission-controller.yml` runs `scripts/pr_admission_controller.py` to report lane pressure; default mode is non-blocking.
 - **Stale-run GC:** `.github/workflows/pr-stale-run-gc.yml` runs `scripts/pr_stale_run_gc.py` to cancel orphaned or stale-SHA runs that consume runner capacity.
-- **Single ready lane per stream:** only one non-draft PR should remain active per stream; all other PRs in that stream stay draft until promoted.
+- **Agent throughput first:** keep parallel PR flow and rely on fast detection + cheap rollback over hard admission gates.
 
 Operator quick commands:
 
@@ -16,8 +16,8 @@ Operator quick commands:
 # Cancel stale PR runs (requires GITHUB_TOKEN)
 python3 scripts/pr_stale_run_gc.py --repo synaptent/aragora --max-runs 500
 
-# Demote a PR to draft to free the lane
-gh pr ready <pr-number> --undo
+# Prune merged local branches
+git branch --merged main | grep -v '^\*' | xargs -r git branch -d
 ```
 
 ## How It Works
