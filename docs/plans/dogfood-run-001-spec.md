@@ -544,3 +544,72 @@ Summary:
 ### Gate Decision
 - **Partial GO**: runtime and scoring harness are now usable for A/B.
 - **No GO for quality claims** until output structure contract is enforced at generation time (e.g., required section headings + grounding fail-closed).
+
+---
+
+## Dogfood Run 006 Results (Section Contract + Grounding Fail-Closed A/B)
+
+### Date
+- 2026-03-03
+
+### Goal
+- Enforce required section headings and grounding fail-closed during generation, then compare baseline vs enhanced context quality with deterministic scoring.
+
+### Configuration
+- **Team**: 2 agents via OpenRouter (`gemini-2.0-flash-001` proposer, `gpt-4o` synthesizer)
+- **Rounds**: 1
+- **Consensus**: majority
+- **Hard gates in run command**:
+  - `--required-sections "Ranked High-Level Tasks,Suggested Subtasks,Owner module / file paths,Test Plan,Rollback Plan,Gate Criteria"`
+  - `--grounding-fail-closed --grounding-min-verified-paths 0.35`
+  - `--quality-min-score 7 --quality-practical-min-score 5 --quality-upgrade-max-loops 1`
+- **Enhanced context mode**: `--mode orchestrator --codebase-context --codebase-context-max-chars 60000`
+- **Timeout**: 420s per run
+
+### Execution Results
+
+| Variant | Exit | Duration | Final answer present | Timeout |
+|---|---:|---:|---:|---:|
+| Baseline | 0 | 351.53s | Yes | No |
+| Enhanced | 0 | 327.56s | Yes | No |
+
+### Objective Score (`scripts/dogfood_score.py`)
+
+| Metric | Baseline | Enhanced |
+|---|---:|---:|
+| Composite score | 0.7194 | **0.7970** |
+| Verified existing path ratio | 0.7647 | **0.8235** |
+| Duplicate existing create-ratio (lower is better) | 0.6923 | **0.4643** |
+| Practicality score (deterministic) | 9.74 | 9.74 |
+| Quality score (section-contract) | 9.0 | 9.0 |
+
+Summary:
+- **Winner by composite score**: Enhanced
+- **Timeout rate**: 0.0 (both runs completed)
+
+### Interpretation
+1. Structured output quality recovered from run-005 failure mode: both variants met required-section contract and scored high (`quality_score_10 = 9.0`).
+2. Enhanced codebase context improved grounding (`verified_paths_ratio` +0.0588) and reduced duplicate-create behavior (`duplicate_existing_create_ratio` -0.2280) versus baseline.
+3. Duplicate-create behavior is still too high in absolute terms, so this is not yet production-grade planning output.
+4. Grounding quality is good enough for fail-closed floor checks at 0.35 but still needs stricter policy to consistently hit higher thresholds.
+
+### Repository State Note (Overall Situation)
+- Run-006 was executed from a **clean disposable worktree** at `origin/main` (`codex/reconcile-worktrees-20260303-224514`) to avoid contamination from unrelated local edits in the primary checkout.
+- At run time, primary checkout was on `fix/deploy-skip-logic` with unrelated landing-page modifications and untracked assets; these were intentionally not touched.
+- Previously “valuable” `integrate/valuable-worktrees-20260304` content was already reconciled into `main` as `feat(landing): render markdown in debate results (#553)`.
+
+### Artifacts
+- `/tmp/dogfood_run006/run006_baseline_stdout.txt`
+- `/tmp/dogfood_run006/run006_baseline_stderr.txt`
+- `/tmp/dogfood_run006/run006_baseline_status.json`
+- `/tmp/dogfood_run006/run006_enhanced_stdout.txt`
+- `/tmp/dogfood_run006/run006_enhanced_stderr.txt`
+- `/tmp/dogfood_run006/run006_enhanced_status.json`
+- `/tmp/dogfood_run006/run006_enhanced_codebase_context.md`
+- `/tmp/dogfood_run006/run006_score.json`
+- `/tmp/dogfood_run006/run006_score.md`
+
+### Gate Decision
+- **GO** for quality-comparable A/B benchmarking under strict section contract.
+- **Partial GO** for grounding: floor gate passed, but path quality still has synthetic-token noise.
+- **NO-GO** for duplicate suppression target until deterministic duplicate-create checks are added to quality defects.
