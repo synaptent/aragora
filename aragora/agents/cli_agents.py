@@ -208,9 +208,9 @@ class CLIAgent(CritiqueMixin, Agent):
         "claude-3-opus-20240229": "anthropic/claude-3-opus",
         "claude-3-sonnet-20240229": "anthropic/claude-3-sonnet",
         # OpenAI/Codex models
-        "gpt-5.2": "openai/gpt-5.2",
-        "gpt-5.2-codex": "openai/gpt-5.2-codex",
-        "gpt-5.2-chat-latest": "openai/gpt-5.2-chat",
+        "gpt-5.3": "openai/gpt-5.3",
+        "gpt-5.3-codex": "openai/gpt-5.3-codex",
+        "gpt-5.3-chat-latest": "openai/gpt-5.3-chat",
         "gpt-4.1-codex": "openai/gpt-4.1",
         "gpt-4.1": "openai/gpt-4.1",
         "gpt-4.1-mini": "openai/gpt-4.1-mini",
@@ -656,7 +656,7 @@ Provide structured feedback:
 
 @AgentRegistry.register(
     "codex",
-    default_model="gpt-5.2-codex",
+    default_model="gpt-5.3-codex",
     agent_type="CLI",
     requires="codex CLI (npm install -g @openai/codex)",
 )
@@ -1086,7 +1086,7 @@ class DeepseekCLIAgent(CLIAgent):
 
 @AgentRegistry.register(
     "openai",
-    default_model="gpt-5.2",
+    default_model="gpt-5.3",
     agent_type="CLI",
     requires="openai CLI (pip install openai)",
     env_vars="OPENAI_API_KEY",
@@ -1098,7 +1098,7 @@ class OpenAIAgent(CLIAgent):
     """
 
     def __init__(
-        self, name: str, model: str = "gpt-5.2", role: AgentRole = "proposer", timeout: int = 120
+        self, name: str, model: str = "gpt-5.3", role: AgentRole = "proposer", timeout: int = 120
     ) -> None:
         super().__init__(name, model, role, timeout)
 
@@ -1187,7 +1187,7 @@ def get_default_agents() -> list[Agent]:
     """
     agents: list[Agent] = [
         ClaudeAgent(name="claude", model="claude-sonnet-4-6"),
-        CodexAgent(name="codex", model="gpt-5.2-codex"),
+        CodexAgent(name="codex", model="gpt-5.3-codex"),
         GeminiCLIAgent(name="gemini-cli", model="gemini-3.1-pro-preview"),
     ]
     return agents

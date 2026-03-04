@@ -129,7 +129,7 @@ def _get_oracle_models() -> tuple[str, str, str]:
 
         return _ORACLE_MODEL_OPENROUTER, _ORACLE_MODEL_ANTHROPIC, _ORACLE_MODEL_OPENAI
     except ImportError:
-        return "anthropic/claude-opus-4.6", "claude-sonnet-4-6", "gpt-5.2"
+        return "anthropic/claude-opus-4.6", "claude-sonnet-4-6", "gpt-5.3"
 
 
 def _get_tentacle_models() -> list[dict[str, str]]:

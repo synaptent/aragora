@@ -94,7 +94,7 @@ Agent (core.py)
 | Provider | Agent Class | Default Model | Env Var | Capabilities |
 |----------|-------------|---------------|---------|--------------|
 | Anthropic | `AnthropicAPIAgent` | claude-opus-4-5-20251101 | `ANTHROPIC_API_KEY` | Streaming, Web Search, Fallback |
-| OpenAI | `OpenAIAPIAgent` | gpt-5.2 | `OPENAI_API_KEY` | Streaming, Web Search, Fallback |
+| OpenAI | `OpenAIAPIAgent` | gpt-5.3 | `OPENAI_API_KEY` | Streaming, Web Search, Fallback |
 | Google | `GeminiAgent` | gemini-3-pro-preview | `GEMINI_API_KEY` | Streaming, Google Search Grounding, Fallback |
 | xAI | `GrokAgent` | grok-4-latest | `XAI_API_KEY` | Streaming, Fallback |
 | Mistral | `MistralAPIAgent` | mistral-large-2512 | `MISTRAL_API_KEY` | Streaming, Fallback |

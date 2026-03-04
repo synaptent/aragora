@@ -142,7 +142,7 @@ Recent changes:
         ),
         OpenAIAPIAgent(
             name="gpt-architect",
-            model="gpt-5.2",
+            model="gpt-5.3",
             role="proposer",
             timeout=120,
         ),

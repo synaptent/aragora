@@ -273,7 +273,7 @@ _MOCK_CONFIDENCE: dict[str, float] = {
 # ---------------------------------------------------------------------------
 
 _ORACLE_MODEL_ANTHROPIC = "claude-sonnet-4-6"
-_ORACLE_MODEL_OPENAI = "gpt-5.2"
+_ORACLE_MODEL_OPENAI = "gpt-5.3"
 _ORACLE_MODEL_OPENROUTER = "anthropic/claude-opus-4.6"  # OpenRouter fallback
 _ORACLE_CALL_TIMEOUT = 45.0  # seconds — focused essay + OpenRouter latency
 
@@ -302,7 +302,7 @@ _TENTACLE_MODELS: list[dict[str, str]] = [
     },
     {
         "provider": "openrouter",
-        "model": "openai/gpt-5.2",
+        "model": "openai/gpt-5.3",
         "name": "gpt",
         "env": "OPENROUTER_API_KEY",
     },

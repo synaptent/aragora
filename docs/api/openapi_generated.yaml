@@ -100006,7 +100006,7 @@ paths:
                       model: claude-opus-4-5-20251101
                     openai:
                       available: true
-                      model: gpt-5.2
+                      model: gpt-5.3
                     openrouter:
                       available: false
                       reason: OPENROUTER_API_KEY not set

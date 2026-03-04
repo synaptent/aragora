@@ -363,7 +363,7 @@ class TestOpenAICompatibleMixinInitialization:
     def test_default_values(self):
         """Should have sensible default values."""
         assert OpenAICompatibleMixin.OPENROUTER_MODEL_MAP == {}
-        assert OpenAICompatibleMixin.DEFAULT_FALLBACK_MODEL == "openai/gpt-5.2"
+        assert OpenAICompatibleMixin.DEFAULT_FALLBACK_MODEL == "openai/gpt-5.3"
         assert OpenAICompatibleMixin.max_tokens == 4096
 
     def test_concrete_agent_initialization(self):

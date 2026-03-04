@@ -3209,7 +3209,7 @@ Aragora should grow more powerful over time, not be stripped down."""
         )
 
         use_api_codex = os.environ.get("NOMIC_CODEX_USE_API", "0") == "1"
-        codex_api_model = os.environ.get("NOMIC_CODEX_API_MODEL", "gpt-5.2")
+        codex_api_model = os.environ.get("NOMIC_CODEX_API_MODEL", "gpt-5.3")
         if use_api_codex:
             self.codex = OpenAIAPIAgent(
                 name="codex-engineer",
@@ -3220,7 +3220,7 @@ Aragora should grow more powerful over time, not be stripped down."""
         else:
             self.codex = CodexAgent(
                 name="codex-engineer",
-                model="gpt-5.2-codex",
+                model="gpt-5.3-codex",
                 role="proposer",
                 timeout=1200,  # Doubled - Codex has known latency issues
             )

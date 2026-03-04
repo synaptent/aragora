@@ -63,7 +63,7 @@ def _resolve_openrouter_key() -> str:
     raise RuntimeError(msg)
 
 
-async def call_openrouter(prompt: str, system: str = "", model: str = "openai/gpt-5.2") -> str:
+async def call_openrouter(prompt: str, system: str = "", model: str = "openai/gpt-5.3") -> str:
     """OpenRouter API call — supports GPT-5.2, Gemini 3.1, Grok 4."""
     import aiohttp
 
@@ -96,7 +96,7 @@ async def phase_debate(task: str) -> str:
     print("  Calling Claude Opus 4.6, GPT-5.2, and Gemini 3.1 Pro...")
     claude_resp, gpt_resp, gemini_resp = await asyncio.gather(
         call_claude(task, system),
-        call_openrouter(task, system, model="openai/gpt-5.2"),
+        call_openrouter(task, system, model="openai/gpt-5.3"),
         call_openrouter(task, system, model="google/gemini-3.1-pro-preview"),
         return_exceptions=True,
     )

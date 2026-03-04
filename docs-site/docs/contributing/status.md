@@ -2166,7 +2166,7 @@ All stabilization items addressed:
 |-------|-------|-----|
 | `grok` | grok-4-latest | xAI |
 | `anthropic-api` | claude-opus-4-5-20251101 | Anthropic |
-| `openai-api` | gpt-5.2 | OpenAI |
+| `openai-api` | gpt-5.3 | OpenAI |
 | `deepseek` | deepseek/deepseek-reasoner | OpenRouter |
 | `mistral-api` | mistral-large-2512 | Mistral |
 | `gemini` | gemini-3-pro-preview | Google |

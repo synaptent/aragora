@@ -157,7 +157,7 @@ def mock_openai_response():
         "id": "chatcmpl-123",
         "object": "chat.completion",
         "created": 1677652288,
-        "model": "gpt-5.2",
+        "model": "gpt-5.3",
         "choices": [
             {
                 "index": 0,

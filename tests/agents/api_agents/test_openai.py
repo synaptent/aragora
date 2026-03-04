@@ -30,7 +30,7 @@ class TestOpenAIAgentInitialization:
         agent = OpenAIAPIAgent()
 
         assert agent.name == "openai-api"
-        assert agent.model == "gpt-5.2"
+        assert agent.model == "gpt-5.3"
         assert agent.role == "proposer"
         assert agent.timeout == 120
         assert agent.agent_type == "openai"
@@ -72,7 +72,7 @@ class TestOpenAIAgentInitialization:
         spec = AgentRegistry.get_spec("openai-api")
 
         assert spec is not None
-        assert spec.default_model == "gpt-5.2"
+        assert spec.default_model == "gpt-5.3"
         assert spec.agent_type == "API"
 
 
@@ -287,7 +287,7 @@ class TestOpenAICompatibleMixin:
 
         payload = agent._build_payload(messages, stream=False)
 
-        assert payload["model"] == "gpt-5.2"
+        assert payload["model"] == "gpt-5.3"
         assert payload["messages"] == messages
         assert "max_tokens" in payload
         assert "stream" not in payload or payload.get("stream") is False

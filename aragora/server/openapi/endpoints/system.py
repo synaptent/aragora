@@ -803,7 +803,7 @@ call it before any credentials are set up.
                                     "available": True,
                                     "model": "claude-opus-4-5-20251101",
                                 },
-                                "openai": {"available": True, "model": "gpt-5.2"},
+                                "openai": {"available": True, "model": "gpt-5.3"},
                                 "openrouter": {
                                     "available": False,
                                     "reason": "OPENROUTER_API_KEY not set",

@@ -11,7 +11,7 @@ Perspective coverage note: Mistral adds an EU lens, and Chinese models like Deep
 | Agent ID | Provider | Model | Best For | Cost |
 |----------|----------|-------|----------|------|
 | `anthropic-api` | Anthropic | claude-opus-4-5-20251101 | Code review, reasoning | $$ |
-| `openai-api` | OpenAI | gpt-5.2 | General tasks, creativity | $$ |
+| `openai-api` | OpenAI | gpt-5.3 | General tasks, creativity | $$ |
 | `gemini` | Google | gemini-3-pro-preview | Long context, analysis | $ |
 | `mistral-api` | Mistral | mistral-large-2512 | European compliance, multilingual | $$ |
 | `grok` | xAI | grok-4-latest | Real-time knowledge | $$ |

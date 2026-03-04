@@ -208,7 +208,7 @@ Return JSON:
 
         Args:
             name: Agent identifier
-            model: Model to use (claude-sonnet-4, gpt-5.2-codex, etc.)
+            model: Model to use (claude-sonnet-4, gpt-5.3-codex, etc.)
             role: Agent role (explorer, verifier)
             timeout: Operation timeout in seconds
             config: Exploration configuration
