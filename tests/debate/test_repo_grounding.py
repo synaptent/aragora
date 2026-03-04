@@ -70,3 +70,17 @@ def test_assess_repo_grounding_handles_markdown_link_absolute_paths():
 """
     report = assess_repo_grounding(answer, repo_root=str(repo_root))
     assert "aragora/debate/orchestrator.py" in report.existing_paths
+
+
+def test_line_concreteness_bare_filename_gets_partial_credit():
+    """Bare filenames like output_quality.py score via _FILE_EXT_RE."""
+    from aragora.debate.repo_grounding import _line_concreteness
+
+    # Bare filename without path separator — no _PATH_RE match but _FILE_EXT_RE hits
+    score_bare = _line_concreteness("Update output_quality.py to add validation")
+    assert score_bare >= 0.55  # action_verb(0.35) + file_ext(0.2)
+
+    # Full path still scores higher
+    score_full = _line_concreteness("Update aragora/debate/output_quality.py to add validation")
+    assert score_full >= 0.7  # action_verb(0.35) + path(0.35)
+    assert score_full > score_bare

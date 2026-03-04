@@ -487,8 +487,8 @@ def _add_ask_parser(subparsers) -> None:
     ask_parser.add_argument(
         "--quality-concretize-max-rounds",
         type=int,
-        default=1,
-        help="Max post-consensus concretization rounds when output is not practical enough (default: 1)",
+        default=3,
+        help="Max post-consensus concretization rounds when output is not practical enough (default: 3)",
     )
     ask_parser.add_argument(
         "--quality-extra-assessment-rounds",

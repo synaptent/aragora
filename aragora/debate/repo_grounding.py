@@ -147,6 +147,9 @@ def _first_nonempty_line(text: str) -> str:
     return ""
 
 
+_FILE_EXT_RE = re.compile(r"\b\w+\.(py|ts|tsx|js|jsx|yaml|yml|toml|json|md)\b")
+
+
 def _line_concreteness(line: str) -> float:
     if not line:
         return 0.0
@@ -155,6 +158,9 @@ def _line_concreteness(line: str) -> float:
         score += 0.35
     if _PATH_RE.search(line):
         score += 0.35
+    elif _FILE_EXT_RE.search(line):
+        # Bare filenames without directory separators (e.g., "output_quality.py")
+        score += 0.2
     if _THRESHOLD_RE.search(line):
         score += 0.2
     if len(line.split()) >= 6:
