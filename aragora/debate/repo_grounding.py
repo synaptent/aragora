@@ -14,18 +14,29 @@ _PATH_RE = re.compile(r"((?:/?[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+)")
 _THRESHOLD_RE = re.compile(
     r"(?i)(<=|>=|<|>|=|==)\s*\d+(?:\.\d+)?\s*(?:%|ms|s|sec|seconds|m|min|minutes|h|hours|rps|qps|req/s)?"
 )
+# Verbs that unambiguously describe a concrete engineering action.
+# Deliberately EXCLUDES directional/vague verbs like "improve", "enhance",
+# "strengthen" — these say which direction to go but not what to do.
+# They are handled separately via _DIRECTIONAL_VERB_RE at reduced weight.
 _ACTION_VERB_RE = re.compile(
     r"(?i)\b(add|create|implement|update|refactor|remove|wire|integrate|validate|test|harden|instrument|enforce|ship"
     r"|build|deploy|configure|construct|establish|develop|provision|run|execute|design|migrate|setup|parse|route"
     r"|initialize|instantiate|enable|monitor|track|define|connect|aggregate|extract|detect|optimize|fix|resolve"
     r"|extend|introduce|scaffold|verify|ensure|check"
-    r"|improve|enhance|strengthen|upgrade|increase|decrease|reduce|modularize|encapsulate|augment"
-    r"|standardize|consolidate|unify|simplify|normalize|expand|scale|wrap|patch|align|refine"
-    r"|decouple|deprecate|emit|inject|register|rewrite|split|merge|expose|publish|document"
+    r"|modularize|encapsulate|decouple|deprecate|emit|inject|register|rewrite|split|merge|expose|publish"
     r"|measure|benchmark|profile|audit|scan|lint|format|generate|transform|convert|serialize"
     r"|throttle|debounce|cache|index|query|fetch|load|store|persist|flush|evict|invalidate"
     r"|assert|mock|stub|parametrize|isolate|snapshot|replay|record|capture|intercept"
     r"|rename|move|relocate|deduplicate|dedupe|prune|trim|compress|decompress|encrypt|decrypt)\b"
+)
+# Directional verbs: indicate intent but not specific action.
+# "Improve X" is less actionable than "Add validation to X".
+# Gets partial credit (0.15) instead of full action verb credit (0.35).
+_DIRECTIONAL_VERB_RE = re.compile(
+    r"(?i)\b(improve|enhance|strengthen|upgrade|increase|decrease|reduce|augment"
+    r"|standardize|consolidate|unify|simplify|normalize|expand|scale|align|refine"
+    r"|streamline|accelerate|harden|tighten|broaden|deepen|elevate|bolster"
+    r"|wrap|patch|document)\b"
 )
 # Tiered placeholder/hedging patterns with severity weights.
 # HIGH (0.30): hard placeholders that indicate missing content.
@@ -248,6 +259,9 @@ def _line_concreteness(line: str) -> float:
     score = 0.0
     if _ACTION_VERB_RE.search(line):
         score += 0.35
+    elif _DIRECTIONAL_VERB_RE.search(line):
+        # Partial credit: "improve" is better than nothing but worse than "add"
+        score += 0.15
     if _PATH_RE.search(line):
         score += 0.35
     elif _FILE_EXT_RE.search(line):

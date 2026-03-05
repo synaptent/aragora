@@ -279,18 +279,9 @@ def test_llm_hedging_patterns_detected():
     )
 
 
-def test_expanded_llm_verbs_score_concreteness():
-    """LLM-common verbs like improve, enhance, strengthen score as action verbs."""
-    llm_verbs = [
-        "improve",
-        "enhance",
-        "strengthen",
-        "upgrade",
-        "reduce",
-        "standardize",
-        "consolidate",
-        "simplify",
-        "normalize",
+def test_concrete_verbs_score_full_credit():
+    """Genuinely actionable verbs (benchmark, audit, cache, etc.) score full action credit."""
+    concrete_verbs = [
         "decouple",
         "deprecate",
         "inject",
@@ -317,36 +308,59 @@ def test_expanded_llm_verbs_score_concreteness():
         "compress",
         "encrypt",
     ]
-    for verb in llm_verbs:
+    for verb in concrete_verbs:
         score = _line_concreteness(
             f"{verb.capitalize()} the debate output processing for better results"
         )
         assert score >= 0.44, f"Verb '{verb}' scored {score}, expected >= 0.44"
 
 
-def test_concretize_output_injects_paths():
-    """concretize_output adds file paths to vague task lines."""
+def test_directional_verbs_score_partial_credit():
+    """Vague verbs like improve, enhance get partial credit (less than concrete verbs)."""
+    directional_verbs = [
+        "improve",
+        "enhance",
+        "strengthen",
+        "upgrade",
+        "reduce",
+        "standardize",
+        "consolidate",
+        "simplify",
+        "normalize",
+    ]
+    for verb in directional_verbs:
+        score = _line_concreteness(
+            f"{verb.capitalize()} the debate output processing for better results"
+        )
+        # Partial credit: 0.15 (directional) + 0.10 (6+ words) = 0.25
+        assert 0.20 <= score <= 0.40, f"Verb '{verb}' scored {score}, expected 0.20-0.40"
+
+    # Concrete verb should score strictly higher than directional verb
+    concrete = _line_concreteness("Refactor the debate output processing for better results")
+    directional = _line_concreteness("Improve the debate output processing for better results")
+    assert concrete > directional, f"concrete={concrete} should be > directional={directional}"
+
+
+def test_concretize_output_does_not_inject_paths():
+    """concretize_output does NOT fabricate paths for vague lines."""
     from aragora.debate.phases.synthesis_generator import SynthesisGenerator
 
     synthesis = """## Ranked High-Level Tasks
 1. Improve the consensus detection system
 2. Update `aragora/debate/orchestrator.py:Arena.run()` to emit events — Verify: `pytest tests/debate/test_orchestrator.py -v`
-
-## Suggested Subtasks
-- Enhance the debate scoring pipeline
 """
     repo_hint = """Key repository paths (use these, not invented paths):
   aragora/debate/: orchestrator.py, consensus.py, convergence.py
-  tests/debate/: test_orchestrator.py, test_consensus.py
 """
     result = SynthesisGenerator.concretize_output(synthesis, repo_hint)
 
-    # Line 1 should now have a path injected (consensus → consensus.py)
-    assert "consensus" in result
+    # Line 1 has no path — concretize should NOT inject one
+    lines = result.strip().split("\n")
+    task1 = [l for l in lines if "Improve the consensus" in l][0]
+    assert "aragora/" not in task1, "Should not inject paths into vague lines"
+
     # Line 2 was already concrete, should be unchanged
     assert "aragora/debate/orchestrator.py:Arena.run()" in result
-    # The scoring subtask should get a path too
-    assert "debate" in result
 
 
 def test_concretize_output_preserves_already_concrete_lines():
@@ -360,11 +374,10 @@ def test_concretize_output_preserves_already_concrete_lines():
   aragora/debate/: orchestrator.py
 """
     result = SynthesisGenerator.concretize_output(synthesis, repo_hint)
-    # Should be identical — already has path + pytest
     assert result.strip() == synthesis.strip()
 
 
-def test_concretize_output_adds_pytest_commands():
+def test_concretize_output_adds_pytest_to_lines_with_paths():
     """Lines with paths but no pytest get a verify command added."""
     from aragora.debate.phases.synthesis_generator import SynthesisGenerator
 
@@ -373,10 +386,10 @@ def test_concretize_output_adds_pytest_commands():
 """
     repo_hint = """Key repository paths:
   aragora/debate/: consensus.py, orchestrator.py
-  tests/debate/: test_consensus.py
 """
     result = SynthesisGenerator.concretize_output(synthesis, repo_hint)
     assert "pytest" in result.lower()
+    assert "tests/debate/test_consensus.py" in result
 
 
 def test_concretize_output_empty_inputs():

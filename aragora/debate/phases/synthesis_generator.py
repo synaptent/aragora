@@ -756,54 +756,22 @@ Your response MUST be approximately 1200 words to provide comprehensive coverage
 
     @staticmethod
     def concretize_output(synthesis: str, repo_hint: str) -> str:
-        """Post-process synthesis to boost concreteness of vague lines.
+        """Post-process synthesis to add pytest verify commands to lines that have paths.
 
-        Rewrites task/subtask lines that lack file paths or test commands by
-        injecting the closest matching path from the repo hint.  Runs before
-        the quality gate so the synthesis gets a fair practicality score.
+        Only adds pytest commands to lines that already contain a file path but
+        lack a test command.  Does NOT inject paths into lines that don't have
+        them — that would be fabricating specificity the LLM didn't produce.
         """
         import re as _re
 
         if not synthesis or not repo_hint:
             return synthesis
 
-        # Build a lookup from directory names to full paths from the hint.
-        # Format: "  aragora/debate/: orchestrator.py, consensus.py, ..."
-        dir_files: dict[str, list[str]] = {}
-        for hint_line in repo_hint.splitlines():
-            hint_line = hint_line.strip()
-            if not hint_line or hint_line.startswith("Key repository"):
-                continue
-            parts = hint_line.split(":", 1)
-            if len(parts) != 2:
-                continue
-            dir_path = parts[0].strip().rstrip("/")
-            files = [f.strip() for f in parts[1].split(",") if f.strip()]
-            if dir_path and files:
-                dir_files[dir_path] = files
-
-        if not dir_files:
-            return synthesis
-
-        # Build keyword → path index for quick lookup.
-        keyword_to_path: dict[str, str] = {}
-        for dir_path, files in dir_files.items():
-            dir_name = dir_path.rsplit("/", 1)[-1] if "/" in dir_path else dir_path
-            keyword_to_path[dir_name] = dir_path
-            for f in files:
-                stem = f.rsplit(".", 1)[0] if "." in f else f
-                keyword_to_path[stem] = f"{dir_path}/{f}"
-
-        # Patterns for sections where we want to concretize
         _TASK_SECTION_RE = _re.compile(
             r"(?i)^##\s+(?:ranked\s+high.level\s+tasks|suggested\s+subtasks|test\s+plan)",
         )
         _PATH_IN_LINE = _re.compile(r"(?:/?[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+")
         _PYTEST_IN_LINE = _re.compile(r"(?i)\bpytest\b")
-        _ACTION_VERB = _re.compile(
-            r"(?i)\b(?:add|create|implement|update|refactor|wire|integrate|test|fix|extend"
-            r"|improve|enhance|harden|validate|deploy|enable|configure|build|resolve)\b"
-        )
         _NUMBERED_ITEM = _re.compile(r"^(\s*(?:\d+\.\s+|\-\s+|\*\s+))")
 
         lines = synthesis.split("\n")
@@ -811,7 +779,6 @@ Your response MUST be approximately 1200 words to provide comprehensive coverage
         result_lines: list[str] = []
 
         for line in lines:
-            # Track which section we're in
             if line.startswith("##"):
                 in_target_section = bool(_TASK_SECTION_RE.match(line))
                 result_lines.append(line)
@@ -822,7 +789,6 @@ Your response MUST be approximately 1200 words to provide comprehensive coverage
                 continue
 
             stripped = line.strip()
-            # Only process bullet/numbered items
             if not stripped or not _NUMBERED_ITEM.match(stripped):
                 result_lines.append(line)
                 continue
@@ -830,73 +796,27 @@ Your response MUST be approximately 1200 words to provide comprehensive coverage
             has_path = bool(_PATH_IN_LINE.search(stripped))
             has_pytest = bool(_PYTEST_IN_LINE.search(stripped))
 
-            if has_path and has_pytest:
-                # Already concrete enough
-                result_lines.append(line)
-                continue
-
-            # Try to find a relevant path from keywords in the line
-            words = _re.findall(r"\b[a-z_]{3,}\b", stripped.lower())
-            best_path = None
-            for word in words:
-                if word in keyword_to_path:
-                    best_path = keyword_to_path[word]
-                    break
-
-            if not best_path and not has_path:
-                # Try partial match on longer words
-                for word in words:
-                    if len(word) >= 5:
-                        for kw, path in keyword_to_path.items():
-                            if word in kw or kw in word:
-                                best_path = path
-                                break
-                    if best_path:
-                        break
-
-            augmented = stripped
-            # Inject path if missing
-            if not has_path and best_path:
-                # Find the end of the action description (before any dash separator)
-                if " — " in augmented:
-                    parts = augmented.split(" — ", 1)
-                    augmented = f"{parts[0]} in `{best_path}` — {parts[1]}"
-                elif " - " in augmented and not augmented.startswith("- "):
-                    idx = augmented.index(" - ", 2)
-                    augmented = f"{augmented[:idx]} in `{best_path}`{augmented[idx:]}"
-                else:
-                    augmented = f"{augmented} — target: `{best_path}`"
-
-            # Inject pytest command if missing and we have a path
-            if not has_pytest:
-                path_match = _PATH_IN_LINE.search(augmented)
+            # Only add pytest command if line already has a path but lacks one
+            if has_path and not has_pytest:
+                path_match = _PATH_IN_LINE.search(stripped)
                 if path_match:
                     found_path = path_match.group(0)
-                    # Derive test path from source path
+                    test_path = None
                     if "tests/" in found_path:
                         test_path = found_path
                     elif found_path.endswith(".py"):
-                        # aragora/debate/foo.py → tests/debate/test_foo.py
                         parts = found_path.split("/")
                         if len(parts) >= 2:
                             module = parts[-2] if parts[-1] != "__init__.py" else parts[-3]
                             fname = parts[-1]
                             test_path = f"tests/{module}/test_{fname}"
-                        else:
-                            test_path = None
-                    else:
-                        test_path = None
 
                     if test_path:
-                        augmented = f"{augmented} — Verify: `pytest {test_path} -v`"
+                        indent = line[: line.index(stripped)]
+                        result_lines.append(f"{indent}{stripped} — Verify: `pytest {test_path} -v`")
+                        continue
 
-            # Preserve original indentation
-            indent_match = _NUMBERED_ITEM.match(line)
-            if indent_match and augmented != stripped:
-                indent = line[: line.index(stripped)]
-                result_lines.append(f"{indent}{augmented}")
-            else:
-                result_lines.append(line)
+            result_lines.append(line)
 
         return "\n".join(result_lines)
 
