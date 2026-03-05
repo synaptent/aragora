@@ -49,6 +49,19 @@ confidence = weighted_average(vote.confidence for vote in votes)
 
 Each agent's vote includes a confidence score (0-1) reflecting their certainty.
 
+## Security Hardening for Consensus
+
+Consensus is a reliability amplifier, not a standalone safety guarantee.
+
+Recommended hardening controls for production execution:
+
+1. **Quorum diversity floor**: Require unique provider/operator diversity in the agreeing set, not just vote count.
+2. **Dissent-aware blocking**: Block auto-execution when high-severity safety dissents remain unresolved.
+3. **Appropriateness policy gate**: Evaluate policy/safety constraints separately from factual agreement.
+4. **Collusion detection**: Down-weight coordinated clusters that shift together without strong evidence.
+5. **Correlated-failure fallback**: Route to human review when agreement is high but evidence diversity is low.
+6. **Receipt verification gate**: Require verified signed receipt before any high-impact downstream action.
+
 ## Evidence Chains
 
 Evidence items support or refute claims:

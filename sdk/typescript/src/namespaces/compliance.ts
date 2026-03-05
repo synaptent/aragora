@@ -933,4 +933,9 @@ export class ComplianceAPI {
   async getComplianceOverview(): Promise<Record<string, unknown>> {
     return this.client.request('GET', '/api/v1/compliance');
   }
+
+  /** Get RBAC coverage report for compliance. */
+  async getRbacCoverage(): Promise<Record<string, unknown>> {
+    return this.client.request('GET', '/api/v1/compliance/rbac-coverage');
+  }
 }

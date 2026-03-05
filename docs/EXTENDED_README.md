@@ -27,15 +27,15 @@ Aragora is built on five architectural commitments.
 
 ### 1. SMB-Ready, Enterprise-Grade
 
-Aragora works for a 5-person startup on day one and scales to regulated enterprise without rearchitecting. Enterprise features -- OIDC/SAML SSO, MFA, AES-256-GCM encryption, multi-tenant isolation, RBAC with 7 roles and 50+ permissions, SOC 2 / GDPR / HIPAA compliance frameworks -- are built in, not bolted on. Security hardening (rate limiting, SSRF protection, path traversal guards, input validation, audit trails) is the default, not a premium tier.
+Aragora works for a 5-person startup on day one and scales to regulated enterprise without rearchitecting. Enterprise features -- OIDC/SAML SSO, MFA, AES-256-GCM encryption, multi-tenant isolation, RBAC with 7 roles and 360+ permissions, SOC 2 / GDPR / HIPAA compliance frameworks -- are built in, not bolted on. Security hardening (rate limiting, SSRF protection, path traversal guards, input validation, audit trails) is the default, not a premium tier.
 
 ### 2. Leading-Edge Memory and Context
 
-Single agents lose context. Aragora's 4-tier Continuum Memory (fast / medium / slow / glacial) and Knowledge Mound with 0 registered adapters give every debate access to institutional history, cross-session learning, and evidence provenance. The RLM (Recursive Language Models) system compresses and structures context to reduce prompt bloat, enabling debates that sustain coherence across long multi-round sessions and large document sets where individual models would degrade.
+Single agents lose context. Aragora's 4-tier Continuum Memory (fast / medium / slow / glacial) and Knowledge Mound with 41 registered adapters give every debate access to institutional history, cross-session learning, and evidence provenance. The RLM (Recursive Language Models) system compresses and structures context to reduce prompt bloat, enabling debates that sustain coherence across long multi-round sessions and large document sets where individual models would degrade.
 
 ### 3. Extensible and Modular
 
-Connectors for Slack, Teams, Discord, Telegram, WhatsApp, email, voice, Kafka, RabbitMQ, GitHub, Jira, Salesforce, healthcare HL7/FHIR, and dozens more. SDKs in Python and TypeScript (140 namespaces). 3,000+ API operations across 2,900+ paths and 260+ WebSocket event types. OpenClaw integration for portable agent governance. A workflow engine with DAG execution and 60+ templates. A marketplace for agent personas, debate templates, and workflow patterns. Aragora adapts to your stack.
+Connectors for Slack, Teams, Discord, Telegram, WhatsApp, email, voice, Kafka, RabbitMQ, GitHub, Jira, Salesforce, healthcare HL7/FHIR, and dozens more. SDKs in Python and TypeScript (184 Python / 183 TypeScript namespaces). 3,000+ API operations across 2,900+ paths and 260+ WebSocket event types. OpenClaw integration for portable agent governance. A workflow engine with DAG execution and 60+ templates. A marketplace for agent personas, debate templates, and workflow patterns. Aragora adapts to your stack.
 
 ### 4. Multi-Agent Robustness
 
@@ -230,7 +230,7 @@ print(f"Consensus: {result.consensus_reached} ({result.confidence:.0%})")
 │  │  • Belief networks with Bayesian propagation              │   │
 │  │  • Claims kernel with typed relationships                 │   │
 │  │  • Evidence provenance with hash chains                   │   │
-│  │  • Knowledge Mound (0 registered adapters) + Semantic search  │   │
+│  │  • Knowledge Mound (41 registered adapters) + Semantic search  │   │
 │  └───────────────────────────┬──────────────────────────────┘   │
 │                               ▼                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -285,7 +285,7 @@ aragora/
 │   └── embeddings.py       # Semantic embedding for retrieval
 ├── knowledge/        # Unified knowledge management
 │   ├── bridges.py          # KnowledgeBridgeHub, MetaLearner, Evidence bridges
-│   └── mound/              # KnowledgeMound (0 registered adapters, 4,300+ tests)
+│   └── mound/              # KnowledgeMound (41 registered adapters, 4,300+ tests)
 │       ├── adapters/       # Belief, Consensus, ELO, Evidence, OpenClaw, etc.
 │       ├── semantic.py     # Vector embedding-based search
 │       ├── federation.py   # Multi-region sync
@@ -301,7 +301,7 @@ aragora/
 │   ├── findings.py         # Findings management
 │   ├── defense.py          # Attack/defend cycles
 │   └── personas/           # GDPR, SOC2, HIPAA, PCI-DSS, AI Act, NIST CSF
-├── server/           # HTTP/WebSocket API (2,000+ operations, 190+ event types)
+├── server/           # HTTP/WebSocket API (3,000+ operations, 190+ event types)
 │   ├── unified_server.py   # Main server
 │   ├── handlers/           # HTTP endpoint handlers
 │   ├── stream/             # WebSocket streaming (26 modules)
@@ -315,7 +315,7 @@ aragora/
 │   └── advertising/        # Twitter Ads, TikTok Ads
 ├── auth/             # Authentication (OIDC, SAML, SCIM)
 ├── tenancy/          # Multi-tenant isolation
-├── rbac/             # Role-based access (7 roles, 50+ permissions)
+├── rbac/             # Role-based access (7 roles, 360+ permissions)
 ├── compliance/       # SOC 2, GDPR, HIPAA
 ├── privacy/          # Anonymization, consent, retention, deletion
 ├── security/         # Encryption, key rotation, SSRF protection
@@ -336,7 +336,7 @@ aragora/
 └── cli/              # Command-line interface
 ```
 
-**Scale:** 3,000+ Python modules | 208,000+ tests across 4,000+ test files | 185 TypeScript SDK namespaces
+**Scale:** 3,000+ Python modules | 208,000+ tests across 4,000+ test files | 184 Python / 183 TypeScript SDK namespaces
 
 ---
 
@@ -466,7 +466,7 @@ aragora context --preview --rlm
 |---------|---------|--------------|
 | **`aragora`** | Full control plane (server, CLI, SDK) | `pip install aragora` |
 | **`aragora-sdk`** | Official Python SDK (remote HTTP API; sync + async + streaming) | `pip install aragora-sdk` |
-| **`@aragora/sdk`** | TypeScript/Node.js SDK (140 namespaces) | `npm install @aragora/sdk` |
+| **`@aragora/sdk`** | TypeScript/Node.js SDK (183 namespaces) | `npm install @aragora/sdk` |
 
 **Deprecated packages** (avoid for new integrations):
 - `aragora-client` -- Legacy async client. Migrate to `aragora-sdk`.
@@ -491,6 +491,16 @@ Aragora has evolved through 21+ phases of self-improvement, with the Nomic Loop 
 | **IntrospectionAPI** | Agent self-awareness and reflection |
 | **ArgumentCartographer** | Real-time debate graph visualization |
 | **WebhookDispatcher** | External event notifications |
+
+### Unified Memory Gateway
+
+Enabled via `enable_unified_memory` in `ArenaConfig`. Added February 2026, 150 tests.
+
+- **MemoryGateway** -- Fan-out query across ContinuumMemory, Knowledge Mound, Supermemory, and claude-mem simultaneously, returning a merged and ranked result set.
+- **RetentionGate** -- Titans/MIRAS surprise-driven policy engine that decides whether to retain, demote, forget, or consolidate each memory item based on information gain.
+- **CrossSystemDedupEngine** -- SHA-256 exact-match deduplication plus Jaccard near-duplicate detection across all memory backends, preventing redundant storage.
+- **RLMMemoryNavigator** -- REPL helpers for programmatic cross-system memory exploration, building on the RLM (Recursive Language Models) context access layer.
+- **ClaudeMemAdapter** -- The 41st Knowledge Mound adapter, wrapping the claude-mem MCP connector so external claude-mem stores participate in unified fan-out queries.
 
 ### Phase 2: Learning
 
@@ -596,7 +606,7 @@ Aragora has evolved through 21+ phases of self-improvement, with the Nomic Loop 
 | **Rate Limiting** | IP, token, and endpoint-based limits |
 | **Connection Pooling** | Adaptive pool with health monitoring |
 | **SCIM 2.0** | Automated user/group provisioning |
-| **RBAC v2** | 7 roles, 50+ permissions, decorator-based enforcement |
+| **RBAC v2** | 7 roles, 360+ permissions, decorator-based enforcement |
 | **Backup/DR** | Incremental backups, retention policies, disaster recovery |
 | **Control Plane** | Agent registry, task scheduler, health monitoring, policy governance (1,500+ tests) |
 

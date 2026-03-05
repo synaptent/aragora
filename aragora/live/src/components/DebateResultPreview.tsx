@@ -147,26 +147,33 @@ export function DebateResultPreview({ result }: DebateResultPreviewProps) {
     if (typeof navigator.share === 'function') {
       try {
         await navigator.share({ title: 'Aragora Debate', text: shareText, url: shareUrl });
+        // Native share sheet provides its own feedback
         return;
       } catch {
         // User cancelled or share failed — fall through to clipboard
       }
     }
 
-    // Clipboard fallback
+    // Clipboard fallback — always show visual feedback regardless of copy success
     try {
       await navigator.clipboard.writeText(shareUrl);
     } catch {
       // Fallback for older browsers without clipboard API
-      const textarea = document.createElement('textarea');
-      textarea.value = shareUrl;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = shareUrl;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      } catch {
+        // Even execCommand failed — feedback still shown below so user
+        // can use the "View full debate" link to get the URL manually
+      }
     }
+    // Always show confirmation so the user knows the action registered
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -242,28 +249,55 @@ export function DebateResultPreview({ result }: DebateResultPreviewProps) {
         )}
       </div>
 
-      {/* Proposals */}
-      <div className="border border-[var(--border)] p-4">
-        <h3 className="text-sm text-[var(--acid-green)] mb-4 font-bold font-mono">
-          Proposals
-        </h3>
-        <div className="space-y-4">
-          {Object.entries(result.proposals).map(([agent, content]) => (
-            <div key={agent}>
-              <h4 className={`text-sm font-bold mb-1 font-mono flex items-center gap-2 ${agentColor(agent)}`}>
-                <span
-                  className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
-                  style={{ backgroundColor: agentDot(agent) }}
-                />
-                {agent}
-              </h4>
-              <div className="text-xs text-[var(--text-muted)] leading-relaxed prose-sm prose-invert max-w-none [&_h1]:text-sm [&_h1]:font-bold [&_h1]:text-[var(--text)] [&_h1]:mt-3 [&_h1]:mb-1 [&_h2]:text-xs [&_h2]:font-bold [&_h2]:text-[var(--text)] [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:text-xs [&_h3]:font-bold [&_h3]:text-[var(--text)] [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:mb-2 [&_strong]:text-[var(--text)] [&_em]:text-[var(--text-muted)] [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:mb-2 [&_li]:mb-0.5 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--accent)] [&_blockquote]:pl-3 [&_blockquote]:italic">
-                <Markdown>{content}</Markdown>
+      {/* Proposals — hidden when single-agent and verdict duplicates the proposal */}
+      {(() => {
+        const proposalEntries = Object.entries(result.proposals);
+        const isSingleAgent = proposalEntries.length === 1;
+        const singleProposalText = isSingleAgent ? proposalEntries[0][1] : '';
+        const verdictDuplicatesProposal =
+          isSingleAgent &&
+          result.final_answer &&
+          singleProposalText.trim() === result.final_answer.trim();
+
+        // When single-agent result duplicates, show a merged "Result" section instead
+        if (verdictDuplicatesProposal) {
+          return (
+            <div className="border border-[var(--acid-green)]/30 p-4">
+              <h3 className="text-sm text-[var(--acid-green)] mb-3 font-bold font-mono">
+                Result
+              </h3>
+              <div className="text-sm text-[var(--text)] leading-relaxed max-w-none [&_h1]:text-base [&_h1]:font-bold [&_h1]:mt-4 [&_h1]:mb-2 [&_h2]:text-sm [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:mb-2 [&_strong]:font-bold [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:mb-2 [&_li]:mb-0.5 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--accent)] [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-[var(--text-muted)]">
+                <Markdown>{result.final_answer}</Markdown>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          );
+        }
+
+        // Multi-agent or non-duplicate: show Proposals section as before
+        return (
+          <div className="border border-[var(--border)] p-4">
+            <h3 className="text-sm text-[var(--acid-green)] mb-4 font-bold font-mono">
+              Proposals
+            </h3>
+            <div className="space-y-4">
+              {proposalEntries.map(([agent, content]) => (
+                <div key={agent}>
+                  <h4 className={`text-sm font-bold mb-1 font-mono flex items-center gap-2 ${agentColor(agent)}`}>
+                    <span
+                      className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                      style={{ backgroundColor: agentDot(agent) }}
+                    />
+                    {agent}
+                  </h4>
+                  <div className="text-xs text-[var(--text-muted)] leading-relaxed prose-sm prose-invert max-w-none [&_h1]:text-sm [&_h1]:font-bold [&_h1]:text-[var(--text)] [&_h1]:mt-3 [&_h1]:mb-1 [&_h2]:text-xs [&_h2]:font-bold [&_h2]:text-[var(--text)] [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:text-xs [&_h3]:font-bold [&_h3]:text-[var(--text)] [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:mb-2 [&_strong]:text-[var(--text)] [&_em]:text-[var(--text-muted)] [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:mb-2 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:mb-2 [&_li]:mb-0.5 [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--accent)] [&_blockquote]:pl-3 [&_blockquote]:italic">
+                    <Markdown>{content}</Markdown>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Critiques (first 3) */}
       {result.critiques.length > 0 && (
@@ -321,8 +355,11 @@ export function DebateResultPreview({ result }: DebateResultPreviewProps) {
         </div>
       )}
 
-      {/* Verdict — visible to everyone */}
-      {result.final_answer && (
+      {/* Verdict — hidden when single-agent result already shown as merged "Result" */}
+      {result.final_answer && !(
+        Object.keys(result.proposals).length === 1 &&
+        Object.values(result.proposals)[0]?.trim() === result.final_answer.trim()
+      ) && (
         <div className="border border-[var(--acid-green)]/30 p-4">
           <h3 className="text-sm text-[var(--acid-green)] mb-3 font-bold font-mono">
             Verdict

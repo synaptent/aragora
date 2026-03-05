@@ -1,6 +1,6 @@
 # Aragora Modes Guide
 
-> **Last Updated:** 2026-01-18
+> **Last Updated:** 2026-03-04
 
 Operational modes for focused AI agent behavior. Modes control what tools an agent can use and provide specialized system prompts for different tasks.
 
@@ -8,19 +8,28 @@ Operational modes for focused AI agent behavior. Modes control what tools an age
 
 | Document | Purpose |
 |----------|---------|
-| **MODES_GUIDE.md** (this) | Operational modes (Architect, Coder, etc.) |
-| [MODES_REFERENCE.md](../workflow/MODES_REFERENCE.md) | Debate modes (RedTeam, Prober, Audit) |
+| **MODES_GUIDE.md** (this) | Operational modes (Architect, Coder, etc.) + advanced debate modes |
+| [PIPELINE_GUIDE.md](PIPELINE_GUIDE.md) | Idea-to-Execution pipeline (uses modes per stage) |
 | [GAUNTLET.md](../debate/GAUNTLET.md) | Comprehensive stress-testing |
 | [PROBE_STRATEGIES.md](../debate/PROBE_STRATEGIES.md) | Probing strategies reference |
 
 ## Overview
 
-Modes are inspired by Kilocode's multi-mode architecture. Each mode defines:
-- **Tool Permissions**: Which tools the agent can access
+Aragora provides two complementary mode systems:
+
+1. **Operational Modes** (Kilocode-inspired) — Architect, Coder, Reviewer, Debugger, Orchestrator, EpistemicHygiene. Each mode controls tool permissions and sets a focused system prompt.
+2. **Debate Modes** — RedTeam, DeepAudit, CapabilityProber. Specialized debate protocols for adversarial testing and high-stakes decisions. Heavy submodules; loaded lazily to avoid scipy/numpy import at startup.
+
+Each mode defines:
+- **Tool Permissions**: Which tool groups the agent can access
 - **File Patterns**: Optional file access restrictions
 - **System Prompt**: Behavioral guidelines for the mode
 
-## Available Modes
+---
+
+## Standard Operational Modes
+
+### Available Modes
 
 | Mode | Tools | Use Case |
 |------|-------|----------|
@@ -29,10 +38,28 @@ Modes are inspired by Kilocode's multi-mode architecture. Each mode defines:
 | **Debugger** | Read, Edit, Command | Bug investigation |
 | **Reviewer** | Read, Browser | Code review |
 | **Orchestrator** | Full access | Complex workflows |
+| **EpistemicHygiene** | Read, Browser, Debate | Rigorous reasoning enforcement |
+
+### Activating a Mode
+
+```python
+from aragora.modes import load_builtins, ArchitectMode
+from aragora.modes.base import ModeRegistry
+
+# Ensure built-ins are registered
+load_builtins()
+
+# Activate by instance
+mode = ArchitectMode()
+agent.set_mode(mode)
+
+# Or look up by name
+mode = ModeRegistry.get("architect")
+```
 
 ---
 
-## Architect Mode
+### Architect Mode
 
 **Purpose**: High-level design and planning without implementation.
 
@@ -44,269 +71,89 @@ Modes are inspired by Kilocode's multi-mode architecture. Each mode defines:
 - Planning refactoring efforts
 - Analyzing dependencies and patterns
 
-### Behavior
-
-In Architect mode, the agent:
-- Reads and searches code to understand the codebase
-- Browses the web for documentation and best practices
-- Proposes architectural designs and plans
-- Identifies patterns, dependencies, and structure
-
-**Restrictions**:
-- Cannot edit or write files
-- Cannot execute commands
-- Can only plan changes, not implement them
-
-### Example Usage
+**Restrictions**: Cannot edit or write files; cannot execute commands.
 
 ```python
 from aragora.modes.builtin import ArchitectMode
-from aragora.modes.base import ModeRegistry
 
-# Activate architect mode
 mode = ArchitectMode()
 agent.set_mode(mode)
-
-# Now agent will only read/browse, not edit
 response = agent.run("Analyze the authentication system architecture")
 ```
 
-### Output Style
-
-Architect mode produces:
-- ASCII architectural diagrams
-- Lists of specific files and functions affected
-- Quantified impact assessments (files changed, complexity)
-- Risk and technical debt flags
-
 ---
 
-## Coder Mode
+### Coder Mode
 
 **Purpose**: Implementation with full development capabilities.
 
 **Tools**: `READ`, `EDIT`, `COMMAND`
 
-**Best For**:
-- Writing new features
-- Implementing bug fixes
-- Refactoring code
-- Creating tests
+**Best For**: Writing new features, implementing bug fixes, refactoring, creating tests.
 
-### Behavior
-
-In Coder mode, the agent:
-- Reads code to understand context
-- Edits and writes files
-- Runs commands for testing and validation
-- Creates new files when necessary
-
-### Guidelines
-
-1. **Follow Patterns**: Match existing code style
-2. **Minimal Changes**: Only change what's needed
-3. **Quality First**: Write clean, maintainable code
-4. **Test as You Go**: Verify changes work
-5. **No Over-engineering**: Avoid premature abstraction
-
-### Anti-Patterns to Avoid
-
-- Adding unrequested features
-- Refactoring unrelated code
-- Creating unnecessary abstractions
-- Ignoring existing error handling patterns
-
-### Example Usage
+**Guidelines**: Match existing code style, make minimal changes, no over-engineering.
 
 ```python
 from aragora.modes.builtin import CoderMode
 
 mode = CoderMode()
 agent.set_mode(mode)
-
-# Agent can now read, edit, and run commands
 response = agent.run("Implement the user registration endpoint")
 ```
 
 ---
 
-## Debugger Mode
+### Debugger Mode
 
 **Purpose**: Investigation and bug fixing.
 
 **Tools**: `READ`, `EDIT`, `COMMAND`
 
-**Best For**:
-- Reproducing issues
-- Tracing root causes
-- Applying minimal fixes
-- Understanding unexpected behavior
-
-### Debugging Methodology
-
-**1. Reproduce**
-- Confirm the issue can be reproduced
-- Identify minimal reproduction steps
-- Note expected vs actual behavior
-
-**2. Isolate**
-- Narrow down to specific component
-- Add logging/breakpoints as needed
-- Check recent related changes
-
-**3. Understand**
-- Trace the code path
-- Identify the exact point of failure
-- Understand WHY it fails, not just WHERE
-
-**4. Fix**
-- Apply minimal fix for root cause
-- Don't fix symptoms - fix underlying issue
-- Avoid changes to unrelated code
-
-**5. Verify**
-- Confirm fix resolves the issue
-- Check for regressions
-- Clean up debug logging
-
-### Anti-Patterns
-
-- Changing code without understanding
-- Adding workarounds instead of fixes
-- Making broad changes for narrow bugs
-- Leaving debug code in place
-
-### Example Usage
+**Methodology**: Reproduce → Isolate → Understand → Fix (root cause only) → Verify.
 
 ```python
 from aragora.modes.builtin import DebuggerMode
 
 mode = DebuggerMode()
 agent.set_mode(mode)
-
-response = agent.run("""
-Bug: Users can't log in after password reset.
-Error: 'Invalid token' on first login attempt.
-Steps: 1. Reset password 2. Log in with new password
-""")
+response = agent.run("Bug: users can't log in after password reset")
 ```
 
 ---
 
-## Reviewer Mode
+### Reviewer Mode
 
 **Purpose**: Code review and quality analysis.
 
 **Tools**: `READ`, `BROWSER` (read-only)
 
-**Best For**:
-- Code review
-- Security audits
-- Performance analysis
-- Quality assessments
+**Review dimensions**: Correctness, Security (OWASP Top 10), Performance, Maintainability.
 
-### Review Checklist
-
-**Correctness**
-- Logic errors and edge cases
-- Off-by-one errors
-- Null/undefined handling
-- Type safety issues
-
-**Security**
-- Input validation
-- Injection vulnerabilities (SQL, XSS, command)
-- Authentication/authorization gaps
-- Secrets in code
-
-**Performance**
-- Unnecessary loops or allocations
-- Missing caching opportunities
-- Database query efficiency
-- Memory leaks
-
-**Maintainability**
-- Code clarity and naming
-- Appropriate abstraction level
-- Missing or misleading comments
-- Test coverage gaps
-
-### Output Format
-
-For each issue, Reviewer mode reports:
-1. **Location**: File and line number
-2. **Severity**: Critical / High / Medium / Low / Suggestion
-3. **Issue**: Clear description
-4. **Why**: Impact explanation
-5. **Fix**: Suggested solution (conceptual)
-
-### Example Usage
+**Output**: Per-issue reports with Location, Severity (Critical/High/Medium/Low), Description, Impact, and suggested fix.
 
 ```python
 from aragora.modes.builtin import ReviewerMode
 
 mode = ReviewerMode()
 agent.set_mode(mode)
-
 response = agent.run("Review the authentication handler at auth.py")
 ```
 
 ---
 
-## Orchestrator Mode
+### Orchestrator Mode
 
 **Purpose**: Coordinate complex multi-step workflows.
 
 **Tools**: `FULL` (Read, Edit, Command, Browser, MCP, Debate)
 
-**Best For**:
-- Complex multi-step tasks
-- Workflows requiring multiple modes
-- Tasks with dependencies
-- Synthesis of multiple results
-
-### Orchestration Principles
-
-**1. Decompose**
-- Break complex tasks into focused sub-tasks
-- Identify dependencies between steps
-- Determine which mode best handles each step
-
-**2. Delegate**
-| Task Type | Mode |
-|-----------|------|
-| Understanding codebase | Architect |
-| Planning features | Architect |
-| Writing code | Coder |
-| Checking quality | Reviewer |
-| Fixing bugs | Debugger |
-
-**3. Synthesize**
-- Combine results from multiple steps
-- Resolve conflicts between recommendations
-- Produce unified actionable output
-
-**4. Validate**
-- Verify sub-task completion before proceeding
-- Check that results align with original goal
-- Handle failures gracefully
-
-### Handoff Protocol
-
-When switching modes:
-1. Summarize what was accomplished
-2. List key findings and artifacts
-3. Specify what the next mode should focus on
-4. Note any open questions or blockers
-
-### Example Usage
+**Best For**: Tasks requiring multiple modes, workflows with dependencies, synthesizing results from multiple agents.
 
 ```python
 from aragora.modes.builtin import OrchestratorMode
 
 mode = OrchestratorMode()
 agent.set_mode(mode)
-
 response = agent.run("""
 Build a user notification system:
 1. Design the architecture
@@ -318,9 +165,144 @@ Build a user notification system:
 
 ---
 
-## Tool Groups
+### EpistemicHygiene Mode
 
-Modes use tool groups to define permissions:
+**Purpose**: Enforce rigorous reasoning standards in debates.
+
+**Tools**: `READ`, `BROWSER`, `DEBATE`
+
+**Best For**: High-stakes decisions where sloppy reasoning is costly; debates that need to surface hidden assumptions.
+
+When activated, this mode requires every agent response to include:
+1. **Alternatives Considered** — at least one rejected alternative with explicit reasoning
+2. **Falsifiability** — conditions under which the claim would be proven wrong
+3. **Confidence Bounds** — numeric or qualitative uncertainty acknowledgment
+4. **Explicit Unknowns** — what the agent does not know
+
+Protocol flags trigger prompt injection and consensus penalties for proposals that skip these sections.
+
+```python
+from aragora.modes.builtin import EpistemicHygieneMode
+
+mode = EpistemicHygieneMode()
+agent.set_mode(mode)
+```
+
+---
+
+## Advanced Debate Modes
+
+These modules are lazily imported — they pull in `aragora.debate.orchestrator` (scipy/numpy) only when accessed.
+
+### RedTeam Mode
+
+**Purpose**: Adversarial attack/defend cycles to stress-test proposals.
+
+**Attack types**: logical fallacy detection, edge case exposure, unstated assumption extraction, counterexamples, scalability stress, security vulnerabilities, adversarial inputs, resource exhaustion, race conditions, dependency failures.
+
+**Structure**: Each `RedTeamRound` has a phase (`attack`, `defend`, `steelman`, `strawman`). Attacks have `severity` and `exploitability` scores; defenses are classified as `refute`, `acknowledge`, `mitigate`, or `accept`.
+
+```python
+from aragora.modes import RedTeamMode, RedTeamProtocol
+
+protocol = RedTeamProtocol(rounds=3)
+mode = RedTeamMode(protocol=protocol)
+
+# Convenience functions for common cases
+from aragora.modes import redteam_code_review, redteam_policy
+
+result = await redteam_code_review(agents, code_diff)
+result = await redteam_policy(agents, policy_text)
+```
+
+---
+
+### DeepAudit Mode
+
+**Purpose**: Six-round intensive debate with cognitive role rotation for high-stakes decisions.
+
+**Inspired by**: Heavy3.ai protocol.
+
+**Cognitive roles**: Analyst, Skeptic, Lateral Thinker, Advocate — rotated across rounds, with a Synthesizer cross-examination in the final round.
+
+**Best For**: Strategy decisions, contract review, code architecture audits, legal documentation.
+
+**Preset audit types**:
+- `CODE_ARCHITECTURE_AUDIT` — architectural soundness, coupling, scalability
+- `CONTRACT_AUDIT` — clause risk, obligation gaps, termination conditions
+- `STRATEGY_AUDIT` — market assumptions, competitive risk, execution feasibility
+
+```python
+from aragora.modes import (
+    DeepAuditOrchestrator,
+    DeepAuditConfig,
+    run_deep_audit,
+    CODE_ARCHITECTURE_AUDIT,
+    CONTRACT_AUDIT,
+    STRATEGY_AUDIT,
+)
+
+# Use a preset
+verdict = await run_deep_audit(
+    subject="Proposed microservices migration",
+    agents=my_agents,
+    config=CODE_ARCHITECTURE_AUDIT,
+)
+
+# Custom config
+config = DeepAuditConfig(
+    rounds=6,
+    enable_research=True,       # Web research between rounds
+    require_citations=True,
+    risk_threshold=0.7,         # Flag findings above this severity
+    cross_examination_depth=3,  # Questions per finding
+)
+verdict = await run_deep_audit(subject=my_subject, agents=my_agents, config=config)
+
+print(verdict.findings)         # List[AuditFinding]
+print(verdict.consensus_score)
+```
+
+---
+
+### CapabilityProber
+
+**Purpose**: Systematically probe agents to detect reliability failures before promoting them.
+
+**Probe types**: ContradictionTrap, HallucinationBait, SycophancyTest, PersistenceChallenge, ConfidenceCalibrationProbe, ReasoningDepthProbe, EdgeCaseProbe, InstructionInjectionProbe, CapabilityExaggerationProbe.
+
+**ELO integration**: Probe results feed into ELO adjustments, creating evolutionary pressure for more robust agents.
+
+```python
+from aragora.modes import (
+    CapabilityProber,
+    ProbeBeforePromote,
+    ContradictionTrap,
+    HallucinationBait,
+    SycophancyTest,
+    VulnerabilityReport,
+    generate_probe_report_markdown,
+)
+
+# Probe before adding an agent to a high-stakes debate
+prober = CapabilityProber()
+report: VulnerabilityReport = await prober.probe(
+    agent=candidate_agent,
+    strategies=[ContradictionTrap(), HallucinationBait(), SycophancyTest()],
+)
+
+# Gate on results
+gate = ProbeBeforePromote(threshold=0.7)
+if gate.should_promote(report):
+    arena.add_agent(candidate_agent)
+
+# Generate markdown report
+print(generate_probe_report_markdown(report))
+```
+
+---
+
+## Tool Groups
 
 | Group | Capabilities |
 |-------|--------------|
@@ -331,26 +313,17 @@ Modes use tool groups to define permissions:
 | `MCP` | MCP server tools |
 | `DEBATE` | Debate participation |
 
-### Composite Groups
-
 ```python
 from aragora.modes.tool_groups import ToolGroup
 
-# Read-only access with web browsing
-READONLY = ToolGroup.READ | ToolGroup.BROWSER
-
-# Standard development access
+READONLY  = ToolGroup.READ | ToolGroup.BROWSER
 DEVELOPER = ToolGroup.READ | ToolGroup.EDIT | ToolGroup.COMMAND
-
-# Full access to all tools
-FULL = ToolGroup.READ | ToolGroup.EDIT | ToolGroup.COMMAND | ToolGroup.BROWSER | ToolGroup.MCP | ToolGroup.DEBATE
+FULL      = ToolGroup.READ | ToolGroup.EDIT | ToolGroup.COMMAND | ToolGroup.BROWSER | ToolGroup.MCP | ToolGroup.DEBATE
 ```
 
 ---
 
 ## Creating Custom Modes
-
-You can create custom modes by extending the `Mode` base class:
 
 ```python
 from dataclasses import dataclass, field
@@ -359,8 +332,6 @@ from aragora.modes.tool_groups import ToolGroup
 
 @dataclass
 class SecurityAuditorMode(Mode):
-    """Custom mode for security-focused analysis."""
-
     name: str = "security_auditor"
     description: str = "Security audit mode with read-only access"
     tool_groups: ToolGroup = field(
@@ -370,51 +341,24 @@ class SecurityAuditorMode(Mode):
 
     def get_system_prompt(self) -> str:
         return """## Security Auditor Mode
-
-You are operating in SECURITY AUDITOR mode. Focus on:
-- Finding security vulnerabilities
-- Checking for OWASP Top 10 issues
-- Identifying authentication/authorization gaps
-- Reviewing input validation
-
-DO NOT edit files - provide a detailed security report.
+Focus on OWASP Top 10, authentication gaps, and input validation.
+DO NOT edit files — produce a security report only.
 """
 ```
 
-### File Pattern Restrictions
-
-Restrict mode to specific files:
-
-```python
-@dataclass
-class TestOnlyMode(Mode):
-    name: str = "test_only"
-    description: str = "Only access test files"
-    tool_groups: ToolGroup = field(
-        default_factory=lambda: ToolGroup.READ | ToolGroup.EDIT
-    )
-    file_patterns: list[str] = field(
-        default_factory=lambda: ["**/test_*.py", "**/tests/**"]
-    )
-```
+Custom modes can also be loaded from YAML via `CustomModeLoader`.
 
 ---
 
 ## Mode Registry
 
-Modes auto-register when instantiated:
-
 ```python
 from aragora.modes.base import ModeRegistry
 
-# List all available modes
 modes = ModeRegistry.list_all()
-# ['architect', 'coder', 'debugger', 'reviewer', 'orchestrator']
+# ['architect', 'coder', 'debugger', 'reviewer', 'orchestrator', 'epistemic_hygiene']
 
-# Get a specific mode
 mode = ModeRegistry.get("architect")
-
-# Get with error if not found
 mode = ModeRegistry.get_or_raise("invalid")  # Raises KeyError
 ```
 
@@ -422,52 +366,27 @@ mode = ModeRegistry.get_or_raise("invalid")  # Raises KeyError
 
 ## Best Practices
 
-### 1. Start with the Right Mode
-
 | Starting Task | Recommended Mode |
 |---------------|------------------|
 | "Add feature X" | Architect → Coder |
 | "Fix bug in Y" | Debugger |
 | "Review PR #123" | Reviewer |
 | "Build entire system" | Orchestrator |
-| "Understand codebase" | Architect |
-
-### 2. Mode Transitions
+| "Evaluate vendor contract" | DeepAudit (CONTRACT_AUDIT) |
+| "Red-team this policy" | RedTeam |
+| "Test this new agent" | CapabilityProber → ProbeBeforePromote |
+| "High-stakes strategy debate" | EpistemicHygiene |
 
 For complex tasks, transition through modes:
 
 ```
-Architect (understand/plan)
-    ↓
-Coder (implement)
-    ↓
-Reviewer (verify quality)
-    ↓
-Debugger (if issues found)
-    ↓
-Coder (apply fixes)
+Architect (understand/plan) → Coder (implement) → Reviewer (verify) → Debugger (if issues found)
 ```
-
-### 3. Use Orchestrator for Complex Workflows
-
-When a task requires multiple modes, use Orchestrator to coordinate:
-
-```python
-mode = OrchestratorMode()
-agent.set_mode(mode)
-
-# Orchestrator will internally delegate to appropriate modes
-agent.run("Add authentication to the API")
-```
-
-### 4. Read-Only First
-
-When uncertain, start with read-only modes (Architect, Reviewer) to understand before modifying.
 
 ---
 
 ## See Also
 
-- [PROBE_STRATEGIES.md](../debate/PROBE_STRATEGIES.md) - Red-teaming and capability testing
-- [AGENT_SELECTION.md](../debate/AGENT_SELECTION.md) - Choosing agents for debates
-- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) - System architecture overview
+- [PROBE_STRATEGIES.md](../debate/PROBE_STRATEGIES.md) — Red-teaming and capability testing
+- [AGENT_SELECTION.md](../debate/AGENT_SELECTION.md) — Choosing agents for debates
+- [PIPELINE_GUIDE.md](PIPELINE_GUIDE.md) — Pipeline mode assignments per stage

@@ -569,6 +569,11 @@ class DebateProtocol:
     # Blocks debates with spam/low-quality prompts before burning API tokens
     enable_content_moderation: bool = False  # Opt-in: uses SpamModerationIntegration
 
+    # Context trust-tiering: mark external/retrieved prompt context as untrusted
+    # and instruct agents to treat such context as data, not executable instructions.
+    enable_context_trust_tiering: bool = True
+    detect_context_taint: bool = True  # Scan untrusted sections for injection-like patterns
+
     # Formal verification: Verify consensus claims using Z3/Lean theorem provers
     # Adds mathematical proof validation to debate conclusions when enabled
     # This is a convenience alias that activates formal_verification_enabled

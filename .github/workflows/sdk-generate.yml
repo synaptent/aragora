@@ -1,22 +1,15 @@
 name: Generate SDK Types
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'docs/api/openapi.json'
-      - 'docs/api/openapi.yaml'
-      - 'aragora/server/openapi/**'
-      - 'scripts/generate_typescript_sdk.py'
-      - 'sdk/typescript/src/**/*.ts'
-      - 'sdk/typescript/package.json'
-      - 'sdk/typescript/tsconfig.json'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'sdk/typescript/src/**/*.ts'
       - 'sdk/typescript/package.json'
       - 'sdk/typescript/tsconfig.json'
+  schedule:
+    # Nightly at 1:15 UTC
+    - cron: '15 1 * * *'
   workflow_dispatch:
     inputs:
       force_regenerate:
@@ -44,7 +37,27 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: ./.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -105,7 +118,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -145,7 +178,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

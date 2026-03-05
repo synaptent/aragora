@@ -37,7 +37,7 @@ organizational knowledge and channels**.
 | [CONTROL_PLANE](./reference/CONTROL_PLANE.md) | Control plane architecture |
 | [CONTROL_PLANE_GUIDE](./guides/CONTROL_PLANE_GUIDE.md) | Control plane operations guide |
 | [MEMORY](./knowledge/MEMORY.md) | Memory systems overview |
-| [KNOWLEDGE_MOUND](./knowledge/KNOWLEDGE_MOUND.md) | Centralized knowledge storage with 33 adapters |
+| [KNOWLEDGE_MOUND](./knowledge/KNOWLEDGE_MOUND.md) | Centralized knowledge storage with 41 adapters |
 | [DOCUMENTS](./reference/DOCUMENTS.md) | Document ingestion and parsing |
 
 ### Memory Tiers

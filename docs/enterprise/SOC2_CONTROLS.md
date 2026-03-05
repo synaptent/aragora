@@ -17,7 +17,7 @@ Aragora implements controls for:
 
 | Control | Implementation | Evidence |
 |---------|----------------|----------|
-| CC1.1 - Security policies | `aragora/auth/`, `aragora/rbac/` | Role-based access control with 50+ permissions |
+| CC1.1 - Security policies | `aragora/auth/`, `aragora/rbac/` | Role-based access control with 360+ permissions |
 | CC1.2 - Board oversight | `docs/ARCHITECTURE.md` | Documented security architecture |
 | CC1.3 - Authority and responsibility | `aragora/rbac/defaults.py` | 6 default roles with defined scopes |
 

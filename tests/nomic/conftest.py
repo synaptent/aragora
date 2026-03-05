@@ -26,8 +26,14 @@ def _restore_mock_side_effect_descriptor():
 
 @pytest.fixture(autouse=True)
 def _disable_rlm_context(monkeypatch):
-    """Disable RLM context gathering to avoid calling real LLM APIs in tests."""
+    """Disable RLM context gathering to avoid calling real LLM APIs in tests.
+
+    Also enables the ENABLE_NOMIC_LOOP gate so tests can exercise execute_goal
+    without fighting the production safety check.  The gate is an operator
+    opt-in for production deployments, not a test-environment restriction.
+    """
     monkeypatch.setenv("ARAGORA_NOMIC_CONTEXT_RLM", "false")
+    monkeypatch.setenv("ENABLE_NOMIC_LOOP", "true")
 
 
 @pytest.fixture(autouse=True)

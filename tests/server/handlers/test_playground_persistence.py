@@ -119,7 +119,9 @@ class TestPersistAndRespond:
 
         body = json.loads(result.body.decode("utf-8"))
         assert "share_url" in body
-        assert body["share_url"] == "/api/v1/playground/debate/abcdef1234567890"
+        assert body["share_url"] == "/debate/abcdef1234567890"
+        assert "share_token" in body
+        assert body["share_token"] == "abcdef1234567890"
 
     def test_debate_retrievable_after_persist(self, handler):
         from aragora.storage.debate_store import get_debate_store

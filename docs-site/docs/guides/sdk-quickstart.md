@@ -248,7 +248,7 @@ the full platform for:
 - **Workflow engine** -- DAG-based automation with 50+ templates
 - **Enterprise auth** -- OIDC/SAML SSO, RBAC, multi-tenancy
 - **Compliance** -- SOC 2, GDPR, EU AI Act artifact generation
-- **REST API** -- 2,000+ operations across 1,800+ paths
+- **REST API** -- 3,000+ operations across 2,900+ paths
 
 ```bash
 pip install aragora[all]

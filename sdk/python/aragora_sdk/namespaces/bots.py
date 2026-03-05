@@ -25,6 +25,10 @@ class BotsAPI:
     def teams_status(self) -> dict[str, Any]:
         return self._client.request("GET", "/api/v1/bots/teams/status")
 
+    def slack_status(self) -> dict[str, Any]:
+        """Get Slack integration status."""
+        return self._client.request("GET", "/api/v1/bots/slack/status")
+
     def discord_interactions(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._client.request("POST", "/api/v1/bots/discord/interactions", json=payload)
 
@@ -67,6 +71,10 @@ class AsyncBotsAPI:
 
     async def teams_status(self) -> dict[str, Any]:
         return await self._client.request("GET", "/api/v1/bots/teams/status")
+
+    async def slack_status(self) -> dict[str, Any]:
+        """Get Slack integration status."""
+        return await self._client.request("GET", "/api/v1/bots/slack/status")
 
     async def discord_interactions(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self._client.request("POST", "/api/v1/bots/discord/interactions", json=payload)

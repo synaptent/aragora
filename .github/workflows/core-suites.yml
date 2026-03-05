@@ -12,16 +12,9 @@ on:
       - 'scripts/ci_core_suites.sh'
       - 'scripts/ci_install_project.sh'
       - '.github/workflows/core-suites.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'aragora/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - 'requirements.txt'
-      - 'scripts/ci_core_suites.sh'
-      - 'scripts/ci_install_project.sh'
-      - '.github/workflows/core-suites.yml'
+  schedule:
+    # Nightly at 2:50 UTC
+    - cron: '50 2 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -39,7 +32,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -64,7 +77,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5

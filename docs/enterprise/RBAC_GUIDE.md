@@ -6,7 +6,7 @@ Aragora implements a comprehensive Role-Based Access Control (RBAC) system with 
 
 | Component | Description |
 |-----------|-------------|
-| **Permissions** | 50+ granular permissions across 20+ resource types |
+| **Permissions** | 360+ granular permissions across 20+ resource types |
 | **Roles** | 8 system roles with hierarchical inheritance |
 | **Resource Permissions** | Per-resource access grants beyond role-based access |
 | **Delegation** | Temporary permission delegation with expiration |

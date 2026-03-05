@@ -32,6 +32,11 @@ from aiohttp import ClientTimeout
 
 from aragora.integrations.base import BaseIntegration
 
+try:
+    from aragora.resilience.registry import get_circuit_breaker
+except ImportError:
+    get_circuit_breaker = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 
@@ -150,6 +155,11 @@ class ZapierIntegration(BaseIntegration):
         super().__init__()
         self.api_base = api_base
         self._apps: dict[str, ZapierApp] = {}
+        self._circuit_breaker = (
+            get_circuit_breaker("zapier_api", provider="zapier")
+            if get_circuit_breaker is not None
+            else None
+        )
 
     @property
     def is_configured(self) -> bool:
@@ -169,6 +179,11 @@ class ZapierIntegration(BaseIntegration):
             logger.warning("Zapier webhook URL blocked by SSRF protection: %s", error)
             return False
 
+        if self._circuit_breaker is not None and not self._circuit_breaker.can_proceed():
+            remaining = self._circuit_breaker.cooldown_remaining()
+            logger.warning("Zapier circuit breaker open, retry in %.1fs", remaining)
+            return False
+
         session = await self._get_session()
         try:
             async with session.post(
@@ -176,9 +191,18 @@ class ZapierIntegration(BaseIntegration):
                 json={"message": content, **kwargs.get("data", {})},
                 timeout=ClientTimeout(total=10),
             ) as response:
-                return response.status == 200
+                if response.status == 200:
+                    if self._circuit_breaker is not None:
+                        self._circuit_breaker.record_success()
+                    return True
+                else:
+                    if self._circuit_breaker is not None:
+                        self._circuit_breaker.record_failure()
+                    return False
         except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
             logger.error("Zapier webhook connection error: %s: %s", type(e).__name__, e)
+            if self._circuit_breaker is not None:
+                self._circuit_breaker.record_failure()
             return False
         except (ValueError, TypeError) as e:
             logger.error("Zapier webhook payload error: %s: %s", type(e).__name__, e)
@@ -387,6 +411,15 @@ class ZapierIntegration(BaseIntegration):
             )
             return False
 
+        if self._circuit_breaker is not None and not self._circuit_breaker.can_proceed():
+            remaining = self._circuit_breaker.cooldown_remaining()
+            logger.warning(
+                "Zapier circuit breaker open for trigger %s, retry in %.1fs",
+                trigger.id,
+                remaining,
+            )
+            return False
+
         # Format payload for Zapier
         payload = self._format_trigger_payload(trigger, event_data)
 
@@ -403,14 +436,20 @@ class ZapierIntegration(BaseIntegration):
                 timeout=ClientTimeout(total=10),
             ) as response:
                 if response.status == 200:
+                    if self._circuit_breaker is not None:
+                        self._circuit_breaker.record_success()
                     return True
                 else:
                     logger.warning("Zapier trigger %s failed: %s", trigger.id, response.status)
+                    if self._circuit_breaker is not None:
+                        self._circuit_breaker.record_failure()
                     return False
         except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
             logger.error(
                 "Zapier trigger %s connection error: %s: %s", trigger.id, type(e).__name__, e
             )
+            if self._circuit_breaker is not None:
+                self._circuit_breaker.record_failure()
             return False
         except (ValueError, TypeError) as e:
             logger.error("Zapier trigger %s payload error: %s: %s", trigger.id, type(e).__name__, e)

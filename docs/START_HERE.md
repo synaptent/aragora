@@ -223,6 +223,6 @@ pytest tests/ -x -q --timeout=10  # Run a quick subset
 |----------|-------------|
 | [API Reference](api/API_REFERENCE.md) | REST API documentation |
 | [SDK Guide](SDK_GUIDE.md) | Comprehensive Python and TypeScript SDK guide |
-| [Feature Discovery](FEATURE_DISCOVERY.md) | Full catalog of 180+ features |
+| [Feature Discovery](FEATURE_DISCOVERY.md) | Full catalog of 215+ features |
 | [Enterprise Features](enterprise/ENTERPRISE_FEATURES.md) | SSO, RBAC, multi-tenancy, compliance |
 | [Status](STATUS.md) | Feature implementation status |

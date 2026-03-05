@@ -1,0 +1,30 @@
+{
+  "policy_id": "execution_safety_gate_defaults",
+  "version": "2026.03.05.1",
+  "effective_date": "2026-03-05",
+  "defaults": {
+    "enforce_execution_safety_gate": true,
+    "execution_gate_require_verified_signed_receipt": true,
+    "execution_gate_enforce_receipt_signer_allowlist": false,
+    "execution_gate_allowed_receipt_signer_keys": [],
+    "execution_gate_require_signed_receipt_timestamp": true,
+    "execution_gate_receipt_max_age_seconds": 86400,
+    "execution_gate_receipt_max_future_skew_seconds": 120,
+    "execution_gate_min_provider_diversity": 2,
+    "execution_gate_min_model_family_diversity": 2,
+    "execution_gate_block_on_context_taint": true,
+    "execution_gate_block_on_high_severity_dissent": true,
+    "execution_gate_high_severity_dissent_threshold": 0.7
+  },
+  "defaults_checksum": "sha256:9ce46000072713856b8345258566c92c4704cc7ee6528e4d3ffc9d2082993710",
+  "approval": {
+    "approved_by": [
+      "platform-security@aragora.ai",
+      "control-plane@aragora.ai"
+    ],
+    "approved_at": "2026-03-05T00:00:00Z",
+    "change_ticket": "SEC-EXEC-GATE-2026-03-05",
+    "review_notes": "Rotate signer keys via allowlist updates; keep receipt freshness <=24h."
+  },
+  "approval_signature": "sha256:efe24366cc074f526f9585f7d1652d08593aeda51a9123d7a75536559b6dbe71"
+}

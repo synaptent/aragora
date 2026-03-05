@@ -17,6 +17,7 @@ This document provides operational procedures for responding to Aragora alerts. 
 5. [Security Alerts](#security-alerts)
 6. [Infrastructure Alerts](#infrastructure-alerts)
 7. [SLO Error Budget Alerts](#slo-error-budget-alerts)
+8. [Execution Safety Gate Alerts](#execution-safety-gate-alerts)
 
 ---
 
@@ -424,6 +425,85 @@ duration: 6h
 
 ---
 
+## Execution Safety Gate Alerts
+
+### ExecutionGateDenySpike / AragoraExecutionGateDenySpike
+
+**Severity:** High (warning in monitoring rules, high in alerting rules)
+**SLO Impact:** Automation Safety Posture
+
+**Alert Condition (conceptual):**
+```promql
+deny_ratio_15m > 0.25 for 10m
+```
+
+**Initial Triage:**
+1. Check top deny reasons:
+   ```promql
+   topk(10, sum by (reason) (rate(aragora_execution_gate_blocks_total[30m])))
+   ```
+2. Segment by path/domain:
+   ```promql
+   sum by (path, domain) (rate(aragora_execution_gate_decisions_total{decision="deny"}[15m]))
+   ```
+3. Confirm whether a deployment or policy change happened in the last hour.
+
+**Resolution Steps:**
+1. If denials are mostly `tainted_context_detected`:
+   - Treat as potential prompt-injection wave.
+   - Disable risky upstream retrieval sources and enforce manual approvals.
+2. If denials are mostly diversity-related:
+   - Verify ensemble composition did not regress to a single provider/family.
+   - Restore multi-provider participant mix.
+3. If denials are mostly dissent-related:
+   - Review unresolved high-severity critiques and tune task decomposition.
+
+**Escalation:**
+- 10 minutes sustained firing: page on-call platform engineer.
+- 30 minutes sustained firing with user impact: escalate to incident commander.
+
+---
+
+### ExecutionGateReceiptVerificationFailures / AragoraExecutionGateReceiptVerificationFailures
+
+**Severity:** Critical
+**SLO Impact:** Decision Integrity and Receipt Trust
+
+**Alert Condition (conceptual):**
+```promql
+receipt_verification_failure_ratio_15m > 0.02 for 10m
+```
+
+**Initial Triage:**
+1. Check failure ratio split:
+   ```promql
+   sum by (path, domain, status) (
+     rate(aragora_execution_gate_receipt_verification_total[15m])
+   )
+   ```
+2. Inspect gate reasons for signer/freshness failures:
+   ```promql
+   sum by (reason) (rate(aragora_execution_gate_blocks_total[30m]))
+   ```
+3. Verify signing key configuration and recent key-rotation changes.
+
+**Resolution Steps:**
+1. If `receipt_signer_not_allowlisted`:
+   - Add rotated signer key ID to allowlist after approval.
+   - Re-run validation checks in CI.
+2. If `receipt_stale` or `receipt_timestamp_in_future`:
+   - Check signer clock skew and NTP sync.
+   - Confirm freshness window configuration is correct.
+3. If `receipt_verification_failed`:
+   - Validate receipt signing key is present and consistent across workers.
+   - Force manual approval mode for auto-execution until receipt trust is healthy.
+
+**Escalation:**
+- Immediate page to on-call and security lead.
+- If failure persists beyond 15 minutes, declare incident and freeze autonomous execution.
+
+---
+
 ## General Procedures
 
 ### Incident Response Flow
@@ -491,5 +571,5 @@ curl http://aragora:8080/api/health/circuits
 ---
 
 **Document Version:** 1.0
-**Last Updated:** January 21, 2026
+**Last Updated:** March 5, 2026
 **Owner:** Platform Team

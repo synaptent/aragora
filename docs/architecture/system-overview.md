@@ -14,7 +14,7 @@ flowchart TB
     end
 
     subgraph Server["Server Layer"]
-        HTTP["HTTP API (2,000+ operations)"]
+        HTTP["HTTP API (3,000+ operations)"]
         WS["WebSocket Streams (22 modules)"]
         Handlers["90 HTTP Handlers"]
         TTS["TTS / Voice Stream"]
@@ -23,7 +23,7 @@ flowchart TB
     subgraph Auth["RBAC and Auth"]
         OIDC["OIDC / SAML SSO"]
         MFA["MFA (TOTP / HOTP)"]
-        RBAC["RBAC v2 (50+ permissions)"]
+        RBAC["RBAC v2 (360+ permissions)"]
         Middleware["Auth Middleware"]
     end
 
@@ -121,9 +121,9 @@ flowchart TB
 | Server | `unified_server.py`, `handlers/`, `stream/` | HTTP/WS API surface, TTS, voice |
 | Auth | `rbac/`, `auth/` | OIDC/SAML SSO, MFA, fine-grained RBAC |
 | Debate Engine | `debate/orchestrator.py`, `consensus.py` | Multi-round structured debates |
-| Agents | `agents/api_agents/`, `cli_agents.py` | 30+ agent-type integrations with fallback |
+| Agents | `agents/api_agents/`, `cli_agents.py` | 43 agent types across 6+ LLM providers with fallback |
 | Memory | `memory/continuum/core.py`, `coordinator.py` | Four-tier memory with atomic writes |
-| Knowledge | `knowledge/mound/`, `bridges.py` | 28 registered adapters, semantic search, federation |
+| Knowledge | `knowledge/mound/`, `bridges.py` | 41 registered adapters, semantic search, federation |
 | Control Plane | `control_plane/` | Registry, scheduling, health, policy |
 | Connectors | `connectors/` | Chat platforms, enterprise event streams |
 | Persistence | External | Supabase/Postgres, Redis |

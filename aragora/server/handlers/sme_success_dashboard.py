@@ -264,6 +264,37 @@ class SMESuccessDashboardHandler(SecureHandler):
 
         return get_cost_tracker()
 
+    def _get_onboarding_activation_metrics(self, org_id: str) -> dict[str, Any]:
+        """Get onboarding activation/timing metrics for PM view."""
+        try:
+            from aragora.server.handlers.onboarding import get_onboarding_analytics_snapshot
+
+            analytics = get_onboarding_analytics_snapshot(organization_id=org_id)
+            funnel = analytics.get("funnel", {})
+            timing = analytics.get("timing", {})
+            return {
+                "started": int(funnel.get("started", 0) or 0),
+                "first_debate": int(funnel.get("first_debate", 0) or 0),
+                "first_receipt": int(funnel.get("first_receipt", 0) or 0),
+                "completed": int(funnel.get("completed", 0) or 0),
+                "completion_rate_percent": float(funnel.get("completion_rate", 0.0) or 0.0),
+                "time_to_first_debate_seconds": timing.get("time_to_first_debate_seconds"),
+                "time_to_first_receipt_seconds": timing.get("time_to_first_receipt_seconds"),
+                "step_drop_off": analytics.get("step_drop_off", {}),
+            }
+        except (ImportError, AttributeError, TypeError, ValueError) as e:
+            logger.debug("Onboarding analytics unavailable for org %s: %s", org_id, e)
+            return {
+                "started": 0,
+                "first_debate": 0,
+                "first_receipt": 0,
+                "completed": 0,
+                "completion_rate_percent": 0.0,
+                "time_to_first_debate_seconds": None,
+                "time_to_first_receipt_seconds": None,
+                "step_drop_off": {},
+            }
+
     def _get_roi_calculator(self, benchmark: str = "sme") -> Any:
         """Get ROI calculator with benchmark."""
         from aragora.billing.roi_calculator import IndustryBenchmark, ROICalculator
@@ -544,6 +575,7 @@ class SMESuccessDashboardHandler(SecureHandler):
 
         start_date, end_date, period = self._parse_period(handler)
         metrics = self._calculate_success_metrics(org.id, start_date, end_date)
+        activation = self._get_onboarding_activation_metrics(org.id)
 
         days_in_period = max(1, (end_date - start_date).days)
         decisions_per_day = metrics["total_debates"] / days_in_period
@@ -594,6 +626,7 @@ class SMESuccessDashboardHandler(SecureHandler):
                         "velocity_trend": "stable",  # Placeholder
                         "consensus_trend": "improving",  # Placeholder
                     },
+                    "activation": activation,
                 }
             }
         )

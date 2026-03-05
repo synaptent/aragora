@@ -130,6 +130,44 @@ class PipelineTransitionsAPI:
             f"/api/v1/pipeline/transitions/{node_id}/provenance",
         )
 
+    def transition(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
+        """Trigger a stage transition for a pipeline item."""
+        return self._client.request(
+            "POST",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition",
+            json={"target_stage": target_stage},
+        )
+
+    def get_history(self, pipeline_id: str, item_id: str) -> list[dict[str, Any]]:
+        """Get transition history for a pipeline item."""
+        return self._client.request(
+            "GET",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transitions",
+        )
+
+    def validate(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
+        """Validate whether a transition is allowed."""
+        return self._client.request(
+            "POST",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition/validate",
+            json={"target_stage": target_stage},
+        )
+
+    def available(self, pipeline_id: str, item_id: str) -> dict[str, Any]:
+        """Get available transitions for the current stage."""
+        return self._client.request(
+            "GET",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transitions/available",
+        )
+
+    def rollback(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
+        """Rollback to a previous stage."""
+        return self._client.request(
+            "POST",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition/rollback",
+            json={"target_stage": target_stage},
+        )
+
 
 class AsyncPipelineTransitionsAPI:
     """Asynchronous Pipeline Transitions API."""
@@ -210,4 +248,42 @@ class AsyncPipelineTransitionsAPI:
         return await self._client.request(
             "GET",
             f"/api/v1/pipeline/transitions/{node_id}/provenance",
+        )
+
+    async def transition(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
+        """Trigger a stage transition for a pipeline item."""
+        return await self._client.request(
+            "POST",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition",
+            json={"target_stage": target_stage},
+        )
+
+    async def get_history(self, pipeline_id: str, item_id: str) -> list[dict[str, Any]]:
+        """Get transition history for a pipeline item."""
+        return await self._client.request(
+            "GET",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transitions",
+        )
+
+    async def validate(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
+        """Validate whether a transition is allowed."""
+        return await self._client.request(
+            "POST",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition/validate",
+            json={"target_stage": target_stage},
+        )
+
+    async def available(self, pipeline_id: str, item_id: str) -> dict[str, Any]:
+        """Get available transitions for the current stage."""
+        return await self._client.request(
+            "GET",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transitions/available",
+        )
+
+    async def rollback(self, pipeline_id: str, item_id: str, target_stage: str) -> dict[str, Any]:
+        """Rollback to a previous stage."""
+        return await self._client.request(
+            "POST",
+            f"/api/v2/pipelines/{pipeline_id}/items/{item_id}/transition/rollback",
+            json={"target_stage": target_stage},
         )

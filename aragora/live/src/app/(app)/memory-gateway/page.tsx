@@ -27,7 +27,7 @@ const SOURCE_LABELS: Record<string, { label: string; color: string; description:
   km: {
     label: 'Knowledge Mound',
     color: 'text-blue-400',
-    description: 'Persistent knowledge with 34 adapters, semantic search, and RBAC governance.',
+    description: 'Persistent knowledge with 41 adapters, semantic search, and RBAC governance.',
   },
   supermemory: {
     label: 'Supermemory',

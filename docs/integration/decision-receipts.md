@@ -11,6 +11,33 @@ Every Gauntlet run automatically generates a Decision Receipt that includes:
 - Cryptographic integrity checksum
 - Optional digital signature
 
+## Security Guarantees and Limits
+
+Decision Receipts are a strong integrity and audit primitive, but they are not a complete safety proof.
+
+Guaranteed when signed and verified:
+- The receipt content was not altered after signing.
+- The signature matches the configured signing key.
+- The captured decision metadata (verdict, confidence, risk summary) is auditable.
+
+Not guaranteed by receipt signing alone:
+- The decision is factually correct.
+- The decision is policy-appropriate or safe to execute.
+- The model ensemble was free from correlated blind spots or collusion.
+- The arbitration/execution layer itself was uncompromised.
+
+Use signed receipts as a necessary precondition for automation, not a sufficient one.
+
+## Execution Gate Recommendation
+
+For high-impact or autonomous actions, require all checks before execution:
+
+1. Receipt integrity verification passes (`/verify`).
+2. Signature verification passes (`/verify-signature`).
+3. Consensus quality checks pass (strong confidence, no unresolved high-severity dissent).
+4. Ensemble diversity policy passes (provider/operator diversity, anti-collusion guardrails).
+5. Domain policy checks pass (security/compliance/business rules).
+
 ## Features
 
 ### Automatic Persistence

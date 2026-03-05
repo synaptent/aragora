@@ -57,7 +57,7 @@ This comparison is based on public documentation, source code analysis, and publ
 | MFA (TOTP/HOTP) | Yes | No | No | No | No |
 | AES-256-GCM encryption | Yes | No | No | No | No |
 | Automated key rotation | Yes (90-day) | No | No | No | No |
-| RBAC | 50+ permissions, 7 roles | Basic (LangSmith) | No | No | No |
+| RBAC | 360+ permissions, 7 roles | Basic (LangSmith) | No | No | No |
 | Anomaly detection | 15 detection types | No | No | No | No |
 | Multi-tenant isolation | Yes | No | No | No | No |
 | Rate limiting (IP, token, endpoint) | Yes | No | No | No | Yes (basic) |
@@ -84,8 +84,8 @@ This comparison is based on public documentation, source code analysis, and publ
 | Enterprise streaming | Kafka, RabbitMQ | No built-in | No built-in | No built-in | No built-in |
 | Webhooks | Yes | Via LangServe | No built-in | No built-in | No built-in |
 | Healthcare (HL7/FHIR) | Yes | No | No | No | No |
-| SDK (Python) | 5,800+ methods, 155 namespaces | Comprehensive | Basic | Basic | Focused |
-| SDK (TypeScript) | 3,700+ methods, 140 namespaces | Comprehensive | No | Via TS port | Yes |
+| SDK (Python) | 5,800+ methods, 184 namespaces | Comprehensive | Basic | Basic | Focused |
+| SDK (TypeScript) | 3,700+ methods, 183 namespaces | Comprehensive | No | Via TS port | Yes |
 | API operations | 2,000+ | Moderate | Basic | Basic | Focused |
 
 ### Self-Improvement

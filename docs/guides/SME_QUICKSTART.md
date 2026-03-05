@@ -291,4 +291,4 @@ GET /api/v1/debates/{debate_id}/receipt/export?format=json|html|markdown|sarif
 
 ---
 
-*Last updated: January 2025*
+*Last updated: March 2026*

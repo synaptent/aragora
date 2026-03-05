@@ -661,7 +661,7 @@ function OverviewTab({
             <div className="flex justify-between">
               <span className="text-text-muted">KM adapters</span>
               <span className="text-text">
-                {memory?.knowledge_mound.adapter_count ?? 34}
+                {memory?.knowledge_mound.adapter_count ?? 41}
               </span>
             </div>
             <div className="flex justify-between">
@@ -959,7 +959,7 @@ function MemoryTab({
         <MetricCard
           title="KM Artifacts"
           value={km?.total_artifacts ?? 0}
-          subtitle={`${km?.adapter_count ?? 34} adapters`}
+          subtitle={`${km?.adapter_count ?? 41} adapters`}
           color="cyan"
           icon="[K]"
         />
@@ -990,7 +990,7 @@ function MemoryTab({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="text-center">
             <div className="text-2xl font-mono text-acid-green">
-              {km?.adapter_count ?? 34}
+              {km?.adapter_count ?? 41}
             </div>
             <div className="text-[10px] font-mono text-text-muted">KM ADAPTERS</div>
           </div>
@@ -1018,7 +1018,7 @@ function MemoryTab({
         <h4 className="text-xs font-mono text-purple-400 mb-2">HOW INSTITUTIONAL MEMORY WORKS</h4>
         <div className="text-[11px] font-mono text-text-muted space-y-1">
           <p>1. Every debate outcome is stored in multi-tier memory (fast/medium/slow/glacial).</p>
-          <p>2. The Knowledge Mound aggregates insights across 34 adapter systems.</p>
+          <p>2. The Knowledge Mound aggregates insights across 41 adapter systems.</p>
           <p>3. Cross-debate links connect related decisions, building organizational knowledge.</p>
           <p>4. Future debates automatically retrieve relevant past decisions for context.</p>
           <p>5. Unlike single-model systems, Aragora builds cumulative organizational intelligence.</p>

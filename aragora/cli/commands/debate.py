@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import Any, Literal, cast
 
@@ -38,6 +39,46 @@ logger = logging.getLogger(__name__)
 
 # Default API URL from environment or localhost fallback
 DEFAULT_API_URL = os.environ.get("ARAGORA_API_URL", "http://localhost:8080")
+
+
+def _coalesce_arena_grouped_configs(arena_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Project legacy arena kwargs into grouped config objects.
+
+    Passing grouped config objects avoids Arena deprecation warnings emitted
+    for individual legacy kwargs (rlm_*, cross_debate_memory, knowledge_*, ml_*).
+    """
+    from aragora.debate.arena_config import MLConfig, MemoryConfig
+
+    def _coalesce(
+        grouped_name: str,
+        grouped_cls: type[Any],
+    ) -> None:
+        grouped_field_names = {field.name for field in dataclass_fields(grouped_cls)}
+        consumed: dict[str, Any] = {}
+        for key in list(arena_kwargs.keys()):
+            if key in grouped_field_names and key != grouped_name:
+                consumed[key] = arena_kwargs.pop(key)
+        if not consumed and grouped_name not in arena_kwargs:
+            return
+
+        existing = arena_kwargs.pop(grouped_name, None)
+        if isinstance(existing, grouped_cls):
+            merged = {
+                field.name: getattr(existing, field.name) for field in dataclass_fields(grouped_cls)
+            }
+            merged.update(consumed)
+            arena_kwargs[grouped_name] = grouped_cls(**merged)
+            return
+        if isinstance(existing, dict):
+            merged = dict(existing)
+            merged.update(consumed)
+            arena_kwargs[grouped_name] = grouped_cls(**merged)
+            return
+        arena_kwargs[grouped_name] = grouped_cls(**consumed)
+
+    _coalesce("memory_config", MemoryConfig)
+    _coalesce("ml_config", MLConfig)
+    return arena_kwargs
 
 
 class _StrictWallClockTimeout(TimeoutError):
@@ -975,8 +1016,11 @@ async def run_debate(
                 "enable_ml_delegation": False,
                 "enable_quality_gates": False,
                 "enable_consensus_estimation": False,
+                # Skip expensive post-debate processing in deterministic offline runs.
+                "disable_post_debate_pipeline": True,
             }
         )
+    arena_kwargs = _coalesce_arena_grouped_configs(arena_kwargs)
 
     arena = Arena(
         env,
@@ -1248,6 +1292,8 @@ def cmd_ask(args: argparse.Namespace) -> None:
         requested_local = True
         requested_api = False
 
+    offline_run = bool(offline or force_local)
+
     if graph_mode or matrix_mode:
         if requested_local:
             print("Graph/matrix debates require API mode. Remove --local.", file=sys.stderr)
@@ -1281,6 +1327,12 @@ def cmd_ask(args: argparse.Namespace) -> None:
         0, int(getattr(args, "quality_extra_assessment_rounds", 2))
     )
     quality_fail_closed = bool(getattr(args, "quality_fail_closed", False))
+    if offline_run:
+        post_consensus_quality = False
+        upgrade_to_good = False
+        quality_upgrade_max_loops = 0
+        quality_concretize_max_rounds = 0
+        quality_extra_assessment_rounds = 0
     grounding_fail_closed = bool(getattr(args, "grounding_fail_closed", False))
     grounding_min_verified_paths = float(getattr(args, "grounding_min_verified_paths", 0.8))
     if not 0.0 <= grounding_min_verified_paths <= 1.0:
@@ -1522,6 +1574,8 @@ def cmd_ask(args: argparse.Namespace) -> None:
                 "[context-init] disabled RLM limiter via --no-context-init-rlm",
                 file=sys.stderr,
             )
+    if offline_run:
+        cli_config_kwargs["disable_post_debate_pipeline"] = True
     if getattr(args, "auto_execute", False):
         cli_config_kwargs["enable_auto_execution"] = True
 
@@ -1662,6 +1716,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
         current_answer: str,
         defects: list[str],
         attempt_num: int,
+        repo_hint: str = "",
     ) -> tuple[str | None, str | None]:
         if quality_contract is None:
             return (None, None)
@@ -1673,10 +1728,11 @@ def cmd_ask(args: argparse.Namespace) -> None:
             contract=quality_contract,
             current_answer=current_answer,
             defects=defects,
+            repo_hint=repo_hint,
         )
         role_hint = (
-            "You are a post-consensus quality upgrader. Keep core ideas, "
-            "fix defects, and preserve required section order."
+            "You are a structured action plan writer. Convert analysis into "
+            "concrete, path-grounded action items. Never reproduce essays."
         )
         return await _attempt_targeted_revision(
             prompt=prompt,
@@ -1697,6 +1753,12 @@ def cmd_ask(args: argparse.Namespace) -> None:
         )
 
         repo_root = os.getcwd()
+        # Generate repo path hint once for all repair prompts so the LLM
+        # can ground file references to real repository paths.
+        from aragora.debate.phases.synthesis_generator import SynthesisGenerator
+
+        _repo_hint = SynthesisGenerator._get_repo_path_hint()
+
         metadata = getattr(result, "metadata", None)
         if not isinstance(metadata, dict):
             metadata = {}
@@ -1724,6 +1786,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
                     current_answer=current_answer,
                     defects=current_report.defects,
                     attempt_num=loop_idx,
+                    repo_hint=_repo_hint,
                 )
                 if not repaired:
                     attempts.append(
@@ -1831,6 +1894,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
                     practicality_score_10=best_report.practicality_score_10,
                     target_practicality_10=quality_practical_min_score,
                     defects=best_report.defects,
+                    repo_hint=_repo_hint,
                 )
                 revised, provider = await _attempt_targeted_revision(
                     prompt=concretize_prompt,
@@ -1897,6 +1961,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
                         f"Raise practicality score to >= {quality_practical_min_score:.2f}.",
                         "Ground owner paths to existing repository files.",
                     ],
+                    repo_hint=_repo_hint,
                 )
                 revised, provider = await _attempt_targeted_revision(
                     prompt=assessment_prompt,
@@ -1988,7 +2053,7 @@ def cmd_ask(args: argparse.Namespace) -> None:
                 auto_select_config=auto_select_config,
                 codebase_context=codebase_context_requested,
                 codebase_context_path=str(codebase_context_repo) if codebase_context_repo else None,
-                offline=offline or force_local,
+                offline=offline_run,
                 auto_explain=explain,
                 **preset_kwargs,
                 **spectate_kwargs,

@@ -2,6 +2,9 @@
 
 > A brutally honest evaluation of what works, what doesn't, and why it matters.
 > Based on verified code review and test execution across the full codebase.
+>
+> **Written:** Early March 2026 (Run 001-003 era). **March 5 update:** Several blockers
+> described below have since been resolved — see update notes inline.
 
 ---
 
@@ -85,7 +88,7 @@ This is production-grade infrastructure, not prototyping code.
 
 | Component | Scale |
 |---|---|
-| Python SDK | 184 namespaces, 5,800+ methods |
+| Python SDK | 185 namespaces, 5,800+ methods |
 | TypeScript SDK | 183 namespaces, 3,700+ methods (99.3% parity) |
 | REST API | 3,000+ operations across 2,900+ paths |
 | WebSocket events | 190+ event types for real-time streaming |
@@ -122,7 +125,7 @@ The self-improvement infrastructure is production-grade with all six phases full
 
 **Testing:** 66 self-improvement E2E tests + 43 Nomic Loop cycle tests passing. Phase transitions, worktree safety, and error recovery all verified.
 
-**Remaining gap:** Output quality consistency -- dogfood benchmark runs show variable pass rates (33-80%) depending on synthesis grounding quality. The loop runs but output quality needs stabilization for reliable autonomous cycles.
+**Remaining gap:** Output quality consistency -- dogfood benchmark runs show variable pass rates (33-80%) depending on synthesis grounding quality. The loop runs but output quality needs stabilization for reliable autonomous cycles. **[March 5 update: Run 012 shows 8.38-9.39/10 composite scores (was 3.46-3.55). Practicality scoring resolved via prompt restructuring + threshold alignment + verb scoring fixes.]**
 
 **Assessment:** The wiring gap identified in Feb 2026 is closed. The binding constraint has shifted from integration to output quality.
 
@@ -168,7 +171,7 @@ These are areas where claims need honest qualification. The code exists, but the
 | 21+ self-improvement phases | More accurately describes manual development iterations, not autonomous agent-driven cycles |
 | Proven autonomous cycles | First proof run completed 2026-03-02: debate phase produced real multi-agent consensus (Claude Opus 4.6 + GPT-5.2, 80% agreement); design phase hit a 120s agent timeout; implement/verify/commit phases skipped due to upstream failure. The pipeline correctly detected and halted on failure. |
 
-**Honest framing:** Aragora has the most sophisticated self-improvement infrastructure of any open agent framework. The pieces individually work and are tested. The first autonomous proof run (2026-03-02) demonstrated that the debate phase produces high-quality multi-agent output, the pipeline stages chain correctly, and failure detection works as designed. The end-to-end cycle has not yet completed all 5 phases autonomously -- the design phase timeout and ChaosTheater noise leaking into design output are the immediate blockers. This is now a reliability tuning problem (agent timeouts, output filtering), not a wiring or architecture problem.
+**Honest framing:** Aragora has the most sophisticated self-improvement infrastructure of any open agent framework. The pieces individually work and are tested. The first autonomous proof run (2026-03-02) demonstrated that the debate phase produces high-quality multi-agent output, the pipeline stages chain correctly, and failure detection works as designed. The end-to-end cycle has not yet completed all 5 phases autonomously -- the design phase timeout and ChaosTheater noise leaking into design output are the immediate blockers. This is now a reliability tuning problem (agent timeouts, output filtering), not a wiring or architecture problem. **[March 5 update: Design phase timeout increased to 1800s (configurable via NOMIC_DESIGN_TIMEOUT). Run 012 composite score: 0.84 vs baseline 0.46.]**
 
 ---
 

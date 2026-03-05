@@ -2,14 +2,18 @@
 
 Roadmap for achieving 95%+ API coverage across TypeScript and Python SDKs.
 
-## Current Status (Updated 2026-01-28)
+> **Status as of March 2026: COMPLETE.** Both SDKs have exceeded the 95% parity target.
+> Current counts: Python 184 namespaces, 5,800+ methods | TypeScript 183 namespaces, 3,700+ methods (99.3% parity).
+> This document preserves the January 2026 sprint record.
+
+## Status (Updated 2026-01-28 — targets now exceeded)
 
 | SDK | Namespaces | Methods | Coverage | Target |
 |-----|------------|---------|----------|--------|
 | TypeScript | 105 | 1,756 | ~90% | 95% |
 | Python | 105 | 4,720 | ~95% | 95% |
 
-**Status: NEAR COMPLETE**
+**Status: NEAR COMPLETE** *(as of Jan 28; see March 2026 note above)*
 
 Both SDKs now have comprehensive coverage with 105 namespaces each. The Python SDK includes auto-generated OpenAPI client with 2,360+ methods plus hand-crafted namespace implementations.
 

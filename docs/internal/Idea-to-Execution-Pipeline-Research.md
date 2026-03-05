@@ -141,7 +141,7 @@ Aragora's existing architecture maps remarkably well to all four stages:
 - `aragora/visualization/exporter.py` — Exports argument graphs to JSON, GraphML, SVG
 
 **Stage 2 (Goals & Principles):**
-- `aragora/knowledge/` — Knowledge Mound with 34 adapters, semantic search, cross-debate learning
+- `aragora/knowledge/` — Knowledge Mound with 41 adapters, semantic search, cross-debate learning
 - `aragora/knowledge/bridges.py` — MetaLearnerBridge, EvidenceBridge, PatternBridge
 - `aragora/workspace/bead.py` + `convoy.py` — Atomic work units with lifecycle tracking
 
@@ -223,7 +223,7 @@ Aragora's existing architecture maps remarkably well to all four stages:
 │ grapher  │  tor     │  (existing)  │  (existing)              │
 │(existing)│  (new)   │              │                           │
 ├──────────┴──────────┴──────────────┴───────────────────────────┤
-│              Knowledge Mound (34 adapters - existing)           │
+│              Knowledge Mound (41 adapters - existing)           │
 ├─────────────────────────────────────────────────────────────────┤
 │         Provenance Chain (Gauntlet Receipts - existing)         │
 │         SHA-256 cryptographic audit trail                       │

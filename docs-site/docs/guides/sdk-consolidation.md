@@ -10,7 +10,7 @@ description: TypeScript SDK Consolidation Roadmap
 
 This document outlines the plan to consolidate the two TypeScript packages (`@aragora/sdk` and `@aragora/client`) into a single unified SDK.
 
-## Current State (v2.5.x)
+## Current State (v2.8.x)
 
 Two packages exist with different focuses:
 

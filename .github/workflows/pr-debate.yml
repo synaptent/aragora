@@ -10,8 +10,33 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: "PR number to review"
+        description: 'PR number to review'
         required: true
+        type: string
+      review_depth:
+        description: 'Review depth'
+        required: false
+        default: 'standard'
+        type: choice
+        options:
+          - quick
+          - standard
+          - deep
+      agents:
+        description: 'Agent list (comma-separated or "all")'
+        required: false
+        default: 'anthropic-api,openai-api'
+        type: string
+      rounds:
+        description: 'Number of review rounds'
+        required: false
+        default: '2'
+        type: string
+      focus:
+        description: 'Review focus areas'
+        required: false
+        default: 'security,performance,quality'
+        type: string
 
 concurrency:
   group: pr-debate-${{ github.event.pull_request.number || github.run_id }}
@@ -55,7 +80,27 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - uses: ./.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
         if: github.event_name == 'workflow_dispatch'
 
       - name: Setup Python

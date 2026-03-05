@@ -1,19 +1,12 @@
 name: Quality Pipeline Smoke
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'aragora/debate/output_quality.py'
-      - 'aragora/debate/repo_grounding.py'
-      - 'aragora/cli/commands/debate.py'
-      - 'tests/debate/test_output_quality.py'
-      - 'tests/debate/test_repo_grounding.py'
-      - 'tests/cli/test_offline_golden_path.py'
-      - '.github/workflows/quality-smoke.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
+  schedule:
+    # Nightly at 1:30 UTC
+    - cron: '30 1 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -29,37 +22,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure checkout-integrity action exists
+      - name: Verify checkout integrity
         shell: bash
         run: |
-          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
-            echo "::warning::checkout-integrity action missing after checkout; attempting recovery"
-            git reset --hard || true
-            git clean -ffdx || true
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
             git sparse-checkout disable || true
-            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}" || true
-            git checkout -f "${GITHUB_SHA:-HEAD}" || true
-            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
-              git reset --hard FETCH_HEAD
-            else
-              git reset --hard HEAD
-            fi
-            git clean -ffdx || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
           fi
-          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
-            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
-              git archive HEAD | tar -x
-            fi
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
           fi
-          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
-            echo "::error::Repository checkout is incomplete (.github/actions/checkout-integrity/action.yml missing)"
-            ls -la .github/actions || true
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
             exit 1
           fi
-
-      - uses: ./.github/actions/checkout-integrity
 
       - uses: dorny/paths-filter@v3
         id: filter
@@ -85,37 +68,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure checkout-integrity action exists
+      - name: Verify checkout integrity
         shell: bash
         run: |
-          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
-            echo "::warning::checkout-integrity action missing after checkout; attempting recovery"
-            git reset --hard || true
-            git clean -ffdx || true
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
             git sparse-checkout disable || true
-            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}" || true
-            git checkout -f "${GITHUB_SHA:-HEAD}" || true
-            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
-              git reset --hard FETCH_HEAD
-            else
-              git reset --hard HEAD
-            fi
-            git clean -ffdx || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
           fi
-          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
-            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
-              git archive HEAD | tar -x
-            fi
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
           fi
-          if [[ ! -f .github/actions/checkout-integrity/action.yml ]]; then
-            echo "::error::Repository checkout is incomplete (.github/actions/checkout-integrity/action.yml missing)"
-            ls -la .github/actions || true
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
             exit 1
           fi
-
-      - uses: ./.github/actions/checkout-integrity
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -143,9 +116,12 @@ jobs:
 
       - name: Run offline golden path tests
         run: |
-          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short
+          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
+            -W error::ResourceWarning \
+            -W error::pytest.PytestUnraisableExceptionWarning
         env:
           PYTHONPATH: .
+          PYTHONWARNINGS: "error::ResourceWarning"
 
       - name: Quality smoke summary
         if: always()

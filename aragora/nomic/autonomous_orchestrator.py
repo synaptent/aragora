@@ -258,6 +258,15 @@ class AutonomousOrchestrator:
         self._convoy_id: str | None = None
         self._bead_ids: dict[str, str] = {}  # subtask_id -> bead_id
 
+        # Evolution audit: tracks agent prompt modifications for safety audit trail
+        self._evolution_audit = None
+        try:
+            from aragora.nomic.evolution_audit import EvolutionAudit
+
+            self._evolution_audit = EvolutionAudit(base_path=self.aragora_path)
+        except ImportError:
+            pass
+
         # --- Production instrumentation ---
         # Cycle telemetry: records per-cycle metrics for dashboards and stopping rules
         self._cycle_telemetry = None
@@ -338,6 +347,69 @@ class AutonomousOrchestrator:
             except (ImportError, subprocess.SubprocessError, OSError):
                 pass
 
+    async def _log_prompt_change(
+        self,
+        agent: str,
+        field: str,
+        before: str,
+        after: str,
+        reason: str,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        """Log an agent prompt or configuration modification to the evolution audit trail.
+
+        This should be called whenever the orchestrator autonomously modifies
+        agent prompts or configuration so that every change is auditable.
+
+        Args:
+            agent: Agent name whose prompt/config was changed.
+            field: The specific field that changed (e.g. "system_prompt").
+            before: Original value.
+            after: New value.
+            reason: Human-readable rationale for the change.
+            extra: Optional additional metadata.
+        """
+        if self._evolution_audit is None:
+            logger.debug("_log_prompt_change: evolution audit not available, skipping")
+            return
+        try:
+            await self._evolution_audit.log_modification(
+                agent=agent,
+                field=field,
+                before=before,
+                after=after,
+                reason=reason,
+                extra=extra,
+            )
+            logger.info(
+                "evolution_audit agent=%s field=%s reason=%s",
+                agent,
+                field,
+                reason[:80],
+            )
+        except (OSError, RuntimeError, AttributeError) as exc:
+            logger.warning("Failed to log prompt change to evolution audit: %s", exc)
+
+    def assert_production_gate(self) -> None:
+        """Assert that the Nomic Loop production gate is enabled.
+
+        This is an explicit opt-in safety control. The Nomic Loop can autonomously
+        modify agent prompts and code. It must not run in production unless
+        the operator has consciously opted in by setting ENABLE_NOMIC_LOOP=true.
+
+        Raises:
+            RuntimeError: If ENABLE_NOMIC_LOOP is not set to a truthy value.
+        """
+        import os
+
+        value = os.environ.get("ENABLE_NOMIC_LOOP", "").strip().lower()
+        if value not in ("true", "1", "yes"):
+            raise RuntimeError(
+                "Nomic Loop production gate is OFF. "
+                "Set ENABLE_NOMIC_LOOP=true to enable autonomous self-improvement. "
+                "This is an explicit opt-in safety control."
+            )
+
     async def execute_goal(
         self,
         goal: str,
@@ -357,6 +429,8 @@ class AutonomousOrchestrator:
         Returns:
             OrchestrationResult with completion status
         """
+        self.assert_production_gate()
+
         self._orchestration_id = f"orch_{uuid.uuid4().hex[:12]}"
         start_time = datetime.now(timezone.utc)
         context = context or {}

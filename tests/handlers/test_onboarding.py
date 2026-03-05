@@ -406,6 +406,7 @@ class TestInitFlow:
         with _analytics_lock:
             assert len(_analytics_events) == 1
             assert _analytics_events[0]["event_type"] == "onboarding_started"
+            assert _analytics_events[0]["data"]["flow_id"].startswith("onb_")
 
     @pytest.mark.asyncio
     async def test_init_returns_recommended_templates(self, handler):
@@ -648,7 +649,9 @@ class TestUpdateStep:
             user_id="test-user-001",
         )
         with _analytics_lock:
-            assert any(e["event_type"] == "step_updated" for e in _analytics_events)
+            step_event = next(e for e in _analytics_events if e["event_type"] == "step_updated")
+            assert step_event["data"]["flow_id"] == "onb_test123"
+            assert "welcome" in step_event["data"]["completed_steps"]
 
 
 # ============================================================================
@@ -827,6 +830,7 @@ class TestFirstDebate:
 
     @pytest.mark.asyncio
     async def test_first_debate_tracks_event(self, handler):
+        _make_flow(step=OnboardingStep.FIRST_DEBATE)
         await handler.handle(
             "/api/v1/onboarding/first-debate",
             method="POST",
@@ -834,7 +838,8 @@ class TestFirstDebate:
             user_id="test-user-001",
         )
         with _analytics_lock:
-            assert any(e["event_type"] == "first_debate_started" for e in _analytics_events)
+            event = next(e for e in _analytics_events if e["event_type"] == "first_debate_started")
+            assert event["data"]["flow_id"] == "onb_test123"
 
     @pytest.mark.asyncio
     async def test_first_debate_unknown_template_uses_default(self, handler):
@@ -1025,6 +1030,34 @@ class TestQuickDebate:
         status = _status(result)
         assert status in (200, 500, 503)
 
+    @pytest.mark.asyncio
+    async def test_quick_debate_tracks_flow_id_in_event(self, handler):
+        _make_flow(step=OnboardingStep.FIRST_DEBATE)
+        with (
+            patch("aragora.server.stream.SyncEventEmitter", return_value=MagicMock()),
+            patch("aragora.server.debate_factory.DebateFactory", return_value=MagicMock()),
+            patch("aragora.server.debate_controller.DebateController") as mock_controller_cls,
+        ):
+            mock_controller = mock_controller_cls.return_value
+            mock_response = MagicMock()
+            mock_response.success = True
+            mock_response.debate_id = "debate_quick_123"
+            mock_response.error = None
+            mock_response.status_code = 200
+            mock_controller.start_debate.return_value = mock_response
+
+            result = await handler.handle(
+                "/api/v1/onboarding/quick-debate",
+                method="POST",
+                data={"profile": "developer", "topic": "Quick debate topic"},
+                user_id="test-user-001",
+            )
+
+        assert _status(result) == 200
+        with _analytics_lock:
+            event = next(e for e in _analytics_events if e["event_type"] == "quick_debate_started")
+            assert event["data"]["flow_id"] == "onb_test123"
+
 
 # ============================================================================
 # GET /api/v1/onboarding/analytics
@@ -1128,6 +1161,127 @@ class TestAnalytics:
         )
         data = _data(result)
         assert data["funnel"]["started"] == 2
+
+    @pytest.mark.asyncio
+    async def test_analytics_includes_timing_and_drop_off(self, handler):
+        t0 = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc).isoformat()
+        t1 = datetime(2026, 1, 1, 12, 0, 30, tzinfo=timezone.utc).isoformat()
+        t2 = datetime(2026, 1, 1, 12, 1, 0, tzinfo=timezone.utc).isoformat()
+        t3 = datetime(2026, 1, 1, 12, 2, 0, tzinfo=timezone.utc).isoformat()
+        with _analytics_lock:
+            _analytics_events.extend(
+                [
+                    {
+                        "event_type": "onboarding_started",
+                        "user_id": "u1",
+                        "organization_id": None,
+                        "data": {"flow_id": "flow_1"},
+                        "timestamp": t0,
+                    },
+                    {
+                        "event_type": "onboarding_started",
+                        "user_id": "u2",
+                        "organization_id": None,
+                        "data": {"flow_id": "flow_2"},
+                        "timestamp": t0,
+                    },
+                    {
+                        "event_type": "step_updated",
+                        "user_id": "u1",
+                        "organization_id": None,
+                        "data": {
+                            "flow_id": "flow_1",
+                            "action": "next",
+                            "from_step": "welcome",
+                            "to_step": "use_case",
+                            "completed_steps": ["welcome"],
+                        },
+                        "timestamp": t1,
+                    },
+                    {
+                        "event_type": "quick_debate_started",
+                        "user_id": "u1",
+                        "organization_id": None,
+                        "data": {"flow_id": "flow_1", "debate_id": "debate_1"},
+                        "timestamp": t2,
+                    },
+                    {
+                        "event_type": "first_receipt_generated",
+                        "user_id": "u1",
+                        "organization_id": None,
+                        "data": {
+                            "flow_id": "flow_1",
+                            "debate_id": "debate_1",
+                            "receipt_id": "receipt_1",
+                        },
+                        "timestamp": t3,
+                    },
+                ]
+            )
+
+        result = await handler.handle(
+            "/api/v1/onboarding/analytics",
+            method="GET",
+            user_id="test-user-001",
+        )
+        data = _data(result)
+        assert data["funnel"]["started"] == 2
+        assert data["funnel"]["first_debate"] == 1
+        assert data["funnel"]["first_receipt"] == 1
+        assert data["timing"]["time_to_first_debate_seconds"] == 60.0
+        assert data["timing"]["time_to_first_receipt_seconds"] == 120.0
+        assert data["step_drop_off"]["welcome"]["drop_off_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_onboarding_e2e_quick_debate_receipt_analytics(self, handler):
+        init_result = await handler.handle(
+            "/api/v1/onboarding/flow",
+            method="POST",
+            data={},
+            user_id="e2e-user",
+        )
+        flow_id = _data(init_result)["flow_id"]
+
+        with (
+            patch("aragora.server.stream.SyncEventEmitter", return_value=MagicMock()),
+            patch("aragora.server.debate_factory.DebateFactory", return_value=MagicMock()),
+            patch("aragora.server.debate_controller.DebateController") as mock_controller_cls,
+        ):
+            mock_controller = mock_controller_cls.return_value
+            mock_response = MagicMock()
+            mock_response.success = True
+            mock_response.debate_id = "debate_e2e_123"
+            mock_response.error = None
+            mock_response.status_code = 200
+            mock_controller.start_debate.return_value = mock_response
+
+            quick_result = await handler.handle(
+                "/api/v1/onboarding/quick-debate",
+                method="POST",
+                data={"topic": "E2E onboarding quick debate"},
+                user_id="e2e-user",
+            )
+
+        assert _status(quick_result) == 200
+        debate_id = _data(quick_result)["debate_id"]
+        _track_event(
+            "first_receipt_generated",
+            "e2e-user",
+            None,
+            {"flow_id": flow_id, "debate_id": debate_id, "receipt_id": "receipt_e2e_1"},
+        )
+
+        analytics_result = await handler.handle(
+            "/api/v1/onboarding/analytics",
+            method="GET",
+            user_id="e2e-user",
+        )
+        analytics = _data(analytics_result)
+        assert analytics["funnel"]["started"] == 1
+        assert analytics["funnel"]["first_debate"] == 1
+        assert analytics["funnel"]["first_receipt"] == 1
+        assert analytics["timing"]["time_to_first_debate_seconds"] is not None
+        assert analytics["timing"]["time_to_first_receipt_seconds"] is not None
 
 
 # ============================================================================

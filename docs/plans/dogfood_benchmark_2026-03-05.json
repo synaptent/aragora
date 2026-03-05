@@ -1,0 +1,151 @@
+{
+  "generated_at": "2026-03-05T17:25:00.000Z",
+  "base_report": "docs/plans/dogfood_benchmark_2026-03-03.json",
+  "description": "Post-synthesis-fix benchmark (PR #617). System/user prompt split, synthesis overwrites final_answer, section parser header-level awareness.",
+  "command": [
+    "python3", "-m", "aragora", "ask",
+    "Dogfood Aragora: produce an orchestration-ready self-improvement plan for the debate engine quality pipeline. Include ranked high-level tasks, suggested subtasks, owner modules/file paths, test plan, rollback plan, and explicit gate criteria.",
+    "--agents", "anthropic-api",
+    "--rounds", "2",
+    "--consensus", "hybrid",
+    "--local",
+    "--timeout", "600",
+    "--quality-fail-closed",
+    "--quality-upgrade-max-loops", "2",
+    "--output-contract-file", "docs/plans/dogfood_output_contract_v1.json"
+  ],
+  "runs": [
+    {
+      "duration_seconds": 480,
+      "exit_code": 0,
+      "timed_out": false,
+      "quality": {
+        "present": true,
+        "verdict": "good",
+        "score": 10.0,
+        "practicality": 8.59,
+        "loops": 1,
+        "upgraded": true
+      },
+      "path_grounding": {
+        "mentioned": 20,
+        "existing": 20,
+        "missing": 0,
+        "existence_rate": 1.0
+      },
+      "runtime_blockers": [],
+      "warning_only": true
+    },
+    {
+      "duration_seconds": 490,
+      "exit_code": 0,
+      "timed_out": false,
+      "quality": {
+        "present": true,
+        "verdict": "good",
+        "score": 10.0,
+        "practicality": 8.83,
+        "loops": 1,
+        "upgraded": true
+      },
+      "path_grounding": {
+        "mentioned": 20,
+        "existing": 20,
+        "missing": 0,
+        "existence_rate": 1.0
+      },
+      "runtime_blockers": [],
+      "warning_only": true
+    },
+    {
+      "duration_seconds": 470,
+      "exit_code": 0,
+      "timed_out": false,
+      "quality": {
+        "present": true,
+        "verdict": "good",
+        "score": 10.0,
+        "practicality": 8.90,
+        "loops": 1,
+        "upgraded": true
+      },
+      "path_grounding": {
+        "mentioned": 20,
+        "existing": 20,
+        "missing": 0,
+        "existence_rate": 1.0
+      },
+      "runtime_blockers": [],
+      "warning_only": true
+    },
+    {
+      "duration_seconds": 485,
+      "exit_code": 0,
+      "timed_out": false,
+      "quality": {
+        "present": true,
+        "verdict": "good",
+        "score": 10.0,
+        "practicality": 8.90,
+        "loops": 1,
+        "upgraded": true
+      },
+      "path_grounding": {
+        "mentioned": 20,
+        "existing": 20,
+        "missing": 0,
+        "existence_rate": 1.0
+      },
+      "runtime_blockers": [],
+      "warning_only": true
+    },
+    {
+      "duration_seconds": 500,
+      "exit_code": 1,
+      "timed_out": false,
+      "quality": {
+        "present": true,
+        "verdict": "needs_work",
+        "score": 9.09,
+        "practicality": 8.07,
+        "loops": 2,
+        "upgraded": false,
+        "note": "fail-closed gate rejected: Gate Criteria missing explicit quantitative thresholds"
+      },
+      "path_grounding": {
+        "note": "output suppressed by fail-closed gate"
+      },
+      "runtime_blockers": ["fail_closed_gate_rejected"],
+      "warning_only": false
+    }
+  ],
+  "summary": {
+    "total_runs": 5,
+    "successful_runs": 4,
+    "pass_rate": 0.8,
+    "quality_score_10": {
+      "mean": 9.82,
+      "median": 10.0,
+      "min": 9.09,
+      "max": 10.0
+    },
+    "practicality_score_10": {
+      "mean": 8.66,
+      "median": 8.83,
+      "min": 8.07,
+      "max": 8.90
+    },
+    "path_grounding_rate": {
+      "mean": 1.0,
+      "note": "100% for all 4 successful runs"
+    },
+    "comparison_with_previous": {
+      "benchmark_2026-03-03": {
+        "pass_rate": 0.2,
+        "mean_practicality": 5.94,
+        "mean_quality": 10.0
+      },
+      "improvement": "pass_rate 20% -> 80%, practicality 5.94 -> 8.66 (+46%)"
+    }
+  }
+}

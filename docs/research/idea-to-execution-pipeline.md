@@ -147,7 +147,7 @@ Aragora's architecture maps remarkably well to all four stages (~70% of backend 
 | Component | Location | Capabilities |
 |-----------|----------|-------------|
 | **ArgumentCartographer** | `aragora/visualization/mapper.py` | 7 node types (PROPOSAL, CRITIQUE, EVIDENCE, CONCESSION, REBUTTAL, VOTE, CONSENSUS), 5 edge relations, real-time graph construction, Mermaid/JSON/HTML export, structural annotation (fallacy detection, premise chains) |
-| **Knowledge Mound** | `aragora/knowledge/mound/core.py` | 34 adapters, semantic search, cross-debate learning, 4,300+ tests |
+| **Knowledge Mound** | `aragora/knowledge/mound/core.py` | 41 adapters, semantic search, cross-debate learning, 4,300+ tests |
 | **Workspace Beads/Convoys** | `aragora/workspace/` | Atomic work units with lifecycle tracking (PENDING, ASSIGNED, RUNNING, DONE, FAILED, SKIPPED) |
 
 **Missing:** No REST endpoint for raw idea graphs outside debate context. No concept-relationship graph for domain-agnostic ideas. No dedicated "idea capture" UI.
@@ -179,7 +179,7 @@ Aragora's architecture maps remarkably well to all four stages (~70% of backend 
 
 | Component | Location | Capabilities |
 |-----------|----------|-------------|
-| **Arena** | `aragora/debate/orchestrator.py` | Multi-agent debate orchestration across 42 agent types |
+| **Arena** | `aragora/debate/orchestrator.py` | Multi-agent debate orchestration across 43 agent types |
 | **Agents** | `aragora/agents/` | Claude, GPT, Mistral, Grok, Llama + 30+ models via OpenRouter; AirlockProxy for resilience |
 | **Control Plane** | `aragora/control_plane/` | Agent registry, task scheduler, health monitoring, 1,500+ tests |
 | **Consensus** | `aragora/debate/consensus.py` | Majority, supermajority, unanimous; semantic similarity convergence |
@@ -249,7 +249,7 @@ Aragora's architecture maps remarkably well to all four stages (~70% of backend 
 | grapher  |  tor     |  (existing)  |  (existing)                |
 |(existing)|  (new)   |              |                             |
 +----------+----------+--------------+-----------------------------+
-|              Knowledge Mound (34 adapters - existing)             |
+|              Knowledge Mound (41 adapters - existing)             |
 +-------------------------------------------------------------------+
 |         Provenance Chain (Gauntlet Receipts - existing)           |
 |         SHA-256 cryptographic audit trail                         |

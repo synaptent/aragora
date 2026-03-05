@@ -1,6 +1,6 @@
 # AI Agent Coordination
 
-**Last updated:** 2026-02-16
+**Last updated:** 2026-03-05
 **Maintainer:** Update this file when starting/finishing work
 
 ---
@@ -24,18 +24,7 @@
 
 ### Currently Active
 
-<!-- Copy this template for each active session:
-
-### [Agent Type] - [Brief Task]
-- **Started:** YYYY-MM-DD HH:MM
-- **Working on:** One sentence description
-- **Files:** List main files being modified
-- **Issue:** #number (if applicable)
-- **Status:** 🟡 In Progress / 🔴 Blocked / 🟢 Almost Done
-
--->
-
-*No active sessions*
+*(No sessions currently claimed — update when starting work on a domain)*
 
 ---
 
@@ -81,7 +70,7 @@ Session 3 claims: tests/
 - [ ] #91 Workspace admin UI ← **next up**
 
 **Developer Track:**
-- [x] #103 API coverage tests (142,211 tests, 2,000+ API ops)
+- [x] #103 API coverage tests (208,000+ tests, 3,000+ API ops)
 - [x] #102 SDK parity pass #2 (100% TS/Python parity)
 - [ ] #94 SDK docs portal / developer quickstart ← **next up**
 

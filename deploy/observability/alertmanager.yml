@@ -55,6 +55,13 @@ route:
 
   # Child routes - processed in order, first match wins
   routes:
+    # Execution safety gate alerts
+    - match_re:
+        alertname: '(ExecutionGate.*|AragoraExecutionGate.*)'
+      receiver: 'slack-execution-safety'
+      group_wait: 20s
+      repeat_interval: 1h
+
     # Critical alerts - Page immediately
     - match:
         severity: critical
@@ -155,6 +162,23 @@ receivers:
           {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
           {{ end }}
         color: '#FFA500'
+
+  # Slack - Execution gate alerts
+  - name: 'slack-execution-safety'
+    slack_configs:
+      - channel: '#aragora-execution-safety'
+        send_resolved: true
+        icon_emoji: ':shield:'
+        title: 'Execution Gate: {{ .GroupLabels.alertname }}'
+        text: |-
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Path:* {{ .Labels.path }}
+          *Domain:* {{ .Labels.domain }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+        color: '{{ if eq .Status "firing" }}#FFA500{{ else }}#36A64F{{ end }}'
 
   # Slack - SLO breaches
   - name: 'slack-slo'
