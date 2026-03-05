@@ -58,6 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PEP 561** `py.typed` marker for type checker support.
 - **235 tests** covering Arena, Receipt, types, agents, events, convergence, trickster, evidence, cross-analysis, and mock styles.
 
-[0.2.3]: https://github.com/an0mium/aragora/compare/aragora-debate-v0.2.2...aragora-debate-v0.2.3
+[0.2.3]: https://github.com/an0mium/aragora/compare/aragora-debate-v0.2.0...aragora-debate-v0.2.3
 [0.2.0]: https://github.com/an0mium/aragora/compare/aragora-debate-v0.1.0...aragora-debate-v0.2.0
 [0.1.0]: https://github.com/an0mium/aragora/releases/tag/aragora-debate-v0.1.0

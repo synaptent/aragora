@@ -298,7 +298,7 @@ DebateConfig(
 | Anthropic | `ClaudeAgent` | `pip install aragora-debate[anthropic]` | `claude-sonnet-4-5-20250929` |
 | OpenAI | `OpenAIAgent` | `pip install aragora-debate[openai]` | `gpt-4o` |
 | Mistral | `MistralAgent` | `pip install aragora-debate[mistral]` | `mistral-large-latest` |
-| Google | `GeminiAgent` | `pip install aragora-debate[gemini]` | `gemini-2.0-flash` |
+| Google | `GeminiAgent` | `pip install aragora-debate[gemini]` | `gemini-3.1-pro-preview` |
 | Mock | `MockAgent` | *(included)* | N/A |
 
 Use the factory for quick setup:

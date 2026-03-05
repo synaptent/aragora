@@ -110,11 +110,19 @@ Minimal adversarial debate engine. Zero dependencies.
 pip install aragora-debate
 ```
 
-| File | Purpose | LOC |
-|------|---------|-----|
-| `types.py` | Core types (Agent, Message, Critique, Vote, etc.) | ~350 |
-| `arena.py` | Debate orchestrator (propose → critique → vote) | ~280 |
-| `receipt.py` | Decision receipts with HMAC-SHA256 signing | ~200 |
+| File | Purpose |
+|------|---------|
+| `types.py` | Core types (Agent, Message, Critique, Vote, DebateConfig, etc.) |
+| `arena.py` | Debate orchestrator (propose → critique → vote) |
+| `debate.py` | High-level 5-line Debate API + `create_agent` factory |
+| `receipt.py` | Decision receipts with HMAC-SHA256 signing |
+| `agents.py` | Provider agents (Claude, OpenAI, Mistral, Gemini) |
+| `evidence.py` | Evidence quality scoring + hollow consensus detection |
+| `convergence.py` | Convergence tracking across rounds (stdlib only) |
+| `trickster.py` | Evidence-powered challenge injection |
+| `cross_analysis.py` | Cross-proposal evidence validation |
+| `events.py` | Event/callback system for real-time monitoring |
+| `_mock.py` / `styled_mock.py` | Mock agents for testing and demos |
 
 **When to use:** You want adversarial debate without the full platform.
 Embed in existing AI pipelines, CrewAI workflows, or LangGraph chains.
