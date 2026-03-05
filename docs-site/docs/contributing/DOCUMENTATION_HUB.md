@@ -77,8 +77,8 @@ KNOWLEDGE_MOUND.md            # Architecture and concepts
 ```
 
 **Key Features:**
-- 28 registered adapters (Continuum, Consensus, Evidence, ELO, etc.)
-- Additional experimental modules (extraction, nomic_cycle, openclaw, ranking)
+- 41 registered adapters (Continuum, Consensus, Evidence, ELO, and 37 more)
+- Additional adapter files present but not factory-registered (extraction, nomic_cycle, openclaw, ranking)
 - Semantic search with validation feedback
 - RBAC-governed access
 - Contradiction detection
