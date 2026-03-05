@@ -116,9 +116,12 @@ jobs:
 
       - name: Run offline golden path tests
         run: |
-          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short
+          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
+            -W error::ResourceWarning \
+            -W error::pytest.PytestUnraisableExceptionWarning
         env:
           PYTHONPATH: .
+          PYTHONWARNINGS: "error::ResourceWarning"
 
       - name: Quality smoke summary
         if: always()

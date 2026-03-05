@@ -4,7 +4,7 @@ Last updated: 2026-02-13
 
 ## Summary
 
-The Aragora server exposes 2,000+ API operations across 208 handler files. This document identifies the ~50 core endpoints that serve 90% of users and categorizes the rest for potential extraction.
+The Aragora server exposes 3,000+ API operations across 208 handler files. This document identifies the ~50 core endpoints that serve 90% of users and categorizes the rest for potential extraction.
 
 ## Core Endpoints (~50)
 

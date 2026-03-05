@@ -54,6 +54,9 @@ _HEDGING_TIERS: list[tuple[float, dict[str, re.Pattern[str]]]] = [
             "placeholder": re.compile(r"\bplaceholder\b", re.IGNORECASE),
             "fill_me": re.compile(r"<\s*fill[^>]*>", re.IGNORECASE),
             "tk": re.compile(r"\btk\b", re.IGNORECASE),
+            "not_produced": re.compile(
+                r"\[(?:section )?not produced|requires (?:LLM |concretization)", re.IGNORECASE
+            ),
             "ellipsis_trail": re.compile(r"\.\.\.\s*$"),
         },
     ),
@@ -113,8 +116,15 @@ def _extract_sections(markdown: str) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
     for idx, match in enumerate(matches):
         title = match.group(2).strip()
+        level = len(match.group(1))
         start = match.end()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown)
+        # Section content extends until the next header at the same or higher
+        # level.  Sub-headers (### within ##) are content, not boundaries.
+        end = len(markdown)
+        for later in matches[idx + 1 :]:
+            if len(later.group(1)) <= level:
+                end = later.start()
+                break
         sections.append(
             {
                 "title": title,

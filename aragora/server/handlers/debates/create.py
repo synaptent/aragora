@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from aragora.resilience import with_timeout_sync
 from aragora.server.http_utils import run_async
+from aragora.server.validation.pydantic_models import validate_debate_request
 from aragora.server.validation.schema import (
     DEBATE_START_SCHEMA,
     validate_against_schema,
@@ -175,6 +176,14 @@ class CreateOperationsMixin:
         validation_result = _get_validate_against_schema()(body, DEBATE_START_SCHEMA)
         if not validation_result.is_valid:
             return error_response(validation_result.error, 400)
+
+        # Pydantic v2 strict validation (question length, rounds bounds, agents limit)
+        # Only applies when the body contains a 'question' field (the primary field);
+        # requests using the legacy 'task' field bypass this layer to preserve compatibility.
+        if "question" in body:
+            _pydantic_req, _pydantic_err = validate_debate_request(body)
+            if _pydantic_err is not None:
+                return error_response(_pydantic_err, 422)
 
         # Spam check for debate content
         spam_result = self._check_spam_content(body)

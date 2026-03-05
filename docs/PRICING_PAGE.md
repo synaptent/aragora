@@ -111,7 +111,7 @@ Aragora is open source (MIT). Use the full debate engine for free, forever. Comm
 <tr>
 <td>REST API + WebSocket</td>
 <td align="center">Limited</td>
-<td align="center">Full (2,000+ operations)</td>
+<td align="center">Full (3,000+ operations)</td>
 <td align="center">Full + priority routing</td>
 </tr>
 <tr>
@@ -141,7 +141,7 @@ Aragora is open source (MIT). Use the full debate engine for free, forever. Comm
 <td align="center">Yes</td>
 </tr>
 <tr>
-<td>Knowledge Mound (34 adapters)</td>
+<td>Knowledge Mound (41 adapters)</td>
 <td align="center">--</td>
 <td align="center">Yes</td>
 <td align="center">Yes</td>
@@ -277,11 +277,11 @@ For teams that need decision rigor, audit trails, and integrations.
 - Hollow consensus detection (Trickster)
 - Vertical weight profiles for healthcare, financial, and legal domains
 - 4-tier Continuum Memory (fast/medium/slow/glacial)
-- Knowledge Mound with 34 adapters and cross-debate learning
+- Knowledge Mound with 41 adapters and cross-debate learning
 - Workflow engine with 50+ templates
 - Slack, Teams, and Discord connectors with managed OAuth
 - CI/CD integration (GitHub Actions, GitLab CI)
-- Full REST API + WebSocket access (2,000+ operations)
+- Full REST API + WebSocket access (3,000+ operations)
 - EU AI Act compliance artifact generation
 - OIDC SSO and 7-role RBAC with 390+ permissions
 - Up to 10 tenants

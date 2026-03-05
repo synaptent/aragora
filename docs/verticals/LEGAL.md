@@ -179,6 +179,8 @@ The legal vertical configuration uses a deliberately low temperature ceiling (0.
 
 ### Attorney-Client Privilege Considerations
 
+> **Legal Disclaimer:** Attorney-client privilege implications of AI-assisted legal review vary by jurisdiction and specific circumstances. Nothing in this document constitutes legal advice. Organizations should consult qualified legal counsel in their jurisdiction before relying on any AI-assisted review tool in privileged communications or work product contexts.
+
 Aragora's Decision Receipts are designed to support privilege claims when used within the appropriate context:
 
 **When privilege may attach**:

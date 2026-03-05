@@ -108,15 +108,23 @@ def _extract_sections(markdown: str) -> list[dict[str, Any]]:
     sections: list[dict[str, Any]] = []
     for idx, match in enumerate(matches):
         title = match.group(2).strip()
+        level = len(match.group(1))
         start = match.end()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown)
+        # Section content extends until the next header at the SAME or higher
+        # level (same or fewer # chars).  Sub-headers (e.g. ### within ##)
+        # are included as content of the parent section.
+        end = len(markdown)
+        for later in matches[idx + 1 :]:
+            if len(later.group(1)) <= level:
+                end = later.start()
+                break
         content = markdown[start:end].strip()
         sections.append(
             {
                 "title": title,
                 "normalized": _normalize_heading(title),
                 "content": content,
-                "level": len(match.group(1)),
+                "level": level,
                 "start": match.start(),
                 "end": end,
             }
@@ -789,7 +797,14 @@ def validate_output_against_contract(
         defects.append("Owner module / file paths is missing concrete repo paths.")
     if contract.require_repo_path_existence and contract.require_owner_paths:
         if grounding.path_existence_rate < 0.67:
-            defects.append("Owner module / file paths are weakly grounded to existing repo files.")
+            msg = "Owner module / file paths are weakly grounded to existing repo files."
+            if grounding.missing_paths:
+                bad = ", ".join(grounding.missing_paths[:5])
+                msg += f" Non-existent paths: {bad}."
+            if grounding.existing_paths:
+                good = ", ".join(grounding.existing_paths[:3])
+                msg += f" Valid paths: {good}."
+            defects.append(msg)
     if contract.require_practicality_checks and grounding.practicality_score_10 < 5.0:
         defects.append("Output practicality is too low for execution handoff.")
     if contract.require_json_payload and not has_valid_json_payload:
@@ -835,6 +850,9 @@ def validate_output_against_contract(
         # model's fault.  They still penalise the quality score but don't
         # hard-fail the verdict.
         "Duplicate section heading",
+        # Duplicate-create ratio can be a false positive when tasks modify
+        # or add to existing files (e.g. "Create dataclass in existing.py").
+        "Duplicate-create proposals target existing",
     )
     hard_defects = [d for d in defects if not d.startswith(_SOFT_DEFECT_PREFIXES)]
     soft_defect_count = len(defects) - len(hard_defects)
@@ -876,6 +894,7 @@ def build_upgrade_prompt(
     contract: OutputContract,
     current_answer: str,
     defects: list[str],
+    repo_hint: str = "",
 ) -> str:
     """Build a focused repair prompt for the upgrade-to-good loop."""
     defect_lines = (
@@ -885,18 +904,33 @@ def build_upgrade_prompt(
         f"{idx}. {section}" for idx, section in enumerate(contract.required_sections, start=1)
     )
     hard_rules = build_contract_context_block(contract)
+    repo_block = (
+        f"\n\nREPOSITORY FILE REFERENCE (use ONLY these paths — do NOT invent paths):\n{repo_hint}\n"
+        if repo_hint
+        else ""
+    )
 
     return (
-        "You are performing a post-consensus quality repair pass.\n"
-        "Preserve intent, improve structure, and fix only quality defects.\n"
-        "Return ONLY the revised markdown answer.\n\n"
-        f"Task:\n{task}\n\n"
+        "TASK: Rewrite the answer below as a STRUCTURED ACTION PLAN.\n"
+        "Do NOT reproduce the essay/analysis. EXTRACT concrete actions from it.\n"
+        "Return ONLY the structured markdown with these section headers.\n\n"
+        "Your output MUST start with `## Ranked High-Level Tasks` — no preamble, no prose.\n\n"
+        f"{repo_block}"
         "Required sections (exact order):\n"
         f"{contract_lines}\n\n"
-        "Defects to fix:\n"
+        "Rules for each section:\n"
+        "- Ranked High-Level Tasks: action verb + real file path + pytest verify command\n"
+        "- Suggested Subtasks: independently testable with specific pytest commands\n"
+        "- Owner module / file paths: ONLY paths from the REPOSITORY FILE REFERENCE\n"
+        "- Test Plan: specific test file references, not generic phrases\n"
+        "- Gate Criteria: comparison operators with numbers (>= 80%, < 250ms)\n"
+        "- Rollback Plan: trigger condition AND rollback action\n"
+        "- JSON Payload: valid JSON mirroring section content\n\n"
+        "Defects in the current answer:\n"
         f"{defect_lines}\n\n"
         f"{hard_rules}\n\n"
-        "Current answer:\n"
+        f"Original question:\n{task}\n\n"
+        "Current answer (extract actions from this, do NOT copy it as prose):\n"
         f"{current_answer}"
     )
 
@@ -909,6 +943,7 @@ def build_concretization_prompt(
     practicality_score_10: float,
     target_practicality_10: float,
     defects: list[str],
+    repo_hint: str = "",
 ) -> str:
     """Build a focused prompt for post-consensus concretization/upgrading."""
     defect_lines = "\n".join(f"- {defect}" for defect in defects) if defects else "- None listed."
@@ -916,28 +951,33 @@ def build_concretization_prompt(
         f"{idx}. {section}" for idx, section in enumerate(contract.required_sections, start=1)
     )
     hard_rules = build_contract_context_block(contract)
+    repo_block = (
+        f"\nREPOSITORY FILE REFERENCE (use ONLY these paths — do NOT invent paths):\n{repo_hint}\n"
+        if repo_hint
+        else ""
+    )
     return (
-        "You are performing a post-consensus concretization pass for execution readiness.\n"
-        "Keep the core strategy, but make the first execution batch practical and testable.\n"
-        "Return ONLY revised markdown output.\n\n"
-        f"Task:\n{task}\n\n"
+        "TASK: Rewrite the answer below as a STRUCTURED ACTION PLAN with real file paths.\n"
+        "Do NOT reproduce essays or analysis. EXTRACT concrete actions.\n"
+        "Your output MUST start with `## Ranked High-Level Tasks` — no preamble.\n"
+        "Return ONLY the structured markdown.\n\n"
         f"Current practicality score (0-10): {practicality_score_10}\n"
         f"Target practicality score (0-10): {target_practicality_10}\n\n"
+        f"{repo_block}"
+        f"Original question:\n{task}\n\n"
         "Required sections (exact order):\n"
         f"{contract_lines}\n\n"
         "Concretization requirements:\n"
-        "- Replace placeholders ([NEW], [INFERRED], TBD, TODO) with concrete decisions.\n"
-        "- First ranked tasks must include explicit file paths and measurable gate criteria.\n"
-        "- Each task line: start with an action verb, reference a file path, use 6+ words.\n"
-        "- Test Plan: each test item must reference a specific test file (e.g. test_output_quality.py).\n"
-        "- Gate Criteria: use comparison operators with numbers (e.g. >= 80%, < 250ms, > 95%).\n"
-        "- Suggested subtasks must be independently testable.\n"
-        "- Keep rollback trigger->action mappings explicit.\n"
-        "- Keep JSON payload synchronized with revised sections.\n\n"
+        "- Each task line: action verb + file path from REPOSITORY FILE REFERENCE + pytest verify command.\n"
+        "- CRITICAL: ALL file paths MUST come from the REPOSITORY FILE REFERENCE above. Do NOT invent paths.\n"
+        "- Gate Criteria: use comparison operators with numbers (>= 80%, < 250ms, > 95%).\n"
+        "- Rollback Plan: explicit trigger condition AND rollback action.\n"
+        "- JSON Payload: valid JSON mirroring section content.\n"
+        "- Replace ALL placeholders ([NEW], [INFERRED], TBD, TODO, '[Section not produced]') with real content.\n\n"
         "Defects to fix:\n"
         f"{defect_lines}\n\n"
         f"{hard_rules}\n\n"
-        "Current answer:\n"
+        "Current answer (extract actions from this, do NOT copy it as prose):\n"
         f"{current_answer}"
     )
 

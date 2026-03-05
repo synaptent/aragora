@@ -11,7 +11,7 @@
     "clean": "rm -rf .next",
     "prebuild": "(npm run validate-env || echo 'Env validation skipped (missing ts-node)') && npm run clean",
     "build": "npm run build:runtime",
-    "build:runtime": "LIVE_DEPLOY_MODE=runtime NEXT_PUBLIC_WS_URL=wss://api.aragora.ai NEXT_PUBLIC_API_URL=https://api.aragora.ai next build --webpack",
+    "build:runtime": "LIVE_DEPLOY_MODE=runtime NEXT_PUBLIC_WS_URL=wss://api.aragora.ai NEXT_PUBLIC_API_URL=https://api.aragora.ai next build",
     "build:standalone": "NEXT_OUTPUT=standalone NEXT_PUBLIC_WS_URL=wss://api.aragora.ai NEXT_PUBLIC_API_URL=https://api.aragora.ai next build --webpack",
     "build:local": "NEXT_OUTPUT=standalone next build --webpack",
     "build:export": "NEXT_OUTPUT=export NEXT_PUBLIC_WS_URL=wss://api.aragora.ai NEXT_PUBLIC_API_URL=https://api.aragora.ai next build --webpack",

@@ -35,7 +35,7 @@ Aragora treats each AI model as an **unreliable witness** and uses structured de
 
 When Claude, GPT, Gemini, Grok, Mistral, and DeepSeek independently converge on an answer after challenging each other, that convergence is meaningful. When they disagree, the dissent trail tells you exactly where human judgment is needed.
 
-This is not a theoretical approach. ICE research on multi-agent debate demonstrates **27-45% accuracy improvements** over single-model baselines on complex reasoning tasks. Mitsubishi Electric announced adversarial multi-agent debate for manufacturing quality assurance in January 2026, validating the concept at industrial scale.
+This is not a theoretical approach. Multi-agent deliberation research (including benchmark studies on debate-based reasoning) demonstrates **27-45% accuracy improvements** over single-model baselines on complex reasoning tasks. Mitsubishi Electric announced adversarial multi-agent debate for manufacturing quality assurance in January 2026, validating the concept at industrial scale.
 
 ### What You Get
 
@@ -45,7 +45,7 @@ This is not a theoretical approach. ICE research on multi-agent debate demonstra
 | **Decision receipts** | Cryptographic audit trails with evidence chains, dissent tracking, and confidence calibration |
 | **Calibrated trust** | ELO rankings and Brier scores track which models are actually reliable on which domains |
 | **Hollow consensus detection** | The Trickster catches cases where models agree without genuine reasoning |
-| **Institutional memory** | Decisions persist across sessions with 4-tier memory and Knowledge Mound (34 adapters) |
+| **Institutional memory** | Decisions persist across sessions with 4-tier memory and Knowledge Mound (41 adapters) |
 | **Channel delivery** | Results route to Slack, Teams, Discord, Telegram, WhatsApp, email, or voice |
 
 ---
@@ -86,7 +86,7 @@ Over time, the system learns which models to trust for which kinds of decisions.
 
 Aragora includes an autonomous self-improvement system where agents debate improvements to the platform itself, design solutions, implement code, and verify changes. Safety rails include automatic backups, protected file checksums, rollback on failure, and human approval gates. The system cannot modify its own safety constraints.
 
-The MetaPlanner uses 12 codebase signal sources for self-directed goal generation, and now automatically extracts improvement goals from debate outcome patterns -- when debates consistently show low consensus or recurring failure modes, the system self-directs toward fixing those weaknesses.
+The MetaPlanner uses multiple codebase signal sources for self-directed goal generation, and now automatically extracts improvement goals from debate outcome patterns -- when debates consistently show low consensus or recurring failure modes, the system self-directs toward fixing those weaknesses.
 
 This is how the platform grew from a debate engine to 3,200+ modules with 208,000+ tests. No competitor has anything equivalent -- it is a structural advantage that compounds over time.
 

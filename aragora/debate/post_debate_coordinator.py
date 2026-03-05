@@ -62,6 +62,14 @@ class PostDebateConfig:
     # Execution bridge: auto-trigger downstream actions
     auto_execution_bridge: bool = True
     execution_bridge_min_confidence: float = 0.0  # Bridge has per-rule thresholds
+    # Execution safety gate: enforce signed-receipt + diversity + taint checks
+    enforce_execution_safety_gate: bool = True
+    execution_gate_require_verified_signed_receipt: bool = True
+    execution_gate_min_provider_diversity: int = 2
+    execution_gate_min_model_family_diversity: int = 2
+    execution_gate_block_on_context_taint: bool = True
+    execution_gate_block_on_high_severity_dissent: bool = True
+    execution_gate_high_severity_dissent_threshold: float = 0.7
     # Settlement tracking: extract verifiable claims for future resolution
     auto_settlement_tracking: bool = False
     settlement_min_confidence: float = 0.3  # Min claim confidence for settlement
@@ -85,6 +93,7 @@ class PostDebateResult:
     plan: dict[str, Any] | None = None
     notification_sent: bool = False
     execution_result: dict[str, Any] | None = None
+    execution_gate: dict[str, Any] | None = None
     pr_result: dict[str, Any] | None = None
     integrity_package: dict[str, Any] | None = None
     receipt_persisted: bool = False
@@ -199,6 +208,11 @@ class PostDebateCoordinator:
                 debate_id, debate_result, task
             )
 
+        # Step 2.8: Execution safety gate (signed receipts + diversity + taint checks)
+        if self.config.enforce_execution_safety_gate:
+            result.execution_gate = self._step_execution_gate(debate_result, agents)
+            self._apply_execution_gate_to_plan(result.plan, result.execution_gate)
+
         # Step 3: Send notifications
         if self.config.auto_notify:
             result.notification_sent = self._step_notify(
@@ -207,7 +221,14 @@ class PostDebateCoordinator:
 
         # Step 4: Execute plan if approved
         if self.config.auto_execute_plan and result.plan:
-            result.execution_result = self._step_execute_plan(result.plan, result.explanation)
+            if self._is_execution_blocked(result.execution_gate):
+                result.execution_result = {
+                    "skipped": True,
+                    "reason": "execution_gate_blocked",
+                    "gate": result.execution_gate,
+                }
+            else:
+                result.execution_result = self._step_execute_plan(result.plan, result.explanation)
 
         # Step 4.5: Create draft PR for code-related debates
         if (
@@ -215,7 +236,14 @@ class PostDebateCoordinator:
             and result.plan
             and confidence >= self.config.pr_min_confidence
         ):
-            result.pr_result = self._step_create_pr(result.plan, task)
+            if self._is_execution_blocked(result.execution_gate):
+                result.pr_result = {
+                    "skipped": True,
+                    "reason": "execution_gate_blocked",
+                    "gate": result.execution_gate,
+                }
+            else:
+                result.pr_result = self._step_create_pr(result.plan, task)
 
         # Step 5: Build decision integrity package
         if self.config.auto_build_integrity_package:
@@ -272,22 +300,123 @@ class PostDebateCoordinator:
             self.config.auto_execution_bridge
             and confidence >= self.config.execution_bridge_min_confidence
         ):
-            bridge_results = self._step_execution_bridge(
-                debate_id,
-                debate_result,
-                task,
-                confidence,
-                agents,
-            )
-            result.bridge_results = bridge_results
+            if self._is_execution_blocked(result.execution_gate):
+                logger.warning(
+                    "Execution bridge blocked by execution gate debate_id=%s reasons=%s",
+                    debate_id,
+                    (result.execution_gate or {}).get("reason_codes", []),
+                )
+            else:
+                bridge_results = self._step_execution_bridge(
+                    debate_id,
+                    debate_result,
+                    task,
+                    confidence,
+                    agents,
+                )
+                result.bridge_results = bridge_results
 
         # Step 8.1: Decision bridge — route plan to Jira/Linear/n8n
-        if result.plan and self.config.auto_execution_bridge:
+        if (
+            result.plan
+            and self.config.auto_execution_bridge
+            and not self._is_execution_blocked(result.execution_gate)
+        ):
             decision_bridge_result = self._step_decision_bridge(result.plan)
             if decision_bridge_result:
                 result.bridge_results.append(decision_bridge_result)
 
         return result
+
+    def _is_execution_blocked(self, gate: dict[str, Any] | None) -> bool:
+        """Return True when execution gate exists and denies auto-execution."""
+        if not gate:
+            return False
+        return not bool(gate.get("allow_auto_execution", True))
+
+    def _step_execution_gate(
+        self,
+        debate_result: Any,
+        agents: list[Any] | None = None,
+    ) -> dict[str, Any]:
+        """Evaluate execution safety gate for high-impact automation."""
+        try:
+            from aragora.debate.execution_safety import (
+                ExecutionSafetyPolicy,
+                evaluate_auto_execution_safety,
+            )
+
+            policy = ExecutionSafetyPolicy(
+                require_verified_signed_receipt=(
+                    self.config.execution_gate_require_verified_signed_receipt
+                ),
+                min_provider_diversity=self.config.execution_gate_min_provider_diversity,
+                min_model_family_diversity=self.config.execution_gate_min_model_family_diversity,
+                block_on_context_taint=self.config.execution_gate_block_on_context_taint,
+                block_on_high_severity_dissent=(
+                    self.config.execution_gate_block_on_high_severity_dissent
+                ),
+                high_severity_dissent_threshold=(
+                    self.config.execution_gate_high_severity_dissent_threshold
+                ),
+            )
+
+            decision = evaluate_auto_execution_safety(
+                debate_result,
+                agents=agents,
+                policy=policy,
+            )
+            gate = decision.to_dict()
+            try:
+                from aragora.server.metrics import track_execution_gate_decision
+
+                track_execution_gate_decision(
+                    gate,
+                    path="post_debate_coordinator",
+                    domain=str(getattr(debate_result, "domain", "general") or "general"),
+                )
+            except ImportError:
+                logger.debug("Execution gate metrics unavailable")
+            except (ValueError, TypeError, AttributeError, RuntimeError):
+                logger.debug("Execution gate metrics emission failed", exc_info=True)
+            if not gate.get("allow_auto_execution", True):
+                logger.warning(
+                    "execution_gate_blocked reasons=%s",
+                    gate.get("reason_codes", []),
+                )
+            return gate
+        except ImportError:
+            logger.debug("Execution safety gate unavailable")
+            return {"allow_auto_execution": True, "reason_codes": []}
+        except (ValueError, TypeError, AttributeError, RuntimeError, OSError) as e:
+            logger.warning("Execution safety gate failed open: %s", e)
+            return {"allow_auto_execution": True, "reason_codes": ["gate_evaluation_failed"]}
+
+    def _apply_execution_gate_to_plan(
+        self,
+        plan_data: dict[str, Any] | None,
+        gate: dict[str, Any] | None,
+    ) -> None:
+        """Force manual approval when execution gate blocks automation."""
+        if not plan_data or not self._is_execution_blocked(gate):
+            return
+
+        plan_obj = plan_data.get("plan")
+        if plan_obj is None:
+            return
+
+        try:
+            from aragora.pipeline.decision_plan.core import ApprovalMode, PlanStatus
+
+            if not isinstance(getattr(plan_obj, "metadata", None), dict):
+                setattr(plan_obj, "metadata", {})
+            plan_obj.metadata["execution_gate"] = gate
+            plan_obj.approval_mode = ApprovalMode.ALWAYS
+            plan_obj.status = PlanStatus.AWAITING_APPROVAL
+        except ImportError:
+            logger.debug("DecisionPlan core unavailable for gate plan enforcement")
+        except (ValueError, TypeError, AttributeError, RuntimeError) as e:
+            logger.warning("Failed to apply execution gate to plan: %s", e)
 
     def _step_explain(
         self,

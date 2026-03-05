@@ -240,9 +240,65 @@ groups:
           summary: "Consensus rate below 50%"
           description: "The consensus rate is {{ $value | humanizePercentage }}. This may indicate difficult topics or agent disagreement."
 
+  - name: aragora.execution_gate
+    interval: 30s
+    rules:
+      - alert: AragoraExecutionGateDenySpike
+        expr: |
+          (
+            sum by (path, domain) (
+              rate(aragora_execution_gate_decisions_total{decision="deny"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (path, domain) (
+                rate(aragora_execution_gate_decisions_total[15m])
+              ),
+              1e-9
+            )
+          ) > 0.25
+          and
+          sum by (path, domain) (
+            rate(aragora_execution_gate_decisions_total[15m])
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: warning
+          component: execution_gate
+        annotations:
+          summary: "Execution gate deny spike for {{ $labels.path }} / {{ $labels.domain }}"
+          description: "Execution-gate deny ratio has exceeded 25% for 10+ minutes."
+
+      - alert: AragoraExecutionGateReceiptVerificationFailures
+        expr: |
+          (
+            sum by (path, domain) (
+              rate(aragora_execution_gate_receipt_verification_total{status="failed"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (path, domain) (
+                rate(aragora_execution_gate_receipt_verification_total[15m])
+              ),
+              1e-9
+            )
+          ) > 0.02
+          and
+          sum by (path, domain) (
+            rate(aragora_execution_gate_receipt_verification_total[15m])
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          component: execution_gate
+        annotations:
+          summary: "Execution gate receipt verification failures for {{ $labels.path }} / {{ $labels.domain }}"
+          description: "Receipt verification failure ratio has exceeded 2% for 10+ minutes."
+
   - name: aragora.queue
     interval: 30s
     rules:
+
       # Queue depth SLO - keep pending queue below 100 for normal load
       - alert: AragoraQueueDepthSLOWarning
         expr: |

@@ -62,13 +62,17 @@ jobs:
 
       - name: Run offline golden-path unit tests
         run: |
-          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short
+          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
+            -W error::ResourceWarning \
+            -W error::pytest.PytestUnraisableExceptionWarning
         env:
           PYTHONPATH: .
+          PYTHONWARNINGS: "error::ResourceWarning"
 
       - name: Run demo command with network blocked
         env:
           ARAGORA_OFFLINE: "1"
+          PYTHONWARNINGS: "error::ResourceWarning"
           # Clear all API keys to prove no network is needed
           ANTHROPIC_API_KEY: ""
           OPENAI_API_KEY: ""
@@ -118,6 +122,7 @@ jobs:
       - name: Run 'aragora ask --demo' with network blocked
         env:
           ARAGORA_OFFLINE: "1"
+          PYTHONWARNINGS: "error::ResourceWarning"
           ANTHROPIC_API_KEY: ""
           OPENAI_API_KEY: ""
           OPENROUTER_API_KEY: ""

@@ -123,11 +123,16 @@ jobs:
 
       - name: Verify offline/demo behavior tests
         run: |
-          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short
+          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
+            -W error::ResourceWarning \
+            -W error::pytest.PytestUnraisableExceptionWarning
+        env:
+          PYTHONWARNINGS: "error::ResourceWarning"
 
       - name: CLI offline smoke command
         env:
           ARAGORA_OFFLINE: "1"
+          PYTHONWARNINGS: "error::ResourceWarning"
         run: |
           aragora ask "Offline mode smoke" --demo --rounds 1
 

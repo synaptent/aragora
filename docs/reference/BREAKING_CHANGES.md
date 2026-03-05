@@ -104,15 +104,9 @@ See [deprecated/migrations/MIGRATION_0.8_to_1.0.md](../deprecated/migrations/MIG
 
 ## Upcoming Breaking Changes
 
-These changes are announced but not yet in effect. See [DEPRECATION_POLICY.md](./DEPRECATION_POLICY.md) for the full deprecation timeline.
+See [DEPRECATION_POLICY.md](./DEPRECATION_POLICY.md) for the full deprecation timeline.
 
-### Scheduled for v2.3.0
-
-| Item | Type | Current | Replacement | Deprecated Since |
-|------|------|---------|-------------|------------------|
-| `aragora.modes.gauntlet` | Module | `from aragora.modes.gauntlet import GauntletOrchestrator` | `from aragora.gauntlet import GauntletOrchestrator` | v2.0.0 |
-| `aragora.crawlers` | Module | `from aragora.crawlers import RepositoryCrawler` | `from aragora.connectors.repository_crawler import RepositoryCrawler` | v2.0.0 |
-| `ARAGORA_REQUIRE_DISTRIBUTED_STATE` | Config | Environment variable | `ARAGORA_REQUIRE_DISTRIBUTED` | v2.0.0 |
+> **Completed (v2.3.0):** `aragora.modes.gauntlet` (→ `aragora.gauntlet`), `aragora.crawlers` (→ `aragora.connectors`), and `ARAGORA_REQUIRE_DISTRIBUTED_STATE` (→ `ARAGORA_REQUIRE_DISTRIBUTED`) were all removed as planned. No migration action needed.
 
 ### Scheduled for Removal: June 1, 2026
 

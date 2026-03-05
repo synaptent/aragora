@@ -30,7 +30,7 @@ module focuses on the articles that apply to high-risk systems under Annex III.
 | Tier | Description | Aragora Coverage |
 |------|-------------|-----------------|
 | **Unacceptable** (Art. 5) | Social scoring, subliminal manipulation, real-time biometric ID | Detected and flagged by `RiskClassifier` |
-| **High** (Art. 6 + Annex III) | Employment, credit scoring, critical infrastructure, law enforcement, etc. | Full artifact generation (Art. 9, 12, 13, 14, 15) |
+| **High** (Art. 6 + Annex III) | Employment, credit scoring, critical infrastructure, law enforcement, etc. | Artifact bundles generated for Art. 12 (Record-keeping), 13 (Transparency), 14 (Human Oversight). Article 9 (Risk Management) conformity checking included in the compliance report. |
 | **Limited** (Art. 50) | Chatbots, deepfakes, AI-generated content | Transparency obligations flagged |
 | **Minimal** | Spam filters, weather models | No obligations; voluntary codes of conduct |
 

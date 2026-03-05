@@ -17,7 +17,7 @@ The minimal trust stack. Every Aragora deployment includes these.
 | `aragora/debate/` | Adversarial multi-model debate orchestration | ~104K | 13,500+ |
 | `aragora/gauntlet/` | Red-team stress testing and decision receipts | ~8K | 1,000+ |
 | `aragora/ranking/` | ELO ratings, calibration, agent trust scoring | ~3K | 500+ |
-| `aragora/knowledge/mound/` | Institutional memory with 28 adapters | ~15K | 4,300+ |
+| `aragora/knowledge/mound/` | Institutional memory with 41 adapters | ~15K | 4,300+ |
 | `aragora/core_types.py` | Shared type definitions | ~750 | — |
 
 **Install:** `pip install aragora`

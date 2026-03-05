@@ -1,8 +1,8 @@
 # Aragora Threat Model
 
-**Version:** 1.0.0
+**Version:** 1.1.0
 **Classification:** Confidential
-**Date:** February 2026
+**Date:** March 2026
 **Methodology:** STRIDE
 **Platform:** Aragora Decision Integrity Platform
 
@@ -26,7 +26,7 @@
 | RBAC role assignments and permissions | Integrity-critical | PostgreSQL | Platform admin |
 | Tenant configuration and quotas | Confidential | PostgreSQL via `aragora/tenancy/quotas.py` | Tenant admin |
 | Audit logs (security events, authorization decisions) | Integrity-critical | PostgreSQL + in-memory (10K cap per F11) | Platform |
-| Knowledge Mound data (33 adapters, semantic search indices) | Confidential | PostgreSQL + file storage | Per-tenant |
+| Knowledge Mound data (41 adapters, semantic search indices) | Confidential | PostgreSQL + file storage | Per-tenant |
 | Skill definitions and marketplace content | Internal | SQLite / PostgreSQL via `aragora/skills/` | Platform |
 
 ### 1.2 Supporting Assets
@@ -203,6 +203,9 @@ messages, debate prompts, webhook URLs.
 | SSRF via webhook URL registration | Information Disclosure | Medium | High | `ssrf_protection.py`: private IP blocking, DNS rebinding checks, cloud metadata blocking | Verify all outbound URL fetch points use `validate_url()` |
 | SSRF via DNS rebinding (TTL-based) | Information Disclosure | Low | High | Optional `resolve_dns=True` mode | DNS resolution not enabled by default (`resolve_dns=False`) |
 | Prompt injection via debate input affecting agent behavior | Tampering | High | Medium | Agent sandbox, debate protocol structure | LLM-level mitigation; no input sanitization for prompt content |
+| Context memory/config poisoning (e.g., `CLAUDE.md`, `MEMORY.md`, retrieved notes) | Tampering | High | High | Git review process, repository controls | No provenance/authority tiering for prompt context; malicious instructions can appear as peer context |
+| Prompt supply-chain poisoning via upstream docs or dependencies | Tampering | Medium | High | Code review, branch protection | No signed context-policy manifests; no mandatory allowlist for model-ingested files |
+| Context authority collapse (tool output or retrieved text treated like trusted instructions) | Elevation of Privilege | Medium | High | Multi-agent critique and dissent tracking | No deterministic trust boundary enforcement inside model context window |
 | JSON body exceeding size limits | Denial of Service | Medium | Medium | `MAX_JSON_CONTENT_LENGTH` enforcement | Verify enforcement on all parsing paths |
 | Multipart boundary attack (oversized boundaries) | Denial of Service | Low | Medium | `MAX_MULTIPART_PARTS = 10` | Verify boundary size is also limited |
 | WebSocket message injection (malformed events) | Tampering | Medium | Medium | Message dispatch in WebSocket handler | Verify message schema validation on all 190+ event types |
@@ -223,6 +226,23 @@ configuration, random number generation.
 | HMAC timing attack on CSRF token validation | Spoofing | Low | Medium | HMAC-signed tokens in `csrf.py` | Verify `hmac.compare_digest()` used (not `==`) |
 | Predictable random values in tokens | Spoofing | Low | High | `secrets` module used in `oidc.py`, `csrf.py` | Verify `secrets` (not `random`) used in all security-sensitive contexts |
 | TLS downgrade to HTTP | Information Disclosure | Low | High | HSTS header with `SecurityHeadersMiddleware` | Verify HSTS max-age and includeSubDomains in production |
+
+### 3.6 Model and Consensus Integrity (AI-Specific)
+
+**Attack Surface:** Model endpoint trust, consensus arbitration logic, receipt-signing pipeline, and auto-execution handoff.
+
+**Source files:** `aragora/debate/post_debate_coordinator.py`,
+`aragora/debate/execution_bridge.py`, `aragora/gauntlet/signing.py`,
+`aragora/server/handlers/gauntlet/receipts.py`, `aragora/config/settings.py`.
+
+| Threat | Category | Likelihood | Impact | Existing Controls | Gaps |
+|--------|----------|------------|--------|-------------------|------|
+| Open-weight refusal-ablation / model lobotomy (OBLITERATUS-class) in participant set | Tampering | Medium | High | Multi-agent debate with dissent capture, execution gate enforces provider + model-family diversity for auto-execution | Still relies on configured ensemble quality; read-only/non-executing debates can run without strict diversity |
+| Endpoint substitution (modified model served behind expected alias) | Spoofing | Medium | High | Named agent registry, API key scoping | No model attestation challenge at runtime for externally hosted/open-weight endpoints |
+| Collusion/Sybil in ensemble (multiple compromised models outvote intact minority) | Elevation of Privilege | Medium | High | Consensus proof + dissent recording, execution gate correlated-risk checks, diversity floors | Detection is heuristic; coordinated multi-provider compromise remains possible |
+| Correlated failure across all models (shared blind spot) | Information Disclosure | Medium | High | Adversarial critique loop, unresolved tension tracking | Consensus can still be wrong; no mandatory external verification gate for high-impact decisions |
+| Compromised arbitration or execution bridge logic | Elevation of Privilege | Low | Critical | Code review, tests, RBAC around endpoints, execution gate requires verified signed receipts by default | Gate bypass remains a critical regression risk; requires continuous verification tests |
+| Receipt-signing key compromise or misuse | Repudiation | Low | Critical | Multiple signing algorithms, verification endpoints | Key custody and rotation policy not enforced as an execution prerequisite |
 
 ---
 
@@ -283,6 +303,7 @@ Client                  Aragora Server           Agent Proxy            AI Provi
 | Authorization / RBAC | Critical | Medium (comprehensive RBAC, but 580+ handlers need IDOR verification) | P0 |
 | OpenClaw Gateway | Critical | High (standalone server has no enforced auth by default) | P0 |
 | Data Input / Injection | Critical | Low-Medium (parameterized queries standard, but SSRF and prompt injection gaps exist) | P1 |
+| Model & Consensus Integrity | Critical | Medium-High (debate helps, but collusion/correlated failure and execution gating remain) | P0 |
 | Cryptographic Operations | Critical | Low (AES-256-GCM with key rotation, but encryption fallback risk in non-prod) | P1 |
 
 ---
@@ -301,6 +322,10 @@ Based on this threat model, the penetration test should prioritize in this order
 8. **Prompt injection** via debate inputs (LLM-specific attack vector)
 9. **Cryptographic validation** -- key strength, timing attacks, fallback behavior
 10. **Rate limit bypass** -- distributed attacks, header manipulation, auth-exempt paths
+11. **Context memory/config poisoning drills** -- malicious `CLAUDE.md`/memory file instructions, indirect retrieval injection
+12. **Model endpoint integrity tests** -- open-weight refusal ablation simulation, endpoint substitution, provider diversity enforcement
+13. **Consensus collusion simulations** -- compromised-model quorum and correlated-failure scenarios against arbitration logic
+14. **Execution-gate regression verification** -- ensure high-impact actions continue to require verified signed receipts plus diversity/taint policy checks
 
 ---
 

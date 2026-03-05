@@ -29,11 +29,11 @@ For detailed migration instructions, see:
 
 | Version | Release | End of Support | Status |
 |---------|---------|----------------|--------|
-| **v2.5.x** | 2026-02-01 | Active | **Current** |
-| v2.4.x | 2026-01-25 | Active | Supported |
-| v2.2.x | 2026-01-24 | Active | Supported |
-| v2.1.x | 2026-01-23 | Active | Supported |
-| v2.0.x | 2026-01-17 | Active | Supported |
+| **v2.8.x** | 2026-02-25 | Active | **Current** |
+| v2.7.x | 2026-02-15 | Active | Supported |
+| v2.6.x | 2026-02-03 | Active | Supported |
+| v2.5.x | 2026-02-01 | Active | Supported |
+| v2.0.x–v2.4.x | 2026-01-13–01-25 | Active | Supported |
 | v1.0.x | 2026-01-13 | 2026-06-01 | Deprecated |
 | v0.8.x | Pre-1.0 | 2026-03-01 | End of life |
 
@@ -47,12 +47,12 @@ For detailed migration instructions, see:
 
 ## Current Version
 
-**Aragora v2.6.3** (released 2026-02-03)
+**Aragora v2.8.0** (released 2026-02-25)
 
 ```python
 # Check your version
 from aragora.__version__ import __version__
-print(__version__)  # "2.6.3"
+print(__version__)  # "2.8.0"
 ```
 
 **Python support:** 3.10, 3.11, 3.12, 3.13

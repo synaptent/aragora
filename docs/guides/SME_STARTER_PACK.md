@@ -374,7 +374,7 @@ Configure budget webhooks for external monitoring:
 
 ## Related Documents
 
-- [BACKLOG_Q1_2026.md](BACKLOG_Q1_2026.md) - Sprint planning
+- [Feature Gap List](../FEATURE_GAP_LIST.md) - Sprint planning
 - [INTEGRATION_AUDIT.md](../enterprise/INTEGRATION_AUDIT.md) - Connector assessment
 - [ONBOARDING_FLOW.md](../guides/ONBOARDING_FLOW.md) - Detailed flow design
 

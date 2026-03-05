@@ -172,7 +172,7 @@ aragora/
 │   └── public/            # Static assets
 │
 ├── server/                 # WebSocket/HTTP server
-│   ├── unified_server.py  # Unified server (2,000+ API operations)
+│   ├── unified_server.py  # Unified server (3,000+ API operations)
 │   ├── handlers/          # Request handlers by domain
 │   │   ├── base.py        # BaseHandler, ttl_cache decorator
 │   │   ├── debates.py     # Debate CRUD and exports

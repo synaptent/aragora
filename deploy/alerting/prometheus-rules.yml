@@ -259,6 +259,66 @@ groups:
           description: "There are more than 500 active WebSocket connections."
           runbook_url: "https://docs.aragora.ai/runbook#high-ws-connections"
 
+  - name: aragora-execution-safety
+    rules:
+      # Execution gate deny spikes can indicate prompt-injection waves or ensemble drift.
+      - alert: ExecutionGateDenySpike
+        expr: |
+          (
+            sum by (path, domain) (
+              rate(aragora_execution_gate_decisions_total{decision="deny"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (path, domain) (
+                rate(aragora_execution_gate_decisions_total[15m])
+              ),
+              1e-9
+            )
+          ) > 0.25
+          and
+          sum by (path, domain) (
+            rate(aragora_execution_gate_decisions_total[15m])
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: high
+          service: execution-gate
+          component: safety
+        annotations:
+          summary: "Execution safety gate deny spike ({{ $labels.path }}/{{ $labels.domain }})"
+          description: "Gate deny ratio exceeded 25% for 10m at path={{ $labels.path }}, domain={{ $labels.domain }}."
+          runbook_url: "https://docs.aragora.ai/runbook#execution-gate-deny-spike"
+
+      # Receipt verification failures must remain rare in production.
+      - alert: ExecutionGateReceiptVerificationFailures
+        expr: |
+          (
+            sum by (path, domain) (
+              rate(aragora_execution_gate_receipt_verification_total{status="failed"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (path, domain) (
+                rate(aragora_execution_gate_receipt_verification_total[15m])
+              ),
+              1e-9
+            )
+          ) > 0.02
+          and
+          sum by (path, domain) (
+            rate(aragora_execution_gate_receipt_verification_total[15m])
+          ) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          service: execution-gate
+          component: safety
+        annotations:
+          summary: "Execution gate receipt verification failures ({{ $labels.path }}/{{ $labels.domain }})"
+          description: "Receipt verification failure ratio exceeded 2% for 10m at path={{ $labels.path }}, domain={{ $labels.domain }}."
+          runbook_url: "https://docs.aragora.ai/runbook#execution-gate-receipt-verification-failures"
+
   # ==========================================================================
   # SLO Recording Rules
   # Pre-compute SLO metrics for efficient alerting and dashboards

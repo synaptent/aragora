@@ -1544,6 +1544,10 @@ class PlaygroundHandler(BaseHandler):
         # Session ID for follow-up conversation memory
         session_id = str(body.get("session_id", "") or "").strip() or None
 
+        # Source: "oracle" for Oracle page, "landing" for main site, etc.
+        # Controls prompt flavour — Oracle uses tentacle language, landing uses neutral.
+        source = str(body.get("source", "") or "").strip() or "oracle"
+
         try:
             rounds = int(body.get("rounds", _DEFAULT_ROUNDS))
         except (TypeError, ValueError):
@@ -1557,7 +1561,13 @@ class PlaygroundHandler(BaseHandler):
         agent_count = max(_MIN_AGENTS, min(agent_count, _MAX_AGENTS))
 
         return self._run_debate(
-            topic, rounds, agent_count, question=question, mode=mode, session_id=session_id
+            topic,
+            rounds,
+            agent_count,
+            question=question,
+            mode=mode,
+            session_id=session_id,
+            source=source,
         )
 
     def _run_debate(
@@ -1568,46 +1578,73 @@ class PlaygroundHandler(BaseHandler):
         question: str | None = None,
         mode: str = "consult",
         session_id: str | None = None,
+        source: str = "oracle",
     ) -> HandlerResult:
         if question:
-            # Oracle mode: try real LLM response first
-            oracle_result = _try_oracle_response(
-                mode=mode, question=question, topic=topic, session_id=session_id
-            )
-            if oracle_result:
-                return json_response(oracle_result)
-            logger.info("Oracle LLM call failed — returning placeholder instead of irrelevant mock")
-            # Return an Oracle-themed placeholder instead of a generic mock debate
-            # (the generic mock talks about microservices which is nonsensical for Oracle)
-            debate_id = uuid.uuid4().hex[:16]
-            return json_response(
-                {
-                    "id": debate_id,
-                    "topic": question,
-                    "status": "completed",
-                    "rounds_used": 1,
-                    "consensus_reached": True,
-                    "confidence": 0.5,
-                    "verdict": "pending",
-                    "duration_seconds": 0.1,
-                    "participants": ["oracle"],
-                    "proposals": {
-                        "oracle": "The Oracle is gathering its thoughts... The tentacles will speak momentarily."
-                    },
-                    "critiques": [],
-                    "votes": [],
-                    "dissenting_views": [],
-                    "final_answer": "The Oracle is gathering its thoughts... The tentacles will speak momentarily.",
-                    "receipt_hash": None,
-                }
-            )
+            if source == "oracle":
+                # Oracle mode: try single-agent Oracle response first
+                oracle_result = _try_oracle_response(
+                    mode=mode, question=question, topic=topic, session_id=session_id
+                )
+                if oracle_result:
+                    return self._persist_and_respond(
+                        json_response(oracle_result),
+                        topic,
+                        source,
+                    )
+                logger.info(
+                    "Oracle LLM call failed — returning placeholder instead of irrelevant mock"
+                )
+                # Return an Oracle-themed placeholder instead of a generic mock debate
+                # (the generic mock talks about microservices which is nonsensical for Oracle)
+                debate_id = uuid.uuid4().hex[:16]
+                return self._persist_and_respond(
+                    json_response(
+                        {
+                            "id": debate_id,
+                            "topic": question,
+                            "status": "completed",
+                            "rounds_used": 1,
+                            "consensus_reached": True,
+                            "confidence": 0.5,
+                            "verdict": "pending",
+                            "duration_seconds": 0.1,
+                            "participants": ["oracle"],
+                            "proposals": {
+                                "oracle": "The Oracle is gathering its thoughts... The tentacles will speak momentarily."
+                            },
+                            "critiques": [],
+                            "votes": [],
+                            "dissenting_views": [],
+                            "final_answer": "The Oracle is gathering its thoughts... The tentacles will speak momentarily.",
+                            "receipt_hash": None,
+                        }
+                    ),
+                    topic,
+                    source,
+                )
+            else:
+                # Non-Oracle source (landing, playground, etc.): try multi-perspective tentacles
+                # with professional analyst roles — no Oracle/Shoggoth branding.
+                tentacle_result = _try_oracle_tentacles(
+                    mode=mode,
+                    question=question,
+                    agent_count=agent_count,
+                    topic=topic,
+                    source=source,
+                    summary_depth="none",  # no essay context for non-Oracle sources
+                )
+                if tentacle_result:
+                    return self._persist_and_respond(json_response(tentacle_result), topic, source)
+                logger.info("Multi-perspective call failed — falling through to mock debate")
+                # Fall through to mock debate below (no Oracle placeholder for landing)
         else:
             # Normal playground: try aragora-debate package
             try:
                 result = self._run_debate_with_package(
                     topic, rounds, agent_count, question=question
                 )
-                return self._persist_and_respond(result, topic, "playground")
+                return self._persist_and_respond(result, topic, source)
             except ImportError:
                 logger.info("aragora-debate not installed, using inline mock debate")
             except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError):
@@ -1619,7 +1656,7 @@ class PlaygroundHandler(BaseHandler):
             return self._persist_and_respond(
                 json_response(mock_result),
                 topic,
-                "mock",
+                source,
             )
         except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError):
             logger.exception("Inline mock debate failed")
@@ -1643,12 +1680,23 @@ class PlaygroundHandler(BaseHandler):
             data = json.loads(body_bytes.decode("utf-8"))
             debate_id = data.get("id", "")
             if debate_id:
-                store = get_debate_store()
-                store.save(debate_id, topic, data, source=source)
+                # Inject share fields and source into data BEFORE persisting
+                # so the public viewer's _is_shareable() check passes.
                 data["share_url"] = f"/debate/{debate_id}"
+                data["share_token"] = debate_id
+                data.setdefault("source", source)
+                try:
+                    store = get_debate_store()
+                    store.save(debate_id, topic, data, source=source)
+                except (ImportError, RuntimeError, OSError):
+                    logger.debug("Debate store unavailable, debate not persisted", exc_info=True)
+                except Exception:  # noqa: BLE001
+                    logger.warning("Unexpected store error, debate not persisted", exc_info=True)
                 return json_response(data)
         except (ImportError, RuntimeError, OSError, json.JSONDecodeError, UnicodeDecodeError):
-            logger.debug("Debate persistence unavailable", exc_info=True)
+            logger.warning("Debate persistence unavailable", exc_info=True)
+        except Exception:  # noqa: BLE001 - sqlite3.Error and other unexpected errors must not surface to user
+            logger.warning("Debate persistence failed unexpectedly", exc_info=True)
 
         return handler_result
 
@@ -1868,7 +1916,13 @@ class PlaygroundHandler(BaseHandler):
         if not has_api_keys:
             # Fall back to mock debate with a note
             result = self._run_debate(
-                topic, rounds, agent_count, question=question, mode=mode, session_id=session_id
+                topic,
+                rounds,
+                agent_count,
+                question=question,
+                mode=mode,
+                session_id=session_id,
+                source=source,
             )
             if result is None:
                 return error_response("Playground unavailable", 503)
@@ -1895,7 +1949,11 @@ class PlaygroundHandler(BaseHandler):
             )
             if tentacle_result:
                 tentacle_result["upgrade_cta"] = _build_upgrade_cta()
-                return json_response(tentacle_result)
+                return self._persist_and_respond(
+                    json_response(tentacle_result),
+                    topic,
+                    source,
+                )
             logger.info("Oracle tentacles failed, trying live debate factory")
 
         # Try live debate — fall back to mock if it fails
@@ -1906,7 +1964,13 @@ class PlaygroundHandler(BaseHandler):
                 live_result.status_code,
             )
             mock_result = self._run_debate(
-                topic, rounds, agent_count, question=question, mode=mode, session_id=session_id
+                topic,
+                rounds,
+                agent_count,
+                question=question,
+                mode=mode,
+                session_id=session_id,
+                source=source,
             )
             if mock_result is not None:
                 import json as _json

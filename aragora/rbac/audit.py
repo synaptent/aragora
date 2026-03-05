@@ -1081,3 +1081,112 @@ def enable_persistent_auditing() -> PersistentAuditHandler:
     auditor.add_handler(handler.handle_event)
     logger.info("Persistent RBAC audit logging enabled")
     return handler
+
+
+# =============================================================================
+# Endpoint Coverage Scan
+# =============================================================================
+
+import ast as _ast
+import time as _time
+
+_coverage_cache: dict[str, Any] = {}
+_coverage_cache_ts: float = 0.0
+_COVERAGE_CACHE_TTL: float = 300.0  # 5 minutes
+
+
+def _compute_endpoint_coverage_uncached() -> dict[str, Any]:
+    """
+    AST-based scan of handler source files.
+
+    Walks every .py file under aragora/server/handlers/, parses each with
+    the stdlib ``ast`` module, and examines decorator lists on matching
+    function definitions.  Using AST avoids false positives from raw-text
+    lookbacks that can bleed across adjacent function boundaries.
+
+    Matching functions: any (async)def whose name starts with one of the
+    canonical handler prefixes (_handle_, _get_, _post_, _put_, _delete_,
+    _patch_).
+
+    A function is counted as "covered" when at least one of its decorators
+    resolves to a name containing ``require_permission`` or ``require_role``.
+    """
+    import pathlib
+
+    handlers_root = pathlib.Path(__file__).parent.parent / "server" / "handlers"
+    if not handlers_root.is_dir():
+        return {"covered_endpoints": 0, "total_endpoints": 0, "coverage_pct": 0.0}
+
+    _PREFIXES = ("_handle_", "_get_", "_post_", "_put_", "_delete_", "_patch_")
+    _RBAC_MARKERS = ("require_permission", "require_role")
+
+    total = 0
+    covered = 0
+
+    for py_file in handlers_root.rglob("*.py"):
+        if any(p in py_file.parts for p in ("__pycache__", "tests")):
+            continue
+        if py_file.name.startswith("__"):
+            continue
+
+        try:
+            source = py_file.read_text(encoding="utf-8", errors="replace")
+            tree = _ast.parse(source, filename=str(py_file))
+        except (OSError, SyntaxError, ValueError):
+            continue
+
+        for node in _ast.walk(tree):
+            if not isinstance(node, (_ast.AsyncFunctionDef, _ast.FunctionDef)):
+                continue
+            if not any(node.name.startswith(p) for p in _PREFIXES):
+                continue
+
+            total += 1
+
+            for dec in node.decorator_list:
+                dec_name = ""
+                if isinstance(dec, _ast.Name):
+                    dec_name = dec.id
+                elif isinstance(dec, _ast.Call):
+                    if isinstance(dec.func, _ast.Name):
+                        dec_name = dec.func.id
+                    elif isinstance(dec.func, _ast.Attribute):
+                        dec_name = dec.func.attr
+                if any(marker in dec_name for marker in _RBAC_MARKERS):
+                    covered += 1
+                    break
+
+    pct = round(100.0 * covered / total, 1) if total else 0.0
+    return {"covered_endpoints": covered, "total_endpoints": total, "coverage_pct": pct}
+
+
+def compute_endpoint_coverage() -> dict[str, Any]:
+    """
+    Return RBAC endpoint coverage metrics, cached for 5 minutes.
+
+    The underlying scan uses AST parsing (accurate, no false positives from
+    text proximity).  Results are cached in a module-level dict with a
+    monotonic-clock TTL to avoid re-scanning ~700 files on every request.
+
+    Returns a dict with keys:
+        covered_endpoints (int): handler methods with @require_permission / @require_role.
+        total_endpoints (int): total matching handler methods found.
+        coverage_pct (float): percentage covered, 0.0–100.0.
+
+    This function never raises — returns zeros on any scan failure.
+    """
+    global _coverage_cache, _coverage_cache_ts
+
+    now = _time.monotonic()
+    if _coverage_cache and (now - _coverage_cache_ts) < _COVERAGE_CACHE_TTL:
+        return _coverage_cache
+
+    try:
+        result = _compute_endpoint_coverage_uncached()
+    except Exception as exc:  # noqa: BLE001 — broad catch intentional for safety
+        logger.debug("Endpoint coverage scan failed: %s", exc)
+        result = {"covered_endpoints": 0, "total_endpoints": 0, "coverage_pct": 0.0}
+
+    _coverage_cache = result
+    _coverage_cache_ts = now
+    return result

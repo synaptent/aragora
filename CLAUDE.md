@@ -108,7 +108,7 @@ Aragora is the **Decision Integrity Platform** -- orchestrating 43 agent types t
 
 **Five Pillars:** (1) SMB-ready with enterprise-grade security, (2) leading-edge memory and context processing, (3) extensible/modular with broad connectors and SDKs, (4) multi-agent robustness via heterogeneous model consensus, (5) self-healing and self-extending via the Nomic Loop.
 
-**Codebase Scale:** 3,000+ Python modules | 208,000+ tests | 4,000+ test files | 210+ debate modules | 3,000+ API operations across 2,900+ paths | 41 KM adapters | 185 SDK namespaces
+**Codebase Scale:** 3,000+ Python modules | 208,000+ tests | 4,000+ test files | 210+ debate modules | 3,000+ API operations across 2,900+ paths | 41 registered KM adapters | 185 Python / 183 TypeScript SDK namespaces
 
 ## Architecture
 
@@ -432,7 +432,7 @@ See `docs/reference/ENVIRONMENT.md` for full reference.
   - RetentionGate: Titans/MIRAS surprise-driven retain/demote/forget/consolidate
   - CrossSystemDedupEngine: SHA-256 exact + Jaccard near-duplicate detection
   - RLMMemoryNavigator: REPL helpers for programmatic cross-system exploration
-  - ClaudeMemAdapter: 34th KM adapter wrapping claude-mem MCP connector
+  - ClaudeMemAdapter: KM adapter wrapping claude-mem MCP connector
 
 See `docs/STATUS.md` for 74+ detailed feature statuses.
 
@@ -453,3 +453,9 @@ See `docs/STATUS.md` for 74+ detailed feature statuses.
 | `docs/verticals/FINANCIAL.md` | Financial services vertical guide (risk, SOX, audit) |
 | `docs/verticals/LEGAL.md` | Legal vertical guide (contracts, due diligence, litigation) |
 | `docs/resilience/RESILIENCE_PATTERNS.md` | Circuit breakers, retry, timeout, health monitoring |
+| `docs/CLI_REFERENCE.md` | Complete reference for all 35 CLI commands with examples |
+| `docs/FEATURE_GAP_LIST.md` | Feature backlog: planned, partial, and scaffolded features by priority |
+| `docs/guides/PIPELINE_GUIDE.md` | 4-stage Idea-to-Execution pipeline usage guide |
+| `docs/guides/MODES_GUIDE.md` | Operational modes guide (standard + advanced: RedTeam, DeepAudit, Probing) |
+| `docs/guides/RLM_INTEGRATION.md` | Recursive Language Models integration guide |
+| `docs/guides/COORDINATION_SYSTEM.md` | Cross-workspace coordination and federated execution guide |

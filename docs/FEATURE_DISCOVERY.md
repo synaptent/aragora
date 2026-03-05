@@ -1,6 +1,6 @@
 # Aragora Feature Discovery Guide
 
-*Complete catalog of 180+ features for developers exploring Aragora capabilities*
+*Complete catalog of 215+ features for developers exploring Aragora capabilities*
 
 This document provides a comprehensive inventory of Aragora's features organized by domain. Use this guide to discover what Aragora can do and find the relevant modules for your use case.
 
@@ -14,15 +14,15 @@ This document provides a comprehensive inventory of Aragora's features organized
 |----------|---------------|----------------|
 | [Core Debate Features](#1-core-debate-features) | 25+ | Stable |
 | [Agent System](#2-agent-system) | 20+ | Stable |
-| [Memory & Learning](#3-memory--learning) | 20+ | Stable |
+| [Memory & Learning](#3-memory--learning) | 25+ | Stable |
 | [Knowledge Management](#4-knowledge-management) | 30+ | Stable |
-| [Enterprise Features](#5-enterprise-features) | 40+ | Production-Ready |
+| [Enterprise Features](#5-enterprise-features) | 45+ | Production-Ready |
 | [Integrations & Connectors](#6-integrations--connectors) | 50+ | Stable |
 | [Observability & Monitoring](#7-observability--monitoring) | 15+ | Stable |
-| [Developer Tools](#8-developer-tools) | 25+ | Stable |
-| [Self-Improvement](#9-self-improvement--nomic-loop) | 12+ | Stable |
+| [Developer Tools](#8-developer-tools) | 35+ | Stable |
+| [Self-Improvement](#9-self-improvement--nomic-loop) | 18+ | Stable |
 
-**Total**: 180+ features | 3,000+ Python modules | 208,000+ tests | 3,000+ API operations
+**Total**: 215+ features | 3,000+ Python modules | 208,000+ tests | 3,000+ API operations
 
 ---
 
@@ -76,7 +76,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 
 ## 2. Agent System
 
-### Supported Providers (30+ agent types)
+### Supported Providers (43 agent types)
 
 | Provider | Type | Models | Key Files |
 |----------|------|--------|-----------|
@@ -129,6 +129,17 @@ This document provides a comprehensive inventory of Aragora's features organized
 | **Progressive Memory Search** | Stable | Staged retrieval (index → timeline → entries) | `aragora/server/handlers/memory/memory.py` | |
 | **Memory Viewer** | Stable | HTML viewer for memory inspection | `aragora/server/handlers/memory/memory.py` | |
 | **Tool Usage Capture** | Optional | Opt-in tool usage capture into FAST tier | `aragora/memory/capture.py` | |
+| **Unified Memory Gateway** | Integrated | Fan-out query across ContinuumMemory, KM, Supermemory, claude-mem via `enable_unified_memory` (150 tests) | `aragora/memory/gateway/` | |
+| **ClaudeMemAdapter** | Integrated | 34th→41st KM adapter wrapping claude-mem MCP connector | `aragora/knowledge/mound/adapters/claude_mem_adapter.py` | |
+
+### Unified Memory Gateway Components
+
+| Component | Status | Description | Key Files |
+|-----------|--------|-------------|-----------|
+| **MemoryGateway** | Integrated | Unified fan-out query interface across all memory systems | `aragora/memory/gateway/core.py` |
+| **RetentionGate** | Integrated | Titans/MIRAS surprise-driven retain/demote/forget/consolidate decisions | `aragora/memory/gateway/retention.py` |
+| **CrossSystemDedupEngine** | Integrated | SHA-256 exact + Jaccard near-duplicate detection across memory systems | `aragora/memory/gateway/dedup.py` |
+| **RLMMemoryNavigator** | Integrated | REPL helpers for programmatic cross-system memory exploration | `aragora/memory/gateway/rlm_navigator.py` |
 
 ### Memory Tiers
 
@@ -306,6 +317,17 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | **DR Drills** | Production | Disaster recovery testing | `aragora/backup/dr_drill.py` |
 | **PostgreSQL Backends** | Production | Full horizontal scaling for 11 storage modules | `aragora/storage/postgres_store.py` |
 
+### Coordination System
+
+| Feature | Status | Description | Key Files |
+|---------|--------|-------------|-----------|
+| **CrossWorkspaceCoordinator** | Production | Cross-workspace data sharing and federated execution | `aragora/coordination/coordinator.py` |
+| **WorktreeManager** | Production | Isolated git worktrees for concurrent agent work | `aragora/coordination/worktree_manager.py` |
+| **ConflictResolver** | Production | Debate-based conflict resolution for concurrent changes | `aragora/coordination/conflict_resolver.py` |
+| **GitReconciler** | Production | Automated merge strategy execution across worktrees | `aragora/coordination/git_reconciler.py` |
+| **SessionRegistry** | Production | Active session tracking with lock mechanism | `aragora/coordination/session_registry.py` |
+| **HealthWatchdog** | Production | Liveness probes for coordination infrastructure | `aragora/coordination/health_watchdog.py` |
+
 ---
 
 ## 6. Integrations & Connectors
@@ -439,8 +461,8 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 
 | SDK | Status | Namespaces | Key Files |
 |-----|--------|------------|-----------|
-| **Python SDK** | Stable | 105 namespaces | `sdk/python/` |
-| **TypeScript SDK** | Stable | 140 namespaces | `sdk/typescript/` |
+| **Python SDK** | Stable | 184 namespaces | `sdk/python/` |
+| **TypeScript SDK** | Stable | 183 namespaces | `sdk/typescript/` |
 
 ### CLI
 
@@ -493,6 +515,28 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | **Template Registry** | Stable | Agent, debate, workflow templates | `aragora/marketplace/` | [MARKETPLACE.md](./workflow/MARKETPLACE.md) |
 | **Built-in Templates** | Stable | Devil's Advocate, Code Reviewer, Research Analyst | `aragora/marketplace/templates/` | |
 
+### Skills Marketplace
+
+| Feature | Status | Description | Key Files |
+|---------|--------|-------------|-----------|
+| **SkillRegistry** | Integrated | Discover and load skills by name or tag | `aragora/skills/registry.py` |
+| **SkillMarketplace** | Integrated | Publish, search, and install from marketplace catalog | `aragora/skills/marketplace.py` |
+| **Skill Installer** | Integrated | Manifest-based dependency management and install | `aragora/skills/installer.py` |
+| **Built-in Skills** | Integrated | Bundled skills for common patterns | `aragora/skills/builtin/` |
+| **LLM Function Calling** | Integrated | Pluggable skills exposed as LLM tool calls | `aragora/skills/base.py` |
+
+Install skills via CLI: `aragora skills install <skill-name>`
+
+### Harnesses
+
+| Feature | Status | Description | Key Files |
+|---------|--------|-------------|-----------|
+| **Claude Code Harness** | Integrated | Invoke Claude Code analysis on codebases | `aragora/harnesses/claude_code.py` |
+| **Codex Harness** | Integrated | Invoke OpenAI Codex for code analysis and generation | `aragora/harnesses/codex.py` |
+| **HarnessResultAdapter** | Integrated | Normalize harness output for audit workflows | `aragora/harnesses/result_adapter.py` |
+
+Used in: audit pipeline (`aragora/audit/`), bug detection (`aragora/audit/bug_detector.py`), and the Nomic Loop self-improvement cycle.
+
 ---
 
 ## 9. Self-Improvement & Nomic Loop
@@ -529,6 +573,16 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | **Human-in-the-Loop** | Stable | Approval flows with risk assessment | `aragora/autonomous/approvals.py` |
 | **Code Verifier** | Stable | AST syntax validation and test execution | `aragora/autonomous/loop_enhancement.py` |
 | **Rollback Manager** | Stable | File backup, restore, cleanup | `aragora/autonomous/loop_enhancement.py` |
+
+### Genesis / Agent Evolution
+
+| Feature | Status | Description | Key Files |
+|---------|--------|-------------|-----------|
+| **FractalOrchestrator** | Integrated | Recursive sub-debates for complex decisions | `aragora/genesis/fractal.py` |
+| **GenomeBreeder** | Integrated | Evolutionary agent improvement via crossover and mutation | `aragora/genesis/breeder.py` |
+| **GenesisLedger** | Integrated | Cryptographic provenance for agent lineage | `aragora/genesis/ledger.py` |
+| **AgentGenome** | Integrated | Parameter encoding for evolutionary selection | `aragora/genesis/genome.py` |
+| **Argonaut Ledger** | Integrated | Agent identity and evolution registry | `aragora/genesis/argonaut_ledger.py` |
 
 ---
 
