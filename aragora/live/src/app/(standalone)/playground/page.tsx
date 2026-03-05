@@ -40,7 +40,7 @@ export default function PlaygroundPage() {
       <nav className="border-b border-[var(--border)] bg-[var(--surface)]/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link
-            href="/"
+            href="/landing/"
             className="font-mono text-[var(--acid-green)] font-bold text-sm tracking-wider"
           >
             ARAGORA
@@ -146,7 +146,7 @@ export default function PlaygroundPage() {
                   CREATE FREE ACCOUNT
                 </Link>
                 <Link
-                  href="/"
+                  href="/landing/"
                   className="px-8 py-3 font-mono text-sm border border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--acid-green)] hover:text-[var(--acid-green)] transition-colors"
                 >
                   BACK TO HOME
