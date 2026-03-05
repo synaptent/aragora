@@ -413,12 +413,32 @@ export class UnifiedInboxAPI {
   }
 
   /**
-   * Trigger a debate workflow for a specific inbox message.
+   * Start a debate on a message — trigger multi-agent analysis.
    */
-  async autoDebate(messageId: string): Promise<{ message_id: string; debate_id: string }> {
+  async debateMessage(
+    messageId: string,
+    request?: { rounds?: number; consensus?: string }
+  ): Promise<{
+    debate_id: string;
+    message_id: string;
+    status: string;
+  }> {
     return this.client.request(
       'POST',
-      `/api/v1/inbox/messages/${encodeURIComponent(messageId)}/debate`
+      `/api/v1/inbox/messages/${encodeURIComponent(messageId)}/debate`,
+      { json: request ?? {} }
     );
+  }
+
+  /**
+   * Trigger a debate workflow for a specific inbox message.
+   * Backward-compatible alias for debateMessage().
+   */
+  async autoDebate(messageId: string): Promise<{ message_id: string; debate_id: string }> {
+    const response = await this.debateMessage(messageId);
+    return {
+      message_id: response.message_id,
+      debate_id: response.debate_id,
+    };
   }
 }
