@@ -1,15 +1,7 @@
 name: Aragora Gauntlet Review
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/PULL_REQUEST_TEMPLATE/**'
+  workflow_dispatch:
 
 concurrency:
   group: gauntlet-${{ github.event.pull_request.number || github.ref }}

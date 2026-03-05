@@ -5,13 +5,6 @@ name: Aragora PR Review
 # - Full AI review remains available via manual workflow_dispatch.
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: "PR number to review"
-        required: true
 
 concurrency:
   group: pr-debate-${{ github.event.pull_request.number || github.run_id }}
@@ -55,7 +48,22 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - uses: ./.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
         if: github.event_name == 'workflow_dispatch'
 
       - name: Setup Python

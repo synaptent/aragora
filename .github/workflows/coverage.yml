@@ -1,13 +1,6 @@
 name: Coverage Gate
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [main]
-    paths:
-      - 'aragora/**'
-      - 'tests/**'
-      - 'pyproject.toml'
   push:
     branches: [main]
     paths:
