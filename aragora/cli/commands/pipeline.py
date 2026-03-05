@@ -429,11 +429,13 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
     max_goals = max(1, int(getattr(args, "max_goals", 1)))
     quick_mode = bool(getattr(args, "quick_mode", False))
     max_parallel = max(1, int(getattr(args, "max_parallel", 4)))
+    pipeline_mode = getattr(args, "pipeline_mode", "live")
 
     print("\n" + "=" * 60)
     print("PIPELINE SELF-IMPROVEMENT")
     print("=" * 60)
     print(f"\nGoal: {goal}")
+    print(f"Pipeline mode: {pipeline_mode}")
     if dry_run:
         print("Mode: DRY RUN (preview only)")
     if budget_limit:
@@ -526,12 +528,40 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
             PipelineConfig,
         )
 
-        _config = PipelineConfig(dry_run=dry_run, enable_receipts=not dry_run)  # noqa: F841
+        config = PipelineConfig(dry_run=dry_run, enable_receipts=not dry_run)
         pipeline = IdeaToExecutionPipeline()
-        result = pipeline.from_ideas(ideas)
+        ideas_text = "\n".join(ideas)
+
+        result = None
+        execution_path = "unknown"
+
+        if pipeline_mode == "live":
+            # Live mode: async pipeline with debate/API stages
+            try:
+                result = asyncio.run(pipeline.run(ideas_text, config=config))
+                execution_path = "live"
+            except (RuntimeError, OSError, ConnectionError) as exc:
+                print(f"\n[WARN] Live pipeline failed ({exc}), no fallback in strict mode.")
+                raise
+        elif pipeline_mode == "hybrid":
+            # Hybrid: try live, fall back to heuristic on failure
+            try:
+                result = asyncio.run(pipeline.run(ideas_text, config=config))
+                execution_path = "live"
+            except (RuntimeError, OSError, ConnectionError) as exc:
+                logger.warning("Live pipeline unavailable (%s), falling back to heuristic", exc)
+                print("\n[INFO] Live pipeline unavailable, using heuristic fallback.")
+                result = pipeline.from_ideas(ideas)
+                execution_path = "heuristic-fallback"
+        else:
+            # Heuristic mode: fast sync path (from_ideas)
+            result = pipeline.from_ideas(ideas)
+            execution_path = "heuristic"
+
         pipeline_result = result
 
         print(f"\nPipeline ID: {result.pipeline_id}")
+        print(f"Execution path: {execution_path}")
 
         if result.goal_graph and hasattr(result.goal_graph, "goals"):
             print(f"Goals extracted: {len(result.goal_graph.goals)}")
@@ -544,6 +574,11 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
             for sr in result.stage_results:
                 status_icon = "OK" if sr.status == "completed" else sr.status.upper()
                 print(f"  [{status_icon}] {sr.stage_name} ({sr.duration:.2f}s)")
+                # Flag 0.0s durations as suspicious (heuristic path indicator)
+                if sr.duration == 0.0 and execution_path == "live":
+                    print(
+                        "         [WARN] 0.0s duration on live path — stage may not have executed"
+                    )
 
         print(f"\nProvenance chain: {len(result.provenance)} links")
         print(f"Duration: {result.duration:.1f}s")
@@ -585,6 +620,71 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
             f"{len(objectives)} unique objectives remaining."
         )
         print()
+
+    # Step 3c: Plan quality gate — validate pipeline output meets minimum quality
+    quality_verdict = "skip"
+    if pipeline_result is not None:
+        try:
+            from aragora.debate.output_quality import (
+                OutputContract,
+                validate_output_against_contract,
+            )
+
+            # Build a lightweight text representation of pipeline output
+            plan_text_parts = []
+            if pipeline_result.goal_graph and hasattr(pipeline_result.goal_graph, "goals"):
+                for g in pipeline_result.goal_graph.goals:
+                    title = getattr(g, "title", getattr(g, "description", str(g)))
+                    plan_text_parts.append(f"## Goal: {title}")
+            for obj in objectives:
+                plan_text_parts.append(f"- {obj}")
+            plan_text = "\n".join(plan_text_parts) if plan_text_parts else goal
+
+            contract = OutputContract(
+                required_sections=[],
+                require_json_payload=False,
+                require_gate_thresholds=False,
+            )
+            report = validate_output_against_contract(plan_text, contract)
+            composite = getattr(report, "composite_score", None)
+            if composite is not None and composite < 0.3:
+                quality_verdict = "fail"
+                print(f"[QUALITY GATE] FAIL — composite score {composite:.2f} < 0.3 threshold")
+                print("  Pipeline output quality too low for handoff.")
+            else:
+                quality_verdict = "pass"
+                score_str = f"{composite:.2f}" if composite is not None else "n/a"
+                print(f"[QUALITY GATE] PASS — composite score {score_str}")
+        except ImportError:
+            logger.debug("Output quality module unavailable, skipping quality gate")
+        except (RuntimeError, ValueError, TypeError, AttributeError) as e:
+            logger.debug("Quality gate check failed: %s", e)
+
+    # Enqueue pipeline results to improvement queue for bidirectional handoff
+    if pipeline_result is not None:
+        try:
+            from aragora.nomic.improvement_queue import (
+                ImprovementSuggestion,
+                get_improvement_queue,
+            )
+
+            queue = get_improvement_queue()
+            avg_fidelity = sum(fidelity_scores) / len(fidelity_scores) if fidelity_scores else -1.0
+            for obj in objectives:
+                suggestion = ImprovementSuggestion(
+                    debate_id="",
+                    task=obj,
+                    suggestion=f"Pipeline-derived objective from goal: {goal}",
+                    category="code_quality",
+                    confidence=0.7,
+                    source_system="pipeline",
+                    source_id=getattr(pipeline_result, "pipeline_id", ""),
+                    gate_verdict=quality_verdict,
+                    fidelity_score=avg_fidelity,
+                )
+                queue.enqueue(suggestion)
+        except ImportError:
+            pass
 
     print("-" * 60)
     print("STEP 4: HANDOFF TO SELF-IMPROVEMENT ENGINE")
@@ -749,6 +849,17 @@ Examples:
         type=int,
         default=4,
         help="Maximum parallel subtasks during self-improvement handoff (default: 4)",
+    )
+    si_parser.add_argument(
+        "--pipeline-mode",
+        choices=["live", "hybrid", "heuristic"],
+        default="live",
+        help=(
+            "Pipeline execution mode: "
+            "'live' runs async pipeline with debate/API stages (default), "
+            "'hybrid' tries live then falls back to heuristic, "
+            "'heuristic' uses fast sync from_ideas() path"
+        ),
     )
 
     # pipeline status

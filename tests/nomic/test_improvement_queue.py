@@ -69,6 +69,40 @@ class TestImprovementSuggestion:
         )
         assert s.created_at == 1000.0
 
+    def test_provenance_fields_default(self):
+        s = _make_suggestion()
+        assert s.source_system == ""
+        assert s.source_id == ""
+        assert s.files == []
+        assert s.gate_verdict == ""
+        assert s.fidelity_score == -1.0
+
+    def test_provenance_fields_set(self):
+        s = ImprovementSuggestion(
+            debate_id="d1",
+            task="fix test",
+            suggestion="test failure in auth",
+            category="reliability",
+            confidence=0.8,
+            source_system="testfixer",
+            source_id="run-abc123",
+            files=["tests/test_auth.py", "aragora/auth/oidc.py"],
+            gate_verdict="fail",
+            fidelity_score=0.85,
+        )
+        assert s.source_system == "testfixer"
+        assert s.source_id == "run-abc123"
+        assert len(s.files) == 2
+        assert s.gate_verdict == "fail"
+        assert s.fidelity_score == 0.85
+
+    def test_provenance_files_mutable_default(self):
+        """Verify files list is not shared between instances."""
+        s1 = _make_suggestion()
+        s2 = _make_suggestion()
+        s1.files.append("a.py")
+        assert s2.files == []
+
 
 class TestImprovementQueue:
     """Tests for ImprovementQueue."""
