@@ -864,10 +864,65 @@ class Article14Artifact:
 
 
 @dataclass
+class Article9Artifact:
+    """Article 9: Risk Management System."""
+
+    artifact_id: str
+    receipt_id: str
+    generated_at: str
+    risk_assessment: dict[str, Any]
+    risk_analysis_method: dict[str, Any]
+    known_risks: list[dict[str, Any]]
+    reasonably_foreseeable_risks: list[dict[str, Any]]
+    mitigation_measures: list[dict[str, Any]]
+    residual_risk: dict[str, Any]
+    risk_acceptance_criteria: dict[str, Any]
+    monitoring_plan: dict[str, Any]
+    incident_response: dict[str, Any]
+    evidence_chain: list[dict[str, Any]]
+    integrity_hash: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.integrity_hash:
+            self.integrity_hash = self._calculate_hash()
+
+    def _calculate_hash(self) -> str:
+        content = json.dumps(
+            {
+                "artifact_id": self.artifact_id,
+                "receipt_id": self.receipt_id,
+                "risk_assessment": self.risk_assessment,
+            },
+            sort_keys=True,
+        )
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "article": "Article 9",
+            "title": "Risk Management System",
+            "receipt_id": self.receipt_id,
+            "generated_at": self.generated_at,
+            "artifact_id": self.artifact_id,
+            "risk_assessment": self.risk_assessment,
+            "risk_analysis_method": self.risk_analysis_method,
+            "known_risks": self.known_risks,
+            "reasonably_foreseeable_risks": self.reasonably_foreseeable_risks,
+            "mitigation_measures": self.mitigation_measures,
+            "residual_risk": self.residual_risk,
+            "risk_acceptance_criteria": self.risk_acceptance_criteria,
+            "monitoring_plan": self.monitoring_plan,
+            "incident_response": self.incident_response,
+            "evidence_chain": self.evidence_chain,
+            "integrity_hash": self.integrity_hash,
+        }
+
+
+@dataclass
 class ComplianceArtifactBundle:
     """Complete EU AI Act compliance artifact bundle.
 
-    Combines conformity report with dedicated Art. 12/13/14 artifacts
+    Combines conformity report with dedicated Art. 9/12/13/14 artifacts
     into a single auditable package with integrity hash.
     """
 
@@ -876,6 +931,7 @@ class ComplianceArtifactBundle:
     generated_at: str
     risk_classification: RiskClassification
     conformity_report: ConformityReport
+    article_9: Article9Artifact
     article_12: Article12Artifact
     article_13: Article13Artifact
     article_14: Article14Artifact
@@ -906,6 +962,7 @@ class ComplianceArtifactBundle:
             "generated_at": self.generated_at,
             "risk_classification": self.risk_classification.to_dict(),
             "conformity_report": self.conformity_report.to_dict(),
+            "article_9_risk_management": self.article_9.to_dict(),
             "article_12_record_keeping": self.article_12.to_dict(),
             "article_13_transparency": self.article_13.to_dict(),
             "article_14_human_oversight": self.article_14.to_dict(),
@@ -919,9 +976,9 @@ class ComplianceArtifactBundle:
 class ComplianceArtifactGenerator:
     """Generate complete EU AI Act compliance artifact bundles.
 
-    Produces dedicated Art. 12 (Record-Keeping), Art. 13 (Transparency),
-    and Art. 14 (Human Oversight) artifacts from a decision receipt,
-    bundled with a conformity assessment report.
+    Produces dedicated Art. 9 (Risk Management), Art. 12 (Record-Keeping),
+    Art. 13 (Transparency), and Art. 14 (Human Oversight) artifacts from
+    a decision receipt, bundled with a conformity assessment report.
     """
 
     def __init__(
@@ -955,9 +1012,270 @@ class ComplianceArtifactGenerator:
             generated_at=timestamp,
             risk_classification=classification,
             conformity_report=report,
+            article_9=self._generate_art9(receipt, receipt_id, timestamp),
             article_12=self._generate_art12(receipt, receipt_id, timestamp),
             article_13=self._generate_art13(receipt, receipt_id, timestamp, classification),
             article_14=self._generate_art14(receipt, receipt_id, timestamp),
+        )
+
+    # -- Article 9: Risk Management --
+
+    def _generate_art9(
+        self,
+        receipt: dict[str, Any],
+        receipt_id: str,
+        timestamp: str,
+    ) -> Article9Artifact:
+        artifact_id = f"ART9-{uuid.uuid4().hex[:8]}"
+        risk_summary = receipt.get("risk_summary", {})
+        confidence = receipt.get("confidence", 0.0)
+        robustness = receipt.get("robustness_score", 0.0)
+        config = receipt.get("config_used", {})
+        consensus = receipt.get("consensus_proof", {}) or {}
+        provenance = receipt.get("provenance_chain", [])
+
+        agents = sorted(
+            set(consensus.get("supporting_agents", []) + consensus.get("dissenting_agents", []))
+        )
+
+        risk_assessment = {
+            "total_risks_identified": risk_summary.get("total", 0),
+            "critical": risk_summary.get("critical", 0),
+            "high": risk_summary.get("high", 0),
+            "medium": risk_summary.get("medium", 0),
+            "low": risk_summary.get("low", 0),
+            "confidence": confidence,
+            "robustness_score": robustness,
+        }
+
+        risk_analysis_method = {
+            "approach": "Multi-agent adversarial debate with consensus voting",
+            "protocol": config.get("protocol", "adversarial"),
+            "rounds": config.get("rounds", 0),
+            "agents": agents,
+            "consensus_method": consensus.get("method", "weighted_majority"),
+            "agreement_ratio": consensus.get("agreement_ratio", 0.0),
+        }
+
+        known_risks = [
+            {
+                "id": "KR-001",
+                "category": "model_hallucination",
+                "description": "Plausible but incorrect claims persisting through consensus",
+                "severity": "high",
+                "likelihood": "medium",
+                "article_ref": "Art. 15(1)",
+            },
+            {
+                "id": "KR-002",
+                "category": "automation_bias",
+                "description": "Over-reliance on AI recommendations without critical review",
+                "severity": "high",
+                "likelihood": "medium",
+                "article_ref": "Art. 14(4)(b)",
+            },
+            {
+                "id": "KR-003",
+                "category": "hollow_consensus",
+                "description": "Surface-level agreement without substantive reasoning depth",
+                "severity": "medium",
+                "likelihood": "medium",
+                "article_ref": "Art. 15(4)",
+            },
+            {
+                "id": "KR-004",
+                "category": "data_drift",
+                "description": "Model knowledge cutoff dates cause outdated reasoning",
+                "severity": "medium",
+                "likelihood": "low",
+                "article_ref": "Art. 15(3)",
+            },
+            {
+                "id": "KR-005",
+                "category": "adversarial_input",
+                "description": "Crafted inputs designed to manipulate debate outcomes",
+                "severity": "high",
+                "likelihood": "low",
+                "article_ref": "Art. 15(5)",
+            },
+        ]
+
+        reasonably_foreseeable_risks = [
+            {
+                "id": "RF-001",
+                "category": "cascading_failure",
+                "description": (
+                    "Simultaneous failures across multiple agent providers "
+                    "degrading consensus quality"
+                ),
+                "severity": "high",
+                "likelihood": "low",
+            },
+            {
+                "id": "RF-002",
+                "category": "regulatory_change",
+                "description": (
+                    "Evolving EU AI Act delegated acts altering compliance "
+                    "requirements post-deployment"
+                ),
+                "severity": "medium",
+                "likelihood": "medium",
+            },
+            {
+                "id": "RF-003",
+                "category": "cross_domain_misuse",
+                "description": (
+                    "System applied to high-risk domains beyond its validated "
+                    "scope without re-assessment"
+                ),
+                "severity": "high",
+                "likelihood": "medium",
+            },
+        ]
+
+        mitigation_measures = [
+            {
+                "id": "MIT-001",
+                "control": "multi_agent_debate",
+                "description": (
+                    "Adversarial multi-agent debate reduces single-point-of-failure "
+                    "and surfaces dissenting perspectives"
+                ),
+                "risk_addressed": ["KR-001", "KR-003"],
+                "effectiveness": "high",
+            },
+            {
+                "id": "MIT-002",
+                "control": "trickster_detection",
+                "description": (
+                    "Trickster module detects hollow consensus and surface-level agreement patterns"
+                ),
+                "risk_addressed": ["KR-003"],
+                "effectiveness": "high",
+            },
+            {
+                "id": "MIT-003",
+                "control": "circuit_breaker",
+                "description": (
+                    "Per-agent circuit breakers isolate failures and prevent cascading degradation"
+                ),
+                "risk_addressed": ["RF-001"],
+                "effectiveness": "high",
+            },
+            {
+                "id": "MIT-004",
+                "control": "calibration_monitoring",
+                "description": (
+                    "Continuous Brier score tracking detects agent drift and "
+                    "triggers re-calibration"
+                ),
+                "risk_addressed": ["KR-004"],
+                "effectiveness": "medium",
+            },
+            {
+                "id": "MIT-005",
+                "control": "human_oversight",
+                "description": (
+                    "Human-in-the-Loop or Human-on-the-Loop oversight with "
+                    "override and stop capabilities"
+                ),
+                "risk_addressed": ["KR-002", "KR-005"],
+                "effectiveness": "high",
+            },
+        ]
+
+        critical_count = risk_summary.get("critical", 0)
+        residual_risk = {
+            "level": "high" if critical_count > 0 else ("medium" if confidence < 0.7 else "low"),
+            "justification": (
+                f"Critical risks present ({critical_count}); mitigation required before deployment."
+                if critical_count > 0
+                else (
+                    f"No critical risks. Confidence {confidence:.0%} with {len(mitigation_measures)} "
+                    "active controls."
+                )
+            ),
+            "mitigated_risk_count": risk_summary.get("total", 0),
+            "unmitigated_critical": critical_count,
+        }
+
+        risk_acceptance_criteria = {
+            "max_critical_risks": 0,
+            "min_confidence": 0.6,
+            "min_robustness": 0.5,
+            "min_agents": 3,
+            "require_human_oversight": True,
+            "met": (
+                critical_count == 0 and confidence >= 0.6 and robustness >= 0.5 and len(agents) >= 3
+            ),
+        }
+
+        monitoring_plan = {
+            "frequency": "continuous",
+            "metrics_tracked": [
+                "agent_calibration_brier_score",
+                "consensus_confidence_trend",
+                "hollow_consensus_rate",
+                "circuit_breaker_trip_rate",
+                "human_override_frequency",
+            ],
+            "alert_thresholds": {
+                "confidence_below": 0.5,
+                "robustness_below": 0.4,
+                "hollow_consensus_rate_above": 0.15,
+            },
+            "review_cadence": "quarterly",
+        }
+
+        incident_response = {
+            "escalation_path": [
+                "Automated alert to system operator",
+                "Human review within 24 hours",
+                "Compliance officer notification within 48 hours",
+                "Regulatory notification per Art. 62 if serious incident",
+            ],
+            "rollback_capability": True,
+            "logging": "All incidents logged in provenance chain with SHA-256 integrity",
+        }
+
+        # Filter evidence chain for risk-relevant events
+        risk_event_types = {
+            "risk_identified",
+            "risk_assessed",
+            "mitigation_applied",
+            "critique_submitted",
+            "vote_cast",
+            "human_approval",
+            "human_override",
+        }
+        evidence_chain = []
+        for i, entry in enumerate(provenance):
+            if isinstance(entry, dict):
+                event_type = entry.get("event_type", "")
+                if event_type in risk_event_types:
+                    evidence_chain.append(
+                        {
+                            "sequence": i + 1,
+                            "event_type": event_type,
+                            "timestamp": entry.get("timestamp", ""),
+                            "actor": entry.get("actor", "system"),
+                        }
+                    )
+
+        return Article9Artifact(
+            artifact_id=artifact_id,
+            receipt_id=receipt_id,
+            generated_at=timestamp,
+            risk_assessment=risk_assessment,
+            risk_analysis_method=risk_analysis_method,
+            known_risks=known_risks,
+            reasonably_foreseeable_risks=reasonably_foreseeable_risks,
+            mitigation_measures=mitigation_measures,
+            residual_risk=residual_risk,
+            risk_acceptance_criteria=risk_acceptance_criteria,
+            monitoring_plan=monitoring_plan,
+            incident_response=incident_response,
+            evidence_chain=evidence_chain,
         )
 
     # -- Article 12: Record-Keeping --
@@ -1334,7 +1652,7 @@ class EUAIActBundleGenerator:
         Args:
             receipt: Decision receipt dict (may be empty for demo bundles).
             scope: Optional human-readable scope description.
-            articles: Limit to specific articles (12, 13, 14). None means all.
+            articles: Limit to specific articles (9, 12, 13, 14). None means all.
 
         Returns:
             Dict with ``bundle_id``, ``articles``, ``generated_at``, and
@@ -1346,11 +1664,12 @@ class EUAIActBundleGenerator:
         # Filter articles if requested
         article_data: dict[str, Any] = {}
         article_map = {
+            9: "article_9_risk_management",
             12: "article_12_record_keeping",
             13: "article_13_transparency",
             14: "article_14_human_oversight",
         }
-        target_articles = articles or [12, 13, 14]
+        target_articles = articles or [9, 12, 13, 14]
         for art_num in target_articles:
             key = article_map.get(art_num)
             if key and key in bundle_dict:
@@ -1433,6 +1752,7 @@ __all__ = [
     "ArticleMapping",
     "ConformityReport",
     "ConformityReportGenerator",
+    "Article9Artifact",
     "Article12Artifact",
     "Article13Artifact",
     "Article14Artifact",

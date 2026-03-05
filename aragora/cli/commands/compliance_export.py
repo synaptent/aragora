@@ -355,6 +355,7 @@ def _generate_compliance_bundle(
     # Extract per-article data
     receipt_data = _build_receipt_section(receipt_dict) if include_receipts else None
     audit_trail = _build_audit_trail(receipt_dict) if include_audit_trail else None
+    risk_management = _build_risk_management(receipt_dict, conformity)
     transparency = _build_transparency_report(receipt_dict, conformity)
     human_oversight = _build_human_oversight(receipt_dict, conformity)
     accuracy = _build_accuracy_report(receipt_dict, conformity)
@@ -391,10 +392,12 @@ def _generate_compliance_bundle(
         "conformity_report": conformity.to_dict(),
         "receipt": receipt_data,
         "audit_trail": audit_trail,
+        "risk_management": risk_management,
         "transparency_report": transparency,
         "human_oversight": human_oversight,
         "accuracy_report": accuracy,
         "article_artifacts": {
+            "article_9": artifact_bundle.article_9.to_dict(),
             "article_12": artifact_bundle.article_12.to_dict(),
             "article_13": artifact_bundle.article_13.to_dict(),
             "article_14": artifact_bundle.article_14.to_dict(),
@@ -560,6 +563,71 @@ def _build_accuracy_report(
     }
 
 
+def _build_risk_management(
+    receipt: dict[str, Any],
+    conformity: Any,
+) -> dict[str, Any]:
+    """Build risk management report (Article 9 mapping)."""
+    risk_summary = receipt.get("risk_summary", {})
+    confidence = receipt.get("confidence", 0.0)
+    robustness = receipt.get("robustness_score", 0.0)
+    config = receipt.get("config_used", {})
+    consensus = receipt.get("consensus_proof", {}) or {}
+
+    agents = sorted(
+        set(consensus.get("supporting_agents", []) + consensus.get("dissenting_agents", []))
+    )
+
+    # Find Art. 9 mapping status from conformity
+    art9_status = "unknown"
+    for m in conformity.article_mappings:
+        if m.article == "Article 9":
+            art9_status = m.status
+            break
+
+    critical_count = risk_summary.get("critical", 0)
+
+    return {
+        "article": "Article 9",
+        "status": art9_status,
+        "risk_assessment": {
+            "total_risks": risk_summary.get("total", 0),
+            "critical": risk_summary.get("critical", 0),
+            "high": risk_summary.get("high", 0),
+            "medium": risk_summary.get("medium", 0),
+            "low": risk_summary.get("low", 0),
+        },
+        "analysis_method": {
+            "approach": "Multi-agent adversarial debate",
+            "protocol": config.get("protocol", "adversarial"),
+            "rounds": config.get("rounds", 0),
+            "agents": agents,
+        },
+        "confidence": confidence,
+        "robustness_score": robustness,
+        "known_risks": [
+            "Model hallucination",
+            "Automation bias",
+            "Hollow consensus",
+            "Data drift",
+            "Adversarial input",
+        ],
+        "mitigation_controls": [
+            "Multi-agent debate",
+            "Trickster detection",
+            "Circuit breaker",
+            "Calibration monitoring",
+            "Human oversight",
+        ],
+        "residual_risk_level": (
+            "high" if critical_count > 0 else ("medium" if confidence < 0.7 else "low")
+        ),
+        "acceptance_criteria_met": (
+            critical_count == 0 and confidence >= 0.6 and robustness >= 0.5 and len(agents) >= 3
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Output writers
 # ---------------------------------------------------------------------------
@@ -597,6 +665,15 @@ def _write_bundle(
             bundle["audit_trail"],
             fmt,
             article_ref=EU_AI_ACT_ARTICLES["article_12"],
+        )
+
+    if bundle.get("risk_management") is not None:
+        _write_artifact(
+            os.path.join(output_dir, f"risk_management.{ext}"),
+            "Risk Management Report",
+            bundle["risk_management"],
+            fmt,
+            article_ref=EU_AI_ACT_ARTICLES["article_9"],
         )
 
     _write_artifact(
@@ -853,6 +930,7 @@ def _write_manifest(
         "|------|-------------------|----------------|",
         "| `bundle.json` | All | Complete machine-readable compliance record |",
         f"| `receipt.{ext}` | Article 9 | Risk assessment, confidence, robustness score |",
+        f"| `risk_management.{ext}` | Article 9 | Risk management system, mitigations, residual risk |",
         f"| `audit_trail.{ext}` | Article 12 | Event log -- who did what and when |",
         f"| `transparency_report.{ext}` | Article 13 | Agent identities, reasoning chain, dissent |",
         f"| `human_oversight.{ext}` | Article 14 | Override capability, voting record, escalation |",
@@ -901,7 +979,7 @@ def _write_manifest(
         f"| Receipt ID | `{meta.get('receipt_id', '')}` |",
         f"| Generated at | {meta.get('generated_at', '')} |",
         f"| Regulation | {meta.get('regulation', '')} |",
-        f"| Integrity hash | `{meta.get('integrity_hash', '')}` |",
+        f"| Integrity Hash | `{meta.get('integrity_hash', '')}` |",
         f"| Generated by | {meta.get('generated_by', 'Aragora Decision Integrity Platform')} |",
         "",
         "---",
@@ -985,6 +1063,7 @@ def _print_summary(
     print("    README.md                         Manifest and article mapping")
     print("    bundle.json                       Full bundle (machine-readable)")
     print(f"    receipt.{ext:<27} Art. 9  -- Risk management")
+    print(f"    risk_management.{ext:<19} Art. 9  -- Risk management system & mitigations")
     print(f"    audit_trail.{ext:<23} Art. 12 -- Record-keeping & provenance")
     print(f"    transparency_report.{ext:<15} Art. 13 -- Agent participation & reasoning")
     print(f"    human_oversight.{ext:<19} Art. 14 -- Human oversight & override")

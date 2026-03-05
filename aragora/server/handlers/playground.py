@@ -1307,6 +1307,26 @@ def _persist_playground_debate(response: dict[str, Any]) -> None:
     except (ImportError, OSError, ValueError) as exc:
         logger.warning("Failed to persist debate: %s", exc)
 
+    # Also save to DebateResultStore so the public viewer can find it.
+    # This is a separate try/except so a failure here doesn't affect the
+    # primary DebateRepository persistence above.
+    try:
+        from aragora.storage.debate_store import get_debate_store
+
+        store_debate_id = response.get("id", uuid.uuid4().hex[:16])
+        store_topic = response.get("topic", "debate")
+        store_source = response.get("source", "playground")
+        store = get_debate_store()
+        store.save(
+            debate_id=store_debate_id,
+            topic=store_topic,
+            result=response,
+            source=store_source,
+        )
+        logger.info("Saved debate %s to DebateResultStore", store_debate_id)
+    except (ImportError, OSError, ValueError) as exc:
+        logger.warning("Failed to save debate to DebateResultStore: %s", exc)
+
 
 # ---------------------------------------------------------------------------
 # Handler
