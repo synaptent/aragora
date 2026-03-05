@@ -12,6 +12,10 @@
     "POST /api/documents/{param}/reprocess"
   ],
   "typescript_sdk_drift": [
+    "GET /api/admin/organizations/{param}/credits/transactions",
+    "GET /api/backups/schedules",
+    "GET /api/debates/public/{param}",
+    "GET /api/debates/{param}/agent-statistics",
     "GET /api/debates/{param}/reasoning",
     "GET /api/documents/{param}/chunks",
     "GET /api/documents/{param}/download",
@@ -35,6 +39,9 @@
     "GET /api/selection/role-assigners",
     "GET /api/selection/scorers",
     "GET /api/selection/team-selectors",
+    "GET /api/pipelines/{param}/items/{param}/transitions",
+    "GET /api/pipelines/{param}/items/{param}/transitions/available",
+    "GET /api/teams/{param}",
     "GET /api/teams/{param}/members",
     "GET /api/teams/{param}/members/{param}",
     "GET /api/teams/{param}/stats"
