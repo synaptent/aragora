@@ -690,7 +690,19 @@ Required sections:
 (end of example — your output must follow this pattern with REAL paths from the REPOSITORY FILE REFERENCE above)
 
 ## YOUR TASK
-Synthesize the debate into a single comprehensive answer that EXACTLY follows the output format above.
+Synthesize the debate into a single comprehensive answer.
+
+STRUCTURAL REQUIREMENT (NON-NEGOTIABLE):
+Your output MUST start with `## Ranked High-Level Tasks` and use ONLY these 7 section headers as `## Heading` markdown:
+1. `## Ranked High-Level Tasks`
+2. `## Suggested Subtasks`
+3. `## Owner module / file paths`
+4. `## Test Plan`
+5. `## Rollback Plan`
+6. `## Gate Criteria`
+7. `## JSON Payload`
+
+Do NOT add any other `##` headers. Do NOT write an executive summary, diagnosis, or architecture section before the first required header. Your FIRST line of content must be `## Ranked High-Level Tasks`.
 
 Critical rules:
 - Use EXACTLY the required section headings as `## Heading` markdown headers, in the specified order.
