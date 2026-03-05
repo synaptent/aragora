@@ -1553,6 +1553,9 @@ class PlaygroundHandler(BaseHandler):
         # Oracle mode (consult / divine / commune)
         mode = str(body.get("mode", "") or "").strip() or "consult"
 
+        # Source: "oracle" for Oracle page, "landing" for main site, etc.
+        source = str(body.get("source", "") or "").strip() or "oracle"
+
         # Session ID for follow-up conversation memory
         session_id = str(body.get("session_id", "") or "").strip() or None
 

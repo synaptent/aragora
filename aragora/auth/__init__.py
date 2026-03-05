@@ -101,6 +101,14 @@ except ImportError:
     SAMLProvider = None
     HAS_SAML = False
 
+from .mfa_drift_monitor import (
+    MFADriftAlert,
+    MFADriftMonitor,
+    MFADriftReport,
+    get_mfa_drift_monitor,
+    init_mfa_drift_monitor,
+)
+
 from .session_monitor import (
     SessionHealthMonitor,
     SessionHealthStatus,
@@ -147,6 +155,12 @@ __all__ = [
     "TrackedSession",
     "get_session_monitor",
     "reset_session_monitor",
+    # MFA drift monitoring
+    "MFADriftAlert",
+    "MFADriftMonitor",
+    "MFADriftReport",
+    "get_mfa_drift_monitor",
+    "init_mfa_drift_monitor",
     # Availability flags
     "HAS_OIDC",
     "HAS_SAML",
