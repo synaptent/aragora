@@ -12,6 +12,7 @@
     "POST /api/documents/{param}/reprocess"
   ],
   "typescript_sdk_drift": [
+    "GET /api/debates/public/{param}",
     "GET /api/debates/{param}/reasoning",
     "GET /api/documents/{param}/chunks",
     "GET /api/documents/{param}/download",
@@ -24,6 +25,14 @@
     "GET /api/knowledge/facts/stats",
     "GET /api/laboratory/agent/{param}/analysis",
     "GET /api/monitoring/dashboards/{param}",
+    "GET /api/pipelines/{param}/items/{param}/transitions",
+    "GET /api/pipelines/{param}/items/{param}/transitions/available",
+    "GET /api/selection/role-assigners",
+    "GET /api/selection/scorers",
+    "GET /api/selection/team-selectors",
+    "GET /api/teams/{param}/members",
+    "GET /api/teams/{param}/members/{param}",
+    "GET /api/teams/{param}/stats",
     "POST /api/debates/{param}/intervene",
     "POST /api/documents/{param}/reprocess",
     "POST /api/knowledge/facts/batch",
@@ -32,12 +41,9 @@
     "POST /api/knowledge/facts/validate",
     "POST /api/monitoring/alerts/{param}/acknowledge",
     "POST /api/monitoring/alerts/{param}/resolve",
-    "GET /api/selection/role-assigners",
-    "GET /api/selection/scorers",
-    "GET /api/selection/team-selectors",
-    "GET /api/teams/{param}/members",
-    "GET /api/teams/{param}/members/{param}",
-    "GET /api/teams/{param}/stats"
+    "POST /api/pipelines/{param}/items/{param}/transition",
+    "POST /api/pipelines/{param}/items/{param}/transition/rollback",
+    "POST /api/pipelines/{param}/items/{param}/transition/validate"
   ],
   "missing_stable": []
 }
