@@ -528,7 +528,11 @@ class TestDecisionRouterIntegration:
             )
 
             # Mock other dependencies
-            with patch.object(handler, "read_json_body", return_value={"question": "Test?"}):
+            with patch.object(
+                handler,
+                "read_json_body",
+                return_value={"question": "Should we adopt microservices?"},
+            ):
                 with patch.object(handler, "_check_spam_content", return_value=None):
                     with patch(
                         "aragora.server.handlers.debates.handler.validate_against_schema"

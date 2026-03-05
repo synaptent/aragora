@@ -202,6 +202,7 @@ class TeamSelector:
         feedback_loop: Any | None = None,
         continuum_memory: ContinuumMemory | None = None,
         control_plane_registry: Any | None = None,
+        marketplace_registry: Any | None = None,
     ):
         self.elo_system = elo_system
         # Auto-detect default CalibrationTracker if none provided.
@@ -252,6 +253,8 @@ class TeamSelector:
                     "proceeding without health filtering"
                 )
         self.control_plane_registry = control_plane_registry
+        # Marketplace registry for template-based team selection
+        self.marketplace_registry = marketplace_registry
         self.pulse_manager: Any = None  # Set externally or via Arena
         self.specialist_registry: Any = None  # Set externally or via Arena
         self._culture_recommendations_cache: dict[str, list[str]] = {}
@@ -2026,3 +2029,85 @@ class TeamSelector:
             strategy: New delegation strategy to use
         """
         self.delegation_strategy = strategy
+
+    def select_from_template(self, template_name: str) -> list[str]:
+        """Return agent names (or role names) derived from a marketplace template.
+
+        Looks up ``template_name`` in the marketplace registry and extracts the
+        set of agent/role identifiers that the template prescribes.
+
+        - For :class:`~aragora.marketplace.models.DebateTemplate`: returns the
+          ``role`` value from each entry in ``agent_roles``.
+        - For :class:`~aragora.marketplace.models.AgentTemplate`: returns a
+          single-element list containing the ``agent_type``.
+        - If the template is not found, logs a warning and returns ``[]``.
+
+        Args:
+            template_name: The ``metadata.id`` of the marketplace template to
+                           look up (e.g. ``"oxford-style"``).
+
+        Returns:
+            A list of agent/role name strings, or ``[]`` on failure.
+        """
+        if not template_name:
+            return []
+
+        # Resolve the registry to use: prefer the one injected at construction
+        # time, but fall back to constructing a default TemplateRegistry so the
+        # method works even without explicit injection.
+        registry = self.marketplace_registry
+        if registry is None:
+            try:
+                from aragora.marketplace.registry import TemplateRegistry
+
+                registry = TemplateRegistry()
+            except (ImportError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "select_from_template: could not initialise TemplateRegistry: %s", exc
+                )
+                return []
+
+        try:
+            template = registry.get(template_name)
+        except (OSError, RuntimeError, TypeError, ValueError, AttributeError) as exc:
+            logger.warning(
+                "select_from_template: registry lookup failed for %r: %s", template_name, exc
+            )
+            return []
+
+        if template is None:
+            logger.warning(
+                "select_from_template: template %r not found in marketplace registry",
+                template_name,
+            )
+            return []
+
+        try:
+            from aragora.marketplace.models import DebateTemplate, AgentTemplate
+
+            if isinstance(template, DebateTemplate):
+                # Extract the 'role' key from each agent_roles entry
+                roles: list[str] = []
+                for entry in template.agent_roles:
+                    role = entry.get("role") if isinstance(entry, dict) else str(entry)
+                    if role:
+                        roles.append(role)
+                return roles
+
+            if isinstance(template, AgentTemplate):
+                return [template.agent_type]
+
+            # WorkflowTemplate or unknown type — return empty list
+            logger.warning(
+                "select_from_template: template %r has unsupported type %s",
+                template_name,
+                type(template).__name__,
+            )
+            return []
+        except (ImportError, AttributeError, TypeError) as exc:
+            logger.warning(
+                "select_from_template: failed to extract agents from template %r: %s",
+                template_name,
+                exc,
+            )
+            return []
