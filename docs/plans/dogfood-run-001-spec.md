@@ -1003,3 +1003,38 @@ Focused profile exceeded the promotion threshold (`>= +0.05`) while maintaining 
 ### Gate Decision
 - **GO**: Dup-create scoring fix confirmed effective. Zero false positives.
 - **GO**: Enhanced profile quality continues to improve (0.84 → 0.91 median composite across runs 012→013).
+
+## Dogfood Run 013 Results (Post-#611 Validation)
+
+### Date
+- 2026-03-05
+
+### Goal
+- Validate quality stability after #611 (verb expansion + concretization) merged on top of #596 (prompt restructuring) and #606 (threshold alignment).
+
+### Aggregate Outcome
+
+| Metric | Value |
+|---|---:|
+| Pairs | 2 (fresh) + 1 (prior) |
+| Timeout rate | 0.0 |
+| Median composite (baseline) | 0.4610 |
+| Median composite (enhanced) | **0.9084** |
+| Promotion threshold | +0.0500 |
+| Observed delta | **+0.4474** |
+| Pair winners | enhanced ×3 (100%) |
+
+### Per-Pair Breakdown
+
+| Pair | Enhanced | Baseline | Quality | Practicality | Path Ratio |
+|------|----------|----------|---------|--------------|------------|
+| 1 | 0.9193 | 0.461 | 9.0 | 8.31 | 0.923 |
+| 2 | 0.9084 | 0.461 | 7.0 | 8.42 | 1.0 |
+| 3 | 0.8975 | 0.461 | 9.0 | 7.57 | — |
+
+### Key Observations
+- Practicality holds at 7.57–8.42 (up from 3.46–3.55 baseline, consistent with run 012's 8.38–9.39)
+- Quality range 7.0–9.0 (stable)
+- Path grounding 92.3%–100% (strong)
+- No regressions from #611 verb expansion changes
+- Composite delta (+0.4474) slightly higher than run 012 (+0.3833)
