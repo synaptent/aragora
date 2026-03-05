@@ -3215,4 +3215,45 @@ export class DebatesAPI {
   }> {
     return this.client.request('GET', `/api/v1/debates/${encodeURIComponent(debateId)}/reasoning`);
   }
+  /**
+   * Get per-agent performance statistics for a specific debate.
+   *
+   * @param debateId - The debate to retrieve agent statistics for
+   * @returns Per-agent statistics keyed by agent name
+   *
+   * @example
+   * ```typescript
+   * const stats = await client.debates.getDebateAgentStatistics('debate-123');
+   * for (const [agent, data] of Object.entries(stats.agents)) {
+   *   console.log(`${agent}: score=${data.contribution_score}`);
+   * }
+   * ```
+   */
+  async getDebateAgentStatistics(debateId: string): Promise<{
+    debate_id: string;
+    agents: Record<string, {
+      contribution_score?: number;
+      argument_count?: number;
+      consensus_alignment?: number;
+      win_rate?: number;
+      avg_confidence?: number;
+    }>;
+  }> {
+    return this.client.request('GET', `/api/v1/debates/${encodeURIComponent(debateId)}/agent-statistics`);
+  }
+
+  /**
+   * Make a debate permanent (prevent automatic cleanup or archiving).
+   *
+   * @param debateId - The debate to mark as permanent
+   *
+   * @example
+   * ```typescript
+   * const result = await client.debates.makePermanent('debate-123');
+   * console.log(`Debate is now permanent: ${result.is_permanent}`);
+   * ```
+   */
+  async makePermanent(debateId: string): Promise<{ success: boolean; is_permanent: boolean; debate_id: string }> {
+    return this.client.request('POST', `/api/v1/debates/${encodeURIComponent(debateId)}/make-permanent`);
+  }
 }
