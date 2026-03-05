@@ -154,7 +154,7 @@ For organizations with compliance, security, and governance requirements.
 | Cross-debate institutional memory | -- | Yes | Yes |
 | **Integrations** | | | |
 | REST API + WebSocket | Limited | Full | Full |
-| Python SDK (184 namespaces) | Yes | Yes | Yes |
+| Python SDK (185 namespaces) | Yes | Yes | Yes |
 | TypeScript SDK (183 namespaces) | Yes | Yes | Yes |
 | Slack / Teams / Discord | -- | Yes | Yes |
 | Telegram / WhatsApp / email / voice | -- | Yes | Yes |
