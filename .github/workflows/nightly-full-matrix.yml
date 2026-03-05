@@ -20,6 +20,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -78,6 +86,14 @@ jobs:
               -q --timeout=240 --tb=short
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -107,6 +123,14 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 

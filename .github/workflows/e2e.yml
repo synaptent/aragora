@@ -45,6 +45,14 @@ jobs:
           --health-retries 5
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -200,6 +208,14 @@ jobs:
           --health-retries 5
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -242,6 +258,14 @@ jobs:
     if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name == 'pull_request')
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 

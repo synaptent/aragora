@@ -48,6 +48,15 @@ jobs:
 
       # Full review path (manual only)
       # SECURITY: checkout base-branch code only; never execute PR head with secrets.
+      - name: Clean stale sparse-checkout
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout base branch (trusted code only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/checkout@v4

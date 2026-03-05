@@ -54,6 +54,14 @@ jobs:
     runs-on: aragora
     timeout-minutes: 15
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -85,6 +93,14 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -169,6 +185,14 @@ jobs:
     environment: staging
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -559,6 +583,14 @@ jobs:
           echo "**Staging result:** ${{ needs.deploy-ec2-staging.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "⚠️ **This deployment requires approval.** Configure required reviewers in repository settings." >> $GITHUB_STEP_SUMMARY
+
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
 
       - name: Checkout
         uses: actions/checkout@v4

@@ -54,6 +54,14 @@ jobs:
       image_tag: ${{ steps.build.outputs.image_tag }}
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/checkout-integrity
@@ -86,6 +94,14 @@ jobs:
     environment: production-us-east-2
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/checkout-integrity
@@ -128,6 +144,14 @@ jobs:
     environment: production-eu-west-1
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/checkout-integrity
@@ -169,6 +193,14 @@ jobs:
     environment: production-ap-south-1
 
     steps:
+      - name: Clean stale sparse-checkout
+        run: |
+          if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+            git sparse-checkout disable 2>/dev/null || true
+            git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+          fi
+        shell: bash
+
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/checkout-integrity

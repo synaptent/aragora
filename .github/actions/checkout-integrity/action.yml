@@ -3,6 +3,16 @@ description: "Ensures checkout is complete, recovers from sparse-checkout corrup
 runs:
   using: "composite"
   steps:
+    - name: Disable stale sparse-checkout
+      shell: bash
+      run: |
+        # Self-hosted runners may retain sparse-checkout state from previous jobs.
+        # Disable it unconditionally so the full worktree is visible.
+        if [ -d .git ] && git rev-parse --is-inside-work-tree 2>/dev/null; then
+          git sparse-checkout disable 2>/dev/null || true
+          git config --unset-all extensions.worktreeConfig 2>/dev/null || true
+        fi
+
     - name: Verify checkout integrity
       shell: bash
       run: |
