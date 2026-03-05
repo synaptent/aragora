@@ -61,6 +61,27 @@ DEFAULT_FOCUSED_TASK = (
     "duplicate_existing_create_ratio <= 0.25."
 )
 
+DEFAULT_INTEGRATION_VAGUE_TASK = (
+    "Please describe the relationship between the completed dogfood stress test, "
+    "the ideas-to-execution pipeline, the self-improvement pipeline, the heterogeneous "
+    "agent codebase assessment/coding-change pipeline, and the self bug-fixing pipeline. "
+    "Can all of these be more tightly integrated? This is intentionally vague and poorly "
+    "specified; treat it as a dogfooding prompt and produce an execution-ready integration plan."
+)
+
+DEFAULT_INTEGRATION_FOCUSED_TASK = (
+    "Use the same vague integration task below and produce an execution-ready plan.\n\n"
+    f"Task: {DEFAULT_INTEGRATION_VAGUE_TASK}\n\n"
+    "Strict requirements:\n"
+    "1) Use exactly these six H2 sections in this order: Ranked High-Level Tasks; Suggested "
+    "Subtasks; Owner module / file paths; Test Plan; Rollback Plan; Gate Criteria.\n"
+    "2) Do not clone the same objective across all tracks; assign each goal to a fitting track.\n"
+    "3) For this prompt class, ensure the top goal track is core, security, or self_hosted.\n"
+    "4) Gate Criteria must include explicit numeric thresholds and time windows.\n"
+    "5) Include rollback trigger -> action mappings.\n"
+    "6) Prefer modify/extend existing modules over creating duplicates."
+)
+
 
 @dataclass
 class RunStatus:
@@ -318,6 +339,12 @@ def _score_pair(
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--prompt-profile",
+        choices=["default", "integration_vague"],
+        default="default",
+        help="Prompt fixture profile used for control/focused tasks.",
+    )
+    parser.add_argument(
         "--pairs",
         type=int,
         default=5,
@@ -420,6 +447,10 @@ def main(argv: list[str] | None = None) -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     env = _load_env(repo_root)
 
+    if args.prompt_profile == "integration_vague":
+        args.control_task = DEFAULT_INTEGRATION_VAGUE_TASK
+        args.focused_task = DEFAULT_INTEGRATION_FOCUSED_TASK
+
     if not args.contract_file.is_file():
         raise SystemExit(f"Contract file not found: {args.contract_file}")
 
@@ -518,6 +549,7 @@ def main(argv: list[str] | None = None) -> int:
         "promotion_threshold_delta": float(args.promotion_threshold_delta),
         "promotion_delta": promotion_delta,
         "promote_focused": promote_focused,
+        "prompt_profile": args.prompt_profile,
     }
     _write_json(output_root / "aggregate_summary.json", aggregate)
 

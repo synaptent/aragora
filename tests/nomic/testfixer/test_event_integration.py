@@ -224,6 +224,11 @@ class TestTestFixerHandlersMixin:
 
     def test_flush_failures_to_planner(self, mock_handler_class):
         """Test that failures are formatted and flushed to planner."""
+        from aragora.nomic.improvement_queue import get_improvement_queue
+
+        queue = get_improvement_queue()
+        queue.dequeue_batch(1000)  # clear prior test residue
+
         accumulator = mock_handler_class._get_testfixer_accumulator()
         accumulator.failures = [
             {
@@ -246,6 +251,10 @@ class TestTestFixerHandlersMixin:
 
         # Failures should be cleared after flush
         assert len(accumulator.failures) == 0
+        queued = queue.dequeue_batch(10)
+        assert len(queued) == 2
+        assert all(item.source_system == "testfixer" for item in queued)
+        assert all(item.category == "reliability" for item in queued)
 
     def test_register_handlers(self, mock_handler_class):
         """Test that handlers can be registered with a dispatcher."""
