@@ -101,15 +101,16 @@ export function PricingSection() {
         </h2>
 
         <p
-          className="text-center max-w-md mx-auto"
+          className="text-center max-w-lg mx-auto"
           style={{
-            fontSize: isDark ? '14px' : '16px',
+            fontSize: isDark ? '14px' : '15px',
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-landing)',
             marginBottom: '64px',
+            lineHeight: '1.6',
           }}
         >
-          Use your own API keys — we never mark up LLM costs. Pay only for orchestration.
+          Bring your own API keys. Aragora never marks up LLM costs.
         </p>
 
         {/* Tier cards */}
