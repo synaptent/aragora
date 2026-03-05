@@ -126,12 +126,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PYTHON_BIN="$(command -v python3 || command -v python || true)"
+          PYTHON_BIN=""
+          for candidate in python3.13 python3.12 python3.11 python3.10 python3 python; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+              PYTHON_BIN="$(command -v "$candidate")"
+              break
+            fi
+          done
           if [[ -z "$PYTHON_BIN" ]]; then
             echo "::error::Python runtime not found on runner"
             exit 1
           fi
-          "$PYTHON_BIN" --version
+          PYTHON_VERSION="$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+          if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+            echo "::error::Python >=3.10 required for lint checks, found ${PYTHON_VERSION} at ${PYTHON_BIN}"
+            exit 1
+          fi
+          echo "Using Python ${PYTHON_VERSION} at ${PYTHON_BIN}"
           "$PYTHON_BIN" -m ensurepip --upgrade || true
           "$PYTHON_BIN" -m pip install --upgrade pip
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
@@ -347,12 +358,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PYTHON_BIN="$(command -v python3 || command -v python || true)"
+          PYTHON_BIN=""
+          for candidate in python3.13 python3.12 python3.11 python3.10 python3 python; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+              PYTHON_BIN="$(command -v "$candidate")"
+              break
+            fi
+          done
           if [[ -z "$PYTHON_BIN" ]]; then
             echo "::error::Python runtime not found on runner"
             exit 1
           fi
-          "$PYTHON_BIN" --version
+          PYTHON_VERSION="$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+          if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+            echo "::error::Python >=3.10 required for typecheck, found ${PYTHON_VERSION} at ${PYTHON_BIN}"
+            exit 1
+          fi
+          echo "Using Python ${PYTHON_VERSION} at ${PYTHON_BIN}"
           "$PYTHON_BIN" -m ensurepip --upgrade || true
           "$PYTHON_BIN" -m pip install --upgrade pip
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
