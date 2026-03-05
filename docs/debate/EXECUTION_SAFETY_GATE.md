@@ -64,6 +64,9 @@ The server metrics module emits gate telemetry for dashboarding:
 - `aragora_execution_gate_provider_diversity{path,domain,...}`
 - `aragora_execution_gate_model_family_diversity{path,domain,...}`
 
+Prebuilt Grafana dashboard:
+- `deploy/grafana/dashboards/execution-safety-gate.json`
+
 Useful PromQL panels:
 
 ```promql
@@ -103,3 +106,11 @@ This produces a dated calibration report with:
 - recommended threshold set
 
 Latest run in this repo: `docs/status/EXECUTION_GATE_TUNING_2026-03-05.md`
+
+## Regression Guard
+
+CI enforces secure defaults and fallback values for execution-gate policy knobs:
+
+```bash
+python scripts/check_execution_gate_defaults.py
+```
