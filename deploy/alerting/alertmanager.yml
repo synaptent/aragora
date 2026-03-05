@@ -31,6 +31,13 @@ route:
 
   # Child routes for specific alerts
   routes:
+    # Execution safety gate alerts route to a dedicated channel for rapid triage.
+    - match_re:
+        alertname: '(ExecutionGate.*|AragoraExecutionGate.*)'
+      receiver: 'slack-execution-safety'
+      group_by: ['alertname', 'path', 'domain']
+      repeat_interval: 1h
+
     # Critical alerts go to PagerDuty
     - match:
         severity: critical
@@ -113,6 +120,25 @@ receivers:
         channel: '#aragora-api'
         username: 'API Monitor'
         icon_emoji: ':api:'
+        send_resolved: true
+
+  # Execution safety gate alerts
+  - name: 'slack-execution-safety'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#aragora-execution-safety'
+        username: 'Execution Safety Monitor'
+        icon_emoji: ':shield:'
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        title: '[Execution Gate {{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Path:* {{ .Labels.path }}
+          *Domain:* {{ .Labels.domain }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          {{ end }}
         send_resolved: true
 
   # Infrastructure Slack

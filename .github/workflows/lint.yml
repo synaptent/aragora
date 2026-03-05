@@ -142,6 +142,9 @@ jobs:
       - name: Enforce execution-gate default hardening policy
         run: python scripts/check_execution_gate_defaults.py
 
+      - name: Validate Prometheus rule syntax with promtool
+        run: python scripts/check_prometheus_rules.py
+
       - name: Run ruff format check (all Python files)
         run: ruff format --check aragora/ tests/ scripts/
         shell: bash
