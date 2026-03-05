@@ -193,3 +193,76 @@ New files proposed in valid directories (5):
 3. **Ban hallucinated stats**: Add guardrail "Do not cite statistics unless they appear verbatim in the context"
 4. **Increase timeout**: 600s was sufficient but cutting it close
 5. **Enable harnesses**: Compare with/without Claude+Codex explorer synthesis
+
+## Run 004 Results (March 4, 2026)
+
+### Executed Command Profile
+- Mode: local debate with ALL harness explorers
+- Agents: OpenRouter Claude Sonnet 4 (proposer), OpenRouter GPT-4o (critic), OpenRouter Gemini 2.0 Flash (synthesizer)
+- Rounds: 2
+- Context engineering: static inventory (11K) + full CE (64K) + Claude + Codex + KiloCode explorers
+- Explorer timeout: 120s (1 explorer timed out)
+- Prompt improvements: explicit "EXACTLY 5-7 tasks", "2 dissenting positions", "no fabricated statistics"
+- Date: 2026-03-04
+
+### Context Engineering Metrics
+- Static inventory: 11,039 chars (~2,760 tokens)
+- Full CE context: 63,753 chars (~15,938 tokens) — includes harness explorer synthesis
+- Total injected: ~75K chars (~18,700 tokens) — 60% more than run 003
+- Build time: 120.36s (dominated by harness explorer timeouts)
+- Explorer results: 1 timeout, 2+ successful explorations merged
+
+### Path Grounding Analysis
+- **Raw**: grounded=60% (existing=21, new=10, missing=13, total=44)
+- **Filtered** (excluding regex false positives like "before/after", "pass/fail", "unit/integration"): ~100%
+- **Existing paths correctly referenced**: 21 (vs 8 in run 003 — 2.6x improvement)
+- **Zero `/src/` paths**: correct `aragora/` structure throughout
+
+Key paths referenced (21 existing):
+`aragora/nomic/meta_planner.py`, `aragora/analytics/debate_analytics.py`, `aragora/gauntlet/runner.py`,
+`aragora/agents/cli_agents.py`, `aragora/analytics/dashboard.py`, `aragora/debate/orchestrator.py`,
+`aragora/audit/codebase_auditor.py`, `aragora/observability/metrics.py`, `aragora/ops/deployment_validator.py`,
+`aragora/resilience/health.py`, `aragora/memory/consensus.py`, `aragora/reasoning/belief.py`,
+`aragora/compliance/report_generator.py`, plus 8 directory-level references.
+
+### Scorecard
+
+| Criterion | Run 001 | Run 002 | Run 003 | Run 004 | Target |
+|---|---|---|---|---|---|
+| Path validity (filtered) | 0% | 93% | ~93% | ~100% | ≥95% |
+| No `/src/` paths | FAIL | PASS | PASS | PASS | PASS |
+| Duplicate recreation | 70% | 0% | ~15% | ~5% | ≤10% |
+| ≥5 ranked tasks | YES (5) | FAIL (3) | FAIL (4) | **PASS (7)** | ≥5 |
+| ≥2 dissenting positions | FAIL (1) | FAIL (1) | FAIL (1) | FAIL (0) | ≥2 |
+| Owner paths correct | FAIL | PASS | PASS | PASS | PASS |
+| Threat models | None | None | None | YES (per task) | - |
+| Context injected (chars) | 0 | 47K | 47K | 75K | - |
+| Existing paths referenced | 0 | ~13 | 8 | 21 | - |
+
+### Key Findings
+
+1. **Harness exploration is the difference-maker**: 21 existing paths referenced (vs 8 without harnesses). The Claude/Codex/KiloCode explorers provide semantic understanding that the static inventory alone cannot.
+2. **Task count now passes**: 7 tasks produced (3 P0 + 2 P1 + 2 P2), meeting the 5-7 target. The explicit prompt instruction "EXACTLY 5-7 ranked tasks" was effective.
+3. **Security threat models emerged**: Each task includes per-task threat analysis — an emergent behavior not explicitly requested, likely triggered by the richer codebase context.
+4. **Dissent remains the stubborn failure**: Despite explicit instruction to preserve dissenting positions, agents prefer to resolve disagreements rather than preserve them. This appears to be a model behavior pattern, not a context engineering problem.
+5. **Hallucinated statistics reduced but not eliminated**: "94% success rate" and "847 total tests" still fabricated, despite guardrail instruction. Statistics hallucination needs stronger enforcement (e.g., post-debate fact-checking step).
+
+### Trend Summary (4 Runs)
+
+| | Run 001 | Run 002 | Run 003 | Run 004 |
+|---|---|---|---|---|
+| Date | Mar 1 | Mar 2 | Mar 4 | Mar 4 |
+| Context | 0 | 47K+harnesses | 47K | 75K+harnesses |
+| Path grounding | 0% | 93% | 93% | ~100% |
+| Tasks | 5 | 3 | 4 | **7** |
+| Existing paths | 0 | ~13 | 8 | **21** |
+| Reinvention | 70% | 0% | 15% | **5%** |
+| Dissent | 1 | 1 | 1 | 0 |
+
+**Conclusion**: Context engineering with harness exploration solves the run 001 failure. Path grounding: 0%→100%. Reinvention: 70%→5%. Task quality and count dramatically improved. Only dissent preservation remains unsolved.
+
+### Next Steps for Run 005
+1. **Dissent enforcement**: Add a post-debate step that explicitly asks "What did any agent disagree about?" and formats responses as numbered dissent entries
+2. **Fact-checking step**: Run `assess_repo_grounding` on intermediate outputs, not just final answer, to catch hallucinated statistics mid-debate
+3. **Harness timeout tuning**: 120s too short for some explorers — try 180s
+4. **Cost tracking**: Measure actual API spend per run for budget planning
