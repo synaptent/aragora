@@ -84,7 +84,7 @@ jobs:
 
       - name: Install and test
         run: |
-          pip install -e ".[dev]" pytest-timeout httpx
+          python -m pip install -e ".[dev]" pytest-timeout httpx
           pytest tests/test_handlers_debates.py tests/test_api_handler.py \
             --timeout=60 -x --tb=short
         env:

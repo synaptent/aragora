@@ -134,13 +134,19 @@ jobs:
           fi
           mkdir -p "$RUNNER_TEMP/bin"
           ln -sf "$PY_BIN" "$RUNNER_TEMP/bin/python"
+          # Create pip wrapper so bare `pip` works even when not on PATH
+          cat > "$RUNNER_TEMP/bin/pip" <<'PIPWRAP'
+          #!/usr/bin/env bash
+          exec python -m pip "$@"
+          PIPWRAP
+          chmod +x "$RUNNER_TEMP/bin/pip"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
           "$PY_BIN" --version
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Check Version Alignment
         run: python scripts/check_version_alignment.py
