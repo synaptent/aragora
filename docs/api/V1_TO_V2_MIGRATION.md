@@ -36,7 +36,7 @@ The v2 API runs on FastAPI/uvicorn:
 
 ### Scope
 
-The v2 API covers **19 route modules** with 120+ endpoints across debates, decisions, agents, consensus, receipts, gauntlet, pipeline, knowledge, workflows, compliance, auth, memory, costs, tasks, notifications, inbox, and the API explorer. The v1 API has ~2,000+ operations; the v2 surface covers the most commonly used operations. Endpoints not yet migrated to v2 remain available on v1.
+The v2 API covers **19 route modules** with 120+ endpoints across debates, decisions, agents, consensus, receipts, gauntlet, pipeline, knowledge, workflows, compliance, auth, memory, costs, tasks, notifications, inbox, and the API explorer. The v1 API has ~3,000+ operations; the v2 surface covers the most commonly used operations. Endpoints not yet migrated to v2 remain available on v1.
 
 ---
 

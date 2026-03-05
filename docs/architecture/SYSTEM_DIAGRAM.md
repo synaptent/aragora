@@ -15,7 +15,7 @@ graph TB
     end
 
     subgraph API["API Gateway"]
-        SERVER["Unified Server<br/>(2,000+ operations)"]
+        SERVER["Unified Server<br/>(3,000+ operations)"]
         WS["WebSocket Stream<br/>(190+ event types)"]
         HANDLERS["580+ HTTP Handlers"]
         RBAC["RBAC Middleware<br/>(7 roles, 360+ perms)"]

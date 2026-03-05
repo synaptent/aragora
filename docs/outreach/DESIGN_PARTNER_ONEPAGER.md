@@ -108,7 +108,7 @@ regulated industry where decision provenance matters.
 ## Numbers
 
 - **129,000+ tests** across 3,000+ test files
-- **2,000+ API operations** across 1,800+ handler routes
+- **3,000+ API operations** across 2,900+ handler routes
 - **33 knowledge adapters** for cross-system learning
 - **190+ WebSocket event types** for real-time streaming
 - **Python + TypeScript SDKs** with 100% route coverage

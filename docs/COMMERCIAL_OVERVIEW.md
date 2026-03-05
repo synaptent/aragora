@@ -96,7 +96,7 @@ For small teams that need decision rigor and audit trails.
 | ELO rankings + Brier calibration | Per-agent, per-domain tracking |
 | Workflow engine | 50+ templates across 6 categories |
 | Vertical weight profiles | Healthcare, financial, legal |
-| API access | Full REST + WebSocket (2,000+ operations) |
+| API access | Full REST + WebSocket (3,000+ operations) |
 | Python + TypeScript SDKs | Full access (184 Python / 183 TypeScript namespaces) |
 
 Bring your own API keys. LLM costs billed directly by your providers.
@@ -285,7 +285,7 @@ Both SDKs provide typed clients for all 3,000+ API operations with full IntelliS
 | Lines of code | 1,490,000 |
 | Tests | 208,000+ |
 | Test files | 4,300+ |
-| API operations | 2,000+ across 1,800+ paths |
+| API operations | 2,000+ across 2,900+ paths |
 | WebSocket event types | 190+ |
 | SDK namespaces | 184 Python / 183 TypeScript (99.3% parity) |
 | Knowledge Mound adapters | 41 |

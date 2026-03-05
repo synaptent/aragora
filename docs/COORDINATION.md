@@ -70,7 +70,7 @@ Session 3 claims: tests/
 - [ ] #91 Workspace admin UI ← **next up**
 
 **Developer Track:**
-- [x] #103 API coverage tests (142,211 tests, 2,000+ API ops)
+- [x] #103 API coverage tests (208,000+ tests, 3,000+ API ops)
 - [x] #102 SDK parity pass #2 (100% TS/Python parity)
 - [ ] #94 SDK docs portal / developer quickstart ← **next up**
 

@@ -52,7 +52,7 @@ This checklist tracks all items required before declaring Aragora self-hosted GA
 
 ## API & SDK
 
-- [x] **REST API** - 2,000+ operations across 1,800+ paths
+- [x] **REST API** - 3,000+ operations across 2,900+ paths
 - [x] **WebSocket streaming** - 190+ event types
 - [x] **Python SDK** - `aragora-sdk` with full API parity
 - [x] **TypeScript SDK** - `@aragora/sdk` with 136/136 namespaces
@@ -71,7 +71,7 @@ This checklist tracks all items required before declaring Aragora self-hosted GA
 
 ## Testing
 
-- [x] **Test suite** - 142,211 tests across 3,801 files
+- [x] **Test suite** - 208,000+ tests across 4,000+ files
 - [x] **Handler tests** - 19,776 tests, 0 failures across randomized seeds
 - [x] **CI pipeline** - GitHub Actions with path-based triggers
 - [x] **Randomized ordering** - Seeds 12345, 54321, 99999 all pass

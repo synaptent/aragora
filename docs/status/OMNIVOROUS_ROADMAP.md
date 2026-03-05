@@ -53,7 +53,7 @@ Unlike chatbots, Aragora builds institutional memory that compounds over time. T
 ### Input Channels
 | Channel | Status | Notes |
 |---------|--------|-------|
-| REST API | Stable | 2,000+ API operations |
+| REST API | Stable | 3,000+ API operations |
 | WebSocket | Stable | Real-time streaming |
 | Slack | Stable | Commands + webhooks |
 | Discord | Stable | Bot integration |

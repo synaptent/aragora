@@ -111,7 +111,7 @@ Aragora is open source (MIT). Use the full debate engine for free, forever. Comm
 <tr>
 <td>REST API + WebSocket</td>
 <td align="center">Limited</td>
-<td align="center">Full (2,000+ operations)</td>
+<td align="center">Full (3,000+ operations)</td>
 <td align="center">Full + priority routing</td>
 </tr>
 <tr>
@@ -281,7 +281,7 @@ For teams that need decision rigor, audit trails, and integrations.
 - Workflow engine with 50+ templates
 - Slack, Teams, and Discord connectors with managed OAuth
 - CI/CD integration (GitHub Actions, GitLab CI)
-- Full REST API + WebSocket access (2,000+ operations)
+- Full REST API + WebSocket access (3,000+ operations)
 - EU AI Act compliance artifact generation
 - OIDC SSO and 7-role RBAC with 390+ permissions
 - Up to 10 tenants

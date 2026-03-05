@@ -299,7 +299,7 @@ When adding new omnivorous capabilities:
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| 2.8.0 | 2026-02-25 | 213K+ tests, 0 mypy errors, SDK parity (184/183), 34 KM adapters, 43 agent types, 390+ RBAC permissions, 98% GA |
+| 2.8.0 | 2026-02-25 | 213K+ tests, 0 mypy errors, SDK parity (184/183), 41 KM adapters, 43 agent types, 390+ RBAC permissions, 98% GA |
 | 2.0.4 | 2026-01-20 | Telegram/WhatsApp handlers, TTS bridge, checkpoint persistence |
 | 2.0.3 | 2026-01-20 | Cross-functional integration, knowledge bridges |
 | 2.0.2 | 2026-01-19 | UI enhancements, connectors, knowledge mound ops |

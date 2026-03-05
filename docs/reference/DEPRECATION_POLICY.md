@@ -406,7 +406,7 @@ Before final removal:
 ### Deprecated
 
 - `aragora.crawlers` module - Use `aragora.connectors` instead. Will be removed in v2.3.0.
-  See [Migration Guide](docs/CRAWLERS_MIGRATION.md).
+  See `docs/guides/V1_TO_V2_MIGRATION.md` for migration guidance.
 
 - `ARAGORA_REQUIRE_DISTRIBUTED_STATE` environment variable - Use `ARAGORA_REQUIRE_DISTRIBUTED`.
   Will be removed in v2.3.0.

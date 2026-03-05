@@ -367,7 +367,7 @@ This creates an immutable chain: `Idea → Goal → Action → Agent Assignment 
 1. **Format network effects**: If the unified DAG format becomes standard for idea-to-execution pipelines, switching costs are high
 2. **Regulatory moat**: EU AI Act requires audit trails; cryptographic provenance from idea through execution is uniquely positioned
 3. **Institutional memory**: Each completed pipeline trains the system; compounding intelligence is nearly impossible to replicate
-4. **Integration depth**: 34 KM adapters, multiple LLM providers, Obsidian sync, enterprise connectors create a web expensive to copy
+4. **Integration depth**: 41 KM adapters, multiple LLM providers, Obsidian sync, enterprise connectors create a web expensive to copy
 5. **SME-specific design**: Large platforms optimize for broad markets; this targets the "10-200 person company that needs AI-orchestrated execution" segment that incumbents ignore
 
 ---

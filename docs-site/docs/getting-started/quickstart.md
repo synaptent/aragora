@@ -231,7 +231,7 @@ Run the Aragora server locally or on your own infrastructure for full API access
 aragora serve --api-port 8080 --ws-port 8765
 ```
 
-This gives you the REST API (2,000+ operations), WebSocket streaming, and programmatic access to debates, receipts, and analytics.
+This gives you the REST API (3,000+ operations), WebSocket streaming, and programmatic access to debates, receipts, and analytics.
 
 See [API Reference](../api/reference) for endpoint-level details and [Documentation Index](../contributing/documentation-index) for architecture navigation.
 

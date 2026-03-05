@@ -37,7 +37,7 @@
 
 **Status before:** Handler registered (`KnowledgeFlowHandler`), but no frontend page to visualize the knowledge flywheel.
 
-**Fix:** Created `/knowledge-flow/page.tsx` with three tabs: Flow (adapter activity, knowledge items, flow direction), Confidence History (temporal confidence tracking), and Adapter Health (status of all 34 KM adapters). Fetches from `/api/v1/knowledge/flow`, `/api/v1/knowledge/flow/confidence-history`, `/api/v1/knowledge/adapters/health`.
+**Fix:** Created `/knowledge-flow/page.tsx` with three tabs: Flow (adapter activity, knowledge items, flow direction), Confidence History (temporal confidence tracking), and Adapter Health (status of all 41 KM adapters). Fetches from `/api/v1/knowledge/flow`, `/api/v1/knowledge/flow/confidence-history`, `/api/v1/knowledge/adapters/health`.
 
 **File:** `aragora/live/src/app/(app)/knowledge-flow/page.tsx`
 

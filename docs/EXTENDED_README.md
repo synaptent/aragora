@@ -301,7 +301,7 @@ aragora/
 │   ├── findings.py         # Findings management
 │   ├── defense.py          # Attack/defend cycles
 │   └── personas/           # GDPR, SOC2, HIPAA, PCI-DSS, AI Act, NIST CSF
-├── server/           # HTTP/WebSocket API (2,000+ operations, 190+ event types)
+├── server/           # HTTP/WebSocket API (3,000+ operations, 190+ event types)
 │   ├── unified_server.py   # Main server
 │   ├── handlers/           # HTTP endpoint handlers
 │   ├── stream/             # WebSocket streaming (26 modules)

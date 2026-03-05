@@ -14,7 +14,7 @@ flowchart TB
     end
 
     subgraph Server["Server Layer"]
-        HTTP["HTTP API (2,000+ operations)"]
+        HTTP["HTTP API (3,000+ operations)"]
         WS["WebSocket Streams (22 modules)"]
         Handlers["90 HTTP Handlers"]
         TTS["TTS / Voice Stream"]

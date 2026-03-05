@@ -1,7 +1,7 @@
 # Aragora: Canonical Goals & Foundational Thesis
 
 **Single source of truth for all goals across aragoradocs.**
-**This document defines WHAT Aragora is and WHY. The [Evolution Roadmap](../aragora/docs/plans/ARAGORA_EVOLUTION_ROADMAP.md) defines HOW.**
+**This document defines WHAT Aragora is and WHY. The [Evolution Roadmap](plans/ARAGORA_EVOLUTION_ROADMAP.md) defines HOW.**
 **Last updated: March 1, 2026**
 
 ---
@@ -264,7 +264,7 @@ These are not product features. They are the intellectual commitments that infor
 
 ### Evolution Roadmap Goals
 
-The [Evolution Roadmap](../aragora/docs/plans/ARAGORA_EVOLUTION_ROADMAP.md) is the HOW document implementing these goals. Summary of phase goals with pillar mapping:
+The [Evolution Roadmap](plans/ARAGORA_EVOLUTION_ROADMAP.md) is the HOW document implementing these goals. Summary of phase goals with pillar mapping:
 
 | Phase | Weeks | Key Goals | Pillar |
 |-------|-------|-----------|--------|
@@ -430,7 +430,7 @@ These claims require qualification in all documents:
 | Zero paying customers | Fatal | Stop building, start selling | Ground-up analysis |
 | Debate quality inconsistent (33% good-run rate) | Blocks demos | Fix output contract parsing, quality gates | DOGFOOD_SPEC |
 | EU AI Act enforcement delayed | Reduced urgency | Product value stands without regulation | BUSINESS_SUMMARY |
-| Well-funded competitor adds adversarial features | Category pressure | Technical moat (210+ debate modules, 34 KM adapters) | STRATEGIC_ANALYSIS |
+| Well-funded competitor adds adversarial features | Category pressure | Technical moat (210+ debate modules, 41 KM adapters) | STRATEGIC_ANALYSIS |
 | Solo maintainer (bus factor) | Existential | Comprehensive docs, MIT license, CI coverage | COMPREHENSIVE_REPORT |
 | LLM provider reliability | Debate failures | Circuit breaker, OpenRouter fallback, multi-provider | HONEST_ASSESSMENT |
 | Engagement-driven revenue corrupts epistemic output | Existential to thesis | SaaS subscription primary; avoid ad-supported model entirely | Terrarium Model |

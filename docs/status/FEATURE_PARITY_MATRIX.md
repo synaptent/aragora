@@ -151,7 +151,7 @@ Comprehensive technical comparison of Aragora against CrewAI, AutoGen, and LangG
 
 | Feature | Aragora | CrewAI | AutoGen | LangGraph |
 |---------|---------|--------|---------|-----------|
-| **HTTP API** | Yes (2,000+ operations) | Yes | Via wrappers | Via LangServe |
+| **HTTP API** | Yes (3,000+ operations) | Yes | Via wrappers | Via LangServe |
 | **WebSocket** | Yes (15 streams) | Partial | No | Yes |
 | **CLI** | Yes (20+ commands) | Yes | Partial | Partial |
 | **MCP Server** | Yes | No | No | No |
