@@ -1556,8 +1556,16 @@ class PlaygroundHandler(BaseHandler):
             agent_count = _DEFAULT_AGENTS
         agent_count = max(_MIN_AGENTS, min(agent_count, _MAX_AGENTS))
 
+        source = str(body.get("source", "") or "").strip() or "playground"
+
         return self._run_debate(
-            topic, rounds, agent_count, question=question, mode=mode, session_id=session_id
+            topic,
+            rounds,
+            agent_count,
+            question=question,
+            mode=mode,
+            session_id=session_id,
+            source=source,
         )
 
     def _run_debate(
@@ -1568,8 +1576,9 @@ class PlaygroundHandler(BaseHandler):
         question: str | None = None,
         mode: str = "consult",
         session_id: str | None = None,
+        source: str = "playground",
     ) -> HandlerResult:
-        if question:
+        if question and source == "oracle":
             # Oracle mode: try real LLM response first
             oracle_result = _try_oracle_response(
                 mode=mode, question=question, topic=topic, session_id=session_id
@@ -1601,6 +1610,19 @@ class PlaygroundHandler(BaseHandler):
                     "receipt_hash": None,
                 }
             )
+        elif question:
+            # Landing / other sources: multi-perspective tentacle debate with
+            # professional role prompts (no Oracle/Shoggoth branding)
+            tentacle_result = _try_oracle_tentacles(
+                mode,
+                question,
+                agent_count,
+                topic=topic,
+                source=source,
+            )
+            if tentacle_result:
+                result = json_response(tentacle_result)
+                return self._persist_and_respond(result, topic or question, source)
         else:
             # Normal playground: try aragora-debate package
             try:

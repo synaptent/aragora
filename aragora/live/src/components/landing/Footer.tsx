@@ -53,7 +53,7 @@ export function Footer() {
             }}
           >
             Try it now
-          </button>
+          </Link>
           <Link
             href="/signup"
             className="text-sm font-semibold transition-colors hover:opacity-80"
