@@ -215,6 +215,7 @@ if TYPE_CHECKING:
     )
     from .debates import DebatesHandler, GraphDebatesHandler, MatrixDebatesHandler
     from .debates.decision_package import DecisionPackageHandler
+    from .debates.public_viewer import PublicDebateViewerHandler
     from .debates.share import DebateShareHandler
     from .decision import DecisionHandler
     from .decisions import DecisionExplainHandler
@@ -804,6 +805,7 @@ __all__ = [
     # connectors
     "ConnectorManagementHandler",
     # debates/ sub-handlers
+    "PublicDebateViewerHandler",
     "DebateShareHandler",
     "DebateStatsHandler",
     "DecisionPackageHandler",

@@ -20,11 +20,29 @@ const API_BASE =
 
 /**
  * Fetch a saved debate from the backend API (server-side).
+ *
+ * Tries the public viewer endpoint first (no auth required, checks shareability),
+ * then falls back to the playground endpoint for backward compatibility.
  * Returns null when the debate cannot be fetched (not found, API down, etc.).
  */
 export async function fetchDebate(
   debateId: string,
 ): Promise<SavedDebate | null> {
+  // Try public viewer endpoint first (preferred for shared debates)
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/v1/debates/public/${debateId}`,
+      { next: { revalidate: 300 } },
+    );
+    if (res.ok) {
+      const data = await res.json();
+      return (data?.data ?? data) as SavedDebate;
+    }
+  } catch {
+    // Fall through to playground endpoint
+  }
+
+  // Fallback to playground endpoint
   try {
     const res = await fetch(
       `${API_BASE}/api/v1/playground/debate/${debateId}`,
@@ -32,7 +50,6 @@ export async function fetchDebate(
     );
     if (!res.ok) return null;
     const data = await res.json();
-    // API may wrap in { data: ... } or return the debate directly
     return (data?.data ?? data) as SavedDebate;
   } catch {
     return null;

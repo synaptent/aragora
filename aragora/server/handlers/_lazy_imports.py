@@ -61,6 +61,7 @@ HANDLER_MODULES: dict[str, str] = {
     # debates/ directory
     "DebatesHandler": "aragora.server.handlers.debates",
     "DebateShareHandler": "aragora.server.handlers.debates.share",
+    "PublicDebateViewerHandler": "aragora.server.handlers.debates.public_viewer",
     "DecisionPackageHandler": "aragora.server.handlers.debates.decision_package",
     "GraphDebatesHandler": "aragora.server.handlers.debates",
     "MatrixDebatesHandler": "aragora.server.handlers.debates",
@@ -578,6 +579,7 @@ ALL_HANDLER_NAMES: list[str] = [
     # connectors
     "ConnectorManagementHandler",
     # debates/ sub-handlers
+    "PublicDebateViewerHandler",
     "DebateShareHandler",
     "DebateStatsHandler",
     "DecisionPackageHandler",

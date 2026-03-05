@@ -57,6 +57,7 @@ from .routing import (
 from .search import SearchOperationsMixin
 from .interventions import DebateInterventionsHandler, INTERVENTION_ROUTES
 from .decision_package import DecisionPackageHandler
+from .public_viewer import PublicDebateViewerHandler
 from .share import (
     DebateShareHandler,
     get_public_collectors,
@@ -106,6 +107,8 @@ __all__ = [
     "ROUTES",
     "SUFFIX_ROUTES",
     "build_suffix_routes",
+    # Public debate viewer
+    "PublicDebateViewerHandler",
     # Share / public spectate
     "DebateShareHandler",
     "get_public_collectors",

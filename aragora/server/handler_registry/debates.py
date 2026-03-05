@@ -92,6 +92,9 @@ TemplateDiscoveryHandler = _safe_import(
 CompositeHandler = _safe_import("aragora.server.handlers.composite", "CompositeHandler")
 DebateStatsHandler = _safe_import("aragora.server.handlers.debate_stats", "DebateStatsHandler")
 DebateShareHandler = _safe_import("aragora.server.handlers.debates.share", "DebateShareHandler")
+PublicDebateViewerHandler = _safe_import(
+    "aragora.server.handlers.debates.public_viewer", "PublicDebateViewerHandler"
+)
 DebateInterventionsHandler = _safe_import(
     "aragora.server.handlers.debates.interventions", "DebateInterventionsHandler"
 )
@@ -151,6 +154,7 @@ DEBATE_HANDLER_REGISTRY: list[tuple[str, object]] = [
     # Debate stats, share, interventions
     ("_debate_stats_handler", DebateStatsHandler),
     ("_debate_share_handler", DebateShareHandler),
+    ("_public_debate_viewer_handler", PublicDebateViewerHandler),
     ("_debate_interventions_handler", DebateInterventionsHandler),
     # Decision package
     ("_decision_package_handler", DecisionPackageHandler),
@@ -206,6 +210,7 @@ __all__ = [
     "CompositeHandler",
     "DebateStatsHandler",
     "DebateShareHandler",
+    "PublicDebateViewerHandler",
     "DebateInterventionsHandler",
     "DecisionPackageHandler",
     "SettlementHandler",

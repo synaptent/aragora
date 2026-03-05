@@ -203,6 +203,7 @@ HANDLER_STABILITY: dict[str, Stability] = {
     "ConnectorManagementHandler": Stability.EXPERIMENTAL,
     # debates/ sub-handlers
     "DebateShareHandler": Stability.EXPERIMENTAL,
+    "PublicDebateViewerHandler": Stability.STABLE,
     "DebateStatsHandler": Stability.STABLE,
     "DecisionPackageHandler": Stability.EXPERIMENTAL,
     # email-related

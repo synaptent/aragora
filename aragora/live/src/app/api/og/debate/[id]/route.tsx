@@ -10,6 +10,21 @@ const API_BASE =
 const AGENT_COLORS = ['#39ff14', '#00ffff', '#bf00ff', '#ffd700', '#ff0040'];
 
 async function fetchDebate(debateId: string) {
+  // Try public viewer endpoint first (preferred for shared debates)
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/v1/debates/public/${debateId}`,
+      { next: { revalidate: 300 } },
+    );
+    if (res.ok) {
+      const data = await res.json();
+      return data?.data ?? data;
+    }
+  } catch {
+    // Fall through to playground endpoint
+  }
+
+  // Fallback to playground endpoint
   try {
     const res = await fetch(
       `${API_BASE}/api/v1/playground/debate/${debateId}`,
