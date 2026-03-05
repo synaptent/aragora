@@ -403,6 +403,24 @@ export class TeamsAPI {
     });
   }
 
+  /**
+   * Get a team by ID.
+   *
+   * @param teamId - The team identifier
+   * @returns Team details including name, members, and configuration
+   *
+   * @route GET /api/v1/teams/{teamId}
+   *
+   * @example
+   * ```typescript
+   * const team = await client.teams.getTeam('team-123');
+   * console.log(`Team: ${team.name} (${team.member_count} members)`);
+   * ```
+   */
+  async getTeam(teamId: string): Promise<Record<string, unknown>> {
+    return this.client.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}`);
+  }
+
   // ===========================================================================
   // Team Members & Stats
   // ===========================================================================

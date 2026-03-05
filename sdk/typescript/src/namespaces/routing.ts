@@ -499,4 +499,18 @@ export class RoutingAPI {
   async deleteBinding(bindingId: string): Promise<Record<string, unknown>> {
     return this.client.request('GET', `/api/v1/bindings/${encodeURIComponent(bindingId)}`);
   }
+
+  /**
+   * Delete a specific binding by provider, account, and peer pattern.
+   *
+   * This is the canonical 3-segment delete endpoint used for removing
+   * specific message routing bindings.
+   *
+   * @param provider - Provider name (e.g. 'slack', 'telegram')
+   * @param accountId - Account identifier
+   * @param peerPattern - Peer pattern to unbind
+   */
+  async deleteProviderBinding(provider: string, accountId: string, peerPattern: string): Promise<Record<string, unknown>> {
+    return this.client.request('DELETE', `/api/v1/bindings/${encodeURIComponent(provider)}/${encodeURIComponent(accountId)}/${encodeURIComponent(peerPattern)}`);
+  }
 }

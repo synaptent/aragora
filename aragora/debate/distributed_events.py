@@ -114,6 +114,10 @@ class AgentProposal:
     confidence: float = 0.0
     reasoning: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Trust-tier taint tracking (G2 security roadmap item)
+    trust_tier: str = "standard"  # "untrusted" | "standard" | "vetted" | "system"
+    taint_source: str | None = None  # e.g. "retrieved_context", "config_file"
+    taint_evidence: list[str] = field(default_factory=list)  # evidence IDs
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
@@ -126,6 +130,9 @@ class AgentProposal:
             "confidence": self.confidence,
             "reasoning": self.reasoning,
             "metadata": self.metadata,
+            "trust_tier": self.trust_tier,
+            "taint_source": self.taint_source,
+            "taint_evidence": self.taint_evidence,
         }
 
 

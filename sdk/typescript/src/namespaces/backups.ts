@@ -232,4 +232,71 @@ export class BackupsAPI {
   async getStats(): Promise<{ stats: BackupStats; generated_at: string }> {
     return this.client.request('GET', '/api/v2/backups/stats');
   }
+
+  // ===========================================================================
+  // Backup Schedules
+  // ===========================================================================
+
+  /**
+   * Create a backup schedule for automated backups.
+   *
+   * @param options - Schedule configuration
+   * @returns Created schedule details
+   *
+   * @example
+   * ```typescript
+   * const schedule = await client.backups.createSchedule({
+   *   name: 'Daily backup',
+   *   cron: '0 2 * * *',
+   *   backup_type: 'incremental',
+   *   retention_days: 30,
+   * });
+   * console.log(`Schedule created: ${schedule.schedule_id}`);
+   * ```
+   */
+  async createSchedule(options: {
+    name: string;
+    cron: string;
+    backup_type?: string;
+    retention_days?: number;
+    enabled?: boolean;
+  }): Promise<Record<string, unknown>> {
+    return this.client.request('POST', '/api/v1/backups/schedules', { json: options as unknown as Record<string, unknown> });
+  }
+
+  /**
+   * List all backup schedules.
+   *
+   * @returns List of configured backup schedules
+   */
+  async listSchedules(): Promise<{ schedules: Record<string, unknown>[]; count: number }> {
+    return this.client.request('GET', '/api/v1/backups/schedules');
+  }
+
+  /**
+   * Delete a backup schedule.
+   *
+   * @param scheduleId - Schedule identifier to delete
+   * @returns Deletion confirmation
+   */
+  async deleteSchedule(scheduleId: string): Promise<{ success: boolean }> {
+    return this.client.request('DELETE', `/api/v1/backups/schedules/${encodeURIComponent(scheduleId)}`);
+  }
+
+  /**
+   * Restore a backup to the system.
+   *
+   * @param backupId - Backup identifier to restore
+   * @param options - Restore options
+   * @returns Restore operation result
+   *
+   * @example
+   * ```typescript
+   * const result = await client.backups.restore('backup-123', { dry_run: true });
+   * console.log(`Restore status: ${result.status}`);
+   * ```
+   */
+  async restore(backupId: string, options?: { dry_run?: boolean; target?: string }): Promise<Record<string, unknown>> {
+    return this.client.request('POST', `/api/v1/backups/${encodeURIComponent(backupId)}/restore`, { json: options as unknown as Record<string, unknown> ?? {} });
+  }
 }

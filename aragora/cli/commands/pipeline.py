@@ -44,6 +44,111 @@ def _normalize_objective_text(value: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", value.lower())).strip()
 
 
+def _check_objective_fidelity(
+    original_goal: str,
+    objectives: list[str],
+) -> list[float]:
+    """Score how well each objective relates to the original goal.
+
+    Uses LLM semantic assessment as primary method, falling back to
+    word-overlap scoring when LLM is unavailable.
+
+    Returns a list of scores in [0.0, 1.0], one per objective.
+    """
+    # Try LLM-based fidelity scoring first
+    try:
+        scores = _check_fidelity_llm(original_goal, objectives)
+        if scores is not None:
+            return scores
+    except Exception:
+        pass
+
+    # Fallback: keyword-based Jaccard similarity
+    return _check_fidelity_keywords(original_goal, objectives)
+
+
+def _check_fidelity_llm(
+    original_goal: str,
+    objectives: list[str],
+) -> list[float] | None:
+    """Use LLM to score semantic alignment between goal and objectives."""
+    import asyncio
+    import json as _json
+
+    try:
+        from aragora.agents import create_agent
+        from aragora.agents.base import AgentType
+    except ImportError:
+        return None
+
+    agent = None
+    for agent_type in ("anthropic-api", "openai-api", "deepseek"):
+        try:
+            agent = create_agent(AgentType(agent_type))  # type: ignore[arg-type]
+            if agent is not None:
+                break
+        except (ImportError, ValueError, TypeError):
+            continue
+
+    if agent is None:
+        return None
+
+    obj_list = "\n".join(f"{i + 1}. {obj}" for i, obj in enumerate(objectives))
+    prompt = (
+        f"Rate how well each objective addresses the original goal.\n\n"
+        f"Original goal: {original_goal}\n\n"
+        f"Objectives:\n{obj_list}\n\n"
+        f"Reply with ONLY a JSON array of scores from 0.0 to 1.0, "
+        f"one per objective. Example: [0.9, 0.3, 0.7]"
+    )
+
+    try:
+        response = asyncio.run(agent.generate(prompt))
+        # Extract JSON array from response
+        match = re.search(r"\[[\d.,\s]+\]", response)
+        if match:
+            scores = _json.loads(match.group())
+            if len(scores) == len(objectives):
+                return [max(0.0, min(1.0, float(s))) for s in scores]
+    except Exception:
+        pass
+
+    return None
+
+
+def _check_fidelity_keywords(
+    original_goal: str,
+    objectives: list[str],
+) -> list[float]:
+    """Fallback: score fidelity using Jaccard word overlap."""
+    _STOP_WORDS = frozenset(
+        "a an the and or but in on of to for is are was were be been "
+        "being have has had do does did will would shall should may might "
+        "can could with at by from as into through during before after "
+        "above below between this that these those it its".split()
+    )
+
+    def _significant_words(text: str) -> set[str]:
+        words = set(re.findall(r"[a-z][a-z_/.-]+", text.lower()))
+        return words - _STOP_WORDS
+
+    goal_words = _significant_words(original_goal)
+    if not goal_words:
+        return [1.0] * len(objectives)
+
+    scores: list[float] = []
+    for obj in objectives:
+        obj_words = _significant_words(obj)
+        if not obj_words:
+            scores.append(0.0)
+            continue
+        intersection = goal_words & obj_words
+        union = goal_words | obj_words
+        scores.append(len(intersection) / len(union) if union else 0.0)
+
+    return scores
+
+
 def _extract_pipeline_objectives(
     pipeline_result: Any | None,
     max_goals: int,
@@ -452,6 +557,35 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
     if not objectives:
         objectives = [goal]
 
+    # Step 3b: Objective-fidelity check — verify extracted objectives
+    # still relate to the original goal (detect intent drift)
+    fidelity_scores = _check_objective_fidelity(goal, objectives)
+    drifted = [obj for obj, score in zip(objectives, fidelity_scores) if score < 0.1]
+    if drifted:
+        print(
+            f"[FIDELITY WARNING] {len(drifted)}/{len(objectives)} objectives "
+            f"may have drifted from original goal."
+        )
+        for obj in drifted:
+            print(f"  - {obj[:80]}...")
+        # Replace drifted objectives with original goal
+        objectives = [
+            obj if score >= 0.1 else goal for obj, score in zip(objectives, fidelity_scores)
+        ]
+        # Deduplicate
+        seen: set[str] = set()
+        deduped: list[str] = []
+        for obj in objectives:
+            if obj not in seen:
+                seen.add(obj)
+                deduped.append(obj)
+        objectives = deduped
+        print(
+            f"  Replaced drifted objectives with original goal. "
+            f"{len(objectives)} unique objectives remaining."
+        )
+        print()
+
     print("-" * 60)
     print("STEP 4: HANDOFF TO SELF-IMPROVEMENT ENGINE")
     print("-" * 60)
@@ -460,12 +594,10 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
         print(f"  {i}. {objective}")
     print()
 
-    if not execute:
+    if not execute and not dry_run:
         print("Handoff not executed (planning mode).")
         print("\nTo execute the handoff:")
         cmd = f'aragora pipeline self-improve "{goal}" --execute'
-        if dry_run:
-            cmd += " --dry-run"
         if budget_limit is not None:
             cmd += f" --budget-limit {budget_limit}"
         if require_approval:
@@ -475,6 +607,8 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
             cmd += " --quick-mode"
         cmd += f" --max-parallel {max_parallel}"
         print(f"  {cmd}")
+        print("\nTo preview the plan first:")
+        print(f"  {cmd} --dry-run")
         print()
         return
 

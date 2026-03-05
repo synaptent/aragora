@@ -432,11 +432,11 @@ describe('AdminAPI Namespace', () => {
         lifetime_issued: 1000,
         lifetime_used: 250,
       };
-      mockClient.getCreditAccount.mockResolvedValue(mockAccount);
+      mockClient.request.mockResolvedValue(mockAccount);
 
       const result = await api.getCreditAccount('org1');
 
-      expect(mockClient.getCreditAccount).toHaveBeenCalledWith('org1');
+      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/admin/organizations/org1/credits');
       expect(result.balance).toBe(750);
     });
 
@@ -448,11 +448,11 @@ describe('AdminAPI Namespace', () => {
         ],
         total: 2,
       };
-      mockClient.listCreditTransactions.mockResolvedValue(mockTransactions);
+      mockClient.request.mockResolvedValue(mockTransactions);
 
       const result = await api.listCreditTransactions('org1');
 
-      expect(mockClient.listCreditTransactions).toHaveBeenCalledWith('org1', undefined);
+      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/admin/organizations/org1/credits/transactions', { params: undefined });
       expect(result.transactions).toHaveLength(2);
     });
 
@@ -463,13 +463,12 @@ describe('AdminAPI Namespace', () => {
         lifetime_issued: 1000,
         lifetime_used: 500,
       };
-      mockClient.adjustCreditBalance.mockResolvedValue(mockAccount);
+      mockClient.request.mockResolvedValue(mockAccount);
 
       const result = await api.adjustCredits('org1', -250, 'Refund adjustment');
 
-      expect(mockClient.adjustCreditBalance).toHaveBeenCalledWith('org1', {
-        amount: -250,
-        reason: 'Refund adjustment',
+      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/v1/admin/organizations/org1/credits', {
+        body: { amount: -250, reason: 'Refund adjustment' },
       });
       expect(result.balance).toBe(500);
     });
@@ -481,11 +480,11 @@ describe('AdminAPI Namespace', () => {
           { amount: 300, expires_at: '2024-02-28' },
         ],
       };
-      mockClient.getExpiringCredits.mockResolvedValue(mockExpiring);
+      mockClient.request.mockResolvedValue(mockExpiring);
 
       const result = await api.getExpiringCredits('org1');
 
-      expect(mockClient.getExpiringCredits).toHaveBeenCalledWith('org1');
+      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/v1/admin/organizations/org1/credits/expiring');
       expect(result.credits).toHaveLength(2);
     });
   });

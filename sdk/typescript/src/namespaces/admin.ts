@@ -294,28 +294,28 @@ export class AdminAPI {
    * Get credit account for an organization.
    */
   async getCreditAccount(orgId: string): Promise<Record<string, unknown>> {
-    return this.client.getCreditAccount(orgId);
+    return this.client.request('GET', `/api/v1/admin/organizations/${orgId}/credits`);
   }
 
   /**
    * List credit transactions for an organization.
    */
   async listCreditTransactions(orgId: string, params?: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.client.listCreditTransactions(orgId, params);
+    return this.client.request('GET', `/api/v1/admin/organizations/${orgId}/credits/transactions`, { params });
   }
 
   /**
    * Adjust credit balance for an organization.
    */
   async adjustCredits(orgId: string, amount: number, reason: string): Promise<Record<string, unknown>> {
-    return this.client.adjustCreditBalance(orgId, { amount, reason });
+    return this.client.request('POST', `/api/v1/admin/organizations/${orgId}/credits`, { body: { amount, reason } });
   }
 
   /**
    * Get expiring credits for an organization.
    */
   async getExpiringCredits(orgId: string): Promise<Record<string, unknown>> {
-    return this.client.getExpiringCredits(orgId);
+    return this.client.request('GET', `/api/v1/admin/organizations/${orgId}/credits/expiring`);
   }
 
   // ===========================================================================

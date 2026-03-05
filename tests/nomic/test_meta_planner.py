@@ -1229,16 +1229,17 @@ class TestHeuristicCodebaseHints:
             tracks = [Track.SECURITY, Track.QA, Track.CORE]
             goals = planner._heuristic_prioritize("hardening", tracks)
 
-        # Verify each file ended up in the correct track's hints
-        hints_by_track = {g.track: g.file_hints for g in goals}
-        assert "aragora/auth/oidc.py" in hints_by_track.get(Track.SECURITY, []), (
-            f"Expected auth file in SECURITY hints, got {hints_by_track}"
+        # "hardening" matches SECURITY, so we get a single SECURITY goal
+        # with all relevant file hints (not one goal per track).
+        assert len(goals) >= 1, f"Expected at least 1 goal, got {len(goals)}"
+        security_goals = [g for g in goals if g.track == Track.SECURITY]
+        assert len(security_goals) >= 1, (
+            f"Expected SECURITY goal for 'hardening', got tracks: {[g.track for g in goals]}"
         )
-        assert "tests/test_auth.py" in hints_by_track.get(Track.QA, []), (
-            f"Expected test file in QA hints, got {hints_by_track}"
-        )
-        assert "aragora/debate/orchestrator.py" in hints_by_track.get(Track.CORE, []), (
-            f"Expected debate file in CORE hints, got {hints_by_track}"
+        # File hints for the best-matching track should include security files
+        security_hints = security_goals[0].file_hints
+        assert "aragora/auth/oidc.py" in security_hints, (
+            f"Expected auth file in SECURITY hints, got {security_hints}"
         )
 
     def test_heuristic_with_empty_codebase(self):

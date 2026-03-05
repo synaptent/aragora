@@ -1712,22 +1712,21 @@ class MetaPlanner:
                     )
                 )
 
-        # Add goals for available tracks that don't have specific keyword matches.
-        # Carry the original objective through so agents know the actual task.
-        priority = len(goals) + 1
-        for track in available_tracks:
-            if not any(g.track == track for g in goals):
-                goals.append(
-                    PrioritizedGoal(
-                        id=f"goal_{priority - 1}",
-                        track=track,
-                        description=f"[{track.value}] {objective}",
-                        rationale=f"Addresses objective within {track.value} track scope",
-                        estimated_impact="medium",
-                        priority=priority,
-                    )
+        # If no keyword-specific goals were generated, create a single goal
+        # on the best-matching track (not all tracks — broadcasting the same
+        # objective to every track produces duplicates, not decomposition).
+        if not goals:
+            best_track = infer_track(objective, available_tracks)
+            goals.append(
+                PrioritizedGoal(
+                    id="goal_0",
+                    track=best_track,
+                    description=f"[{best_track.value}] {objective}",
+                    rationale="Best-matching track for objective via keyword scoring",
+                    estimated_impact="medium",
+                    priority=1,
                 )
-                priority += 1
+            )
 
         # Enrich goals with codebase file hints
         for goal in goals:

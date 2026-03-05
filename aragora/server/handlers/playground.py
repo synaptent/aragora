@@ -273,7 +273,7 @@ _MOCK_CONFIDENCE: dict[str, float] = {
 # ---------------------------------------------------------------------------
 
 _ORACLE_MODEL_ANTHROPIC = "claude-sonnet-4-6"
-_ORACLE_MODEL_OPENAI = "gpt-5.3"
+_ORACLE_MODEL_OPENAI = "gpt-5.3-chat"
 _ORACLE_MODEL_OPENROUTER = "anthropic/claude-opus-4.6"  # OpenRouter fallback
 _ORACLE_CALL_TIMEOUT = 45.0  # seconds — focused essay + OpenRouter latency
 
@@ -320,13 +320,13 @@ _TENTACLE_MODELS: list[dict[str, str]] = [
     },
     {
         "provider": "openrouter",
-        "model": "google/gemini-3.1-pro-preview",
+        "model": "google/gemini-2.5-pro",
         "name": "gemini",
         "env": "OPENROUTER_API_KEY",
     },
     {
         "provider": "openrouter",
-        "model": "mistralai/mistral-large-2512",
+        "model": "mistralai/mistral-large",
         "name": "mistral",
         "env": "OPENROUTER_API_KEY",
     },
@@ -380,6 +380,8 @@ def _call_provider_llm(
             AttributeError,
         ):
             logger.warning("Anthropic tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
+            logger.warning("Anthropic tentacle call failed (%s)", model, exc_info=True)
         return None
 
     if provider == "openai":
@@ -407,6 +409,8 @@ def _call_provider_llm(
             AttributeError,
         ):
             logger.warning("OpenAI tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
+            logger.warning("OpenAI tentacle call failed (%s)", model, exc_info=True)
         return None
 
     if provider == "xai":
@@ -433,6 +437,8 @@ def _call_provider_llm(
             KeyError,
             AttributeError,
         ):
+            logger.warning("xAI tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
             logger.warning("xAI tentacle call failed (%s)", model, exc_info=True)
         return None
 
@@ -465,6 +471,8 @@ def _call_provider_llm(
             AttributeError,
         ):
             logger.warning("OpenRouter tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
+            logger.warning("OpenRouter tentacle call failed (%s)", model, exc_info=True)
         return None
 
     if provider == "google":
@@ -488,6 +496,8 @@ def _call_provider_llm(
             KeyError,
             AttributeError,
         ):
+            logger.warning("Google tentacle call failed (%s)", model, exc_info=True)
+        except Exception:
             logger.warning("Google tentacle call failed (%s)", model, exc_info=True)
         return None
 
@@ -1071,6 +1081,8 @@ def _try_oracle_tentacles(
                 TimeoutError,
             ):
                 logger.warning("Tentacle future failed", exc_info=True)
+            except Exception:
+                logger.warning("Tentacle future failed (unexpected)", exc_info=True)
 
     if not results:
         logger.warning("All %d tentacle calls failed — no results", count)
@@ -1560,6 +1572,9 @@ class PlaygroundHandler(BaseHandler):
 
         # Oracle mode (consult / divine / commune)
         mode = str(body.get("mode", "") or "").strip() or "consult"
+
+        # Source: "oracle" for Oracle page, "landing" for main site, etc.
+        source = str(body.get("source", "") or "").strip() or "oracle"
 
         # Session ID for follow-up conversation memory
         session_id = str(body.get("session_id", "") or "").strip() or None
