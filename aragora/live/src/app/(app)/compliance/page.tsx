@@ -624,11 +624,25 @@ export default function CompliancePage() {
   const { entries: auditEntries, auditFallback, isLoading: auditLoading } = useAuditTrail(8);
   const { data: healthData, isLoading: healthLoading } = useSWRFetch<HealthResponse>('/api/health', { refreshInterval: 60000 });
 
+  // New RBAC coverage endpoint (v1) — used to populate the RBAC coverage card
+  const { data: v1RbacData, isLoading: v1RbacLoading } = useSWRFetch<{
+    data: { covered_endpoints: number; total_endpoints: number; coverage_pct: number };
+  }>('/api/v1/compliance/rbac-coverage', { refreshInterval: 300000 });
+
   // Derive framework indicators from the status endpoint
   const frameworkData = buildFrameworkIndicators(complianceStatus);
 
   // Effective data: backend or fallback
-  const effectiveRBAC = rbac ?? rbacFallback;
+  // For the RBAC panel, prefer the v1 endpoint's coverage_pct over the v2 value
+  const baseRBAC = rbac ?? rbacFallback;
+  const effectiveRBAC: RBACCoverage = v1RbacData?.data
+    ? {
+        ...baseRBAC,
+        coverage_percent: v1RbacData.data.coverage_pct,
+        total_endpoints: v1RbacData.data.total_endpoints,
+        unprotected_endpoints: v1RbacData.data.total_endpoints - v1RbacData.data.covered_endpoints,
+      }
+    : baseRBAC;
   const effectiveEncryption = encryption ?? encryptionFallback;
   const effectiveAudit = auditEntries ?? auditFallback;
   const dbMode: string = (healthData as HealthResponse | null)?.db_mode
@@ -798,7 +812,7 @@ export default function CompliancePage() {
         {/* ============================================================= */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <PanelErrorBoundary panelName="RBAC Coverage">
-            <RBACCoveragePanel data={effectiveRBAC} loading={rbacLoading && !rbac} />
+            <RBACCoveragePanel data={effectiveRBAC} loading={(rbacLoading && !rbac) || (v1RbacLoading && !v1RbacData)} />
           </PanelErrorBoundary>
 
           <PanelErrorBoundary panelName="Encryption Status">

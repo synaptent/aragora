@@ -1080,6 +1080,7 @@ def enable_persistent_auditing() -> PersistentAuditHandler:
     auditor = get_auditor()
     auditor.add_handler(handler.handle_event)
     logger.info("Persistent RBAC audit logging enabled")
+    return handler
 
 
 # =============================================================================
