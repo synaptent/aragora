@@ -105,6 +105,7 @@ class ComplianceHandler(
     """
 
     ROUTES = [
+        "/api/v1/compliance/rbac-coverage",
         "/api/v2/compliance",
         "/api/v2/compliance/*",
     ]
@@ -115,6 +116,8 @@ class ComplianceHandler(
 
     def can_handle(self, path: str, method: str = "GET") -> bool:
         """Check if this handler can process the request."""
+        if path == "/api/v1/compliance/rbac-coverage":
+            return method == "GET"
         if path.startswith("/api/v2/compliance"):
             return method in ("GET", "POST", "DELETE")
         return False
@@ -137,6 +140,10 @@ class ComplianceHandler(
         query_params = query_params or {}
 
         try:
+            # RBAC coverage endpoint (v1)
+            if path == "/api/v1/compliance/rbac-coverage" and method == "GET":
+                return await self._get_rbac_coverage()
+
             # Status endpoint
             if path == "/api/v2/compliance/status" and method == "GET":
                 emit_handler_event("compliance", QUERIED, {"endpoint": "status"})
@@ -289,6 +296,27 @@ class ComplianceHandler(
         except (ValueError, KeyError, TypeError, RuntimeError, OSError) as e:
             logger.exception("Error handling compliance request: %s", e)
             return error_response("Internal server error", 500)
+
+    async def _get_rbac_coverage(self) -> "HandlerResult":
+        """
+        GET /api/v1/compliance/rbac-coverage
+
+        Returns RBAC endpoint coverage metrics.
+
+        Response shape:
+            {"data": {"covered_endpoints": N, "total_endpoints": M, "coverage_pct": 87.5}}
+        """
+        from aragora.server.handlers.base import json_response
+
+        try:
+            from aragora.rbac.audit import compute_endpoint_coverage
+
+            coverage = compute_endpoint_coverage()
+        except (ImportError, RuntimeError, TypeError, ValueError, OSError) as exc:
+            logger.warning("RBAC coverage scan failed, using fallback: %s", exc)
+            coverage = {"covered_endpoints": 0, "total_endpoints": 0, "coverage_pct": 0.0}
+
+        return json_response({"data": coverage})
 
     # Backward compatible timestamp parser (used in tests)
     _parse_timestamp = staticmethod(parse_timestamp)

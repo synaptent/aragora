@@ -27,6 +27,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { useAuth } from '@/context/AuthContext';
+import { useSWRFetch } from '@/hooks/useSWRFetch';
 import {
   useComplianceStatus,
   useRBACCoverage,
@@ -353,6 +354,51 @@ function RBACCoveragePanel({ data, loading }: { data: RBACCoverage; loading: boo
 }
 
 // ---------------------------------------------------------------------------
+// Panel: Database Mode
+// ---------------------------------------------------------------------------
+
+interface HealthResponse {
+  status?: string;
+  db_mode?: string;
+  database_mode?: string;
+  components?: Record<string, { status?: string }>;
+}
+
+function DatabaseModePanel({ dbMode, loading }: { dbMode: string; loading: boolean }) {
+  const isKnown = dbMode !== 'unknown';
+  const modeColor = isKnown ? 'text-green-400' : 'text-[var(--text-muted)]';
+  const modeBg = isKnown ? 'bg-green-500/20' : 'bg-[var(--bg-secondary)]';
+
+  return (
+    <div className="border border-[var(--border)] bg-[var(--bg-secondary)] rounded p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-mono font-bold text-[var(--text-primary)] uppercase tracking-wider">
+          Database Mode
+        </h3>
+        <span className="text-[10px] font-mono text-[var(--text-muted)]">/api/health</span>
+      </div>
+
+      {loading ? (
+        <div className="text-xs font-mono text-[var(--text-muted)] animate-pulse">
+          Scanning database status...
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className={`inline-flex items-center gap-2 px-3 py-2 rounded ${modeBg}`}>
+            <span className={`text-sm font-mono font-bold ${modeColor}`}>{dbMode}</span>
+          </div>
+          <div className="text-[10px] font-mono text-[var(--text-muted)]">
+            {isKnown
+              ? 'Database mode reported by health endpoint'
+              : 'db_mode not present in health response — server may not expose this field'}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Panel: Encryption Status
 // ---------------------------------------------------------------------------
 
@@ -576,6 +622,7 @@ export default function CompliancePage() {
   const { rbac, rbacFallback, isLoading: rbacLoading } = useRBACCoverage();
   const { encryption, encryptionFallback, isLoading: encryptionLoading } = useEncryptionStatus();
   const { entries: auditEntries, auditFallback, isLoading: auditLoading } = useAuditTrail(8);
+  const { data: healthData, isLoading: healthLoading } = useSWRFetch<HealthResponse>('/api/health', { refreshInterval: 60000 });
 
   // Derive framework indicators from the status endpoint
   const frameworkData = buildFrameworkIndicators(complianceStatus);
@@ -584,6 +631,9 @@ export default function CompliancePage() {
   const effectiveRBAC = rbac ?? rbacFallback;
   const effectiveEncryption = encryption ?? encryptionFallback;
   const effectiveAudit = auditEntries ?? auditFallback;
+  const dbMode: string = (healthData as HealthResponse | null)?.db_mode
+    ?? (healthData as HealthResponse | null)?.database_mode
+    ?? 'unknown';
 
   // EU AI Act interactive state
   const [euAiActExpanded, setEuAiActExpanded] = useState(false);
@@ -753,6 +803,15 @@ export default function CompliancePage() {
 
           <PanelErrorBoundary panelName="Encryption Status">
             <EncryptionStatusPanel data={effectiveEncryption} loading={encryptionLoading && !encryption} />
+          </PanelErrorBoundary>
+        </div>
+
+        {/* ============================================================= */}
+        {/* Section 1b: Database Mode                                      */}
+        {/* ============================================================= */}
+        <div className="mb-6">
+          <PanelErrorBoundary panelName="Database Mode">
+            <DatabaseModePanel dbMode={dbMode} loading={healthLoading && !healthData} />
           </PanelErrorBoundary>
         </div>
 

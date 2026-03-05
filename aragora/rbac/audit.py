@@ -1080,4 +1080,79 @@ def enable_persistent_auditing() -> PersistentAuditHandler:
     auditor = get_auditor()
     auditor.add_handler(handler.handle_event)
     logger.info("Persistent RBAC audit logging enabled")
-    return handler
+
+
+# =============================================================================
+# Endpoint Coverage Scan
+# =============================================================================
+
+
+def compute_endpoint_coverage() -> dict[str, Any]:
+    """
+    Scan handler modules and count endpoints decorated with @require_permission.
+
+    Uses grep-based introspection of the handler source tree to count:
+    - total_endpoints: all ``async def handle`` / ``async def _handle_*`` methods
+      across handler modules.
+    - covered_endpoints: those that reference ``require_permission`` in their
+      source (either as a decorator or via a direct call).
+
+    Returns a dict with keys:
+        covered_endpoints (int): number of endpoints with RBAC decoration.
+        total_endpoints (int): total endpoints found.
+        coverage_pct (float): percentage covered, 0.0–100.0.
+
+    This function never raises — it returns zeros on scan failure.
+    """
+    import pathlib
+    import re
+
+    handlers_root = pathlib.Path(__file__).parent.parent / "server" / "handlers"
+    if not handlers_root.is_dir():
+        return {"covered_endpoints": 0, "total_endpoints": 0, "coverage_pct": 0.0}
+
+    total = 0
+    covered = 0
+
+    # Pattern for async handler methods (handle, _handle_*, _get_*, _post_*, etc.)
+    method_pattern = re.compile(
+        r"^\s+(?:@[^\n]+\n\s+)*async\s+def\s+(?:handle|_handle_|_get_|_post_|_put_|_patch_|_delete_|_list_|_create_|_update_)",
+        re.MULTILINE,
+    )
+    require_pattern = re.compile(r"require_permission\s*\(")
+
+    try:
+        for py_file in handlers_root.rglob("*.py"):
+            # Skip test files, __pycache__, and __init__
+            if any(p in py_file.parts for p in ("__pycache__", "tests")):
+                continue
+            if py_file.name.startswith("__"):
+                continue
+
+            try:
+                source = py_file.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+
+            # Find all async handler methods in this file
+            for match in method_pattern.finditer(source):
+                total += 1
+                # Look at up to 10 lines before the def for decorators
+                start = max(0, match.start() - 500)
+                context = source[start : match.start() + len(match.group())]
+                if require_pattern.search(context):
+                    covered += 1
+
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        logger.debug("Endpoint coverage scan failed: %s", exc)
+        return {"covered_endpoints": 0, "total_endpoints": 0, "coverage_pct": 0.0}
+
+    if total == 0:
+        return {"covered_endpoints": 0, "total_endpoints": 0, "coverage_pct": 0.0}
+
+    coverage_pct = round(covered / total * 100, 1)
+    return {
+        "covered_endpoints": covered,
+        "total_endpoints": total,
+        "coverage_pct": coverage_pct,
+    }
