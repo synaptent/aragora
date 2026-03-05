@@ -39,4 +39,9 @@ export class FlipsAPI {
   async getSummary(params?: { period?: string }): Promise<FlipSummary> {
     return this.client.request('GET', '/api/v1/flips/summary', { params: params as Record<string, unknown> });
   }
+
+  /** Get a specific flip by ID. */
+  async get(flipId: string): Promise<FlipEntry> {
+    return this.client.request('GET', `/api/v1/flips/${encodeURIComponent(flipId)}`);
+  }
 }

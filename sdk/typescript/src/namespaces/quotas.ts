@@ -91,4 +91,32 @@ export class QuotasNamespace {
       { body: { limit } }
     );
   }
+
+  /**
+   * Request a quota increase for a resource.
+   *
+   * Submits a request for a higher quota limit. Requests are reviewed
+   * and typically processed within 1-2 business days.
+   *
+   * @param resource - Resource type to increase (e.g. 'debates', 'api_calls')
+   * @param requestedLimit - Desired new limit value
+   * @param reason - Business justification for the increase
+   *
+   * @example
+   * ```typescript
+   * const req = await client.quotas.requestIncrease('debates', 500, 'Running enterprise evaluation');
+   * console.log(`Request ${req.request_id}: ${req.status}`);
+   * ```
+   */
+  async requestIncrease(
+    resource: string,
+    requestedLimit: number,
+    reason?: string
+  ): Promise<{ request_id: string; status: string; resource: string; requested_limit: number }> {
+    return this.client.request(
+      'POST',
+      '/api/v1/quotas/request-increase',
+      { body: { resource, requested_limit: requestedLimit, reason } }
+    );
+  }
 }

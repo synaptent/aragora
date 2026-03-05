@@ -323,4 +323,25 @@ export class InboxCommandAPI {
       json: data,
     });
   }
+
+  /** Acknowledge an inbox mention. */
+  async acknowledgeMention(mentionId: string): Promise<{ success: boolean; mention_id: string }> {
+    return this.client.request('POST', `/api/v1/inbox/mentions/${encodeURIComponent(mentionId)}/acknowledge`);
+  }
+
+  /** Send a message from the inbox. */
+  async sendMessage(options: {
+    to: string | string[];
+    subject?: string;
+    body: string;
+    reply_to?: string;
+    account_id?: string;
+  }): Promise<{ message_id: string; status: string }> {
+    return this.client.request('POST', '/api/v1/inbox/messages/send', { json: options as unknown as Record<string, unknown> });
+  }
+
+  /** Start a debate from an inbox message. */
+  async debateMessage(messageId: string, options?: { agents?: string[]; rounds?: number }): Promise<{ debate_id: string; status: string }> {
+    return this.client.request('POST', `/api/v1/inbox/messages/${encodeURIComponent(messageId)}/debate`, { json: options as unknown as Record<string, unknown> });
+  }
 }
