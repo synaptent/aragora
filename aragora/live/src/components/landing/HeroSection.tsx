@@ -348,6 +348,18 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
           </button>
         </form>
 
+        {/* Secondary CTA — no account needed */}
+        {!isRunning && !result && (
+          <div className="mt-3 text-center">
+            <a
+              href="/demo"
+              className="inline-flex items-center text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              Try a live debate — no account needed →
+            </a>
+          </div>
+        )}
+
         {/* Loading state — phased progress */}
         {isRunning && (
           <div className="mt-8 max-w-xl mx-auto">
