@@ -5,6 +5,7 @@ Provides CLI access to EU AI Act compliance tooling and the compliance framework
 - aragora compliance audit <receipt_file>  -- Generate conformity report
 - aragora compliance classify <description> -- Classify use case by risk level
 - aragora compliance eu-ai-act generate    -- Generate full artifact bundle (Art. 9, 12-15)
+- aragora compliance export                -- Export structured compliance bundle for a debate
 - aragora compliance --generate-artifacts  -- Shorthand for eu-ai-act generate
 - aragora compliance status                -- Show compliance framework status
 - aragora compliance report                -- Generate a compliance framework report
@@ -167,6 +168,11 @@ def add_compliance_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Free-text description of the AI use case",
     )
 
+    # -- aragora compliance export --
+    from aragora.cli.commands.compliance_export import add_export_subparser
+
+    add_export_subparser(sub)
+
     # -- aragora compliance eu-ai-act generate --
     eu_p = sub.add_parser(
         "eu-ai-act",
@@ -258,6 +264,10 @@ def cmd_compliance(args: argparse.Namespace) -> None:
         _cmd_audit(args)
     elif command == "classify":
         _cmd_classify(args)
+    elif command == "export":
+        from aragora.cli.commands.compliance_export import cmd_compliance_export
+
+        cmd_compliance_export(args)
     elif command == "eu-ai-act":
         eu_command = getattr(args, "eu_ai_act_command", None)
         if eu_command == "generate":
@@ -271,7 +281,7 @@ def cmd_compliance(args: argparse.Namespace) -> None:
             print("Omit receipt_file to generate a demonstration bundle with synthetic data.")
             sys.exit(1)
     else:
-        print("Usage: aragora compliance {status,report,check,audit,classify,eu-ai-act}")
+        print("Usage: aragora compliance {status,report,check,audit,classify,export,eu-ai-act}")
         print()
         print("  Framework commands (offline):")
         print("    status     Show compliance framework status")
@@ -281,6 +291,7 @@ def cmd_compliance(args: argparse.Namespace) -> None:
         print("  EU AI Act commands:")
         print("    audit      Generate EU AI Act conformity report from a receipt")
         print("    classify   Classify a use case by EU AI Act risk level")
+        print("    export     Export structured compliance bundle for a debate")
         print("    eu-ai-act  Generate compliance artifact bundles (Articles 12/13/14)")
         sys.exit(1)
 
