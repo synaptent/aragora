@@ -864,6 +864,49 @@ class Article14Artifact:
 
 
 @dataclass
+class Article9Artifact:
+    """EU AI Act Article 9 — Risk Management System artifact."""
+
+    artifact_id: str
+    receipt_id: str
+    generated_at: str
+
+    # Risk identification
+    risk_identification_methodology: str
+    identified_risks: list[dict]  # [{risk_id, description, likelihood, severity, category}]
+
+    # Reasonably foreseeable misuse
+    foreseeable_misuse_scenarios: list[str]
+
+    # Risk mitigation
+    risk_mitigation_measures: list[dict]  # [{risk_id, measure, residual_risk_level}]
+
+    # Residual risk assessment
+    residual_risks: list[dict]
+    overall_residual_risk_level: str  # "acceptable" | "conditional" | "unacceptable"
+
+    # Monitoring plan
+    post_market_monitoring_plan: str
+
+    integrity_hash: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "artifact_id": self.artifact_id,
+            "receipt_id": self.receipt_id,
+            "generated_at": self.generated_at,
+            "risk_identification_methodology": self.risk_identification_methodology,
+            "identified_risks": self.identified_risks,
+            "foreseeable_misuse_scenarios": self.foreseeable_misuse_scenarios,
+            "risk_mitigation_measures": self.risk_mitigation_measures,
+            "residual_risks": self.residual_risks,
+            "overall_residual_risk_level": self.overall_residual_risk_level,
+            "post_market_monitoring_plan": self.post_market_monitoring_plan,
+            "integrity_hash": self.integrity_hash,
+        }
+
+
+@dataclass
 class ComplianceArtifactBundle:
     """Complete EU AI Act compliance artifact bundle.
 
@@ -879,6 +922,7 @@ class ComplianceArtifactBundle:
     article_12: Article12Artifact
     article_13: Article13Artifact
     article_14: Article14Artifact
+    article_9: "Article9Artifact | None" = None
     integrity_hash: str = ""
 
     def __post_init__(self):
@@ -906,6 +950,7 @@ class ComplianceArtifactBundle:
             "generated_at": self.generated_at,
             "risk_classification": self.risk_classification.to_dict(),
             "conformity_report": self.conformity_report.to_dict(),
+            "article_9_risk_management": self.article_9.to_dict() if self.article_9 else None,
             "article_12_record_keeping": self.article_12.to_dict(),
             "article_13_transparency": self.article_13.to_dict(),
             "article_14_human_oversight": self.article_14.to_dict(),
@@ -958,6 +1003,7 @@ class ComplianceArtifactGenerator:
             article_12=self._generate_art12(receipt, receipt_id, timestamp),
             article_13=self._generate_art13(receipt, receipt_id, timestamp, classification),
             article_14=self._generate_art14(receipt, receipt_id, timestamp),
+            article_9=self._generate_art9(receipt, receipt_id, timestamp),
         )
 
     # -- Article 12: Record-Keeping --
@@ -1244,6 +1290,108 @@ class ComplianceArtifactGenerator:
                     },
                 ],
             },
+        )
+
+    # -- Article 9: Risk Management System --
+
+    def _generate_art9(
+        self,
+        receipt: dict[str, Any],
+        receipt_id: str,
+        timestamp: str,
+    ) -> Article9Artifact:
+        """Generate Article 9 (Risk Management System) artifact."""
+        artifact_id = f"ART9-{uuid.uuid4().hex[:8]}"
+
+        risk_summary = receipt.get("risk_summary", {})
+        dissenting = receipt.get("dissenting_agents", [])
+        confidence = receipt.get("confidence", 0.0)
+
+        # Build identified risks from the receipt's risk summary
+        identified_risks = []
+        for severity, count in risk_summary.items():
+            if count > 0:
+                identified_risks.append(
+                    {
+                        "risk_id": f"RISK-{severity.upper()}-001",
+                        "description": f"{count} {severity}-severity risk(s) identified during debate",
+                        "likelihood": "medium" if severity in ("high", "critical") else "low",
+                        "severity": severity,
+                        "category": "operational",
+                    }
+                )
+
+        # Foreseeable misuse based on topic
+        foreseeable_misuse = [
+            "Use for irreversible decisions without human review",
+            "Applying verdict to out-of-scope domains",
+            "Treating low-confidence verdicts as definitive",
+        ]
+        if dissenting:
+            foreseeable_misuse.append(f"Ignoring minority dissent from: {', '.join(dissenting)}")
+
+        # Mitigation measures
+        mitigations = [
+            {
+                "risk_id": "RISK-HALLUCINATION",
+                "measure": "Multi-agent adversarial debate with dissent capture",
+                "residual_risk_level": "low",
+            },
+            {
+                "risk_id": "RISK-BIAS",
+                "measure": "Heterogeneous model ensemble (different providers and RLHF targets)",
+                "residual_risk_level": "low",
+            },
+            {
+                "risk_id": "RISK-SYCOPHANCY",
+                "measure": "Trickster hollow-consensus detection + RhetoricalObserver",
+                "residual_risk_level": "low",
+            },
+        ]
+
+        # Residual risk level
+        critical_count = risk_summary.get("critical", 0)
+        high_count = risk_summary.get("high", 0)
+        if critical_count > 0:
+            residual_level = "unacceptable"
+        elif high_count > 2 or confidence < 0.5:
+            residual_level = "conditional"
+        else:
+            residual_level = "acceptable"
+
+        residual_risks = [
+            {
+                "description": "Correlated model failures on shared blind spots",
+                "likelihood": "low",
+                "severity": "medium",
+                "accepted": True,
+                "rationale": "Heterogeneous ensemble reduces but does not eliminate shared failures",
+            }
+        ]
+
+        integrity_input = f"{artifact_id}:{receipt_id}:{residual_level}"
+        integrity_hash = hashlib.sha256(integrity_input.encode()).hexdigest()
+
+        return Article9Artifact(
+            artifact_id=artifact_id,
+            receipt_id=receipt_id,
+            generated_at=timestamp,
+            risk_identification_methodology=(
+                "Multi-agent adversarial debate with structured critique phases. "
+                "Risk identification emerges from agent disagreement, dissent, and "
+                "confidence calibration across heterogeneous model ensemble."
+            ),
+            identified_risks=identified_risks,
+            foreseeable_misuse_scenarios=foreseeable_misuse,
+            risk_mitigation_measures=mitigations,
+            residual_risks=residual_risks,
+            overall_residual_risk_level=residual_level,
+            post_market_monitoring_plan=(
+                "Periodic re-evaluation via SettlementTracker (automated data checks: days, "
+                "human review panels: months, market resolution: years). ELO calibration "
+                "tracks model performance over time. Brier scores updated after settlement."
+            ),
+            integrity_hash=integrity_hash,
         )
 
 
