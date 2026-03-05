@@ -51,6 +51,9 @@
     "POST /api/backups/schedules",
     "POST /api/backups/{param}/restore",
     "POST /api/debates/{param}/make-permanent",
+    "POST /api/decisions/{param}/cancel",
+    "POST /api/decisions/{param}/retry",
+    "POST /api/inbox/messages/send",
     "POST /api/pipelines/{param}/items/{param}/transition",
     "POST /api/pipelines/{param}/items/{param}/transition/rollback",
     "POST /api/pipelines/{param}/items/{param}/transition/validate"
