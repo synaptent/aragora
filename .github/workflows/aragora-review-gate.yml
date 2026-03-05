@@ -1,12 +1,11 @@
 name: Aragora Code Review
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'aragora/**'
-      - 'tests/**'
-      - 'scripts/**'
+  # Manual-only until beta users are onboarded.
+  # Re-enable pull_request trigger when ready:
+  #   pull_request:
+  #     types: [opened, synchronize, reopened, ready_for_review]
+  #     paths: ['aragora/**', 'tests/**', 'scripts/**']
   workflow_dispatch:
     inputs:
       pr_number:
