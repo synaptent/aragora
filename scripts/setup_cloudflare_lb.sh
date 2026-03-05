@@ -20,8 +20,8 @@ MONITOR_NAME="aragora-health-check"
 API_BASE="https://api.cloudflare.com/client/v4"
 
 # Origin servers
-ORIGIN_1_IP="3.141.158.91"     # aragora-api-server (i-0dbd51f74a9a11fcc)
-ORIGIN_2_IP="3.139.4.165"      # aragora-api-2 (i-016b3e32625bf967e)
+ORIGIN_1_IP="3.141.170.60"      # aragora-api-server-al2023 (i-0823e60c7c4b924e1)
+ORIGIN_2_IP="3.143.224.156"    # aragora-api-2-al2023 (i-07e538fafbe61696d)
 
 # Verify credentials
 if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
