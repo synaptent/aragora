@@ -76,7 +76,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 
 ## 2. Agent System
 
-### Supported Providers (30+ agent types)
+### Supported Providers (43 agent types)
 
 | Provider | Type | Models | Key Files |
 |----------|------|--------|-----------|
