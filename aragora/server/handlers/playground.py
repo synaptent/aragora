@@ -1645,7 +1645,7 @@ class PlaygroundHandler(BaseHandler):
             if debate_id:
                 store = get_debate_store()
                 store.save(debate_id, topic, data, source=source)
-                data["share_url"] = f"/api/v1/playground/debate/{debate_id}"
+                data["share_url"] = f"/debate/{debate_id}"
                 return json_response(data)
         except (ImportError, RuntimeError, OSError, json.JSONDecodeError, UnicodeDecodeError):
             logger.debug("Debate persistence unavailable", exc_info=True)
