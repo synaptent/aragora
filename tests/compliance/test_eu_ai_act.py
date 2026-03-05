@@ -980,3 +980,99 @@ class TestEuAiActGenerateCLI:
         assert (output_dir / "compliance_bundle.json").exists()
         captured = capsys.readouterr()
         assert "EU AI Act Compliance Artifact Bundle Generated" in captured.out
+
+
+# Minimal receipt fixture shared by Article 9 and 15 tests
+_MINIMAL_RECEIPT = {
+    "receipt_id": "rcpt-test001",
+    "topic": "Should we migrate to microservices?",
+    "verdict": "Conditional: migrate incrementally with circuit breakers",
+    "confidence": 0.82,
+    "robustness_score": 0.75,
+    "consensus_reached": True,
+    "participants": ["claude-3", "gpt-4o", "mistral-large"],
+    "risk_summary": {"critical": 0, "high": 1, "medium": 2, "low": 3},
+    "dissenting_agents": ["mistral-large"],
+    "artifact_hash": "abc123def456",
+    "signature": "sig-xyz",
+    "votes": [
+        {"agent": "claude-3", "choice": "yes", "confidence": 0.9},
+        {"agent": "gpt-4o", "choice": "yes", "confidence": 0.85},
+        {"agent": "mistral-large", "choice": "no", "confidence": 0.6},
+    ],
+}
+
+
+class TestArticle9Artifact:
+    def test_generate_returns_article9_artifact(self):
+        from aragora.compliance.eu_ai_act import ComplianceArtifactGenerator, Article9Artifact
+
+        gen = ComplianceArtifactGenerator()
+        art9 = gen._generate_art9(_MINIMAL_RECEIPT, "rcpt-test001", "2026-03-05T00:00:00Z")
+        assert isinstance(art9, Article9Artifact)
+
+    def test_article9_has_required_fields(self):
+        from aragora.compliance.eu_ai_act import ComplianceArtifactGenerator
+
+        gen = ComplianceArtifactGenerator()
+        art9 = gen._generate_art9(_MINIMAL_RECEIPT, "rcpt-test001", "2026-03-05T00:00:00Z")
+        assert art9.risk_identification_methodology
+        assert isinstance(art9.identified_risks, list)
+        assert isinstance(art9.risk_mitigation_measures, list)
+        assert art9.overall_residual_risk_level in ("acceptable", "conditional", "unacceptable")
+        assert art9.integrity_hash
+
+    def test_bundle_includes_article9(self):
+        from aragora.compliance.eu_ai_act import ComplianceArtifactGenerator
+
+        gen = ComplianceArtifactGenerator()
+        bundle = gen.generate(_MINIMAL_RECEIPT)
+        assert bundle.article_9 is not None
+        assert bundle.article_9.artifact_id.startswith("ART9-")
+
+    def test_article9_serializes_to_dict(self):
+        from aragora.compliance.eu_ai_act import ComplianceArtifactGenerator
+
+        gen = ComplianceArtifactGenerator()
+        art9 = gen._generate_art9(_MINIMAL_RECEIPT, "rcpt-test001", "2026-03-05T00:00:00Z")
+        d = art9.to_dict()
+        assert "identified_risks" in d
+        assert "overall_residual_risk_level" in d
+        assert "integrity_hash" in d
+
+
+class TestArticle15Artifact:
+    def test_generate_returns_article15_artifact(self):
+        from aragora.compliance.eu_ai_act import ComplianceArtifactGenerator, Article15Artifact
+
+        gen = ComplianceArtifactGenerator()
+        art15 = gen._generate_art15(_MINIMAL_RECEIPT, "rcpt-test001", "2026-03-05T00:00:00Z")
+        assert isinstance(art15, Article15Artifact)
+
+    def test_article15_has_required_fields(self):
+        from aragora.compliance.eu_ai_act import ComplianceArtifactGenerator
+
+        gen = ComplianceArtifactGenerator()
+        art15 = gen._generate_art15(_MINIMAL_RECEIPT, "rcpt-test001", "2026-03-05T00:00:00Z")
+        assert isinstance(art15.accuracy_metrics, dict)
+        assert 0.0 <= art15.robustness_score <= 1.0
+        assert isinstance(art15.cryptographic_controls, dict)
+        assert art15.integrity_hash
+
+    def test_bundle_includes_article15(self):
+        from aragora.compliance.eu_ai_act import ComplianceArtifactGenerator
+
+        gen = ComplianceArtifactGenerator()
+        bundle = gen.generate(_MINIMAL_RECEIPT)
+        assert bundle.article_15 is not None
+        assert bundle.article_15.artifact_id.startswith("ART15-")
+
+    def test_article15_serializes_to_dict(self):
+        from aragora.compliance.eu_ai_act import ComplianceArtifactGenerator
+
+        gen = ComplianceArtifactGenerator()
+        art15 = gen._generate_art15(_MINIMAL_RECEIPT, "rcpt-test001", "2026-03-05T00:00:00Z")
+        d = art15.to_dict()
+        assert "accuracy_metrics" in d
+        assert "robustness_score" in d
+        assert "cryptographic_controls" in d
