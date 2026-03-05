@@ -1,5 +1,8 @@
 # Aragora: Control Plane for Multi-Agent Vetted Decisionmaking
 
+> **Note:** This is an archived copy from the `docs/status/` tracking directory (v2.5.x era).
+> For the current version, see [`docs/OMNIVOROUS_ROADMAP.md`](../OMNIVOROUS_ROADMAP.md).
+
 ## Mission Statement
 
 Aragora is the **control plane for multi-agent vetted decisionmaking across organizational knowledge and channels** - a system designed to:

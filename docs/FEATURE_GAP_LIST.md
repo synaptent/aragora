@@ -19,7 +19,7 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | External penetration test | Vendor outreach in progress | Kickoff target: Mar 3, 2026. Only remaining external blocker. |
-| Debate output quality | 33% → 80%+ good-run rate | Quality gate hardening in progress (Runs 012+). Key metric: composite score 0.84 on enhanced vs 0.46 baseline. |
+| Debate output quality | Substantially improved — needs consistency validation | Run 012 (Mar 5): composite scores 8.38-9.39/10 (was 3.46-3.55). Practicality scoring fixes merged. Goal: validate 80%+ pass rate consistency across diverse tasks. |
 
 ---
 
@@ -92,7 +92,7 @@
 
 | Feature | Current State | Gap |
 |---------|---------------|-----|
-| Self-improving platform quality | Nomic Loop 100% wired; 66 E2E tests passing | Consistent 80%+ quality improvement (currently 33% on raw runs, 84% on enhanced) |
+| Self-improving platform quality | Nomic Loop 100% wired; 66 E2E tests passing; Run 012 scores 8.38-9.39/10 | Validate 80%+ pass rate consistency across diverse tasks (not just dogfood) |
 | Blockchain receipts | SHA-256 cryptographic hashing works | On-chain storage with ERC-8004 (not deployed) |
 | Semantic convergence | Embedding detection wired (sentence-transformers) | Not default; some debate paths still use difflib |
 | OpenClaw execution | Computer use detection works | Production E2E flow (debate → computer use → receipt) not validated |

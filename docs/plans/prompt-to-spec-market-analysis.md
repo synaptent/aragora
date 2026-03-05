@@ -172,7 +172,7 @@ Key differentiators:
 - **Idea-to-execution pipeline**: Vague prompts → goals → workflows → orchestrated agent execution
 - **Self-improvement loop (Nomic Loop)**: The system debates improvements to itself, implements them, verifies, and commits
 - **Decision accountability**: Cryptographic receipts, provenance chains, EU AI Act compliance artifacts
-- **Knowledge integration**: 34 Knowledge Mound adapters, Obsidian connector, memory tiers, Bayesian belief networks
+- **Knowledge integration**: 41 Knowledge Mound adapters, Obsidian connector, memory tiers, Bayesian belief networks
 
 ### What Aragora Should Become (Market-Aligned)
 

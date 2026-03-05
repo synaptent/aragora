@@ -140,7 +140,7 @@ aragora/
 ├── knowledge/        # Unified knowledge management
 │   ├── bridges.py          # KnowledgeBridgeHub, MetaLearner, Evidence bridges
 │   └── mound/              # KnowledgeMound with sync, revalidation
-│       └── adapters/       # KM adapters (34 registered)
+│       └── adapters/       # KM adapters (41 registered)
 │           └── factory.py  # Auto-create adapters from Arena subsystems
 ├── connectors/       # External integrations
 │   ├── chat/               # Telegram, WhatsApp connectors
@@ -417,7 +417,7 @@ See `docs/reference/ENVIRONMENT.md` for full reference.
 
 **Integrated:**
 - Knowledge Mound - STABLE Phase A2 (100% integrated, 4,300+ tests passing)
-  - 34 adapters (Continuum, Consensus, Critique, Evidence, Belief, Insights, ELO, Performance, Pulse, Cost, Provenance, Fabric, Workspace, ComputerUse, Gateway, CalibrationFusion, ControlPlane, Culture, Receipt, DecisionPlan, Supermemory, RLM, Trickster, ERC8004, Obsidian, Debate, Workflow, Compliance, LangExtract, Extraction, NomicCycle, Ranking, OpenClaw, ClaudeMem)
+  - 41 adapters (Continuum, Consensus, Critique, Evidence, Belief, Insights, ELO, Performance, Pulse, Cost, Provenance, Fabric, Workspace, ComputerUse, Gateway, CalibrationFusion, ControlPlane, Culture, Receipt, DecisionPlan, Outcome, Supermemory, RLM, RLMContext, Trickster, ERC8004, Obsidian, Debate, Workflow, Compliance, LangExtract, Codebase, IdeaCanvas, GoalCanvas, ClaudeMem, Genesis, Pipeline, Explainability, Email, Jira, Confluence)
   - Visibility, sharing, federation, global knowledge
   - Semantic search, validation feedback, cross-debate learning
   - SLO alerting with Prometheus metrics
@@ -432,7 +432,7 @@ See `docs/reference/ENVIRONMENT.md` for full reference.
   - RetentionGate: Titans/MIRAS surprise-driven retain/demote/forget/consolidate
   - CrossSystemDedupEngine: SHA-256 exact + Jaccard near-duplicate detection
   - RLMMemoryNavigator: REPL helpers for programmatic cross-system exploration
-  - ClaudeMemAdapter: 34th KM adapter wrapping claude-mem MCP connector
+  - ClaudeMemAdapter: KM adapter wrapping claude-mem MCP connector
 
 See `docs/STATUS.md` for 74+ detailed feature statuses.
 

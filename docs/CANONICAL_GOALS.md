@@ -20,7 +20,7 @@ All aragoradocs should cite these values. Update monthly.
 | API operations | 3,000+ across 2,900+ paths | OpenAPI spec |
 | WebSocket event types | 190+ | Stream modules |
 | SDK namespaces | 184 Python / 183 TypeScript (99.3% parity) | SDK package |
-| Knowledge Mound adapters | 34 | adapter registry |
+| Knowledge Mound adapters | 41 | adapter registry |
 | RBAC permissions | 390+ across 165+ resource types | rbac/types.py |
 | Agent types | 43 across 6+ LLM providers | agent registry |
 | Workflow templates | 50+ across 6 categories | template registry |
@@ -413,7 +413,7 @@ Each aragoradocs file serves a specific purpose. Goals are consolidated here.
 
 These claims require qualification in all documents:
 
-1. **"Self-improving platform"** -- Nomic Loop is fully wired end-to-end with all six phases operational (Phase 10C consolidation, Jan 2026; 66 E2E tests passing). Autonomous cycles demonstrated in production dogfooding. Output quality consistency is the remaining constraint (33-80% pass rate in benchmarks). **Goal: stabilize output quality to 80%+ and demonstrate autonomous improvement beyond internal dogfooding.**
+1. **"Self-improving platform"** -- Nomic Loop is fully wired end-to-end with all six phases operational (Phase 10C consolidation, Jan 2026; 66 E2E tests passing). Autonomous cycles demonstrated in production dogfooding. Run 012 (March 2026) achieved composite scores of 8.38-9.39/10 following practicality scoring fixes (prompt restructuring, threshold alignment, verb scoring). **Goal: demonstrate autonomous improvement beyond internal dogfooding and validate 80%+ pass rate consistency across diverse tasks.**
 
 2. **"43-agent parallel coordination"** -- All 43 agent types exist and work individually. Practical debates use 2-6 agents due to provider rate limits. The value is heterogeneity (different models catching different issues), not raw parallelism. **Goal: demonstrate 10+ agent coordination (P4 #37).**
 
