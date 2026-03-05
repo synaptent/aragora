@@ -173,7 +173,7 @@ class TestRBACCoverageEndpoint:
                 query_params={},
                 handler=mock_handler_get,
             )
-        # Should still return 200 with a data envelope
+        # Should still return 200 with a data envelope containing zero-value fallback
         assert result.status_code == 200
         body = json.loads(result.body)
         assert "data" in body
@@ -181,6 +181,9 @@ class TestRBACCoverageEndpoint:
         assert "covered_endpoints" in data
         assert "total_endpoints" in data
         assert "coverage_pct" in data
+        assert data["covered_endpoints"] == 0
+        assert data["total_endpoints"] == 0
+        assert data["coverage_pct"] == 0.0
 
     @pytest.mark.asyncio
     async def test_can_handle_v1_path(self, compliance_handler):
