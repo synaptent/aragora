@@ -355,6 +355,171 @@ class UnifiedOrchestrator:
                 won=won,
             )
 
+    async def goals_to_workflow(self, goals: list[dict]) -> dict:
+        """Convert a list of goal dicts into a basic workflow DAG.
+
+        Each goal dict should have at least a ``title`` key. Optional keys:
+
+        - ``id``          — Unique identifier for the goal (auto-generated if absent).
+        - ``description`` — Human-readable description.
+        - ``goal_type``   — One of ``goal``, ``milestone``, ``strategy``,
+                            ``principle``, ``metric``, ``risk`` (default: ``goal``).
+        - ``priority``    — ``high``, ``medium``, or ``low`` (default: ``medium``).
+        - ``measurable``  — Measurable success criterion string.
+        - ``dependencies``— List of goal ``id``s that must complete first.
+
+        Returns a WorkflowDefinition-compatible dict with ``steps``,
+        ``transitions``, ``entry_step``, ``id``, and ``name``.
+
+        Example::
+
+            orch = UnifiedOrchestrator()
+            dag = await orch.goals_to_workflow([
+                {"title": "Set up CI", "goal_type": "goal"},
+                {"title": "Deploy to prod", "goal_type": "milestone"},
+            ])
+            # dag["steps"] contains the decomposed workflow steps
+            # dag["transitions"] encodes the DAG edges
+        """
+        import uuid as _uuid
+
+        # Decomposition templates by goal type (mirrors IdeaToExecutionPipeline)
+        _DECOMPOSITION: dict[str, list[tuple[str, str, str]]] = {
+            "goal": [
+                ("research", "task", "Research: {title}"),
+                ("implement", "task", "Implement: {title}"),
+                ("test", "verification", "Test: {title}"),
+                ("review", "human_checkpoint", "Review: {title}"),
+            ],
+            "milestone": [
+                ("checkpoint", "human_checkpoint", "Checkpoint: {title}"),
+                ("verify", "verification", "Verify: {title}"),
+            ],
+            "principle": [
+                ("define", "task", "Define: {title}"),
+                ("validate", "verification", "Validate: {title}"),
+            ],
+            "strategy": [
+                ("research", "task", "Research: {title}"),
+                ("design", "task", "Design: {title}"),
+                ("implement", "task", "Implement: {title}"),
+            ],
+            "metric": [
+                ("instrument", "task", "Instrument: {title}"),
+                ("baseline", "verification", "Baseline: {title}"),
+                ("monitor", "task", "Monitor: {title}"),
+            ],
+            "risk": [
+                ("assess", "task", "Assess: {title}"),
+                ("mitigate", "task", "Mitigate: {title}"),
+                ("verify", "verification", "Verify mitigation: {title}"),
+            ],
+        }
+        _DEFAULT_TEMPLATE: list[tuple[str, str, str]] = [("execute", "task", "{title}")]
+
+        steps: list[dict] = []
+        transitions: list[dict] = []
+
+        # Normalise goal dicts and assign stable IDs
+        normalised: list[dict] = []
+        for g in goals:
+            goal_id = str(g.get("id") or _uuid.uuid4())
+            normalised.append(
+                {
+                    "id": goal_id,
+                    "title": str(g.get("title", "Untitled goal")),
+                    "description": str(g.get("description", "")),
+                    "goal_type": str(g.get("goal_type", "goal")).lower(),
+                    "priority": str(g.get("priority", "medium")).lower(),
+                    "measurable": str(g.get("measurable", "")),
+                    "dependencies": list(g.get("dependencies") or []),
+                }
+            )
+
+        for goal in normalised:
+            template = _DECOMPOSITION.get(goal["goal_type"], _DEFAULT_TEMPLATE)
+
+            goal_step_ids: list[str] = []
+            for phase, step_type, name_fmt in template:
+                step_id = f"step-{goal['id']}-{phase}"
+                steps.append(
+                    {
+                        "id": step_id,
+                        "name": name_fmt.format(title=goal["title"]),
+                        "description": goal["description"],
+                        "step_type": step_type,
+                        "source_goal_id": goal["id"],
+                        "phase": phase,
+                        "config": {
+                            "priority": goal["priority"],
+                            "measurable": goal["measurable"],
+                        },
+                        "timeout_seconds": 3600,
+                        "retries": 1,
+                        "optional": goal["priority"] == "low",
+                    }
+                )
+
+                # Chain phases within a goal sequentially
+                if goal_step_ids:
+                    transitions.append(
+                        {
+                            "id": f"seq-{goal_step_ids[-1]}-{step_id}",
+                            "from_step": goal_step_ids[-1],
+                            "to_step": step_id,
+                            "condition": "",
+                            "label": "then",
+                            "priority": 0,
+                        }
+                    )
+                goal_step_ids.append(step_id)
+
+            # Link dep goals (last step of dependency → first step of this goal)
+            for dep_goal_id in goal["dependencies"]:
+                dep_steps = [s for s in steps if s.get("source_goal_id") == dep_goal_id]
+                if dep_steps and goal_step_ids:
+                    transitions.append(
+                        {
+                            "id": f"dep-{dep_goal_id}-{goal['id']}",
+                            "from_step": dep_steps[-1]["id"],
+                            "to_step": goal_step_ids[0],
+                            "condition": "",
+                            "label": "after",
+                            "priority": 0,
+                        }
+                    )
+
+        # Chain independent goal groups sequentially
+        prev_last_step: str | None = None
+        for goal in normalised:
+            g_steps = [s for s in steps if s.get("source_goal_id") == goal["id"]]
+            if not g_steps:
+                continue
+            first_id = g_steps[0]["id"]
+            last_id = g_steps[-1]["id"]
+            has_dep = any(t["to_step"] == first_id for t in transitions)
+            if not has_dep and prev_last_step:
+                transitions.append(
+                    {
+                        "id": f"seq-{prev_last_step}-{first_id}",
+                        "from_step": prev_last_step,
+                        "to_step": first_id,
+                        "condition": "",
+                        "label": "then",
+                        "priority": 0,
+                    }
+                )
+            prev_last_step = last_id
+
+        workflow_id = str(_uuid.uuid4())
+        return {
+            "id": f"wf-{workflow_id}",
+            "name": "Goal Implementation Workflow",
+            "steps": steps,
+            "transitions": transitions,
+            "entry_step": steps[0]["id"] if steps else None,
+        }
+
     def _build_outcome(self, result: OrchestratorResult, cfg: OrchestratorConfig) -> Any:
         """Build a PipelineOutcome from the orchestrator result."""
         from aragora.pipeline.outcome_feedback import PipelineOutcome
