@@ -1,0 +1,16 @@
+{
+  "required_sections": [
+    "Ranked High-Level Tasks",
+    "Suggested Subtasks",
+    "Owner module / file paths",
+    "Test Plan",
+    "Rollback Plan",
+    "Gate Criteria"
+  ],
+  "require_json_payload": false,
+  "require_gate_thresholds": true,
+  "require_rollback_triggers": true,
+  "require_owner_paths": true,
+  "require_repo_path_existence": true,
+  "require_practicality_checks": true
+}
