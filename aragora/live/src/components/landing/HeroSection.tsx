@@ -220,7 +220,7 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
         />
       )}
 
-      <div className="max-w-2xl mx-auto text-center w-full">
+      <div className="max-w-xl mx-auto text-center w-full">
         {/* ASCII banner — dark theme only */}
         {isDark && (
           <pre
@@ -254,9 +254,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
           </span>
         </h1>
 
-        {/* Subtitle — single line on desktop */}
+        {/* Subtitle */}
         <p
-          className="max-w-2xl mx-auto leading-relaxed"
+          className="mx-auto leading-relaxed"
           style={{
             fontSize: '14px',
             color: 'var(--text-muted)',
@@ -264,11 +264,11 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
             marginBottom: '48px',
           }}
         >
-          Pit Claude, GPT, Gemini, and Mistral against each other. Get a verdict you can defend to your board.
+          Multiple AI models debate your question and deliver an audit-ready verdict.
         </p>
 
-        {/* Debate input form — THE CENTERPIECE */}
-        <form onSubmit={handleSubmit} className="text-left max-w-xl mx-auto">
+        {/* Debate input form */}
+        <form onSubmit={handleSubmit} className="text-left">
           <div className="relative">
             {isDark && (
               <span

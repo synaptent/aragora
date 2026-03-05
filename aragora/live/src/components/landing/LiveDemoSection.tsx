@@ -61,8 +61,8 @@ export function LiveDemoSection() {
           }}
         >
           <div
-            className="p-4 flex flex-wrap items-center gap-3"
-            style={{ borderBottom: '1px solid var(--border)' }}
+            className="flex flex-wrap items-center gap-3"
+            style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}
           >
             <span
               className="font-bold px-2 py-0.5 uppercase tracking-wider"
@@ -93,13 +93,13 @@ export function LiveDemoSection() {
             {DEMO_AGENTS.map((agent, i) => (
               <div
                 key={agent.name}
-                className="p-4"
                 style={{
+                  padding: '20px',
                   borderRight: i < DEMO_AGENTS.length - 1 ? '1px solid var(--border)' : 'none',
                   borderBottom: '1px solid var(--border)',
                 }}
               >
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2" style={{ marginBottom: '12px' }}>
                   <div
                     className="w-2 h-2 rounded-full"
                     style={{ backgroundColor: agent.accent }}
@@ -113,7 +113,7 @@ export function LiveDemoSection() {
                 </div>
                 <p
                   className="leading-relaxed"
-                  style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', lineHeight: '1.7' }}
+                  style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', lineHeight: '1.7' }}
                 >
                   {agent.content}
                 </p>

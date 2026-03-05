@@ -27,18 +27,18 @@ export function Footer() {
       <div className="max-w-2xl mx-auto text-center">
         {/* Call to action statement */}
         <p
-          className="mb-6"
           style={{
             fontSize: '14px',
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-landing)',
+            marginBottom: '32px',
           }}
         >
           No signup required. No API keys required. First verdict within 5 minutes.
         </p>
 
         {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4" style={{ marginBottom: '48px' }}>
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             className="text-sm font-semibold transition-opacity hover:opacity-80 cursor-pointer"
@@ -71,7 +71,7 @@ export function Footer() {
         </div>
 
         {/* Nav links */}
-        <div className="flex items-center justify-center gap-6 mb-6">
+        <div className="flex items-center justify-center gap-6 mb-8">
           {NAV_LINKS.map((link) => (
             <a
               key={link.href}

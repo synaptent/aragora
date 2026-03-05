@@ -49,7 +49,7 @@ export function HowItWorksSection() {
             fontSize: isDark ? '16px' : '18px',
             color: 'var(--text-muted)',
             fontFamily: 'var(--font-landing)',
-            marginBottom: '64px',
+            marginBottom: '48px',
           }}
         >
           {isDark ? '> HOW IT WORKS' : 'HOW IT WORKS'}

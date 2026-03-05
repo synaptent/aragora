@@ -86,14 +86,14 @@ export function FeatureShowcase() {
     >
       <div className="max-w-4xl mx-auto">
         <p
-          className="text-center mb-4 uppercase tracking-widest"
-          style={{ fontSize: isDark ? '16px' : '18px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}
+          className="text-center uppercase tracking-widest"
+          style={{ fontSize: isDark ? '16px' : '18px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', marginBottom: '20px' }}
         >
           {isDark ? '> CAPABILITIES' : 'CAPABILITIES'}
         </p>
         <p
-          className="text-center mb-12"
-          style={{ fontSize: isDark ? '16px' : '18px', color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
+          className="text-center"
+          style={{ fontSize: isDark ? '16px' : '18px', color: 'var(--text)', fontFamily: 'var(--font-landing)', marginBottom: '48px' }}
         >
           Everything you need to make decisions you can defend.
         </p>
@@ -116,14 +116,14 @@ export function FeatureShowcase() {
                 {feature.icon}
                 <h3
                   className="font-semibold"
-                  style={{ fontSize: '13px', color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
+                  style={{ fontSize: '15px', color: 'var(--text)', fontFamily: 'var(--font-landing)' }}
                 >
                   {feature.title}
                 </h3>
               </div>
               <p
                 className="leading-relaxed"
-                style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', lineHeight: '1.7' }}
+                style={{ fontSize: isDark ? '13px' : '14px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', lineHeight: '1.7' }}
               >
                 {feature.description}
               </p>
