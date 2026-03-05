@@ -92,7 +92,7 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
         {/* Header */}
         <header className="border-b border-acid-green/30 bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-            <Link href="/">
+            <Link href="/landing/">
               <AsciiBannerCompact connected={true} />
             </Link>
             <ThemeToggle />
@@ -296,7 +296,7 @@ function SavedDebateView({ debate }: { debate: SavedDebate }) {
           {/* Footer */}
           <div className="text-center py-8 border-t border-[var(--border)]">
             <Link
-              href="/"
+              href="/landing/"
               className="text-xs font-mono text-[var(--text-muted)] hover:text-[var(--acid-green)] transition-colors"
             >
               ARAGORA // DECISION INTEGRITY PLATFORM
@@ -377,7 +377,7 @@ export function DebateViewerWrapper({
         <main className="min-h-screen bg-bg text-text relative z-10">
           <header className="border-b border-acid-green/30 bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
             <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-              <Link href="/">
+              <Link href="/landing/">
                 <AsciiBannerCompact connected={true} />
               </Link>
               <ThemeToggle />
@@ -385,8 +385,8 @@ export function DebateViewerWrapper({
           </header>
           <div className="container mx-auto px-4 py-20 text-center">
             <div className="text-acid-green font-mono text-xl mb-4">{'>'} NO DEBATE ID PROVIDED</div>
-            <Link href="/" className="text-acid-cyan hover:text-acid-green transition-colors font-mono">
-              [RETURN TO DASHBOARD]
+            <Link href="/landing/" className="text-acid-cyan hover:text-acid-green transition-colors font-mono">
+              [RETURN HOME]
             </Link>
           </div>
         </main>

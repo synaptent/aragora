@@ -417,7 +417,7 @@ export default function CompliancePage() {
                     High-risk systems require Articles 12, 13, and 14 compliance artifacts.
                   </p>
                   <Link
-                    href="/landing"
+                    href="/playground/"
                     style={{
                       fontSize: '14px',
                       color: 'var(--accent)',
@@ -553,7 +553,7 @@ export default function CompliancePage() {
             Run a multi-model debate on any decision. Aragora generates a cryptographically signed compliance bundle from the result.
           </p>
           <Link
-            href="/landing"
+            href="/playground/"
             className="inline-block font-semibold transition-all hover:scale-[1.01] active:scale-[0.99]"
             style={{
               backgroundColor: 'var(--accent)',
