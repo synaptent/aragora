@@ -137,12 +137,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          PY_BIN="$(command -v python || true)"
-          if [[ -z "$PY_BIN" ]]; then
-            PY_BIN="$(command -v python3 || true)"
+          PY_BIN=""
+          if [[ -n "${pythonLocation:-}" && -x "${pythonLocation}/bin/python" ]]; then
+            PY_BIN="${pythonLocation}/bin/python"
+          elif command -v python3.11 >/dev/null 2>&1; then
+            PY_BIN="$(command -v python3.11)"
+          elif command -v python3 >/dev/null 2>&1; then
+            PY_BIN="$(command -v python3)"
+          elif command -v python >/dev/null 2>&1; then
+            PY_BIN="$(command -v python)"
           fi
           if [[ -z "$PY_BIN" ]]; then
             echo "::error::No python interpreter found on runner"
+            exit 1
+          fi
+
+          PY_OK="$("$PY_BIN" - <<'PY'
+          import sys
+          print(int(sys.version_info >= (3, 10)))
+          PY
+          )"
+          if [[ "$PY_OK" != "1" ]]; then
+            "$PY_BIN" --version
+            echo "::error::OpenAPI workflow requires Python >= 3.10"
             exit 1
           fi
 
@@ -151,11 +168,11 @@ jobs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
           if ! command -v pip >/dev/null 2>&1; then
-            python -m ensurepip --upgrade || true
+            "$PY_BIN" -m ensurepip --upgrade || true
           fi
 
-          python --version
-          pip --version || python -m pip --version
+          "$PY_BIN" --version
+          pip --version || "$PY_BIN" -m pip --version
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
@@ -165,8 +182,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[test]"
-          pip install pyyaml datamodel-code-generator
+          python -m pip install -e .
+          python -m pip install pyyaml datamodel-code-generator
+          USER_BASE="$(python -m site --user-base)"
+          echo "${USER_BASE}/bin" >> "$GITHUB_PATH"
 
       - name: Generate OpenAPI spec
         run: |
@@ -397,7 +416,7 @@ jobs:
 
       - name: Run contract matrix tests
         run: |
-          pip install pytest pytest-asyncio
+          python -m pip install pytest pytest-asyncio
           pytest tests/server/openapi/test_contract_matrix.py -v --timeout=60 || true
 
       - name: Upload generated spec and SDK types

@@ -13,6 +13,10 @@ on:
       - "scripts/check_branch_mutation_policy.py"
       - "scripts/check_deploy_secure_sha_guard.py"
       - "scripts/check_required_check_priority_policy.py"
+      - "scripts/check_execution_gate_defaults.py"
+      - "scripts/check_execution_gate_policy_control.py"
+      - "scripts/check_prometheus_rules.py"
+      - "security/policies/execution_gate_defaults_policy.json"
       - ".github/workflows/release-readiness.yml"
   schedule:
     # Nightly at 1:35 UTC

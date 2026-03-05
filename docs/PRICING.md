@@ -169,7 +169,7 @@ Aragora is open source (MIT). Use the full debate engine for free, forever. Comm
 <tr>
 <td>RBAC</td>
 <td align="center">Basic (admin/user)</td>
-<td align="center">7 roles, 50+ permissions</td>
+<td align="center">7 roles, 360+ permissions</td>
 <td align="center">390+ permissions, custom roles, policy engine</td>
 </tr>
 <tr>

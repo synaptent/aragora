@@ -9,11 +9,13 @@ It is enforced in:
 ## What It Enforces
 
 1. Verified signed consensus receipt
-2. Provider diversity floor
-3. Model-family diversity floor
-4. Context taint blocking (prompt-injection signals)
-5. High-severity dissent blocking
-6. Correlated-failure and suspicious-unanimity risk blocking
+2. Optional signer-key allowlist enforcement (key rotation control)
+3. Signed-receipt timestamp freshness checks
+4. Provider diversity floor
+5. Model-family diversity floor
+6. Context taint blocking (prompt-injection signals)
+7. High-severity dissent blocking
+8. Correlated-failure and suspicious-unanimity risk blocking
 
 This is designed to reduce both:
 - Context-level compromise (Brainworm-class prompt/context hijack)
@@ -25,6 +27,11 @@ This is designed to reduce both:
 |---|---:|---|
 | `enforce_execution_safety_gate` | `True` | Turns gate on/off |
 | `execution_gate_require_verified_signed_receipt` | `True` | Require signed + verified receipt |
+| `execution_gate_enforce_receipt_signer_allowlist` | `False` | If enabled, signer key ID must be in allowlist |
+| `execution_gate_allowed_receipt_signer_keys` | `()` | Allowed signer key IDs when allowlist mode is enabled |
+| `execution_gate_require_signed_receipt_timestamp` | `True` | Require `signed_at` timestamp on receipt |
+| `execution_gate_receipt_max_age_seconds` | `86400` | Max receipt age before auto-execution is blocked |
+| `execution_gate_receipt_max_future_skew_seconds` | `120` | Max tolerated future clock skew on `signed_at` |
 | `execution_gate_min_provider_diversity` | `2` | Minimum unique providers |
 | `execution_gate_min_model_family_diversity` | `2` | Minimum unique model families |
 | `execution_gate_block_on_context_taint` | `True` | Block when taint signals exist |
@@ -37,12 +44,18 @@ This is designed to reduce both:
 - Do not lower diversity floors below `2` unless execution is already human-gated.
 - Keep taint blocking enabled.
 - Keep signed receipt verification required for all high-impact automations.
+- If signer allowlists are enabled, keep key IDs synchronized with key rotation playbooks.
+- Keep receipt age/future-skew bounds tight and ensure NTP sync on workers.
 
 ## Reason Codes
 
 | Code | Meaning |
 |---|---|
 | `receipt_verification_failed` | Receipt missing/invalid signature or integrity |
+| `receipt_signer_not_allowlisted` | Receipt signer key not in approved key allowlist |
+| `receipt_missing_signed_timestamp` | Receipt missing or malformed `signed_at` timestamp |
+| `receipt_stale` | Receipt age exceeds configured max age |
+| `receipt_timestamp_in_future` | Receipt timestamp exceeds allowed future skew |
 | `provider_diversity_below_minimum` | Too few distinct providers |
 | `model_family_diversity_below_minimum` | Too few distinct model families |
 | `tainted_context_detected` | Untrusted context contains suspicious instruction patterns |
@@ -118,3 +131,12 @@ CI enforces secure defaults and fallback values for execution-gate policy knobs:
 ```bash
 python scripts/check_execution_gate_defaults.py
 ```
+
+CI also enforces policy-version/change-control metadata with checksum/signature validation:
+
+```bash
+python scripts/check_execution_gate_policy_control.py
+```
+
+Policy document:
+- `security/policies/execution_gate_defaults_policy.json`

@@ -17,6 +17,11 @@ from dataclasses import dataclass
 class PostDebateConfig:
     enforce_execution_safety_gate: bool = True
     execution_gate_require_verified_signed_receipt: bool = True
+    execution_gate_enforce_receipt_signer_allowlist: bool = False
+    execution_gate_allowed_receipt_signer_keys: tuple[str, ...] = ()
+    execution_gate_require_signed_receipt_timestamp: bool = True
+    execution_gate_receipt_max_age_seconds: int = 86400
+    execution_gate_receipt_max_future_skew_seconds: int = 120
     execution_gate_min_provider_diversity: int = 2
     execution_gate_min_model_family_diversity: int = 2
     execution_gate_block_on_context_taint: bool = True
@@ -33,6 +38,21 @@ def build_policy(post_cfg):
     return ExecutionSafetyPolicy(
         require_verified_signed_receipt=getattr(
             post_cfg, "execution_gate_require_verified_signed_receipt", True
+        ),
+        require_receipt_signer_allowlist=getattr(
+            post_cfg, "execution_gate_enforce_receipt_signer_allowlist", False
+        ),
+        allowed_receipt_signer_keys=getattr(
+            post_cfg, "execution_gate_allowed_receipt_signer_keys", ()
+        ),
+        require_signed_receipt_timestamp=getattr(
+            post_cfg, "execution_gate_require_signed_receipt_timestamp", True
+        ),
+        receipt_max_age_seconds=getattr(
+            post_cfg, "execution_gate_receipt_max_age_seconds", 86400
+        ),
+        receipt_max_future_skew_seconds=getattr(
+            post_cfg, "execution_gate_receipt_max_future_skew_seconds", 120
         ),
         min_provider_diversity=getattr(post_cfg, "execution_gate_min_provider_diversity", 2),
         min_model_family_diversity=getattr(post_cfg, "execution_gate_min_model_family_diversity", 2),
@@ -70,6 +90,16 @@ def test_post_debate_defaults_reject_weakened_diversity_floor() -> None:
     violations = find_post_debate_default_violations(text)
     assert violations
     assert any("execution_gate_min_provider_diversity" in message for message in violations)
+
+
+def test_post_debate_defaults_reject_overly_lenient_receipt_age() -> None:
+    text = _valid_post_debate_source().replace(
+        "execution_gate_receipt_max_age_seconds: int = 86400",
+        "execution_gate_receipt_max_age_seconds: int = 172800",
+    )
+    violations = find_post_debate_default_violations(text)
+    assert violations
+    assert any("execution_gate_receipt_max_age_seconds" in message for message in violations)
 
 
 def test_orchestrator_fallbacks_accept_secure_baseline() -> None:

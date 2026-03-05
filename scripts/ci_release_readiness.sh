@@ -17,6 +17,8 @@ python3 scripts/check_branch_mutation_policy.py
 python3 scripts/check_deploy_secure_sha_guard.py
 python3 scripts/check_required_check_priority_policy.py
 python3 scripts/check_execution_gate_defaults.py
+python3 scripts/check_execution_gate_policy_control.py
+python3 scripts/check_prometheus_rules.py
 
 echo "[release-readiness] debate/workflow"
 pytest -q \

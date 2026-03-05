@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from aragora.debate.provider_diversity import detect_provider
@@ -40,6 +41,11 @@ class ExecutionSafetyPolicy:
     """Policy used to decide whether auto-execution is allowed."""
 
     require_verified_signed_receipt: bool = True
+    require_receipt_signer_allowlist: bool = False
+    allowed_receipt_signer_keys: tuple[str, ...] | list[str] | set[str] | str | None = None
+    require_signed_receipt_timestamp: bool = True
+    receipt_max_age_seconds: int = 86400
+    receipt_max_future_skew_seconds: int = 120
     min_provider_diversity: int = 2
     min_model_family_diversity: int = 2
     block_on_context_taint: bool = True
@@ -57,6 +63,12 @@ class ExecutionSafetyDecision:
     receipt_integrity_valid: bool = False
     receipt_signature_valid: bool = False
     receipt_id: str | None = None
+    receipt_signer_key_id: str | None = None
+    receipt_signer_allowlisted: bool = True
+    receipt_timestamp_present: bool = False
+    receipt_timestamp_parse_valid: bool = False
+    receipt_fresh: bool = False
+    receipt_not_from_future: bool = False
     provider_diversity: int = 0
     model_family_diversity: int = 0
     providers: list[str] = field(default_factory=list)
@@ -75,6 +87,12 @@ class ExecutionSafetyDecision:
             "receipt_integrity_valid": self.receipt_integrity_valid,
             "receipt_signature_valid": self.receipt_signature_valid,
             "receipt_id": self.receipt_id,
+            "receipt_signer_key_id": self.receipt_signer_key_id,
+            "receipt_signer_allowlisted": self.receipt_signer_allowlisted,
+            "receipt_timestamp_present": self.receipt_timestamp_present,
+            "receipt_timestamp_parse_valid": self.receipt_timestamp_parse_valid,
+            "receipt_fresh": self.receipt_fresh,
+            "receipt_not_from_future": self.receipt_not_from_future,
             "provider_diversity": self.provider_diversity,
             "model_family_diversity": self.model_family_diversity,
             "providers": list(self.providers),
@@ -213,6 +231,101 @@ def _build_signed_receipt(result: Any) -> tuple[DecisionReceipt | None, bool, bo
         return None, False, False, False
 
 
+def _normalize_signer_allowlist(
+    values: tuple[str, ...] | list[str] | set[str] | str | None,
+) -> set[str]:
+    """Normalize signer allowlist to a lowercase key-id set."""
+    if values is None:
+        return set()
+
+    if isinstance(values, str):
+        candidates = [entry.strip() for entry in values.split(",")]
+    else:
+        candidates = [str(entry).strip() for entry in values]
+
+    normalized: set[str] = set()
+    for entry in candidates:
+        if entry:
+            normalized.add(entry.lower())
+    return normalized
+
+
+def _parse_signed_timestamp(raw: str) -> datetime | None:
+    """Parse signed receipt timestamp in ISO-8601 format."""
+    text = raw.strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+@dataclass(frozen=True)
+class _ReceiptTrustState:
+    signer_key_id: str | None
+    signer_allowlisted: bool
+    timestamp_present: bool
+    timestamp_parse_valid: bool
+    receipt_fresh: bool
+    receipt_not_from_future: bool
+
+
+def _evaluate_receipt_trust(
+    receipt: DecisionReceipt | None,
+    policy: ExecutionSafetyPolicy,
+) -> _ReceiptTrustState:
+    """Evaluate signer allowlist and signed-timestamp trust controls."""
+    signer_key_id_raw = str(getattr(receipt, "signature_key_id", "") or "").strip()
+    signer_key_id = signer_key_id_raw or None
+    signer_allowlisted = True
+    if policy.require_receipt_signer_allowlist:
+        allowlist = _normalize_signer_allowlist(policy.allowed_receipt_signer_keys)
+        signer_allowlisted = bool(signer_key_id and signer_key_id.lower() in allowlist)
+
+    timestamp_raw = str(getattr(receipt, "signed_at", "") or "").strip()
+    timestamp_present = bool(timestamp_raw)
+
+    if not policy.require_signed_receipt_timestamp:
+        return _ReceiptTrustState(
+            signer_key_id=signer_key_id,
+            signer_allowlisted=signer_allowlisted,
+            timestamp_present=timestamp_present,
+            timestamp_parse_valid=True,
+            receipt_fresh=True,
+            receipt_not_from_future=True,
+        )
+
+    timestamp = _parse_signed_timestamp(timestamp_raw) if timestamp_present else None
+    timestamp_parse_valid = timestamp is not None
+    if timestamp is None:
+        return _ReceiptTrustState(
+            signer_key_id=signer_key_id,
+            signer_allowlisted=signer_allowlisted,
+            timestamp_present=timestamp_present,
+            timestamp_parse_valid=False,
+            receipt_fresh=False,
+            receipt_not_from_future=False,
+        )
+
+    age_seconds = (datetime.now(timezone.utc) - timestamp).total_seconds()
+    max_age = float(max(0, policy.receipt_max_age_seconds))
+    max_future_skew = float(max(0, policy.receipt_max_future_skew_seconds))
+    return _ReceiptTrustState(
+        signer_key_id=signer_key_id,
+        signer_allowlisted=signer_allowlisted,
+        timestamp_present=timestamp_present,
+        timestamp_parse_valid=timestamp_parse_valid,
+        receipt_fresh=age_seconds <= max_age,
+        receipt_not_from_future=age_seconds >= (-1.0 * max_future_skew),
+    )
+
+
 def evaluate_auto_execution_safety(
     result: Any,
     *,
@@ -228,6 +341,7 @@ def evaluate_auto_execution_safety(
     operator_diversity = len(operators)
 
     receipt, receipt_signed, integrity_valid, signature_valid = _build_signed_receipt(result)
+    receipt_trust = _evaluate_receipt_trust(receipt, policy)
     context_taint = _context_taint_detected(result)
     high_dissent = _has_high_severity_dissent(result, policy.high_severity_dissent_threshold)
 
@@ -249,6 +363,24 @@ def evaluate_auto_execution_safety(
         receipt_signed and integrity_valid and signature_valid
     ):
         reason_codes.append("receipt_verification_failed")
+    if policy.require_receipt_signer_allowlist and not receipt_trust.signer_allowlisted:
+        reason_codes.append("receipt_signer_not_allowlisted")
+    if policy.require_signed_receipt_timestamp and not (
+        receipt_trust.timestamp_present and receipt_trust.timestamp_parse_valid
+    ):
+        reason_codes.append("receipt_missing_signed_timestamp")
+    if (
+        policy.require_signed_receipt_timestamp
+        and receipt_trust.timestamp_parse_valid
+        and not receipt_trust.receipt_not_from_future
+    ):
+        reason_codes.append("receipt_timestamp_in_future")
+    if (
+        policy.require_signed_receipt_timestamp
+        and receipt_trust.timestamp_parse_valid
+        and not receipt_trust.receipt_fresh
+    ):
+        reason_codes.append("receipt_stale")
     if provider_diversity < policy.min_provider_diversity:
         reason_codes.append("provider_diversity_below_minimum")
     if model_family_diversity < policy.min_model_family_diversity:
@@ -270,6 +402,12 @@ def evaluate_auto_execution_safety(
         receipt_integrity_valid=integrity_valid,
         receipt_signature_valid=signature_valid,
         receipt_id=getattr(receipt, "receipt_id", None) if receipt else None,
+        receipt_signer_key_id=receipt_trust.signer_key_id,
+        receipt_signer_allowlisted=receipt_trust.signer_allowlisted,
+        receipt_timestamp_present=receipt_trust.timestamp_present,
+        receipt_timestamp_parse_valid=receipt_trust.timestamp_parse_valid,
+        receipt_fresh=receipt_trust.receipt_fresh,
+        receipt_not_from_future=receipt_trust.receipt_not_from_future,
         provider_diversity=provider_diversity,
         model_family_diversity=model_family_diversity,
         providers=sorted(providers),

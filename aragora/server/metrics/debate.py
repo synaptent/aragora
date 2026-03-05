@@ -283,6 +283,10 @@ def track_execution_gate_decision(
         bool(gate.get("receipt_signed"))
         and bool(gate.get("receipt_integrity_valid"))
         and bool(gate.get("receipt_signature_valid"))
+        and bool(gate.get("receipt_signer_allowlisted", True))
+        and bool(gate.get("receipt_timestamp_parse_valid", True))
+        and bool(gate.get("receipt_fresh", True))
+        and bool(gate.get("receipt_not_from_future", True))
     )
     EXECUTION_GATE_RECEIPT_VERIFICATION.inc(
         path=path,

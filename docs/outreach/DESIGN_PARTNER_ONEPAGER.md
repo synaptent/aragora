@@ -47,7 +47,7 @@ Your question → 42 agents debate → Consensus + receipt → Slack / GitHub / 
 | Python + TypeScript SDKs | Production |
 | Docker one-command deployment | Production |
 | EU AI Act compliance artifacts (Art. 12/13/14) | Production |
-| RBAC with 50+ permissions | Production |
+| RBAC with 360+ permissions | Production |
 | OpenTelemetry observability | Production |
 
 ## Quick Demo (60 seconds)

@@ -1401,6 +1401,31 @@ async def _auto_execute_plan(
                 "execution_gate_require_verified_signed_receipt",
                 True,
             ),
+            require_receipt_signer_allowlist=getattr(
+                post_cfg,
+                "execution_gate_enforce_receipt_signer_allowlist",
+                False,
+            ),
+            allowed_receipt_signer_keys=getattr(
+                post_cfg,
+                "execution_gate_allowed_receipt_signer_keys",
+                (),
+            ),
+            require_signed_receipt_timestamp=getattr(
+                post_cfg,
+                "execution_gate_require_signed_receipt_timestamp",
+                True,
+            ),
+            receipt_max_age_seconds=getattr(
+                post_cfg,
+                "execution_gate_receipt_max_age_seconds",
+                86400,
+            ),
+            receipt_max_future_skew_seconds=getattr(
+                post_cfg,
+                "execution_gate_receipt_max_future_skew_seconds",
+                120,
+            ),
             min_provider_diversity=getattr(post_cfg, "execution_gate_min_provider_diversity", 2),
             min_model_family_diversity=getattr(
                 post_cfg, "execution_gate_min_model_family_diversity", 2

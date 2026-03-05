@@ -108,7 +108,7 @@ Comprehensive technical comparison of Aragora against CrewAI, AutoGen, and LangG
 | Feature | Aragora | CrewAI | AutoGen | LangGraph |
 |---------|---------|--------|---------|-----------|
 | **Multi-Tenancy** | Yes | Enterprise | No | No |
-| **RBAC** | Yes (v2, 50+ permissions) | Enterprise | No | No |
+| **RBAC** | Yes (v2, 360+ permissions) | Enterprise | No | No |
 | **SSO (OIDC/SAML)** | Yes | Enterprise | No | No |
 | **MFA** | Yes (TOTP/HOTP) | Enterprise | No | No |
 | **API Key Management** | Yes | Enterprise | No | No |

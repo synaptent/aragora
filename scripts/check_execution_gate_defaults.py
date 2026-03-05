@@ -22,21 +22,31 @@ ORCHESTRATOR_RUNNER_PATH = Path("aragora/debate/orchestrator_runner.py")
 REQUIRED_TRUE_FIELDS: set[str] = {
     "enforce_execution_safety_gate",
     "execution_gate_require_verified_signed_receipt",
+    "execution_gate_require_signed_receipt_timestamp",
     "execution_gate_block_on_context_taint",
     "execution_gate_block_on_high_severity_dissent",
 }
 
 MINIMUM_FIELDS: dict[str, float] = {
+    "execution_gate_receipt_max_age_seconds": 300,
+    "execution_gate_receipt_max_future_skew_seconds": 0,
     "execution_gate_min_provider_diversity": 2,
     "execution_gate_min_model_family_diversity": 2,
 }
 
 MAXIMUM_FIELDS: dict[str, float] = {
+    "execution_gate_receipt_max_age_seconds": 86400,
+    "execution_gate_receipt_max_future_skew_seconds": 300,
     "execution_gate_high_severity_dissent_threshold": 0.7,
 }
 
 ORCHESTRATOR_EXPECTED_GETATTRS: dict[str, str] = {
     "require_verified_signed_receipt": "execution_gate_require_verified_signed_receipt",
+    "require_receipt_signer_allowlist": "execution_gate_enforce_receipt_signer_allowlist",
+    "allowed_receipt_signer_keys": "execution_gate_allowed_receipt_signer_keys",
+    "require_signed_receipt_timestamp": "execution_gate_require_signed_receipt_timestamp",
+    "receipt_max_age_seconds": "execution_gate_receipt_max_age_seconds",
+    "receipt_max_future_skew_seconds": "execution_gate_receipt_max_future_skew_seconds",
     "min_provider_diversity": "execution_gate_min_provider_diversity",
     "min_model_family_diversity": "execution_gate_min_model_family_diversity",
     "block_on_context_taint": "execution_gate_block_on_context_taint",

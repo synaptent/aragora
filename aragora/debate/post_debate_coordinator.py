@@ -65,6 +65,11 @@ class PostDebateConfig:
     # Execution safety gate: enforce signed-receipt + diversity + taint checks
     enforce_execution_safety_gate: bool = True
     execution_gate_require_verified_signed_receipt: bool = True
+    execution_gate_enforce_receipt_signer_allowlist: bool = False
+    execution_gate_allowed_receipt_signer_keys: tuple[str, ...] = ()
+    execution_gate_require_signed_receipt_timestamp: bool = True
+    execution_gate_receipt_max_age_seconds: int = 86400
+    execution_gate_receipt_max_future_skew_seconds: int = 120
     execution_gate_min_provider_diversity: int = 2
     execution_gate_min_model_family_diversity: int = 2
     execution_gate_block_on_context_taint: bool = True
@@ -349,6 +354,19 @@ class PostDebateCoordinator:
             policy = ExecutionSafetyPolicy(
                 require_verified_signed_receipt=(
                     self.config.execution_gate_require_verified_signed_receipt
+                ),
+                require_receipt_signer_allowlist=(
+                    self.config.execution_gate_enforce_receipt_signer_allowlist
+                ),
+                allowed_receipt_signer_keys=(
+                    self.config.execution_gate_allowed_receipt_signer_keys
+                ),
+                require_signed_receipt_timestamp=(
+                    self.config.execution_gate_require_signed_receipt_timestamp
+                ),
+                receipt_max_age_seconds=self.config.execution_gate_receipt_max_age_seconds,
+                receipt_max_future_skew_seconds=(
+                    self.config.execution_gate_receipt_max_future_skew_seconds
                 ),
                 min_provider_diversity=self.config.execution_gate_min_provider_diversity,
                 min_model_family_diversity=self.config.execution_gate_min_model_family_diversity,

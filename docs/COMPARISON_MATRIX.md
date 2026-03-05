@@ -57,7 +57,7 @@ This comparison is based on public documentation, source code analysis, and publ
 | MFA (TOTP/HOTP) | Yes | No | No | No | No |
 | AES-256-GCM encryption | Yes | No | No | No | No |
 | Automated key rotation | Yes (90-day) | No | No | No | No |
-| RBAC | 50+ permissions, 7 roles | Basic (LangSmith) | No | No | No |
+| RBAC | 360+ permissions, 7 roles | Basic (LangSmith) | No | No | No |
 | Anomaly detection | 15 detection types | No | No | No | No |
 | Multi-tenant isolation | Yes | No | No | No | No |
 | Rate limiting (IP, token, endpoint) | Yes | No | No | No | Yes (basic) |
