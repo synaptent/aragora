@@ -34,6 +34,7 @@ from aragora.server.metrics import (
     track_agent_error,
     classify_agent_error,
     track_agent_participation,
+    track_execution_gate_decision,
     track_debate_execution,
     generate_metrics,
     _format_labels,
@@ -56,6 +57,13 @@ from aragora.server.metrics import (
     AGENT_ERRORS,
     AGENT_PARTICIPATION,
     LAST_DEBATE_TIMESTAMP,
+    EXECUTION_GATE_DECISIONS,
+    EXECUTION_GATE_BLOCK_REASONS,
+    EXECUTION_GATE_PROVIDER_DIVERSITY,
+    EXECUTION_GATE_MODEL_FAMILY_DIVERSITY,
+    EXECUTION_GATE_RECEIPT_VERIFICATION,
+    EXECUTION_GATE_CONTEXT_TAINT,
+    EXECUTION_GATE_CORRELATED_RISK,
     SUBSCRIPTION_EVENTS,
     USAGE_DEBATES,
     USAGE_TOKENS,
@@ -113,6 +121,11 @@ def reset_global_metrics():
         CONSENSUS_REACHED,
         AGENT_ERRORS,
         AGENT_PARTICIPATION,
+        EXECUTION_GATE_DECISIONS,
+        EXECUTION_GATE_BLOCK_REASONS,
+        EXECUTION_GATE_RECEIPT_VERIFICATION,
+        EXECUTION_GATE_CONTEXT_TAINT,
+        EXECUTION_GATE_CORRELATED_RISK,
         SUBSCRIPTION_EVENTS,
         USAGE_DEBATES,
         USAGE_TOKENS,
@@ -131,7 +144,14 @@ def reset_global_metrics():
             metric._values.clear()
 
     # Clear Histogram metrics
-    for metric in [API_LATENCY, AGENT_LATENCY, DEBATE_DURATION, DEBATE_CONFIDENCE]:
+    for metric in [
+        API_LATENCY,
+        AGENT_LATENCY,
+        DEBATE_DURATION,
+        DEBATE_CONFIDENCE,
+        EXECUTION_GATE_PROVIDER_DIVERSITY,
+        EXECUTION_GATE_MODEL_FAMILY_DIVERSITY,
+    ]:
         with metric._lock:
             metric._counts.clear()
             metric._sums.clear()
@@ -565,6 +585,130 @@ class TestTrackDebateOutcome:
 
         collected = DEBATE_DURATION.collect()
         assert len(collected) >= 1
+
+
+# =============================================================================
+# Track Execution Gate Tests
+# =============================================================================
+
+
+class TestTrackExecutionGateDecision:
+    """Tests for execution safety gate telemetry helper."""
+
+    def test_tracks_allowed_gate_with_verified_receipt(self):
+        """Should track allow decisions, receipt status, and diversity."""
+        gate = {
+            "allow_auto_execution": True,
+            "reason_codes": [],
+            "provider_diversity": 3,
+            "model_family_diversity": 3,
+            "receipt_signed": True,
+            "receipt_integrity_valid": True,
+            "receipt_signature_valid": True,
+            "context_taint_detected": False,
+            "correlated_failure_risk": False,
+            "suspicious_unanimity_risk": False,
+        }
+
+        track_execution_gate_decision(gate, path="unit_test", domain="security")
+
+        assert (
+            EXECUTION_GATE_DECISIONS.get(path="unit_test", domain="security", decision="allow") == 1
+        )
+        assert (
+            EXECUTION_GATE_RECEIPT_VERIFICATION.get(
+                path="unit_test", domain="security", status="verified"
+            )
+            == 1
+        )
+        assert (
+            EXECUTION_GATE_CONTEXT_TAINT.get(path="unit_test", domain="security", state="clean")
+            == 1
+        )
+        assert (
+            EXECUTION_GATE_CORRELATED_RISK.get(path="unit_test", domain="security", state="clear")
+            == 1
+        )
+
+        provider_rows = [
+            data
+            for labels, data in EXECUTION_GATE_PROVIDER_DIVERSITY.collect()
+            if labels == {"domain": "security", "path": "unit_test"}
+        ]
+        model_rows = [
+            data
+            for labels, data in EXECUTION_GATE_MODEL_FAMILY_DIVERSITY.collect()
+            if labels == {"domain": "security", "path": "unit_test"}
+        ]
+        assert provider_rows and provider_rows[0]["count"] == 1
+        assert model_rows and model_rows[0]["count"] == 1
+
+    def test_tracks_denied_gate_and_reason_breakdown(self):
+        """Should track deny reason codes and risk signals."""
+        gate = {
+            "allow_auto_execution": False,
+            "reason_codes": ["provider_diversity_below_minimum", "tainted_context_detected"],
+            "provider_diversity": 1,
+            "model_family_diversity": 1,
+            "receipt_signed": False,
+            "receipt_integrity_valid": False,
+            "receipt_signature_valid": False,
+            "context_taint_detected": True,
+            "correlated_failure_risk": True,
+            "suspicious_unanimity_risk": False,
+        }
+
+        track_execution_gate_decision(gate, path="post_debate", domain="general")
+
+        assert (
+            EXECUTION_GATE_DECISIONS.get(path="post_debate", domain="general", decision="deny") == 1
+        )
+        assert (
+            EXECUTION_GATE_BLOCK_REASONS.get(
+                path="post_debate",
+                domain="general",
+                reason="provider_diversity_below_minimum",
+            )
+            == 1
+        )
+        assert (
+            EXECUTION_GATE_BLOCK_REASONS.get(
+                path="post_debate",
+                domain="general",
+                reason="tainted_context_detected",
+            )
+            == 1
+        )
+        assert (
+            EXECUTION_GATE_RECEIPT_VERIFICATION.get(
+                path="post_debate",
+                domain="general",
+                status="failed",
+            )
+            == 1
+        )
+        assert (
+            EXECUTION_GATE_CONTEXT_TAINT.get(
+                path="post_debate",
+                domain="general",
+                state="tainted",
+            )
+            == 1
+        )
+        assert (
+            EXECUTION_GATE_CORRELATED_RISK.get(
+                path="post_debate",
+                domain="general",
+                state="detected",
+            )
+            == 1
+        )
+
+    def test_ignores_non_dict_gate_payload(self):
+        """Should no-op when gate payload is missing or malformed."""
+        track_execution_gate_decision(None)
+        track_execution_gate_decision("not-a-dict")  # type: ignore[arg-type]
+        assert EXECUTION_GATE_DECISIONS.collect() == []
 
 
 # =============================================================================

@@ -1085,6 +1085,26 @@ async def handle_debate_completion(
             auto_execution_bridge=effective_config.auto_execution_bridge,
             execution_bridge_min_confidence=effective_config.execution_bridge_min_confidence,
         )
+
+    # Propagate prompt-level context-taint signals into debate metadata so
+    # execution safety gates can treat untrusted context as tainted.
+    if ctx.result:
+        try:
+            prompt_builder = getattr(arena, "prompt_builder", None)
+            if prompt_builder is not None and hasattr(prompt_builder, "get_context_taint_report"):
+                report = prompt_builder.get_context_taint_report()
+                if isinstance(report, dict) and report.get("context_taint_detected"):
+                    if not isinstance(ctx.result.metadata, dict):
+                        ctx.result.metadata = {}
+                    ctx.result.metadata["context_taint_detected"] = True
+                    ctx.result.metadata["context_taint_patterns"] = report.get(
+                        "context_taint_patterns", []
+                    )
+                    ctx.result.metadata["context_taint_sources"] = report.get(
+                        "context_taint_sources", []
+                    )
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
+            logger.debug("Context taint metadata propagation skipped: %s", e)
     if not getattr(arena, "disable_post_debate_pipeline", False) and ctx.result:
         try:
             from aragora.debate.post_debate_coordinator import PostDebateCoordinator
@@ -1347,6 +1367,11 @@ async def _auto_execute_plan(
         The DebateResult with plan metadata attached.
     """
     try:
+        # Enforce execution safety gate before autonomous execution.
+        from aragora.debate.execution_safety import (
+            ExecutionSafetyPolicy,
+            evaluate_auto_execution_safety,
+        )
         from aragora.pipeline.decision_plan import DecisionPlanFactory
         from aragora.pipeline.decision_plan.core import ApprovalMode
         from aragora.pipeline.executor import PlanExecutor
@@ -1368,6 +1393,60 @@ async def _auto_execute_plan(
         approval_mode_str = getattr(arena, "auto_approval_mode", "risk_based")
         max_risk_str = getattr(arena, "auto_max_risk", "low")
         execution_mode: str = getattr(arena, "auto_execution_mode", "workflow")
+        post_cfg = getattr(arena, "post_debate_config", None)
+
+        gate_policy = ExecutionSafetyPolicy(
+            require_verified_signed_receipt=getattr(
+                post_cfg,
+                "execution_gate_require_verified_signed_receipt",
+                True,
+            ),
+            min_provider_diversity=getattr(post_cfg, "execution_gate_min_provider_diversity", 2),
+            min_model_family_diversity=getattr(
+                post_cfg, "execution_gate_min_model_family_diversity", 2
+            ),
+            block_on_context_taint=getattr(post_cfg, "execution_gate_block_on_context_taint", True),
+            block_on_high_severity_dissent=getattr(
+                post_cfg, "execution_gate_block_on_high_severity_dissent", True
+            ),
+            high_severity_dissent_threshold=getattr(
+                post_cfg, "execution_gate_high_severity_dissent_threshold", 0.7
+            ),
+        )
+        gate_decision = evaluate_auto_execution_safety(
+            result,
+            agents=getattr(arena, "agents", None),
+            policy=gate_policy,
+        )
+
+        if not isinstance(result.metadata, dict):
+            result.metadata = {}
+        gate_dict = gate_decision.to_dict()
+        result.metadata["execution_gate"] = gate_dict
+        if gate_decision.signed_receipt is not None:
+            result.metadata["signed_consensus_receipt"] = gate_decision.signed_receipt
+
+        try:
+            from aragora.server.metrics import track_execution_gate_decision
+
+            track_execution_gate_decision(
+                gate_dict,
+                path="arena_auto_execute",
+                domain=str(getattr(result, "domain", "general") or "general"),
+            )
+        except ImportError:
+            logger.debug("Execution gate metrics unavailable")
+        except (ValueError, TypeError, AttributeError, RuntimeError):
+            logger.debug("Execution gate metrics emission failed", exc_info=True)
+
+        if not gate_decision.allow_auto_execution:
+            result.metadata["auto_execution_blocked"] = "execution_gate"
+            logger.warning(
+                "auto_execution_blocked debate_id=%s reasons=%s",
+                result.debate_id,
+                gate_decision.reason_codes,
+            )
+            return result
 
         plan = DecisionPlanFactory.from_debate_result(
             result,

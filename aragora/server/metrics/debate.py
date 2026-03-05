@@ -81,6 +81,51 @@ AGENT_ERRORS = Counter(
     label_names=["agent", "error_type"],
 )
 
+# Execution safety gate telemetry (signed receipts + diversity + taint)
+EXECUTION_GATE_DECISIONS = Counter(
+    name="aragora_execution_gate_decisions_total",
+    help="Execution safety gate decisions by path/domain/decision",
+    label_names=["path", "domain", "decision"],  # decision: allow, deny
+)
+
+EXECUTION_GATE_BLOCK_REASONS = Counter(
+    name="aragora_execution_gate_blocks_total",
+    help="Execution safety gate deny reason counts",
+    label_names=["path", "domain", "reason"],
+)
+
+EXECUTION_GATE_PROVIDER_DIVERSITY = Histogram(
+    name="aragora_execution_gate_provider_diversity",
+    help="Provider diversity seen by execution safety gate",
+    label_names=["path", "domain"],
+    buckets=[1, 2, 3, 4, 5, 6, 8],
+)
+
+EXECUTION_GATE_MODEL_FAMILY_DIVERSITY = Histogram(
+    name="aragora_execution_gate_model_family_diversity",
+    help="Model family diversity seen by execution safety gate",
+    label_names=["path", "domain"],
+    buckets=[1, 2, 3, 4, 5, 6, 8],
+)
+
+EXECUTION_GATE_RECEIPT_VERIFICATION = Counter(
+    name="aragora_execution_gate_receipt_verification_total",
+    help="Signed consensus receipt verification outcomes",
+    label_names=["path", "domain", "status"],  # status: verified, failed
+)
+
+EXECUTION_GATE_CONTEXT_TAINT = Counter(
+    name="aragora_execution_gate_context_taint_total",
+    help="Context taint signal seen by execution safety gate",
+    label_names=["path", "domain", "state"],  # state: tainted, clean
+)
+
+EXECUTION_GATE_CORRELATED_RISK = Counter(
+    name="aragora_execution_gate_correlated_risk_total",
+    help="Correlated failure/collusion risk signals seen by execution safety gate",
+    label_names=["path", "domain", "state"],  # state: detected, clear
+)
+
 
 # =============================================================================
 # Helpers
@@ -185,6 +230,83 @@ def track_agent_participation(agent_name: str, outcome: str) -> None:
     AGENT_PARTICIPATION.inc(agent_name=agent_name, outcome=outcome)
 
 
+def track_execution_gate_decision(
+    gate: dict[str, Any] | None,
+    *,
+    path: str = "post_debate",
+    domain: str = "general",
+) -> None:
+    """Track execution safety gate decision and diagnostics.
+
+    Args:
+        gate: Execution gate dict from ExecutionSafetyDecision.to_dict()
+        path: Emission path (e.g., post_debate_coordinator, arena_auto_execute)
+        domain: Debate domain for dashboard segmentation
+    """
+    if not isinstance(gate, dict):
+        return
+
+    decision = "allow" if bool(gate.get("allow_auto_execution", True)) else "deny"
+    EXECUTION_GATE_DECISIONS.inc(path=path, domain=domain, decision=decision)
+
+    # Reason-level deny telemetry
+    reasons = gate.get("reason_codes", [])
+    if isinstance(reasons, list):
+        for reason in reasons:
+            reason_label = str(reason or "unknown").strip().lower() or "unknown"
+            EXECUTION_GATE_BLOCK_REASONS.inc(path=path, domain=domain, reason=reason_label)
+
+    # Diversity observability
+    try:
+        provider_diversity = float(gate.get("provider_diversity", 0))
+        if provider_diversity > 0:
+            EXECUTION_GATE_PROVIDER_DIVERSITY.observe(
+                provider_diversity,
+                path=path,
+                domain=domain,
+            )
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        model_family_diversity = float(gate.get("model_family_diversity", 0))
+        if model_family_diversity > 0:
+            EXECUTION_GATE_MODEL_FAMILY_DIVERSITY.observe(
+                model_family_diversity,
+                path=path,
+                domain=domain,
+            )
+    except (TypeError, ValueError):
+        pass
+
+    receipt_verified = (
+        bool(gate.get("receipt_signed"))
+        and bool(gate.get("receipt_integrity_valid"))
+        and bool(gate.get("receipt_signature_valid"))
+    )
+    EXECUTION_GATE_RECEIPT_VERIFICATION.inc(
+        path=path,
+        domain=domain,
+        status="verified" if receipt_verified else "failed",
+    )
+
+    context_taint = bool(gate.get("context_taint_detected"))
+    EXECUTION_GATE_CONTEXT_TAINT.inc(
+        path=path,
+        domain=domain,
+        state="tainted" if context_taint else "clean",
+    )
+
+    correlated_risk = bool(gate.get("correlated_failure_risk")) or bool(
+        gate.get("suspicious_unanimity_risk")
+    )
+    EXECUTION_GATE_CORRELATED_RISK.inc(
+        path=path,
+        domain=domain,
+        state="detected" if correlated_risk else "clear",
+    )
+
+
 @contextmanager
 def track_debate_execution(domain: str = "general") -> Generator[dict, None, None]:
     """Context manager to track debate execution metrics.
@@ -251,10 +373,18 @@ __all__ = [
     "CONSENSUS_QUALITY",
     "CIRCUIT_BREAKERS_OPEN",
     "AGENT_ERRORS",
+    "EXECUTION_GATE_DECISIONS",
+    "EXECUTION_GATE_BLOCK_REASONS",
+    "EXECUTION_GATE_PROVIDER_DIVERSITY",
+    "EXECUTION_GATE_MODEL_FAMILY_DIVERSITY",
+    "EXECUTION_GATE_RECEIPT_VERIFICATION",
+    "EXECUTION_GATE_CONTEXT_TAINT",
+    "EXECUTION_GATE_CORRELATED_RISK",
     "track_debate_outcome",
     "track_circuit_breaker_state",
     "track_agent_error",
     "classify_agent_error",
     "track_agent_participation",
+    "track_execution_gate_decision",
     "track_debate_execution",
 ]

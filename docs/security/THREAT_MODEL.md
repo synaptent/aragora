@@ -237,11 +237,11 @@ configuration, random number generation.
 
 | Threat | Category | Likelihood | Impact | Existing Controls | Gaps |
 |--------|----------|------------|--------|-------------------|------|
-| Open-weight refusal-ablation / model lobotomy (OBLITERATUS-class) in participant set | Tampering | Medium | High | Multi-agent debate with dissent capture, optional provider allowlists | No hard requirement for provider-family diversity in every high-risk debate |
+| Open-weight refusal-ablation / model lobotomy (OBLITERATUS-class) in participant set | Tampering | Medium | High | Multi-agent debate with dissent capture, execution gate enforces provider + model-family diversity for auto-execution | Still relies on configured ensemble quality; read-only/non-executing debates can run without strict diversity |
 | Endpoint substitution (modified model served behind expected alias) | Spoofing | Medium | High | Named agent registry, API key scoping | No model attestation challenge at runtime for externally hosted/open-weight endpoints |
-| Collusion/Sybil in ensemble (multiple compromised models outvote intact minority) | Elevation of Privilege | Medium | High | Consensus proof + dissent recording, calibration signals | No mandatory anti-collusion quorum rules (e.g., unique provider/operator constraints) before auto-action |
+| Collusion/Sybil in ensemble (multiple compromised models outvote intact minority) | Elevation of Privilege | Medium | High | Consensus proof + dissent recording, execution gate correlated-risk checks, diversity floors | Detection is heuristic; coordinated multi-provider compromise remains possible |
 | Correlated failure across all models (shared blind spot) | Information Disclosure | Medium | High | Adversarial critique loop, unresolved tension tracking | Consensus can still be wrong; no mandatory external verification gate for high-impact decisions |
-| Compromised arbitration or execution bridge logic | Elevation of Privilege | Low | Critical | Code review, tests, RBAC around endpoints | Auto-execution path is not gated on verified signed receipts by default |
+| Compromised arbitration or execution bridge logic | Elevation of Privilege | Low | Critical | Code review, tests, RBAC around endpoints, execution gate requires verified signed receipts by default | Gate bypass remains a critical regression risk; requires continuous verification tests |
 | Receipt-signing key compromise or misuse | Repudiation | Low | Critical | Multiple signing algorithms, verification endpoints | Key custody and rotation policy not enforced as an execution prerequisite |
 
 ---
@@ -325,7 +325,7 @@ Based on this threat model, the penetration test should prioritize in this order
 11. **Context memory/config poisoning drills** -- malicious `CLAUDE.md`/memory file instructions, indirect retrieval injection
 12. **Model endpoint integrity tests** -- open-weight refusal ablation simulation, endpoint substitution, provider diversity enforcement
 13. **Consensus collusion simulations** -- compromised-model quorum and correlated-failure scenarios against arbitration logic
-14. **Execution-gate verification** -- ensure high-impact actions require verified signed receipts plus policy checks
+14. **Execution-gate regression verification** -- ensure high-impact actions continue to require verified signed receipts plus diversity/taint policy checks
 
 ---
 

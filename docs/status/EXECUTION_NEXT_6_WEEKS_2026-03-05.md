@@ -33,6 +33,10 @@ It complements (does not replace) `docs/status/NEXT_STEPS_CANONICAL.md`.
    - Offline/demo debates now disable post-debate coordinator pipeline (`disable_post_debate_pipeline=True`) to avoid network-backed canvas/judge workflows.
    - Offline/demo quality pipeline now skips provider-backed repair loops while keeping deterministic contract checks.
    - `scripts/run_offline_golden_path.sh` now completes without `ResourceWarning` transport leaks.
+5. Execution safety observability + calibration shipped:
+   - Added execution-gate telemetry metrics (`aragora_execution_gate_*`) for decision outcomes, deny reasons, receipt verification, taint, and diversity.
+   - Added reproducible threshold tuning sweep script: `scripts/tune_execution_gate.py`.
+   - Published calibration report: `docs/status/EXECUTION_GATE_TUNING_2026-03-05.md`.
 
 ## Week-by-Week Execution
 
