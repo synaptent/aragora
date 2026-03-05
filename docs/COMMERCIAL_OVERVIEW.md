@@ -44,7 +44,7 @@ Small and medium businesses making consequential decisions with AI -- engineerin
 
 Regulated enterprises in healthcare, finance, legal, and government that need auditable AI decisions for EU AI Act compliance (enforcement begins August 2, 2026), SOC 2 audits, HIPAA workflows, and board-level decision documentation.
 
-**Value proposition:** Compliance-ready decision receipts generated as a byproduct of improving the decision itself. Enterprise security features -- OIDC/SAML SSO, multi-tenant isolation, RBAC with 390+ permissions, AES-256-GCM encryption -- are built in, not bolted on.
+**Value proposition:** Compliance-ready decision receipts generated as a byproduct of improving the decision itself. Enterprise security features -- OIDC/SAML SSO, multi-tenant isolation, RBAC with 450+ permission combinations across 14 resource types, 8 actions, and 4 scope levels, AES-256-GCM encryption -- are built in, not bolted on.
 
 ### Verticals with Strongest Fit
 
@@ -92,12 +92,12 @@ For small teams that need decision rigor and audit trails.
 | CI/CD integration | GitHub Actions, GitLab CI |
 | Channel delivery | Slack, Teams, Discord, email |
 | 4-tier Continuum Memory | Fast / medium / slow / glacial |
-| Knowledge Mound | 34 adapters |
+| Knowledge Mound | 41 adapters |
 | ELO rankings + Brier calibration | Per-agent, per-domain tracking |
 | Workflow engine | 50+ templates across 6 categories |
 | Vertical weight profiles | Healthcare, financial, legal |
-| API access | Full REST + WebSocket (2,000+ operations) |
-| Python + TypeScript SDKs | Full access (155 namespaces each) |
+| API access | Full REST + WebSocket (3,000+ operations) |
+| Python + TypeScript SDKs | Full access (184 Python / 183 TypeScript namespaces) |
 
 Bring your own API keys. LLM costs billed directly by your providers.
 
@@ -111,7 +111,7 @@ For organizations with compliance, security, and governance requirements.
 | SSO (OIDC / SAML) | Azure AD, Okta, Google Workspace, Auth0, Keycloak |
 | MFA | TOTP / HOTP |
 | SCIM 2.0 provisioning | Automatic user sync from identity providers |
-| RBAC v2 | 390+ permissions, 7 default roles, role hierarchy, middleware enforcement |
+| RBAC v2 | 450+ permission combinations across 14 resource types, 8 actions, and 4 scope levels; 7 default roles, role hierarchy, middleware enforcement |
 | Multi-tenancy | Tenant isolation, resource quotas, usage metering |
 | Encryption | AES-256-GCM at rest, field-level encryption for HIPAA |
 | Key rotation | Versioned keys with automatic rotation schedules |
@@ -150,11 +150,11 @@ For organizations with compliance, security, and governance requirements.
 | Anti-fragile agent reassignment | -- | Yes | Yes |
 | **Memory & Knowledge** | | | |
 | 4-tier Continuum Memory | -- | Yes | Yes |
-| Knowledge Mound (34 adapters) | -- | Yes | Yes |
+| Knowledge Mound (41 adapters) | -- | Yes | Yes |
 | Cross-debate institutional memory | -- | Yes | Yes |
 | **Integrations** | | | |
 | REST API + WebSocket | Limited | Full | Full |
-| Python SDK (184 namespaces) | Yes | Yes | Yes |
+| Python SDK (185 namespaces) | Yes | Yes | Yes |
 | TypeScript SDK (183 namespaces) | Yes | Yes | Yes |
 | Slack / Teams / Discord | -- | Yes | Yes |
 | Telegram / WhatsApp / email / voice | -- | Yes | Yes |
@@ -168,7 +168,7 @@ For organizations with compliance, security, and governance requirements.
 | SSO (OIDC / SAML) | -- | -- | Yes |
 | MFA (TOTP / HOTP) | -- | -- | Yes |
 | SCIM 2.0 provisioning | -- | -- | Yes |
-| RBAC v2 (390+ permissions) | -- | -- | Yes |
+| RBAC v2 (450+ permission combinations) | -- | -- | Yes |
 | Multi-tenancy | -- | -- | Yes |
 | AES-256-GCM encryption | -- | -- | Yes |
 | Field-level encryption (HIPAA) | -- | -- | Yes |
@@ -234,6 +234,8 @@ For classified, regulated, or disconnected environments.
 | **EU AI Act** | Artifacts generated | Article 9 (risk management via adversarial debate), Article 12 (event logs, technical documentation, retention), Article 13 (transparency, known risks, output interpretation), Article 14 (human oversight, override mechanisms), Article 15 (accuracy tracking via calibration scores) |
 | **SOX** | Partial | Audit trails and access controls applicable to financial reporting decisions |
 
+> **EU AI Act enforcement: August 2, 2026** — Aragora's compliance CLI provides audit-ready artifact bundles, giving enterprise buyers a clear path to compliance before the deadline.
+
 **Important caveat:** Aragora provides the technical controls and artifacts. Compliance certification requires organizational processes, legal review, and (for SOC 2) third-party auditor engagement. Aragora does not certify compliance -- it provides the infrastructure that makes certification achievable.
 
 ---
@@ -283,11 +285,11 @@ Both SDKs provide typed clients for all 3,000+ API operations with full IntelliS
 | Lines of code | 1,490,000 |
 | Tests | 208,000+ |
 | Test files | 4,300+ |
-| API operations | 2,000+ across 1,800+ paths |
+| API operations | 2,000+ across 2,900+ paths |
 | WebSocket event types | 190+ |
 | SDK namespaces | 184 Python / 183 TypeScript (99.3% parity) |
-| Knowledge Mound adapters | 34 |
-| RBAC permissions | 390+ |
+| Knowledge Mound adapters | 41 |
+| RBAC permission combinations | 450+ (14 resource types × 8 actions × 4 scope levels) |
 | Agent types | 43 |
 | LLM providers | 6+ (Anthropic, OpenAI, Google, xAI, Mistral, OpenRouter) |
 | Workflow templates | 50+ across 6 categories |
@@ -312,6 +314,8 @@ Both SDKs provide typed clients for all 3,000+ API operations with full IntelliS
 ---
 
 ## Why Now
+
+> **EU AI Act enforcement: August 2, 2026** — Aragora's compliance CLI provides audit-ready artifact bundles, giving enterprise buyers a clear path to compliance before the deadline.
 
 The EU AI Act high-risk enforcement begins **August 2, 2026** -- six months away. Organizations deploying AI in regulated industries have a narrowing window to build decision governance infrastructure.
 

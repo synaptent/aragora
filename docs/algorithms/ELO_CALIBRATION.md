@@ -57,6 +57,7 @@ changes = elo.record_match(
 )
 
 # Legacy API: two-player
+> **Deprecated:** The two-player match API is no longer supported. Use `record_match()` with the full agent list.
 changes = elo.record_match(
     winner="claude",
     loser="gpt4",
@@ -136,6 +137,8 @@ Brier = (predicted_probability - actual_outcome)^2
 Range: 0 (perfect) to 1 (worst)
 
 ### Recording Predictions
+
+> **Note:** Tournament prediction API is not yet implemented in the current version.
 
 ```python
 # Tournament winner prediction

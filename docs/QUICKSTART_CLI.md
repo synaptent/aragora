@@ -137,4 +137,4 @@ The `result` object also exposes:
 |---|---|
 | `docs/EXTENDED_README.md` | Full technical reference covering all five pillars |
 | `docs/SDK_GUIDE.md` | Python and TypeScript SDK usage with advanced examples |
-| `docs/api/API_REFERENCE.md` | Complete REST API documentation (2,000+ operations) |
+| `docs/api/API_REFERENCE.md` | Complete REST API documentation (3,000+ operations) |

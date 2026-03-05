@@ -6,8 +6,8 @@ This runbook provides operational procedures for managing the Aragora production
 
 | Component | Service | Region | Notes |
 |-----------|---------|--------|-------|
-| API Server #1 | EC2 `i-0dbd51f74a9a11fcc` | us-east-2 | aragora-api-server |
-| API Server #2 | EC2 `i-016b3e32625bf967e` | us-east-2 | aragora-api-2 |
+| API Server #1 | EC2 `i-0823e60c7c4b924e1` | us-east-2 | aragora-api-server-al2023 (AL2023) |
+| API Server #2 | EC2 `i-07e538fafbe61696d` | us-east-2 | aragora-api-2-al2023 (AL2023) |
 | Database | Supabase PostgreSQL | - | Transaction pooler mode |
 | Cache | Upstash Redis | us-east-2 | TLS enabled |
 | CDN/WAF | Cloudflare | - | SSL termination, load balancing |
@@ -21,13 +21,13 @@ This runbook provides operational procedures for managing the Aragora production
 ```bash
 # Via AWS SSM (recommended)
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["systemctl status aragora --no-pager"]' \
   --output text --query "Command.CommandId"
 
 # Get command result
-aws ssm get-command-invocation --command-id "<COMMAND_ID>" --instance-id "i-0dbd51f74a9a11fcc"
+aws ssm get-command-invocation --command-id "<COMMAND_ID>" --instance-id "i-0823e60c7c4b924e1"
 ```
 
 ### Check Health Endpoint
@@ -38,7 +38,7 @@ curl -s https://api.aragora.ai/api/health | jq
 
 # Internal (via SSM)
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["curl -s http://localhost:8080/api/health | jq"]' \
   --output text --query "Command.CommandId"
@@ -49,14 +49,14 @@ aws ssm send-command \
 ```bash
 # Recent logs (last 100 lines)
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["sudo journalctl -u aragora -n 100 --no-pager"]' \
   --output text --query "Command.CommandId"
 
 # Follow logs (for debugging)
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["sudo journalctl -u aragora -f --no-pager | head -200"]' \
   --output text --query "Command.CommandId"
@@ -66,7 +66,7 @@ aws ssm send-command \
 
 ```bash
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["sudo systemctl restart aragora && sleep 5 && systemctl status aragora --no-pager | head -15"]' \
   --output text --query "Command.CommandId"
@@ -77,7 +77,7 @@ aws ssm send-command \
 ```bash
 # Manual deploy to single instance
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=[
     "export HOME=/home/ec2-user",
@@ -94,7 +94,7 @@ aws ssm send-command \
 
 # Deploy to both instances
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" "i-016b3e32625bf967e" \
+  --instance-ids "i-0823e60c7c4b924e1" "i-07e538fafbe61696d" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=[...]'
 ```
@@ -106,7 +106,7 @@ aws ssm send-command \
 ```bash
 # On the server via SSM
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=[
     "export HOME=/home/ec2-user",
@@ -136,7 +136,7 @@ curl -s -X POST "https://api.aragora.ai/api/debates" \
 
 ```bash
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["curl -s http://localhost:8080/api/health | jq .checks.database"]' \
   --output text --query "Command.CommandId"
@@ -146,7 +146,7 @@ aws ssm send-command \
 
 ```bash
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=[
     "export HOME=/home/ec2-user",
@@ -170,7 +170,7 @@ aws ssm send-command \
 
 ```bash
 aws ssm send-command \
-  --instance-ids "i-0dbd51f74a9a11fcc" \
+  --instance-ids "i-0823e60c7c4b924e1" \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=["curl -s http://localhost:8080/api/health | jq .checks.redis"]' \
   --output text --query "Command.CommandId"
@@ -348,8 +348,8 @@ Cloudflare load balancing distributes traffic between two EC2 instances:
 
 | Origin | IP | Instance ID |
 |--------|-----|-------------|
-| aragora-api-server | 3.141.158.91 | i-0dbd51f74a9a11fcc |
-| aragora-api-2 | 18.222.130.110 | i-016b3e32625bf967e |
+| aragora-api-server | 3.141.158.91 | i-0823e60c7c4b924e1 |
+| aragora-api-2 | 18.222.130.110 | i-07e538fafbe61696d |
 
 ### Health Checks
 
@@ -404,7 +404,7 @@ aws logs describe-log-streams \
 # Get recent logs from a stream
 aws logs get-log-events \
   --log-group-name "/aragora/production" \
-  --log-stream-name "i-0dbd51f74a9a11fcc/nginx-access" \
+  --log-stream-name "i-0823e60c7c4b924e1/nginx-access" \
   --limit 50
 
 # Search across all streams

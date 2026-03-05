@@ -218,6 +218,82 @@ class TestRoleViews:
         expected_sections = ["alignment", "time_impact", "participation", "wellbeing_impact"]
 
 
+class TestOnboardingActivation:
+    """Tests for onboarding activation metrics in PM dashboard."""
+
+    def test_onboarding_activation_metrics_from_snapshot(self, handler):
+        snapshot = {
+            "funnel": {
+                "started": 12,
+                "first_debate": 8,
+                "first_receipt": 6,
+                "completed": 5,
+                "completion_rate": 41.67,
+            },
+            "timing": {
+                "time_to_first_debate_seconds": 95.0,
+                "time_to_first_receipt_seconds": 210.0,
+            },
+            "step_drop_off": {"welcome": {"drop_off_count": 3}},
+        }
+
+        with patch(
+            "aragora.server.handlers.onboarding.get_onboarding_analytics_snapshot",
+            return_value=snapshot,
+        ):
+            metrics = handler._get_onboarding_activation_metrics("org_123")
+
+        assert metrics["started"] == 12
+        assert metrics["first_debate"] == 8
+        assert metrics["first_receipt"] == 6
+        assert metrics["time_to_first_debate_seconds"] == 95.0
+        assert metrics["time_to_first_receipt_seconds"] == 210.0
+        assert metrics["step_drop_off"]["welcome"]["drop_off_count"] == 3
+
+    def test_pm_view_includes_activation_block(self, handler, mock_user, mock_org):
+        base_metrics = {
+            "total_debates": 20,
+            "total_cost_usd": 10.0,
+            "minutes_saved": 300,
+            "hours_saved": 5.0,
+            "cost_saved_usd": 100.0,
+            "net_savings_usd": 90.0,
+            "roi_percentage": 900.0,
+            "consensus_rate": 80.0,
+            "consensus_streak": 5,
+            "avg_debate_time_minutes": 5.0,
+            "manual_equivalent_minutes": 45,
+        }
+        activation_metrics = {
+            "started": 4,
+            "first_debate": 3,
+            "first_receipt": 2,
+            "completed": 1,
+            "completion_rate_percent": 25.0,
+            "time_to_first_debate_seconds": 60.0,
+            "time_to_first_receipt_seconds": 120.0,
+            "step_drop_off": {"welcome": {"drop_off_count": 1}},
+        }
+
+        with (
+            patch.object(handler, "_get_user_and_org", return_value=(mock_user, mock_org, None)),
+            patch.object(handler, "_calculate_success_metrics", return_value=base_metrics),
+            patch.object(
+                handler, "_get_onboarding_activation_metrics", return_value=activation_metrics
+            ),
+        ):
+            result = handler._get_pm_view.__wrapped__.__wrapped__(  # type: ignore[attr-defined]
+                handler,
+                {"period": "month"},
+                {},
+                mock_user,
+            )
+
+        payload = json.loads(result.body)
+        assert payload["pm_view"]["activation"]["started"] == 4
+        assert payload["pm_view"]["activation"]["time_to_first_debate_seconds"] == 60.0
+
+
 class TestPeriodParsing:
     """Tests for period parameter parsing."""
 

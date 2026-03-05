@@ -399,6 +399,11 @@ class PromptBuilder(PromptContextMixin, PromptAssemblyMixin):
         self.mode_sequence: list[str] | None = None
         self._active_mode_name: str | None = None
 
+        # Context taint tracking (for execution safety gate)
+        self._context_taint_detected: bool = False
+        self._context_taint_patterns: set[str] = set()
+        self._context_taint_sources: set[str] = set()
+
     def set_mode_for_phase(self, phase: str) -> None:
         """Set the active mode based on debate phase.
 
@@ -447,6 +452,14 @@ class PromptBuilder(PromptContextMixin, PromptAssemblyMixin):
     def set_memory_fabric(self, fabric: Any) -> None:
         """Set the MemoryFabric for unified cross-system context retrieval."""
         self._memory_fabric = fabric
+
+    def get_context_taint_report(self) -> dict[str, Any]:
+        """Return context taint signals detected during prompt assembly."""
+        return {
+            "context_taint_detected": self._context_taint_detected,
+            "context_taint_patterns": sorted(self._context_taint_patterns),
+            "context_taint_sources": sorted(self._context_taint_sources),
+        }
 
     def clear_caches(self) -> None:
         """Clear all caches. Call at session boundaries (e.g., debate end)."""

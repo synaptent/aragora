@@ -64,6 +64,13 @@ route:
 
   # Child routes for specific alert types
   routes:
+    # Execution safety gate routing (deny spikes, receipt verification failures)
+    - matchers:
+        - alertname =~ "ExecutionGate.*|AragoraExecutionGate.*"
+      receiver: 'execution-gate-slack'
+      group_wait: 20s
+      repeat_interval: 1h
+
     # Critical alerts - immediate notification to PagerDuty and Slack
     - matchers:
         - severity = critical
@@ -189,6 +196,22 @@ receivers:
           {{ range .Alerts }}
           *Alert:* {{ .Annotations.summary }}
           *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+  # Execution safety gate alerts
+  - name: 'execution-gate-slack'
+    slack_configs:
+      - channel: '#aragora-execution-safety'
+        send_resolved: true
+        color: '{{ if eq .Status "firing" }}warning{{ else }}good{{ end }}'
+        title: ':shield: Execution Gate: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Path:* {{ .Labels.path }}
+          *Domain:* {{ .Labels.domain }}
+          {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
           {{ end }}
 
   # SLO burn rate alerts

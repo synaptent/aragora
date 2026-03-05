@@ -41,15 +41,18 @@ async def test_run_debate_offline_is_network_free(monkeypatch):
 
         mock_store.assert_not_called()
         _, kwargs = mock_arena.call_args
-        assert kwargs["knowledge_mound"] is None
-        assert kwargs["auto_create_knowledge_mound"] is False
-        assert kwargs["enable_knowledge_retrieval"] is False
-        assert kwargs["enable_knowledge_ingestion"] is False
-        assert kwargs["enable_cross_debate_memory"] is False
-        assert kwargs["use_rlm_limiter"] is False
-        assert kwargs["enable_ml_delegation"] is False
-        assert kwargs["enable_quality_gates"] is False
-        assert kwargs["enable_consensus_estimation"] is False
+        memory_config = kwargs["memory_config"]
+        ml_config = kwargs["ml_config"]
+        assert memory_config.knowledge_mound is None
+        assert memory_config.auto_create_knowledge_mound is False
+        assert memory_config.enable_knowledge_retrieval is False
+        assert memory_config.enable_knowledge_ingestion is False
+        assert memory_config.enable_cross_debate_memory is False
+        assert memory_config.use_rlm_limiter is False
+        assert ml_config.enable_ml_delegation is False
+        assert ml_config.enable_quality_gates is False
+        assert ml_config.enable_consensus_estimation is False
+        assert kwargs["disable_post_debate_pipeline"] is True
 
 
 def test_cmd_ask_demo_forces_local_offline(monkeypatch):
@@ -113,6 +116,72 @@ def test_cmd_ask_demo_forces_local_offline(monkeypatch):
     import os
 
     assert os.getenv("ARAGORA_OFFLINE") == "1"
+
+
+def test_cmd_ask_demo_disables_quality_upgrade_pipeline(monkeypatch):
+    """Demo/offline mode should skip provider-backed quality upgrades entirely."""
+    from aragora.cli.commands import debate as debate_cmd
+
+    monkeypatch.delenv("ARAGORA_OFFLINE", raising=False)
+
+    args = argparse.Namespace(
+        task=(
+            "output sections Ranked High-Level Tasks, Suggested Subtasks, "
+            "Owner module / file paths, Test Plan, Rollback Plan, Gate Criteria, JSON Payload"
+        ),
+        agents="anthropic-api,openai-api,gemini,grok",
+        rounds=2,
+        consensus="judge",
+        context="",
+        learn=True,
+        db=":memory:",
+        demo=True,
+        api=False,
+        local=False,
+        graph=False,
+        matrix=False,
+        decision_integrity=False,
+        auto_select=False,
+        auto_select_config=None,
+        enable_verticals=False,
+        vertical=None,
+        calibration=True,
+        evidence_weighting=True,
+        trending=True,
+        mode=None,
+        api_url="http://localhost:8080",
+        api_key=None,
+        verbose=False,
+        graph_rounds=3,
+        branch_threshold=0.7,
+        max_branches=3,
+        scenario=None,
+        matrix_rounds=3,
+        di_include_context=False,
+        di_plan_strategy="single_task",
+        di_execution_mode=None,
+        timeout=60,
+        post_consensus_quality=True,
+        upgrade_to_good=True,
+        quality_upgrade_max_loops=2,
+    )
+
+    weak_answer = "## Ranked High-Level Tasks\n- Task 1\n\n## Gate Criteria\n- Should be reliable."
+
+    with (
+        patch.object(debate_cmd, "create_agent", side_effect=AssertionError("no repair agents")),
+        patch.object(debate_cmd, "run_debate", new_callable=AsyncMock) as mock_run_debate,
+    ):
+        mock_result = MagicMock()
+        mock_result.final_answer = weak_answer
+        mock_result.metadata = {}
+        mock_result.dissenting_views = []
+        mock_run_debate.return_value = mock_result
+        debate_cmd.cmd_ask(args)
+
+    run_kwargs = mock_run_debate.call_args.kwargs
+    assert run_kwargs["offline"] is True
+    assert run_kwargs["disable_post_debate_pipeline"] is True
 
 
 def test_cmd_ask_strict_wall_clock_timeout_exits(monkeypatch, capsys):

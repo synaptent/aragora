@@ -53,7 +53,7 @@ to fix 6 months later. It paid for itself in one session."
 
 | | Manual Review | Single-LLM Tools | **Aragora** |
 |---|---|---|---|
-| Perspectives | 3-5 humans | 1 AI | **30+ agent types** |
+| Perspectives | 3-5 humans | 1 AI | **43 agent types** |
 | Time | 2-4 weeks | Hours | **Minutes** |
 | Delivery | Docs only | Chat UI | **Any channel** |
 | Verification | None | None | **Receipts + evidence** |

@@ -314,3 +314,68 @@ class TestStepImplementations:
         coordinator = PostDebateCoordinator()
         assert coordinator.config.auto_explain is True
         assert coordinator.config.auto_notify is True
+
+
+class TestExecutionSafetyGate:
+    """Test execution gate wiring inside PostDebateCoordinator.run()."""
+
+    def test_execution_plan_blocked_when_gate_denies(self):
+        config = PostDebateConfig(
+            auto_explain=False,
+            auto_create_plan=True,
+            auto_notify=False,
+            auto_execute_plan=True,
+            auto_persist_receipt=False,
+            auto_execution_bridge=False,
+            plan_min_confidence=0.5,
+            enforce_execution_safety_gate=True,
+        )
+        coordinator = PostDebateCoordinator(config=config)
+        plan_obj = MagicMock()
+        plan_obj.status = "approved"
+
+        with patch.object(coordinator, "_step_create_plan", return_value={"plan": plan_obj}):
+            with patch.object(coordinator, "_step_execution_gate") as gate_mock:
+                gate_mock.return_value = {
+                    "allow_auto_execution": False,
+                    "reason_codes": ["provider_diversity_below_minimum"],
+                }
+                with patch.object(coordinator, "_step_execute_plan") as exec_mock:
+                    result = coordinator.run("d1", _make_debate_result(), confidence=0.9)
+
+        exec_mock.assert_not_called()
+        assert result.execution_result is not None
+        assert result.execution_result.get("skipped") is True
+        assert result.execution_result.get("reason") == "execution_gate_blocked"
+
+    def test_plan_forced_to_human_approval_when_gate_denies(self):
+        config = PostDebateConfig(
+            auto_explain=False,
+            auto_create_plan=True,
+            auto_notify=False,
+            auto_execute_plan=False,
+            auto_persist_receipt=False,
+            auto_execution_bridge=False,
+            plan_min_confidence=0.5,
+            enforce_execution_safety_gate=True,
+        )
+        coordinator = PostDebateCoordinator(config=config)
+
+        class _Plan:
+            def __init__(self):
+                self.metadata = {}
+                self.approval_mode = None
+                self.status = None
+
+        plan_obj = _Plan()
+        with patch.object(coordinator, "_step_create_plan", return_value={"plan": plan_obj}):
+            with patch.object(coordinator, "_step_execution_gate") as gate_mock:
+                gate_mock.return_value = {
+                    "allow_auto_execution": False,
+                    "reason_codes": ["tainted_context_detected"],
+                }
+                result = coordinator.run("d1", _make_debate_result(), confidence=0.9)
+
+        assert result.plan is not None
+        assert plan_obj.metadata.get("execution_gate") is not None
+        assert str(plan_obj.status).lower().endswith("awaiting_approval")

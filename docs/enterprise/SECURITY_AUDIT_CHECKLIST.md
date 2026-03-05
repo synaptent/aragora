@@ -224,7 +224,7 @@ bind_to_user_agent=True
 - `/aragora/rbac/defaults.py` - Default roles and permissions
 
 **Current Implementation Status:**
-- [x] 50+ granular permissions across resource types
+- [x] 360+ granular permissions across resource types
 - [x] Role hierarchy with inheritance
 - [x] Organization-scoped role assignments
 - [x] API key scopes with permission restrictions

@@ -89,9 +89,8 @@ class SynthesisGenerator:
                 "No proposals were generated. One or more agents may have failed to respond."
             )
             ctx.result.synthesis = synthesis
-            # Only set final_answer if the consensus phase didn't already set one
-            if not ctx.result.final_answer:
-                ctx.result.final_answer = synthesis
+            # Synthesis is the definitive final answer — always overwrite.
+            ctx.result.final_answer = synthesis
             self._emit_synthesis_events(ctx, synthesis, "fallback")
             self._generate_export_links(ctx)
             return True
@@ -113,9 +112,8 @@ class SynthesisGenerator:
         if synthesis:
             # Store synthesis in result
             ctx.result.synthesis = synthesis
-            # Only set final_answer if the consensus phase didn't already set one
-            if not ctx.result.final_answer:
-                ctx.result.final_answer = synthesis
+            # Synthesis is the definitive final answer — always overwrite.
+            ctx.result.final_answer = synthesis
 
             # Emit explicit synthesis event (guaranteed delivery)
             self._emit_synthesis_events(ctx, synthesis, synthesis_source)
@@ -135,13 +133,15 @@ class SynthesisGenerator:
                 model="claude-opus-4-5-20251101",
             )
 
-            # Build synthesis prompt
-            synthesis_prompt = self._build_synthesis_prompt(ctx)
+            # Build synthesis prompt — split into system (format) and user (content)
+            system_prompt, user_prompt = self._build_synthesis_prompt_parts(ctx)
+            synthesizer.system_prompt = system_prompt
 
             # Generate synthesis with timeout (60s to fit within phase budget)
+            # Pass user_prompt WITHOUT context_messages to avoid essay-pattern priming
             with streaming_task_context("synthesis-agent:opus_synthesis"):
                 synthesis = await asyncio.wait_for(
-                    synthesizer.generate(synthesis_prompt, ctx.context_messages),
+                    synthesizer.generate(user_prompt),
                     timeout=60.0,
                 )
             synthesis = await self._ensure_complete_synthesis(
@@ -171,10 +171,11 @@ class SynthesisGenerator:
                     name="synthesis-agent-fallback",
                     model="claude-sonnet-4-20250514",
                 )
-                synthesis_prompt = self._build_synthesis_prompt(ctx)
+                system_prompt, user_prompt = self._build_synthesis_prompt_parts(ctx)
+                synthesizer.system_prompt = system_prompt
                 with streaming_task_context("synthesis-agent-fallback:sonnet_synthesis"):
                     synthesis = await asyncio.wait_for(
-                        synthesizer.generate(synthesis_prompt, ctx.context_messages),
+                        synthesizer.generate(user_prompt),
                         timeout=30.0,
                     )
                 synthesis = await self._ensure_complete_synthesis(
@@ -192,6 +193,17 @@ class SynthesisGenerator:
         if not synthesis:
             synthesis = self._combine_proposals_as_synthesis(ctx)
             logger.info("synthesis_generated_combined chars=%s", len(synthesis))
+
+        # Post-process: concretize vague lines with real repo paths
+        repo_hint = self._get_repo_path_hint()
+        if repo_hint and synthesis:
+            before_len = len(synthesis)
+            synthesis = self.concretize_output(synthesis, repo_hint)
+            if len(synthesis) != before_len:
+                logger.info(
+                    "synthesis_concretized delta_chars=%s",
+                    len(synthesis) - before_len,
+                )
 
         # Store synthesis in result
         ctx.result.synthesis = synthesis
@@ -456,31 +468,16 @@ class SynthesisGenerator:
         synthesis += "\n*Note: This synthesis was automatically generated from agent proposals.*"
         return synthesis
 
-    def _build_synthesis_prompt(self, ctx: DebateContext) -> str:
-        """Build prompt for final synthesis generation.
-
-        When a quality output contract is available in the context, the synthesis
-        uses the contract's required sections as the output structure instead of
-        the default generic structure.  This ensures the debate's final answer
-        naturally satisfies the post-consensus quality validator.
-
-        Args:
-            ctx: The DebateContext with proposals, critiques, and task
-
-        Returns:
-            Formatted synthesis prompt string
-        """
+    def _prepare_synthesis_parts(self, ctx: DebateContext) -> tuple[str, str, str, str]:
+        """Extract task, proposals, critiques, and contract from context."""
         proposals = ctx.proposals
-        # DebateContext uses 'round_critiques', not 'critiques'
         critiques = getattr(ctx, "round_critiques", []) or getattr(ctx, "critiques", []) or []
         task = ctx.env.task if ctx.env else "Unknown task"
 
-        # Format proposals
         proposals_text = "\n\n---\n\n".join(
             f"**{agent}**:\n{prop[:1500]}" for agent, prop in proposals.items()
         )
 
-        # Format critiques (if any)
         critiques_text = ""
         if critiques:
             critique_items = []
@@ -490,13 +487,32 @@ class SynthesisGenerator:
                     critique_items.append(f"- {c.agent} on {c.target}: {summary}")
             critiques_text = "\n".join(critique_items)
 
-        # Check if a quality output contract is available in the context.
-        # If none is explicitly provided, use the default contract so that
-        # every synthesis goes through the contract-guided path.
         contract_block = self._extract_contract_block(ctx)
         if not contract_block:
             contract_block = self._default_output_contract()
 
+        return task, proposals_text, critiques_text, contract_block
+
+    def _build_synthesis_prompt(self, ctx: DebateContext) -> str:
+        """Build prompt for final synthesis generation (single string).
+
+        For backwards compatibility. Prefer _build_synthesis_prompt_parts
+        which separates system and user content.
+        """
+        task, proposals_text, critiques_text, contract_block = self._prepare_synthesis_parts(ctx)
+        system, user = self._build_contract_guided_prompt(
+            task, proposals_text, critiques_text, contract_block
+        )
+        return f"{system}\n\n{user}"
+
+    def _build_synthesis_prompt_parts(self, ctx: DebateContext) -> tuple[str, str]:
+        """Build synthesis prompt as (system_prompt, user_prompt) tuple.
+
+        Separates format constraints (system) from debate content (user)
+        so the model treats structural requirements as instructions, not
+        just another part of the conversation.
+        """
+        task, proposals_text, critiques_text, contract_block = self._prepare_synthesis_parts(ctx)
         return self._build_contract_guided_prompt(
             task, proposals_text, critiques_text, contract_block
         )
@@ -637,68 +653,77 @@ Required sections:
         proposals_text: str,
         critiques_text: str,
         contract_block: str,
-    ) -> str:
-        """Build synthesis prompt that uses the quality contract's section structure."""
+    ) -> tuple[str, str]:
+        """Build synthesis prompt as (system_prompt, user_prompt) tuple.
+
+        System prompt contains format constraints and repo paths.
+        User prompt contains debate content to synthesize.
+        """
         repo_hint = self._get_repo_path_hint()
         repo_section = (
-            f"\n\n## REPOSITORY FILE REFERENCE (USE THESE PATHS — DO NOT INVENT PATHS)\n{repo_hint}"
+            f"\nREPOSITORY FILE REFERENCE (use ONLY these paths — do NOT invent paths):\n{repo_hint}"
             if repo_hint
             else ""
         )
 
-        return f"""You are Claude Opus 4.5, tasked with creating the DEFINITIVE synthesis of this multi-agent AI debate.
+        system = f"""You are a structured action plan writer. You convert debate analysis into executable action plans.
+
+CRITICAL OUTPUT FORMAT — NON-NEGOTIABLE:
+
+Your ENTIRE output must use EXACTLY these 7 section headers in order.
+Do NOT write prose, essays, analysis, preamble, or commentary.
+Your VERY FIRST output token must be: ## Ranked High-Level Tasks
+
+Required headers (in this exact order, using ## markdown):
+1. ## Ranked High-Level Tasks
+2. ## Suggested Subtasks
+3. ## Owner module / file paths
+4. ## Test Plan
+5. ## Rollback Plan
+6. ## Gate Criteria
+7. ## JSON Payload
+
+VIOLATIONS (any of these = failure):
+- Writing ANY text before "## Ranked High-Level Tasks"
+- Adding extra ## headers (no "## Summary", "## Analysis", "## Recommendation", "## Preamble")
+- Putting placeholder text like "[Section not produced]", "TBD", "TODO"
+- Inventing file paths not in REPOSITORY FILE REFERENCE
+- Writing vague lines like "Improve X" — use specific actions like "Add validation to `path/file.py:function()`"
+
+EVERY task line must include: action verb + real file path + pytest verify command.
 {repo_section}
 
-## ORIGINAL QUESTION
-{task}
-
-## AGENT FINAL PROPOSALS
-{proposals_text}
-
-## KEY CRITIQUES
-{critiques_text if critiques_text else "No critiques recorded."}
-
-## OUTPUT FORMAT REQUIREMENTS (MANDATORY)
 {contract_block}
 
-## CONCRETE EXAMPLE (follow this style exactly)
+EXAMPLE (follow this exact style):
 
 ## Ranked High-Level Tasks
-1. **Refactor `aragora/debate/orchestrator.py:Arena.run()` to emit phase-transition events** — Add `self._emit("phase_change", phase=name)` calls at each phase boundary. Verify: `pytest tests/debate/test_orchestrator.py::test_phase_events -v`
-2. **Update `aragora/debate/phases/synthesis_generator.py:SynthesisGenerator._build_synthesis_prompt()` to include repo path context** — Verify: `pytest tests/debate/test_output_quality.py -v`
+1. **Refactor `aragora/debate/orchestrator.py:Arena.run()` to emit phase-transition events** — Verify: `pytest tests/debate/test_orchestrator.py -v`
+2. **Update `aragora/debate/consensus.py:detect_consensus()` to weight by evidence quality** — Verify: `pytest tests/debate/test_consensus.py -v`
 
 ## Suggested Subtasks
-- Add `PhaseEvent` dataclass to `aragora/events/schema.py` — Verify: `pytest tests/events/test_schema.py::test_phase_event`
-- Wire event emission in `aragora/debate/phases/consensus_phase.py:ConsensusPhase.run()` — Verify: `pytest tests/debate/test_consensus.py -v`
+- Add `PhaseEvent` dataclass to `aragora/events/schema.py` — Verify: `pytest tests/events/test_schema.py -v`
 
 ## Owner module / file paths
-- `aragora/debate/orchestrator.py` (Arena class, run method)
-- `aragora/events/schema.py` (PhaseEvent dataclass)
-- `tests/debate/test_orchestrator.py` (new test_phase_events test)
+- `aragora/debate/orchestrator.py`
+- `aragora/events/schema.py`
 
-(end of example — your output must follow this pattern with REAL paths from the REPOSITORY FILE REFERENCE above)
+(continue with Test Plan, Rollback Plan, Gate Criteria, JSON Payload)"""
 
-## YOUR TASK
-Synthesize the debate into a single comprehensive answer that EXACTLY follows the output format above.
+        user = f"""Extract actionable items from this debate and produce the structured action plan.
+Do NOT reproduce the proposals as prose. EXTRACT specific actions, file paths, and test commands.
 
-Critical rules:
-- Use EXACTLY the required section headings as `## Heading` markdown headers, in the specified order.
-- Each section must have **substantive content** — at least 2-3 specific, actionable items drawn from the debate.
-- **PATH GROUNDING (CRITICAL)**: Every file path you mention MUST come from the REPOSITORY FILE REFERENCE at the top. Do NOT invent paths like `src/aragora/core/...` or `aragora/protocols/...` — these directories do not exist. The actual codebase uses `aragora/debate/`, `aragora/agents/`, `aragora/pipeline/`, etc. If you need a new file, mark it `NEW: aragora/existing_dir/new_file.py`.
-- For "Ranked High-Level Tasks": EVERY task must include:
-  - An action verb (add, create, implement, update, refactor, wire, test)
-  - A real file path + class/function name (e.g., `aragora/debate/orchestrator.py:Arena.run()`)
-  - A pytest command to verify (e.g., `pytest tests/debate/test_X.py::test_name -v`)
-- For "Suggested Subtasks": Each must be independently testable with a specific pytest command.
-- For "Owner module / file paths": reference ONLY paths from the REPOSITORY FILE REFERENCE above.
-- For "Test Plan": each test item must reference a specific test file. Do NOT use generic phrases like "run unit tests".
-- For "Gate Criteria": include specific thresholds with comparison operators + numbers (e.g., "coverage >= 80%", "error_rate < 1%"). Every criterion MUST contain a comparison operator.
-- For "Rollback Plan": include explicit trigger conditions AND rollback actions.
-- For "JSON Payload": produce valid JSON that mirrors the section content.
-- Preserve DISSENT: if agents disagreed, note it in the relevant section.
-- Do NOT use placeholder text like TBD, TODO, "as needed", or "to be determined".
+QUESTION: {task}
 
-Write authoritatively. This is the FINAL WORD on this debate."""
+AGENT PROPOSALS:
+{proposals_text}
+
+CRITIQUES:
+{critiques_text if critiques_text else "No critiques recorded."}
+
+Remember: Start your response with ## Ranked High-Level Tasks — no preamble."""
+
+        return system, user
 
     @staticmethod
     def _build_default_synthesis_prompt(task: str, proposals_text: str, critiques_text: str) -> str:
@@ -731,6 +756,72 @@ Create a comprehensive synthesis of **approximately 1200 words** (minimum 1000, 
 
 Write authoritatively. This is the FINAL WORD on this debate.
 Your response MUST be approximately 1200 words to provide comprehensive coverage."""
+
+    @staticmethod
+    def concretize_output(synthesis: str, repo_hint: str) -> str:
+        """Post-process synthesis to add pytest verify commands to lines that have paths.
+
+        Only adds pytest commands to lines that already contain a file path but
+        lack a test command.  Does NOT inject paths into lines that don't have
+        them — that would be fabricating specificity the LLM didn't produce.
+        """
+        import re as _re
+
+        if not synthesis or not repo_hint:
+            return synthesis
+
+        _TASK_SECTION_RE = _re.compile(
+            r"(?i)^#{2,3}\s+(?:ranked\s+high.level\s+tasks|suggested\s+subtasks|test\s+plan)",
+        )
+        _PATH_IN_LINE = _re.compile(r"(?:/?[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+")
+        _PYTEST_IN_LINE = _re.compile(r"(?i)\bpytest\b")
+        _NUMBERED_ITEM = _re.compile(r"^(\s*(?:\d+\.\s+|\-\s+|\*\s+))")
+
+        lines = synthesis.split("\n")
+        in_target_section = False
+        result_lines: list[str] = []
+
+        for line in lines:
+            if line.startswith("##"):
+                in_target_section = bool(_TASK_SECTION_RE.match(line))
+                result_lines.append(line)
+                continue
+
+            if not in_target_section:
+                result_lines.append(line)
+                continue
+
+            stripped = line.strip()
+            if not stripped or not _NUMBERED_ITEM.match(stripped):
+                result_lines.append(line)
+                continue
+
+            has_path = bool(_PATH_IN_LINE.search(stripped))
+            has_pytest = bool(_PYTEST_IN_LINE.search(stripped))
+
+            # Only add pytest command if line already has a path but lacks one
+            if has_path and not has_pytest:
+                path_match = _PATH_IN_LINE.search(stripped)
+                if path_match:
+                    found_path = path_match.group(0)
+                    test_path = None
+                    if "tests/" in found_path:
+                        test_path = found_path
+                    elif found_path.endswith(".py"):
+                        parts = found_path.split("/")
+                        if len(parts) >= 2:
+                            module = parts[-2] if parts[-1] != "__init__.py" else parts[-3]
+                            fname = parts[-1]
+                            test_path = f"tests/{module}/test_{fname}"
+
+                    if test_path:
+                        indent = line[: line.index(stripped)]
+                        result_lines.append(f"{indent}{stripped} — Verify: `pytest {test_path} -v`")
+                        continue
+
+            result_lines.append(line)
+
+        return "\n".join(result_lines)
 
 
 __all__ = ["SynthesisGenerator"]

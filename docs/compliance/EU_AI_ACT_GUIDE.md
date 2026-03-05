@@ -1,8 +1,89 @@
 # EU AI Act Compliance with Aragora
 
-> Comprehensive guide to generating audit-ready compliance artifacts for the
-> EU AI Act (Regulation (EU) 2024/1689) using the Aragora Decision Integrity
-> Platform. Enforcement deadline for high-risk AI systems: **August 2, 2026**.
+> **The EU AI Act enforcement deadline for high-risk AI systems is August 2, 2026.**
+> That gives organizations deploying Annex III AI roughly 5 months to have
+> risk management systems, audit trails, transparency documentation, and human
+> oversight mechanisms in place -- or face fines of up to **EUR 15 million or 3%
+> of global annual turnover.**
+>
+> Aragora generates the compliance artifacts you need, automatically, from every
+> decision your AI system makes.
+
+---
+
+## What Aragora Proves -- Automatically
+
+| EU AI Act Requirement | What Aragora Generates | Article |
+|-----------------------|------------------------|---------|
+| Risk management system | Decision receipts with risk assessment, confidence scores, adversarial stress-test results | Art. 9 |
+| Automatic event logging | Cryptographic provenance chain -- every agent, every round, every vote, timestamped and hashed | Art. 12 |
+| Transparency for deployers | Agent identities, reasoning chains, dissent records, consensus rationale | Art. 13 |
+| Human oversight capability | HITL/HOTL audit trail, override mechanisms, voting records, escalation paths | Art. 14 |
+| Accuracy and robustness | Confidence scores, robustness metrics, integrity hashes, multi-agent consensus | Art. 15 |
+
+**What Aragora cannot generate for you:** Training data governance (Art. 10),
+EU database registration (Art. 49), and formal notified-body conformity assessment
+(Art. 43). Aragora produces the supporting documentation that feeds those processes.
+
+---
+
+## 2-Minute Quickstart
+
+No API key needed. No server running. Uses synthetic demo data.
+
+```bash
+# Install (if not already)
+pip install -e .
+
+# Step 1: Classify your AI use case by risk tier
+aragora compliance classify \
+  "AI-powered CV screening for automated hiring decisions"
+
+# Step 2: Export a compliance bundle (demo mode -- no real debate required)
+aragora compliance export \
+  --demo \
+  --output-dir ./my-compliance-pack
+
+# Step 3: Review what was generated
+ls -la ./my-compliance-pack/
+cat ./my-compliance-pack/README.md
+```
+
+**Expected output from Step 2:**
+
+```
+EU AI Act Compliance Bundle
+=======================================================
+  Regulation:  EU AI Act (Regulation 2024/1689)
+  Receipt ID:  DEMO-RCP-001
+  Risk Level:  HIGH
+
+  Compliance Score:  87/100 -- Substantially Conformant
+  Deadline:          August 2, 2026 (150 days remaining)
+
+  Article        Requirement                                        Status
+  -------------- -------------------------------------------------- ------
+  Article 9      Identify and analyze known and reasonably fo...    [PASS]
+  Article 12     Automatic logging of events with traceability      [PASS]
+  Article 13     Identify participating agents, their argument...   [PASS]
+  Article 14     Enable human oversight, including ability to...    [PASS]
+  Article 15     Appropriate levels of accuracy and robustness...   [PASS]
+
+  Output: ./my-compliance-pack/
+    README.md                         Manifest with compliance score
+    bundle.json                       Full bundle (all articles, machine-readable)
+    receipt.md                 Art. 9  -- Risk assessment
+    audit_trail.md             Art. 12 -- Record-keeping & provenance
+    transparency_report.md     Art. 13 -- Agent participation & reasoning
+    human_oversight.md         Art. 14 -- Human oversight & override
+    accuracy_report.md         Art. 15 -- Confidence & robustness
+```
+
+For the interactive demo script that walks through all steps:
+
+```bash
+./scripts/demo_compliance.sh
+```
 
 ---
 
@@ -225,9 +306,43 @@ aragora decide "Evaluate hiring algorithm for bias compliance" \
     --auto-approve
 ```
 
-### Step 3: Generate Conformity Report
+### Step 3: Export a Compliance Bundle
 
-Generate a conformity assessment from a saved receipt:
+Export a structured compliance bundle for any debate:
+
+```bash
+# From a debate ID (after running aragora ask/decide)
+aragora compliance export \
+    --debate-id <DEBATE_ID> \
+    --output-dir ./compliance-pack
+
+# From a saved receipt file
+aragora compliance export \
+    --receipt-file ./receipt.json \
+    --output-dir ./compliance-pack
+
+# Demo mode (no real debate needed -- runs in 30 seconds)
+aragora compliance export \
+    --demo \
+    --output-dir ./compliance-pack
+```
+
+This produces:
+
+```
+compliance-pack/
+  README.md                     Manifest with compliance score and article mapping
+  bundle.json                   Full bundle (all articles, machine-readable)
+  receipt.md                    Art. 9  -- Risk assessment
+  audit_trail.md                Art. 12 -- Event log & provenance chain
+  transparency_report.md        Art. 13 -- Agent participation & reasoning
+  human_oversight.md            Art. 14 -- Override capability & voting record
+  accuracy_report.md            Art. 15 -- Confidence & robustness metrics
+```
+
+### Step 4: Generate Conformity Report (Optional Deep-Dive)
+
+Generate a standalone conformity assessment from a saved receipt:
 
 ```bash
 # Markdown output (human-readable)
@@ -237,9 +352,9 @@ aragora compliance audit receipt.json --format markdown --output report.md
 aragora compliance audit receipt.json --format json --output report.json
 ```
 
-### Step 4: Generate Full Artifact Bundle
+### Step 5: Generate Full Artifact Bundle (Regulator Submission)
 
-Generate the complete compliance artifact bundle:
+For submissions requiring dedicated per-article files with Annex IV documentation:
 
 ```bash
 aragora compliance eu-ai-act generate receipt.json \
@@ -251,7 +366,7 @@ aragora compliance eu-ai-act generate receipt.json \
     --system-version "2.1.0"
 ```
 
-This produces the following files:
+This produces:
 
 ```
 compliance-bundle/
@@ -262,17 +377,6 @@ compliance-bundle/
   conformity_report.md            # Human-readable conformity assessment
   conformity_report.json          # Machine-readable conformity assessment
 ```
-
-### Step 5 (Optional): Generate Demo Bundle
-
-To see what the output looks like without a real receipt, omit the receipt file:
-
-```bash
-aragora compliance eu-ai-act generate --output ./demo-bundle/
-```
-
-This generates a bundle from synthetic data so you can review the artifact
-structure before integrating with your production pipeline.
 
 ---
 
@@ -286,6 +390,19 @@ Classify a free-text AI use case description by EU AI Act risk level.
 |------|-------------|
 | `description` | Free-text description of the AI use case (required) |
 
+### `aragora compliance export`
+
+Export a structured compliance bundle mapping debate artifacts to EU AI Act articles.
+Includes a compliance readiness score and per-article markdown/HTML reports.
+
+| Flag | Description |
+|------|-------------|
+| `--debate-id` | Debate ID to export compliance pack for |
+| `--receipt-file` | Path to an existing receipt JSON file |
+| `--output-dir` | Output directory (default: `./compliance-pack`) |
+| `--format` | Output format: `markdown`, `html`, or `json` (default: markdown) |
+| `--demo` | Generate a sample bundle from synthetic data (no real debate needed) |
+
 ### `aragora compliance audit <receipt_file>`
 
 Generate an EU AI Act conformity report from a decision receipt JSON file.
@@ -298,7 +415,7 @@ Generate an EU AI Act conformity report from a decision receipt JSON file.
 
 ### `aragora compliance eu-ai-act generate [receipt_file]`
 
-Generate a complete EU AI Act compliance artifact bundle.
+Generate a complete EU AI Act compliance artifact bundle with per-article JSON files.
 
 | Flag | Description |
 |------|-------------|
@@ -390,178 +507,101 @@ bundle.to_dict()            # Full bundle as Python dict
 
 ## Example Artifact Output
 
-### Compliance Bundle Structure (JSON)
+### Bundle Structure (JSON)
 
-Below is an abbreviated example of what `compliance_bundle.json` looks like:
+Below is an abbreviated example of what `bundle.json` looks like:
 
 ```json
 {
-  "bundle_id": "EUAIA-a3f8c2d1",
-  "regulation": "EU AI Act (Regulation 2024/1689)",
-  "compliance_deadline": "2026-08-02",
-  "receipt_id": "RCP-HR-2026-0041",
-  "generated_at": "2026-02-12T10:15:00.000000+00:00",
+  "meta": {
+    "framework": "eu-ai-act",
+    "receipt_id": "RCP-HR-2026-0041",
+    "generated_at": "2026-02-12T10:15:00.000000+00:00",
+    "integrity_hash": "6f32616ade73e6ab7fd470dbe0c2f92ef617e2d9049a6ea98506eb34a4461066",
+    "compliance_deadline": "2026-08-02",
+    "days_until_deadline": 171,
+    "regulation": "EU AI Act (Regulation 2024/1689)",
+    "generated_by": "Aragora Decision Integrity Platform"
+  },
+  "compliance_score": {
+    "score": 87,
+    "level": "substantial",
+    "label": "Substantially Conformant",
+    "breakdown": {
+      "pass": ["Article 9", "Article 12", "Article 13", "Article 14"],
+      "partial": ["Article 15"],
+      "fail": []
+    }
+  },
   "risk_classification": {
     "risk_level": "high",
     "annex_iii_category": "Employment and worker management",
     "annex_iii_number": 4,
-    "rationale": "Use case falls under Annex III category 4...",
-    "matched_keywords": ["recruitment", "cv screening", "hiring decision"],
-    "applicable_articles": [
-      "Article 6 (Classification)",
-      "Article 9 (Risk management)",
-      "Article 13 (Transparency)",
-      "Article 14 (Human oversight)",
-      "Article 15 (Accuracy, robustness, cybersecurity)"
-    ],
-    "obligations": [
-      "Establish and maintain a risk management system (Art. 9).",
-      "Maintain technical documentation (Art. 11).",
-      "Implement automatic logging of events (Art. 12).",
-      "Ensure transparency and provide instructions for deployers (Art. 13).",
-      "Design for effective human oversight (Art. 14).",
-      "..."
-    ]
+    "obligations": ["Establish and maintain a risk management system (Art. 9).", "..."]
   },
   "conformity_report": {
-    "report_id": "EUAIA-b7e9d4f2",
     "overall_status": "conformant",
     "article_mappings": [
       {
         "article": "Article 9",
-        "requirement": "Identify and analyze known and reasonably foreseeable risks",
         "status": "satisfied",
         "evidence": "Risk assessment performed: 5 risks identified (0 critical). Confidence: 78.0%."
       },
       {
         "article": "Article 12",
-        "requirement": "Automatic logging of events with traceability",
         "status": "satisfied",
         "evidence": "Provenance chain contains 10 events."
       },
       {
         "article": "Article 13",
-        "requirement": "Identify participating agents, their arguments, and decision rationale",
         "status": "satisfied",
-        "evidence": "4 agents participated. Verdict reasoning: The recruitment screening..."
+        "evidence": "4 agents participated. Verdict reasoning logged."
       },
       {
         "article": "Article 14",
-        "requirement": "Enable human oversight, including ability to override or halt",
         "status": "satisfied",
-        "evidence": "Human approval/override mechanism detected in receipt configuration."
+        "evidence": "Human approval/override mechanism detected."
       },
       {
         "article": "Article 15",
-        "requirement": "Appropriate levels of accuracy and robustness; resilience to attacks",
         "status": "satisfied",
-        "evidence": "Robustness score: 72.0%. Integrity hash: present. Cryptographic signature: present."
+        "evidence": "Robustness score: 72.0%. Integrity hash: present."
       }
-    ],
-    "integrity_hash": "a3f8c2d1e5b7..."
-  },
-  "article_12_record_keeping": {
-    "event_log": [
-      {"event_id": "evt_0001", "event_type": "debate_started", "actor": "system"},
-      {"event_id": "evt_0002", "event_type": "proposal_submitted", "actor": "claude-analyst"},
-      {"event_id": "evt_0009", "event_type": "human_approval", "actor": "hr-director@acme.com"},
-      {"event_id": "evt_0010", "event_type": "receipt_generated", "actor": "system"}
-    ],
-    "technical_documentation": {
-      "annex_iv_sec1_general": {
-        "system_name": "Aragora Decision Integrity Platform",
-        "version": "2.6.3",
-        "provider": "Aragora Inc."
-      }
-    },
-    "retention_policy": {
-      "minimum_months": 6,
-      "basis": "Art. 26(6) -- minimum 6 months for high-risk systems",
-      "integrity_mechanism": "SHA-256 hash chain"
-    }
-  },
-  "article_13_transparency": {
-    "provider_identity": {
-      "name": "Aragora Inc.",
-      "contact": "compliance@aragora.ai",
-      "eu_representative": "Aragora EU GmbH, Berlin, Germany"
-    },
-    "known_risks": [
-      {"risk": "Automation bias", "mitigation": "Mandatory human review, dissent highlighting"},
-      {"risk": "Hollow consensus", "mitigation": "Trickster detection module, evidence grounding"},
-      {"risk": "Model hallucination", "mitigation": "Multi-agent challenge, calibration tracking"}
-    ],
-    "output_interpretation": {
-      "confidence": 0.78,
-      "confidence_interpretation": "Moderate confidence -- some reservations",
-      "dissent_count": 1
-    }
-  },
-  "article_14_human_oversight": {
-    "oversight_model": {
-      "primary": "Human-in-the-Loop (HITL)",
-      "human_approval_detected": true
-    },
-    "override_capability": {
-      "override_available": true,
-      "mechanisms": [
-        {"action": "Reject verdict", "audit_logged": true},
-        {"action": "Override with reason", "audit_logged": true},
-        {"action": "Reverse prior decision", "audit_logged": true}
-      ]
-    },
-    "intervention_capability": {
-      "stop_available": true,
-      "mechanisms": [
-        {"action": "Stop debate", "safe_state": true},
-        {"action": "Cancel decision", "safe_state": true}
-      ]
-    }
-  },
-  "integrity_hash": "6f32616ade73e6ab7fd470dbe0c2f92ef617e2d9049a6ea98506eb34a4461066"
+    ]
+  }
 }
 ```
 
-### Conformity Report (Markdown)
+### Bundle Manifest (README.md)
 
-The `conformity_report.md` file looks like this:
+The `README.md` manifest looks like this:
 
 ```markdown
-# EU AI Act Conformity Report
+# EU AI Act Compliance Bundle
 
-**Report ID:** EUAIA-b7e9d4f2
-**Receipt ID:** RCP-HR-2026-0041
-**Generated:** 2026-02-12T10:15:00.000000+00:00
-**Integrity Hash:** `6f32616ade73e6a...`
+> Generated by Aragora Decision Integrity Platform -- EU AI Act (Regulation 2024/1689)
 
----
+## Compliance Readiness
 
-## Risk Classification
+  Score:   87/100  [=========-]  Substantially Conformant
+  Risk:    HIGH
+  Status:  CONFORMANT
+  Deadline: August 2, 2026  (171 days remaining)
 
-**Risk Level:** HIGH
-**Annex III Category:** 4. Employment and worker management
-**Rationale:** Use case falls under Annex III category 4...
+- Passing: Article 9, Article 12, Article 13, Article 14
+- Partial: Article 15
+- Failing: --
 
-### Obligations
+## Bundle Contents
 
-- Establish and maintain a risk management system (Art. 9).
-- Maintain technical documentation (Art. 11).
-- Implement automatic logging of events (Art. 12).
-- ...
-
----
-
-## Article Compliance Assessment
-
-**Overall Status:** CONFORMANT
-
-| Article | Requirement | Status | Evidence |
-|---------|-------------|--------|----------|
-| Article 9 | Identify and analyze known and reasonab... | PASS | Risk assessment performed: 5 risks... |
-| Article 12 | Automatic logging of events with tracea... | PASS | Provenance chain contains 10 events. |
-| Article 13 | Identify participating agents, their ar... | PASS | 4 agents participated... |
-| Article 14 | Enable human oversight, including abilit... | PASS | Human approval/override mechanism... |
-| Article 15 | Appropriate levels of accuracy and robu... | PASS | Robustness score: 72.0%... |
+| File | EU AI Act Article | What It Proves |
+|------|-------------------|----------------|
+| bundle.json | All | Complete machine-readable compliance record |
+| receipt.md | Article 9 | Risk assessment, confidence, robustness score |
+| audit_trail.md | Article 12 | Event log -- who did what and when |
+| transparency_report.md | Article 13 | Agent identities, reasoning chain, dissent |
+| human_oversight.md | Article 14 | Override capability, voting record, escalation |
+| accuracy_report.md | Article 15 | Confidence metrics, robustness, integrity hash |
 ```
 
 ---
@@ -575,7 +615,7 @@ The `conformity_report.md` file looks like this:
 | **Now** | Classify your AI systems by risk level | `aragora compliance classify` |
 | **Now** | Inventory all AI use cases against Annex III | `RiskClassifier` API |
 | **Q2 2026** | Run adversarial stress tests on high-risk systems | `aragora gauntlet` |
-| **Q2 2026** | Generate compliance artifact bundles | `aragora compliance eu-ai-act generate` |
+| **Q2 2026** | Generate compliance artifact bundles | `aragora compliance export` |
 | **Q2 2026** | Establish human oversight procedures | Debate engine with approval gates |
 | **Q2 2026** | Configure log retention (min. 6 months) | Art. 12 retention policy artifacts |
 | **Q2 2026** | Designate EU authorized representative (if non-EU) | `--eu-representative` flag |
@@ -597,9 +637,9 @@ The `conformity_report.md` file looks like this:
 
 | Violation | Maximum Fine |
 |-----------|-------------|
-| Prohibited AI practices (Art. 5) | 35M EUR or 7% of global turnover |
-| High-risk non-compliance | 15M EUR or 3% of global turnover |
-| Providing incorrect information | 7.5M EUR or 1% of global turnover |
+| Prohibited AI practices (Art. 5) | EUR 35M or 7% of global turnover |
+| High-risk non-compliance | EUR 15M or 3% of global turnover |
+| Providing incorrect information | EUR 7.5M or 1% of global turnover |
 
 ---
 
@@ -645,20 +685,21 @@ contribution is in the decision-making layer: multi-model consensus reduces
 single-provider bias, and the Gauntlet stress-testing framework tests for
 fairness across demographic groups.
 
-### Q: What is the difference between `audit` and `eu-ai-act generate`?
+### Q: What is the difference between `export` and `eu-ai-act generate`?
 
-- `aragora compliance audit` generates a **conformity report** -- a single
-  document that maps receipt fields to article requirements and flags gaps.
-- `aragora compliance eu-ai-act generate` produces a **full artifact bundle**
-  -- dedicated Art. 12, 13, and 14 artifacts with detailed fields suitable
-  for submission to regulators, plus the conformity report.
+- `aragora compliance export` -- structured bundle with per-article markdown/HTML
+  reports and a compliance readiness score. Best for **review by compliance
+  officers and legal teams** during day-to-day operations.
+- `aragora compliance eu-ai-act generate` -- dedicated Art. 12, 13, and 14
+  JSON artifacts plus a formal conformity report. Best for **submission to
+  regulators or notified bodies**.
 
-Use `audit` for quick checks during development. Use `eu-ai-act generate`
-when preparing documentation for regulatory review.
+Use `export` for ongoing monitoring and review. Use `eu-ai-act generate`
+when preparing formal documentation for regulatory submission.
 
 ### Q: How do I verify the integrity of a compliance bundle?
 
-Every bundle includes a `integrity_hash` field -- a SHA-256 hash computed from
+Every bundle includes an `integrity_hash` field -- a SHA-256 hash computed from
 the bundle ID, receipt ID, risk level, and conformity status. Recalculate the
 hash and compare to detect tampering. The conformity report also has its own
 independent integrity hash.
@@ -666,6 +707,7 @@ independent integrity hash.
 ### Q: Where should I store compliance artifacts?
 
 Store artifacts in a tamper-evident system with access controls. Options include:
+
 - Aragora's Knowledge Mound (built-in, with SHA-256 integrity)
 - An enterprise document management system
 - A dedicated compliance repository with audit logging
@@ -674,12 +716,25 @@ Article 26(6) requires deployers to retain automatically generated logs for
 a minimum of 6 months. Aragora's retention policy artifact documents this
 requirement.
 
+### Q: What compliance score do I need?
+
+The `compliance_score` in the bundle is Aragora's readiness indicator, not
+an official regulatory score. It reflects how many article requirements are
+satisfied (100%), partially satisfied (50%), or not satisfied (0%):
+
+| Score | Label | Interpretation |
+|-------|-------|----------------|
+| 95-100 | Full Conformity | All articles satisfied; ready for submission |
+| 75-94 | Substantially Conformant | Minor gaps; review recommendations |
+| 40-74 | Partial Conformity | Material gaps; remediation required |
+| 0-39 | Not Ready | Significant gaps; engage compliance counsel |
+
 ---
 
 ## Related Documentation
 
 - [Enterprise Compliance Guide](../enterprise/COMPLIANCE.md) -- Operational controls and governance model
-- EU AI Act compliance checklist is maintained in `docs/compliance/EU_AI_ACT_CHECKLIST.md`
 - [API Reference](../api/API_REFERENCE.md) -- REST API documentation
 - [Gauntlet Testing](../../aragora/gauntlet/README.md) -- Adversarial stress testing
 - [Decision Receipts](../reference/CLI_REFERENCE.md) -- Receipt command and verification workflow
+- [Demo Script](../../scripts/demo_compliance.sh) -- End-to-end walkthrough in 2 minutes

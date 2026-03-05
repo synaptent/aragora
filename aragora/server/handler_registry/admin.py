@@ -29,6 +29,7 @@ DeployStatusHandler = _safe_import(
 NomicHandler = _safe_import("aragora.server.handlers", "NomicHandler")
 DocsHandler = _safe_import("aragora.server.handlers", "DocsHandler")
 ApiDocsHandler = _safe_import("aragora.server.handlers.api_docs", "ApiDocsHandler")
+MCPToolsHandler = _safe_import("aragora.server.handlers.mcp_tools_handler", "MCPToolsHandler")
 
 # =============================================================================
 # Admin Handler Imports
@@ -480,6 +481,7 @@ ADMIN_HANDLER_REGISTRY: list[tuple[str, object]] = [
     ("_nomic_handler", NomicHandler),
     ("_docs_handler", DocsHandler),
     ("_api_docs_handler", ApiDocsHandler),
+    ("_mcp_tools_handler", MCPToolsHandler),
     ("_system_handler", SystemHandler),
     # Admin
     ("_admin_handler", AdminHandler),

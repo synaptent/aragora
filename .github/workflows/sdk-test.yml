@@ -1,16 +1,12 @@
 name: SDK Tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'sdk/python/**'
-      - 'sdk/typescript/**'
-      - 'tests/sdk/**'
-      - '.github/workflows/sdk-test.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
+  schedule:
+    # Nightly at 2:20 UTC
+    - cron: '20 2 * * *'
   workflow_dispatch:
 
 concurrency:

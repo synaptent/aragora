@@ -1,22 +1,6 @@
 name: Capability Surface Report
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'aragora/capabilities.yaml'
-      - 'aragora/capability_surfaces.yaml'
-      - 'scripts/capability_gap_report.py'
-      - 'scripts/generate_capability_matrix.py'
-      - 'scripts/check_capability_matrix_sync.py'
-      - 'scripts/check_legacy_entrypoints.py'
-      - 'scripts/capability_matrix_delta.py'
-      - 'scripts/generate_cli_reference.py'
-      - 'docs/CAPABILITY_MATRIX.md'
-      - 'docs/reference/CLI_REFERENCE.md'
-      - 'docs-site/docs/contributing/capability-matrix.md'
-      - 'docs-site/docs/api/cli.md'
-      - '.github/workflows/capability-gap.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
@@ -34,6 +18,9 @@ on:
       - 'docs-site/docs/contributing/capability-matrix.md'
       - 'docs-site/docs/api/cli.md'
       - '.github/workflows/capability-gap.yml'
+  schedule:
+    # Nightly at 1:00 UTC
+    - cron: '0 1 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -51,7 +38,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5

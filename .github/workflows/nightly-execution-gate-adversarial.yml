@@ -1,0 +1,44 @@
+name: Nightly Execution Gate Adversarial
+
+on:
+  schedule:
+    # Nightly at 03:20 UTC
+    - cron: "20 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-execution-gate-adversarial-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  adversarial-suite:
+    name: Execution Gate Adversarial Regression
+    runs-on: aragora
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run adversarial regression suite
+        run: |
+          python scripts/run_execution_gate_adversarial_suite.py \
+            --json-output artifacts/execution_gate_adversarial_suite.json
+
+      - name: Upload adversarial suite artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: execution-gate-adversarial-suite
+          path: artifacts/execution_gate_adversarial_suite.json
+          if-no-files-found: warn

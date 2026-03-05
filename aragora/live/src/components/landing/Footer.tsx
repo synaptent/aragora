@@ -38,7 +38,7 @@ export function Footer() {
         </p>
 
         {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4" style={{ marginBottom: '48px' }}>
           <Link
             href="/playground"
             className="text-sm font-semibold transition-opacity hover:opacity-80 cursor-pointer inline-block"
@@ -53,7 +53,7 @@ export function Footer() {
             }}
           >
             Try it now
-          </button>
+          </Link>
           <Link
             href="/signup"
             className="text-sm font-semibold transition-colors hover:opacity-80"

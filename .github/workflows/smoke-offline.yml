@@ -1,13 +1,6 @@
 name: Offline Golden Path
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'aragora/**'
-      - 'tests/cli/test_offline_golden_path.py'
-      - 'pyproject.toml'
-      - '.github/workflows/smoke-offline.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
@@ -15,6 +8,9 @@ on:
       - 'aragora/**'
       - 'tests/cli/test_offline_golden_path.py'
       - 'pyproject.toml'
+  schedule:
+    # Nightly at 2:10 UTC
+    - cron: '10 2 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -32,7 +28,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: synaptent/aragora/.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -46,13 +62,17 @@ jobs:
 
       - name: Run offline golden-path unit tests
         run: |
-          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short
+          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
+            -W error::ResourceWarning \
+            -W error::pytest.PytestUnraisableExceptionWarning
         env:
           PYTHONPATH: .
+          PYTHONWARNINGS: "error::ResourceWarning"
 
       - name: Run demo command with network blocked
         env:
           ARAGORA_OFFLINE: "1"
+          PYTHONWARNINGS: "error::ResourceWarning"
           # Clear all API keys to prove no network is needed
           ANTHROPIC_API_KEY: ""
           OPENAI_API_KEY: ""
@@ -102,6 +122,7 @@ jobs:
       - name: Run 'aragora ask --demo' with network blocked
         env:
           ARAGORA_OFFLINE: "1"
+          PYTHONWARNINGS: "error::ResourceWarning"
           ANTHROPIC_API_KEY: ""
           OPENAI_API_KEY: ""
           OPENROUTER_API_KEY: ""

@@ -1,30 +1,12 @@
 name: OpenAPI Spec
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'aragora/server/handlers/**'
-      - 'aragora/server/openapi/**'
-      - 'aragora/server/openapi_impl.py'
-      - 'scripts/export_openapi.py'
-      - 'scripts/generate_openapi.py'
-      - 'docs/api/openapi*.json'
-      - 'docs/api/openapi*.yaml'
-      - 'scripts/verify_sdk_contracts.py'
-      - 'scripts/validate_openapi_routes.py'
-      - 'scripts/check_sdk_namespace_parity.py'
-      - 'scripts/contract_drift_report.py'
-      - 'scripts/generate_contract_drift_backlog.py'
-      - 'scripts/baselines/verify_sdk_contracts.json'
-      - 'scripts/baselines/validate_openapi_routes.json'
-      - 'scripts/baselines/check_sdk_namespace_parity.json'
-      - 'scripts/baselines/internal_route_prefixes.json'
-      - 'sdk/python/aragora/namespaces/**'
-      - 'sdk/typescript/src/namespaces/**'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
+  schedule:
+    # Nightly at 1:10 UTC
+    - cron: '10 1 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -144,9 +126,53 @@ jobs:
           fi
 
       - name: Set up Python 3.11
+        id: setup-python
+        continue-on-error: true
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Ensure python toolchain is available
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PY_BIN=""
+          if [[ -n "${pythonLocation:-}" && -x "${pythonLocation}/bin/python" ]]; then
+            PY_BIN="${pythonLocation}/bin/python"
+          elif command -v python3.11 >/dev/null 2>&1; then
+            PY_BIN="$(command -v python3.11)"
+          elif command -v python3 >/dev/null 2>&1; then
+            PY_BIN="$(command -v python3)"
+          elif command -v python >/dev/null 2>&1; then
+            PY_BIN="$(command -v python)"
+          fi
+          if [[ -z "$PY_BIN" ]]; then
+            echo "::error::No python interpreter found on runner"
+            exit 1
+          fi
+
+          PY_OK="$("$PY_BIN" - <<'PY'
+          import sys
+          print(int(sys.version_info >= (3, 10)))
+          PY
+          )"
+          if [[ "$PY_OK" != "1" ]]; then
+            "$PY_BIN" --version
+            echo "::error::OpenAPI workflow requires Python >= 3.10"
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/bin"
+          ln -sf "$PY_BIN" "$RUNNER_TEMP/bin/python"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+          if ! command -v pip >/dev/null 2>&1; then
+            "$PY_BIN" -m ensurepip --upgrade || true
+          fi
+
+          "$PY_BIN" --version
+          pip --version || "$PY_BIN" -m pip --version
 
       - name: Set up Node 20
         uses: actions/setup-node@v4
@@ -156,8 +182,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[test]"
-          pip install pyyaml datamodel-code-generator
+          python -m pip install -e .
+          python -m pip install pyyaml datamodel-code-generator
+          USER_BASE="$(python -m site --user-base)"
+          echo "${USER_BASE}/bin" >> "$GITHUB_PATH"
 
       - name: Generate OpenAPI spec
         run: |
@@ -388,7 +416,7 @@ jobs:
 
       - name: Run contract matrix tests
         run: |
-          pip install pytest pytest-asyncio
+          python -m pip install pytest pytest-asyncio
           pytest tests/server/openapi/test_contract_matrix.py -v --timeout=60 || true
 
       - name: Upload generated spec and SDK types

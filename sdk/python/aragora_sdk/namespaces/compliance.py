@@ -502,6 +502,14 @@ class ComplianceAPI:
         """
         return self._client.request("GET", "/api/v1/compliance")
 
+    def get_rbac_coverage(self) -> dict[str, Any]:
+        """Get RBAC coverage report for compliance.
+
+        Returns:
+            Dict with RBAC coverage metrics and uncovered routes.
+        """
+        return self._client.request("GET", "/api/v1/compliance/rbac-coverage")
+
 
 class AsyncComplianceAPI:
     """
@@ -818,3 +826,7 @@ class AsyncComplianceAPI:
     async def get_compliance_overview(self) -> dict[str, Any]:
         """Get compliance overview (v2)."""
         return await self._client.request("GET", "/api/v1/compliance")
+
+    async def get_rbac_coverage(self) -> dict[str, Any]:
+        """Get RBAC coverage report for compliance."""
+        return await self._client.request("GET", "/api/v1/compliance/rbac-coverage")

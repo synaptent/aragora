@@ -745,6 +745,133 @@ class MetaPlanner:
 
         return context
 
+    async def approve_changes(
+        self,
+        changes: str,
+        gauntlet_baseline: float | None = None,
+        elo_baseline: float | None = None,
+    ) -> dict[str, Any]:
+        """Approve or reject proposed changes based on quality gates.
+
+        Runs two independent quality gates:
+        1. Gauntlet quality gate: robustness_score must be >= 90% of baseline
+        2. ELO regression gate: average agent ELO must be >= 95% of baseline
+
+        Either gate failing causes rejection. Both must pass for approval.
+        If a gate is unavailable or errors, it defaults to pass (fail-open).
+
+        Args:
+            changes: The proposed code/spec changes to evaluate.
+            gauntlet_baseline: Expected robustness score baseline (0–1). If None,
+                uses an absolute minimum threshold of 0.5.
+            elo_baseline: Expected average ELO baseline. If None, ELO gate is
+                skipped entirely.
+
+        Returns:
+            Dict with keys:
+                - approved (bool): True if all gates pass
+                - reason (str): Human-readable explanation when rejected
+                - gauntlet_score (float | None): Score from gauntlet run
+                - gauntlet_skipped (bool): True if gauntlet was unavailable
+                - elo_avg (float | None): Average ELO from current ratings
+                - elo_skipped (bool): True if ELO check was skipped
+        """
+        result: dict[str, Any] = {
+            "approved": True,
+            "reason": "",
+            "gauntlet_score": None,
+            "gauntlet_skipped": False,
+            "elo_avg": None,
+            "elo_skipped": False,
+        }
+        rejection_reasons: list[str] = []
+
+        # --- Gate 1: Gauntlet quality check ---
+        # Allow test injection via module-level name
+        import aragora.nomic.meta_planner as _self_mod
+
+        _runner_cls = getattr(_self_mod, "_GauntletRunner", None)
+        _flag = getattr(_self_mod, "_GAUNTLET_AVAILABLE", None)
+
+        # Determine availability: either injected flag, injected class, or real import
+        if _flag is False:
+            _gauntlet_available = False
+        elif _runner_cls is not None:
+            _gauntlet_available = True
+        else:
+            try:
+                import importlib
+
+                _gauntlet_available = (
+                    importlib.util.find_spec("aragora.gauntlet.runner") is not None
+                )
+            except (ImportError, ModuleNotFoundError, ValueError):
+                _gauntlet_available = False
+
+        if not _gauntlet_available:
+            result["gauntlet_skipped"] = True
+        else:
+            try:
+                if _runner_cls is None:
+                    from aragora.gauntlet.runner import GauntletRunner as _runner_cls  # type: ignore[no-redef]
+                from aragora.gauntlet.config import GauntletConfig
+
+                runner = _runner_cls(
+                    config=GauntletConfig(
+                        attack_rounds=1,
+                        probes_per_category=1,
+                        run_scenario_matrix=False,
+                        max_agents=2,
+                    )
+                )
+
+                gauntlet_result = await runner.run(input_content=changes)
+                score = getattr(gauntlet_result, "robustness_score", None)
+                result["gauntlet_score"] = score
+
+                if score is not None:
+                    effective_baseline = gauntlet_baseline if gauntlet_baseline is not None else 0.5
+                    threshold = effective_baseline * 0.90
+                    if score < threshold:
+                        rejection_reasons.append(
+                            f"gauntlet score {score:.3f} < 90% of baseline {effective_baseline:.3f} "
+                            f"(threshold {threshold:.3f})"
+                        )
+            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
+                logger.warning("Gauntlet quality gate error (skipping): %s", exc)
+                result["gauntlet_skipped"] = True
+
+        # --- Gate 2: ELO regression check ---
+        if elo_baseline is not None:
+            try:
+                _elo_store_fn = getattr(_self_mod, "_get_elo_store", None)
+                if _elo_store_fn is None:
+                    from aragora.ranking.elo import get_elo_store as _elo_store_fn  # type: ignore[no-redef]
+
+                elo_store = _elo_store_fn()
+                all_ratings = elo_store.get_all_ratings()
+
+                if all_ratings:
+                    avg_elo = sum(r.elo for r in all_ratings) / len(all_ratings)
+                    result["elo_avg"] = avg_elo
+                    threshold = elo_baseline * 0.95
+                    if avg_elo < threshold:
+                        rejection_reasons.append(
+                            f"average ELO {avg_elo:.1f} < 95% of baseline {elo_baseline:.1f} "
+                            f"(threshold {threshold:.1f})"
+                        )
+                else:
+                    result["elo_skipped"] = True
+            except (ImportError, RuntimeError, ValueError, OSError) as exc:
+                logger.warning("ELO regression gate error (skipping): %s", exc)
+                result["elo_skipped"] = True
+
+        if rejection_reasons:
+            result["approved"] = False
+            result["reason"] = "; ".join(rejection_reasons)
+
+        return result
+
     def _generate_receipt(self, result: Any) -> None:
         """Generate a DecisionReceipt from a debate result and persist to KM.
 

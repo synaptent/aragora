@@ -116,8 +116,8 @@ aragora serve --api-port 8080 --ws-port 8765
 
 | Guide | What you'll learn |
 |-------|-------------------|
-| [CLI Guide](guides/CLI_GUIDE.md) | All CLI commands and flags |
+| [CLI Reference](CLI_REFERENCE.md) | All CLI commands and flags |
 | [SDK Guide](SDK_GUIDE.md) | Python & TypeScript SDK reference |
 | [API Reference](api/API_REFERENCE.md) | REST API endpoints |
-| [Self-Hosting](guides/SELF_HOSTING.md) | Production deployment |
+| [Self-Hosting](guides/SELF_HOSTED_COMPLETE_GUIDE.md) | Production deployment |
 | [Start Here](START_HERE.md) | Deeper architectural overview |

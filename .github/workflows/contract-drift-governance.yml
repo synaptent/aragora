@@ -1,18 +1,6 @@
 name: Contract Drift Governance
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'aragora/server/handlers/**'
-      - 'sdk/**'
-      - 'docs/api/openapi*.json'
-      - 'scripts/check_contract_drift_ratchet.py'
-      - 'scripts/contract_drift_report.py'
-      - 'scripts/generate_contract_drift_backlog.py'
-      - 'scripts/generate_contract_drift_issue_plan.py'
-      - 'scripts/baselines/**'
-      - '.github/workflows/contract-drift-governance.yml'
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
@@ -44,7 +32,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: ./.github/actions/checkout-integrity
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5

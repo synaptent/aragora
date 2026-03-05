@@ -224,7 +224,7 @@ def test_build_concretization_prompt_contains_practicality_target():
     )
     assert "Current practicality score (0-10): 4.2" in prompt
     assert "Target practicality score (0-10): 7.0" in prompt
-    assert "Replace placeholders" in prompt
+    assert "Replace ALL placeholders" in prompt
 
 
 def test_apply_deterministic_quality_repairs_is_additive():
@@ -787,8 +787,8 @@ def test_derive_contract_short_without_context_stays_minimal():
     assert contract.required_sections == []
 
 
-def test_duplicate_existing_create_ratio_detected_as_hard_defect(tmp_path):
-    """Create/add/build targeting existing files should hard-fail quality."""
+def test_duplicate_existing_create_ratio_detected_as_soft_defect(tmp_path):
+    """Create/add/build targeting existing files is a soft defect (not hard-fail)."""
     (tmp_path / "aragora" / "debate").mkdir(parents=True)
     (tmp_path / "aragora" / "debate" / "output_quality.py").write_text("# existing", "utf-8")
     (tmp_path / "tests" / "debate").mkdir(parents=True)
@@ -822,7 +822,8 @@ If error_rate > 2% for 10m, rollback by disabling feature flag.
 - quality_score_10 >= 7.0
 """
     report = validate_output_against_contract(answer, contract, repo_root=str(tmp_path))
-    assert report.verdict == "needs_work"
+    # Duplicate-create is now a soft defect — doesn't block verdict at high scores
+    assert report.verdict == "good"
     assert report.duplicate_existing_create_ratio is not None
     assert report.duplicate_existing_create_ratio > 0.25
     assert any("Duplicate-create proposals target existing repo paths" in d for d in report.defects)

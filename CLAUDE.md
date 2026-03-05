@@ -108,7 +108,7 @@ Aragora is the **Decision Integrity Platform** -- orchestrating 43 agent types t
 
 **Five Pillars:** (1) SMB-ready with enterprise-grade security, (2) leading-edge memory and context processing, (3) extensible/modular with broad connectors and SDKs, (4) multi-agent robustness via heterogeneous model consensus, (5) self-healing and self-extending via the Nomic Loop.
 
-**Codebase Scale:** 3,000+ Python modules | 208,000+ tests | 4,000+ test files | 210+ debate modules | 3,000+ API operations across 2,900+ paths | 0 KM adapters | 185 SDK namespaces
+**Codebase Scale:** 3,000+ Python modules | 208,000+ tests | 4,000+ test files | 210+ debate modules | 3,000+ API operations across 2,900+ paths | 41 registered KM adapters | 185 Python / 183 TypeScript SDK namespaces
 
 ## Architecture
 
@@ -140,7 +140,7 @@ aragora/
 ├── knowledge/        # Unified knowledge management
 │   ├── bridges.py          # KnowledgeBridgeHub, MetaLearner, Evidence bridges
 │   └── mound/              # KnowledgeMound with sync, revalidation
-│       └── adapters/       # KM adapters (34 registered)
+│       └── adapters/       # KM adapters (41 registered)
 │           └── factory.py  # Auto-create adapters from Arena subsystems
 ├── connectors/       # External integrations
 │   ├── chat/               # Telegram, WhatsApp connectors
@@ -167,7 +167,7 @@ aragora/
 │   └── coordinator.py     # Unified control plane API
 ├── rbac/             # Role-based access control v2
 │   ├── models.py           # Permission, Role, RoleAssignment dataclasses
-│   ├── types.py            # 7 default roles, 50+ permissions
+│   ├── types.py            # 7 default roles, 360+ permissions
 │   ├── checker.py          # PermissionChecker with caching
 │   ├── decorators.py       # @require_permission, @require_role
 │   ├── middleware.py       # HTTP route protection
@@ -406,7 +406,7 @@ See `docs/reference/ENVIRONMENT.md` for full reference.
 - Security - AES-256-GCM encryption, rate limiting, circuit breakers
 - Compliance - SOC 2 controls, GDPR support, audit trails
 - Observability - Prometheus metrics, Grafana dashboards, OpenTelemetry tracing
-- RBAC v2 - Fine-grained permissions (50+), role hierarchy, decorators, middleware
+- RBAC v2 - Fine-grained permissions (360+), role hierarchy, decorators, middleware
 - Backup/DR - Incremental backups, retention policies, disaster recovery drills
 - Control Plane - Agent registry, task scheduler, health monitoring, policy governance (1,500+ tests)
   - PolicyConflictDetector - Detects contradictory policies before they cause issues
@@ -417,7 +417,7 @@ See `docs/reference/ENVIRONMENT.md` for full reference.
 
 **Integrated:**
 - Knowledge Mound - STABLE Phase A2 (100% integrated, 4,300+ tests passing)
-  - 34 adapters (Continuum, Consensus, Critique, Evidence, Belief, Insights, ELO, Performance, Pulse, Cost, Provenance, Fabric, Workspace, ComputerUse, Gateway, CalibrationFusion, ControlPlane, Culture, Receipt, DecisionPlan, Supermemory, RLM, Trickster, ERC8004, Obsidian, Debate, Workflow, Compliance, LangExtract, Extraction, NomicCycle, Ranking, OpenClaw, ClaudeMem)
+  - 41 adapters (Belief, CalibrationFusion, ClaudeMem, Codebase, Compliance, ComputerUse, Confluence, Consensus, Continuum, ControlPlane, Cost, Critique, Culture, Debate, DecisionPlan, ELO, Email, ERC8004, Evidence, Explainability, Fabric, Gateway, Genesis, GoalCanvas, IdeaCanvas, Insights, Jira, LangExtract, Obsidian, Outcome, Performance, Pipeline, Provenance, Pulse, Receipt, RLM, RLMContext, Supermemory, Trickster, Workflow, Workspace)
   - Visibility, sharing, federation, global knowledge
   - Semantic search, validation feedback, cross-debate learning
   - SLO alerting with Prometheus metrics
@@ -432,7 +432,7 @@ See `docs/reference/ENVIRONMENT.md` for full reference.
   - RetentionGate: Titans/MIRAS surprise-driven retain/demote/forget/consolidate
   - CrossSystemDedupEngine: SHA-256 exact + Jaccard near-duplicate detection
   - RLMMemoryNavigator: REPL helpers for programmatic cross-system exploration
-  - ClaudeMemAdapter: 34th KM adapter wrapping claude-mem MCP connector
+  - ClaudeMemAdapter: KM adapter wrapping claude-mem MCP connector
 
 See `docs/STATUS.md` for 74+ detailed feature statuses.
 
@@ -453,3 +453,9 @@ See `docs/STATUS.md` for 74+ detailed feature statuses.
 | `docs/verticals/FINANCIAL.md` | Financial services vertical guide (risk, SOX, audit) |
 | `docs/verticals/LEGAL.md` | Legal vertical guide (contracts, due diligence, litigation) |
 | `docs/resilience/RESILIENCE_PATTERNS.md` | Circuit breakers, retry, timeout, health monitoring |
+| `docs/CLI_REFERENCE.md` | Complete reference for all 35 CLI commands with examples |
+| `docs/FEATURE_GAP_LIST.md` | Feature backlog: planned, partial, and scaffolded features by priority |
+| `docs/guides/PIPELINE_GUIDE.md` | 4-stage Idea-to-Execution pipeline usage guide |
+| `docs/guides/MODES_GUIDE.md` | Operational modes guide (standard + advanced: RedTeam, DeepAudit, Probing) |
+| `docs/guides/RLM_INTEGRATION.md` | Recursive Language Models integration guide |
+| `docs/guides/COORDINATION_SYSTEM.md` | Cross-workspace coordination and federated execution guide |

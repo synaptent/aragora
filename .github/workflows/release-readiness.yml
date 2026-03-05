@@ -1,18 +1,6 @@
 name: Release Readiness Gate
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "aragora/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "requirements.txt"
-      - "scripts/ci_release_readiness.sh"
-      - "scripts/check_branch_mutation_policy.py"
-      - "scripts/check_deploy_secure_sha_guard.py"
-      - "scripts/check_required_check_priority_policy.py"
-      - ".github/workflows/release-readiness.yml"
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
@@ -25,7 +13,14 @@ on:
       - "scripts/check_branch_mutation_policy.py"
       - "scripts/check_deploy_secure_sha_guard.py"
       - "scripts/check_required_check_priority_policy.py"
+      - "scripts/check_execution_gate_defaults.py"
+      - "scripts/check_execution_gate_policy_control.py"
+      - "scripts/check_prometheus_rules.py"
+      - "security/policies/execution_gate_defaults_policy.json"
       - ".github/workflows/release-readiness.yml"
+  schedule:
+    # Nightly at 1:35 UTC
+    - cron: '35 1 * * *'
   workflow_dispatch:
 
 concurrency:

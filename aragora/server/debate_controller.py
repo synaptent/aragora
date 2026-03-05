@@ -1424,6 +1424,7 @@ class DebateController:
             if is_onboarding:
                 user_id = config.metadata.get("user_id") if config.metadata else None
                 org_id = config.metadata.get("organization_id") if config.metadata else None
+                flow_id = config.metadata.get("flow_id") if config.metadata else None
                 if user_id:
                     try:
                         from aragora.storage.repositories.onboarding import (
@@ -1433,6 +1434,7 @@ class DebateController:
                         repo = get_onboarding_repository()
                         flow = repo.get_flow(user_id, org_id)
                         if flow:
+                            flow_id = flow.get("id") or flow_id
                             repo.update_flow(
                                 flow["id"],
                                 {
@@ -1442,6 +1444,21 @@ class DebateController:
                                     }
                                 },
                             )
+                        try:
+                            from aragora.server.handlers.onboarding import _track_event
+
+                            _track_event(
+                                "first_receipt_generated",
+                                str(user_id),
+                                str(org_id) if org_id is not None else None,
+                                {
+                                    "flow_id": flow_id,
+                                    "debate_id": debate_id,
+                                    "receipt_id": receipt_id,
+                                },
+                            )
+                        except (ImportError, AttributeError, TypeError, ValueError) as e:
+                            logger.debug("Could not track onboarding receipt event: %s", e)
                     except (ImportError, KeyError, TypeError, OSError) as e:
                         # ImportError: onboarding repository not available
                         # KeyError: missing flow data

@@ -1,7 +1,7 @@
 # Aragora: Canonical Goals & Foundational Thesis
 
 **Single source of truth for all goals across aragoradocs.**
-**This document defines WHAT Aragora is and WHY. The [Evolution Roadmap](../aragora/docs/plans/ARAGORA_EVOLUTION_ROADMAP.md) defines HOW.**
+**This document defines WHAT Aragora is and WHY. The [Evolution Roadmap](plans/ARAGORA_EVOLUTION_ROADMAP.md) defines HOW.**
 **Last updated: March 1, 2026**
 
 ---
@@ -20,7 +20,7 @@ All aragoradocs should cite these values. Update monthly.
 | API operations | 3,000+ across 2,900+ paths | OpenAPI spec |
 | WebSocket event types | 190+ | Stream modules |
 | SDK namespaces | 184 Python / 183 TypeScript (99.3% parity) | SDK package |
-| Knowledge Mound adapters | 34 | adapter registry |
+| Knowledge Mound adapters | 41 | adapter registry |
 | RBAC permissions | 390+ across 165+ resource types | rbac/types.py |
 | Agent types | 43 across 6+ LLM providers | agent registry |
 | Workflow templates | 50+ across 6 categories | template registry |
@@ -105,6 +105,58 @@ The system should be able to self-repair and self-improve and orchestrate swarms
 The system should interface with OpenClaw for agentic execution in a safe and controlled way. OpenClaw provides policy-gated sandbox execution where AI-generated plans are executed within defined safety boundaries. This is the bridge between "debate produces a decision" and "decision gets implemented" with appropriate guardrails, budget controls, and audit trails.
 
 **Serves:** OpenClaw SDK (22/22 endpoints in Python and TypeScript), policy-gated execution, sandbox infrastructure, harness integrations (Claude Code, Codex), agent fabric.
+
+---
+
+### Canonical Security Properties: AI Attack Vector Resistance
+
+Aragora's multi-model adversarial architecture creates emergent defenses against LLM-native attack
+classes that have no equivalent in single-model platforms. These are structural properties — not
+add-on features — and should be documented and communicated as part of the competitive moat.
+
+**Two research-documented attack classes are directly relevant:**
+
+- **Brainworm-class (Context Injection / Config C2)**: Semantic hijacking of AI agents via trusted
+  configuration files (`CLAUDE.md`, memory files, retrieved notes). No binary artifacts — attacker
+  injects natural language instructions into files the agent trusts by convention. Exploits trust
+  domain collapse: the model's context window does not distinguish operator instructions from
+  retrieved data, allowing injected instructions to redirect agent behavior without triggering
+  signature-based detection.
+
+- **OBLITERATUS-class (Weight Surgery)**: SVD-based projection removes refusal behaviors from
+  open-weight LLMs by operating directly on model weights, not inputs. A modified model is
+  indistinguishable from a legitimate endpoint at the API level — it accepts the same request format
+  and returns plausible responses, but without safety-trained constraints.
+
+#### What Aragora Already Defends (Structural, by Design)
+
+| Attack Vector | Defense Mechanism | Pillar |
+|---------------|------------------|--------|
+| Prompt injection into a single model | Adversarial critique loop: one compromised proposal is challenged by N-1 intact heterogeneous peers across multiple rounds; bad output cannot reach consensus alone | P1 |
+| Jailbreak / sycophancy | Trickster hollow-consensus detection; RhetoricalObserver flags rhetorical patterns; dissent is captured in receipt | P1 |
+| OBLITERATUS-class (refusal ablation on one open-weight participant) | Execution gate enforces provider + model-family diversity; a lobotomized model must outvote intact heterogeneous peers across critique rounds without triggering dissent detection | P1, P4 |
+| Single-source hallucination | Cross-verification phase; consensus proof requires independent multi-model agreement | P1 |
+| Correlated failure / shared blind spot | Heterogeneous models from different training lineages, RLHF targets, and corporate principals reduce the surface of shared vulnerability | P1 |
+
+The **consensus receipt as execution gate** is the critical security primitive: nothing executes
+without a signed receipt certifying multi-factor verification (integrity + signature + provider
+diversity + domain policy). A single compromised model cannot unilaterally produce a valid receipt.
+
+#### Defense Gaps with Roadmap Items
+
+These gaps exist and are tracked as named roadmap items. Each represents a concrete engineering
+investment.
+
+| Gap | Attack Vector | Roadmap Item | Priority |
+|-----|--------------|--------------|---------|
+| No signed context manifests | Brainworm: malicious `CLAUDE.md`/memory file ingested without provenance verification | G1: Cryptographic signing of trusted context sources; agents verify provenance before elevating trust | 2 |
+| No trust-tier taint tracking | Context authority collapse: injected instructions propagate through debate rounds invisibly | G2: Taint flag propagates — if retrieved context influences a proposal, the receipt carries a taint annotation | 1 |
+| No runtime model attestation | OBLITERATUS endpoint substitution: modified open-weight model served behind expected alias | G3: Behavior-signature challenge at registration; periodic behavioral probing against known-good baselines | 4 |
+| No mandatory external verification gate | Correlated failure: all ensemble models share a blind spot on the same topic | G4: External verifier requirement for decisions above a configurable impact threshold | 3 |
+
+**Engineering priority order when capacity is available:** G2 (taint tracking, highest leverage,
+debate orchestrator change) → G1 (signed manifests, blocks injection point) → G4 (external gate,
+can ship as opt-in policy flag) → G3 (attestation, most complex, probabilistic not cryptographic).
 
 ---
 
@@ -264,7 +316,7 @@ These are not product features. They are the intellectual commitments that infor
 
 ### Evolution Roadmap Goals
 
-The [Evolution Roadmap](../aragora/docs/plans/ARAGORA_EVOLUTION_ROADMAP.md) is the HOW document implementing these goals. Summary of phase goals with pillar mapping:
+The [Evolution Roadmap](plans/ARAGORA_EVOLUTION_ROADMAP.md) is the HOW document implementing these goals. Summary of phase goals with pillar mapping:
 
 | Phase | Weeks | Key Goals | Pillar |
 |-------|-------|-----------|--------|
@@ -413,7 +465,7 @@ Each aragoradocs file serves a specific purpose. Goals are consolidated here.
 
 These claims require qualification in all documents:
 
-1. **"Self-improving platform"** -- Nomic Loop is fully wired end-to-end with all six phases operational (Phase 10C consolidation, Jan 2026; 66 E2E tests passing). Autonomous cycles demonstrated in production dogfooding. Output quality consistency is the remaining constraint (33-80% pass rate in benchmarks). **Goal: stabilize output quality to 80%+ and demonstrate autonomous improvement beyond internal dogfooding.**
+1. **"Self-improving platform"** -- Nomic Loop is fully wired end-to-end with all six phases operational (Phase 10C consolidation, Jan 2026; 66 E2E tests passing). Autonomous cycles demonstrated in production dogfooding. Run 012 (March 2026) achieved composite scores of 8.38-9.39/10 following practicality scoring fixes (prompt restructuring, threshold alignment, verb scoring). **Goal: demonstrate autonomous improvement beyond internal dogfooding and validate 80%+ pass rate consistency across diverse tasks.**
 
 2. **"43-agent parallel coordination"** -- All 43 agent types exist and work individually. Practical debates use 2-6 agents due to provider rate limits. The value is heterogeneity (different models catching different issues), not raw parallelism. **Goal: demonstrate 10+ agent coordination (P4 #37).**
 
@@ -430,7 +482,7 @@ These claims require qualification in all documents:
 | Zero paying customers | Fatal | Stop building, start selling | Ground-up analysis |
 | Debate quality inconsistent (33% good-run rate) | Blocks demos | Fix output contract parsing, quality gates | DOGFOOD_SPEC |
 | EU AI Act enforcement delayed | Reduced urgency | Product value stands without regulation | BUSINESS_SUMMARY |
-| Well-funded competitor adds adversarial features | Category pressure | Technical moat (210+ debate modules, 34 KM adapters) | STRATEGIC_ANALYSIS |
+| Well-funded competitor adds adversarial features | Category pressure | Technical moat (210+ debate modules, 41 KM adapters) | STRATEGIC_ANALYSIS |
 | Solo maintainer (bus factor) | Existential | Comprehensive docs, MIT license, CI coverage | COMPREHENSIVE_REPORT |
 | LLM provider reliability | Debate failures | Circuit breaker, OpenRouter fallback, multi-provider | HONEST_ASSESSMENT |
 | Engagement-driven revenue corrupts epistemic output | Existential to thesis | SaaS subscription primary; avoid ad-supported model entirely | Terrarium Model |

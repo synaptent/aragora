@@ -2743,6 +2743,26 @@ export class DebatesAPI {
   }
 
   /**
+   * Get a publicly shared debate by ID (no auth required).
+   */
+  async getPublicDebate(debateId: string): Promise<Record<string, unknown>> {
+    return this.client.request(
+      'GET',
+      `/api/debates/public/${encodeURIComponent(debateId)}`
+    );
+  }
+
+  /**
+   * Get Open Graph metadata for a publicly shared debate (for social previews).
+   */
+  async getPublicDebateOg(debateId: string): Promise<Record<string, unknown>> {
+    return this.client.request(
+      'GET',
+      `/api/debates/public/${encodeURIComponent(debateId)}/og`
+    );
+  }
+
+  /**
    * Get diagnostics for a debate.
    */
   async getDiagnostics(debateId: string): Promise<Record<string, unknown>> {

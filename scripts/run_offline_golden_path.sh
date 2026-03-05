@@ -17,12 +17,22 @@ fi
 
 echo "[offline-golden-path] Using Python: $PYTHON"
 
+# Fail fast on leaked transports/file handles in offline smoke flows.
+if [[ -n "${PYTHONWARNINGS:-}" ]]; then
+  export PYTHONWARNINGS="error::ResourceWarning,${PYTHONWARNINGS}"
+else
+  export PYTHONWARNINGS="error::ResourceWarning"
+fi
+echo "[offline-golden-path] Enforcing PYTHONWARNINGS=${PYTHONWARNINGS}"
+
 echo "[offline-golden-path] Installing dev/test dependencies"
 "$PYTHON" -m pip install --upgrade pip
 "$PYTHON" -m pip install -e ".[dev,test]"
 
 echo "[offline-golden-path] Running offline behavior tests"
-"$PYTHON" -m pytest tests/cli/test_offline_golden_path.py -v --timeout=120 --tb=short
+"$PYTHON" -m pytest tests/cli/test_offline_golden_path.py -v --timeout=120 --tb=short \
+  -W error::ResourceWarning \
+  -W error::pytest.PytestUnraisableExceptionWarning
 
 echo "[offline-golden-path] Running offline demo CLI smoke"
 ARAGORA_OFFLINE=1 "$PYTHON" -m aragora ask "Offline mode smoke" --demo --rounds 1

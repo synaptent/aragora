@@ -40,6 +40,7 @@ This index is scoped to high-signal, actively maintained docs with validated pat
 
 - Architecture: [../architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md)
 - Debate internals: [../debate/DEBATE_INTERNALS.md](../debate/DEBATE_INTERNALS.md)
+- Execution safety gate: [../debate/EXECUTION_SAFETY_GATE.md](../debate/EXECUTION_SAFETY_GATE.md)
 - Agent system: [../debate/AGENTS.md](../debate/AGENTS.md)
 - Knowledge Mound: [../knowledge/KNOWLEDGE_MOUND.md](../knowledge/KNOWLEDGE_MOUND.md)
 - Workflow engine: [../workflow/WORKFLOW_ENGINE.md](../workflow/WORKFLOW_ENGINE.md)

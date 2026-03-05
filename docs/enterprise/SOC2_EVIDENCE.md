@@ -67,7 +67,7 @@ This document describes how Aragora addresses SOC 2 Trust Service Criteria and w
 
 | Control | Implementation | Evidence |
 |---------|----------------|----------|
-| Role-based access | RBAC v2 with 50+ permissions | `aragora/rbac/defaults.py` |
+| Role-based access | RBAC v2 with 360+ permissions | `aragora/rbac/defaults.py` |
 | MFA support | TOTP/HOTP with backup codes | `aragora/auth/mfa.py` |
 | Session management | JWT with configurable timeout | `aragora/auth/session.py` |
 | API key management | Scoped API keys with rotation | `aragora/auth/api_keys.py` |

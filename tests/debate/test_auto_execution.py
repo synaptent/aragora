@@ -18,6 +18,7 @@ import pytest
 
 from aragora.core_types import DebateResult
 from aragora.debate.arena_sub_configs import AutoExecutionConfig
+from aragora.debate.execution_safety import ExecutionSafetyDecision
 from aragora.debate.orchestrator_runner import _auto_execute_plan
 from aragora.pipeline.decision_plan import DecisionPlanFactory
 from aragora.pipeline.decision_plan.core import ApprovalMode, PlanStatus
@@ -133,6 +134,14 @@ def _make_arena(**overrides) -> MagicMock:
     arena.auto_execution_mode = overrides.get("auto_execution_mode", "workflow")
     arena.auto_approval_mode = overrides.get("auto_approval_mode", "risk_based")
     arena.auto_max_risk = overrides.get("auto_max_risk", "low")
+    arena.post_debate_config = overrides.get("post_debate_config")
+    arena.agents = overrides.get(
+        "agents",
+        [
+            MagicMock(model="claude-opus-4-6", agent_type="anthropic-api"),
+            MagicMock(model="gpt-4.1", agent_type="openai-api"),
+        ],
+    )
     return arena
 
 
@@ -232,6 +241,52 @@ class TestAutoExecutePlan:
             assert updated.metadata["plan_outcome"]["success"] is True
             assert updated.metadata["plan_outcome"]["tasks_completed"] == 3
             assert updated.metadata["plan_outcome"]["tasks_total"] == 3
+
+    @pytest.mark.asyncio
+    async def test_auto_execution_emits_gate_telemetry_labels(self):
+        """Auto-execution path emits gate telemetry with expected labels."""
+        mock_plan = _make_mock_plan(requires_approval=False)
+        mock_outcome = MagicMock(success=True, tasks_completed=1, tasks_total=1)
+        gate_decision = ExecutionSafetyDecision(
+            allow_auto_execution=True,
+            receipt_signed=True,
+            receipt_integrity_valid=True,
+            receipt_signature_valid=True,
+            provider_diversity=2,
+            model_family_diversity=2,
+            providers=["anthropic", "openai"],
+            model_families=["claude", "gpt"],
+            signed_receipt={"receipt_id": "r-123"},
+        )
+
+        with (
+            patch(
+                "aragora.debate.execution_safety.evaluate_auto_execution_safety",
+                return_value=gate_decision,
+            ) as gate_eval,
+            patch("aragora.server.metrics.track_execution_gate_decision") as track_gate_metrics,
+            patch.object(DecisionPlanFactory, "from_debate_result", return_value=mock_plan),
+            patch("aragora.pipeline.executor.PlanExecutor") as mock_executor_cls,
+        ):
+            mock_executor_instance = MagicMock()
+            mock_executor_instance.execute = AsyncMock(return_value=mock_outcome)
+            mock_executor_cls.return_value = mock_executor_instance
+
+            arena = _make_arena()
+            arena.agents = [MagicMock(model="gpt-4.1", agent_type="openai-api")]
+            result = _make_result()
+            setattr(result, "domain", "security")
+
+            updated = await _auto_execute_plan(arena, result)
+
+            gate_eval.assert_called_once()
+            track_gate_metrics.assert_called_once()
+            telemetry_call = track_gate_metrics.call_args
+            assert telemetry_call.args[0]["allow_auto_execution"] is True
+            assert telemetry_call.kwargs["path"] == "arena_auto_execute"
+            assert telemetry_call.kwargs["domain"] == "security"
+            assert updated.metadata["execution_gate"]["allow_auto_execution"] is True
+            assert updated.metadata["plan_outcome"]["success"] is True
 
     @pytest.mark.asyncio
     async def test_graceful_failure_on_import_error(self):

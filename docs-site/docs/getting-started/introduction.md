@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # Introduction to Aragora
 
-Aragora is the **control plane for multi-agent vetted decisionmaking across organizational knowledge and channels**. It orchestrates 42+ agent types to debate your organization's knowledge (documents, databases, APIs) and deliver defensible decisions to any channel (Slack, Teams, Discord, voice).
+Aragora is the **control plane for multi-agent vetted decisionmaking across organizational knowledge and channels**. It orchestrates 43 agent types to debate your organization's knowledge (documents, databases, APIs) and deliver defensible decisions to any channel (Slack, Teams, Discord, voice).
 
 ## Why Multi-Agent Debate?
 

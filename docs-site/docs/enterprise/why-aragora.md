@@ -50,7 +50,7 @@ This is not a theoretical approach. ICE research on multi-agent debate demonstra
 | **Decision receipts** | Cryptographic audit trails with evidence chains, dissent tracking, and confidence calibration |
 | **Calibrated trust** | ELO rankings and Brier scores track which models are actually reliable on which domains |
 | **Hollow consensus detection** | The Trickster catches cases where models agree without genuine reasoning |
-| **Institutional memory** | Decisions persist across sessions with 4-tier memory and Knowledge Mound (34 adapters) |
+| **Institutional memory** | Decisions persist across sessions with 4-tier memory and Knowledge Mound (41 adapters) |
 | **Channel delivery** | Results route to Slack, Teams, Discord, Telegram, WhatsApp, email, or voice |
 
 ---

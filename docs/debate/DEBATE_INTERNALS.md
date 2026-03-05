@@ -171,6 +171,19 @@ consumed by orchestration layers to alter the next round.
 Production deployments should back this with Redis or a database to preserve
 state across restarts and allow horizontal scaling.
 
+## Execution Safety Gate
+
+High-impact automation after debates (execution bridge, plan execution, PR creation)
+is protected by an execution safety gate that evaluates:
+
+- signed receipt verification
+- provider/model-family diversity
+- context taint signals from untrusted prompt context
+- high-severity dissent and correlated-failure risk
+
+See [Execution Safety Gate](./EXECUTION_SAFETY_GATE.md) for policy knobs, defaults,
+reason codes, and telemetry/dashboard queries.
+
 ## Agent Channel Integration
 
 When enabled in the debate protocol, agents can send peer‑to‑peer messages
