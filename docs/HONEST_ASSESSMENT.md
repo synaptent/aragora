@@ -88,7 +88,7 @@ This is production-grade infrastructure, not prototyping code.
 
 | Component | Scale |
 |---|---|
-| Python SDK | 184 namespaces, 5,800+ methods |
+| Python SDK | 185 namespaces, 5,800+ methods |
 | TypeScript SDK | 183 namespaces, 3,700+ methods (99.3% parity) |
 | REST API | 3,000+ operations across 2,900+ paths |
 | WebSocket events | 190+ event types for real-time streaming |

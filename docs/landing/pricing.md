@@ -37,7 +37,7 @@ For teams shipping high-stakes software.
 - Knowledge Mound (41 adapters)
 - ELO rankings + Brier calibration
 - Workflow engine (50+ templates)
-- Python SDK (184 namespaces) + TypeScript SDK (183 namespaces)
+- Python SDK (185 namespaces) + TypeScript SDK (183 namespaces)
 - Priority email support
 
 **Best for:** Engineering teams, SMBs (5-50 people)
