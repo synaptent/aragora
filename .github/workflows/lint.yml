@@ -121,41 +121,51 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Resolve Python runtime
+        id: lint_python
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON_BIN="$(command -v python3 || command -v python || true)"
+          if [[ -z "$PYTHON_BIN" ]]; then
+            echo "::error::Python runtime not found on runner"
+            exit 1
+          fi
+          "$PYTHON_BIN" --version
+          "$PYTHON_BIN" -m ensurepip --upgrade || true
+          "$PYTHON_BIN" -m pip install --upgrade pip
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "python_bin=$PYTHON_BIN" >> "$GITHUB_OUTPUT"
 
       - name: Install linters
         run: |
-          python -m pip install --upgrade pip
-          pip install ruff==0.14.14
-          pip install -e .
+          "${{ steps.lint_python.outputs.python_bin }}" -m pip install --user ruff==0.14.14
+          "${{ steps.lint_python.outputs.python_bin }}" -m pip install --user -e .
 
       - name: Enforce branch mutation policy
-        run: python scripts/check_branch_mutation_policy.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_branch_mutation_policy.py
 
       - name: Enforce deploy SHA verification guard
-        run: python scripts/check_deploy_secure_sha_guard.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_deploy_secure_sha_guard.py
 
       - name: Enforce required-check-priority keep-list policy
-        run: python scripts/check_required_check_priority_policy.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_required_check_priority_policy.py
 
       - name: Enforce execution-gate default hardening policy
-        run: python scripts/check_execution_gate_defaults.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_execution_gate_defaults.py
 
       - name: Enforce execution-gate policy change-control metadata
-        run: python scripts/check_execution_gate_policy_control.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_execution_gate_policy_control.py
 
       - name: Validate Prometheus rule syntax with promtool
-        run: python scripts/check_prometheus_rules.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_prometheus_rules.py
 
       - name: Run ruff format check (all Python files)
-        run: ruff format --check aragora/ tests/ scripts/
+        run: ${{ steps.lint_python.outputs.python_bin }} -m ruff format --check aragora/ tests/ scripts/
         shell: bash
 
       - name: Run ruff lint check (all Python files)
-        run: ruff check aragora/ tests/ scripts/
+        run: ${{ steps.lint_python.outputs.python_bin }} -m ruff check aragora/ tests/ scripts/
         shell: bash
 
   lint:
@@ -332,19 +342,29 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Resolve Python runtime
+        id: typecheck_python
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON_BIN="$(command -v python3 || command -v python || true)"
+          if [[ -z "$PYTHON_BIN" ]]; then
+            echo "::error::Python runtime not found on runner"
+            exit 1
+          fi
+          "$PYTHON_BIN" --version
+          "$PYTHON_BIN" -m ensurepip --upgrade || true
+          "$PYTHON_BIN" -m pip install --upgrade pip
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "python_bin=$PYTHON_BIN" >> "$GITHUB_OUTPUT"
 
       - name: Install mypy and type stubs
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install mypy types-requests types-redis types-python-dateutil types-setuptools
+          "${{ steps.typecheck_python.outputs.python_bin }}" -m pip install --user -e .
+          "${{ steps.typecheck_python.outputs.python_bin }}" -m pip install --user mypy types-requests types-redis types-python-dateutil types-setuptools
 
       - name: Run typecheck tier
-        run: bash scripts/test_tiers.sh typecheck
+        run: PATH="$HOME/.local/bin:$PATH" bash scripts/test_tiers.sh typecheck
         shell: bash
         # Phase 5: mypy now REQUIRED (43→0 errors fixed Jan 2026)
 

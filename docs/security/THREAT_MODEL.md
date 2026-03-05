@@ -203,9 +203,9 @@ messages, debate prompts, webhook URLs.
 | SSRF via webhook URL registration | Information Disclosure | Medium | High | `ssrf_protection.py`: private IP blocking, DNS rebinding checks, cloud metadata blocking | Verify all outbound URL fetch points use `validate_url()` |
 | SSRF via DNS rebinding (TTL-based) | Information Disclosure | Low | High | Optional `resolve_dns=True` mode | DNS resolution not enabled by default (`resolve_dns=False`) |
 | Prompt injection via debate input affecting agent behavior | Tampering | High | Medium | Agent sandbox, debate protocol structure | LLM-level mitigation; no input sanitization for prompt content |
-| Context memory/config poisoning (e.g., `CLAUDE.md`, `MEMORY.md`, retrieved notes) | Tampering | High | High | Git review process, repository controls | No provenance/authority tiering for prompt context; malicious instructions can appear as peer context |
-| Prompt supply-chain poisoning via upstream docs or dependencies | Tampering | Medium | High | Code review, branch protection | No signed context-policy manifests; no mandatory allowlist for model-ingested files |
-| Context authority collapse (tool output or retrieved text treated like trusted instructions) | Elevation of Privilege | Medium | High | Multi-agent critique and dissent tracking | No deterministic trust boundary enforcement inside model context window |
+| Context memory/config poisoning (Brainworm-class: malicious `CLAUDE.md`, `MEMORY.md`, retrieved notes) | Tampering | High | High | Multi-agent critique and dissent tracking; Nomic Loop worktree isolation | No signed context manifests; no provenance/authority tiering for ingested files; malicious instructions appear as peer context (G1, G2) |
+| Prompt supply-chain poisoning via upstream docs or knowledge retrieval | Tampering | Medium | High | Code review, branch protection, Knowledge Mound provenance tracking | No cryptographic signing of knowledge sources; no mandatory allowlist for model-ingested files (G1) |
+| Context authority collapse (tool output or retrieved text treated as trusted operator instructions) | Elevation of Privilege | Medium | High | Multi-agent critique loop; dissent capture | No deterministic trust boundary enforcement inside model context window; taint does not propagate to receipt (G2) |
 | JSON body exceeding size limits | Denial of Service | Medium | Medium | `MAX_JSON_CONTENT_LENGTH` enforcement | Verify enforcement on all parsing paths |
 | Multipart boundary attack (oversized boundaries) | Denial of Service | Low | Medium | `MAX_MULTIPART_PARTS = 10` | Verify boundary size is also limited |
 | WebSocket message injection (malformed events) | Tampering | Medium | Medium | Message dispatch in WebSocket handler | Verify message schema validation on all 190+ event types |
@@ -229,20 +229,28 @@ configuration, random number generation.
 
 ### 3.6 Model and Consensus Integrity (AI-Specific)
 
-**Attack Surface:** Model endpoint trust, consensus arbitration logic, receipt-signing pipeline, and auto-execution handoff.
+**Attack Surface:** Model endpoint trust, consensus arbitration logic, receipt-signing pipeline,
+and auto-execution handoff. Covers both Brainworm-class (context injection) and OBLITERATUS-class
+(weight surgery) attack vectors, as well as collusion and correlated failure scenarios.
 
-**Source files:** `aragora/debate/post_debate_coordinator.py`,
+**Source files:** `aragora/debate/orchestrator.py`, `aragora/debate/consensus.py`,
 `aragora/debate/execution_bridge.py`, `aragora/gauntlet/signing.py`,
-`aragora/server/handlers/gauntlet/receipts.py`, `aragora/config/settings.py`.
+`aragora/server/handlers/gauntlet/receipts.py`, `aragora/agents/`, `aragora/config/settings.py`.
 
 | Threat | Category | Likelihood | Impact | Existing Controls | Gaps |
 |--------|----------|------------|--------|-------------------|------|
-| Open-weight refusal-ablation / model lobotomy (OBLITERATUS-class) in participant set | Tampering | Medium | High | Multi-agent debate with dissent capture, execution gate enforces provider + model-family diversity for auto-execution | Still relies on configured ensemble quality; read-only/non-executing debates can run without strict diversity |
-| Endpoint substitution (modified model served behind expected alias) | Spoofing | Medium | High | Named agent registry, API key scoping | No model attestation challenge at runtime for externally hosted/open-weight endpoints |
-| Collusion/Sybil in ensemble (multiple compromised models outvote intact minority) | Elevation of Privilege | Medium | High | Consensus proof + dissent recording, execution gate correlated-risk checks, diversity floors | Detection is heuristic; coordinated multi-provider compromise remains possible |
-| Correlated failure across all models (shared blind spot) | Information Disclosure | Medium | High | Adversarial critique loop, unresolved tension tracking | Consensus can still be wrong; no mandatory external verification gate for high-impact decisions |
-| Compromised arbitration or execution bridge logic | Elevation of Privilege | Low | Critical | Code review, tests, RBAC around endpoints, execution gate requires verified signed receipts by default | Gate bypass remains a critical regression risk; requires continuous verification tests |
-| Receipt-signing key compromise or misuse | Repudiation | Low | Critical | Multiple signing algorithms, verification endpoints | Key custody and rotation policy not enforced as an execution prerequisite |
+| OBLITERATUS-class refusal ablation (open-weight model weight surgery in participant set) | Tampering | Medium | High | Execution gate enforces provider + model-family diversity; lobotomized model must outvote intact heterogeneous peers without triggering dissent detection | Detection relies on behavioral divergence in debate; no runtime attestation challenge at registration (G3) |
+| Endpoint substitution (modified model served behind expected alias) | Spoofing | Medium | High | Named agent registry, API key scoping | No behavior-signature challenge at registration; open-weight endpoints especially at risk (G3) |
+| Collusion/Sybil in ensemble (multiple compromised models outvote intact minority) | Elevation of Privilege | Medium | High | Consensus proof + dissent recording; execution gate correlated-risk checks; provider diversity floors | Detection is heuristic; coordinated multi-provider compromise not addressed (G4) |
+| Correlated failure across all models (shared blind spot) | Information Disclosure | Medium | High | Adversarial critique loop; heterogeneous training lineages | Consensus can be wrong; no mandatory external verification gate for high-impact decisions (G4) |
+| Compromised arbitration or execution bridge logic | Elevation of Privilege | Low | Critical | Code review, tests, RBAC; execution gate requires verified signed receipts | Gate bypass is a critical regression risk; continuous verification tests required |
+| Receipt-signing key compromise or misuse | Repudiation | Low | Critical | Multiple signing algorithms (HMAC-SHA256, RSA-SHA256, Ed25519); verification endpoints | Key custody and rotation policy not enforced as execution prerequisite |
+
+**Planned mitigations (roadmap items):**
+- **G1**: Signed context manifests — cryptographic provenance for trusted context sources ingested by Nomic Loop and debate orchestrator
+- **G2**: Trust-tier taint propagation — tainted context annotations propagate through debate rounds and appear in receipt schema
+- **G3**: Runtime model attestation — behavioral probe challenge at registration + periodic re-attestation during sessions
+- **G4**: External verification gate — opt-in policy flag requiring non-Aragora verifier signature for high-impact decisions
 
 ---
 
@@ -302,8 +310,8 @@ Client                  Aragora Server           Agent Proxy            AI Provi
 | Authentication / Tokens | Critical | Medium (controls strong, but JWT algorithm confusion and auth-exempt path bypass need verification) | P0 |
 | Authorization / RBAC | Critical | Medium (comprehensive RBAC, but 580+ handlers need IDOR verification) | P0 |
 | OpenClaw Gateway | Critical | High (standalone server has no enforced auth by default) | P0 |
-| Data Input / Injection | Critical | Low-Medium (parameterized queries standard, but SSRF and prompt injection gaps exist) | P1 |
-| Model & Consensus Integrity | Critical | Medium-High (debate helps, but collusion/correlated failure and execution gating remain) | P0 |
+| Data Input / Injection | Critical | Medium (parameterized queries standard, but SSRF, prompt injection, and context poisoning gaps exist) | P1 |
+| Model & Consensus Integrity | Critical | Medium-High (debate helps, but collusion/correlated failure, context poisoning, and execution gating remain; no G1-G4 implemented) | P0 |
 | Cryptographic Operations | Critical | Low (AES-256-GCM with key rotation, but encryption fallback risk in non-prod) | P1 |
 
 ---
@@ -322,9 +330,9 @@ Based on this threat model, the penetration test should prioritize in this order
 8. **Prompt injection** via debate inputs (LLM-specific attack vector)
 9. **Cryptographic validation** -- key strength, timing attacks, fallback behavior
 10. **Rate limit bypass** -- distributed attacks, header manipulation, auth-exempt paths
-11. **Context memory/config poisoning drills** -- malicious `CLAUDE.md`/memory file instructions, indirect retrieval injection
-12. **Model endpoint integrity tests** -- open-weight refusal ablation simulation, endpoint substitution, provider diversity enforcement
-13. **Consensus collusion simulations** -- compromised-model quorum and correlated-failure scenarios against arbitration logic
+11. **Context memory/config poisoning drills** (Brainworm-class) -- malicious `CLAUDE.md`/memory file instructions, indirect retrieval injection via Knowledge Mound
+12. **Model endpoint integrity tests** (OBLITERATUS-class) -- open-weight refusal ablation simulation, endpoint substitution, provider diversity enforcement verification
+13. **Consensus collusion simulations** -- compromised-model quorum and correlated-failure scenarios against arbitration logic and dissent detection
 14. **Execution-gate regression verification** -- ensure high-impact actions continue to require verified signed receipts plus diversity/taint policy checks
 
 ---

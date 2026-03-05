@@ -5,7 +5,11 @@
     "/api/v1/agent-evolution/pending/{param}/approve",
     "/api/v1/agent-evolution/pending/{param}/reject",
     "/api/v1/agent-evolution/timeline",
+    "/api/v1/compliance/rbac-coverage",
+    "/api/v1/debates/public/{param}",
+    "/api/v1/debates/public/{param}/og",
     "/api/v1/inbox/messages/{param}/debate",
+    "/api/v1/mcp/tools",
     "/api/v1/relationship/{param}/*"
   ],
   "orphaned_in_spec": [
