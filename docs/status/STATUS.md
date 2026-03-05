@@ -238,7 +238,7 @@ Independent verification of production readiness found the project is **98% GA-r
 - **Bot Cache Optimization**: Heap-based O(log n) TTL cleanup for response caching
 - **Circuit Breaker Defaults**: Tuned (threshold=5, cooldown=60s) across all resilience patterns
 - **Debate Stability Detection**: Beta-Binomial model with KS-distance for statistical early stopping (opt-in via `enable_stability_detection`)
-- **Knowledge Mound Adapter Base**: 33 adapters using unified base class with resilience, metrics, and tracing
+- **Knowledge Mound Adapter Base**: 41 adapters using unified base class with resilience, metrics, and tracing
 
 ---
 
@@ -252,7 +252,7 @@ Independent verification of production readiness found the project is **98% GA-r
 
 #### Key Highlights
 - **Type safety** - Fixed 10+ mypy type errors across server handlers
-- **TypeScript SDK** - 140 namespaces wired to client (added backups, dashboard, devices, expenses, rlm, threat-intel, unified-inbox)
+- **TypeScript SDK** - 183 namespaces wired to client (added backups, dashboard, devices, expenses, rlm, threat-intel, unified-inbox)
 - **Bot handler consolidation** - All 8 bot handlers now use BotHandlerMixin
 - **RBAC standardization** - 90%+ of handlers now have permission checks
 - **Feedback handler tests** - 21 new tests for NPS and feedback submission

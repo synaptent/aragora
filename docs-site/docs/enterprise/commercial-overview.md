@@ -97,12 +97,12 @@ For small teams that need decision rigor and audit trails.
 | CI/CD integration | GitHub Actions, GitLab CI |
 | Channel delivery | Slack, Teams, Discord, email |
 | 4-tier Continuum Memory | Fast / medium / slow / glacial |
-| Knowledge Mound | 34 adapters |
+| Knowledge Mound | 41 adapters |
 | ELO rankings + Brier calibration | Per-agent, per-domain tracking |
 | Workflow engine | 50+ templates across 6 categories |
 | Vertical weight profiles | Healthcare, financial, legal |
-| API access | Full REST + WebSocket (2,000+ operations) |
-| Python + TypeScript SDKs | Full access (155 namespaces each) |
+| API access | Full REST + WebSocket (3,000+ operations) |
+| Python + TypeScript SDKs | Full access (184 Python / 183 TypeScript namespaces) |
 
 Bring your own API keys. LLM costs billed directly by your providers.
 
@@ -155,7 +155,7 @@ For organizations with compliance, security, and governance requirements.
 | Anti-fragile agent reassignment | -- | Yes | Yes |
 | **Memory & Knowledge** | | | |
 | 4-tier Continuum Memory | -- | Yes | Yes |
-| Knowledge Mound (34 adapters) | -- | Yes | Yes |
+| Knowledge Mound (41 adapters) | -- | Yes | Yes |
 | Cross-debate institutional memory | -- | Yes | Yes |
 | **Integrations** | | | |
 | REST API + WebSocket | Limited | Full | Full |
@@ -288,10 +288,10 @@ Both SDKs provide typed clients for all 3,000+ API operations with full IntelliS
 | Lines of code | 1,490,000 |
 | Tests | 208,000+ |
 | Test files | 4,300+ |
-| API operations | 2,000+ across 1,800+ paths |
+| API operations | 3,000+ across 2,900+ paths |
 | WebSocket event types | 190+ |
 | SDK namespaces | 184 Python / 183 TypeScript (99.3% parity) |
-| Knowledge Mound adapters | 34 |
+| Knowledge Mound adapters | 41 |
 | RBAC permissions | 390+ |
 | Agent types | 43 |
 | LLM providers | 6+ (Anthropic, OpenAI, Google, xAI, Mistral, OpenRouter) |

@@ -42,7 +42,7 @@ graph TB
 
     subgraph Memory["Memory & Knowledge"]
         CONTINUUM["Continuum Memory<br/>(fast / medium / slow / glacial)"]
-        KM["Knowledge Mound<br/>(33 adapters)"]
+        KM["Knowledge Mound<br/>(41 adapters)"]
         EVIDENCE["Evidence<br/>+ Provenance"]
         RLM["RLM<br/>(Context Structuring)"]
     end
@@ -201,7 +201,7 @@ graph LR
 
     Fast --> Medium --> Slow --> Glacial
 
-    KM["Knowledge Mound<br/>(33 adapters)"] --> Glacial
+    KM["Knowledge Mound<br/>(41 adapters)"] --> Glacial
 
     classDef fast fill:#ffcdd2,stroke:#c62828
     classDef med fill:#fff9c4,stroke:#f9a825

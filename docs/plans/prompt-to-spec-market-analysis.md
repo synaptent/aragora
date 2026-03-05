@@ -140,7 +140,7 @@ Nate quotes Anthropic's best practice: "Interview me in detail. Ask about techni
 Lütke's core insight — "state a problem with enough context that it's plausibly solvable without additional information" — is exactly what most users can't do. Aragora's interrogation engine is the mechanism that forces this to happen even when the user won't do it themselves.
 
 **4. The enterprise specification engineering opportunity is massive.**
-Nate's vision of "your entire organizational document corpus should be agent-readable" is exactly what Aragora's Knowledge Mound + 34 adapters + Obsidian sync is building toward. The one-person business advantage Nate describes ("just convert your Notion to be agent-readable and you're off to the races") is precisely Aragora's SME value proposition.
+Nate's vision of "your entire organizational document corpus should be agent-readable" is exactly what Aragora's Knowledge Mound + 41 adapters + Obsidian sync is building toward. The one-person business advantage Nate describes ("just convert your Notion to be agent-readable and you're off to the races") is precisely Aragora's SME value proposition.
 
 ### What Nate Misses That Aragora Should Exploit
 

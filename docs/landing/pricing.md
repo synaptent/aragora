@@ -34,7 +34,7 @@ For teams shipping high-stakes software.
 - CI/CD integration (GitHub Actions, GitLab CI)
 - Channel delivery (Slack, Teams, Discord, email)
 - 4-tier Continuum Memory
-- Knowledge Mound (34 adapters)
+- Knowledge Mound (41 adapters)
 - ELO rankings + Brier calibration
 - Workflow engine (50+ templates)
 - Python SDK (184 namespaces) + TypeScript SDK (183 namespaces)

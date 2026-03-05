@@ -1,6 +1,6 @@
 # Aragora Feature Discovery Guide
 
-*Complete catalog of 180+ features for developers exploring Aragora capabilities*
+*Complete catalog of 215+ features for developers exploring Aragora capabilities*
 
 This document provides a comprehensive inventory of Aragora's features organized by domain. Use this guide to discover what Aragora can do and find the relevant modules for your use case.
 
@@ -22,7 +22,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 | [Developer Tools](#8-developer-tools) | 25+ | Stable |
 | [Self-Improvement](#9-self-improvement--nomic-loop) | 12+ | Stable |
 
-**Total**: 180+ features | 3,000+ Python modules | 131,000+ tests | 2,000+ API operations
+**Total**: 215+ features | 3,000+ Python modules | 208,000+ tests | 3,000+ API operations
 
 ---
 
@@ -188,7 +188,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | **KM Resilience** | Stable | ResilientPostgresStore with retry, health, cache invalidation | `aragora/knowledge/mound/resilience.py` | |
 | **SLO Alerting** | Stable | Adapter performance monitoring with Prometheus | `aragora/config/performance_slos.py` | |
 
-### Knowledge Adapters (25 Total)
+### Knowledge Adapters (41 Total)
 
 | Adapter | Purpose | Key Files |
 |---------|---------|-----------|
@@ -429,7 +429,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 
 | Feature | Status | Description | Key Files | Docs |
 |---------|--------|-------------|-----------|------|
-| **Unified Server** | Stable | 2,000+ API operations | `aragora/server/unified_server.py` | [API_REFERENCE.md](../api/API_REFERENCE.md) |
+| **Unified Server** | Stable | 3,000+ API operations | `aragora/server/unified_server.py` | [API_REFERENCE.md](../api/API_REFERENCE.md) |
 | **Handler Registry** | Stable | O(1) route lookup with LRU caching | `aragora/server/handler_registry.py` | |
 | **GraphQL API** | Stable | Schema for debates, agents, memory | `aragora/server/graphql/` | |
 | **WebSocket Streaming** | Stable | 26 stream modules for real-time events | `aragora/server/stream/` | |
@@ -439,8 +439,8 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 
 | SDK | Status | Namespaces | Key Files |
 |-----|--------|------------|-----------|
-| **Python SDK** | Stable | 105 namespaces | `sdk/python/` |
-| **TypeScript SDK** | Stable | 140 namespaces | `sdk/typescript/` |
+| **Python SDK** | Stable | 184 namespaces | `sdk/python/` |
+| **TypeScript SDK** | Stable | 183 namespaces | `sdk/typescript/` |
 
 ### CLI
 
