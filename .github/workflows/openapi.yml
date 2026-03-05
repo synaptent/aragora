@@ -179,6 +179,15 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Configure npm cache for self-hosted runners
+        shell: bash
+        run: |
+          set -euo pipefail
+          NPM_CACHE_DIR="${RUNNER_TEMP}/npm-cache"
+          mkdir -p "$NPM_CACHE_DIR"
+          echo "NPM_CONFIG_CACHE=${NPM_CACHE_DIR}" >> "$GITHUB_ENV"
+          echo "npm_config_cache=${NPM_CACHE_DIR}" >> "$GITHUB_ENV"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
