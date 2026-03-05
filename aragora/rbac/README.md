@@ -49,7 +49,7 @@ rbac/
 ├── emergency.py         # Break-glass access
 ├── quotas.py            # Rate limits
 └── defaults/
-    ├── permissions.py   # 50+ permission definitions
+    ├── permissions.py   # 360+ permission definitions
     └── roles.py         # System role configurations
 ```
 

@@ -234,7 +234,7 @@ ARAGORA_API_TOKEN=<token>
 
 ## Security Features
 
-- **RBAC**: 50+ fine-grained permissions with role hierarchy
+- **RBAC**: 360+ permissions with role hierarchy
 - **Multi-Tenancy**: Workspace isolation with membership verification
 - **Rate Limiting**: Per-user, per-tier, per-endpoint quotas
 - **Audit Logging**: SOC 2 compliance trails

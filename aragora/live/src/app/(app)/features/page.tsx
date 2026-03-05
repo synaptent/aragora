@@ -51,9 +51,9 @@ const CATEGORIES: FeatureCategory[] = [
   {
     id: 'knowledge',
     title: 'Knowledge Management',
-    description: 'Unified knowledge superstructure with 34 adapters across all memory systems',
+    description: 'Unified knowledge superstructure with 41 adapters across all memory systems',
     features: [
-      { name: 'Knowledge Mound', description: '34 adapters integrating memory, consensus, evidence, and debate knowledge', status: 'active', href: '/knowledge' },
+      { name: 'Knowledge Mound', description: '41 adapters integrating memory, consensus, evidence, and debate knowledge', status: 'active', href: '/knowledge' },
       { name: 'Semantic Search', description: 'Vector-based knowledge retrieval with confidence scoring', status: 'active', href: '/knowledge' },
       { name: 'Contradiction Detection', description: 'Automatic identification of conflicting knowledge nodes', status: 'active', href: '/knowledge' },
       { name: 'Multi-Tier Memory', description: 'Fast/Medium/Slow/Glacial memory tiers with TTL-based promotion', status: 'active', href: '/memory' },
@@ -124,7 +124,7 @@ const CATEGORIES: FeatureCategory[] = [
     features: [
       { name: 'Decision Integrity', description: 'End-to-end decision quality assurance with provenance tracking', status: 'active', href: '/decision-integrity' },
       { name: 'Dashboard', description: 'Agent registry, task scheduler, health monitoring, and policy governance', status: 'active', href: '/control-plane' },
-      { name: 'RBAC v2', description: '50+ fine-grained permissions with role hierarchy and middleware', status: 'active', href: '/control-plane' },
+      { name: 'RBAC v2', description: '360+ fine-grained permissions with role hierarchy and middleware', status: 'active', href: '/control-plane' },
       { name: 'Multi-Tenancy', description: 'Tenant isolation, resource quotas, and usage metering', status: 'active', href: '/admin/tenants' },
       { name: 'Moderation', description: 'Spam filtering and content validation for debates', status: 'active', href: '/moderation' },
       { name: 'Vertical Specialists', description: 'Healthcare (HIPAA), Financial (SOX), Legal vertical guides', status: 'active', href: '/verticals' },

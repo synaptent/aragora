@@ -257,6 +257,156 @@ Two cautionary tales that inform Aragora's design:
 
 ---
 
+## Security-as-Architecture: AI Attack Vector Resistance
+
+Aragora's adversarial multi-model architecture is not just an epistemic tool — it is a structural
+defense against a class of AI-native attacks that have no precedent in traditional software security.
+This section names those attack classes explicitly, maps them to existing defenses, and defines the
+roadmap items required to close remaining gaps.
+
+### Attack Taxonomy
+
+#### Brainworm-class: Context Injection / Config C2
+
+Semantic hijacking of AI agents via trusted configuration files. The attack requires no binary
+artifacts — only natural language instructions placed in files the agent treats as authoritative
+(`CLAUDE.md`, `MEMORY.md`, retrieved Obsidian notes, tool output). The vector exploits **trust
+domain collapse**: inside an LLM's context window, there is no deterministic boundary between
+operator instructions and retrieved data. A sufficiently subtle injection can redirect agent
+behavior across sessions, accumulating effect through memory files without triggering any
+signature-based detection.
+
+**Aragora relevance**: The Nomic Loop ingests `CLAUDE.md`, memory files, and retrieved knowledge
+as prompt context. A compromised knowledge source or tampered config file could influence agent
+proposals in ways that survive casual review.
+
+#### OBLITERATUS-class: Weight Surgery
+
+SVD-based projection techniques that remove refusal behaviors from open-weight LLMs by operating
+directly on model weights rather than inputs. The modified model is indistinguishable from a
+legitimate endpoint at the API level — it accepts the same request format, returns plausible
+responses, but without safety-trained constraints. Unlike jailbreaks, weight surgery cannot be
+patched by prompt hardening.
+
+**Aragora relevance**: The execution gate enforces provider + model-family diversity, but relies on
+configured ensemble quality. An open-weight participant that has been weight-surgered cannot be
+detected through metadata inspection — it must be caught by behavioral divergence during debate.
+
+### Aragora's Structural Defenses
+
+These defenses exist today. They are properties of the architecture, not add-on features.
+
+```
+Single-model platform:           Aragora:
+
+  User Input                       User Input
+      │                                │
+      ▼                            ┌───┴───────────────────┐
+  [LLM] ── prompt injection ──►  [Claude]  [GPT]  [Mistral]  [Grok]
+      │       jailbreak            │         │         │          │
+      │       weight surgery        └────┬────┘    critique   critique
+      ▼                                  │         rounds      rounds
+  Output                           consensus proof ────────────────►
+  (no defense)                          │
+                                   signed receipt (if diversity + integrity verified)
+                                        │
+                                    execution gate
+```
+
+| Attack | Defense Mechanism | Current Strength |
+|--------|------------------|-----------------|
+| Prompt injection into a single model | Adversarial critique loop: compromised proposals are challenged by N-1 intact heterogeneous peers | **Strong** |
+| Jailbreak / sycophancy | Trickster hollow-consensus detection; RhetoricalObserver; dissent capture | **Strong** |
+| OBLITERATUS-class (refusal ablation on open-weight participant) | Execution gate: provider + model-family diversity enforced; lobotomized model must outvote intact peers without triggering dissent | **Medium** (relies on ensemble quality) |
+| Single-source hallucination | Cross-verification phase; consensus proof requires independent multi-model agreement | **Strong** |
+| Correlated failure / shared blind spot | Heterogeneous training lineages, RLHF targets, corporate principals reduce shared vulnerability surface | **Medium** (heuristic, not structural) |
+| Sybil / collusion in ensemble | Diversity floors + dissent recording; execution gate correlated-risk checks | **Medium** (detection is heuristic) |
+
+**The consensus receipt as execution gate** is the critical security primitive. Multi-factor
+verification required: integrity + signature + provider diversity + domain policy. A single
+compromised model cannot unilaterally produce a valid execution receipt.
+
+### Defense Gaps and Roadmap Items
+
+The following gaps represent concrete engineering investments. Each is tracked as a named roadmap
+item and should be prioritized when security engineering capacity is available.
+
+#### G1: Signed Context Manifests
+
+**Gap**: No cryptographic provenance for trusted context sources. A malicious `CLAUDE.md` or
+tampered memory file is ingested with the same trust weight as legitimate operator instructions.
+
+**Mitigation**: At ingestion time, verify a cryptographic signature on each trusted context source
+before elevating its trust tier. Unsigned or unverifiable sources are treated as untrusted
+retrieved data, not operator instructions. Requires: key distribution for signing, ingestion
+pipeline changes in Nomic Loop context phase.
+
+**Files**: `scripts/nomic_loop.py` (context phase), `aragora/knowledge/mound/` (retrieval),
+`aragora/memory/continuum/` (memory ingestion)
+
+#### G2: Trust-Tier Taint Propagation
+
+**Gap**: No taint tracking in the debate orchestrator. When retrieved or injected context
+influences an agent proposal, the proposal appears identical to a proposal grounded in clean
+operator context — no flag appears in the receipt.
+
+**Mitigation**: Taint propagates through the debate graph. If a proposal is influenced by
+untrusted/unverified context, a taint annotation is added to the proposal, propagates through
+critiques and votes, and appears in the final consensus receipt. High-taint receipts trigger a
+review gate before execution.
+
+**Files**: `aragora/debate/orchestrator.py`, `aragora/debate/consensus.py`,
+`aragora/gauntlet/receipts.py` (taint field in receipt schema)
+
+#### G3: Runtime Model Attestation
+
+**Gap**: No behavior-signature challenge at agent registration. An OBLITERATUS-modified open-weight
+model served behind an expected endpoint alias cannot be distinguished from the legitimate model
+through API metadata alone.
+
+**Mitigation**: At registration, challenge the endpoint with a curated behavioral probe set (known
+correct/refusal scenarios with expected response profiles). Periodic re-attestation during debate
+sessions. Flag behavioral drift beyond a configurable threshold. Note: this is probabilistic, not
+cryptographic — determined adversaries can probe the attestation set and tune the weight surgery to
+pass it. Defense-in-depth with G2 (taint) is the correct posture.
+
+**Files**: `aragora/agents/` (agent registry), `aragora/debate/team_selector.py`
+
+#### G4: External Verification Gate
+
+**Gap**: No mandatory external check before high-impact execution. If the entire ensemble shares a
+correlated blind spot (e.g., all models fail to recognize a specific domain-specific risk), the
+consensus receipt will be signed without that risk surfacing.
+
+**Mitigation**: For decisions above a configurable impact threshold, require at least one non-Aragora
+verifier signature before execution proceeds. Can be implemented as an opt-in policy flag initially
+(`require_external_verification=True` in ArenaConfig or execution gate policy). External verifier
+can be a human reviewer, a specialized domain model, or a third-party verification service.
+
+**Files**: `aragora/debate/execution_bridge.py`, `aragora/gauntlet/signing.py` (multi-party
+signature support)
+
+### Positioning: The Semantic Immune System
+
+Aragora's combination of heterogeneous consensus + adversarial structure + consensus receipt as
+execution gate makes it the first platform to apply **distributed immunological defense** to AI
+decision-making. The thesis:
+
+> If you only execute against signed consensus receipts from N adversarial heterogeneous models,
+> you have something provably safer to execute against than the output of any single model —
+> regardless of whether that model has been jailbroken, sycophancy-trained, or weight-surgered.
+
+The analogy to biological immune systems is apt: diversity prevents any single vulnerability from
+being universally exploited. A clonal cell population can be wiped out by a single pathogen that
+targets their shared receptor. A heterogeneous ecosystem requires the pathogen to simultaneously
+defeat multiple independent defense mechanisms — a combinatorially harder problem.
+
+**This is not a claim that Aragora is immune to LLM attacks. It is a claim that adversarial
+multi-model consensus with signed receipts raises the cost of a successful attack by orders of
+magnitude compared to any single-model platform.**
+
+---
+
 ## Phase 0: Foundation Hardening (Week 1-2)
 
 ### 0A. Obsidian Bidirectional Sync

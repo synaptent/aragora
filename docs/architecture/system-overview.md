@@ -23,7 +23,7 @@ flowchart TB
     subgraph Auth["RBAC and Auth"]
         OIDC["OIDC / SAML SSO"]
         MFA["MFA (TOTP / HOTP)"]
-        RBAC["RBAC v2 (50+ permissions)"]
+        RBAC["RBAC v2 (360+ permissions)"]
         Middleware["Auth Middleware"]
     end
 

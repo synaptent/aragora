@@ -161,7 +161,7 @@ This document maps Aragora's security controls to SOC 2 Type II Trust Service Cr
 
 | Control ID | Control | Implementation | File Path | Evidence |
 |------------|---------|----------------|-----------|----------|
-| P2.1 | Fine-Grained Permissions | 50+ permissions across resource types | `aragora/rbac/models.py:312-356` | `Permission` dataclass |
+| P2.1 | Fine-Grained Permissions | 360+ permissions across resource types | `aragora/rbac/models.py:312-356` | `Permission` dataclass |
 | P2.2 | Role Hierarchy | Parent role inheritance with priority conflict resolution | `aragora/rbac/models.py:358-405` | `Role.parent` field |
 | P2.3 | Time-Bound Assignments | Role assignment expiration with validity checks | `aragora/rbac/models.py:430-468` | `RoleAssignment.valid_until` |
 | P2.4 | Conditional Permissions | Attribute-based access control via metadata | `aragora/rbac/conditions.py` | ABAC support |

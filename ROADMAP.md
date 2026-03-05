@@ -12,7 +12,7 @@ Aragora is **98% GA-ready**. The platform has shipped all core infrastructure an
 - 208,000+ tests across 4,000+ test files (0 failures on main)
 - 41 Knowledge Mound adapters registered (up from 34 in Q4 2025)
 - 3,000+ API operations across 2,900+ paths
-- 14 RBAC resource types, 8 actions, 50+ permissions
+- 14 RBAC resource types, 8 actions, 360+ permissions
 - SOC 2 controls framework: 98% implemented
 
 **Completed since January 2026:**

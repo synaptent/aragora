@@ -167,7 +167,7 @@ aragora/
 │   └── coordinator.py     # Unified control plane API
 ├── rbac/             # Role-based access control v2
 │   ├── models.py           # Permission, Role, RoleAssignment dataclasses
-│   ├── types.py            # 7 default roles, 50+ permissions
+│   ├── types.py            # 7 default roles, 360+ permissions
 │   ├── checker.py          # PermissionChecker with caching
 │   ├── decorators.py       # @require_permission, @require_role
 │   ├── middleware.py       # HTTP route protection
@@ -406,7 +406,7 @@ See `docs/reference/ENVIRONMENT.md` for full reference.
 - Security - AES-256-GCM encryption, rate limiting, circuit breakers
 - Compliance - SOC 2 controls, GDPR support, audit trails
 - Observability - Prometheus metrics, Grafana dashboards, OpenTelemetry tracing
-- RBAC v2 - Fine-grained permissions (50+), role hierarchy, decorators, middleware
+- RBAC v2 - Fine-grained permissions (360+), role hierarchy, decorators, middleware
 - Backup/DR - Incremental backups, retention policies, disaster recovery drills
 - Control Plane - Agent registry, task scheduler, health monitoring, policy governance (1,500+ tests)
   - PolicyConflictDetector - Detects contradictory policies before they cause issues

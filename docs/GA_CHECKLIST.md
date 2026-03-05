@@ -13,7 +13,7 @@ This checklist tracks all items required before declaring Aragora self-hosted GA
 - [x] **Error message sanitization** - No `str(e)` leaks in user-facing responses
 - [x] **JWT validation** - `sub` claim validation + insecure decode audit logging
 - [x] **Rate limiting** - Enabled by default on all endpoints, configurable per-route
-- [x] **RBAC v2** - 50+ permissions, 7 default roles, fine-grained decorators
+- [x] **RBAC v2** - 360+ permissions, 7 default roles, fine-grained decorators
 - [x] **MFA** - TOTP/HOTP support with enforcement toggle
 - [x] **Encryption** - AES-256-GCM for data at rest
 - [x] **SSRF protection** - Built-in URL validation
