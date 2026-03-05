@@ -149,11 +149,11 @@ Aragora is useful to a 5-person startup on day one and scales to regulated enter
 
 ### 2. Leading-Edge Memory and Context
 
-Single agents lose context. Aragora's 4-tier Continuum Memory (fast / medium / slow / glacial) and Knowledge Mound with 0 registered adapters give every debate access to institutional history, cross-session learning, and evidence provenance. The RLM (Recursive Language Models) system compresses and structures context to reduce prompt bloat, enabling debates that sustain coherence across long multi-round sessions and large document sets where individual models would degrade.
+Single agents lose context. Aragora's 4-tier Continuum Memory (fast / medium / slow / glacial) and Knowledge Mound with 41 registered adapters give every debate access to institutional history, cross-session learning, and evidence provenance. The RLM (Recursive Language Models) system compresses and structures context to reduce prompt bloat, enabling debates that sustain coherence across long multi-round sessions and large document sets where individual models would degrade.
 
 ### 3. Extensible and Modular
 
-Connectors for Slack, Teams, Discord, Telegram, WhatsApp, email, voice, Kafka, RabbitMQ, GitHub, Jira, Salesforce, healthcare HL7/FHIR, and dozens more. SDKs in Python and TypeScript (140 namespaces in the TypeScript SDK). 3,000+ API operations across 2,900+ paths and 260+ WebSocket event types. OpenClaw integration for portable agent governance. A workflow engine with DAG execution and 60+ templates. A marketplace for agent personas, debate templates, and workflow patterns. Aragora adapts to your stack -- not the other way around.
+Connectors for Slack, Teams, Discord, Telegram, WhatsApp, email, voice, Kafka, RabbitMQ, GitHub, Jira, Salesforce, healthcare HL7/FHIR, and dozens more. SDKs in Python and TypeScript (184 Python / 183 TypeScript namespaces). 3,000+ API operations across 2,900+ paths and 260+ WebSocket event types. OpenClaw integration for portable agent governance. A workflow engine with DAG execution and 60+ templates. A marketplace for agent personas, debate templates, and workflow patterns. Aragora adapts to your stack -- not the other way around.
 
 ### 4. Multi-Agent Robustness
 
@@ -177,7 +177,7 @@ Aragora treats each model as an **unreliable witness** and uses structured debat
 | **Decision Receipts** | Cryptographic audit trails with evidence chains, dissent tracking, and confidence calibration |
 | **Gauntlet Mode** | Red-team stress-tests for specs, policies, and architectures using adversarial personas |
 | **Calibrated Trust** | ELO rankings and Brier scores track which models are actually reliable on which domains |
-| **Institutional Memory** | Decisions persist across sessions with 4-tier memory and Knowledge Mound (<!-- adpt-count -->57<!-- /adpt-count --> adapters) |
+| **Institutional Memory** | Decisions persist across sessions with 4-tier memory and Knowledge Mound (<!-- adpt-count -->41<!-- /adpt-count --> adapters) |
 | **Channel Delivery** | Results route to Slack, Teams, Discord, Telegram, WhatsApp, email, or voice |
 
 ---
@@ -299,7 +299,7 @@ aragora/
 │   ├── cli_agents.py     # Claude Code, Codex, Gemini CLI, Grok CLI
 │   └── fallback.py       # OpenRouter fallback on quota errors
 ├── gauntlet/       # Adversarial stress testing
-├── knowledge/      # Knowledge Mound with 0 registered adapters
+├── knowledge/      # Knowledge Mound with 41 registered adapters
 ├── memory/         # 4-tier memory (fast/medium/slow/glacial)
 ├── server/         # 3,000+ API operations, 260+ WebSocket event types
 ├── pipeline/       # Decision-to-PR generation
@@ -343,7 +343,7 @@ Costs vary by model mix. Use `aragora decide --dry-run` to preview costs before 
 | Gauntlet stress testing | Built-in CLI | No | No | No |
 | Enterprise security (SSO, RBAC, encryption) | Production-ready | No | No | No |
 | Self-improvement (Nomic Loop) | Autonomous with safety gates | No | No | No |
-| Knowledge persistence (33 adapters) | 4-tier memory + Knowledge Mound | Custom | Custom | Custom |
+| Knowledge persistence (41 adapters) | 4-tier memory + Knowledge Mound | Custom | Custom | Custom |
 | Channel delivery (Slack, Teams, etc.) | 8 channels built-in | No | No | No |
 
 ---

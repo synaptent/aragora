@@ -288,6 +288,24 @@ Data handling policies:
 - Encryption requirements
 - Retention policies
 
+### EU AI Act Compliance
+**Location**: `aragora/compliance/`, `docs/compliance/EU_AI_ACT_GUIDE.md`
+
+> **Enforcement date: August 2, 2026.** EU AI Act obligations for high-risk AI systems
+> become legally enforceable on this date. Aragora's compliance CLI provides audit-ready
+> artifact bundles to meet these requirements.
+
+- Risk classification and documentation
+- Conformity assessment artifact generation (`aragora compliance export`)
+- Transparency and explainability logs
+- Human oversight controls and audit trails
+- Continuous compliance monitoring
+
+```bash
+# Generate EU AI Act compliance bundle
+aragora compliance export --format eu-ai-act --output ./compliance-bundle
+```
+
 ### Incident Response
 **Location**: `docs/INCIDENT_RESPONSE.md`
 
