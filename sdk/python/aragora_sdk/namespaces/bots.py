@@ -55,6 +55,10 @@ class BotsAPI:
     def zoom_status(self) -> dict[str, Any]:
         return self._client.request("GET", "/api/v1/bots/zoom/status")
 
+    def slack_status(self) -> dict[str, Any]:
+        """Get Slack integration status."""
+        return self._client.request("GET", "/api/v1/bots/slack/status")
+
 
 class AsyncBotsAPI:
     """Asynchronous bots API."""
@@ -97,3 +101,7 @@ class AsyncBotsAPI:
 
     async def zoom_status(self) -> dict[str, Any]:
         return await self._client.request("GET", "/api/v1/bots/zoom/status")
+
+    async def slack_status(self) -> dict[str, Any]:
+        """Get Slack integration status."""
+        return await self._client.request("GET", "/api/v1/bots/slack/status")

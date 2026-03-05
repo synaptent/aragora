@@ -411,4 +411,22 @@ export class UnifiedInboxAPI {
       json: request,
     });
   }
+
+  /**
+   * Start a debate on a message — trigger multi-agent analysis.
+   */
+  async debateMessage(
+    messageId: string,
+    request?: { rounds?: number; consensus?: string }
+  ): Promise<{
+    debate_id: string;
+    message_id: string;
+    status: string;
+  }> {
+    return this.client.request(
+      'POST',
+      `/api/v1/inbox/messages/${messageId}/debate`,
+      { json: request ?? {} }
+    );
+  }
 }
