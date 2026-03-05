@@ -18,7 +18,14 @@ _ACTION_VERB_RE = re.compile(
     r"(?i)\b(add|create|implement|update|refactor|remove|wire|integrate|validate|test|harden|instrument|enforce|ship"
     r"|build|deploy|configure|construct|establish|develop|provision|run|execute|design|migrate|setup|parse|route"
     r"|initialize|instantiate|enable|monitor|track|define|connect|aggregate|extract|detect|optimize|fix|resolve"
-    r"|extend|introduce|scaffold|verify|ensure|check)\b"
+    r"|extend|introduce|scaffold|verify|ensure|check"
+    r"|improve|enhance|strengthen|upgrade|increase|decrease|reduce|modularize|encapsulate|augment"
+    r"|standardize|consolidate|unify|simplify|normalize|expand|scale|wrap|patch|align|refine"
+    r"|decouple|deprecate|emit|inject|register|rewrite|split|merge|expose|publish|document"
+    r"|measure|benchmark|profile|audit|scan|lint|format|generate|transform|convert|serialize"
+    r"|throttle|debounce|cache|index|query|fetch|load|store|persist|flush|evict|invalidate"
+    r"|assert|mock|stub|parametrize|isolate|snapshot|replay|record|capture|intercept"
+    r"|rename|move|relocate|deduplicate|dedupe|prune|trim|compress|decompress|encrypt|decrypt)\b"
 )
 # Tiered placeholder/hedging patterns with severity weights.
 # HIGH (0.30): hard placeholders that indicate missing content.
