@@ -1541,6 +1541,9 @@ class PlaygroundHandler(BaseHandler):
         # Oracle mode (consult / divine / commune)
         mode = str(body.get("mode", "") or "").strip() or "consult"
 
+        # Source: "oracle" for Oracle page, "landing" for main site, etc.
+        source = str(body.get("source", "") or "").strip() or "oracle"
+
         # Session ID for follow-up conversation memory
         session_id = str(body.get("session_id", "") or "").strip() or None
 
@@ -1557,7 +1560,13 @@ class PlaygroundHandler(BaseHandler):
         agent_count = max(_MIN_AGENTS, min(agent_count, _MAX_AGENTS))
 
         return self._run_debate(
-            topic, rounds, agent_count, question=question, mode=mode, session_id=session_id
+            topic,
+            rounds,
+            agent_count,
+            question=question,
+            mode=mode,
+            source=source,
+            session_id=session_id,
         )
 
     def _run_debate(
@@ -1567,15 +1576,31 @@ class PlaygroundHandler(BaseHandler):
         agent_count: int,
         question: str | None = None,
         mode: str = "consult",
+        source: str = "oracle",
         session_id: str | None = None,
     ) -> HandlerResult:
         if question:
-            # Oracle mode: try real LLM response first
-            oracle_result = _try_oracle_response(
-                mode=mode, question=question, topic=topic, session_id=session_id
-            )
-            if oracle_result:
-                return json_response(oracle_result)
+            if source != "oracle":
+                # Non-Oracle sources (e.g. landing page): professional multi-model debate
+                tentacle_result = _try_oracle_tentacles(
+                    mode=mode,
+                    question=question,
+                    agent_count=agent_count,
+                    topic=topic,
+                    source=source,
+                )
+                if tentacle_result:
+                    return self._persist_and_respond(
+                        json_response(tentacle_result), topic, source
+                    )
+                logger.info("Landing tentacle debate failed — falling through to mock")
+            else:
+                # Oracle page: single-model Oracle response (Phase 1)
+                oracle_result = _try_oracle_response(
+                    mode=mode, question=question, topic=topic, session_id=session_id
+                )
+                if oracle_result:
+                    return json_response(oracle_result)
             logger.info("Oracle LLM call failed — returning placeholder instead of irrelevant mock")
             # Return an Oracle-themed placeholder instead of a generic mock debate
             # (the generic mock talks about microservices which is nonsensical for Oracle)

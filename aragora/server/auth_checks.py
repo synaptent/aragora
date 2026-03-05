@@ -366,7 +366,9 @@ class AuthChecksMixin:
         # "/api/v1/features/",
         "/api/gauntlet/personas",  # Public gauntlet personas list
         "/api/v1/gauntlet/personas",  # Public gauntlet personas list (v1)
-        # LOCKED: debate data requires auth
+        "/api/debates/public/",  # Public share links — no auth required
+        "/api/v1/debates/public/",  # Public share links — no auth required (v1)
+        # LOCKED: full debate listing requires auth
         # "/api/debates/",
         # "/api/v1/debates/",
         # LOCKED: internal metrics require auth
