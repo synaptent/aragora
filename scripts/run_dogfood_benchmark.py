@@ -26,6 +26,12 @@ QUALITY_LINE_RE = re.compile(
     r"practicality=(?P<practicality>[0-9]+(?:\.[0-9]+)?)\s+"
     r"loops=(?P<loops>[0-9]+)\s+upgraded=(?P<upgraded>True|False)"
 )
+EXECUTION_PATH_RE = re.compile(r"Execution path:\s*(?P<path>[a-z0-9_-]+)", re.IGNORECASE)
+LIVE_STAGES_RE = re.compile(r"Live stages completed:\s*(?P<count>\d+)", re.IGNORECASE)
+PROVIDER_CALLS_RE = re.compile(r"Provider calls detected:\s*(?P<flag>True|False)", re.IGNORECASE)
+QUALITY_GATE_RE = re.compile(r"\[QUALITY GATE\]\s+(?P<verdict>PASS|FAIL)", re.IGNORECASE)
+TOP_TRACK_RE = re.compile(r"^\s*1\.\s+\[(?P<track>[a-z_]+)\]", re.IGNORECASE | re.MULTILINE)
+TRACK_LINE_RE = re.compile(r"^\s*\d+\.\s+\[(?P<track>[a-z_]+)\]", re.IGNORECASE | re.MULTILINE)
 
 
 def _utc_now() -> str:
@@ -75,6 +81,57 @@ def _extract_quality(stdout: str) -> dict[str, Any]:
     }
 
 
+def _extract_pipeline_checks(stdout: str) -> dict[str, Any]:
+    execution_match = EXECUTION_PATH_RE.search(stdout or "")
+    live_stage_match = LIVE_STAGES_RE.search(stdout or "")
+    provider_match = PROVIDER_CALLS_RE.search(stdout or "")
+    quality_gate_match = QUALITY_GATE_RE.search(stdout or "")
+    top_track_match = TOP_TRACK_RE.search(stdout or "")
+    track_lines = [m.group("track").lower() for m in TRACK_LINE_RE.finditer(stdout or "")]
+
+    execution_path = execution_match.group("path").lower() if execution_match else None
+    live_stages = int(live_stage_match.group("count")) if live_stage_match else None
+    provider_calls_detected = None
+    if provider_match:
+        provider_calls_detected = provider_match.group("flag").lower() == "true"
+
+    quality_gate_verdict = (
+        quality_gate_match.group("verdict").lower() if quality_gate_match else None
+    )
+    top_track = top_track_match.group("track").lower() if top_track_match else None
+    has_cross_track_duplicates = len(track_lines) != len(set(track_lines)) if track_lines else None
+    top_track_in_allowed_set = (
+        top_track in {"core", "security", "self_hosted"} if top_track is not None else None
+    )
+
+    checks = {
+        "execution_path_live": execution_path == "live" if execution_path is not None else None,
+        "quality_gate_pass": quality_gate_verdict == "pass"
+        if quality_gate_verdict is not None
+        else None,
+        "top_track_is_infra_or_security": top_track_in_allowed_set,
+        "no_cross_track_clones": (
+            (not has_cross_track_duplicates) if has_cross_track_duplicates is not None else None
+        ),
+    }
+    checks_present = any(value is not None for value in checks.values())
+    hard_checks_pass = checks_present and all(
+        value is True for value in checks.values() if value is not None
+    )
+
+    return {
+        "present": checks_present,
+        "execution_path": execution_path,
+        "live_stages_completed": live_stages,
+        "provider_calls_detected": provider_calls_detected,
+        "quality_gate_verdict": quality_gate_verdict,
+        "top_track": top_track,
+        "track_lines": track_lines,
+        "checks": checks,
+        "hard_checks_pass": hard_checks_pass,
+    }
+
+
 def _excerpt(text: str, max_chars: int = 4000) -> str:
     value = (text or "").strip()
     if len(value) <= max_chars:
@@ -104,12 +161,14 @@ def _run_once(command: list[str], timeout_seconds: int) -> dict[str, Any]:
     ended = time.monotonic()
 
     quality = _extract_quality(stdout)
+    pipeline_checks = _extract_pipeline_checks(stdout)
     classified = classify_stderr_signals(stderr)
     return {
         "duration_seconds": round(ended - started, 2),
         "exit_code": exit_code,
         "timed_out": timed_out,
         "quality": quality,
+        "pipeline_checks": pipeline_checks,
         "runtime_blockers": classified["runtime_blockers"],
         "warning_signals": classified["warning_signals"],
         "warning_only": classified["warning_only"],
@@ -146,6 +205,10 @@ def _summarize(runs: list[dict[str, Any]]) -> dict[str, Any]:
         and (run["quality"]["score"] or 0) >= 9.0
         and (run["quality"]["practicality"] or 0) >= 5.0
     ]
+    pipeline_present = [run for run in runs if run.get("pipeline_checks", {}).get("present")]
+    pipeline_hard_pass = [
+        run for run in pipeline_present if run.get("pipeline_checks", {}).get("hard_checks_pass")
+    ]
 
     durations = [float(run["duration_seconds"]) for run in runs]
     loops = [
@@ -168,6 +231,23 @@ def _summarize(runs: list[dict[str, Any]]) -> dict[str, Any]:
     for run in runs:
         for blocker in run.get("runtime_blockers") or []:
             blocker_counts[blocker] = blocker_counts.get(blocker, 0) + 1
+
+    check_keys = [
+        "execution_path_live",
+        "quality_gate_pass",
+        "top_track_is_infra_or_security",
+        "no_cross_track_clones",
+    ]
+    check_pass_rates: dict[str, float | None] = {}
+    for key in check_keys:
+        values = [
+            run.get("pipeline_checks", {}).get("checks", {}).get(key) for run in pipeline_present
+        ]
+        bool_values = [bool(v) for v in values if v is not None]
+        if not bool_values:
+            check_pass_rates[key] = None
+        else:
+            check_pass_rates[key] = round(sum(bool_values) / len(bool_values), 4)
 
     return {
         "total_runs": total,
@@ -200,6 +280,16 @@ def _summarize(runs: list[dict[str, Any]]) -> dict[str, Any]:
             "min": _safe_min(loops),
             "max": _safe_max(loops),
         },
+        "pipeline_hard_checks": {
+            "present_runs": len(pipeline_present),
+            "hard_check_pass_runs": len(pipeline_hard_pass),
+            "hard_check_pass_rate": (
+                round(len(pipeline_hard_pass) / len(pipeline_present), 4)
+                if pipeline_present
+                else None
+            ),
+            "check_pass_rates": check_pass_rates,
+        },
         "runtime_blockers": blocker_counts,
     }
 
@@ -224,6 +314,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--output",
         default="docs/plans/dogfood_benchmark_2026-03-01.json",
         help="Output report JSON path.",
+    )
+    parser.add_argument(
+        "--enforce-pipeline-hard-checks",
+        action="store_true",
+        help=(
+            "Fail non-zero when pipeline hard checks are present and any run fails them "
+            "(execution_path/live, quality gate pass, top-track class, clone check)."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -273,6 +371,17 @@ def main(argv: list[str] | None = None) -> int:
     out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"[dogfood-benchmark] report={out_path}", flush=True)
     print(f"[dogfood-benchmark] summary={json.dumps(payload['summary'], indent=2)}", flush=True)
+    if args.enforce_pipeline_hard_checks:
+        checks = payload["summary"].get("pipeline_hard_checks", {})
+        present_runs = int(checks.get("present_runs") or 0)
+        pass_runs = int(checks.get("hard_check_pass_runs") or 0)
+        if present_runs > 0 and pass_runs < present_runs:
+            print(
+                "[dogfood-benchmark] enforce-pipeline-hard-checks failed: "
+                f"{pass_runs}/{present_runs} runs passed",
+                flush=True,
+            )
+            return 1
     return 0
 
 

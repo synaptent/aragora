@@ -307,6 +307,51 @@ class TestHeuristicPrioritize:
         tracks_covered = {g.track for g in goals}
         assert Track.SME in tracks_covered or Track.QA in tracks_covered
 
+    def test_generic_objective_not_broadcast_to_all_tracks(self):
+        """Fallback heuristic should pick one best track, not clone to all tracks."""
+        planner = MetaPlanner()
+        goals = planner._heuristic_prioritize(
+            "Create a shared WorkItem protocol and UnifiedCycleOrchestrator",
+            [Track.SME, Track.QA, Track.CORE, Track.SELF_HOSTED, Track.SECURITY],
+        )
+
+        assert len(goals) == 1
+        assert goals[0].track in {Track.CORE, Track.SELF_HOSTED, Track.SECURITY}
+        assert goals[0].track != Track.SME
+
+    @pytest.mark.asyncio
+    async def test_prioritize_work_recovers_when_objective_fidelity_is_low(self):
+        """Low-fidelity goal sets should be recovered to objective-aligned track."""
+        planner = MetaPlanner(
+            MetaPlannerConfig(
+                quick_mode=True,
+                objective_fidelity_threshold=0.8,
+                enforce_objective_fidelity=True,
+            )
+        )
+
+        def _drifted_goals(_objective, _tracks):
+            return [
+                PrioritizedGoal(
+                    id="goal_0",
+                    track=Track.SME,
+                    description="Improve SME dashboard font hierarchy and color contrast",
+                    rationale="drifted",
+                    estimated_impact="medium",
+                    priority=1,
+                )
+            ]
+
+        planner._heuristic_prioritize = _drifted_goals  # type: ignore[assignment]
+        goals = await planner.prioritize_work(
+            objective="Integrate pipeline, testfixer, and quality gates into a closed loop",
+            available_tracks=[Track.CORE, Track.SELF_HOSTED, Track.SECURITY, Track.SME],
+        )
+
+        assert len(goals) == 1
+        assert goals[0].track in {Track.CORE, Track.SELF_HOSTED, Track.SECURITY}
+        assert "closed loop" in goals[0].description.lower()
+
     def test_respects_max_goals(self):
         """Should not exceed max_goals."""
         config = MetaPlannerConfig(max_goals=2)

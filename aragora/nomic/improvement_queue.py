@@ -26,6 +26,12 @@ class ImprovementSuggestion:
     category: str  # test_coverage, performance, reliability, code_quality, documentation
     confidence: float
     created_at: float = field(default_factory=time.time)
+    # Provenance fields for bidirectional handoff tracking
+    source_system: str = ""  # e.g. "pipeline", "testfixer", "debate", "nomic_loop"
+    source_id: str = ""  # ID from the originating system (pipeline_id, run_id, etc.)
+    files: list[str] = field(default_factory=list)  # affected file paths
+    gate_verdict: str = ""  # quality gate result: "pass", "fail", "skip"
+    fidelity_score: float = -1.0  # objective fidelity score (-1 = not measured)
 
 
 class ImprovementQueue:
