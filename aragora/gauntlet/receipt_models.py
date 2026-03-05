@@ -57,6 +57,9 @@ class ConsensusProof:
     dissenting_agents: list[str] = field(default_factory=list)
     method: str = "majority"
     evidence_hash: str = ""
+    # Taint tracking (G2)
+    tainted_proposals: list[str] = field(default_factory=list)
+    trust_score: float = 1.0  # 1.0 = all clean; lower = tainted proposals in consensus
 
     def to_dict(self) -> dict:
         return {
@@ -66,6 +69,8 @@ class ConsensusProof:
             "dissenting_agents": self.dissenting_agents,
             "method": self.method,
             "evidence_hash": self.evidence_hash,
+            "tainted_proposals": self.tainted_proposals,
+            "trust_score": self.trust_score,
         }
 
 
@@ -120,6 +125,9 @@ class DecisionReceipt:
 
     # Epistemic settlement metadata (optional, for quality feedback loop)
     settlement_metadata: dict[str, Any] | None = None
+
+    # Taint analysis (G2 — populated when tainted context influenced any proposal)
+    taint_analysis: dict[str, Any] | None = None
 
     # Extended thinking traces from Anthropic agents (optional, for explainability)
     # Maps agent name -> thinking trace string produced during the debate
