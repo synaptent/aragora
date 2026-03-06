@@ -13,7 +13,7 @@ concurrency:
 jobs:
   adversarial-suite:
     name: Execution Gate Adversarial Regression
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 25
 
     steps:

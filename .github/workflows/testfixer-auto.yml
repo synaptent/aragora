@@ -32,7 +32,7 @@ jobs:
     # Disabled: auto-fix loop causes CI thrash (push→cancel→restart cycle).
     # Re-enable via workflow_dispatch when needed for targeted fix runs.
     if: github.event_name == 'workflow_dispatch'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       DEFAULT_TEST_COMMAND: >-

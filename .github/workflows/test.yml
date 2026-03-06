@@ -48,7 +48,7 @@ jobs:
   version-check:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Version Alignment
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
 
     steps:
@@ -168,7 +168,7 @@ jobs:
   sdk-typescript-compile-gate:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: SDK TypeScript Compile Gate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 8
     needs: version-check
 
@@ -230,7 +230,7 @@ jobs:
   baseline-determinism:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Baseline Determinism
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 12
     needs: version-check
 
@@ -279,7 +279,7 @@ jobs:
   skip-audit:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Skip Marker Audit
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
@@ -350,7 +350,7 @@ jobs:
   status-reconciliation:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Status Doc Reconciliation
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
@@ -409,7 +409,7 @@ jobs:
   zero-coverage-check:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Zero Coverage Check
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: baseline-determinism
 
@@ -495,7 +495,7 @@ jobs:
   # Fast parallel tests by category (Ubuntu only, primary Python)
   test-fast:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: baseline-determinism
     strategy:
@@ -571,7 +571,7 @@ jobs:
   epistemic-settlement-gate:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Epistemic Hygiene + Settlement Gate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 12
     needs: baseline-determinism
 
@@ -643,7 +643,7 @@ jobs:
 
   v1-scope-lock-gate:
     name: V1 Scope Lock Gate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: baseline-determinism
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request')
@@ -691,7 +691,7 @@ jobs:
   integration-minimal:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Integration Minimal
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: baseline-determinism
 
@@ -746,7 +746,7 @@ jobs:
   # Integration smoke lane for high-risk paths (PR only)
   integration-smoke:
     name: Integration Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: baseline-determinism
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request')
@@ -824,7 +824,7 @@ jobs:
   test-pollution-randomized:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Randomized Order Pollution Guard
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: test-fast
     strategy:
@@ -906,7 +906,7 @@ jobs:
   golden-paths:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Golden Path Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: version-check
 
@@ -955,7 +955,7 @@ jobs:
   aragora-debate-tests:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Standalone Debate Package
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test-fast
 
@@ -1136,7 +1136,7 @@ jobs:
   # Summary job: merge coverage from shards and enforce gates
   test-summary:
     name: Test Summary
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test]
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always())
@@ -1340,7 +1340,7 @@ jobs:
   smoke:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: CLI Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: baseline-determinism
 
@@ -1433,7 +1433,7 @@ jobs:
 
   nightly-slow:
     name: Nightly Slow Tier
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: baseline-determinism
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -1492,7 +1492,7 @@ jobs:
   frontend:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Frontend E2E Tests
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -1575,7 +1575,7 @@ jobs:
   # Lightweight frontend type checking (PR-only, path-filtered)
   frontend-typecheck:
     name: Frontend TypeScript Type Check
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request')
 
@@ -1638,7 +1638,7 @@ jobs:
   security:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Security Scan
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -1693,7 +1693,7 @@ jobs:
   typecheck:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Type Check
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -1747,7 +1747,7 @@ jobs:
   migration-test:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Database Migrations
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     services:
@@ -1849,7 +1849,7 @@ jobs:
 
   nightly-optional:
     name: Optional Deps (Full)
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: baseline-determinism
     # Run on schedule, push to main, or workflow_dispatch
@@ -1944,7 +1944,7 @@ jobs:
   quality-gates:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Quality Gates
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test-fast, test-summary, epistemic-settlement-gate, v1-scope-lock-gate]
 
@@ -1994,7 +1994,7 @@ jobs:
 
   test-analytics:
     name: Test Analytics
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test-fast]
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always() && github.event_name == 'pull_request')

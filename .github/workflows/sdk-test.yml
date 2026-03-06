@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     name: SDK Change Detection
     outputs:
@@ -74,7 +74,7 @@ jobs:
   python-sdk:
     needs: changes
     if: needs.changes.outputs.run_python == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: Python SDK Tests
 
@@ -138,7 +138,7 @@ jobs:
   typescript-sdk-run:
     needs: changes
     if: needs.changes.outputs.run_typescript == 'true'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: TypeScript SDK Build
 
@@ -200,7 +200,7 @@ jobs:
   sdk-integration:
     needs: changes
     if: needs.changes.outputs.run_python == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: SDK Integration Tests
 
@@ -259,7 +259,7 @@ jobs:
     name: TypeScript SDK Type Check
     needs: [changes, typescript-sdk-run]
     if: always()
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Evaluate TypeScript SDK result

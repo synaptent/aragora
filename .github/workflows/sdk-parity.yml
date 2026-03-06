@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
       relevant: ${{ steps.filter.outputs.relevant }}
@@ -72,7 +72,7 @@ jobs:
   sdk-parity-run:
     needs: changes
     if: needs.changes.outputs.relevant == 'true'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 12
 
     steps:
@@ -193,7 +193,7 @@ jobs:
   sdk-parity:
     needs: [changes, sdk-parity-run]
     if: always()
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Evaluate sdk-parity result

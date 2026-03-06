@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
       should_review: ${{ steps.filter.outputs.code }}
@@ -69,7 +69,7 @@ jobs:
   review:
     needs: changes
     if: needs.changes.outputs.should_review == 'true' && !github.event.pull_request.draft
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
@@ -245,7 +245,7 @@ jobs:
   aragora-review:
     if: always()
     needs: [changes, review]
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Gate result

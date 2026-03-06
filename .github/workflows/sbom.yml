@@ -16,7 +16,7 @@ permissions:
 jobs:
   generate-python-sbom:
     name: Generate Python SBOM
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -83,7 +83,7 @@ jobs:
 
   generate-node-sbom:
     name: Generate Node.js SBOM
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     strategy:
@@ -153,7 +153,7 @@ jobs:
 
   generate-container-sbom:
     name: Generate Container SBOM
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     if: github.event_name == 'release'
 
@@ -217,7 +217,7 @@ jobs:
 
   vulnerability-scan:
     name: SBOM Vulnerability Scan
-    runs-on: aragora
+    runs-on: ubuntu-latest
     needs: [generate-python-sbom, generate-node-sbom]
     timeout-minutes: 15
 

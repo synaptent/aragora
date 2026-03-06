@@ -13,7 +13,7 @@ concurrency:
 jobs:
   live-debate:
     name: Live Debate E2E
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.repository == 'an0mium/aragora'
 
@@ -83,7 +83,7 @@ jobs:
 
   pypi-check:
     name: PyPI Build Verification
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:

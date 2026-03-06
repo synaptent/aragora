@@ -16,7 +16,7 @@ concurrency:
 jobs:
   scope:
     name: OpenAPI Scope
-    runs-on: aragora
+    runs-on: ubuntu-latest
     outputs:
       run_openapi: ${{ steps.filter.outputs.run_openapi }}
 
@@ -81,7 +81,7 @@ jobs:
 
   generate-run:
     name: OpenAPI Generate & Validate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: scope
     if: needs.scope.outputs.run_openapi == 'true'
@@ -477,7 +477,7 @@ jobs:
 
   sync:
     name: Sync Spec (main only)
-    runs-on: aragora
+    runs-on: ubuntu-latest
     needs: generate-run
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -578,7 +578,7 @@ jobs:
     name: Generate & Validate
     needs: [scope, generate-run]
     if: always()
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Evaluate OpenAPI result

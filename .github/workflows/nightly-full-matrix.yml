@@ -16,7 +16,7 @@ permissions:
 jobs:
   pre-release-gates:
     name: Pre-release Gates
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -74,7 +74,7 @@ jobs:
 
   regression-matrix:
     name: Regression Matrix (${{ matrix.shard.name }})
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -143,7 +143,7 @@ jobs:
 
   frontend-build:
     name: Frontend Build
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
@@ -193,7 +193,7 @@ jobs:
 
   summary:
     name: Nightly Matrix Summary
-    runs-on: aragora
+    runs-on: ubuntu-latest
     needs: [pre-release-gates, regression-matrix, frontend-build]
     if: always()
 

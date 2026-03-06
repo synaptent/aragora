@@ -27,7 +27,7 @@ jobs:
   benchmark:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Performance Benchmarks
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -118,7 +118,7 @@ jobs:
     # REQUIRED STATUS CHECK: This job must pass on all PRs.
     # Validates that fast-first routing reduces critique latency by >=25%.
     name: Orchestration Speed Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
 
@@ -168,7 +168,7 @@ jobs:
     # REQUIRED STATUS CHECK: This job must pass on all PRs.
     # Fails if any benchmark regresses by >20% vs main branch.
     name: Performance Regression Check
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request')
 
@@ -284,7 +284,7 @@ jobs:
 
   latency-tests:
     name: Latency Distribution
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
 
@@ -345,7 +345,7 @@ jobs:
 
   baseline-comparison:
     name: Baseline Comparison
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
 

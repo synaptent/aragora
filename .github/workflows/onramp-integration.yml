@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 jobs:
   time-to-first-debate:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +44,7 @@ jobs:
           ARAGORA_OFFLINE: "1"
 
   playground-build:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
           npx next build --webpack
 
   sdk-parity:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4

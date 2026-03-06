@@ -33,7 +33,7 @@ jobs:
   regression-gate:
     if: github.event_name == 'merge_group' || github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Regression Gate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
