@@ -114,6 +114,54 @@ async def generate_pipeline_receipt(
     return receipt
 
 
+def update_receipt_with_execution(
+    receipt_envelope: "ReceiptEnvelope",
+    plan_outcome: dict[str, Any],
+    action_bundle: dict[str, Any] | None = None,
+) -> "ReceiptEnvelope":
+    """Append execution metadata to a receipt envelope and re-hash.
+
+    After harness execution completes, this function enriches the receipt
+    with execution results and the ComputerUseActionBundle, then recomputes
+    the artifact hash to maintain integrity.
+
+    Args:
+        receipt_envelope: The existing ReceiptEnvelope to update.
+        plan_outcome: Execution outcome dict (status, tests_passed, etc.).
+        action_bundle: Optional ComputerUseActionBundle.to_dict() data.
+
+    Returns:
+        The mutated ReceiptEnvelope (same object, updated in place).
+    """
+    # Update verdict based on execution outcome
+    status = str(plan_outcome.get("status", "unknown")).strip()
+    if status in {"succeeded", "completed", "success"}:
+        receipt_envelope.verdict = "pass"
+    elif status == "failed":
+        receipt_envelope.verdict = "fail"
+    # else: preserve existing verdict
+
+    # Store execution details in extras
+    receipt_envelope.extras["execution_outcome"] = {
+        "status": status,
+        "tests_passed": plan_outcome.get("tests_passed", 0),
+        "tests_failed": plan_outcome.get("tests_failed", 0),
+        "files_changed": plan_outcome.get("files_changed", 0),
+        "duration_s": plan_outcome.get("duration_s", 0.0),
+    }
+
+    if action_bundle:
+        receipt_envelope.extras["action_bundle"] = action_bundle
+
+    # Re-hash for integrity
+    content_str = (
+        f"{receipt_envelope.receipt_id}:{receipt_envelope.verdict}:{receipt_envelope.extras}"
+    )
+    receipt_envelope.artifact_hash = hashlib.sha256(content_str.encode()).hexdigest()
+
+    return receipt_envelope
+
+
 def generate_receipt_envelope(
     receipt: dict[str, Any],
     *,

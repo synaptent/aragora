@@ -586,6 +586,63 @@ class OutcomeFeedbackRecord:
         )
 
 
+@dataclass
+class ComputerUseActionBundle:
+    """Stable handoff artifact for a single computer-use (harness) action.
+
+    Captures the inputs, outputs, and metadata of a harness execution so
+    downstream stages (receipt generation, outcome feedback, audit) have a
+    normalized view of what happened regardless of which harness was used.
+    """
+
+    harness_name: str  # "claude-code", "codex"
+    action_type: str  # "implementation", "analysis", "review"
+    input_prompt: str
+    output_files: list[str] = field(default_factory=list)
+    execution_time_seconds: float = 0.0
+    exit_code: int = 0
+    stdout_summary: str = ""  # Truncated to 2000 chars
+    policy_violations: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ComputerUseActionBundle":
+        return cls(
+            harness_name=str(data.get("harness_name", "")),
+            action_type=str(data.get("action_type", "")),
+            input_prompt=str(data.get("input_prompt", "")),
+            output_files=list(data.get("output_files", [])),
+            execution_time_seconds=float(data.get("execution_time_seconds", 0.0)),
+            exit_code=int(data.get("exit_code", 0)),
+            stdout_summary=str(data.get("stdout_summary", ""))[:2000],
+            policy_violations=list(data.get("policy_violations", [])),
+        )
+
+    @classmethod
+    def from_execution_result(
+        cls,
+        result: dict[str, Any],
+        *,
+        harness_name: str = "claude-code",
+        action_type: str = "implementation",
+        input_prompt: str = "",
+    ) -> "ComputerUseActionBundle":
+        """Create from a CodeImplementationTask execution result dict."""
+        stdout = str(result.get("stdout", ""))
+        return cls(
+            harness_name=harness_name,
+            action_type=action_type,
+            input_prompt=input_prompt,
+            output_files=[],  # Caller may enrich from git diff
+            execution_time_seconds=float(result.get("duration_seconds", 0.0)),
+            exit_code=int(result.get("exit_code", 0)),
+            stdout_summary=stdout[:2000],
+            policy_violations=[],
+        )
+
+
 class TaintChecker:
     """Utility for inspecting taint across backbone bundles.
 
