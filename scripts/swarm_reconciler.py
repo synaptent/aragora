@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""Swarm Reconciler Daemon — periodically dispatches and collects swarm workers.
+"""Swarm reconciler daemon.
 
-Polls active supervisor runs, dispatches queued work orders that have leases,
-and collects results from completed workers. Follows the PR Watch Daemon pattern.
-
-Usage::
-
-    python scripts/swarm_reconciler.py --repo-root . --poll-interval 30
-    python scripts/swarm_reconciler.py --once  # single pass, then exit
+Thin daemon wrapper around the canonical swarm reconciler so CLI, API, and
+background watch mode all use the same supervisor-run advancement logic.
 """
 
 from __future__ import annotations
@@ -20,6 +15,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from aragora.swarm import SwarmReconciler as CoreSwarmReconciler
+
 logger = logging.getLogger("aragora.swarm.reconciler")
 
 
@@ -31,10 +28,11 @@ class ReconcilerConfig:
     poll_interval_seconds: int = 30
     collect_timeout_seconds: float = 5.0
     once: bool = False
+    limit: int = 20
 
 
 class SwarmReconciler:
-    """Periodically reconcile active supervisor runs."""
+    """Periodically reconcile open supervisor runs."""
 
     def __init__(self, config: ReconcilerConfig) -> None:
         self._config = config
@@ -42,10 +40,8 @@ class SwarmReconciler:
 
     async def run(self) -> None:
         """Main daemon loop."""
-        from aragora.swarm.supervisor import SwarmSupervisor
-
         repo_root = Path(self._config.repo_root).resolve()
-        supervisor = SwarmSupervisor(repo_root=repo_root)
+        reconciler = CoreSwarmReconciler(repo_root=repo_root)
 
         logger.info(
             "Swarm reconciler started (repo=%s, poll=%ds)",
@@ -55,7 +51,7 @@ class SwarmReconciler:
 
         while not self._stop.is_set():
             try:
-                await self._reconcile_once(supervisor)
+                await self._reconcile_once(reconciler)
             except Exception:
                 logger.exception("Reconcile cycle failed")
 
@@ -68,53 +64,17 @@ class SwarmReconciler:
                     timeout=self._config.poll_interval_seconds,
                 )
             except asyncio.TimeoutError:
-                pass  # normal — poll interval elapsed
+                pass
 
         logger.info("Swarm reconciler stopped")
 
-    async def _reconcile_once(self, supervisor: object) -> None:
+    async def _reconcile_once(self, reconciler: CoreSwarmReconciler) -> None:
         """Single reconciliation pass."""
-        summary = supervisor.status_summary(refresh_scaling=True)
-        runs = summary.get("runs", [])
-        counts = summary.get("counts", {})
-
-        active_runs = [r for r in runs if r.get("status") == "active"]
-        if not active_runs:
-            logger.debug(
-                "No active runs (total=%d, queued=%d, completed=%d)",
-                counts.get("runs", 0),
-                counts.get("queued_work_orders", 0),
-                counts.get("completed_work_orders", 0),
-            )
-            return
-
-        for run_data in active_runs:
-            run_id = run_data.get("run_id", "")
-            work_orders = run_data.get("work_orders", [])
-
-            # Count by status
-            leased = sum(1 for w in work_orders if w.get("status") == "leased")
-            dispatched = sum(1 for w in work_orders if w.get("status") == "dispatched")
-
-            # Dispatch any leased-but-not-yet-launched orders
-            if leased > 0:
-                try:
-                    launched = await supervisor.dispatch_workers(run_id)
-                    if launched:
-                        logger.info("Run %s: dispatched %d workers", run_id[:8], len(launched))
-                except Exception:
-                    logger.exception("Failed to dispatch workers for %s", run_id[:8])
-
-            # Collect results from dispatched workers (non-blocking timeout)
-            if dispatched > 0:
-                try:
-                    completed = await supervisor.collect_results(
-                        run_id, timeout=self._config.collect_timeout_seconds
-                    )
-                    if completed:
-                        logger.info("Run %s: collected %d results", run_id[:8], len(completed))
-                except Exception:
-                    logger.exception("Failed to collect results for %s", run_id[:8])
+        runs = await reconciler.tick_open_runs(limit=self._config.limit)
+        if runs:
+            logger.info("Reconciled %d open runs", len(runs))
+        else:
+            logger.debug("No open runs to reconcile")
 
     def stop(self) -> None:
         self._stop.set()
@@ -140,7 +100,13 @@ def main() -> None:
         "--collect-timeout",
         type=float,
         default=5.0,
-        help="Timeout for collecting worker results per run (default: 5.0)",
+        help="Reserved for compatibility; reconciliation now uses the canonical engine",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum open runs to reconcile per pass (default: 20)",
     )
     parser.add_argument(
         "--once",
@@ -160,8 +126,8 @@ def main() -> None:
         poll_interval_seconds=args.poll_interval,
         collect_timeout_seconds=args.collect_timeout,
         once=args.once,
+        limit=max(1, args.limit),
     )
-
     reconciler = SwarmReconciler(config)
 
     async def _run() -> None:

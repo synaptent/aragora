@@ -561,7 +561,10 @@ class CoordinationHandlerMixin:
     @require_permission("coordination:workspaces.write")
     def _handle_swarm_run(self, body: dict[str, Any]) -> HandlerResult:
         """Create a supervisor-backed swarm run from a goal or spec."""
-        from aragora.swarm import SwarmApprovalPolicy, SwarmSpec, SwarmSupervisor
+        import asyncio
+        import inspect
+
+        from aragora.swarm import SwarmApprovalPolicy, SwarmReconciler, SwarmSpec, SwarmSupervisor
 
         goal = str(body.get("goal", "")).strip()
         spec_body = body.get("spec")
@@ -602,7 +605,64 @@ class CoordinationHandlerMixin:
             approval_policy=policy,
             refresh_scaling=True,
         )
+        if bool(body.get("dispatch_workers", True)):
+            dispatch_result = supervisor.dispatch_workers(run.run_id)
+            if inspect.isawaitable(dispatch_result):
+                asyncio.run(dispatch_result)
+            if bool(body.get("watch", False)):
+                run = asyncio.run(
+                    SwarmReconciler(supervisor=supervisor).watch_run(
+                        run.run_id,
+                        interval_seconds=float(body.get("interval_seconds", 5.0) or 5.0),
+                        max_ticks=body.get("max_ticks"),
+                    )
+                )
+            else:
+                store = getattr(supervisor, "store", None)
+                getter = getattr(store, "get_supervisor_run", None)
+                record = getter(run.run_id) if callable(getter) else None
+                if isinstance(record, dict):
+                    run = type(run).from_record(record)
         return json_response(run.to_dict(), status=201)
+
+    @api_endpoint(
+        method="POST",
+        path="/api/v1/coordination/swarm/reconcile",
+        summary="Advance one or more supervisor-backed swarm runs",
+        tags=["Coordination"],
+    )
+    @handle_errors("coordination swarm reconcile")
+    @require_permission("coordination:workspaces.write")
+    def _handle_swarm_reconcile(self, body: dict[str, Any]) -> HandlerResult:
+        """Reconcile supervisor runs by dispatching/collecting/top-up work."""
+        import asyncio
+
+        from aragora.swarm import SwarmReconciler
+
+        repo_root = self._fleet_repo_root()
+        reconciler = SwarmReconciler(repo_root=repo_root)
+        run_id = str(body.get("run_id", "")).strip()
+        if bool(body.get("all_runs", False)):
+            runs = asyncio.run(
+                reconciler.tick_open_runs(limit=max(1, min(int(body.get("limit", 20) or 20), 100)))
+            )
+            return json_response({"runs": [run.to_dict() for run in runs], "count": len(runs)})
+        if not run_id:
+            return error_response("run_id or all_runs is required", 400)
+
+        watch = bool(body.get("watch", False))
+        interval_seconds = float(body.get("interval_seconds", 5.0) or 5.0)
+        max_ticks = body.get("max_ticks")
+        run = asyncio.run(
+            reconciler.watch_run(
+                run_id,
+                interval_seconds=interval_seconds,
+                max_ticks=max_ticks,
+            )
+            if watch
+            else reconciler.tick_run(run_id)
+        )
+        return json_response(run.to_dict())
 
     @api_endpoint(
         method="GET",

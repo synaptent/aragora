@@ -13,6 +13,7 @@ from typing import Any
 
 from aragora.swarm.config import SwarmCommanderConfig
 from aragora.swarm.interrogator import SwarmInterrogator
+from aragora.swarm.reconciler import SwarmReconciler
 from aragora.swarm.reporter import SwarmReport, SwarmReporter
 from aragora.swarm.spec import SwarmSpec
 from aragora.swarm.supervisor import SupervisorRun, SwarmApprovalPolicy, SwarmSupervisor
@@ -186,6 +187,8 @@ class SwarmCommander:
         approval_policy: SwarmApprovalPolicy | None = None,
         dispatch: bool = True,
         wait: bool = True,
+        interval_seconds: float = 5.0,
+        max_ticks: int | None = None,
         input_fn: Any | None = None,
         print_fn: Any | None = None,
     ) -> SupervisorRun:
@@ -204,6 +207,8 @@ class SwarmCommander:
             approval_policy=approval_policy,
             dispatch=dispatch,
             wait=wait,
+            interval_seconds=interval_seconds,
+            max_ticks=max_ticks,
         )
 
     async def run_supervised_from_spec(
@@ -217,12 +222,14 @@ class SwarmCommander:
         approval_policy: SwarmApprovalPolicy | None = None,
         dispatch: bool = True,
         wait: bool = True,
+        interval_seconds: float = 5.0,
+        max_ticks: int | None = None,
     ) -> SupervisorRun:
         """Dispatch a spec through the supervisor-backed Codex/Claude worker pool.
 
         Args:
             dispatch: If True, spawn CLI worker processes after provisioning.
-            wait: If True, wait for all workers to complete before returning.
+            wait: If True, reconcile until the run reaches a stable stop condition.
         """
         self._spec = spec
         supervisor = SwarmSupervisor(repo_root=repo_path or Path.cwd())
@@ -233,14 +240,16 @@ class SwarmCommander:
             managed_dir_pattern=managed_dir_pattern,
             approval_policy=approval_policy,
         )
-
         if dispatch:
             launched = await supervisor.dispatch_workers(run.run_id)
-            logger.info("Dispatched %d workers for run %s", len(launched), run.run_id)
-
             if wait and launched:
-                completed = await supervisor.collect_results(run.run_id)
-                logger.info("Collected %d results for run %s", len(completed), run.run_id)
+                reconciler = SwarmReconciler(supervisor=supervisor)
+                return await reconciler.watch_run(
+                    run.run_id,
+                    interval_seconds=interval_seconds,
+                    max_ticks=max_ticks,
+                )
+            return supervisor.refresh_run(run.run_id)
 
         return supervisor.refresh_run(run.run_id)
 

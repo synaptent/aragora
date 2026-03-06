@@ -84,7 +84,6 @@ class TestSwarmCommanderRunFromSpec:
             mock_sup = mock_supervisor_cls.return_value
             mock_sup.start_run.return_value = fake_run
             mock_sup.dispatch_workers = AsyncMock(return_value=[])
-            mock_sup.collect_results = AsyncMock(return_value=[])
             mock_sup.refresh_run.return_value = fake_run
             result = await commander.run_supervised_from_spec(spec)
 

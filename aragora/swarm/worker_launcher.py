@@ -1,16 +1,17 @@
 """Worker launcher for supervised swarm runs.
 
 Spawns Claude Code or Codex CLI processes in provisioned worktrees,
-monitors their lifecycle, and collects completion receipts.
+reusing the managed-session wrapper so worktree locks/logs stay coherent.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
+import shutil
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -27,12 +28,20 @@ class WorkerProcess:
     worktree_path: str
     branch: str
     pid: int | None = None
+    session_id: str = ""
+    lease_id: str = ""
     started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     completed_at: str | None = None
     exit_code: int | None = None
     stdout: str = ""
     stderr: str = ""
     diff: str = ""
+    initial_head: str = ""
+    head_sha: str = ""
+    commit_shas: list[str] = field(default_factory=list)
+    changed_paths: list[str] = field(default_factory=list)
+    tests_run: list[str] = field(default_factory=list)
+    command: list[str] = field(default_factory=list)
 
     @property
     def is_running(self) -> bool:
@@ -45,9 +54,14 @@ class WorkerProcess:
             "worktree_path": self.worktree_path,
             "branch": self.branch,
             "pid": self.pid,
+            "session_id": self.session_id,
+            "lease_id": self.lease_id,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "exit_code": self.exit_code,
+            "head_sha": self.head_sha,
+            "commit_shas": list(self.commit_shas),
+            "changed_paths": list(self.changed_paths),
         }
 
 
@@ -61,18 +75,12 @@ class LaunchConfig:
     claude_model: str | None = None
     codex_model: str | None = None
     auto_commit: bool = True
+    use_managed_session_script: bool = True
+    base_branch: str = "main"
 
 
 class WorkerLauncher:
-    """Launch and monitor Claude Code / Codex worker processes.
-
-    Usage::
-
-        launcher = WorkerLauncher()
-        proc = await launcher.launch(work_order, worktree_path="/path/to/wt")
-        # ... later ...
-        result = await launcher.wait(proc.work_order_id)
-    """
+    """Launch and monitor Claude Code / Codex worker processes."""
 
     def __init__(self, config: LaunchConfig | None = None) -> None:
         self.config = config or LaunchConfig()
@@ -86,28 +94,24 @@ class WorkerLauncher:
         worktree_path: str,
         branch: str = "main",
     ) -> WorkerProcess:
-        """Launch a worker process for a work order.
-
-        Args:
-            work_order: Dict with work_order_id, title, description, target_agent,
-                        file_scope, expected_tests, etc.
-            worktree_path: Absolute path to the provisioned worktree.
-            branch: Git branch the worktree is on.
-
-        Returns:
-            WorkerProcess tracking the launched subprocess.
-        """
+        """Launch a worker process for a work order."""
         work_order_id = str(work_order.get("work_order_id", "unknown"))
         agent = str(work_order.get("target_agent", "claude")).strip() or "claude"
         prompt = self._build_prompt(work_order)
+        session_id = str(work_order.get("owner_session_id", "")).strip()
+        lease_id = str(work_order.get("lease_id", "")).strip()
 
-        cmd = self._build_command(agent, prompt, worktree_path)
+        cmd = self._build_command(
+            agent,
+            prompt,
+            worktree_path,
+            session_id=session_id,
+        )
         if not cmd:
             raise RuntimeError(f"Cannot build launch command for agent={agent}")
 
-        cli_path = cmd[0]
-        if not shutil.which(cli_path):
-            raise FileNotFoundError(f"{cli_path} CLI not found on PATH")
+        self._validate_launch_command(cmd, agent)
+        initial_head = await self._git_output(worktree_path, "rev-parse", "HEAD")
 
         logger.info(
             "Launching %s worker for %s in %s",
@@ -129,6 +133,13 @@ class WorkerLauncher:
             worktree_path=worktree_path,
             branch=branch,
             pid=proc.pid,
+            session_id=session_id,
+            lease_id=lease_id,
+            initial_head=initial_head,
+            tests_run=[
+                str(item) for item in work_order.get("expected_tests", []) if str(item).strip()
+            ],
+            command=list(cmd),
         )
         self._workers[work_order_id] = worker
         self._processes[work_order_id] = proc
@@ -140,15 +151,7 @@ class WorkerLauncher:
         *,
         timeout: float | None = None,
     ) -> WorkerProcess:
-        """Wait for a worker to complete and collect results.
-
-        Args:
-            work_order_id: The work order to wait for.
-            timeout: Override timeout (defaults to config.timeout_seconds).
-
-        Returns:
-            Completed WorkerProcess with exit_code, stdout, stderr, diff.
-        """
+        """Wait for a worker to complete and collect results."""
         worker = self._workers.get(work_order_id)
         proc = self._processes.get(work_order_id)
         if worker is None or proc is None:
@@ -172,24 +175,57 @@ class WorkerLauncher:
             logger.warning("Worker %s timed out", work_order_id)
 
         worker.completed_at = datetime.now(UTC).isoformat()
-
-        # Collect git diff from worktree
         worker.diff = await self._collect_diff(worker.worktree_path)
 
-        # Auto-commit if configured and there are changes
         if self.config.auto_commit and worker.diff and worker.exit_code == 0:
             await self._auto_commit(worker)
 
-        logger.info(
-            "Worker %s completed: exit=%s diff_lines=%d",
-            work_order_id,
-            worker.exit_code,
-            worker.diff.count("\n"),
+        worker.head_sha = await self._git_output(worker.worktree_path, "rev-parse", "HEAD")
+        worker.commit_shas = await self._collect_commit_shas(
+            worker.worktree_path,
+            initial_head=worker.initial_head,
+            head_sha=worker.head_sha,
+        )
+        worker.changed_paths = await self._collect_changed_paths(
+            worker.worktree_path,
+            initial_head=worker.initial_head,
+            head_sha=worker.head_sha,
         )
 
-        # Clean up process references
+        logger.info(
+            "Worker %s completed: exit=%s commits=%d changed_paths=%d",
+            work_order_id,
+            worker.exit_code,
+            len(worker.commit_shas),
+            len(worker.changed_paths),
+        )
+
         self._processes.pop(work_order_id, None)
         return worker
+
+    async def collect_finished(
+        self,
+        *,
+        work_order_ids: list[str] | None = None,
+        poll_timeout: float = 0.01,
+    ) -> list[WorkerProcess]:
+        """Collect only workers that have already finished."""
+        completed: list[WorkerProcess] = []
+        ids = work_order_ids or list(self._processes.keys())
+        for work_order_id in ids:
+            proc = self._processes.get(work_order_id)
+            if proc is None:
+                continue
+            finished = proc.returncode is not None
+            if not finished:
+                try:
+                    await asyncio.wait_for(asyncio.shield(proc.wait()), timeout=poll_timeout)
+                    finished = True
+                except asyncio.TimeoutError:
+                    finished = False
+            if finished:
+                completed.append(await self.wait(work_order_id, timeout=max(poll_timeout, 0.1)))
+        return completed
 
     async def launch_and_wait(
         self,
@@ -217,41 +253,67 @@ class WorkerLauncher:
         agent: str,
         prompt: str,
         worktree_path: str,
+        *,
+        session_id: str = "",
     ) -> list[str]:
-        """Build the CLI command for the given agent type.
+        """Build the launch command for the given agent type."""
+        inner = self._build_agent_command(agent, prompt)
+        if not self.config.use_managed_session_script:
+            return inner
 
-        All commands use create_subprocess_exec (no shell) for safety.
-        """
+        session_script = Path(worktree_path).resolve() / "scripts" / "codex_session.sh"
+        managed_dir = str(Path(worktree_path).resolve().parent)
+        cmd = [
+            "bash",
+            str(session_script),
+            "--agent",
+            agent,
+            "--base",
+            self.config.base_branch,
+            "--managed-dir",
+            managed_dir,
+            "--no-maintain",
+            "--no-reconcile",
+        ]
+        if session_id:
+            cmd.extend(["--session-id", session_id])
+        cmd.append("--")
+        cmd.extend(inner)
+        return cmd
+
+    def _build_agent_command(self, agent: str, prompt: str) -> list[str]:
         if agent == "claude":
-            cmd = [
-                self.config.claude_path,
-                "-p",  # non-interactive
-                prompt,
-                "--yes",  # auto-approve edits
-            ]
+            cmd = [self.config.claude_path, "-p", prompt, "--yes"]
             if self.config.claude_model:
                 cmd.extend(["--model", self.config.claude_model])
             return cmd
 
         if agent == "codex":
-            cmd = [
-                self.config.codex_path,
-                "exec",
-                prompt,
-                "--full-auto",
-            ]
+            cmd = [self.config.codex_path, "exec", prompt, "--full-auto"]
             if self.config.codex_model:
                 cmd.extend(["--model", self.config.codex_model])
             return cmd
 
-        # Unknown agent — try as claude with warning
         logger.warning("Unknown agent %r, falling back to claude", agent)
-        return [
-            self.config.claude_path,
-            "-p",
-            prompt,
-            "--yes",
-        ]
+        return [self.config.claude_path, "-p", prompt, "--yes"]
+
+    def _validate_launch_command(self, cmd: list[str], agent: str) -> None:
+        if not cmd:
+            raise RuntimeError("Empty launch command")
+        if self.config.use_managed_session_script:
+            inner_cli = self.config.claude_path if agent == "claude" else self.config.codex_path
+            if agent not in {"claude", "codex"}:
+                inner_cli = self.config.claude_path
+            if not shutil.which(inner_cli):
+                raise FileNotFoundError(f"{inner_cli} CLI not found on PATH")
+            session_script = Path(cmd[1]) if len(cmd) > 1 else None
+            if session_script is None or not session_script.exists():
+                raise FileNotFoundError(f"session script not found: {session_script}")
+            return
+
+        cli_path = cmd[0]
+        if not shutil.which(cli_path):
+            raise FileNotFoundError(f"{cli_path} CLI not found on PATH")
 
     @staticmethod
     def _build_prompt(work_order: dict[str, Any]) -> str:
@@ -295,27 +357,74 @@ class WorkerLauncher:
         return "\n\n".join(parts)
 
     @staticmethod
-    async def _collect_diff(worktree_path: str) -> str:
-        """Collect git diff (staged + unstaged) from the worktree."""
+    async def _git_output(worktree_path: str, *args: str) -> str:
         try:
             proc = await asyncio.create_subprocess_exec(
                 "git",
-                "diff",
-                "HEAD",
+                *args,
                 cwd=worktree_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-            return stdout.decode(errors="replace")
+            if proc.returncode != 0:
+                return ""
+            return stdout.decode(errors="replace").strip()
         except (asyncio.TimeoutError, FileNotFoundError, OSError):
             return ""
+
+    @classmethod
+    async def _collect_diff(cls, worktree_path: str) -> str:
+        return await cls._git_output(worktree_path, "diff", "HEAD")
+
+    @classmethod
+    async def _collect_commit_shas(
+        cls,
+        worktree_path: str,
+        *,
+        initial_head: str,
+        head_sha: str,
+    ) -> list[str]:
+        if not initial_head or not head_sha or initial_head == head_sha:
+            return []
+        output = await cls._git_output(
+            worktree_path, "rev-list", "--reverse", f"{initial_head}..{head_sha}"
+        )
+        return [line.strip() for line in output.splitlines() if line.strip()]
+
+    @classmethod
+    async def _collect_changed_paths(
+        cls,
+        worktree_path: str,
+        *,
+        initial_head: str,
+        head_sha: str,
+    ) -> list[str]:
+        changed: set[str] = set()
+        if initial_head and head_sha and initial_head != head_sha:
+            diff_names = await cls._git_output(
+                worktree_path,
+                "diff",
+                "--name-only",
+                f"{initial_head}..{head_sha}",
+            )
+            changed.update(line.strip() for line in diff_names.splitlines() if line.strip())
+
+        status_output = await cls._git_output(worktree_path, "status", "--porcelain")
+        for line in status_output.splitlines():
+            if len(line) < 4:
+                continue
+            path = line[3:].strip()
+            if " -> " in path:
+                path = path.split(" -> ")[-1].strip()
+            if path:
+                changed.add(path)
+        return sorted(changed)
 
     @staticmethod
     async def _auto_commit(worker: WorkerProcess) -> None:
         """Auto-commit changes in the worktree if any."""
         try:
-            # Stage all changes
             add_proc = await asyncio.create_subprocess_exec(
                 "git",
                 "add",
@@ -326,7 +435,6 @@ class WorkerLauncher:
             )
             await asyncio.wait_for(add_proc.communicate(), timeout=10)
 
-            # Commit
             msg = f"feat(swarm): {worker.agent} completed {worker.work_order_id}"
             commit_proc = await asyncio.create_subprocess_exec(
                 "git",
