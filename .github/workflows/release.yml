@@ -164,7 +164,7 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-python-safe
         with:
-          python-version: "${{"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -712,7 +712,7 @@ jobs:
           path: dist/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.validate.outputs.version }}
           name: Release v${{ needs.validate.outputs.version }}
