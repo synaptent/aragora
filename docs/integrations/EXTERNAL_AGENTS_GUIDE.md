@@ -375,7 +375,7 @@ Aragora verification provides:
 | **Multi-agent adversarial testing** | 43 agent types probe for weaknesses |
 | **Cryptographic receipts** | SHA-256 signed, tamper-proof audit trail |
 | **Formal verification** | Z3/Lean mathematical proofs of decision properties |
-| **RBAC governance** | 50+ permissions, role hierarchy, tenant isolation |
+| **RBAC governance** | 360+ permissions, role hierarchy, tenant isolation |
 | **Approval workflows** | Human-in-the-loop for high-risk decisions |
 | **Sandbox isolation** | Docker/subprocess isolation for code execution |
 | **Audit logging** | Immutable hash-chain audit trail with compliance export |

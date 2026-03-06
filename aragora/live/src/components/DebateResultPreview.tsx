@@ -206,36 +206,43 @@ export function DebateResultPreview({ result }: DebateResultPreviewProps) {
         </div>
       )}
 
-      {/* Summary bar */}
+      {/* Summary bar — verdict first, then metadata */}
       <div className="border border-[var(--border)] p-4 space-y-3">
-        <div className="flex flex-wrap gap-4 items-center text-sm font-mono">
+        {/* Verdict status + confidence side by side */}
+        <div className="flex items-center justify-between gap-4">
           <span
-            className={
+            className={`text-base font-bold font-mono ${
               result.consensus_reached
                 ? 'text-[var(--acid-green)]'
                 : 'text-[var(--warning)]'
-            }
+            }`}
           >
             {result.consensus_reached ? 'Consensus Reached' : 'No Consensus'}
           </span>
-          <span className="text-[var(--text-muted)]">|</span>
-          <span className="text-[var(--text-muted)]">
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs font-mono text-[var(--text-muted)]">Confidence</span>
+            <ConfidenceGauge value={result.confidence} />
+          </div>
+        </div>
+        {/* Metadata row */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 items-center text-xs font-mono text-[var(--text-muted)]">
+          <span>
             {result.rounds_used} round{result.rounds_used !== 1 ? 's' : ''}
           </span>
-          <span className="text-[var(--text-muted)]">|</span>
-          <span className="text-[var(--text-muted)]">
+          <span>|</span>
+          <span>
             {result.duration_seconds}s
           </span>
-        </div>
-        {/* Confidence gauge */}
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-[var(--text-muted)] shrink-0">Confidence</span>
-          <ConfidenceGauge value={result.confidence} />
+          {result.participants.length > 0 && (
+            <>
+              <span>|</span>
+              <span>{result.participants.length} agents</span>
+            </>
+          )}
         </div>
         {/* Participating agents */}
         {result.participants.length > 0 && (
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs font-mono text-[var(--text-muted)]">Agents:</span>
             {result.participants.map((name) => (
               <span key={name} className="flex items-center gap-1 text-xs font-mono">
                 <span

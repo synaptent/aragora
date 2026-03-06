@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     name: SDK Change Detection
     outputs:
@@ -74,7 +74,7 @@ jobs:
   python-sdk:
     needs: changes
     if: needs.changes.outputs.run_python == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: Python SDK Tests
 
@@ -117,15 +117,15 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          cd sdk/python && pip install -e ".[dev]"
+          cd sdk/python && python -m pip install -e ".[dev]"
 
       - name: Run SDK tests
         run: |
@@ -138,7 +138,7 @@ jobs:
   typescript-sdk-run:
     needs: changes
     if: needs.changes.outputs.run_typescript == 'true'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: TypeScript SDK Build
 
@@ -200,7 +200,7 @@ jobs:
   sdk-integration:
     needs: changes
     if: needs.changes.outputs.run_python == 'true' || github.event_name == 'workflow_dispatch'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: SDK Integration Tests
 
@@ -240,16 +240,16 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install -e sdk/python/
-          pip install pytest pytest-timeout pytest-rerunfailures pytest-asyncio
+          python -m pip install -e .
+          python -m pip install -e sdk/python/
+          python -m pip install pytest pytest-timeout pytest-rerunfailures pytest-asyncio
 
       - name: Run SDK integration tests
         run: |
@@ -259,7 +259,7 @@ jobs:
     name: TypeScript SDK Type Check
     needs: [changes, typescript-sdk-run]
     if: always()
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Evaluate TypeScript SDK result

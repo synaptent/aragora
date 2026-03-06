@@ -22,6 +22,7 @@ import base64
 import logging
 from typing import Any, cast
 
+from aragora.rbac.decorators import require_permission
 from aragora.server.validation.query_params import safe_query_int
 from aragora.storage.gmail_token_store import GmailUserState
 
@@ -710,6 +711,7 @@ class GmailThreadsHandler(SecureHandler):
             response.raise_for_status()
             return response.json()
 
+    @require_permission("email:delete")
     async def _delete_draft(self, state: GmailUserState, draft_id: str) -> HandlerResult:
         """Delete a draft."""
         try:

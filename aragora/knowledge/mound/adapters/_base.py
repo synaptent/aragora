@@ -77,6 +77,8 @@ ADAPTER_CIRCUIT_CONFIGS: dict[str, AdapterCircuitBreakerConfig] = {
     "email": AdapterCircuitBreakerConfig(failure_threshold=5, timeout_seconds=45.0),
     "jira": AdapterCircuitBreakerConfig(failure_threshold=5, timeout_seconds=45.0),
     "confluence": AdapterCircuitBreakerConfig(failure_threshold=5, timeout_seconds=45.0),
+    # Idea Cloud adapter - external file I/O, moderate latency
+    "ideacloud": AdapterCircuitBreakerConfig(failure_threshold=5, timeout_seconds=45.0),
 }
 
 

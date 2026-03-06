@@ -61,7 +61,7 @@ Production security, compliance, and multi-tenancy.
 | Module | Purpose |
 |--------|---------|
 | `aragora/auth/` | OIDC/SAML SSO, MFA, API key management |
-| `aragora/rbac/` | Fine-grained permissions (50+), role hierarchy |
+| `aragora/rbac/` | Fine-grained permissions (360+), role hierarchy |
 | `aragora/tenancy/` | Tenant isolation, resource quotas |
 | `aragora/compliance/` | SOC 2 controls, GDPR, audit trails |
 | `aragora/security/` | AES-256-GCM encryption, key rotation |

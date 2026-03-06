@@ -25,12 +25,20 @@ def test_nomic_blocked_without_env_var():
             orch.assert_production_gate()
 
 
+# Alias required by task specification
+test_nomic_loop_blocked_without_env_var = test_nomic_blocked_without_env_var
+
+
 def test_nomic_allowed_with_env_var():
     from aragora.nomic.autonomous_orchestrator import AutonomousOrchestrator
 
     with patch.dict(os.environ, {"ENABLE_NOMIC_LOOP": "true"}):
         orch = AutonomousOrchestrator()
         orch.assert_production_gate()  # must not raise
+
+
+# Alias required by task specification
+test_nomic_loop_allowed_with_env_var = test_nomic_allowed_with_env_var
 
 
 def test_nomic_allowed_with_env_var_1():

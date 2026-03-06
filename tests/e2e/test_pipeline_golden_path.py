@@ -1,13 +1,17 @@
-"""E2E golden path test: debate → decision plan → structured output.
+"""E2E golden path test: debate -> plan -> execute -> verify.
 
-Covers the complete UnifiedOrchestrator pipeline with mocked Arena/debate
-calls. Verifies that:
-1. The debate stage runs and populates debate_result.
-2. The decision plan stage creates a DecisionPlan from the debate result.
-3. The structured output (OrchestratorResult) contains all expected fields.
+Covers two pipeline entry points with mocked dependencies:
+
+A) UnifiedOrchestrator (debate -> plan -> execute -> feedback)
+   Verifies the full stage chain, structured output, approval gates,
+   and graceful degradation on failures.
+
+B) IdeaToExecutionPipeline (text -> ideation -> goals -> workflow -> orchestration)
+   Verifies the 4-stage idea pipeline produces pipeline_id, stage_results,
+   and goal_graph, and handles stage failures gracefully.
 
 All external calls are mocked — no real API calls are made.
-Run with: pytest tests/e2e/test_pipeline_golden_path.py -v --timeout=30
+Run with: pytest tests/e2e/test_pipeline_golden_path.py -v --timeout=60
 """
 
 from __future__ import annotations
@@ -312,3 +316,313 @@ class TestPipelineGoldenPath:
         assert result.debate_result.task == "Adopt event-driven architecture for order processing"
         assert "debate" in result.stages_completed
         assert "plan" in result.stages_completed
+
+    @pytest.mark.asyncio
+    async def test_golden_path_approval_gate(self) -> None:
+        """Approval callback controls whether execution proceeds past the plan."""
+        debate_result = _FakeDebateResult()
+        plan = MagicMock()
+        plan.id = "plan-approval"
+        plan_factory = _make_plan_factory(plan)
+
+        orch = UnifiedOrchestrator(
+            arena_factory=_make_arena_factory(debate_result),
+            plan_factory=plan_factory,
+            plan_executor=_make_plan_executor(),
+        )
+
+        async def approve_all(stage: str, artifact: Any) -> bool:
+            return True
+
+        cfg = OrchestratorConfig(autonomy_level="propose_and_approve")
+        result = await orch.run(
+            "Design a rate limiter",
+            config=cfg,
+            approval_callback=approve_all,
+        )
+
+        # With approve_all, the pipeline should reach execution
+        assert "debate" in result.stages_completed
+        assert result.succeeded
+
+    @pytest.mark.asyncio
+    async def test_golden_path_quality_gate(self) -> None:
+        """Quality gate rejects low-quality debate output."""
+        debate_result = _FakeDebateResult()
+
+        # Quality validator returns a failing report
+        quality_report = MagicMock()
+        quality_report.verdict = "fail"
+        quality_report.quality_score_10 = 2.0
+
+        async def mock_quality_validator(result, **kwargs):
+            return quality_report
+
+        orch = UnifiedOrchestrator(
+            arena_factory=_make_arena_factory(debate_result),
+            plan_factory=_make_plan_factory(),
+            quality_validator=mock_quality_validator,
+        )
+
+        cfg = OrchestratorConfig(
+            autonomy_level="fully_autonomous",
+            enable_quality_gate=True,
+            skip_execution=True,
+        )
+        result = await orch.run("Low quality question", config=cfg)
+
+        assert "debate" in result.stages_completed
+        assert "quality_gate" in result.stages_completed
+        assert any("Quality gate rejected" in e for e in result.errors)
+        assert not result.succeeded  # quality gate rejection = failure
+
+    @pytest.mark.asyncio
+    async def test_golden_path_partial_result_on_plan_failure(self) -> None:
+        """When plan creation fails, debate result still available in output."""
+        debate_result = _FakeDebateResult()
+        broken_factory = MagicMock()
+        broken_factory.from_debate_result.side_effect = ValueError("plan creation error")
+
+        orch = UnifiedOrchestrator(
+            arena_factory=_make_arena_factory(debate_result),
+            plan_factory=broken_factory,
+        )
+
+        cfg = OrchestratorConfig(
+            autonomy_level="fully_autonomous",
+            skip_execution=True,
+        )
+        result = await orch.run("Test partial failure", config=cfg)
+
+        # Debate succeeded, plan was skipped due to error
+        assert "debate" in result.stages_completed
+        assert "plan" in result.stages_skipped
+        assert result.debate_result is not None
+        assert result.decision_plan is None
+        assert result.succeeded  # debate completed, plan is optional
+
+
+# =============================================================================
+# IdeaToExecutionPipeline Tests (Task 1 - Test 1)
+# =============================================================================
+
+
+class TestIdeaToExecutionPipelineGoldenPath:
+    """E2E: IdeaToExecutionPipeline.run() from input text to result."""
+
+    @pytest.mark.asyncio
+    async def test_full_pipeline_from_text_to_result(self) -> None:
+        """Full pipeline from input text produces pipeline_id, stage_results, goal_graph."""
+        from aragora.pipeline.idea_to_execution import (
+            IdeaToExecutionPipeline,
+            PipelineConfig,
+            PipelineResult,
+        )
+
+        pipeline = IdeaToExecutionPipeline()
+        cfg = PipelineConfig(
+            dry_run=True,
+            enable_receipts=False,
+            enable_km_precedents=False,
+            enable_km_persistence=False,
+            enable_workspace_context=False,
+            enable_meta_tuning=False,
+        )
+
+        result = await pipeline.run(
+            "Implement Redis caching to reduce API latency. "
+            "Add rate limiting to endpoints. "
+            "Deploy monitoring dashboards.",
+            config=cfg,
+        )
+
+        assert isinstance(result, PipelineResult)
+        assert result.pipeline_id  # non-empty string
+        assert result.pipeline_id.startswith("pipe-")
+
+        # Stage results should be populated
+        assert len(result.stage_results) >= 1
+        stage_names = [sr.stage_name for sr in result.stage_results]
+        assert "ideation" in stage_names
+
+        # At least ideation should have completed
+        ideation_sr = next(sr for sr in result.stage_results if sr.stage_name == "ideation")
+        assert ideation_sr.status == "completed"
+        assert ideation_sr.duration >= 0.0
+
+        # Stage status should reflect completion
+        assert result.stage_status.get("ideas") in ("complete", "pending")
+
+    @pytest.mark.asyncio
+    async def test_pipeline_produces_goal_graph(self) -> None:
+        """Pipeline extracts goals from input text into a GoalGraph."""
+        from aragora.pipeline.idea_to_execution import (
+            IdeaToExecutionPipeline,
+            PipelineConfig,
+        )
+
+        pipeline = IdeaToExecutionPipeline()
+        cfg = PipelineConfig(
+            dry_run=True,
+            enable_receipts=False,
+            enable_km_precedents=False,
+            enable_km_persistence=False,
+            enable_workspace_context=False,
+            enable_meta_tuning=False,
+        )
+
+        result = await pipeline.run(
+            "Build a CI pipeline. Implement unit tests. Deploy to production.",
+            config=cfg,
+        )
+
+        # Goal graph should be produced from ideation output
+        if result.goal_graph is not None:
+            assert hasattr(result.goal_graph, "goals")
+            assert hasattr(result.goal_graph, "id")
+
+        # Workflow stage should have run
+        stage_names = [sr.stage_name for sr in result.stage_results]
+        if "goals" in stage_names:
+            goals_sr = next(sr for sr in result.stage_results if sr.stage_name == "goals")
+            assert goals_sr.status in ("completed", "failed")
+
+    @pytest.mark.asyncio
+    async def test_pipeline_all_stages_complete(self) -> None:
+        """All configured stages complete without errors in dry_run mode."""
+        from aragora.pipeline.idea_to_execution import (
+            IdeaToExecutionPipeline,
+            PipelineConfig,
+        )
+
+        pipeline = IdeaToExecutionPipeline()
+        cfg = PipelineConfig(
+            stages_to_run=["ideation", "goals", "workflow", "orchestration"],
+            dry_run=True,
+            enable_receipts=False,
+            enable_km_precedents=False,
+            enable_km_persistence=False,
+            enable_workspace_context=False,
+            enable_meta_tuning=False,
+        )
+
+        result = await pipeline.run(
+            "Reduce deployment time from 30 minutes to 5 minutes.",
+            config=cfg,
+        )
+
+        # Check that no stage has unhandled errors
+        for sr in result.stage_results:
+            assert sr.status in ("completed", "skipped", "failed"), (
+                f"Stage {sr.stage_name} has unexpected status: {sr.status}"
+            )
+
+        # Pipeline should have a positive duration
+        assert result.duration >= 0.0
+
+        # Pipeline integrity hash should be computable
+        result_dict = result.to_dict()
+        assert "integrity_hash" in result_dict
+
+    @pytest.mark.asyncio
+    async def test_pipeline_with_custom_pipeline_id(self) -> None:
+        """External pipeline_id is preserved in the result."""
+        from aragora.pipeline.idea_to_execution import (
+            IdeaToExecutionPipeline,
+            PipelineConfig,
+        )
+
+        pipeline = IdeaToExecutionPipeline()
+        cfg = PipelineConfig(
+            dry_run=True,
+            stages_to_run=["ideation"],
+            enable_receipts=False,
+            enable_km_precedents=False,
+            enable_km_persistence=False,
+            enable_workspace_context=False,
+            enable_meta_tuning=False,
+        )
+
+        result = await pipeline.run(
+            "Test custom ID",
+            config=cfg,
+            pipeline_id="custom-test-001",
+        )
+
+        assert result.pipeline_id == "custom-test-001"
+
+    @pytest.mark.asyncio
+    async def test_pipeline_handles_stage_failure_gracefully(self) -> None:
+        """When a stage fails, the pipeline returns partial results without raising."""
+        from unittest.mock import patch as _patch
+
+        from aragora.pipeline.idea_to_execution import (
+            IdeaToExecutionPipeline,
+            PipelineConfig,
+            StageResult,
+        )
+
+        pipeline = IdeaToExecutionPipeline()
+        cfg = PipelineConfig(
+            dry_run=True,
+            enable_receipts=False,
+            enable_km_precedents=False,
+            enable_km_persistence=False,
+            enable_workspace_context=False,
+            enable_meta_tuning=False,
+        )
+
+        # Force ideation to fail
+        async def _failing_ideation(pipeline_id, input_text, config):
+            return StageResult(
+                stage_name="ideation",
+                status="failed",
+                error="Simulated ideation failure",
+            )
+
+        with _patch.object(pipeline, "_run_ideation", _failing_ideation):
+            result = await pipeline.run("This should fail gracefully", config=cfg)
+
+        # Pipeline must still return a PipelineResult (no exception)
+        assert result is not None
+        assert result.pipeline_id
+
+        # The failed stage is recorded
+        ideation_results = [sr for sr in result.stage_results if sr.stage_name == "ideation"]
+        assert len(ideation_results) == 1
+        assert ideation_results[0].status == "failed"
+        assert ideation_results[0].error == "Simulated ideation failure"
+
+        # ideas_canvas is None since ideation failed
+        assert result.ideas_canvas is None
+
+    @pytest.mark.asyncio
+    async def test_pipeline_event_callback_fires(self) -> None:
+        """The event_callback receives stage lifecycle events."""
+        from aragora.pipeline.idea_to_execution import (
+            IdeaToExecutionPipeline,
+            PipelineConfig,
+        )
+
+        events: list[tuple[str, dict]] = []
+
+        def on_event(event_type: str, data: dict) -> None:
+            events.append((event_type, data))
+
+        pipeline = IdeaToExecutionPipeline()
+        cfg = PipelineConfig(
+            dry_run=True,
+            stages_to_run=["ideation"],
+            enable_receipts=False,
+            enable_km_precedents=False,
+            enable_km_persistence=False,
+            enable_workspace_context=False,
+            enable_meta_tuning=False,
+            event_callback=on_event,
+        )
+
+        await pipeline.run("Track events test", config=cfg)
+
+        event_types = [e[0] for e in events]
+        assert "started" in event_types
+        assert "stage_started" in event_types

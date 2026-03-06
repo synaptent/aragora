@@ -84,7 +84,7 @@ Every framework adds them eventually.
 
 | Module | Files | LOC | Role |
 |--------|-------|-----|------|
-| `rbac/` | 35 | 19K | Role-based access control (50+ permissions) |
+| `rbac/` | 35 | 19K | Role-based access control (360+ permissions) |
 | `audit/` | 43 | 24K | Audit logging |
 | `billing/` | 34 | 23K | Cost tracking, metering, forecasting |
 | `security/` | 9 | 7K | Encryption, key rotation, anomaly detection |

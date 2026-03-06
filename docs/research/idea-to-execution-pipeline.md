@@ -179,7 +179,7 @@ Aragora's architecture maps remarkably well to all four stages (~70% of backend 
 
 | Component | Location | Capabilities |
 |-----------|----------|-------------|
-| **Arena** | `aragora/debate/orchestrator.py` | Multi-agent debate orchestration across 42 agent types |
+| **Arena** | `aragora/debate/orchestrator.py` | Multi-agent debate orchestration across 43 agent types |
 | **Agents** | `aragora/agents/` | Claude, GPT, Mistral, Grok, Llama + 30+ models via OpenRouter; AirlockProxy for resilience |
 | **Control Plane** | `aragora/control_plane/` | Agent registry, task scheduler, health monitoring, 1,500+ tests |
 | **Consensus** | `aragora/debate/consensus.py` | Majority, supermajority, unanimous; semantic similarity convergence |

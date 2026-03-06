@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
       quality: ${{ steps.filter.outputs.quality }}
@@ -61,7 +61,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.quality == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     name: Quality Pipeline Tests
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -90,8 +90,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.12"
           cache: 'pip'
@@ -100,7 +100,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run output quality tests
         run: |
@@ -136,7 +136,7 @@ jobs:
   quality-smoke:
     needs: [changes, quality-smoke-run]
     if: always()
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Evaluate quality smoke result

@@ -1,0 +1,20 @@
+{
+  "description": "Base command for pipeline self-improve hard-check benchmark.",
+  "command": [
+    "python3",
+    "-m",
+    "aragora.cli.main",
+    "pipeline",
+    "self-improve",
+    "Please describe the relationship between the completed dogfood stress test, the ideas-to-execution pipeline, the self-improvement pipeline, the heterogeneous agent codebase assessment/coding-change pipeline, and the self bug-fixing pipeline. Can all of these be more tightly integrated? This is intentionally vague and poorly specified; treat it as a dogfooding prompt and produce an execution-ready integration plan.",
+    "--dry-run",
+    "--pipeline-mode",
+    "live",
+    "--plan-quality-min-score",
+    "6.0",
+    "--plan-quality-min-practicality",
+    "5.0",
+    "--max-goals",
+    "1"
+  ]
+}

@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   changes:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
       python: ${{ steps.filter.outputs.python }}
@@ -81,7 +81,7 @@ jobs:
   lint-run:
     needs: changes
     if: needs.changes.outputs.python == 'true'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -121,47 +121,71 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Resolve Python runtime
+        id: lint_python
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON_BIN=""
+          for candidate in python3.13 python3.12 python3.11 python3.10 python3 python; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+              PYTHON_BIN="$(command -v "$candidate")"
+              break
+            fi
+          done
+          if [[ -z "$PYTHON_BIN" ]]; then
+            echo "::error::Python runtime not found on runner"
+            exit 1
+          fi
+          PYTHON_VERSION="$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+          if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+            echo "::error::Python >=3.10 required for lint checks, found ${PYTHON_VERSION} at ${PYTHON_BIN}"
+            exit 1
+          fi
+          echo "Using Python ${PYTHON_VERSION} at ${PYTHON_BIN}"
+          "$PYTHON_BIN" -m ensurepip --upgrade || true
+          "$PYTHON_BIN" -m pip install --upgrade pip
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "python_bin=$PYTHON_BIN" >> "$GITHUB_OUTPUT"
 
       - name: Install linters
         run: |
-          python -m pip install --upgrade pip
-          pip install ruff==0.14.14
-          pip install -e .
+          "${{ steps.lint_python.outputs.python_bin }}" -m pip install --user ruff==0.14.14
+          "${{ steps.lint_python.outputs.python_bin }}" -m pip install --user -e .
 
       - name: Enforce branch mutation policy
-        run: python scripts/check_branch_mutation_policy.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_branch_mutation_policy.py
 
       - name: Enforce deploy SHA verification guard
-        run: python scripts/check_deploy_secure_sha_guard.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_deploy_secure_sha_guard.py
 
       - name: Enforce required-check-priority keep-list policy
-        run: python scripts/check_required_check_priority_policy.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_required_check_priority_policy.py
+
+      - name: Enforce workflow pip install policy
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_workflow_pip_install_policy.py
 
       - name: Enforce execution-gate default hardening policy
-        run: python scripts/check_execution_gate_defaults.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_execution_gate_defaults.py
 
       - name: Enforce execution-gate policy change-control metadata
-        run: python scripts/check_execution_gate_policy_control.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_execution_gate_policy_control.py
 
       - name: Validate Prometheus rule syntax with promtool
-        run: python scripts/check_prometheus_rules.py
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_prometheus_rules.py
 
       - name: Run ruff format check (all Python files)
-        run: ruff format --check aragora/ tests/ scripts/
+        run: ${{ steps.lint_python.outputs.python_bin }} -m ruff format --check aragora/ tests/ scripts/
         shell: bash
 
       - name: Run ruff lint check (all Python files)
-        run: ruff check aragora/ tests/ scripts/
+        run: ${{ steps.lint_python.outputs.python_bin }} -m ruff check aragora/ tests/ scripts/
         shell: bash
 
   lint:
     needs: [changes, lint-run]
     if: always()
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Evaluate lint result
@@ -173,7 +197,7 @@ jobs:
           echo "Lint passed (or skipped — no Python-relevant changes)"
 
   connector-exception-hygiene:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: Connector Exception Hygiene
     # PR fast path: this job is non-required and runs on push/workflow_dispatch.
@@ -215,7 +239,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -228,7 +252,7 @@ jobs:
           echo "Reproduce locally: python scripts/check_connector_exception_handling.py --path aragora/connectors aragora/runtime"
 
   agent-registry-sync:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: Agent Registry Sync
     if: github.event_name != 'pull_request'
@@ -269,14 +293,14 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Check AGENTS registry sync
         run: python scripts/check_agent_registry_sync.py
@@ -294,7 +318,7 @@ jobs:
   typecheck-run:
     needs: changes
     if: needs.changes.outputs.python == 'true'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -332,26 +356,47 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+      - name: Resolve Python runtime
+        id: typecheck_python
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHON_BIN=""
+          for candidate in python3.13 python3.12 python3.11 python3.10 python3 python; do
+            if command -v "$candidate" >/dev/null 2>&1; then
+              PYTHON_BIN="$(command -v "$candidate")"
+              break
+            fi
+          done
+          if [[ -z "$PYTHON_BIN" ]]; then
+            echo "::error::Python runtime not found on runner"
+            exit 1
+          fi
+          PYTHON_VERSION="$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+          if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+            echo "::error::Python >=3.10 required for typecheck, found ${PYTHON_VERSION} at ${PYTHON_BIN}"
+            exit 1
+          fi
+          echo "Using Python ${PYTHON_VERSION} at ${PYTHON_BIN}"
+          "$PYTHON_BIN" -m ensurepip --upgrade || true
+          "$PYTHON_BIN" -m pip install --upgrade pip
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "python_bin=$PYTHON_BIN" >> "$GITHUB_OUTPUT"
 
       - name: Install mypy and type stubs
         run: |
-          python -m pip install --upgrade pip
-          pip install -e .
-          pip install mypy types-requests types-redis types-python-dateutil types-setuptools
+          "${{ steps.typecheck_python.outputs.python_bin }}" -m pip install --user -e .
+          "${{ steps.typecheck_python.outputs.python_bin }}" -m pip install --user mypy types-requests types-redis types-python-dateutil types-setuptools
 
       - name: Run typecheck tier
-        run: bash scripts/test_tiers.sh typecheck
+        run: PATH="$HOME/.local/bin:$PATH" bash scripts/test_tiers.sh typecheck
         shell: bash
         # Phase 5: mypy now REQUIRED (43→0 errors fixed Jan 2026)
 
   typecheck:
     needs: [changes, typecheck-run]
     if: always()
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Evaluate typecheck result
@@ -363,7 +408,7 @@ jobs:
           echo "Type check passed (or skipped — no Python-relevant changes)"
 
   typecheck-core:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     name: Core Module Type Safety
     if: github.event_name != 'pull_request'
@@ -404,15 +449,15 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install mypy and dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mypy types-requests types-redis types-python-dateutil types-setuptools
-          pip install -e .
+          python -m pip install mypy types-requests types-redis types-python-dateutil types-setuptools
+          python -m pip install -e .
 
       - name: Typecheck core modules (REQUIRED)
         run: |
@@ -474,7 +519,7 @@ jobs:
           echo "Core modules type check passed!"
 
   frontend-lint:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name != 'pull_request'
 
@@ -536,7 +581,7 @@ jobs:
         run: npm run check:types
 
   security:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: github.event_name != 'pull_request'
 
@@ -576,14 +621,14 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install security tools
         run: |
           python -m pip install --upgrade pip
-          pip install bandit safety
+          python -m pip install bandit safety
 
       - name: Run Bandit security scan
         run: |
@@ -594,13 +639,13 @@ jobs:
 
       - name: Check dependencies for vulnerabilities
         run: |
-          pip install -e .
+          python -m pip install -e .
           # Blocking: fail on HIGH/CRITICAL vulnerabilities.
           # --ignore 70612: Known false positive / accepted risk.
           safety check --full-report --ignore 70612
 
   secrets:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: Secret Scanning
     if: github.event_name != 'pull_request'
@@ -658,7 +703,7 @@ jobs:
           GITLEAKS_LICENSE: ${{ env.GITLEAKS_LICENSE }}
 
   helm-lint:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     name: Helm Chart Validation
     if: github.event_name != 'pull_request'
@@ -744,7 +789,7 @@ jobs:
       - name: Validate values schema
         run: |
           # Install schema validator
-          pip install check-jsonschema
+          python -m pip install check-jsonschema
 
           # Validate values.yaml against schema
           if [ -f deploy/helm/aragora/values.schema.json ]; then
@@ -779,7 +824,7 @@ jobs:
           echo "All charts passed Kubernetes schema validation!"
 
   todo-audit:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     name: TODO/FIXME Enforcement
     if: github.event_name != 'pull_request'
@@ -848,7 +893,7 @@ jobs:
           fi
 
   docs-sync:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.event_name != 'pull_request'
 
@@ -888,15 +933,15 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install tiktoken
-          pip install -e .
+          python -m pip install tiktoken
+          python -m pip install -e .
 
       - name: Regenerate API docs
         run: |

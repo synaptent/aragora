@@ -13,7 +13,7 @@ concurrency:
 jobs:
   live-debate:
     name: Live Debate E2E
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: github.repository == 'an0mium/aragora'
 
@@ -43,13 +43,13 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev]"
 
       - name: Run 1-round debate with real API
         env:
@@ -83,7 +83,7 @@ jobs:
 
   pypi-check:
     name: PyPI Build Verification
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
@@ -112,13 +112,13 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install build tools
-        run: pip install build twine
+        run: python -m pip install build twine
 
       - name: Build sdist and wheel
         run: python -m build

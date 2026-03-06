@@ -480,6 +480,7 @@ class SharingHandler(BaseHandler):
         created = self._social_store.create(share)
         return json_response({"share": created.to_dict()}, status=201)
 
+    @require_permission("social:delete")
     def _delete_social_share(
         self,
         share_id: str,

@@ -369,6 +369,7 @@ ignore = ["E402", "E501", "E731", "E741", "E712", "C401", "C405", "C408", "C416"
 [tool.ruff.lint.per-file-ignores]
 # Allow print statements in CLI modules, migrations, and scripts
 "aragora/cli/*" = ["T201", "BLE001"]
+"aragora/ideacloud/cli/*" = ["T201"]
 "aragora/migrations/*" = ["T201", "BLE001"]
 "aragora/db/migrate.py" = ["T201", "BLE001"]
 "aragora/persistence/migrations/*" = ["T201", "BLE001"]

@@ -76,7 +76,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -91,7 +91,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,redis,test]"
+          python -m pip install -e ".[dev,redis,test]"
 
       - name: Configure AWS credentials
         id: aws-creds
@@ -452,15 +452,15 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,redis]"
-          pip install memory_profiler psutil
+          python -m pip install -e ".[dev,redis]"
+          python -m pip install memory_profiler psutil
 
       - name: Start server with memory monitoring
         run: |

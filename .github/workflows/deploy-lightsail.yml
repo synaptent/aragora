@@ -50,13 +50,14 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
       - name: Install and test
         run: |
-          pip install -e ".[dev]" pytest-timeout httpx
-          pytest tests/test_handlers_debates.py tests/test_api_handler.py \
+          python -m pip install -e ".[dev]" pytest-timeout httpx
+          python -m pytest tests/test_handlers_debates.py tests/test_api_handler.py \
             --timeout=60 -x --tb=short
         env:
           PYTHONPATH: .
@@ -105,7 +106,7 @@ jobs:
 
             # Install
             source venv/bin/activate 2>/dev/null || source .venv/bin/activate 2>/dev/null || true
-            pip install -e . --quiet --no-cache-dir 2>/dev/null || true
+            python -m pip install -e . --quiet --no-cache-dir 2>/dev/null || true
 
             # Import check
             python -c "from aragora.server.unified_server import UnifiedServer; print('Import OK')"

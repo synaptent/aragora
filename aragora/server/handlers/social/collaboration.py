@@ -20,6 +20,7 @@ from aragora.server.collaboration import (
     SessionManager,
     get_session_manager,
 )
+from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.base import error_response, json_response
 from aragora.server.handlers.utils.lazy_stores import LazyStore
 from aragora.server.handlers.utils.rate_limit import RateLimiter, get_client_ip
@@ -708,6 +709,7 @@ class CollaborationHandler:
         session = self._store.get_by_id(session_id)
         return json_response({"session": session.to_dict() if session else {}})
 
+    @require_permission("collaboration:delete")
     def _delete_session(self, session_id: str) -> Any:
         deleted = self._store.delete(session_id)
         if not deleted:

@@ -10,6 +10,7 @@ import logging
 import re
 from typing import Any
 
+from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.base import HandlerResult, json_response
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,8 @@ class EventsMixin:
 
         return json_response({"ok": True})
 
+    # Auth context flows from the parent event handler that invokes this method.
+    @require_permission("slack:write")
     async def _post_message_async(
         self,
         channel: str,

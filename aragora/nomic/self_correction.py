@@ -78,11 +78,20 @@ class SelfCorrectionEngine:
     3. Strategy adaptation: switch approaches when patterns indicate failure
     """
 
-    def __init__(self, config: SelfCorrectionConfig | None = None):
+    def __init__(
+        self,
+        config: SelfCorrectionConfig | None = None,
+        km_bridge: Any | None = None,
+    ):
         self.config = config or SelfCorrectionConfig()
+        self._km_bridge = km_bridge
 
     def analyze_patterns(self, outcomes: list[dict[str, Any]]) -> CorrectionReport:
         """Analyze past outcomes to identify success/failure patterns.
+
+        When a ``km_bridge`` is available, historical structured outcomes from
+        the Knowledge Mound are merged with the supplied in-memory outcomes
+        before analysis.
 
         Looks for:
         - Tracks that consistently succeed vs fail
@@ -103,7 +112,30 @@ class SelfCorrectionEngine:
         Returns:
             CorrectionReport with analysis results.
         """
-        if not outcomes:
+        # Merge historical patterns from KM bridge when available
+        merged = list(outcomes)
+        if self._km_bridge is not None:
+            try:
+                historical = self._km_bridge.retrieve_success_patterns(limit=50)
+                for h in historical:
+                    # Convert structured outcome format to analysis-compatible format
+                    merged.append(
+                        {
+                            "track": h.get("track", "unknown"),
+                            "success": h.get("success", False),
+                            "agent": h.get("agent", ""),
+                            "goal_type": h.get("goal_type", ""),
+                            "timestamp": datetime.fromtimestamp(
+                                h.get("timestamp", 0), tz=timezone.utc
+                            ).isoformat()
+                            if h.get("timestamp")
+                            else None,
+                        }
+                    )
+            except (RuntimeError, OSError, ValueError, TypeError, AttributeError) as exc:
+                logger.debug("self_correction_km_merge_failed: %s", exc)
+
+        if not merged:
             return CorrectionReport(
                 total_cycles=0,
                 overall_success_rate=0.0,
@@ -114,7 +146,7 @@ class SelfCorrectionEngine:
             )
 
         # Filter out stale outcomes
-        filtered = self._filter_by_age(outcomes)
+        filtered = self._filter_by_age(merged)
 
         total = len(filtered)
         successes = sum(1 for o in filtered if o.get("success"))

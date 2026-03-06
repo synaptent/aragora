@@ -609,3 +609,142 @@ class TestGauntletGateLightweightMode:
         assert captured_config.attack_rounds == 3
         assert captured_config.probes_per_category == 2
         assert captured_config.run_scenario_matrix is True
+
+
+# ---------------------------------------------------------------------------
+# Gauntlet quality regression gate (T1 — Epic #295)
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_gauntlet_result_with_robustness(
+    robustness_score: float = 1.0,
+    gauntlet_id: str = "gauntlet-regression-test",
+    duration: float = 1.5,
+):
+    """Create a mock GauntletResult with a specific robustness score."""
+    from aragora.gauntlet.result import (
+        AttackSummary,
+        GauntletResult,
+        RiskSummary,
+    )
+
+    return GauntletResult(
+        gauntlet_id=gauntlet_id,
+        input_hash="abc123",
+        input_summary="test content",
+        started_at="2026-03-05T00:00:00",
+        completed_at="2026-03-05T00:00:01",
+        duration_seconds=duration,
+        risk_summary=RiskSummary(),
+        attack_summary=AttackSummary(robustness_score=robustness_score),
+    )
+
+
+class TestGauntletQualityRegression:
+    """Tests for the gauntlet quality regression gate."""
+
+    @pytest.mark.asyncio
+    async def test_nomic_loop_rejects_on_gauntlet_regression(self):
+        """Quality check should reject when robustness regresses >10%."""
+        from aragora.nomic.gauntlet_gate import GauntletQualityResult
+
+        # Baseline score is 0.9, new score is 0.7 -> regression of ~22%
+        mock_result = _make_mock_gauntlet_result_with_robustness(robustness_score=0.7)
+        mock_runner = MagicMock()
+        mock_runner.run = AsyncMock(return_value=mock_result)
+
+        config = GauntletGateConfig(enabled=True)
+        gate = GauntletApprovalGate(config=config)
+
+        with patch("aragora.nomic.gauntlet_gate._GauntletRunner", return_value=mock_runner):
+            result = await gate.check_quality_regression(
+                content="test content",
+                baseline_score=0.9,
+                max_regression_pct=10.0,
+            )
+
+        assert isinstance(result, GauntletQualityResult)
+        assert result.passed is False
+        assert result.baseline_score == 0.9
+        assert result.current_score == 0.7
+        assert result.regression_pct > 10.0
+        assert "regression" in result.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_nomic_loop_accepts_on_gauntlet_pass(self):
+        """Quality check should accept when regression is within threshold."""
+        from aragora.nomic.gauntlet_gate import GauntletQualityResult
+
+        # Baseline is 0.9, new score is 0.85 -> regression of ~5.6%
+        mock_result = _make_mock_gauntlet_result_with_robustness(robustness_score=0.85)
+        mock_runner = MagicMock()
+        mock_runner.run = AsyncMock(return_value=mock_result)
+
+        config = GauntletGateConfig(enabled=True)
+        gate = GauntletApprovalGate(config=config)
+
+        with patch("aragora.nomic.gauntlet_gate._GauntletRunner", return_value=mock_runner):
+            result = await gate.check_quality_regression(
+                content="test content",
+                baseline_score=0.9,
+                max_regression_pct=10.0,
+            )
+
+        assert isinstance(result, GauntletQualityResult)
+        assert result.passed is True
+        assert result.baseline_score == 0.9
+        assert result.current_score == 0.85
+        assert result.regression_pct <= 10.0
+        assert "passed" in result.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_quality_check_skipped_when_disabled(self):
+        """Quality check should pass immediately when gate is disabled."""
+        config = GauntletGateConfig(enabled=False)
+        gate = GauntletApprovalGate(config=config)
+
+        result = await gate.check_quality_regression(
+            content="test",
+            baseline_score=0.9,
+        )
+        assert result.passed is True
+        assert "disabled" in result.reason.lower()
+
+    @pytest.mark.asyncio
+    async def test_quality_check_improvement_passes(self):
+        """When score improves, quality check should pass."""
+        # Baseline 0.7, new score 0.9 -> improvement (negative regression)
+        mock_result = _make_mock_gauntlet_result_with_robustness(robustness_score=0.9)
+        mock_runner = MagicMock()
+        mock_runner.run = AsyncMock(return_value=mock_result)
+
+        config = GauntletGateConfig(enabled=True)
+        gate = GauntletApprovalGate(config=config)
+
+        with patch("aragora.nomic.gauntlet_gate._GauntletRunner", return_value=mock_runner):
+            result = await gate.check_quality_regression(
+                content="test",
+                baseline_score=0.7,
+                max_regression_pct=10.0,
+            )
+
+        assert result.passed is True
+        assert result.regression_pct < 0  # negative = improvement
+
+    @pytest.mark.asyncio
+    async def test_quality_check_runner_error_does_not_block(self):
+        """When the runner errors, quality check should pass (non-blocking)."""
+        mock_runner = MagicMock()
+        mock_runner.run = AsyncMock(side_effect=RuntimeError("API down"))
+
+        config = GauntletGateConfig(enabled=True)
+        gate = GauntletApprovalGate(config=config)
+
+        with patch("aragora.nomic.gauntlet_gate._GauntletRunner", return_value=mock_runner):
+            result = await gate.check_quality_regression(
+                content="test",
+                baseline_score=0.9,
+            )
+
+        assert result.passed is True
+        assert "failed" in result.reason.lower()

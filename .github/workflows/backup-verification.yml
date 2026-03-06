@@ -22,7 +22,7 @@ permissions:
 jobs:
   backup-tests:
     name: Backup System Tests
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -51,8 +51,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -68,7 +68,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run backup manager tests
         run: |
@@ -90,7 +90,7 @@ jobs:
 
   dr-drill-tests:
     name: DR Drill Tests
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: backup-tests
 
@@ -120,15 +120,15 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run DR drill tests
         run: |
@@ -144,7 +144,7 @@ jobs:
 
   backup-handler-tests:
     name: Backup Handler Tests
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: backup-tests
 
@@ -174,15 +174,15 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run backup handler tests
         run: |
@@ -192,7 +192,7 @@ jobs:
 
   summary:
     name: Generate Summary
-    runs-on: aragora
+    runs-on: ubuntu-latest
     needs: [backup-tests, dr-drill-tests, backup-handler-tests]
     if: always()
 

@@ -1,0 +1,98 @@
+name: "Setup Python (Runner-Safe)"
+description: >
+  Wraps actions/setup-python with automatic fallback to system Python
+  for self-hosted runners that lack the Python tool cache.
+
+inputs:
+  python-version:
+    description: "Python version to install"
+    required: false
+    default: "3.11"
+  cache:
+    description: "Package manager to cache (pip, pipenv, poetry)"
+    required: false
+    default: ""
+  cache-dependency-path:
+    description: "Path to dependency file(s) for caching"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare writable tool cache
+      shell: bash
+      run: |
+        set -euo pipefail
+        TOOL_CACHE="${RUNNER_TEMP:-/tmp}/hostedtoolcache"
+        mkdir -p "${TOOL_CACHE}"
+        echo "AGENT_TOOLSDIRECTORY=${TOOL_CACHE}" >> "${GITHUB_ENV}"
+        echo "RUNNER_TOOL_CACHE=${TOOL_CACHE}" >> "${GITHUB_ENV}"
+
+    - name: Set up Python ${{ inputs.python-version }}
+      id: setup-python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: ${{ inputs.cache || '' }}
+        cache-dependency-path: ${{ inputs.cache-dependency-path || '' }}
+      continue-on-error: true
+
+    - name: Fallback to system Python
+      if: steps.setup-python.outcome == 'failure'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::warning::actions/setup-python failed — falling back to system Python"
+        PY_BIN=""
+        for cmd in python${{ inputs.python-version }} python3 python; do
+          if command -v "$cmd" &>/dev/null; then
+            echo "Found $cmd: $("$cmd" --version)"
+            PY_BIN="$(command -v "$cmd")"
+            break
+          fi
+        done
+
+        # actions/setup-python may download and unpack a requested interpreter
+        # before failing to install into the hosted tool cache. Reuse that
+        # unpacked binary when available.
+        if [[ -z "${PY_BIN}" && -n "${RUNNER_TEMP:-}" ]]; then
+          DISCOVERED_PY="$(find "${RUNNER_TEMP}" -type f -name "python${{ inputs.python-version }}" -perm -u+x 2>/dev/null | head -n 1 || true)"
+          if [[ -n "${DISCOVERED_PY}" ]]; then
+            PY_BIN="${DISCOVERED_PY}"
+            echo "Found unpacked interpreter in RUNNER_TEMP: ${PY_BIN}"
+            "${PY_BIN}" --version || true
+          fi
+        fi
+
+        if [[ -z "${PY_BIN}" ]]; then
+          echo "::error::No Python interpreter found"
+          exit 1
+        fi
+
+        LOCAL_BIN="${RUNNER_TEMP:-$HOME}/setup-python-safe-bin"
+        mkdir -p "${LOCAL_BIN}"
+        cat > "${LOCAL_BIN}/python" <<EOF
+        #!/usr/bin/env bash
+        exec "${PY_BIN}" "\$@"
+        EOF
+        chmod +x "${LOCAL_BIN}/python"
+        ln -sf "${LOCAL_BIN}/python" "${LOCAL_BIN}/python3"
+
+        # Make pip reliably available on self-hosted runners even when
+        # actions/setup-python fails and no pip shim is on PATH.
+        "${LOCAL_BIN}/python" -m ensurepip --upgrade || true
+        "${LOCAL_BIN}/python" -m pip --version
+
+        cat > "${LOCAL_BIN}/pip" <<EOF
+        #!/usr/bin/env bash
+        exec "${PY_BIN}" -m pip "\$@"
+        EOF
+        chmod +x "${LOCAL_BIN}/pip"
+        ln -sf "${LOCAL_BIN}/pip" "${LOCAL_BIN}/pip3"
+
+        echo "${LOCAL_BIN}" >> "${GITHUB_PATH}"
+        export PATH="${LOCAL_BIN}:${PATH}"
+
+        "${LOCAL_BIN}/python" --version
+        "${LOCAL_BIN}/python" -m pip --version

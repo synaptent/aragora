@@ -309,6 +309,8 @@ class AuthChecksMixin:
             # Live debate + TTS: NOT exempt — require auth + budget gate
             # (handled by _check_live_streaming_budget in the request pipeline)
             "/api/v1/playground/status",
+            # Public demo — no auth, no API credits (offline fixture mode)
+            "/api/v1/demo/adversarial",
             # OAuth callbacks from external providers (redirects carry no auth headers)
             "/api/integrations/slack/callback",
             "/api/integrations/teams/callback",

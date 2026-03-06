@@ -592,6 +592,7 @@ class BudgetHandler(BaseHandler):
             logger.error("Failed to update budget: %s", e)
             return error_response("Budget update failed", 500)
 
+    @require_permission("budget:delete")
     def _delete_budget(self, budget_id: str, org_id: str) -> HandlerResult:
         """Delete (close) a budget."""
         try:

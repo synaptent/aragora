@@ -26,6 +26,8 @@ from typing import Any
 
 from aragora.server.versioning.compat import strip_version_prefix
 
+from aragora.rbac.decorators import require_permission
+
 from ..base import (
     SAFE_ID_PATTERN,
     BaseHandler,
@@ -310,6 +312,7 @@ class UniversalGraphHandler(BaseHandler):
         store.update(graph)
         return json_response(graph.to_dict())
 
+    @require_permission("pipeline:delete")
     def _delete_graph(self, graph_id: str) -> HandlerResult:
         store = _get_store()
         deleted = store.delete(graph_id)

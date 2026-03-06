@@ -48,7 +48,7 @@ permissions:
 
 jobs:
   review:
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
 
@@ -105,10 +105,10 @@ jobs:
 
       - name: Setup Python
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: 'pip'
 
       - name: Ensure GitHub CLI is available
         if: github.event_name == 'workflow_dispatch'
@@ -130,8 +130,8 @@ jobs:
       - name: Install aragora from base branch
         if: github.event_name == 'workflow_dispatch'
         run: |
-          pip install --upgrade pip
-          pip install -e .
+          python -m pip install --upgrade pip
+          python -m pip install -e .
 
       - name: Get PR diff
         if: github.event_name == 'workflow_dispatch'

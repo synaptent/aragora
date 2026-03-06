@@ -172,6 +172,7 @@ class DocumentHandler(BaseHandler):
             return self._delete_document(doc_id)
         return None
 
+    @require_permission("documents:delete")
     def _delete_document(self, doc_id: str) -> HandlerResult:
         """Delete a document by ID."""
         store = self.get_document_store()

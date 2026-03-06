@@ -18,6 +18,50 @@ from pathlib import Path
 import pytest
 
 
+@pytest.mark.asyncio
+async def test_prompt_modification_logged(tmp_path):
+    """Log a modification and verify retrieval (T6 task specification)."""
+    from aragora.nomic.evolution_audit import EvolutionAudit
+
+    audit = EvolutionAudit(base_path=tmp_path)
+    await audit.log_modification(
+        agent="claude",
+        field="system_prompt",
+        before="You are helpful.",
+        after="You are an expert.",
+        reason="Nomic cycle #7",
+    )
+
+    history = await audit.get_history()
+    assert len(history) == 1
+    entry = history[0]
+    assert entry["agent"] == "claude"
+    assert entry["field"] == "system_prompt"
+    assert entry["before"] == "You are helpful."
+    assert entry["after"] == "You are an expert."
+    assert entry["reason"] == "Nomic cycle #7"
+    assert "timestamp" in entry
+
+
+@pytest.mark.asyncio
+async def test_history_filtered_by_agent(tmp_path):
+    """Log for 2 agents, filter returns only one (T6 task specification)."""
+    from aragora.nomic.evolution_audit import EvolutionAudit
+
+    audit = EvolutionAudit(base_path=tmp_path)
+    await audit.log_modification("claude", "prompt", "a", "b", "reason1")
+    await audit.log_modification("codex", "prompt", "c", "d", "reason2")
+    await audit.log_modification("claude", "instructions", "e", "f", "reason3")
+
+    claude_history = await audit.get_history(agent="claude")
+    assert len(claude_history) == 2
+    assert all(e["agent"] == "claude" for e in claude_history)
+
+    codex_history = await audit.get_history(agent="codex")
+    assert len(codex_history) == 1
+    assert codex_history[0]["agent"] == "codex"
+
+
 class TestEvolutionAuditLogging:
     """Tests for EvolutionAudit.log_modification."""
 

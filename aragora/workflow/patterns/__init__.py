@@ -8,6 +8,7 @@ Pre-defined workflow patterns for common multi-agent orchestration scenarios:
 - Hierarchical: Manager-worker delegation pattern
 - ReviewCycle: Iterative refinement with convergence check
 - Dialectic: Thesis-antithesis-synthesis pattern
+- Escalation: Multi-level escalation paths for debate SLA violations
 
 Each pattern provides a factory method to create a WorkflowDefinition
 that can be customized and executed by the WorkflowEngine.
@@ -44,6 +45,12 @@ from aragora.workflow.patterns.post_debate import (
     PostDebatePattern,
     PostDebateConfig,
     get_default_post_debate_workflow,
+)
+from aragora.workflow.patterns.escalation import (
+    EscalationWorkflowPattern,
+    EscalationStep,
+    EscalationPathConfig,
+    STANDARD_ESCALATION_PATH,
 )
 
 # Pattern registry for dynamic pattern creation
@@ -91,6 +98,10 @@ __all__ = [
     "PostDebatePattern",
     "PostDebateConfig",
     "get_default_post_debate_workflow",
+    "EscalationWorkflowPattern",
+    "EscalationStep",
+    "EscalationPathConfig",
+    "STANDARD_ESCALATION_PATH",
     # Registry
     "PATTERN_REGISTRY",
     "create_pattern",

@@ -21,6 +21,8 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
+from aragora.rbac.decorators import require_permission
+
 from ..base import (
     HandlerResult,
     error_response,
@@ -353,6 +355,7 @@ class GmailLabelsHandler(SecureHandler):
             response.raise_for_status()
             return response.json()
 
+    @require_permission("email:delete")
     async def _delete_label(self, state: Any, label_id: str) -> HandlerResult:
         """Delete a Gmail label."""
         try:
@@ -670,6 +673,7 @@ class GmailLabelsHandler(SecureHandler):
             response.raise_for_status()
             return response.json()
 
+    @require_permission("email:delete")
     async def _delete_filter(self, state: Any, filter_id: str) -> HandlerResult:
         """Delete a Gmail filter."""
         try:

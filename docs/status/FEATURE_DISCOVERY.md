@@ -252,7 +252,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | **SCIM 2.0** | Production | Automated user/group provisioning (Okta, Azure AD, OneLogin) | `aragora/auth/scim/` | |
 | **Account Lockout** | Production | Progressive delays, IP/user tracking | `aragora/auth/lockout.py` | |
 
-### RBAC v2 (50+ Permissions)
+### RBAC v2 (360+ Permissions)
 
 | Feature | Status | Description | Key Files |
 |---------|--------|-------------|-----------|

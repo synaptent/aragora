@@ -104,6 +104,14 @@ function agentRole(index: number): string {
 
 const DEFAULT_TOPIC = 'Should we use microservices or a monolith for our new product?';
 
+const EXAMPLE_TOPICS = [
+  'Should we migrate our monolithic app to microservices?',
+  'Is it better to build our own auth system or use Auth0?',
+  'Should we raise prices 15% or expand to a new market first?',
+  'Build vs buy: should we develop our own data warehouse?',
+  'Should we switch from REST to GraphQL for our mobile API?',
+];
+
 const DEMO_AGENTS: AgentEntry[] = [
   {
     name: 'claude-analyst',
@@ -324,7 +332,12 @@ type Phase = 'idle' | 'topic' | 'proposals' | 'critiques' | 'votes' | 'receipt';
 
 const PHASE_ORDER: Phase[] = ['topic', 'proposals', 'critiques', 'votes', 'receipt'];
 
-export function PlaygroundDebate() {
+export interface PlaygroundDebateProps {
+  /** Called when the debate completes and the receipt is shown */
+  onDebateComplete?: (info: { debateId: string; shareUrl: string }) => void;
+}
+
+export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {}) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [proposalIndex, setProposalIndex] = useState(-1);
   const [critiqueIndex, setCritiqueIndex] = useState(-1);
@@ -335,6 +348,7 @@ export function PlaygroundDebate() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [shareUrl, setShareUrl] = useState('');
+  const [debateId, setDebateId] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Live API result state
@@ -414,6 +428,7 @@ export function PlaygroundDebate() {
       setLiveReceipt(display.receipt);
       setLiveFinalAnswer(display.finalAnswer);
       if (data.share_url) setShareUrl(data.share_url);
+      setDebateId(data.id ?? display.receipt.receipt_id);
 
       setLoading(false);
       setStarted(true);
@@ -458,6 +473,14 @@ export function PlaygroundDebate() {
     return () => timers.forEach(clearTimeout);
   }, [started, agents.length, critiques.length, votes.length, isLive]);
 
+  // Notify parent when debate completes (receipt shown)
+  useEffect(() => {
+    if (showReceipt && onDebateComplete) {
+      const id = debateId || DEMO_RECEIPT.receipt_id;
+      onDebateComplete({ debateId: id, shareUrl });
+    }
+  }, [showReceipt, onDebateComplete, debateId, shareUrl]);
+
   // Scroll on phase/content changes
   useEffect(() => { scrollToBottom(); }, [phase, proposalIndex, critiqueIndex, voteIndex, showReceipt, p0, p1, p2, scrollToBottom]);
 
@@ -473,6 +496,7 @@ export function PlaygroundDebate() {
     setIsLive(false);
     setError('');
     setShareUrl('');
+    setDebateId('');
     setLiveAgents([]);
     setLiveCritiques([]);
     setLiveVotes([]);
@@ -501,14 +525,28 @@ export function PlaygroundDebate() {
         <div ref={containerRef} className="p-6 max-h-[600px] overflow-y-auto space-y-4">
           {/* Start state */}
           {!started && !loading && (
-            <div className="text-center py-8 space-y-6">
-              <div className="space-y-2">
+            <div className="py-6 space-y-5">
+              <div className="text-center space-y-1">
                 <p className="text-sm font-mono text-[var(--text-muted)]">
                   {'>'} Watch AI agents debate any decision with adversarial rigor
                 </p>
                 <p className="text-xs font-mono text-[var(--text-muted)]/60">
-                  Enter your question below, or leave blank for a demo
+                  Enter your question below, or pick an example — or leave blank for a demo
                 </p>
+              </div>
+
+              {/* Example topics */}
+              <div className="flex flex-col gap-1.5">
+                {EXAMPLE_TOPICS.map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setCustomTopic(t)}
+                    className="text-left px-3 py-2 text-xs font-mono border border-[var(--acid-cyan)]/20
+                               text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/10 transition-colors"
+                  >
+                    {t}
+                  </button>
+                ))}
               </div>
 
               <div className="max-w-lg mx-auto space-y-3">
@@ -521,7 +559,7 @@ export function PlaygroundDebate() {
                       startDebate();
                     }
                   }}
-                  placeholder="e.g. Should we raise prices 15% or expand to a new market first?"
+                  placeholder="Or type your own question..."
                   className="w-full px-4 py-3 font-mono text-xs bg-[var(--bg)] border border-[var(--acid-green)]/30 text-[var(--text)] placeholder:text-[var(--text-muted)]/40 focus:border-[var(--acid-green)] focus:outline-none resize-none"
                   rows={2}
                   maxLength={500}
@@ -532,7 +570,7 @@ export function PlaygroundDebate() {
                 <button
                   onClick={startDebate}
                   disabled={loading}
-                  className="px-8 py-3 font-mono text-sm font-bold bg-[var(--acid-green)] text-[var(--bg)] hover:bg-[var(--acid-green)]/80 transition-colors disabled:opacity-50"
+                  className="w-full py-3 font-mono text-sm font-bold bg-[var(--acid-green)] text-[var(--bg)] hover:bg-[var(--acid-green)]/80 transition-colors disabled:opacity-50"
                 >
                   {customTopic.trim() ? 'RUN DEBATE' : 'START DEMO'}
                 </button>
@@ -542,14 +580,35 @@ export function PlaygroundDebate() {
 
           {/* Loading state */}
           {loading && (
-            <div className="text-center py-12 space-y-4">
-              <div className="flex items-center justify-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[var(--acid-green)] animate-pulse" />
-                <span className="w-2 h-2 rounded-full bg-[var(--acid-green)] animate-pulse" style={{ animationDelay: '150ms' }} />
-                <span className="w-2 h-2 rounded-full bg-[var(--acid-green)] animate-pulse" style={{ animationDelay: '300ms' }} />
+            <div className="py-10 space-y-5">
+              {/* Animated agent assembly */}
+              <div className="flex items-center justify-center gap-3">
+                {['Strategic Analyst', "Devil's Advocate", 'Synthesizer'].map((name, i) => (
+                  <div key={name} className="flex flex-col items-center gap-1">
+                    <span
+                      className="w-3 h-3 rounded-full animate-pulse"
+                      style={{
+                        backgroundColor: ['var(--acid-cyan)', 'var(--acid-magenta)', 'var(--acid-green)'][i],
+                        animationDelay: `${i * 200}ms`,
+                      }}
+                    />
+                    <span className="text-[10px] font-mono text-[var(--text-muted)]/60 text-center hidden sm:block">
+                      {name}
+                    </span>
+                  </div>
+                ))}
               </div>
-              <p className="text-xs font-mono text-[var(--text-muted)]">
-                Assembling agents and running debate...
+              <p className="text-xs font-mono text-center text-[var(--text-muted)]">
+                Running live debate with 3 AI agents...
+              </p>
+              <div className="h-1 bg-[var(--acid-green)]/10 overflow-hidden max-w-xs mx-auto">
+                <div
+                  className="h-full bg-[var(--acid-green)] animate-pulse"
+                  style={{ width: '40%', animation: 'loading-bar 2s ease-in-out infinite' }}
+                />
+              </div>
+              <p className="text-[10px] font-mono text-center text-[var(--text-muted)]/40">
+                Usually 15-30 seconds
               </p>
             </div>
           )}
@@ -697,23 +756,36 @@ export function PlaygroundDebate() {
                 )}
 
                 {/* Share + Try Again buttons */}
-                <div className="mt-4 pt-3 border-t border-[var(--acid-green)]/20 flex items-center gap-3">
-                  {shareUrl && (
+                <div className="mt-4 pt-3 border-t border-[var(--acid-green)]/20 space-y-2">
+                  {shareUrl ? (
                     <button
                       onClick={() => {
                         const url = `${window.location.origin}${shareUrl}`;
-                        navigator.clipboard.writeText(url).catch(() => {});
+                        navigator.clipboard
+                          .writeText(url)
+                          .catch(() => {});
                       }}
-                      className="px-4 py-1.5 text-xs font-mono border border-[var(--acid-green)]/30 text-[var(--acid-green)] hover:bg-[var(--acid-green)]/10 transition-colors"
+                      className="w-full py-2 text-xs font-mono font-bold border border-[var(--acid-green)] text-[var(--acid-green)] hover:bg-[var(--acid-green)]/10 transition-colors"
                     >
-                      COPY SHARE LINK
+                      SHARE THIS DEBATE
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        navigator.clipboard
+                          .writeText(`${window.location.origin}/playground`)
+                          .catch(() => {});
+                      }}
+                      className="w-full py-2 text-xs font-mono font-bold border border-[var(--acid-green)]/50 text-[var(--acid-green)]/70 hover:border-[var(--acid-green)] hover:text-[var(--acid-green)] transition-colors"
+                    >
+                      SHARE ARAGORA PLAYGROUND
                     </button>
                   )}
                   <button
                     onClick={handleReset}
-                    className="px-4 py-1.5 text-xs font-mono border border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--acid-green)]/30 hover:text-[var(--text)] transition-colors"
+                    className="w-full py-2 text-xs font-mono border border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--acid-green)]/30 hover:text-[var(--text)] transition-colors"
                   >
-                    TRY ANOTHER
+                    TRY ANOTHER QUESTION
                   </button>
                 </div>
               </div>

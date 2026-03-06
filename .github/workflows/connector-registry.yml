@@ -48,9 +48,9 @@ jobs:
           fi
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Verify connector registry artifacts
         run: python scripts/update_connector_registry.py --check

@@ -121,7 +121,7 @@ Titans/MIRAS-inspired integrated memory system connecting all 5 memory systems (
 - `apply_retention_decision()` added to `TierManager`
 - `evaluate_retention()` post-write hook added to `MemoryCoordinator`
 
-### Phase 2: ClaudeMemAdapter — 34th KM Adapter (28 tests)
+### Phase 2: ClaudeMemAdapter — 41st KM Adapter (28 tests)
 - **`ClaudeMemAdapter`** wraps `ClaudeMemConnector` following `SupermemoryAdapter` pattern
 - Read-mostly: pulls observations into KM, does not write back
 - Methods: `search_observations()`, `inject_context()`, `sync_to_km()`, `evidence_to_knowledge_item()`

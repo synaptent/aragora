@@ -33,7 +33,7 @@ jobs:
   python-security:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Python Security Scan
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -63,7 +63,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -72,7 +72,7 @@ jobs:
       - name: Install security tools and project
         run: |
           python -m pip install --upgrade pip
-          pip install bandit[toml] pip-audit safety
+          python -m pip install bandit[toml] pip-audit safety
           bash scripts/ci_install_project.sh
 
       # ---------------------------------------------------------------
@@ -83,16 +83,16 @@ jobs:
       - name: "BLOCKING: Bandit security scan (HIGH severity)"
         run: |
           echo "--- Full report (informational) ---"
-          bandit -r aragora/ -c pyproject.toml -f json -o bandit-report.json || true
+          python -m bandit -r aragora/ -c pyproject.toml -f json -o bandit-report.json || true
           echo "--- Blocking check: HIGH severity findings ---"
-          bandit -r aragora/ -c pyproject.toml -lll
+          python -m bandit -r aragora/ -c pyproject.toml -lll
 
       # ---------------------------------------------------------------
       # pip-audit: check installed Python packages for known CVEs
       # ---------------------------------------------------------------
       - name: "BLOCKING: Python dependency audit (pip-audit)"
         run: |
-          pip-audit --strict --vulnerability-service osv \
+          python -m pip_audit --strict --vulnerability-service osv \
             --ignore-vuln CVE-2025-14009
 
       # ---------------------------------------------------------------
@@ -100,7 +100,7 @@ jobs:
       # ---------------------------------------------------------------
       - name: "BLOCKING: Verify Python lockfile freshness"
         run: |
-          pip install uv
+          python -m pip install uv
           uv lock --check || { echo "::error::uv.lock is stale. Run 'uv lock' locally."; exit 1; }
 
       # ---------------------------------------------------------------
@@ -124,7 +124,7 @@ jobs:
   npm-security:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: npm Security Scan
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -217,7 +217,7 @@ jobs:
 
   security-summary:
     name: Security Gate Summary
-    runs-on: aragora
+    runs-on: ubuntu-latest
     needs: [python-security, npm-security]
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always())
     timeout-minutes: 2

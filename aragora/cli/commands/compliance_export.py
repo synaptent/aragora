@@ -276,6 +276,54 @@ def _load_receipt_for_debate(debate_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _days_until_deadline() -> int:
+    """Return number of days from today until the EU AI Act enforcement deadline (Aug 2, 2026)."""
+    from datetime import date
+
+    deadline = date(2026, 8, 2)
+    today = date.today()
+    return max(0, (deadline - today).days)
+
+
+def _compute_compliance_score(conformity: Any) -> dict[str, Any]:
+    """Compute a numeric compliance readiness score from article mappings.
+
+    Returns a dict with:
+      - score: 0-100 integer (satisfied=1.0, partial=0.5, not_satisfied=0.0 per article)
+      - level: "full" | "substantial" | "partial" | "not_ready"
+      - label: Human-readable level label
+      - breakdown: per-article pass/partial/fail lists
+    """
+    mappings = conformity.article_mappings
+    applicable = [m for m in mappings if m.status != "not_applicable"]
+    if not applicable:
+        return {"score": 0, "level": "not_ready", "label": "Not Ready", "breakdown": {}}
+
+    weight_map = {"satisfied": 1.0, "partial": 0.5, "not_satisfied": 0.0}
+    raw = sum(weight_map.get(m.status, 0.0) for m in applicable)
+    score = int(round((raw / len(applicable)) * 100))
+
+    if score >= 95:
+        level, label = "full", "Full Conformity"
+    elif score >= 75:
+        level, label = "substantial", "Substantially Conformant"
+    elif score >= 40:
+        level, label = "partial", "Partial Conformity"
+    else:
+        level, label = "not_ready", "Not Ready"
+
+    breakdown: dict[str, list[str]] = {"pass": [], "partial": [], "fail": []}
+    for m in applicable:
+        if m.status == "satisfied":
+            breakdown["pass"].append(m.article)
+        elif m.status == "partial":
+            breakdown["partial"].append(m.article)
+        else:
+            breakdown["fail"].append(m.article)
+
+    return {"score": score, "level": level, "label": label, "breakdown": breakdown}
+
+
 def _generate_compliance_bundle(
     receipt_dict: dict[str, Any],
     framework: str,
@@ -307,9 +355,13 @@ def _generate_compliance_bundle(
     # Extract per-article data
     receipt_data = _build_receipt_section(receipt_dict) if include_receipts else None
     audit_trail = _build_audit_trail(receipt_dict) if include_audit_trail else None
+    risk_management = _build_risk_management(receipt_dict, conformity)
     transparency = _build_transparency_report(receipt_dict, conformity)
     human_oversight = _build_human_oversight(receipt_dict, conformity)
     accuracy = _build_accuracy_report(receipt_dict, conformity)
+
+    # Compliance readiness score
+    compliance_score = _compute_compliance_score(conformity)
 
     # Compute integrity hash
     hash_input = json.dumps(
@@ -331,16 +383,21 @@ def _generate_compliance_bundle(
             "generated_at": timestamp,
             "integrity_hash": integrity_hash,
             "compliance_deadline": "2026-08-02",
+            "days_until_deadline": _days_until_deadline(),
             "regulation": "EU AI Act (Regulation 2024/1689)",
+            "generated_by": "Aragora Decision Integrity Platform",
         },
+        "compliance_score": compliance_score,
         "risk_classification": classification.to_dict(),
         "conformity_report": conformity.to_dict(),
         "receipt": receipt_data,
         "audit_trail": audit_trail,
+        "risk_management": risk_management,
         "transparency_report": transparency,
         "human_oversight": human_oversight,
         "accuracy_report": accuracy,
         "article_artifacts": {
+            "article_9": artifact_bundle.article_9.to_dict(),
             "article_12": artifact_bundle.article_12.to_dict(),
             "article_13": artifact_bundle.article_13.to_dict(),
             "article_14": artifact_bundle.article_14.to_dict(),
@@ -506,6 +563,71 @@ def _build_accuracy_report(
     }
 
 
+def _build_risk_management(
+    receipt: dict[str, Any],
+    conformity: Any,
+) -> dict[str, Any]:
+    """Build risk management report (Article 9 mapping)."""
+    risk_summary = receipt.get("risk_summary", {})
+    confidence = receipt.get("confidence", 0.0)
+    robustness = receipt.get("robustness_score", 0.0)
+    config = receipt.get("config_used", {})
+    consensus = receipt.get("consensus_proof", {}) or {}
+
+    agents = sorted(
+        set(consensus.get("supporting_agents", []) + consensus.get("dissenting_agents", []))
+    )
+
+    # Find Art. 9 mapping status from conformity
+    art9_status = "unknown"
+    for m in conformity.article_mappings:
+        if m.article == "Article 9":
+            art9_status = m.status
+            break
+
+    critical_count = risk_summary.get("critical", 0)
+
+    return {
+        "article": "Article 9",
+        "status": art9_status,
+        "risk_assessment": {
+            "total_risks": risk_summary.get("total", 0),
+            "critical": risk_summary.get("critical", 0),
+            "high": risk_summary.get("high", 0),
+            "medium": risk_summary.get("medium", 0),
+            "low": risk_summary.get("low", 0),
+        },
+        "analysis_method": {
+            "approach": "Multi-agent adversarial debate",
+            "protocol": config.get("protocol", "adversarial"),
+            "rounds": config.get("rounds", 0),
+            "agents": agents,
+        },
+        "confidence": confidence,
+        "robustness_score": robustness,
+        "known_risks": [
+            "Model hallucination",
+            "Automation bias",
+            "Hollow consensus",
+            "Data drift",
+            "Adversarial input",
+        ],
+        "mitigation_controls": [
+            "Multi-agent debate",
+            "Trickster detection",
+            "Circuit breaker",
+            "Calibration monitoring",
+            "Human oversight",
+        ],
+        "residual_risk_level": (
+            "high" if critical_count > 0 else ("medium" if confidence < 0.7 else "low")
+        ),
+        "acceptance_criteria_met": (
+            critical_count == 0 and confidence >= 0.6 and robustness >= 0.5 and len(agents) >= 3
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Output writers
 # ---------------------------------------------------------------------------
@@ -543,6 +665,15 @@ def _write_bundle(
             bundle["audit_trail"],
             fmt,
             article_ref=EU_AI_ACT_ARTICLES["article_12"],
+        )
+
+    if bundle.get("risk_management") is not None:
+        _write_artifact(
+            os.path.join(output_dir, f"risk_management.{ext}"),
+            "Risk Management Report",
+            bundle["risk_management"],
+            fmt,
+            article_ref=EU_AI_ACT_ARTICLES["article_9"],
         )
 
     _write_artifact(
@@ -742,64 +873,121 @@ def _write_manifest(
     meta = bundle.get("meta", {})
     classification = bundle.get("risk_classification", {})
     conformity = bundle.get("conformity_report", {})
+    score_info = bundle.get("compliance_score", {})
+
+    score = score_info.get("score", 0)
+    label = score_info.get("label", "Unknown")
+    days = meta.get("days_until_deadline", 0)
+    breakdown = score_info.get("breakdown", {})
+
+    # Score bar (10 chars wide)
+    filled = max(1, score // 10)
+    score_bar = "=" * filled + "-" * (10 - filled)
 
     lines = [
         "# EU AI Act Compliance Bundle",
         "",
-        f"**Generated:** {meta.get('generated_at', '')}",
-        f"**Receipt ID:** {meta.get('receipt_id', '')}",
-        f"**Integrity Hash:** `{meta.get('integrity_hash', '')}`",
-        f"**Risk Level:** {classification.get('risk_level', 'unknown').upper()}",
-        f"**Conformity Status:** {conformity.get('overall_status', 'unknown').upper()}",
-        f"**Compliance Deadline:** {meta.get('compliance_deadline', '2026-08-02')}",
+        "> Generated by **Aragora Decision Integrity Platform** -- EU AI Act (Regulation 2024/1689)",
         "",
         "---",
         "",
-        "## Artifacts",
+        "## Compliance Readiness",
         "",
-        "| File | EU AI Act Article | Description |",
-        "|------|-------------------|-------------|",
-        "| `bundle.json` | All | Complete compliance bundle (machine-readable) |",
-        f"| `receipt.{ext}` | Article 9 | Decision receipt with risk assessment |",
-        f"| `audit_trail.{ext}` | Article 12 | Chronological audit log with provenance |",
-        f"| `transparency_report.{ext}` | Article 13 | Agent participation and reasoning |",
-        f"| `human_oversight.{ext}` | Article 14 | Voting record, dissent, escalation |",
-        f"| `accuracy_report.{ext}` | Article 15 | Confidence scores, robustness metrics |",
+        "```",
+        f"  Score:    {score}/100  [{score_bar}]  {label}",
+        f"  Risk:     {classification.get('risk_level', 'unknown').upper()}",
+        f"  Status:   {conformity.get('overall_status', 'unknown').upper()}",
+        f"  Deadline: August 2, 2026  ({days} days remaining)",
+        "```",
+        "",
+    ]
+
+    if breakdown:
+        pass_arts = ", ".join(breakdown.get("pass", [])) or "--"
+        partial_arts = ", ".join(breakdown.get("partial", [])) or "--"
+        fail_arts = ", ".join(breakdown.get("fail", [])) or "--"
+        lines += [
+            f"- **Passing:** {pass_arts}",
+            f"- **Partial:** {partial_arts}",
+            f"- **Failing:** {fail_arts}",
+            "",
+        ]
+
+    article_titles = {
+        "Article 9": "Risk Management",
+        "Article 12": "Record-Keeping",
+        "Article 13": "Transparency",
+        "Article 14": "Human Oversight",
+        "Article 15": "Accuracy & Robustness",
+    }
+
+    lines += [
+        "---",
+        "",
+        "## Bundle Contents",
+        "",
+        "| File | EU AI Act Article | What It Proves |",
+        "|------|-------------------|----------------|",
+        "| `bundle.json` | All | Complete machine-readable compliance record |",
+        f"| `receipt.{ext}` | Article 9 | Risk assessment, confidence, robustness score |",
+        f"| `risk_management.{ext}` | Article 9 | Risk management system, mitigations, residual risk |",
+        f"| `audit_trail.{ext}` | Article 12 | Event log -- who did what and when |",
+        f"| `transparency_report.{ext}` | Article 13 | Agent identities, reasoning chain, dissent |",
+        f"| `human_oversight.{ext}` | Article 14 | Override capability, voting record, escalation |",
+        f"| `accuracy_report.{ext}` | Article 15 | Confidence metrics, robustness, integrity hash |",
         "| `README.md` | -- | This manifest |",
         "",
         "---",
         "",
-        "## Article Mapping",
+        "## Article-by-Article Assessment",
         "",
-        "| Article | Requirement | Status |",
-        "|---------|-------------|--------|",
+        "| Article | Title | Status | Evidence |",
+        "|---------|-------|--------|----------|",
     ]
 
     for mapping in conformity.get("article_mappings", []):
         status_label = {
-            "satisfied": "PASS",
+            "satisfied": "**PASS**",
             "partial": "PARTIAL",
-            "not_satisfied": "FAIL",
+            "not_satisfied": "**FAIL**",
             "not_applicable": "N/A",
         }.get(mapping.get("status", ""), mapping.get("status", ""))
-        lines.append(
-            f"| {mapping.get('article', '')} | "
-            f"{mapping.get('requirement', '')[:60]} | "
-            f"{status_label} |"
-        )
+        article = mapping.get("article", "")
+        title = article_titles.get(article, "")
+        evidence = mapping.get("evidence", "")[:80]
+        lines.append(f"| {article} | {title} | {status_label} | {evidence} |")
 
     if conformity.get("recommendations"):
-        lines.append("")
-        lines.append("## Recommendations")
-        lines.append("")
+        lines += [
+            "",
+            "---",
+            "",
+            "## Recommendations",
+            "",
+        ]
         for i, rec in enumerate(conformity["recommendations"], 1):
             lines.append(f"{i}. {rec}")
 
-    lines.append("")
-    lines.append("---")
-    lines.append("")
-    lines.append("*Generated by Aragora Decision Integrity Platform*")
-    lines.append("")
+    lines += [
+        "",
+        "---",
+        "",
+        "## Audit Metadata",
+        "",
+        "| Field | Value |",
+        "|-------|-------|",
+        f"| Receipt ID | `{meta.get('receipt_id', '')}` |",
+        f"| Generated at | {meta.get('generated_at', '')} |",
+        f"| Regulation | {meta.get('regulation', '')} |",
+        f"| Integrity Hash | `{meta.get('integrity_hash', '')}` |",
+        f"| Generated by | {meta.get('generated_by', 'Aragora Decision Integrity Platform')} |",
+        "",
+        "---",
+        "",
+        "*This bundle was generated automatically from a cryptographically signed decision receipt.*",
+        "*The integrity hash verifies the bundle has not been tampered with since generation.*",
+        "",
+    ]
 
     manifest_path = os.path.join(output_dir, "README.md")
     with open(manifest_path, "w") as f:
@@ -815,39 +1003,71 @@ def _print_summary(
     meta = bundle.get("meta", {})
     classification = bundle.get("risk_classification", {})
     conformity = bundle.get("conformity_report", {})
+    score_info = bundle.get("compliance_score", {})
     ext = _format_extension(fmt)
 
-    print("EU AI Act Compliance Bundle Exported")
-    print("=" * 50)
-    print(f"Receipt ID:      {meta.get('receipt_id', '')}")
-    print(f"Risk Level:      {classification.get('risk_level', '').upper()}")
-    print(f"Conformity:      {conformity.get('overall_status', '').upper()}")
-    print(f"Integrity Hash:  {meta.get('integrity_hash', '')[:16]}...")
-    print(f"Deadline:        {meta.get('compliance_deadline', '2026-08-02')}")
+    # ANSI colors -- gracefully ignored when piped
+    GREEN = "\033[32m"
+    YELLOW = "\033[33m"
+    RED = "\033[31m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+
+    score = score_info.get("score", 0)
+    label = score_info.get("label", "Unknown")
+    days = meta.get("days_until_deadline", 0)
+
+    score_color = GREEN if score >= 75 else (YELLOW if score >= 40 else RED)
+    days_color = RED if days < 90 else (YELLOW if days < 180 else GREEN)
+
+    print()
+    print(f"{BOLD}EU AI Act Compliance Bundle{RESET}")
+    print("=" * 55)
+    print("  Regulation:      EU AI Act (Regulation 2024/1689)")
+    print(f"  Receipt ID:      {meta.get('receipt_id', '')}")
+    print(f"  Risk Level:      {classification.get('risk_level', '').upper()}")
+    print()
+    print(f"  {BOLD}Compliance Score: {score_color}{score}/100 -- {label}{RESET}")
+    print(f"  Deadline:        {days_color}August 2, 2026 ({days} days remaining){RESET}")
+    print(f"  Integrity Hash:  {meta.get('integrity_hash', '')[:32]}...")
     print()
 
     # Article status table
-    print("Article Compliance Summary:")
+    status_sym = {
+        "satisfied": "PASS",
+        "partial": "PARTIAL",
+        "not_satisfied": "FAIL",
+        "not_applicable": "N/A",
+    }
+    status_col = {"satisfied": GREEN, "partial": YELLOW, "not_satisfied": RED, "not_applicable": ""}
+
+    print(f"  {'Article':<14} {'Requirement':<52} Status")
+    print(f"  {'-' * 14} {'-' * 52} ------")
     for mapping in conformity.get("article_mappings", []):
-        status_display = {
-            "satisfied": "PASS",
-            "partial": "PARTIAL",
-            "not_satisfied": "FAIL",
-            "not_applicable": "N/A",
-        }.get(mapping.get("status", ""), mapping.get("status", ""))
+        st = mapping.get("status", "")
+        sym = status_sym.get(st, st)
+        col = status_col.get(st, "")
         article = mapping.get("article", "")
-        requirement = mapping.get("requirement", "")[:50]
-        print(f"  {article:<12s} {requirement:<52s} [{status_display}]")
+        req = mapping.get("requirement", "")[:52]
+        print(f"  {article:<14} {req:<52} {col}[{sym}]{RESET}")
+
+    recs = conformity.get("recommendations", [])
+    if recs:
+        print()
+        print(f"  {YELLOW}Recommendations:{RESET}")
+        for i, rec in enumerate(recs, 1):
+            print(f"    {i}. {rec}")
 
     print()
-    print(f"Output directory: {output_dir}/")
-    print("  bundle.json                    Full bundle (JSON)")
-    print(f"  receipt.{ext:<24s}  Art. 9  Risk management")
-    print(f"  audit_trail.{ext:<20s}  Art. 12 Record-keeping")
-    print(f"  transparency_report.{ext:<12s}  Art. 13 Transparency")
-    print(f"  human_oversight.{ext:<16s}  Art. 14 Human oversight")
-    print(f"  accuracy_report.{ext:<16s}  Art. 15 Accuracy & robustness")
-    print("  README.md                      Manifest")
+    print(f"  Output: {output_dir}/")
+    print("    README.md                         Manifest and article mapping")
+    print("    bundle.json                       Full bundle (machine-readable)")
+    print(f"    receipt.{ext:<27} Art. 9  -- Risk management")
+    print(f"    risk_management.{ext:<19} Art. 9  -- Risk management system & mitigations")
+    print(f"    audit_trail.{ext:<23} Art. 12 -- Record-keeping & provenance")
+    print(f"    transparency_report.{ext:<15} Art. 13 -- Agent participation & reasoning")
+    print(f"    human_oversight.{ext:<19} Art. 14 -- Human oversight & override")
+    print(f"    accuracy_report.{ext:<19} Art. 15 -- Confidence & robustness")
     print()
 
 

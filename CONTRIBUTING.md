@@ -256,8 +256,8 @@ aragora/
 │   ├── agents/        # Agent implementations (API + CLI)
 │   ├── debate/        # Debate orchestration (Arena, phases, consensus)
 │   ├── memory/        # Memory systems (Continuum, 4-tier)
-│   ├── knowledge/     # Knowledge Mound with 14 adapters
-│   ├── server/        # HTTP/WebSocket API (275+ endpoints)
+│   ├── knowledge/     # Knowledge Mound with 41 adapters
+│   ├── server/        # HTTP/WebSocket API (3,000+ operations)
 │   ├── control_plane/ # Enterprise orchestration
 │   ├── connectors/    # 130+ external integrations
 │   ├── cli/           # CLI commands

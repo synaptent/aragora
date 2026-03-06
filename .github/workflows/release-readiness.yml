@@ -31,7 +31,7 @@ jobs:
   release-readiness:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Release Readiness
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 35
 
     steps:
@@ -69,15 +69,15 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install (dev)
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Run release-readiness gate
         # Keep this gate deterministic: never rely on optional external

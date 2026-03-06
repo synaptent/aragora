@@ -58,7 +58,7 @@ Every component of Aragora's healthcare pipeline is designed for HIPAA complianc
 | **PHI Redaction** | Safe Harbor de-identification strips all 18 HIPAA identifiers from Decision Receipts before storage or export |
 | **Encryption** | AES-256-GCM field-level encryption for sensitive data at rest; TLS 1.3 in transit |
 | **Audit Trails** | Every debate round, every agent contribution, every vote is logged with tamper-evident SHA-256 hashing |
-| **Access Control** | RBAC v2 with 50+ granular permissions; role-based access to clinical debate results |
+| **Access Control** | RBAC v2 with 360+ permissions; role-based access to clinical debate results |
 | **Data Retention** | Configurable retention policies aligned with state and federal requirements |
 | **Breach Notification** | Built-in breach assessment workflow template with HHS notification timelines |
 | **Minimum Necessary** | Only clinical data relevant to the specific decision is included in the debate context |

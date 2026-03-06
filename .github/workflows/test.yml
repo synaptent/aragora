@@ -48,7 +48,7 @@ jobs:
   version-check:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Version Alignment
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
 
     steps:
@@ -77,8 +77,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -92,7 +92,7 @@ jobs:
       - name: Install OpenAPI generation dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Check version alignment
         run: python scripts/check_version_alignment.py
@@ -115,7 +115,7 @@ jobs:
 
       - name: Check Python SDK types are up to date
         run: |
-          pip install datamodel-code-generator
+          python -m pip install datamodel-code-generator
           python scripts/generate_python_sdk_types.py --openapi docs/api/openapi_generated.json --check
 
       - name: Check capability matrix is up to date
@@ -168,7 +168,7 @@ jobs:
   sdk-typescript-compile-gate:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: SDK TypeScript Compile Gate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 8
     needs: version-check
 
@@ -198,8 +198,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -215,7 +215,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Install TypeScript SDK dependencies
         working-directory: sdk/typescript
@@ -230,7 +230,7 @@ jobs:
   baseline-determinism:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Baseline Determinism
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 12
     needs: version-check
 
@@ -260,8 +260,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -270,7 +270,7 @@ jobs:
       - name: Install baseline test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
+          python -m pip install -e ".[dev,research,test]"
 
       - name: Verify deterministic baseline command
         run: python scripts/run_test_baseline.py
@@ -279,7 +279,7 @@ jobs:
   skip-audit:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Skip Marker Audit
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
@@ -308,8 +308,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -350,7 +350,7 @@ jobs:
   status-reconciliation:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Status Doc Reconciliation
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:
@@ -379,8 +379,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -389,7 +389,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Run status reconciliation
         run: |
@@ -409,7 +409,7 @@ jobs:
   zero-coverage-check:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Zero Coverage Check
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: baseline-determinism
 
@@ -439,8 +439,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -449,7 +449,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Check for new zero-coverage files
         run: |
@@ -495,7 +495,7 @@ jobs:
   # Fast parallel tests by category (Ubuntu only, primary Python)
   test-fast:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: baseline-determinism
     strategy:
@@ -541,8 +541,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -551,8 +551,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout pytest-xdist
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout pytest-xdist
 
       - name: Run ${{ matrix.category.name }} tests
         run: |
@@ -571,7 +571,7 @@ jobs:
   epistemic-settlement-gate:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Epistemic Hygiene + Settlement Gate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 12
     needs: baseline-determinism
 
@@ -601,8 +601,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -611,8 +611,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout
 
       - name: Run epistemic hygiene + settlement gate
         run: bash scripts/run_epistemic_settlement_gate.sh
@@ -643,7 +643,7 @@ jobs:
 
   v1-scope-lock-gate:
     name: V1 Scope Lock Gate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: baseline-determinism
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request')
@@ -676,8 +676,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -691,7 +691,7 @@ jobs:
   integration-minimal:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Integration Minimal
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: baseline-determinism
 
@@ -721,8 +721,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -731,8 +731,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout
 
       - name: Run integration minimal marker suite
         run: |
@@ -746,7 +746,7 @@ jobs:
   # Integration smoke lane for high-risk paths (PR only)
   integration-smoke:
     name: Integration Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: baseline-determinism
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request')
@@ -792,7 +792,7 @@ jobs:
 
       - name: Set up Python 3.11
         if: steps.changes.outputs.high_risk == 'true'
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -802,8 +802,8 @@ jobs:
         if: steps.changes.outputs.high_risk == 'true'
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout
 
       - name: Run integration smoke tests
         if: steps.changes.outputs.high_risk == 'true'
@@ -824,7 +824,7 @@ jobs:
   test-pollution-randomized:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Randomized Order Pollution Guard
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: test-fast
     strategy:
@@ -858,8 +858,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -868,8 +868,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout pytest-xdist pytest-randomly
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout pytest-xdist pytest-randomly
 
       - name: Compute dynamic seed
         id: dynamic-seed
@@ -906,7 +906,7 @@ jobs:
   golden-paths:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Golden Path Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: version-check
 
@@ -936,8 +936,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -946,7 +946,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run golden-path harness (fast)
         run: |
@@ -955,7 +955,7 @@ jobs:
   aragora-debate-tests:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Standalone Debate Package
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: test-fast
 
@@ -985,8 +985,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -995,7 +995,7 @@ jobs:
       - name: Install aragora-debate with dev deps
         run: |
           python -m pip install --upgrade pip
-          pip install -e "aragora-debate[dev]"
+          python -m pip install -e "aragora-debate[dev]"
 
       - name: Run aragora-debate tests
         run: |
@@ -1091,8 +1091,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -1101,8 +1101,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-cov pytest-timeout pytest-xdist
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-cov pytest-timeout pytest-xdist
 
       - name: Run tests – shard ${{ matrix.shard.name }} (parallel with xdist)
         run: |
@@ -1136,7 +1136,7 @@ jobs:
   # Summary job: merge coverage from shards and enforce gates
   test-summary:
     name: Test Summary
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test]
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always())
@@ -1188,8 +1188,8 @@ jobs:
               ;;
           esac
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -1198,7 +1198,7 @@ jobs:
       - name: Install coverage tools
         run: |
           python -m pip install --upgrade pip
-          pip install coverage
+          python -m pip install coverage
 
       - name: Download all coverage artifacts
         uses: actions/download-artifact@v4
@@ -1340,7 +1340,7 @@ jobs:
   smoke:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: CLI Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: baseline-determinism
 
@@ -1370,8 +1370,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -1380,7 +1380,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Smoke - demo ask
         run: |
@@ -1433,7 +1433,7 @@ jobs:
 
   nightly-slow:
     name: Nightly Slow Tier
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: baseline-determinism
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
@@ -1464,8 +1464,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -1474,8 +1474,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout
 
       - name: Run slow/load/e2e/benchmark tier
         run: |
@@ -1492,7 +1492,7 @@ jobs:
   frontend:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Frontend E2E Tests
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -1575,7 +1575,7 @@ jobs:
   # Lightweight frontend type checking (PR-only, path-filtered)
   frontend-typecheck:
     name: Frontend TypeScript Type Check
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request')
 
@@ -1638,7 +1638,7 @@ jobs:
   security:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Security Scan
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -1667,15 +1667,15 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
           cache-dependency-path: pyproject.toml
 
       - name: Install bandit
-        run: pip install bandit[toml]
+        run: python -m pip install bandit[toml]
 
       - name: Run bandit security scan
         run: |
@@ -1693,7 +1693,7 @@ jobs:
   typecheck:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Type Check
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
@@ -1722,8 +1722,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -1732,8 +1732,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install mypy types-requests types-aiofiles
+          python -m pip install -e ".[dev]"
+          python -m pip install mypy types-requests types-aiofiles
 
       - name: Run mypy
         run: |
@@ -1747,7 +1747,7 @@ jobs:
   migration-test:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Database Migrations
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     services:
@@ -1791,8 +1791,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -1801,8 +1801,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install alembic psycopg2-binary asyncpg
+          python -m pip install -e ".[dev]"
+          python -m pip install alembic psycopg2-binary asyncpg
 
       - name: Verify migration files
         run: |
@@ -1849,7 +1849,7 @@ jobs:
 
   nightly-optional:
     name: Optional Deps (Full)
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: baseline-determinism
     # Run on schedule, push to main, or workflow_dispatch
@@ -1905,8 +1905,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -1915,8 +1915,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test,research]"
-          pip install mcp || true
+          python -m pip install -e ".[dev,test,research]"
+          python -m pip install mcp || true
 
       - name: Run optional-deps test suite
         run: |
@@ -1944,7 +1944,7 @@ jobs:
   quality-gates:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Quality Gates
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test-fast, test-summary, epistemic-settlement-gate, v1-scope-lock-gate]
 
@@ -1974,8 +1974,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -1984,7 +1984,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: RBAC coverage audit
         run: python scripts/audit_rbac_coverage.py
@@ -1994,7 +1994,7 @@ jobs:
 
   test-analytics:
     name: Test Analytics
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test-fast]
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always() && github.event_name == 'pull_request')
@@ -2025,8 +2025,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -2035,8 +2035,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install pytest-rerunfailures
+          python -m pip install -e ".[dev]"
+          python -m pip install pytest-rerunfailures
 
       - name: Run tests with JUnit output
         id: tests

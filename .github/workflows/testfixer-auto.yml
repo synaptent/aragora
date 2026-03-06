@@ -32,7 +32,7 @@ jobs:
     # Disabled: auto-fix loop causes CI thrash (push→cancel→restart cycle).
     # Re-enable via workflow_dispatch when needed for targeted fix runs.
     if: github.event_name == 'workflow_dispatch'
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
       DEFAULT_TEST_COMMAND: >-
@@ -71,15 +71,15 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Guard secrets
         id: guard

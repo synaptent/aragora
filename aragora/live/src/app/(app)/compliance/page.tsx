@@ -3,9 +3,10 @@
 /**
  * Compliance Dashboard
  *
- * Shows four key compliance panels:
- *   1. RBAC coverage summary
- *   2. Encryption status (at-rest AES-256-GCM, in-transit TLS)
+ * Shows five key compliance panels:
+ *   1. RBAC coverage summary (v1 endpoint + v2 fallback)
+ *   2. Database mode (from /api/health db_mode field)
+ *   2b. Receipt anchor verification placeholder
  *   3. Compliance framework readiness (SOC 2, GDPR, EU AI Act)
  *   4. Recent audit trail entries
  *
@@ -826,6 +827,31 @@ export default function CompliancePage() {
         <div className="mb-6">
           <PanelErrorBoundary panelName="Database Mode">
             <DatabaseModePanel dbMode={dbMode} loading={healthLoading && !healthData} />
+          </PanelErrorBoundary>
+        </div>
+
+        {/* ============================================================= */}
+        {/* Section 2b: Receipt Anchor Verification                        */}
+        {/* ============================================================= */}
+        <div className="mb-6">
+          <PanelErrorBoundary panelName="Receipt Anchor Verification">
+            <div className="border border-[var(--border)] bg-[var(--bg-secondary)] rounded p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-mono font-bold text-[var(--text-primary)] uppercase tracking-wider">
+                  Receipt Anchor Verification
+                </h3>
+                <span className="text-[10px] font-mono text-[var(--text-muted)]">Coming soon</span>
+              </div>
+              <div className="text-xs font-mono text-[var(--text-muted)] space-y-2">
+                <p>Verify decision receipt integrity against on-chain anchors.</p>
+                <p>SHA-256 hashes are anchored after each debate settlement.</p>
+                <div className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded bg-[var(--bg)] border border-dashed border-[var(--border)]">
+                  <span className="text-[10px] font-mono text-[var(--text-muted)]">
+                    Anchor verification will be available once the settlement hook infrastructure is production-ready.
+                  </span>
+                </div>
+              </div>
+            </div>
           </PanelErrorBoundary>
         </div>
 

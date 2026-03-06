@@ -19,7 +19,7 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | External penetration test | Vendor outreach in progress | Kickoff target: Mar 3, 2026. Only remaining external blocker. |
-| Debate output quality | Substantially improved — needs consistency validation | Run 012 (Mar 5): composite scores 8.38-9.39/10 (was 3.46-3.55). Practicality scoring fixes merged. Goal: validate 80%+ pass rate consistency across diverse tasks. |
+| Debate output quality | **VALIDATED — 100% pass rate** | Run 012 (Mar 5): composite 8.38-9.39/10. Diverse benchmark (10 domains): 100% pass, avg composite 0.938. Move to Completed next update. |
 
 ---
 
@@ -27,12 +27,12 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| 3 beta users with `aragora review` | Not started | Need real PRs reviewed end-to-end via Aragora |
-| GitHub Actions pre-merge gate | Not started | AI code review integration for CI pipelines |
-| Public demo at aragora.ai/demo | Not started | Live shareable debate demo with persistence |
-| EU AI Act compliance package | Partial | Artifact bundles generated for Art. 12, 13, 14. Art. 9 conformity checking included in the report; dedicated Art. 9 artifact bundle is planned (see P2). CLI export works; documentation and customer playbook needed. **Deadline: Aug 2, 2026.** |
+| Agent-first beta via REST API | **In progress** | OpenClaw instances as non-human beta users calling `POST /api/v1/debates`. Self-hosted runner fleet deployed for end-to-end dogfooding and CI validation. |
+| GitHub Actions pre-merge gate | **Merged (#648)** | `aragora-review.yml` deployed. Gates on critical findings. Needs branch protection config + beta testing with real repos. |
+| Public demo at aragora.ai/demo | **Demo page + share URLs live** | Standalone demo page merged (#648). Share URL persistence fixed. Needs frontend routing verification at aragora.ai/demo. |
+| EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14/15 dedicated bundles + CLI export + compliance scoring + demo script + customer playbook. **Deadline: Aug 2, 2026.** |
 | First 2 enterprise pilot engagements | Not started | Closed partnerships — target fintech + healthcare |
-| Developer onboarding <10 min | Not measured | No validated onboarding flow; needs user testing |
+| Developer onboarding <10 min | **Quickstart exists** | `docs/QUICKSTART.md` covers install → zero-key demo → real AI → TypeScript → Docker → CLI in 7 steps. Needs cold-start user testing. |
 
 ---
 
@@ -46,7 +46,7 @@
 | Decision-Integrity UI Workbench | Not started | No frontend for knowledge search, agent leaderboard, pipeline canvas. Backend APIs complete. |
 | SOC 2 Type II audit engagement | Not started | 98% controls implemented; formal audit vendor not engaged. |
 | Smart provider routing | Not started | Cost/quality-optimized routing across Claude/GPT/Mistral/DeepSeek. |
-| Article 9 dedicated artifact bundle | Not started | `ComplianceArtifactGenerator` currently produces Art. 12/13/14 bundles only. Art. 9 (Risk Management) conformity is checked via `ConformityReportGenerator` but has no dedicated `article_9_risk_management.json` output file. Needs `Article9Artifact` dataclass + generator method + CLI export. |
+| Enterprise Communication Hub (#293) | **~55%** | Delivery log + retry queue + circuit breakers + event telemetry wired. Remaining: notification templates, user preferences, inbox→debate trigger, Active Triage dashboard. |
 
 ---
 
@@ -92,7 +92,7 @@
 
 | Feature | Current State | Gap |
 |---------|---------------|-----|
-| Self-improving platform quality | Nomic Loop 100% wired; 66 E2E tests passing; Run 012 scores 8.38-9.39/10 | Validate 80%+ pass rate consistency across diverse tasks (not just dogfood) |
+| Self-improving platform quality | Nomic Loop 100% wired; 82 E2E tests; pipeline hardened (PRs #650, #649, #659 merged); safety gates + gauntlet gate + evolution audit | Diverse benchmark validated (100% pass). Production safety gate requires ENABLE_NOMIC_LOOP=true. |
 | Blockchain receipts | SHA-256 cryptographic hashing works | On-chain storage with ERC-8004 (not deployed) |
 | Semantic convergence | Embedding detection wired (sentence-transformers) | Not default; some debate paths still use difflib |
 | OpenClaw execution | Computer use detection works | Production E2E flow (debate → computer use → receipt) not validated |
@@ -117,3 +117,6 @@ These items were planned and are now shipped:
 | Compliance CLI (EU AI Act artifact export) | Mar 2026 |
 | Settlement hooks | Mar 2026 |
 | Gauntlet receipts (SHA-256 audit trails) | Feb 2026 |
+| Article 9 dedicated artifact bundle | Mar 2026 |
+| Debate output quality (10-domain benchmark) | Mar 2026 |
+| Nomic Loop safety gates (production gate, gauntlet, audit) | Mar 2026 |

@@ -402,3 +402,191 @@ class TestUnifiedOrchestratorGoldenPath:
         # No plan_factory → plan stage skipped
         assert result.decision_plan is None
         assert result.succeeded
+
+
+class TestUnifiedOrchestratorQualityGate:
+    """Quality gate integration in the unified pipeline."""
+
+    @pytest.mark.asyncio
+    async def test_quality_gate_passes_good_output(self):
+        """Quality gate accepts high-quality debate output."""
+        mock_debate = MagicMock()
+        mock_debate.final_answer = (
+            "## Ranked High-Level Tasks\n"
+            "1. Refactor aragora/debate/orchestrator.py with p95 <= 200ms\n"
+            "## Test Plan\nRun pytest tests/debate/ -v\n"
+            "## Gate Criteria\ncoverage >= 80%"
+        )
+        mock_debate.consensus_reached = True
+
+        mock_quality_report = MagicMock()
+        mock_quality_report.verdict = "good"
+        mock_quality_report.quality_score_10 = 9.5
+
+        async def arena_factory(prompt, **kwargs):
+            return mock_debate
+
+        async def quality_validator(debate_result, **kwargs):
+            return mock_quality_report
+
+        orch = UnifiedOrchestrator(
+            arena_factory=arena_factory,
+            quality_validator=quality_validator,
+        )
+        config = OrchestratorConfig(enable_quality_gate=True, skip_execution=True)
+        result = await orch.run("Test quality gate", config=config)
+
+        assert "debate" in result.stages_completed
+        assert "quality_gate" in result.stages_completed
+        assert result.quality_report is mock_quality_report
+        assert result.succeeded
+
+    @pytest.mark.asyncio
+    async def test_quality_gate_rejects_bad_output(self):
+        """Quality gate stops pipeline when output fails validation."""
+        mock_debate = MagicMock()
+        mock_debate.final_answer = "vague answer with no structure"
+        mock_debate.consensus_reached = True
+
+        mock_quality_report = MagicMock()
+        mock_quality_report.verdict = "fail"
+        mock_quality_report.quality_score_10 = 3.0
+
+        async def arena_factory(prompt, **kwargs):
+            return mock_debate
+
+        async def quality_validator(debate_result, **kwargs):
+            return mock_quality_report
+
+        orch = UnifiedOrchestrator(
+            arena_factory=arena_factory,
+            quality_validator=quality_validator,
+        )
+        config = OrchestratorConfig(enable_quality_gate=True)
+        result = await orch.run("Test quality rejection", config=config)
+
+        assert "quality_gate" in result.stages_completed
+        assert not result.succeeded
+        assert any("Quality gate rejected" in e for e in result.errors)
+
+    @pytest.mark.asyncio
+    async def test_quality_gate_skipped_when_disabled(self):
+        """Quality gate doesn't run when not configured."""
+        mock_debate = MagicMock(final_answer="Answer", consensus_reached=True)
+
+        async def arena_factory(prompt, **kwargs):
+            return mock_debate
+
+        orch = UnifiedOrchestrator(arena_factory=arena_factory)
+        config = OrchestratorConfig(enable_quality_gate=False)
+        result = await orch.run("No quality gate", config=config)
+
+        assert "quality_gate" not in result.stages_completed
+        assert result.quality_report is None
+
+
+class TestUnifiedOrchestratorBugFixLoop:
+    """Bug-fix loop integration in the unified pipeline."""
+
+    @pytest.mark.asyncio
+    async def test_bug_fix_diagnoses_and_repairs(self):
+        """Bug fixer detects failure and applies fix."""
+        mock_debate = MagicMock(final_answer="Plan", consensus_reached=True)
+        mock_plan = MagicMock(id="plan-1", task="fix bugs")
+        mock_plan_factory = MagicMock()
+        mock_plan_factory.from_debate_result.return_value = mock_plan
+
+        mock_outcome = MagicMock()
+        mock_outcome.test_output = "FAILED test_foo - AssertionError"
+        mock_outcome.diff = "--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-old\n+new"
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = mock_outcome
+        mock_executor.apply_fix_and_retest.return_value = "All tests passed"
+
+        mock_diagnosis = MagicMock()
+        mock_diagnosis.failure_type = "assertion_mismatch"
+        mock_diagnosis.confidence = 0.9
+
+        mock_fix = MagicMock()
+        mock_fix.description = "Fix assertion in test_foo"
+        mock_fix.confidence = 0.85
+
+        mock_fixer = MagicMock()
+        mock_fixer.diagnose_failure.return_value = mock_diagnosis
+        mock_fixer.suggest_fix.return_value = mock_fix
+
+        async def arena_factory(prompt, **kwargs):
+            return mock_debate
+
+        async def approve_all(stage, artifact):
+            return True
+
+        orch = UnifiedOrchestrator(
+            arena_factory=arena_factory,
+            plan_factory=mock_plan_factory,
+            plan_executor=mock_executor,
+            bug_fixer=mock_fixer,
+        )
+        config = OrchestratorConfig(enable_bug_fix_loop=True)
+        result = await orch.run("Fix bugs", config=config, approval_callback=approve_all)
+
+        assert "bug_fix" in result.stages_completed
+        assert result.bug_fix_result["status"] == "fixed"
+        assert result.bug_fix_result["attempts"] == 1
+
+    @pytest.mark.asyncio
+    async def test_bug_fix_skipped_without_fixer(self):
+        """Bug-fix loop gracefully skips when no fixer provided."""
+        mock_debate = MagicMock(final_answer="Plan", consensus_reached=True)
+
+        async def arena_factory(prompt, **kwargs):
+            return mock_debate
+
+        orch = UnifiedOrchestrator(arena_factory=arena_factory)
+        config = OrchestratorConfig(enable_bug_fix_loop=True)
+        result = await orch.run("No fixer", config=config)
+
+        assert "bug_fix" not in result.stages_completed
+        assert result.bug_fix_result is None
+
+    @pytest.mark.asyncio
+    async def test_bug_fix_respects_max_retries(self):
+        """Bug-fix loop stops after max_retries attempts."""
+        mock_debate = MagicMock(final_answer="Plan", consensus_reached=True)
+        mock_plan = MagicMock(id="plan-1", task="fix bugs")
+        mock_plan_factory = MagicMock()
+        mock_plan_factory.from_debate_result.return_value = mock_plan
+
+        mock_outcome = MagicMock()
+        mock_outcome.test_output = "FAILED test_foo"
+        mock_outcome.diff = None
+
+        mock_executor = AsyncMock()
+        mock_executor.execute.return_value = mock_outcome
+        mock_executor.apply_fix_and_retest.return_value = "FAILED test_foo again"
+
+        mock_diagnosis = MagicMock(failure_type="type_error", confidence=0.8)
+        mock_fix = MagicMock(description="Fix type", confidence=0.7)
+        mock_fixer = MagicMock()
+        mock_fixer.diagnose_failure.return_value = mock_diagnosis
+        mock_fixer.suggest_fix.return_value = mock_fix
+
+        async def arena_factory(prompt, **kwargs):
+            return mock_debate
+
+        async def approve_all(stage, artifact):
+            return True
+
+        orch = UnifiedOrchestrator(
+            arena_factory=arena_factory,
+            plan_factory=mock_plan_factory,
+            plan_executor=mock_executor,
+            bug_fixer=mock_fixer,
+        )
+        config = OrchestratorConfig(enable_bug_fix_loop=True, bug_fix_max_retries=2)
+        result = await orch.run("Retry limited", config=config, approval_callback=approve_all)
+
+        assert "bug_fix" in result.stages_completed
+        assert result.bug_fix_result["status"] == "unfixed"
+        assert result.bug_fix_result["attempts"] == 2

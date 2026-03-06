@@ -322,13 +322,13 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
-          pip install python-socketio websocket-client
+          python -m pip install python-socketio websocket-client
 
       - name: Provision monitors
         env:

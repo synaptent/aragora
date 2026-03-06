@@ -251,6 +251,15 @@ class TestInferTrack:
         )
         assert track == Track.CORE
 
+    def test_infer_infrastructure_integration_prompt_not_sme(self):
+        """Infrastructure integration objectives should not be mapped to SME."""
+        planner = MetaPlanner()
+        track = planner._infer_track(
+            "Tightly integrate pipeline self-improve, testfixer feedback loops, and quality gates",
+            [Track.SME, Track.CORE, Track.SELF_HOSTED, Track.SECURITY, Track.QA],
+        )
+        assert track in {Track.CORE, Track.SELF_HOSTED, Track.SECURITY}
+
     def test_infer_defaults_to_first(self):
         """Should default to first available track."""
         planner = MetaPlanner()
@@ -306,6 +315,53 @@ class TestHeuristicPrioritize:
 
         tracks_covered = {g.track for g in goals}
         assert Track.SME in tracks_covered or Track.QA in tracks_covered
+
+    def test_generic_objective_not_broadcast_to_all_tracks(self):
+        """Fallback heuristic should pick one best track, not clone to all tracks."""
+        planner = MetaPlanner()
+        objective = "Create a shared WorkItem protocol and UnifiedCycleOrchestrator"
+        goals = planner._heuristic_prioritize(
+            objective,
+            [Track.SME, Track.QA, Track.CORE, Track.SELF_HOSTED, Track.SECURITY],
+        )
+
+        assert len(goals) == 1
+        assert goals[0].track in {Track.CORE, Track.SELF_HOSTED, Track.SECURITY}
+        assert goals[0].track != Track.SME
+        assert planner._goal_fidelity_score(objective, goals[0].description) >= 0.2
+
+    @pytest.mark.asyncio
+    async def test_prioritize_work_recovers_when_objective_fidelity_is_low(self):
+        """Low-fidelity goal sets should be recovered to objective-aligned track."""
+        planner = MetaPlanner(
+            MetaPlannerConfig(
+                quick_mode=True,
+                objective_fidelity_threshold=0.8,
+                enforce_objective_fidelity=True,
+            )
+        )
+
+        def _drifted_goals(_objective, _tracks):
+            return [
+                PrioritizedGoal(
+                    id="goal_0",
+                    track=Track.SME,
+                    description="Improve SME dashboard font hierarchy and color contrast",
+                    rationale="drifted",
+                    estimated_impact="medium",
+                    priority=1,
+                )
+            ]
+
+        planner._heuristic_prioritize = _drifted_goals  # type: ignore[assignment]
+        goals = await planner.prioritize_work(
+            objective="Integrate pipeline, testfixer, and quality gates into a closed loop",
+            available_tracks=[Track.CORE, Track.SELF_HOSTED, Track.SECURITY, Track.SME],
+        )
+
+        assert len(goals) == 1
+        assert goals[0].track in {Track.CORE, Track.SELF_HOSTED, Track.SECURITY}
+        assert "closed loop" in goals[0].description.lower()
 
     def test_respects_max_goals(self):
         """Should not exceed max_goals."""
@@ -1229,16 +1285,17 @@ class TestHeuristicCodebaseHints:
             tracks = [Track.SECURITY, Track.QA, Track.CORE]
             goals = planner._heuristic_prioritize("hardening", tracks)
 
-        # Verify each file ended up in the correct track's hints
-        hints_by_track = {g.track: g.file_hints for g in goals}
-        assert "aragora/auth/oidc.py" in hints_by_track.get(Track.SECURITY, []), (
-            f"Expected auth file in SECURITY hints, got {hints_by_track}"
+        # "hardening" matches SECURITY, so we get a single SECURITY goal
+        # with all relevant file hints (not one goal per track).
+        assert len(goals) >= 1, f"Expected at least 1 goal, got {len(goals)}"
+        security_goals = [g for g in goals if g.track == Track.SECURITY]
+        assert len(security_goals) >= 1, (
+            f"Expected SECURITY goal for 'hardening', got tracks: {[g.track for g in goals]}"
         )
-        assert "tests/test_auth.py" in hints_by_track.get(Track.QA, []), (
-            f"Expected test file in QA hints, got {hints_by_track}"
-        )
-        assert "aragora/debate/orchestrator.py" in hints_by_track.get(Track.CORE, []), (
-            f"Expected debate file in CORE hints, got {hints_by_track}"
+        # File hints for the best-matching track should include security files
+        security_hints = security_goals[0].file_hints
+        assert "aragora/auth/oidc.py" in security_hints, (
+            f"Expected auth file in SECURITY hints, got {security_hints}"
         )
 
     def test_heuristic_with_empty_codebase(self):

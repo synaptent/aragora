@@ -14,6 +14,7 @@ Phase 2 step implementations for the Enterprise Control Plane:
 - KnowledgePruningStep: Automatic knowledge maintenance (pruning, dedup, decay)
 - ContentExtractionStep: Structured data extraction (entities, relationships, schemas)
 - HarnessStep: External code analysis harness integration (Claude Code, Codex)
+- CreateTicketStep / SendSummaryStep: Action fulfillment for debate results
 """
 
 from aragora.workflow.nodes.human_checkpoint import HumanCheckpointStep
@@ -43,6 +44,7 @@ from aragora.workflow.nodes.implementation import ImplementationStep, Verificati
 from aragora.workflow.nodes.computer_use import ComputerUseTaskStep
 from aragora.workflow.nodes.content_extraction import ContentExtractionStep
 from aragora.workflow.nodes.harness import HarnessStep
+from aragora.workflow.nodes.action_fulfillment import CreateTicketStep, SendSummaryStep
 
 from aragora.workflow.step import WorkflowStep
 
@@ -89,5 +91,7 @@ __all__ = [
     "ImplementationStep",
     "VerificationStep",
     "HarnessStep",
+    "CreateTicketStep",
+    "SendSummaryStep",
     "register_step_type",
 ]

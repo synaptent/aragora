@@ -18,6 +18,10 @@ pytest -q \
   tests/knowledge/test_knowledge_pipeline.py::TestKnowledgePipelineIntegration::test_full_pipeline_text_input \
   tests/pipeline/test_decision_integrity.py::TestBuildDecisionIntegrityPackage::test_defaults_include_receipt_and_plan \
   tests/server/test_decision_integrity_utils.py::test_build_payload_executes_hybrid \
+  tests/cli/test_pipeline_command.py \
+  tests/nomic/test_meta_planner.py \
+  tests/nomic/test_improvement_queue.py \
+  tests/nomic/testfixer/test_event_integration.py \
   tests/connectors/chat/test_chat_base.py \
   tests/connectors/chat/test_base.py \
   tests/connectors/chat/test_chat_base_defaults.py

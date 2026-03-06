@@ -131,6 +131,8 @@ Examples:
     _add_playbook_parser(subparsers)
     _add_pipeline_parser(subparsers)
     _add_consensus_parser(subparsers)
+    _add_ideacloud_parser(subparsers)
+    _add_signing_parser(subparsers)
 
     return parser
 
@@ -2005,6 +2007,20 @@ def _add_consensus_parser(subparsers) -> None:
     from aragora.cli.commands.consensus import add_consensus_parser
 
     add_consensus_parser(subparsers)
+
+
+def _add_ideacloud_parser(subparsers) -> None:
+    """Add the 'ideacloud' subcommand group for managing the Idea Cloud."""
+    from aragora.ideacloud.cli.commands import add_ideacloud_commands
+
+    add_ideacloud_commands(subparsers)
+
+
+def _add_signing_parser(subparsers) -> None:
+    """Add the 'signing' subcommand for context file signing and verification (G1)."""
+    from aragora.cli.commands.signing import add_signing_parser
+
+    add_signing_parser(subparsers)
 
 
 def _add_swarm_parser(subparsers) -> None:

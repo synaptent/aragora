@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aragora.rbac.decorators import require_permission
+
 from .config import SLACK_BOT_TOKEN
 from .messaging import MessagingMixin
 
@@ -67,6 +69,8 @@ class BlocksMixin(MessagingMixin):
 
         return blocks
 
+    # Auth context flows from the parent event/command handler that invokes this method.
+    @require_permission("slack:write")
     async def _post_round_update(
         self,
         response_url: str,
@@ -139,6 +143,8 @@ class BlocksMixin(MessagingMixin):
                 },
             )
 
+    # Auth context flows from the parent event/command handler that invokes this method.
+    @require_permission("slack:write")
     async def _post_agent_response(
         self,
         response_url: str,

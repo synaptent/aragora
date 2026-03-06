@@ -51,7 +51,24 @@ export class ReputationAPI {
   }
 
   /**
-   * Get reputation for a specific agent.
+   * Get reputation for a specific agent by canonical path.
+   *
+   * @param agentName - Agent identifier
+   *
+   * @example
+   * ```typescript
+   * const rep = await client.reputation.get('claude-3-5-sonnet');
+   * console.log(`Reputation: ${rep.overall_reputation}`);
+   * ```
+   */
+  async get(agentName: string): Promise<AgentReputation> {
+    return this.client.request('GET', `/api/v1/reputation/${encodeURIComponent(agentName)}`);
+  }
+
+  /**
+   * Get reputation for a specific agent via agent endpoint.
+   *
+   * @param agentName - Agent identifier
    */
   async getAgent(agentName: string): Promise<AgentReputation> {
     return this.client.request('GET', `/api/v1/agent/${agentName}/reputation`);

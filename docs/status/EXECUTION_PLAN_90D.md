@@ -85,7 +85,7 @@ mapping, gap analysis, and build-vs-integrate recommendations.
 │  debate/          - Arena, PhaseExecutor, Consensus, Convergence
 │  agents/          - CLI + API agents, Airlock, Fallback
 │  memory/          - Continuum (4-tier), ConsensusMemory
-│  knowledge/       - KnowledgeMound (28 registered adapters)
+│  knowledge/       - KnowledgeMound (41 registered adapters)
 │  workflow/        - DAG engine, 50+ templates
 │  rbac/            - Permissions, roles, middleware
 │  resilience.py    - CircuitBreaker

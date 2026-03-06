@@ -21,8 +21,8 @@ jobs:
   smoke:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Smoke Tests
-    runs-on: aragora
-    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -50,15 +50,16 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
+          python -m pip install reportlab
 
       - name: Run smoke tests
         run: |
@@ -82,7 +83,7 @@ jobs:
   offline-golden-path:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Offline Golden Path
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -111,19 +112,19 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Verify offline/demo behavior tests
         run: |
-          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
+          python -m pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
             -W error::ResourceWarning \
             -W error::pytest.PytestUnraisableExceptionWarning
         env:
@@ -134,12 +135,12 @@ jobs:
           ARAGORA_OFFLINE: "1"
           PYTHONWARNINGS: "error::ResourceWarning"
         run: |
-          aragora ask "Offline mode smoke" --demo --rounds 1
+          python -m aragora.cli.main ask "Offline mode smoke" --demo --rounds 1
 
   server-smoke:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Server Smoke Tests
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -168,19 +169,19 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Run server smoke tests
         run: |
-          pytest tests/e2e/test_server_smoke.py -v --timeout=120 --tb=short
+          python -m pytest tests/e2e/test_server_smoke.py -v --timeout=120 --tb=short
         env:
           PYTHONPATH: .
           ARAGORA_CI: "true"
@@ -200,7 +201,7 @@ jobs:
   decision-action-smoke:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Decision-to-Action Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -229,22 +230,22 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Run decision-to-action smoke scenario
         env:
           PYTHONPATH: .
           DECISION_ACTION_SMOKE_ARTIFACT_DIR: test-results/decision-action-smoke
         run: |
-          pytest tests/e2e/test_decision_action_smoke.py -v --tb=short --timeout=120
+          python -m pytest tests/e2e/test_decision_action_smoke.py -v --tb=short --timeout=120
 
       - name: Upload decision-to-action smoke artifacts
         if: always()

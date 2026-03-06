@@ -27,7 +27,7 @@ Aragora is built on five architectural commitments.
 
 ### 1. SMB-Ready, Enterprise-Grade
 
-Aragora works for a 5-person startup on day one and scales to regulated enterprise without rearchitecting. Enterprise features -- OIDC/SAML SSO, MFA, AES-256-GCM encryption, multi-tenant isolation, RBAC with 7 roles and 50+ permissions, SOC 2 / GDPR / HIPAA compliance frameworks -- are built in, not bolted on. Security hardening (rate limiting, SSRF protection, path traversal guards, input validation, audit trails) is the default, not a premium tier.
+Aragora works for a 5-person startup on day one and scales to regulated enterprise without rearchitecting. Enterprise features -- OIDC/SAML SSO, MFA, AES-256-GCM encryption, multi-tenant isolation, RBAC with 7 roles and 360+ permissions, SOC 2 / GDPR / HIPAA compliance frameworks -- are built in, not bolted on. Security hardening (rate limiting, SSRF protection, path traversal guards, input validation, audit trails) is the default, not a premium tier.
 
 ### 2. Leading-Edge Memory and Context
 
@@ -213,7 +213,7 @@ print(f"Consensus: {result.consensus_reached} ({result.confidence:.0%})")
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │                 AGENT LAYER (30+ Agent Types)             │   │
+│  │                 AGENT LAYER (43 Agent Types)              │   │
 │  │  Claude | GPT | Gemini | Grok | Mistral | DeepSeek | Qwen │   │
 │  │              + Kimi, Yi, Local Models (Ollama)             │   │
 │  └───────────────────────────┬──────────────────────────────┘   │
@@ -315,7 +315,7 @@ aragora/
 │   └── advertising/        # Twitter Ads, TikTok Ads
 ├── auth/             # Authentication (OIDC, SAML, SCIM)
 ├── tenancy/          # Multi-tenant isolation
-├── rbac/             # Role-based access (7 roles, 50+ permissions)
+├── rbac/             # Role-based access (7 roles, 360+ permissions)
 ├── compliance/       # SOC 2, GDPR, HIPAA
 ├── privacy/          # Anonymization, consent, retention, deletion
 ├── security/         # Encryption, key rotation, SSRF protection
@@ -606,7 +606,7 @@ Enabled via `enable_unified_memory` in `ArenaConfig`. Added February 2026, 150 t
 | **Rate Limiting** | IP, token, and endpoint-based limits |
 | **Connection Pooling** | Adaptive pool with health monitoring |
 | **SCIM 2.0** | Automated user/group provisioning |
-| **RBAC v2** | 7 roles, 50+ permissions, decorator-based enforcement |
+| **RBAC v2** | 7 roles, 360+ permissions, decorator-based enforcement |
 | **Backup/DR** | Incremental backups, retention policies, disaster recovery |
 | **Control Plane** | Agent registry, task scheduler, health monitoring, policy governance (1,500+ tests) |
 

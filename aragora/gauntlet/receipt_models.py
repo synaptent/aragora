@@ -57,6 +57,9 @@ class ConsensusProof:
     dissenting_agents: list[str] = field(default_factory=list)
     method: str = "majority"
     evidence_hash: str = ""
+    # Taint tracking (G2)
+    tainted_proposals: list[str] = field(default_factory=list)
+    trust_score: float = 1.0  # 1.0 = all clean; lower = tainted proposals in consensus
 
     def to_dict(self) -> dict:
         return {
@@ -66,6 +69,8 @@ class ConsensusProof:
             "dissenting_agents": self.dissenting_agents,
             "method": self.method,
             "evidence_hash": self.evidence_hash,
+            "tainted_proposals": self.tainted_proposals,
+            "trust_score": self.trust_score,
         }
 
 
@@ -120,6 +125,9 @@ class DecisionReceipt:
 
     # Epistemic settlement metadata (optional, for quality feedback loop)
     settlement_metadata: dict[str, Any] | None = None
+
+    # Taint analysis (G2 — populated when tainted context influenced any proposal)
+    taint_analysis: dict[str, Any] | None = None
 
     # Extended thinking traces from Anthropic agents (optional, for explainability)
     # Maps agent name -> thinking trace string produced during the debate
@@ -1416,3 +1424,140 @@ class DecisionReceipt:
         from aragora.gauntlet.receipt_exporters import receipt_to_csv
 
         return receipt_to_csv(self)
+
+    def to_briefing_text(self, max_chars: int = 2000) -> str:
+        """Generate natural-language spoken text suitable for TTS synthesis.
+
+        Produces a concise audio briefing covering the receipt identification,
+        verdict, key metrics (confidence, robustness, finding counts by
+        severity), consensus breakdown, and a summary of key reasoning.
+
+        The output avoids jargon and spells out abbreviations so that
+        text-to-speech engines produce natural-sounding audio.
+
+        Args:
+            max_chars: Maximum character length of the returned text.
+                When the full briefing exceeds this limit it is truncated
+                at the nearest sentence boundary with an ellipsis appended.
+
+        Returns:
+            A plain-text briefing string ready for TTS input.
+        """
+        parts: list[str] = []
+
+        # --- Receipt identification ---
+        parts.append(f"Decision Receipt {self.receipt_id}.")
+
+        # --- Verdict ---
+        confidence_pct = round(self.confidence * 100)
+        robustness_pct = round(self.robustness_score * 100)
+        parts.append(
+            f"Verdict: {self.verdict} with {confidence_pct} percent confidence "
+            f"and {robustness_pct} percent robustness."
+        )
+
+        # --- Risk / finding counts by severity ---
+        risk = self.risk_summary or {}
+        severity_parts: list[str] = []
+        for level in ("critical", "high", "medium", "low"):
+            count = risk.get(level, 0)
+            if count:
+                severity_parts.append(f"{count} {level}")
+        if severity_parts:
+            findings_text = ", ".join(severity_parts)
+            total_findings = risk.get("total", self.vulnerabilities_found)
+            attacks_text = ""
+            if self.attacks_attempted:
+                attacks_text = f" across {self.attacks_attempted} attack attempts"
+            parts.append(
+                f"The analysis found {findings_text} findings "
+                f"out of {total_findings} total{attacks_text}."
+            )
+        elif self.vulnerabilities_found:
+            parts.append(f"The analysis found {self.vulnerabilities_found} findings.")
+        else:
+            parts.append("No findings were identified.")
+
+        # --- Consensus breakdown ---
+        if self.consensus_proof:
+            cp = self.consensus_proof
+            method = cp.method.replace("_", " ") if cp.method else "consensus"
+            n_supporting = len(cp.supporting_agents)
+            n_dissenting = len(cp.dissenting_agents)
+
+            if cp.reached:
+                consensus_text = f"Consensus was reached by {method}"
+            else:
+                consensus_text = f"Consensus was not reached. Method used: {method}"
+
+            agent_parts: list[str] = []
+            if n_supporting:
+                agent_parts.append(
+                    f"{n_supporting} supporting agent{'s' if n_supporting != 1 else ''}"
+                )
+            if n_dissenting:
+                agent_parts.append(f"{n_dissenting} dissenting")
+            if agent_parts:
+                consensus_text += f" among {' with '.join(agent_parts)}"
+            consensus_text += "."
+            parts.append(consensus_text)
+
+        # --- Key reasoning ---
+        if self.verdict_reasoning:
+            reasoning = self.verdict_reasoning.strip()
+            # Limit reasoning to ~2 sentences for brevity
+            sentences = reasoning.replace(". ", ".\n").split("\n")
+            short_reasoning = ". ".join(s.strip() for s in sentences[:2] if s.strip())
+            if short_reasoning and not short_reasoning.endswith("."):
+                short_reasoning += "."
+            parts.append(f"Key reasoning: {short_reasoning}")
+
+        text = " ".join(parts)
+
+        # --- Truncation ---
+        if len(text) <= max_chars:
+            return text
+
+        # Truncate at the nearest sentence boundary before max_chars
+        truncated = text[: max_chars - 3]  # leave room for ellipsis
+        last_period = truncated.rfind(".")
+        if last_period > 0:
+            return truncated[: last_period + 1] + "..."
+        return truncated + "..."
+
+    def to_audio_ssml(self, max_chars: int = 2000) -> str:
+        """Wrap the briefing text in SSML for improved TTS pronunciation.
+
+        Generates Speech Synthesis Markup Language that adds pauses between
+        sections and emphasis on the verdict, producing more natural audio
+        when fed to TTS engines such as Amazon Polly, Google Cloud TTS, or
+        Azure Cognitive Services Speech.
+
+        Args:
+            max_chars: Passed through to :meth:`to_briefing_text` to control
+                the maximum length of the underlying plain text.
+
+        Returns:
+            An SSML document string (``<speak>`` root element).
+        """
+        text = self.to_briefing_text(max_chars=max_chars)
+
+        # Split into sentences for structured SSML
+        raw_sentences = text.replace(". ", ".\n").split("\n")
+        sentences = [s.strip() for s in raw_sentences if s.strip()]
+
+        ssml_parts: list[str] = ["<speak>"]
+
+        for i, sentence in enumerate(sentences):
+            # Add a medium break between sections
+            if i > 0:
+                ssml_parts.append('  <break time="600ms"/>')
+
+            # Emphasize the verdict sentence
+            if sentence.lower().startswith("verdict:"):
+                ssml_parts.append(f'  <emphasis level="strong">{escape(sentence)}</emphasis>')
+            else:
+                ssml_parts.append(f"  <s>{escape(sentence)}</s>")
+
+        ssml_parts.append("</speak>")
+        return "\n".join(ssml_parts)

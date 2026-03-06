@@ -565,6 +565,7 @@ class FolderUploadHandler(BaseHandler):
 
     @require_user_auth
     @handle_errors("folder delete")
+    @require_permission("folders:delete")
     def _delete_folder(self, folder_id: str, handler=None, user=None) -> HandlerResult:
         """Delete a folder upload and optionally its documents."""
         with FolderUploadHandler._jobs_lock:

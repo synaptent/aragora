@@ -423,6 +423,13 @@ class StreamEventType(Enum):
     INTERROGATION_ANSWER = "interrogation_answer"  # Agent answered a question
     INTERROGATION_CRYSTALLIZED = "interrogation_crystallized"  # Insights crystallized
 
+    # Notification delivery events (unified telemetry for Epic #293)
+    NOTIFICATION_SENT = "notification_sent"  # Notification delivered successfully
+    NOTIFICATION_FAILED = "notification_failed"  # Notification delivery failed
+    NOTIFICATION_RETRIED = "notification_retried"  # Failed notification retried
+    NOTIFICATION_CIRCUIT_OPENED = "notification_circuit_opened"  # Channel circuit breaker opened
+    NOTIFICATION_CIRCUIT_CLOSED = "notification_circuit_closed"  # Channel circuit breaker closed
+
 
 @dataclass
 class StreamEvent:

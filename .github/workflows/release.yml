@@ -102,14 +102,14 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Regenerate API docs
         run: |
@@ -161,16 +161,16 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,code-intel,test,monitoring]"
-          pip install pytest-timeout pytest-xdist
+          python -m pip install -e ".[dev,research,code-intel,test,monitoring]"
+          python -m pip install pytest-timeout pytest-xdist
 
       - name: Verify required test dependencies
         run: python scripts/check_test_dependencies.py
@@ -216,7 +216,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -228,7 +228,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
           npm --prefix sdk/typescript ci
 
       - name: SDK parity strict gate
@@ -298,15 +298,15 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install security tools
         run: |
           python -m pip install --upgrade pip
-          pip install bandit[toml] pip-audit safety
-          pip install -e .
+          python -m pip install bandit[toml] pip-audit safety
+          python -m pip install -e .
 
       # Bandit: fail on HIGH severity findings (-lll = high only)
       - name: Bandit security scan (HIGH severity blocking)
@@ -439,14 +439,14 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Skip baseline enforcement
         run: |
@@ -543,15 +543,15 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,code-intel,test,monitoring]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,code-intel,test,monitoring]"
+          python -m pip install pytest-timeout
 
       - name: Run smoke test harness (--skip-server)
         run: python scripts/smoke_test.py --skip-server --quick --verbose
@@ -626,14 +626,14 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install build tools
         run: |
           python -m pip install --upgrade pip
-          pip install build twine
+          python -m pip install build twine
 
       - name: Update version in pyproject.toml
         run: |
@@ -712,7 +712,7 @@ jobs:
           path: dist/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.validate.outputs.version }}
           name: Release v${{ needs.validate.outputs.version }}

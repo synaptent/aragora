@@ -87,6 +87,7 @@ from aragora.server.startup.security import (
     init_graphql_routes,
     init_api_key_proxy,
     init_key_rotation_scheduler,
+    init_mfa_drift_monitor,
     init_rbac_distributed_cache,
     init_secrets_rotation_scheduler,
     validate_required_secrets,
@@ -414,6 +415,7 @@ def _build_initial_status(
         "titans_memory_sweep": None,
         "budget_notifications": False,
         "spectate_bridge": False,
+        "mfa_drift_monitor": False,
     }
 
 
@@ -569,6 +571,7 @@ async def _init_all_components(
     status["access_review_scheduler"] = await init_access_review_scheduler()
     status["rbac_distributed_cache"] = await init_rbac_distributed_cache()
     status["approval_gate_recovery"] = await init_approval_gate_recovery()
+    status["mfa_drift_monitor"] = await init_mfa_drift_monitor()
 
     # Spectate WebSocket bridge (lightweight, no external deps)
     try:
@@ -733,6 +736,7 @@ __all__ = [
     "init_aws_rotation_monitor",
     "init_api_key_proxy",
     "init_key_rotation_scheduler",
+    "init_mfa_drift_monitor",
     "init_access_review_scheduler",
     "init_rbac_distributed_cache",
     "init_approval_gate_recovery",

@@ -21,7 +21,7 @@ jobs:
   offline-demo:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Offline Demo Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -50,19 +50,19 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
       - name: Install aragora in isolated environment
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Run offline golden-path unit tests
         run: |
-          pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
+          python -m pytest tests/cli/test_offline_golden_path.py -v --timeout=60 --tb=short \
             -W error::ResourceWarning \
             -W error::pytest.PytestUnraisableExceptionWarning
         env:
@@ -138,7 +138,7 @@ jobs:
           sudo iptables -A OUTPUT -p tcp -m state --state NEW -j REJECT
 
           # Run ask --demo which uses the debate engine with demo agents
-          aragora ask "Should we use microservices?" --demo --rounds 1 2>&1 | tee /tmp/ask_demo_output.txt
+          python -m aragora.cli.main ask "Should we use microservices?" --demo --rounds 1 2>&1 | tee /tmp/ask_demo_output.txt
           ASK_EXIT=$?
 
           # Restore network

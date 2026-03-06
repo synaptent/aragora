@@ -342,6 +342,33 @@ class TestComprehensiveHealth:
         assert data["checks"]["ai_providers"]["providers"]["anthropic"] is True
         assert data["checks"]["ai_providers"]["any_available"] is True
 
+    async def test_health_includes_db_mode_field(self, health_handler):
+        """Health endpoint includes db_mode in response."""
+        result = await health_handler.handle("/api/health", {}, None)
+
+        assert result is not None
+        data = json.loads(result.body)
+        assert "db_mode" in data
+        assert data["db_mode"] in ("sqlite", "postgres")
+
+    @patch.dict("os.environ", {"DATABASE_URL": "postgresql://localhost/aragora"})
+    async def test_health_db_mode_postgres(self, health_handler):
+        """Health endpoint returns db_mode=postgres when DATABASE_URL is postgres."""
+        result = await health_handler.handle("/api/health", {}, None)
+
+        assert result is not None
+        data = json.loads(result.body)
+        assert data["db_mode"] == "postgres"
+
+    @patch.dict("os.environ", {"DATABASE_URL": ""}, clear=False)
+    async def test_health_db_mode_sqlite_default(self, health_handler):
+        """Health endpoint returns db_mode=sqlite when no DATABASE_URL is set."""
+        result = await health_handler.handle("/api/health", {}, None)
+
+        assert result is not None
+        data = json.loads(result.body)
+        assert data["db_mode"] == "sqlite"
+
 
 # ============================================================================
 # GET /api/health/detailed Tests

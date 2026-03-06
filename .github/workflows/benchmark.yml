@@ -27,7 +27,7 @@ jobs:
   benchmark:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Performance Benchmarks
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
@@ -58,8 +58,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -76,7 +76,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           bash scripts/ci_install_project.sh --extras test
-          pip install pytest-benchmark
+          python -m pip install pytest-benchmark
 
       - name: Run benchmark tests
         run: |
@@ -118,7 +118,7 @@ jobs:
     # REQUIRED STATUS CHECK: This job must pass on all PRs.
     # Validates that fast-first routing reduces critique latency by >=25%.
     name: Orchestration Speed Smoke
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
 
@@ -148,8 +148,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -168,7 +168,7 @@ jobs:
     # REQUIRED STATUS CHECK: This job must pass on all PRs.
     # Fails if any benchmark regresses by >20% vs main branch.
     name: Performance Regression Check
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'pull_request')
 
@@ -226,8 +226,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -235,7 +235,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           bash scripts/ci_install_project.sh --extras test
-          pip install pytest-benchmark
+          python -m pip install pytest-benchmark
 
       - name: Run PR benchmarks
         run: |
@@ -284,7 +284,7 @@ jobs:
 
   latency-tests:
     name: Latency Distribution
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
 
@@ -316,8 +316,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -345,7 +345,7 @@ jobs:
 
   baseline-comparison:
     name: Baseline Comparison
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request')
 
@@ -375,8 +375,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 

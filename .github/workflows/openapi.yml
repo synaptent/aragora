@@ -16,7 +16,7 @@ concurrency:
 jobs:
   scope:
     name: OpenAPI Scope
-    runs-on: aragora
+    runs-on: ubuntu-latest
     outputs:
       run_openapi: ${{ steps.filter.outputs.run_openapi }}
 
@@ -81,7 +81,7 @@ jobs:
 
   generate-run:
     name: OpenAPI Generate & Validate
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: scope
     if: needs.scope.outputs.run_openapi == 'true'
@@ -128,7 +128,7 @@ jobs:
       - name: Set up Python 3.11
         id: setup-python
         continue-on-error: true
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -178,6 +178,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Configure npm cache for self-hosted runners
+        shell: bash
+        run: |
+          set -euo pipefail
+          NPM_CACHE_DIR="${RUNNER_TEMP}/npm-cache"
+          mkdir -p "$NPM_CACHE_DIR"
+          echo "NPM_CONFIG_CACHE=${NPM_CACHE_DIR}" >> "$GITHUB_ENV"
+          echo "npm_config_cache=${NPM_CACHE_DIR}" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: |
@@ -303,6 +312,12 @@ jobs:
           print(f'AST-only mode: {len(paths)} paths, {total} operations')
           assert spec.get('openapi') == '3.1.0'
           "
+
+      - name: Fix npm cache ownership
+        run: |
+          if [[ -d "$HOME/.npm" ]]; then
+            sudo chown -R "$(id -u):$(id -g)" "$HOME/.npm" 2>/dev/null || true
+          fi
 
       - name: Generate TypeScript SDK types
         run: python scripts/generate_sdk_types.py --openapi docs/api/openapi_generated.json
@@ -462,7 +477,7 @@ jobs:
 
   sync:
     name: Sync Spec (main only)
-    runs-on: aragora
+    runs-on: ubuntu-latest
     needs: generate-run
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -563,7 +578,7 @@ jobs:
     name: Generate & Validate
     needs: [scope, generate-run]
     if: always()
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Evaluate OpenAPI result

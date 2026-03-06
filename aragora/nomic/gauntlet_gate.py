@@ -32,6 +32,7 @@ __all__ = [
     "GauntletApprovalGate",
     "GauntletGateConfig",
     "GauntletGateResult",
+    "GauntletQualityResult",
 ]
 
 import logging
@@ -153,6 +154,40 @@ class GauntletGateResult:
             "duration_seconds": self.duration_seconds,
             "skipped": self.skipped,
             "error": self.error,
+        }
+
+
+@dataclass
+class GauntletQualityResult:
+    """Result of a gauntlet quality regression check.
+
+    Attributes:
+        passed: True if the score did not regress beyond the allowed threshold.
+        baseline_score: The baseline robustness score that was compared against.
+        current_score: The robustness score from the new gauntlet run.
+        regression_pct: Percentage of regression (positive means worse).
+        max_regression_pct: The configured maximum allowed regression.
+        reason: Human-readable explanation.
+        gauntlet_id: ID of the gauntlet run for traceability.
+    """
+
+    passed: bool = True
+    baseline_score: float = 1.0
+    current_score: float = 1.0
+    regression_pct: float = 0.0
+    max_regression_pct: float = 10.0
+    reason: str = ""
+    gauntlet_id: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "baseline_score": self.baseline_score,
+            "current_score": self.current_score,
+            "regression_pct": round(self.regression_pct, 2),
+            "max_regression_pct": self.max_regression_pct,
+            "reason": self.reason,
+            "gauntlet_id": self.gauntlet_id,
         }
 
 
@@ -299,4 +334,126 @@ class GauntletApprovalGate:
             blocking_findings=blocking_findings,
             gauntlet_id=gauntlet_result.gauntlet_id,
             duration_seconds=gauntlet_result.duration_seconds,
+        )
+
+    async def check_quality_regression(
+        self,
+        content: str,
+        baseline_score: float,
+        context: str = "",
+        max_regression_pct: float = 10.0,
+    ) -> GauntletQualityResult:
+        """Run the gauntlet and reject if robustness score regresses >N% from baseline.
+
+        This complements the severity-threshold ``evaluate()`` method with a
+        *relative* quality check: even if no CRITICAL/HIGH findings exist, a
+        significant drop in robustness score indicates quality regression that
+        should block the change.
+
+        Args:
+            content: The content to validate.
+            baseline_score: Previous robustness score (0-1) to compare against.
+            context: Additional context for the validation.
+            max_regression_pct: Maximum allowed regression percentage (default 10%).
+
+        Returns:
+            GauntletQualityResult with pass/fail and regression details.
+        """
+        if not self.config.enabled:
+            return GauntletQualityResult(
+                passed=True,
+                baseline_score=baseline_score,
+                current_score=baseline_score,
+                reason="Gauntlet gate disabled — quality check skipped",
+            )
+
+        if not _GAUNTLET_AVAILABLE:
+            logger.debug("Gauntlet quality check skipped: gauntlet module unavailable")
+            return GauntletQualityResult(
+                passed=True,
+                baseline_score=baseline_score,
+                current_score=baseline_score,
+                reason="Gauntlet module not available — quality check skipped",
+            )
+
+        # Build lightweight Gauntlet configuration (same as evaluate)
+        gauntlet_config = _GauntletConfig(
+            name="Nomic Loop Quality Regression Check",
+            description="Quality regression check for self-improvement gate",
+            attack_categories=[
+                _AttackCategory.SECURITY,
+                _AttackCategory.LOGIC,
+            ],
+            attack_rounds=self.config.attack_rounds,
+            attacks_per_category=2,
+            probe_categories=[
+                _ProbeCategory.CONTRADICTION,
+                _ProbeCategory.HALLUCINATION,
+            ],
+            probes_per_category=self.config.probes_per_category,
+            run_scenario_matrix=self.config.run_scenario_matrix,
+            enable_scenario_analysis=self.config.run_scenario_matrix,
+            agents=self.config.agents,
+            max_agents=2,
+            critical_threshold=self.config.max_critical,
+            high_threshold=self.config.max_high,
+            timeout_seconds=self.config.timeout_seconds,
+        )
+
+        runner = _GauntletRunner(config=gauntlet_config)
+
+        try:
+            gauntlet_result = await runner.run(
+                input_content=content,
+                context=context,
+            )
+        except (RuntimeError, ValueError, TimeoutError, OSError) as e:
+            logger.warning("Gauntlet quality check failed: %s", e)
+            return GauntletQualityResult(
+                passed=True,
+                baseline_score=baseline_score,
+                current_score=baseline_score,
+                reason=f"Gauntlet run failed (non-blocking): {type(e).__name__}",
+            )
+
+        current_score = gauntlet_result.attack_summary.robustness_score
+
+        # Calculate regression percentage relative to baseline
+        if baseline_score > 0:
+            regression_pct = ((baseline_score - current_score) / baseline_score) * 100.0
+        else:
+            # Baseline is zero: any score >= 0 is acceptable
+            regression_pct = 0.0
+
+        passed = regression_pct <= max_regression_pct
+
+        if passed:
+            reason = (
+                f"Quality check passed: robustness {current_score:.2f} "
+                f"(baseline {baseline_score:.2f}, regression {regression_pct:.1f}%"
+                f" <= {max_regression_pct:.1f}% threshold)"
+            )
+        else:
+            reason = (
+                f"Quality regression detected: robustness dropped from "
+                f"{baseline_score:.2f} to {current_score:.2f} "
+                f"({regression_pct:.1f}% > {max_regression_pct:.1f}% threshold)"
+            )
+
+        logger.info(
+            "gauntlet_quality_check passed=%s baseline=%.2f current=%.2f regression=%.1f%%",
+            passed,
+            baseline_score,
+            current_score,
+            regression_pct,
+        )
+
+        return GauntletQualityResult(
+            passed=passed,
+            baseline_score=baseline_score,
+            current_score=current_score,
+            regression_pct=regression_pct,
+            max_regression_pct=max_regression_pct,
+            reason=reason,
+            gauntlet_id=gauntlet_result.gauntlet_id,
         )

@@ -353,7 +353,7 @@ aragora compliance audit --framework gdpr --scope "data-processing"
 
 ## 13. Check RBAC Permissions
 
-Fine-grained access control with 50+ permissions.
+Fine-grained access control with 360+ permissions.
 
 ```python
 from aragora.rbac.checker import PermissionChecker

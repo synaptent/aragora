@@ -40,10 +40,78 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: Prepare writable tool cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOL_CACHE="${RUNNER_TEMP:-/tmp}/hostedtoolcache"
+          mkdir -p "${TOOL_CACHE}"
+          echo "AGENT_TOOLSDIRECTORY=${TOOL_CACHE}" >> "${GITHUB_ENV}"
+          echo "RUNNER_TOOL_CACHE=${TOOL_CACHE}" >> "${GITHUB_ENV}"
+
+      - name: Set up Python
+        id: setup-python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ env.AGENT_TOOLSDIRECTORY }}
+          RUNNER_TOOL_CACHE: ${{ env.RUNNER_TOOL_CACHE }}
+        continue-on-error: true
+
+      - name: Fallback to system Python
+        if: steps.setup-python.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::warning::actions/setup-python failed — falling back to system Python"
+          PY_BIN=""
+          for cmd in python3.11 python3 python; do
+            if command -v "$cmd" &>/dev/null; then
+              PY_BIN="$(command -v "$cmd")"
+              echo "Found $cmd: $("$cmd" --version)"
+              break
+            fi
+          done
+
+          if [[ -z "${PY_BIN}" && -n "${RUNNER_TEMP:-}" ]]; then
+            DISCOVERED_PY="$(find "${RUNNER_TEMP}" -type f -name "python3.11" -perm -u+x 2>/dev/null | head -n 1 || true)"
+            if [[ -n "${DISCOVERED_PY}" ]]; then
+              PY_BIN="${DISCOVERED_PY}"
+              echo "Found unpacked interpreter in RUNNER_TEMP: ${PY_BIN}"
+              "${PY_BIN}" --version || true
+            fi
+          fi
+
+          if [[ -z "${PY_BIN}" ]]; then
+            echo "::error::No Python interpreter found"
+            exit 1
+          fi
+
+          LOCAL_BIN="${RUNNER_TEMP:-$HOME}/setup-python-safe-bin"
+          mkdir -p "${LOCAL_BIN}"
+          cat > "${LOCAL_BIN}/python" <<EOF
+          #!/usr/bin/env bash
+          exec "${PY_BIN}" "\$@"
+          EOF
+          chmod +x "${LOCAL_BIN}/python"
+          ln -sf "${LOCAL_BIN}/python" "${LOCAL_BIN}/python3"
+
+          "${LOCAL_BIN}/python" -m ensurepip --upgrade || true
+          "${LOCAL_BIN}/python" -m pip --version
+
+          cat > "${LOCAL_BIN}/pip" <<EOF
+          #!/usr/bin/env bash
+          exec "${PY_BIN}" -m pip "\$@"
+          EOF
+          chmod +x "${LOCAL_BIN}/pip"
+          ln -sf "${LOCAL_BIN}/pip" "${LOCAL_BIN}/pip3"
+
+          echo "${LOCAL_BIN}" >> "${GITHUB_PATH}"
+          export PATH="${LOCAL_BIN}:${PATH}"
+
+          "${LOCAL_BIN}/python" --version
+          "${LOCAL_BIN}/python" -m pip --version
 
       - name: Resolve PR number
         id: resolve
@@ -70,7 +138,7 @@ jobs:
           fi
 
           set +e
-          python3 scripts/pr_admission_controller.py \
+          python scripts/pr_admission_controller.py \
             --repo "${GITHUB_REPOSITORY}" \
             --pr-number "${{ steps.resolve.outputs.pr_number }}" \
             --max-ready-per-stream "${MAX_READY}" \

@@ -1,0 +1,264 @@
+name: Aragora Code Review
+
+on:
+  # Manual-only until beta users are onboarded.
+  # Re-enable pull_request trigger when ready:
+  #   pull_request:
+  #     types: [opened, synchronize, reopened, ready_for_review]
+  #     paths: ['aragora/**', 'tests/**', 'scripts/**']
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to review'
+        required: true
+        type: string
+
+concurrency:
+  group: aragora-review-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      should_review: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git reset --hard || true
+            git clean -ffdx || true
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}" || true
+            git checkout -f "${GITHUB_SHA:-HEAD}" || true
+            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
+              git reset --hard FETCH_HEAD
+            else
+              git reset --hard HEAD
+            fi
+            git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'aragora/**'
+              - 'tests/**'
+              - 'scripts/**'
+
+  review:
+    needs: changes
+    if: needs.changes.outputs.should_review == 'true' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git reset --hard || true
+            git clean -ffdx || true
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}" || true
+            git checkout -f "${GITHUB_SHA:-HEAD}" || true
+            if git rev-parse --verify FETCH_HEAD >/dev/null 2>&1; then
+              git reset --hard FETCH_HEAD
+            else
+              git reset --hard HEAD
+            fi
+            git clean -ffdx || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
+              git archive HEAD | tar -x
+            fi
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
+
+      - name: Set up Python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+        continue-on-error: true
+
+      - name: Fallback to system Python
+        if: steps.setup-python.outcome == 'failure'
+        shell: bash
+        run: |
+          for cmd in python3.11 python3; do
+            if command -v "$cmd" &>/dev/null; then
+              sudo ln -sf "$(command -v "$cmd")" /usr/local/bin/python
+              sudo ln -sf "$(command -v "$cmd")" /usr/local/bin/python3
+              break
+            fi
+          done
+          python --version
+
+      - name: Install Aragora
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . 2>/dev/null || python -m pip install -r requirements.txt
+
+      - name: Run Aragora Review
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+        shell: bash
+        run: |
+          # Get the diff
+          gh pr diff "$PR_NUMBER" > /tmp/pr.diff 2>/dev/null || git diff origin/main...HEAD > /tmp/pr.diff
+
+          # Truncate large diffs
+          if [[ $(wc -c < /tmp/pr.diff) -gt 51200 ]]; then
+            head -c 51200 /tmp/pr.diff > /tmp/pr_truncated.diff
+            mv /tmp/pr_truncated.diff /tmp/pr.diff
+            echo "::warning::Diff truncated to 50KB"
+          fi
+
+          # Skip if no meaningful diff
+          if [[ ! -s /tmp/pr.diff ]]; then
+            echo "No code changes to review"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Run review
+          cat /tmp/pr.diff | python -m aragora.cli.review \
+            --agents anthropic-api,openai-api \
+            --rounds 2 \
+            --format json \
+            --output /tmp/review.json 2>/dev/null || true
+
+          if [[ -f /tmp/review.json ]]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+
+            # Count findings by severity
+            critical=$(python3 -c "import json; d=json.load(open('/tmp/review.json')); print(sum(1 for f in d.get('findings',[]) if f.get('severity')=='critical'))" 2>/dev/null || echo 0)
+            high=$(python3 -c "import json; d=json.load(open('/tmp/review.json')); print(sum(1 for f in d.get('findings',[]) if f.get('severity')=='high'))" 2>/dev/null || echo 0)
+            echo "critical=$critical" >> "$GITHUB_OUTPUT"
+            echo "high=$high" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post Review Comment
+        if: steps.review.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          if [[ ! -f /tmp/review.json ]]; then exit 0; fi
+
+          # Build markdown comment
+          python3 -c "
+          import json, sys
+          try:
+              data = json.load(open('/tmp/review.json'))
+          except Exception:
+              sys.exit(0)
+          findings = data.get('findings', [])
+          if not findings:
+              print('## Aragora Code Review\n\nNo issues found.')
+              sys.exit(0)
+          severity_emoji = {'critical': '[CRITICAL]', 'high': '[HIGH]', 'medium': '[MEDIUM]', 'low': '[LOW]', 'info': '[INFO]'}
+          lines = ['## Aragora Code Review\n']
+          lines.append(f'**{len(findings)} finding(s)** across the diff\n')
+          for f in findings:
+              sev = f.get('severity', 'info')
+              label = severity_emoji.get(sev, '[?]')
+              lines.append(f'### {label} {f.get(\"title\", \"Finding\")}')
+              if f.get('file'):
+                  loc = f['file']
+                  if f.get('line'):
+                      loc += f':{f[\"line\"]}'
+                  lines.append(f'**Location:** \`{loc}\`')
+              lines.append(f.get('description', ''))
+              if f.get('suggestion'):
+                  lines.append(f'\n**Suggestion:** {f[\"suggestion\"]}')
+              lines.append('')
+          lines.append('---')
+          lines.append('*Generated by [Aragora](https://aragora.ai) multi-agent code review*')
+          print('\n'.join(lines))
+          " > /tmp/review_comment.md
+
+          # Post or update comment
+          existing_id=$(gh api "repos/${GH_REPO}/issues/${PR_NUMBER}/comments" \
+            --jq '.[] | select(.body | startswith("## Aragora Code Review")) | .id' 2>/dev/null | head -1)
+
+          if [[ -n "$existing_id" ]]; then
+            gh api "repos/${GH_REPO}/issues/comments/${existing_id}" \
+              -X PATCH -F body=@/tmp/review_comment.md 2>/dev/null || true
+          else
+            gh pr comment "$PR_NUMBER" --body-file /tmp/review_comment.md 2>/dev/null || true
+          fi
+
+      - name: Gate on Critical Findings
+        if: steps.review.outputs.critical != '' && steps.review.outputs.critical != '0'
+        env:
+          CRITICAL_COUNT: ${{ steps.review.outputs.critical }}
+        run: |
+          echo "::error::Aragora review found ${CRITICAL_COUNT} critical issue(s)"
+          exit 1
+
+  # Gate job - always reports status for branch protection
+  aragora-review:
+    if: always()
+    needs: [changes, review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Gate result
+        env:
+          SHOULD_REVIEW: ${{ needs.changes.outputs.should_review }}
+          REVIEW_RESULT: ${{ needs.review.result }}
+        run: |
+          if [[ "$SHOULD_REVIEW" != "true" ]]; then
+            echo "No code changes - skipping review"
+            exit 0
+          fi
+          if [[ "$REVIEW_RESULT" == "failure" ]]; then
+            echo "Review gate failed"
+            exit 1
+          fi
+          echo "Review gate passed"

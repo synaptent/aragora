@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { PlaygroundDebate } from '@/components/playground/PlaygroundDebate';
+import { PostDebatePrompt } from '@/components/playground/PostDebatePrompt';
 import { EndpointSelector, ENDPOINTS } from '@/components/playground/EndpointSelector';
 import type { Endpoint } from '@/components/playground/EndpointSelector';
 import { RequestBuilder } from '@/components/playground/RequestBuilder';
@@ -29,6 +30,20 @@ export default function PlaygroundPage() {
     duration: 0,
     headers: {},
   });
+
+  // Post-debate conversion prompt state
+  const [debateComplete, setDebateComplete] = useState(false);
+  const [completedDebateId, setCompletedDebateId] = useState('');
+  const [completedShareUrl, setCompletedShareUrl] = useState('');
+
+  const handleDebateComplete = useCallback(
+    (info: { debateId: string; shareUrl: string }) => {
+      setCompletedDebateId(info.debateId);
+      setCompletedShareUrl(info.shareUrl);
+      setDebateComplete(true);
+    },
+    [],
+  );
 
   const handleResponse = useCallback((res: ResponseState) => {
     setResponse(res);
@@ -91,7 +106,14 @@ export default function PlaygroundPage() {
                 produce an audit-ready decision receipt.
               </p>
             </div>
-            <PlaygroundDebate />
+            <PlaygroundDebate onDebateComplete={handleDebateComplete} />
+            <div style={{ marginTop: '32px' }}>
+              <PostDebatePrompt
+                debateId={completedDebateId}
+                shareUrl={completedShareUrl}
+                visible={debateComplete}
+              />
+            </div>
           </section>
 
           <section className="py-12 px-4 border-t border-[var(--border)]">

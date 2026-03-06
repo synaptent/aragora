@@ -104,6 +104,15 @@ export default defineConfig({
       testMatch: /visual-regression\.spec\.ts/,
     },
 
+    // Mobile audit tests - run with: npx playwright test --project=mobile-audit
+    // Against production: PLAYWRIGHT_BASE_URL=https://aragora.ai npx playwright test --project=mobile-audit
+    {
+      name: 'mobile-audit',
+      use: { ...devices['Desktop Chrome'] }, // viewport overridden per-test
+      testDir: './e2e/mobile',
+      testMatch: /mobile-audit\.spec\.ts/,
+    },
+
     // Production monitoring tests - run with: PLAYWRIGHT_INCLUDE_PROD=1 npx playwright test --project=production
     {
       name: 'production',

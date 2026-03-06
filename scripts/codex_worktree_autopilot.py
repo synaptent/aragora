@@ -548,7 +548,7 @@ def _has_active_session(worktree_path: Path) -> bool:
     Conservative behavior: unreadable or unparseable lock files are treated as
     active to avoid destructive cleanup/reconcile on in-progress sessions.
     """
-    lock_names = (".claude-session-active", ".codex_session_active")
+    lock_names = (".claude-session-active", ".codex_session_active", ".nomic-session-active")
     for lock_name in lock_names:
         lock_file = worktree_path / lock_name
         if not lock_file.exists():

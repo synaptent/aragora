@@ -72,7 +72,7 @@ Current gaps:
 ### 2.3 RBAC v2 Enhancement
 **Effort:** 2-3 weeks | **Impact:** Enterprise security requirement
 
-Current state: 50+ permissions, 69% test coverage
+Current state: 360+ permissions, 69% test coverage
 
 **Gaps to address:**
 - 15-20% of endpoints lack permission checks

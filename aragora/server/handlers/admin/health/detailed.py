@@ -273,11 +273,19 @@ def health_check(handler) -> HandlerResult:
     # Check demo mode
     demo_mode = _os.environ.get("ARAGORA_DEMO_MODE", "").lower() in ("true", "1", "yes")
 
+    # Determine database mode from DATABASE_URL
+    database_url = _os.environ.get("DATABASE_URL", "")
+    if database_url and "postgres" in database_url.lower():
+        db_mode = "postgres"
+    else:
+        db_mode = "sqlite"
+
     health = {
         "status": "healthy" if all_healthy else "degraded",
         "version": version,
         "uptime_seconds": uptime_seconds,
         "demo_mode": demo_mode,
+        "db_mode": db_mode,
         "checks": checks,
         "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         "response_time_ms": response_time_ms,

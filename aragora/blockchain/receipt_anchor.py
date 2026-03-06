@@ -192,6 +192,70 @@ class ReceiptAnchor:
             return list(self._local_anchors)
         return [a for a in self._local_anchors if a.receipt_hash == receipt_hash]
 
+    def verify_anchor(self, receipt_hash: str) -> dict[str, Any]:
+        """Verify anchoring status for a given receipt hash.
+
+        Looks up all anchors (on-chain and local) for the receipt hash and
+        returns a verification summary.
+
+        Args:
+            receipt_hash: SHA-256 hex digest of the decision receipt.
+
+        Returns:
+            Dictionary with verification status::
+
+                {
+                    "anchored": True/False,
+                    "receipt_hash": "...",
+                    "anchors": [...],
+                    "verified_at": <timestamp>,
+                }
+
+            Each anchor entry includes:
+            - For on-chain: tx_hash, chain_id, block_number (if available), timestamp
+            - For local: anchor_id, timestamp
+        """
+        anchors = self.get_anchors(receipt_hash)
+        verified_at = time.time()
+
+        if not anchors:
+            return {
+                "anchored": False,
+                "receipt_hash": receipt_hash,
+                "anchors": [],
+                "verified_at": verified_at,
+            }
+
+        anchor_details: list[dict[str, Any]] = []
+        for record in anchors:
+            if record.local_only:
+                anchor_details.append(
+                    {
+                        "type": "local",
+                        "timestamp": record.timestamp,
+                        "metadata": record.metadata,
+                    }
+                )
+            else:
+                detail: dict[str, Any] = {
+                    "type": "on_chain",
+                    "tx_hash": record.tx_hash,
+                    "chain_id": record.chain_id,
+                    "timestamp": record.timestamp,
+                    "metadata": record.metadata,
+                }
+                # Include block_number if available in metadata
+                if "block_number" in record.metadata:
+                    detail["block_number"] = record.metadata["block_number"]
+                anchor_details.append(detail)
+
+        return {
+            "anchored": True,
+            "receipt_hash": receipt_hash,
+            "anchors": anchor_details,
+            "verified_at": verified_at,
+        }
+
 
 __all__ = [
     "AnchorRecord",
