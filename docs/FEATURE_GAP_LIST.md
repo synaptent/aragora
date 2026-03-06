@@ -27,12 +27,12 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| 3 beta users with `aragora review` | Not started | Need real PRs reviewed end-to-end via Aragora |
-| GitHub Actions pre-merge gate | **Workflow created** | `aragora-review-gate.yml` uses existing composite action. Gates on critical findings. Needs branch protection config + beta testing. |
-| Public demo at aragora.ai/demo | **Share URLs fixed** | Share URL persistence bug fixed (dual-store sync). Live demo needs frontend routing + landing page link. |
-| EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14 dedicated bundles + CLI export + compliance scoring + demo script. Customer playbook needed. **Deadline: Aug 2, 2026.** |
+| 3 beta users with `aragora review` | Not started | Need real PRs reviewed end-to-end via Aragora. Review gate workflow merged (#648). |
+| GitHub Actions pre-merge gate | **Merged (#648)** | `aragora-review.yml` deployed. Gates on critical findings. Needs branch protection config + beta testing with real repos. |
+| Public demo at aragora.ai/demo | **Demo page + share URLs live** | Standalone demo page merged (#648). Share URL persistence fixed. Needs frontend routing verification at aragora.ai/demo. |
+| EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14/15 dedicated bundles + CLI export + compliance scoring + demo script. Customer playbook needed. **Deadline: Aug 2, 2026.** |
 | First 2 enterprise pilot engagements | Not started | Closed partnerships — target fintech + healthcare |
-| Developer onboarding <10 min | Not measured | No validated onboarding flow; needs user testing |
+| Developer onboarding <10 min | **Quickstart exists** | `docs/QUICKSTART.md` covers install → zero-key demo → real AI → TypeScript → Docker → CLI in 7 steps. Needs cold-start user testing. |
 
 ---
 
@@ -92,7 +92,7 @@
 
 | Feature | Current State | Gap |
 |---------|---------------|-----|
-| Self-improving platform quality | Nomic Loop 100% wired; 66 E2E tests passing; Run 012 scores 8.38-9.39/10 | Validate 80%+ pass rate consistency across diverse tasks (not just dogfood) |
+| Self-improving platform quality | Nomic Loop 100% wired; 66 E2E tests; pipeline hardened (live async default, quality gate, bidirectional handoff — PRs #650, #649 merged) | Validate 80%+ pass rate consistency across diverse tasks; diverse benchmark in progress |
 | Blockchain receipts | SHA-256 cryptographic hashing works | On-chain storage with ERC-8004 (not deployed) |
 | Semantic convergence | Embedding detection wired (sentence-transformers) | Not default; some debate paths still use difflib |
 | OpenClaw execution | Computer use detection works | Production E2E flow (debate → computer use → receipt) not validated |

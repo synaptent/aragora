@@ -1,0 +1,115 @@
+{
+  "benchmark": "diverse_quality_validation",
+  "date": "2026-03-05",
+  "prompts_tested": 10,
+  "pass_rate": "10/10",
+  "pass_rate_pct": 100.0,
+  "threshold": 0.5,
+  "composite_formula": "0.4 * (quality_score_10 / 10) + 0.6 * (practicality_score_10 / 10)",
+  "average_composite": 0.938,
+  "average_quality": 10.0,
+  "average_practicality": 8.967,
+  "scores": [
+    {
+      "id": "strategic",
+      "category": "architecture",
+      "prompt": "Should we migrate our monolith to microservices?",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 8.78,
+      "composite": 0.9268,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "security",
+      "category": "security",
+      "prompt": "Design a zero-trust authentication flow for our API",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 8.90,
+      "composite": 0.934,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "hiring",
+      "category": "business",
+      "prompt": "Should we hire a dedicated DevOps engineer or upskill existing team?",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 9.72,
+      "composite": 0.9832,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "legal",
+      "category": "legal",
+      "prompt": "What are the implications of using GPL-licensed code in our SaaS product?",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 8.69,
+      "composite": 0.9214,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "performance",
+      "category": "engineering",
+      "prompt": "Our API p99 latency is 2.3s - what should we optimize first?",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 9.18,
+      "composite": 0.9508,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "product",
+      "category": "product",
+      "prompt": "Should we build a mobile app or focus on responsive web?",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 8.75,
+      "composite": 0.925,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "data",
+      "category": "compliance",
+      "prompt": "Design a data retention policy compliant with GDPR and CCPA",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 8.78,
+      "composite": 0.9268,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "ml",
+      "category": "ml",
+      "prompt": "Should we build our own ML pipeline or use a managed service?",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 8.79,
+      "composite": 0.9274,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "culture",
+      "category": "process",
+      "prompt": "How should we structure code reviews for a team of 12 engineers?",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 8.90,
+      "composite": 0.934,
+      "verdict": "good",
+      "passed": true
+    },
+    {
+      "id": "crisis",
+      "category": "incident",
+      "prompt": "Our main database just lost 4 hours of data - what's the recovery plan?",
+      "quality_score_10": 10.0,
+      "practicality_score_10": 9.18,
+      "composite": 0.9508,
+      "verdict": "good",
+      "passed": true
+    }
+  ],
+  "conclusion": "80%+ pass rate validated. 10/10 prompts pass with average composite 0.938. Practicality range 8.69-9.72/10 across all 10 domain categories (architecture, security, business, legal, engineering, product, compliance, ML, process, incident). Quality scoring pipeline is consistent across diverse task types."
+}

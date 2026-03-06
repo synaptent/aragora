@@ -1,0 +1,52 @@
+[
+  {
+    "id": "strategic",
+    "prompt": "Should we migrate our monolith to microservices?",
+    "category": "architecture"
+  },
+  {
+    "id": "security",
+    "prompt": "Design a zero-trust authentication flow for our API",
+    "category": "security"
+  },
+  {
+    "id": "hiring",
+    "prompt": "Should we hire a dedicated DevOps engineer or upskill existing team?",
+    "category": "business"
+  },
+  {
+    "id": "legal",
+    "prompt": "What are the implications of using GPL-licensed code in our SaaS product?",
+    "category": "legal"
+  },
+  {
+    "id": "performance",
+    "prompt": "Our API p99 latency is 2.3s - what should we optimize first?",
+    "category": "engineering"
+  },
+  {
+    "id": "product",
+    "prompt": "Should we build a mobile app or focus on responsive web?",
+    "category": "product"
+  },
+  {
+    "id": "data",
+    "prompt": "Design a data retention policy compliant with GDPR and CCPA",
+    "category": "compliance"
+  },
+  {
+    "id": "ml",
+    "prompt": "Should we build our own ML pipeline or use a managed service?",
+    "category": "ml"
+  },
+  {
+    "id": "culture",
+    "prompt": "How should we structure code reviews for a team of 12 engineers?",
+    "category": "process"
+  },
+  {
+    "id": "crisis",
+    "prompt": "Our main database just lost 4 hours of data - what's the recovery plan?",
+    "category": "incident"
+  }
+]
