@@ -1,314 +1,67 @@
-name: 'Aragora Code Review'
-description: 'Multi-agent AI code review on pull requests. Runs adversarial debate across LLM providers to catch issues single reviewers miss.'
-author: 'Aragora Team'
-
-branding:
-  icon: 'code'
-  color: 'green'
+# .github/actions/aragora-code-review/action.yml
+name: Aragora Code Review
+description: Multi-agent AI code review using aragora review CLI. Requires pull-requests write permission to post comments.
 
 inputs:
   anthropic-api-key:
-    description: 'Anthropic API key (Claude)'
-    required: false
-  openai-api-key:
-    description: 'OpenAI API key (GPT)'
-    required: false
-  openrouter-api-key:
-    description: 'OpenRouter API key (fallback/additional models)'
-    required: false
-  agents:
-    description: 'Comma-separated list of agents to use (auto-detected from API keys if omitted)'
+    description: Anthropic API key (optional; omit to run in --demo mode)
     required: false
     default: ''
   rounds:
-    description: 'Number of debate rounds (1-5)'
+    description: Number of debate rounds
     required: false
     default: '2'
   focus:
-    description: 'Comma-separated focus areas (security, performance, quality, correctness)'
+    description: Comma-separated focus areas (security,performance,quality)
     required: false
     default: 'security,performance,quality'
   output-format:
-    description: 'Output format: github, json, or html'
+    description: Output format (github, json, sarif)
     required: false
     default: 'github'
   post-comment:
-    description: 'Post review results as a PR comment'
+    description: Post review as PR comment
     required: false
     default: 'true'
-  fail-on-critical:
-    description: 'Fail the action if critical issues are found'
-    required: false
-    default: 'true'
-  fail-on-high:
-    description: 'Fail the action if high-severity issues are found'
-    required: false
-    default: 'false'
-  sarif-upload:
-    description: 'Upload SARIF results to GitHub Security tab'
-    required: false
-    default: 'false'
-  max-diff-size:
-    description: 'Maximum diff size in bytes (larger diffs are truncated)'
-    required: false
-    default: '50000'
-
-outputs:
-  review-path:
-    description: 'Path to the review output file'
-  critical-count:
-    description: 'Number of critical issues found'
-  high-count:
-    description: 'Number of high-severity issues found'
-  medium-count:
-    description: 'Number of medium-severity issues found'
-  low-count:
-    description: 'Number of low-severity issues found'
-  total-count:
-    description: 'Total number of issues found'
-  agreement-score:
-    description: 'Agent agreement score (0.0-1.0)'
-  sarif-path:
-    description: 'Path to SARIF output (if generated)'
 
 runs:
-  using: 'composite'
+  using: composite
   steps:
-    - name: Setup Python
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'
 
-    - name: Install Aragora
+    - name: Install aragora
       shell: bash
-      run: |
-        pip install -e . 2>/dev/null || pip install aragora 2>/dev/null || {
-          echo "::warning::Installing from source"
-          pip install -e ".[dev]"
-        }
+      run: pip install -e ".[dev]" --quiet 2>/dev/null || pip install aragora --quiet
 
-    - name: Get PR diff
-      id: diff
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        if [ "${{ github.event_name }}" = "pull_request" ]; then
-          gh pr diff ${{ github.event.pull_request.number }} > /tmp/aragora-pr.diff 2>/dev/null || \
-            git diff ${{ github.event.pull_request.base.sha }}...${{ github.sha }} > /tmp/aragora-pr.diff
-        else
-          git diff HEAD~1 > /tmp/aragora-pr.diff
-        fi
-
-        DIFF_SIZE=$(wc -c < /tmp/aragora-pr.diff)
-        echo "diff-size=$DIFF_SIZE" >> $GITHUB_OUTPUT
-        echo "Diff size: $DIFF_SIZE bytes"
-
-        if [ "$DIFF_SIZE" -gt "${{ inputs.max-diff-size }}" ]; then
-          echo "::warning::Diff exceeds max size ($DIFF_SIZE > ${{ inputs.max-diff-size }}), truncating"
-          head -c ${{ inputs.max-diff-size }} /tmp/aragora-pr.diff > /tmp/aragora-pr-truncated.diff
-          mv /tmp/aragora-pr-truncated.diff /tmp/aragora-pr.diff
-        fi
-
-        if [ "$DIFF_SIZE" -eq 0 ]; then
-          echo "::notice::No diff found, skipping review"
-          echo "skip=true" >> $GITHUB_OUTPUT
-        else
-          echo "skip=false" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Run Aragora Code Review
-      if: steps.diff.outputs.skip != 'true'
-      id: review
+    - name: Run aragora review
       shell: bash
       env:
         ANTHROPIC_API_KEY: ${{ inputs.anthropic-api-key }}
-        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
-        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-        ARAGORA_OPENROUTER_FALLBACK_ENABLED: 'true'
+        GITHUB_TOKEN: ${{ github.token }}
+        PR_URL: ${{ github.event.pull_request.html_url }}
+        INPUT_ROUNDS: ${{ inputs.rounds }}
+        INPUT_FOCUS: ${{ inputs.focus }}
+        INPUT_OUTPUT_FORMAT: ${{ inputs.output-format }}
+        INPUT_POST_COMMENT: ${{ inputs.post-comment }}
+        INPUT_API_KEY: ${{ inputs.anthropic-api-key }}
       run: |
-        AGENTS_FLAG=""
-        if [ -n "${{ inputs.agents }}" ]; then
-          AGENTS_FLAG="--agents ${{ inputs.agents }}"
+        if [[ -z "$PR_URL" ]]; then
+          echo "::notice::No PR URL available — skipping aragora review"
+          exit 0
         fi
-
-        SARIF_FLAG=""
-        if [ "${{ inputs.sarif-upload }}" = "true" ]; then
-          SARIF_FLAG="--sarif /tmp/aragora-review.sarif"
+        ARGS=("--output-format" "$INPUT_OUTPUT_FORMAT" "--rounds" "$INPUT_ROUNDS" "--focus" "$INPUT_FOCUS")
+        if [[ "$INPUT_POST_COMMENT" == "true" ]]; then
+          ARGS+=("--post-comment")
         fi
-
-        CI_FLAG=""
-        if [ "${{ inputs.fail-on-critical }}" = "true" ] || [ "${{ inputs.fail-on-high }}" = "true" ]; then
-          CI_FLAG="--ci"
+        if [[ -z "$INPUT_API_KEY" ]]; then
+          echo "No API key provided — running in demo mode"
+          ARGS+=("--demo")
         fi
-
-        mkdir -p /tmp/aragora-artifacts
-
-        aragora review \
-          --diff-file /tmp/aragora-pr.diff \
-          --rounds ${{ inputs.rounds }} \
-          --focus ${{ inputs.focus }} \
-          --output-format json \
-          --output-dir /tmp/aragora-artifacts \
-          $AGENTS_FLAG \
-          $SARIF_FLAG \
-          $CI_FLAG \
-          2>&1 || REVIEW_EXIT=$?
-
-        REVIEW_EXIT=${REVIEW_EXIT:-0}
-
-        # Parse results
-        if [ -f /tmp/aragora-artifacts/review.json ]; then
-          python3 << 'PYEOF'
-        import json, os
-
-        with open("/tmp/aragora-artifacts/review.json") as f:
-            data = json.load(f)
-
-        counts = {
-            "critical": len(data.get("critical_issues", [])),
-            "high": len(data.get("high_issues", [])),
-            "medium": len(data.get("medium_issues", [])),
-            "low": len(data.get("low_issues", [])),
+        aragora review "$PR_URL" "${ARGS[@]}" || {
+          EXIT=$?
+          echo "::warning::aragora review exited with code $EXIT — review may be incomplete"
+          true
         }
-        counts["total"] = sum(counts.values())
-        agreement = data.get("agreement_score", 0.0)
-
-        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-            for k, v in counts.items():
-                f.write(f"{k}-count={v}\n")
-            f.write(f"total-count={counts['total']}\n")
-            f.write(f"agreement-score={agreement}\n")
-            f.write(f"review-path=/tmp/aragora-artifacts/review.json\n")
-            if os.path.exists("/tmp/aragora-review.sarif"):
-                f.write("sarif-path=/tmp/aragora-review.sarif\n")
-
-        print(f"Critical: {counts['critical']}, High: {counts['high']}, "
-              f"Medium: {counts['medium']}, Low: {counts['low']}, "
-              f"Agreement: {agreement:.0%}")
-        PYEOF
-        fi
-
-        # Determine exit code based on settings
-        if [ "${{ inputs.fail-on-critical }}" = "true" ] && [ "$REVIEW_EXIT" = "1" ]; then
-          echo "::error::Critical issues found in code review"
-          exit 1
-        fi
-        if [ "${{ inputs.fail-on-high }}" = "true" ] && [ "$REVIEW_EXIT" = "2" ]; then
-          echo "::error::High-severity issues found in code review"
-          exit 1
-        fi
-
-    - name: Generate PR Comment
-      if: steps.diff.outputs.skip != 'true' && inputs.post-comment == 'true' && github.event_name == 'pull_request'
-      shell: bash
-      run: |
-        if [ -f /tmp/aragora-artifacts/review.json ]; then
-          python3 << 'PYEOF'
-        import json
-
-        with open("/tmp/aragora-artifacts/review.json") as f:
-            data = json.load(f)
-
-        lines = ["## Aragora Code Review\n"]
-        agreement = data.get("agreement_score", 0.0)
-        lines.append(f"**Agent agreement:** {agreement:.0%}\n")
-
-        # Unanimous critiques
-        unanimous = data.get("unanimous_critiques", [])
-        if unanimous:
-            lines.append(f"\n### Unanimous Issues ({len(unanimous)})\n")
-            lines.append("All agents agree on these findings:\n")
-            for item in unanimous[:10]:
-                sev = item.get("severity", "medium").upper()
-                lines.append(f"- **[{sev}]** {item.get('description', item.get('title', 'Issue'))}")
-
-        # Critical and high
-        for level in ["critical", "high"]:
-            issues = data.get(f"{level}_issues", [])
-            if issues:
-                emoji = "🔴" if level == "critical" else "🟠"
-                lines.append(f"\n### {emoji} {level.title()} Issues ({len(issues)})\n")
-                for item in issues[:5]:
-                    lines.append(f"- {item.get('description', item.get('title', 'Issue'))}")
-                    if item.get("file"):
-                        lines.append(f"  - File: `{item['file']}`")
-
-        # Split opinions
-        splits = data.get("split_opinions", [])
-        if splits:
-            lines.append(f"\n### Split Opinions ({len(splits)})\n")
-            lines.append("<details><summary>Agents disagreed on these points</summary>\n")
-            for item in splits[:5]:
-                lines.append(f"- {item.get('description', item.get('title', 'Issue'))}")
-            lines.append("\n</details>")
-
-        # Summary
-        summary = data.get("summary", "")
-        if summary:
-            lines.append(f"\n### Summary\n\n{summary}")
-
-        lines.append("\n---")
-        lines.append("*Generated by [Aragora](https://aragora.ai) multi-agent code review*")
-
-        with open("/tmp/aragora-comment.md", "w") as f:
-            f.write("\n".join(lines))
-        PYEOF
-        fi
-
-    - name: Post PR Comment
-      if: steps.diff.outputs.skip != 'true' && inputs.post-comment == 'true' && github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          let comment;
-          try {
-            comment = fs.readFileSync('/tmp/aragora-comment.md', 'utf8');
-          } catch (e) {
-            console.log('No review comment generated');
-            return;
-          }
-
-          // Find and update existing comment
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-          });
-
-          const existing = comments.find(c =>
-            c.user.type === 'Bot' && c.body.includes('Aragora Code Review')
-          );
-
-          if (existing) {
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: existing.id,
-              body: comment,
-            });
-          } else {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: comment,
-            });
-          }
-
-    - name: Upload SARIF
-      if: steps.diff.outputs.skip != 'true' && inputs.sarif-upload == 'true'
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: /tmp/aragora-review.sarif
-      continue-on-error: true
-
-    - name: Upload Review Artifacts
-      if: steps.diff.outputs.skip != 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: aragora-code-review
-        path: /tmp/aragora-artifacts/
-        retention-days: 30

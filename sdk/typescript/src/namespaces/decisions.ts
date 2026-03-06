@@ -314,6 +314,41 @@ export class DecisionsAPI {
   async listOutcomes(decisionId: string): Promise<Record<string, unknown>> {
     return this.client.get(`/api/v1/decisions/${decisionId}/outcomes`);
   }
+
+  /**
+   * Cancel a pending or processing decision.
+   *
+   * Only decisions in PENDING or PROCESSING status can be cancelled.
+   *
+   * @param decisionId - The decision request ID to cancel
+   * @param reason - Optional reason for cancellation
+   *
+   * @example
+   * ```typescript
+   * const result = await client.decisions.cancel('req-123', 'No longer needed');
+   * console.log(`Cancelled at: ${result.cancelled_at}`);
+   * ```
+   */
+  async cancel(decisionId: string, reason?: string): Promise<{ request_id: string; status: DecisionStatus; cancelled_at: string }> {
+    return this.client.request('POST', `/api/v1/decisions/${decisionId}/cancel`, { params: reason ? { reason } : {} });
+  }
+
+  /**
+   * Retry a failed or cancelled decision.
+   *
+   * Creates a new decision request with the same parameters as the original.
+   *
+   * @param decisionId - The decision request ID to retry
+   *
+   * @example
+   * ```typescript
+   * const retried = await client.decisions.retry('req-123');
+   * console.log(`New request ID: ${retried.request_id}`);
+   * ```
+   */
+  async retry(decisionId: string): Promise<DecisionResult> {
+    return this.client.request('POST', `/api/v1/decisions/${decisionId}/retry`);
+  }
 }
 
 // ---------------------------------------------------------------------------

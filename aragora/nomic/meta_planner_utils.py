@@ -6,6 +6,7 @@ Standalone helpers extracted from MetaPlanner for reuse and testability.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from pathlib import Path
@@ -19,24 +20,226 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+# ── Track descriptions for LLM classification ────────────────────────
+_TRACK_DESCRIPTIONS: dict[Track, str] = {
+    Track.SME: "End-user features: dashboard, onboarding, billing, UI/UX, admin panels, workspace management, customer-facing pages",
+    Track.DEVELOPER: "Developer experience: SDKs, APIs, documentation, client libraries, OpenAPI specs, webhooks, TypeScript/Python packages",
+    Track.SELF_HOSTED: "Infrastructure & ops: Docker, Kubernetes, deployment, CI/CD, runners, monitoring, Prometheus, scaling, cloud, servers",
+    Track.QA: "Testing & quality: pytest, E2E tests, coverage, benchmarks, Playwright, regression, fixtures, test infrastructure",
+    Track.CORE: "Core platform: debate engine, agents, consensus, Arena, memory, pipeline orchestration, Nomic loop, knowledge mound, resilience, architecture, integration",
+    Track.SECURITY: "Security: authentication, RBAC, encryption, OWASP, vulnerability scanning, OIDC/SAML, MFA, secrets, anomaly detection",
+}
+
+
 def infer_track(description: str, available_tracks: list[Track]) -> Track:
-    """Infer track from goal description using keyword matching.
+    """Infer track from goal description.
+
+    Uses LLM semantic classification as the primary method, falling back
+    to keyword scoring when LLM is unavailable (no API keys, import
+    failures, or network errors).
 
     Args:
         description: Goal description text
         available_tracks: List of tracks to choose from
 
     Returns:
-        Best matching Track, or first available track as fallback
+        Best matching Track
+    """
+    # Try LLM-based classification first
+    try:
+        result = _infer_track_llm(description, available_tracks)
+        if result is not None:
+            return result
+    except Exception:
+        logger.debug("LLM track classification unavailable, using keyword fallback")
+
+    # Keyword-based fallback
+    return _infer_track_keywords(description, available_tracks)
+
+
+def _infer_track_llm(description: str, available_tracks: list[Track]) -> Track | None:
+    """Classify track using a frontier LLM for semantic understanding.
+
+    Makes a single cheap LLM call to classify the goal. Returns None if
+    the LLM is unavailable or the response can't be parsed.
+    """
+    from aragora.agents import create_agent
+    from aragora.agents.base import AgentType
+
+    # Build the classification prompt
+    track_options = "\n".join(
+        f"- {t.value}: {_TRACK_DESCRIPTIONS.get(t, t.value)}" for t in available_tracks
+    )
+
+    prompt = (
+        f"Classify this development goal into exactly one track.\n\n"
+        f"Goal: {description}\n\n"
+        f"Available tracks:\n{track_options}\n\n"
+        f"Reply with ONLY the track name (e.g., 'core' or 'sme'). "
+        f"Nothing else."
+    )
+
+    # Try cheapest available agent
+    agent = None
+    for agent_type in ("anthropic-api", "openai-api", "deepseek"):
+        try:
+            agent = create_agent(AgentType(agent_type))  # type: ignore[arg-type]
+            if agent is not None:
+                break
+        except (ImportError, ValueError, TypeError):
+            continue
+
+    if agent is None:
+        return None
+
+    # Run the single-shot classification
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Already in async context — can't nest asyncio.run
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                response = pool.submit(asyncio.run, agent.generate(prompt)).result(timeout=15)
+        else:
+            response = asyncio.run(agent.generate(prompt))
+    except Exception:
+        logger.debug("LLM classification call failed")
+        return None
+
+    # Parse response — expect a single track name
+    response_clean = response.strip().lower().replace("_", "_")
+    track_map = {t.value: t for t in available_tracks}
+    if response_clean in track_map:
+        return track_map[response_clean]
+
+    # Fuzzy match: check if any track name appears in the response
+    for value, track in track_map.items():
+        if value in response_clean:
+            return track
+
+    logger.debug("Could not parse LLM track response: %s", response_clean)
+    return None
+
+
+def _infer_track_keywords(description: str, available_tracks: list[Track]) -> Track:
+    """Fallback: infer track using scored keyword matching.
+
+    Scores each available track by counting keyword hits. Returns the
+    track with the highest score, falling back to CORE for unclassifiable goals.
     """
     desc_lower = description.lower()
 
-    track_keywords = {
-        Track.SME: ["dashboard", "user", "ui", "frontend", "workspace", "admin"],
-        Track.DEVELOPER: ["sdk", "api", "documentation", "client", "package"],
-        Track.SELF_HOSTED: ["docker", "deploy", "backup", "ops", "kubernetes"],
-        Track.QA: ["test", "ci", "coverage", "quality", "e2e", "playwright"],
-        Track.CORE: ["debate", "agent", "consensus", "arena", "memory"],
+    track_keywords: dict[Track, list[str]] = {
+        Track.SME: [
+            "dashboard",
+            "user",
+            "ui",
+            "frontend",
+            "workspace",
+            "admin",
+            "onboarding",
+            "billing",
+            "subscription",
+            "customer",
+            "tenant",
+            "landing",
+            "ux",
+        ],
+        Track.DEVELOPER: [
+            "sdk",
+            "api",
+            "documentation",
+            "client",
+            "package",
+            "openapi",
+            "swagger",
+            "webhook",
+            "endpoint",
+            "schema",
+            "typescript",
+            "library",
+            "integration",
+        ],
+        Track.SELF_HOSTED: [
+            "docker",
+            "deploy",
+            "backup",
+            "ops",
+            "kubernetes",
+            "helm",
+            "terraform",
+            "ansible",
+            "infrastructure",
+            "cloud",
+            "scaling",
+            "monitoring",
+            "prometheus",
+            "grafana",
+            "container",
+            "k8s",
+            "ci/cd",
+            "runner",
+            "fleet",
+            "ci",
+            "server",
+            "instance",
+            "region",
+            "load balancer",
+            "fleet",
+            "node",
+            "cluster",
+            "autoscaling",
+            "workload",
+            "runner",
+            "self hosted",
+        ],
+        Track.QA: [
+            "test",
+            "coverage",
+            "e2e",
+            "playwright",
+            "pytest",
+            "regression",
+            "benchmark",
+            "fixture",
+            "assertion",
+            "flaky",
+            "snapshot",
+        ],
+        Track.CORE: [
+            "debate",
+            "agent",
+            "consensus",
+            "arena",
+            "memory",
+            "pipeline",
+            "orchestrat",
+            "nomic",
+            "canvas",
+            "provenance",
+            "knowledge",
+            "mound",
+            "resilience",
+            "circuit",
+            "event",
+            "stream",
+            "unified",
+            "bridge",
+            "integrate",
+            "loop",
+            "cycle",
+            "subsystem",
+            "module",
+            "refactor",
+            "architecture",
+            "workitem",
+            "testfixer",
+            "quality gate",
+            "handoff",
+            "control plane",
+            "closed loop",
+        ],
         Track.SECURITY: [
             "security",
             "auth",
@@ -47,15 +250,35 @@ def infer_track(description: str, available_tracks: list[Track]) -> Track:
             "csrf",
             "xss",
             "injection",
+            "rbac",
+            "permission",
+            "oidc",
+            "saml",
+            "mfa",
+            "token",
+            "anomaly",
+            "receipt",
+            "signature",
+            "sandbox",
+            "trust",
+            "adversarial",
         ],
     }
 
+    # Score each track by counting keyword hits
+    scores: dict[Track, int] = {}
     for track, keywords in track_keywords.items():
         if track in available_tracks:
-            if any(kw in desc_lower for kw in keywords):
-                return track
+            score = sum(1 for kw in keywords if kw in desc_lower)
+            if score > 0:
+                scores[track] = score
 
-    # Default to first available track
+    if scores:
+        return max(scores, key=scores.get)  # type: ignore[arg-type]
+
+    # Default to CORE for unclassifiable goals
+    if Track.CORE in available_tracks:
+        return Track.CORE
     return available_tracks[0] if available_tracks else Track.DEVELOPER
 
 

@@ -1,0 +1,602 @@
+name: Deploy to EC2
+
+# Production deployment to 3 EC2 instances behind Cloudflare Load Balancer
+# in us-east-2, using AWS SSM (no SSH keys required).
+#
+# Instances:
+#   i-0dbd51f74a9a11fcc  (aragora-api-server)  — primary / canary
+#   i-092c2d3b4dafc1f24  (aragora-al2023-1)    — worker
+#   i-0aae2ccd2f68b94d2  (aragora-al2023-2)    — worker
+#
+# Rolling deploy strategy:
+#   1. Deploy to canary (aragora-api-server), verify health
+#   2. Deploy to remaining two instances in parallel, verify health
+#   3. Final external health check via Cloudflare
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'aragora/**'
+      - 'deploy/**'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/deploy-ec2.yml'
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip test step'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  # Hardcoded instance IDs — these are long-lived production instances
+  CANARY_INSTANCE: i-0dbd51f74a9a11fcc
+  WORKER_INSTANCES: i-092c2d3b4dafc1f24,i-0aae2ccd2f68b94d2
+  ALL_INSTANCES: i-0dbd51f74a9a11fcc,i-092c2d3b4dafc1f24,i-0aae2ccd2f68b94d2
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Test — quick smoke test before deploying
+  # ---------------------------------------------------------------------------
+  test:
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
+    runs-on: aragora
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install and test
+        run: |
+          python -m pip install -e ".[dev]" pytest-timeout httpx
+          pytest tests/test_handlers_debates.py tests/test_api_handler.py \
+            --timeout=60 -x --tb=short
+        env:
+          PYTHONPATH: .
+
+  # ---------------------------------------------------------------------------
+  # Deploy canary — single instance, verify before continuing
+  # ---------------------------------------------------------------------------
+  deploy-canary:
+    needs: test
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: aragora
+    timeout-minutes: 15
+    outputs:
+      canary_ok: ${{ steps.health.outputs.canary_ok }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.AWS_DEPLOY_ROLE_NAME }}
+          role-session-name: deploy-ec2-canary-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Pre-deploy canary health check
+        run: |
+          echo "Verifying canary instance health before deployment..."
+          STATUS=$(aws ec2 describe-instance-status \
+            --instance-ids "$CANARY_INSTANCE" \
+            --query 'InstanceStatuses[0].[InstanceStatus.Status, SystemStatus.Status]' \
+            --output text 2>/dev/null || echo "unknown unknown")
+          INST_STATUS=$(echo "$STATUS" | awk '{print $1}')
+          SYS_STATUS=$(echo "$STATUS" | awk '{print $2}')
+          if [[ "$INST_STATUS" != "ok" ]] || [[ "$SYS_STATUS" != "ok" ]]; then
+            echo "::error::Canary instance $CANARY_INSTANCE health check failed: instance=$INST_STATUS system=$SYS_STATUS"
+            exit 1
+          fi
+          echo "Canary instance healthy: instance=$INST_STATUS system=$SYS_STATUS"
+
+      - name: Deploy to canary via SSM
+        id: deploy
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$CANARY_INSTANCE" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy aragora canary from GitHub Actions run ${{ github.run_id }}" \
+            --parameters 'commands=[
+              "set -e",
+              "export HOME=/root",
+              "cd /home/ec2-user/aragora",
+              "git config --global safe.directory /home/ec2-user/aragora",
+              "PREVIOUS_COMMIT=$(git rev-parse HEAD)",
+              "echo \"PREVIOUS_COMMIT=$PREVIOUS_COMMIT\" > /tmp/aragora_deploy_state",
+              "sudo -u ec2-user git stash --include-untracked || true",
+              "sudo chown -R ec2-user:ec2-user /home/ec2-user/aragora/.git || true",
+              "sudo -u ec2-user git fetch origin main --depth=1",
+              "sudo -u ec2-user git checkout main || sudo -u ec2-user git checkout -b main origin/main",
+              "sudo -u ec2-user git reset --hard origin/main",
+              "sudo chown -R ec2-user:ec2-user /home/ec2-user/aragora/venv || true",
+              "sudo chown -R ec2-user:ec2-user /home/ec2-user/.npm /home/ec2-user/.cache || true",
+              "sudo -u ec2-user bash -c 'cd /home/ec2-user/aragora && source venv/bin/activate && pip install -e . --quiet --no-cache-dir'",
+              "find /home/ec2-user/aragora/venv/lib/python3.11/site-packages -maxdepth 1 -name \"~*\" -type d -exec rm -rf {} + 2>/dev/null || true",
+              "sudo -u ec2-user bash -c 'cd /home/ec2-user/aragora && source venv/bin/activate && python -c \"from aragora.server.unified_server import UnifiedServer; print(\\\"Import OK\\\")\"'",
+              "sudo systemctl restart aragora",
+              "sleep 5",
+              "if ! systemctl is-active --quiet aragora; then echo \"=== SERVICE FAILED ===\"; systemctl status aragora --no-pager || true; journalctl -u aragora -n 50 --no-pager || true; exit 1; fi",
+              "for i in $(seq 1 12); do if curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then echo \"Health OK on attempt $i\"; break; fi; echo \"Waiting... $i/12\"; sleep 5; done",
+              "if ! curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then echo \"Health FAILED\"; journalctl -u aragora -n 30 --no-pager || true; exit 1; fi",
+              "echo \"Canary deploy complete\""
+            ]' \
+            --timeout-seconds 300 \
+            --query 'Command.CommandId' \
+            --output text)
+
+          echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
+          echo "Started canary deployment: $COMMAND_ID"
+
+          # Poll for completion (up to 5 minutes)
+          MAX_POLL=60
+          CONSECUTIVE_ERRORS=0
+          MAX_CONSECUTIVE_ERRORS=5
+          BACKOFF=5
+
+          for i in $(seq 1 $MAX_POLL); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$CANARY_INSTANCE" \
+              --query 'Status' \
+              --output text 2>/dev/null)
+            EXIT_CODE=$?
+
+            if [[ $EXIT_CODE -ne 0 ]]; then
+              CONSECUTIVE_ERRORS=$((CONSECUTIVE_ERRORS + 1))
+              echo "::warning::SSM API error (attempt $i, errors: $CONSECUTIVE_ERRORS/$MAX_CONSECUTIVE_ERRORS)"
+              if [[ $CONSECUTIVE_ERRORS -ge $MAX_CONSECUTIVE_ERRORS ]]; then
+                echo "::error::Too many consecutive SSM API errors, aborting"
+                exit 1
+              fi
+              BACKOFF=$((BACKOFF * 2 > 30 ? 30 : BACKOFF * 2))
+              sleep $BACKOFF
+              continue
+            fi
+
+            CONSECUTIVE_ERRORS=0
+            BACKOFF=5
+
+            case "$STATUS" in
+              Success)
+                echo "Canary deployment succeeded"
+                echo "deploy_success=true" >> $GITHUB_OUTPUT
+                exit 0
+                ;;
+              Failed|Cancelled|TimedOut)
+                echo "::error::Canary deployment failed (status: $STATUS)"
+                echo "=== Stdout ==="
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$CANARY_INSTANCE" \
+                  --query 'StandardOutputContent' \
+                  --output text || true
+                echo "=== Stderr ==="
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$CANARY_INSTANCE" \
+                  --query 'StandardErrorContent' \
+                  --output text || true
+                echo "deploy_success=false" >> $GITHUB_OUTPUT
+                exit 1
+                ;;
+              *)
+                echo "Waiting for canary... attempt $i/$MAX_POLL (status: $STATUS)"
+                sleep 5
+                ;;
+            esac
+          done
+
+          echo "::error::Canary deployment timed out waiting for SSM"
+          echo "deploy_success=false" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Verify canary health via SSM
+        id: health
+        if: steps.deploy.outputs.deploy_success == 'true'
+        run: |
+          HEALTH_CMD_ID=$(aws ssm send-command \
+            --instance-ids "$CANARY_INSTANCE" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Canary health check from run ${{ github.run_id }}" \
+            --parameters 'commands=[
+              "set -e",
+              "for i in $(seq 1 12); do if curl -sf http://localhost:8080/api/health; then echo; echo HEALTH_OK; break; fi; echo \"Waiting... $i/12\"; sleep 5; done",
+              "if ! curl -sf http://localhost:8080/api/health > /dev/null; then echo HEALTH_FAIL; exit 1; fi",
+              "DEPLOYED_SHA=$(cd /home/ec2-user/aragora && git rev-parse HEAD)",
+              "echo DEPLOYED_SHA=$DEPLOYED_SHA",
+              "echo CANARY_VERIFIED"
+            ]' \
+            --timeout-seconds 90 \
+            --query 'Command.CommandId' \
+            --output text)
+
+          MAX_POLL=20
+          for i in $(seq 1 $MAX_POLL); do
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$HEALTH_CMD_ID" \
+              --instance-id "$CANARY_INSTANCE" \
+              --query 'Status' \
+              --output text 2>/dev/null || echo "Pending")
+            case "$STATUS" in
+              Success)
+                echo "Canary health check passed"
+                echo "canary_ok=true" >> $GITHUB_OUTPUT
+                exit 0
+                ;;
+              Failed|TimedOut|Cancelled)
+                echo "::error::Canary health check failed (status: $STATUS)"
+                aws ssm get-command-invocation \
+                  --command-id "$HEALTH_CMD_ID" \
+                  --instance-id "$CANARY_INSTANCE" \
+                  --query 'StandardErrorContent' \
+                  --output text || true
+                echo "canary_ok=false" >> $GITHUB_OUTPUT
+                exit 1
+                ;;
+              *)
+                sleep 5
+                ;;
+            esac
+          done
+
+          echo "::error::Canary health check timed out"
+          echo "canary_ok=false" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Rollback canary on failure
+        if: failure()
+        run: |
+          echo "::warning::Rolling back canary instance..."
+          aws ssm send-command \
+            --instance-ids "$CANARY_INSTANCE" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Rollback canary from run ${{ github.run_id }}" \
+            --parameters 'commands=[
+              "set -e",
+              "export HOME=/root",
+              "cd /home/ec2-user/aragora",
+              "git config --global safe.directory /home/ec2-user/aragora",
+              "if [ -f /tmp/aragora_deploy_state ]; then source /tmp/aragora_deploy_state; fi",
+              "if [ -n \"$PREVIOUS_COMMIT\" ]; then sudo -u ec2-user git checkout $PREVIOUS_COMMIT; fi",
+              "source venv/bin/activate",
+              "pip install -e . --quiet --no-cache-dir",
+              "sudo systemctl restart aragora",
+              "rm -f /tmp/aragora_deploy_state",
+              "echo \"Canary rollback complete\""
+            ]' \
+            --timeout-seconds 120
+          echo "Rollback command sent to canary"
+
+  # ---------------------------------------------------------------------------
+  # Deploy workers — remaining 2 instances in parallel, after canary verified
+  # ---------------------------------------------------------------------------
+  deploy-workers:
+    needs: deploy-canary
+    if: needs.deploy-canary.outputs.canary_ok == 'true'
+    runs-on: aragora
+    timeout-minutes: 15
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ secrets.AWS_DEPLOY_ROLE_NAME }}
+          role-session-name: deploy-ec2-workers-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Pre-deploy worker health check
+        run: |
+          echo "Verifying worker instances health before deployment..."
+          IFS=',' read -ra IDS <<< "$WORKER_INSTANCES"
+          for INST_ID in "${IDS[@]}"; do
+            STATUS=$(aws ec2 describe-instance-status \
+              --instance-ids "$INST_ID" \
+              --query 'InstanceStatuses[0].[InstanceStatus.Status, SystemStatus.Status]' \
+              --output text 2>/dev/null || echo "unknown unknown")
+            INST_STATUS=$(echo "$STATUS" | awk '{print $1}')
+            SYS_STATUS=$(echo "$STATUS" | awk '{print $2}')
+            if [[ "$INST_STATUS" != "ok" ]] || [[ "$SYS_STATUS" != "ok" ]]; then
+              echo "::error::Worker $INST_ID health check failed: instance=$INST_STATUS system=$SYS_STATUS"
+              exit 1
+            fi
+            echo "Worker $INST_ID: instance=$INST_STATUS system=$SYS_STATUS"
+          done
+          echo "All worker instances healthy"
+
+      - name: Deploy to workers via SSM (parallel)
+        id: deploy
+        run: |
+          IFS=',' read -ra IDS <<< "$WORKER_INSTANCES"
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "${IDS[@]}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy aragora workers from GitHub Actions run ${{ github.run_id }}" \
+            --parameters 'commands=[
+              "set -e",
+              "export HOME=/root",
+              "cd /home/ec2-user/aragora",
+              "git config --global safe.directory /home/ec2-user/aragora",
+              "PREVIOUS_COMMIT=$(git rev-parse HEAD)",
+              "echo \"PREVIOUS_COMMIT=$PREVIOUS_COMMIT\" > /tmp/aragora_deploy_state",
+              "sudo -u ec2-user git stash --include-untracked || true",
+              "sudo chown -R ec2-user:ec2-user /home/ec2-user/aragora/.git || true",
+              "sudo -u ec2-user git fetch origin main --depth=1",
+              "sudo -u ec2-user git checkout main || sudo -u ec2-user git checkout -b main origin/main",
+              "sudo -u ec2-user git reset --hard origin/main",
+              "sudo chown -R ec2-user:ec2-user /home/ec2-user/aragora/venv || true",
+              "sudo chown -R ec2-user:ec2-user /home/ec2-user/.npm /home/ec2-user/.cache || true",
+              "sudo -u ec2-user bash -c 'cd /home/ec2-user/aragora && source venv/bin/activate && pip install -e . --quiet --no-cache-dir'",
+              "find /home/ec2-user/aragora/venv/lib/python3.11/site-packages -maxdepth 1 -name \"~*\" -type d -exec rm -rf {} + 2>/dev/null || true",
+              "sudo -u ec2-user bash -c 'cd /home/ec2-user/aragora && source venv/bin/activate && python -c \"from aragora.server.unified_server import UnifiedServer; print(\\\"Import OK\\\")\"'",
+              "sudo systemctl restart aragora",
+              "sleep 5",
+              "if ! systemctl is-active --quiet aragora; then echo \"=== SERVICE FAILED ===\"; systemctl status aragora --no-pager || true; journalctl -u aragora -n 50 --no-pager || true; exit 1; fi",
+              "for i in $(seq 1 12); do if curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then echo \"Health OK on attempt $i\"; break; fi; echo \"Waiting... $i/12\"; sleep 5; done",
+              "if ! curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then echo \"Health FAILED\"; journalctl -u aragora -n 30 --no-pager || true; exit 1; fi",
+              "echo \"Worker deploy complete\""
+            ]' \
+            --timeout-seconds 300 \
+            --query 'Command.CommandId' \
+            --output text)
+
+          echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
+          echo "Started worker deployment: $COMMAND_ID"
+
+          # Poll for completion on both instances (up to 5 minutes)
+          MAX_POLL=60
+          CONSECUTIVE_ERRORS=0
+          MAX_CONSECUTIVE_ERRORS=5
+          BACKOFF=5
+
+          for i in $(seq 1 $MAX_POLL); do
+            POLL_ERROR=false
+            ALL_DONE=true
+            FAILED_IDS=""
+
+            for INST_ID in "${IDS[@]}"; do
+              STATUS=$(aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INST_ID" \
+                --query 'Status' \
+                --output text 2>/dev/null)
+              EXIT_CODE=$?
+
+              if [[ $EXIT_CODE -ne 0 ]]; then
+                POLL_ERROR=true
+                break
+              fi
+
+              case "$STATUS" in
+                Success)
+                  ;;
+                Failed|Cancelled|TimedOut)
+                  FAILED_IDS="${FAILED_IDS}${FAILED_IDS:+,}$INST_ID"
+                  ;;
+                *)
+                  ALL_DONE=false
+                  ;;
+              esac
+            done
+
+            if [[ "$POLL_ERROR" == "true" ]]; then
+              CONSECUTIVE_ERRORS=$((CONSECUTIVE_ERRORS + 1))
+              echo "::warning::SSM API error (attempt $i, errors: $CONSECUTIVE_ERRORS/$MAX_CONSECUTIVE_ERRORS)"
+              if [[ $CONSECUTIVE_ERRORS -ge $MAX_CONSECUTIVE_ERRORS ]]; then
+                echo "::error::Too many consecutive SSM API errors, aborting"
+                exit 1
+              fi
+              BACKOFF=$((BACKOFF * 2 > 30 ? 30 : BACKOFF * 2))
+              sleep $BACKOFF
+              continue
+            fi
+
+            CONSECUTIVE_ERRORS=0
+            BACKOFF=5
+
+            if [[ -n "$FAILED_IDS" ]]; then
+              echo "::error::Worker deployment failed on: $FAILED_IDS"
+              for FID in $(echo "$FAILED_IDS" | tr ',' ' '); do
+                echo "=== Instance $FID ==="
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$FID" \
+                  --query 'StandardOutputContent' \
+                  --output text || true
+                aws ssm get-command-invocation \
+                  --command-id "$COMMAND_ID" \
+                  --instance-id "$FID" \
+                  --query 'StandardErrorContent' \
+                  --output text || true
+              done
+              exit 1
+            fi
+
+            if [[ "$ALL_DONE" == "true" ]]; then
+              echo "Worker deployment succeeded on all instances"
+              exit 0
+            fi
+
+            echo "Waiting for workers... attempt $i/$MAX_POLL"
+            sleep 5
+          done
+
+          echo "::error::Worker deployment timed out"
+          exit 1
+
+      - name: Verify all workers healthy via SSM
+        id: health
+        run: |
+          IFS=',' read -ra IDS <<< "$WORKER_INSTANCES"
+          HEALTH_CMD_ID=$(aws ssm send-command \
+            --instance-ids "${IDS[@]}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Worker health check from run ${{ github.run_id }}" \
+            --parameters 'commands=[
+              "set -e",
+              "for i in $(seq 1 12); do if curl -sf http://localhost:8080/api/health; then echo; echo HEALTH_OK; break; fi; echo \"Waiting... $i/12\"; sleep 5; done",
+              "if ! curl -sf http://localhost:8080/api/health > /dev/null; then echo HEALTH_FAIL; exit 1; fi",
+              "DEPLOYED_SHA=$(cd /home/ec2-user/aragora && git rev-parse HEAD)",
+              "echo DEPLOYED_SHA=$DEPLOYED_SHA",
+              "echo WORKER_VERIFIED"
+            ]' \
+            --timeout-seconds 90 \
+            --query 'Command.CommandId' \
+            --output text)
+
+          MAX_POLL=20
+          for i in $(seq 1 $MAX_POLL); do
+            ALL_DONE=true
+            ALL_OK=true
+            for INST_ID in "${IDS[@]}"; do
+              STATUS=$(aws ssm get-command-invocation \
+                --command-id "$HEALTH_CMD_ID" \
+                --instance-id "$INST_ID" \
+                --query 'Status' \
+                --output text 2>/dev/null || echo "Pending")
+              case "$STATUS" in
+                Success)
+                  ;;
+                Failed|TimedOut|Cancelled)
+                  ALL_OK=false
+                  ;;
+                *)
+                  ALL_DONE=false
+                  ;;
+              esac
+            done
+
+            if [[ "$ALL_DONE" == "true" ]]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ "$ALL_OK" == "true" && "$ALL_DONE" == "true" ]]; then
+            echo "All worker health checks passed"
+          else
+            echo "::error::Worker health check failed on one or more instances"
+            for INST_ID in "${IDS[@]}"; do
+              INST_STATUS=$(aws ssm get-command-invocation \
+                --command-id "$HEALTH_CMD_ID" \
+                --instance-id "$INST_ID" \
+                --query 'Status' \
+                --output text 2>/dev/null || echo "Unknown")
+              if [[ "$INST_STATUS" != "Success" ]]; then
+                echo "=== Health failure on $INST_ID (status: $INST_STATUS) ==="
+                aws ssm get-command-invocation \
+                  --command-id "$HEALTH_CMD_ID" \
+                  --instance-id "$INST_ID" \
+                  --query 'StandardErrorContent' \
+                  --output text || true
+              fi
+            done
+            exit 1
+          fi
+
+      - name: Rollback workers on failure
+        if: failure()
+        run: |
+          echo "::warning::Rolling back worker instances..."
+          IFS=',' read -ra IDS <<< "$WORKER_INSTANCES"
+          aws ssm send-command \
+            --instance-ids "${IDS[@]}" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Rollback workers from run ${{ github.run_id }}" \
+            --parameters 'commands=[
+              "set -e",
+              "export HOME=/root",
+              "cd /home/ec2-user/aragora",
+              "git config --global safe.directory /home/ec2-user/aragora",
+              "if [ -f /tmp/aragora_deploy_state ]; then source /tmp/aragora_deploy_state; fi",
+              "if [ -n \"$PREVIOUS_COMMIT\" ]; then sudo -u ec2-user git checkout $PREVIOUS_COMMIT; fi",
+              "source venv/bin/activate",
+              "pip install -e . --quiet --no-cache-dir",
+              "sudo systemctl restart aragora",
+              "rm -f /tmp/aragora_deploy_state",
+              "echo \"Worker rollback complete\""
+            ]' \
+            --timeout-seconds 120
+          echo "Rollback command sent to workers"
+
+  # ---------------------------------------------------------------------------
+  # Final verification — external health check via Cloudflare
+  # ---------------------------------------------------------------------------
+  verify:
+    needs: [deploy-canary, deploy-workers]
+    runs-on: aragora
+    timeout-minutes: 5
+
+    steps:
+      - name: Verify external health via Cloudflare
+        run: |
+          echo "Checking external access via https://api.aragora.ai/api/health ..."
+          for i in $(seq 1 12); do
+            RESPONSE=$(curl -sf "https://api.aragora.ai/api/health" 2>/dev/null || echo "")
+            if echo "$RESPONSE" | grep -q '"status"'; then
+              echo "External health check passed on attempt $i"
+              echo "$RESPONSE"
+              exit 0
+            fi
+            echo "Waiting for Cloudflare propagation... attempt $i/12"
+            sleep 5
+          done
+          echo "::warning::External health check via Cloudflare failed after 60s"
+          exit 1
+
+      - name: Deployment summary
+        if: always()
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          DEPLOY_REF: ${{ github.ref_name }}
+          CANARY_RESULT: ${{ needs.deploy-canary.result }}
+          WORKERS_RESULT: ${{ needs.deploy-workers.result }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## EC2 Deployment Summary
+
+          **Commit:** \`${DEPLOY_SHA}\`
+          **Triggered by:** ${DEPLOY_ACTOR}
+          **Branch:** ${DEPLOY_REF}
+
+          | Instance | Role | Status |
+          |----------|------|--------|
+          | i-0dbd51f74a9a11fcc | Canary (aragora-api-server) | ${CANARY_RESULT} |
+          | i-092c2d3b4dafc1f24 | Worker (aragora-al2023-1) | ${WORKERS_RESULT} |
+          | i-0aae2ccd2f68b94d2 | Worker (aragora-al2023-2) | ${WORKERS_RESULT} |
+          EOF

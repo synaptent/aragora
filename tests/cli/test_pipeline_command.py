@@ -48,7 +48,57 @@ class _FakeMetaPlanner:
 
 
 class _FakeIdeaToExecutionPipeline:
+    run_calls = 0
+    from_ideas_calls = 0
+    force_run_error = False
+    quality_gate_passed = True
+
+    @classmethod
+    def reset(cls) -> None:
+        cls.run_calls = 0
+        cls.from_ideas_calls = 0
+        cls.force_run_error = False
+        cls.quality_gate_passed = True
+
+    async def run(self, _ideas_text, config=None):
+        type(self).run_calls += 1
+        if type(self).force_run_error:
+            raise RuntimeError("simulated live failure")
+
+        min_score = float(getattr(config, "plan_quality_min_score", 6.0))
+        min_practicality = float(getattr(config, "plan_quality_min_practicality", 5.0))
+        gate_passed = bool(type(self).quality_gate_passed)
+        score = min_score + 0.5 if gate_passed else max(0.0, min_score - 1.0)
+        practicality = min_practicality + 0.5 if gate_passed else max(0.0, min_practicality - 1.0)
+        result = self.from_ideas(["live-generated"])
+        result.metadata = {
+            "plan_quality": {
+                "gate_passed": gate_passed,
+                "quality_score_10": score,
+                "practicality_score_10": practicality,
+                "min_quality_score_10": min_score,
+                "min_practicality_score_10": min_practicality,
+            }
+        }
+        result.stage_results = [
+            SimpleNamespace(
+                stage_name="ideation",
+                status="completed",
+                duration=0.25,
+                output={"debate_result": {"provider": "fake"}},
+            ),
+            SimpleNamespace(
+                stage_name="goals",
+                status="completed",
+                duration=0.18,
+                output={},
+            ),
+        ]
+        result.duration = 0.6
+        return result
+
     def from_ideas(self, _ideas):
+        type(self).from_ideas_calls += 1
         goals = [
             SimpleNamespace(
                 title="Bridge pipeline to self-improve",
@@ -108,6 +158,13 @@ class TestPipelineParser:
                 "--quick-mode",
                 "--max-parallel",
                 "2",
+                "--pipeline-mode",
+                "hybrid",
+                "--plan-quality-min-score",
+                "7.5",
+                "--plan-quality-min-practicality",
+                "6.0",
+                "--plan-quality-fail-closed",
             ]
         )
 
@@ -117,6 +174,10 @@ class TestPipelineParser:
         assert args.max_goals == 3
         assert args.quick_mode is True
         assert args.max_parallel == 2
+        assert args.pipeline_mode == "hybrid"
+        assert args.plan_quality_min_score == 7.5
+        assert args.plan_quality_min_practicality == 6.0
+        assert args.plan_quality_fail_closed is True
 
 
 class TestPipelineObjectiveExtraction:
@@ -182,12 +243,18 @@ class TestPipelineSelfImproveCommand:
             "max_goals": 1,
             "quick_mode": False,
             "max_parallel": 4,
+            "pipeline_mode": "live",
+            "plan_quality_contract_file": None,
+            "plan_quality_fail_closed": False,
+            "plan_quality_min_score": 6.0,
+            "plan_quality_min_practicality": 5.0,
         }
         base.update(overrides)
         return argparse.Namespace(**base)
 
     def test_self_improve_planning_only_does_not_call_handoff(self, capsys):
-        args = self._args(execute=False)
+        args = self._args(execute=False, dry_run=False)
+        _FakeIdeaToExecutionPipeline.reset()
 
         with (
             patch.dict("sys.modules", _fake_module_payload()),
@@ -198,9 +265,12 @@ class TestPipelineSelfImproveCommand:
         out = capsys.readouterr().out
         assert "Handoff not executed" in out
         mock_handoff.assert_not_called()
+        assert _FakeIdeaToExecutionPipeline.run_calls == 1
+        assert _FakeIdeaToExecutionPipeline.from_ideas_calls == 1
 
     def test_self_improve_execute_calls_handoff_with_ranked_objective(self):
         args = self._args(execute=True, max_goals=1)
+        _FakeIdeaToExecutionPipeline.reset()
 
         with (
             patch.dict("sys.modules", _fake_module_payload()),
@@ -212,10 +282,49 @@ class TestPipelineSelfImproveCommand:
         call_args = mock_handoff.call_args
         objectives = call_args.args[0]
         assert len(objectives) == 1
-        assert objectives[0].startswith("Bridge pipeline to self-improve")
+        assert objectives[0] == "Make Aragora more useful"
         assert call_args.kwargs["dry_run"] is True
         assert call_args.kwargs["require_approval"] is False
         assert call_args.kwargs["max_parallel"] == 4
+        assert _FakeIdeaToExecutionPipeline.run_calls == 1
+
+    def test_self_improve_hybrid_falls_back_to_heuristic(self, capsys):
+        args = self._args(execute=False, dry_run=False, pipeline_mode="hybrid")
+        _FakeIdeaToExecutionPipeline.reset()
+        _FakeIdeaToExecutionPipeline.force_run_error = True
+
+        with (
+            patch.dict("sys.modules", _fake_module_payload()),
+            patch("aragora.cli.commands.pipeline._run_self_improve_handoff") as mock_handoff,
+        ):
+            _cmd_pipeline_self_improve(args)
+
+        out = capsys.readouterr().out
+        assert "heuristic fallback" in out.lower()
+        assert "Execution path: heuristic-fallback" in out
+        assert _FakeIdeaToExecutionPipeline.run_calls == 1
+        assert _FakeIdeaToExecutionPipeline.from_ideas_calls >= 1
+        mock_handoff.assert_not_called()
+
+    def test_self_improve_fail_closed_blocks_handoff(self, capsys):
+        args = self._args(
+            execute=True,
+            plan_quality_fail_closed=True,
+            plan_quality_min_score=8.0,
+            plan_quality_min_practicality=7.0,
+        )
+        _FakeIdeaToExecutionPipeline.reset()
+        _FakeIdeaToExecutionPipeline.quality_gate_passed = False
+
+        with (
+            patch.dict("sys.modules", _fake_module_payload()),
+            patch("aragora.cli.commands.pipeline._run_self_improve_handoff") as mock_handoff,
+        ):
+            _cmd_pipeline_self_improve(args)
+
+        out = capsys.readouterr().out
+        assert "Blocking handoff" in out
+        mock_handoff.assert_not_called()
 
     def test_handoff_runner_uses_dry_run_mode(self):
         from aragora.cli.commands.pipeline import _run_self_improve_handoff

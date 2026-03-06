@@ -104,4 +104,24 @@ export class WorkspaceSettingsNamespace {
       { body: { enabled } }
     );
   }
+
+  /** List all invites for a workspace. */
+  async listInvites(workspaceId: string): Promise<{ invites: Record<string, unknown>[]; count: number }> {
+    return this.client.request('GET', `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/invites`);
+  }
+
+  /** Create a workspace invite. */
+  async createInvite(workspaceId: string, email: string, role: string, options?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.client.request('POST', `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/invites`, { body: { email, role, ...options } });
+  }
+
+  /** Revoke a workspace invite. */
+  async revokeInvite(workspaceId: string, inviteId: string): Promise<{ success: boolean }> {
+    return this.client.request('DELETE', `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/invites/${encodeURIComponent(inviteId)}`);
+  }
+
+  /** Resend a pending workspace invite. */
+  async resendInvite(workspaceId: string, inviteId: string): Promise<{ success: boolean; message: string }> {
+    return this.client.request('POST', `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/invites/${encodeURIComponent(inviteId)}/resend`);
+  }
 }

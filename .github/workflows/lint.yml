@@ -297,7 +297,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Check AGENTS registry sync
         run: python scripts/check_agent_registry_sync.py
@@ -453,8 +453,8 @@ jobs:
       - name: Install mypy and dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mypy types-requests types-redis types-python-dateutil types-setuptools
-          pip install -e .
+          python -m pip install mypy types-requests types-redis types-python-dateutil types-setuptools
+          python -m pip install -e .
 
       - name: Typecheck core modules (REQUIRED)
         run: |
@@ -625,7 +625,7 @@ jobs:
       - name: Install security tools
         run: |
           python -m pip install --upgrade pip
-          pip install bandit safety
+          python -m pip install bandit safety
 
       - name: Run Bandit security scan
         run: |
@@ -636,7 +636,7 @@ jobs:
 
       - name: Check dependencies for vulnerabilities
         run: |
-          pip install -e .
+          python -m pip install -e .
           # Blocking: fail on HIGH/CRITICAL vulnerabilities.
           # --ignore 70612: Known false positive / accepted risk.
           safety check --full-report --ignore 70612
@@ -786,7 +786,7 @@ jobs:
       - name: Validate values schema
         run: |
           # Install schema validator
-          pip install check-jsonschema
+          python -m pip install check-jsonschema
 
           # Validate values.yaml against schema
           if [ -f deploy/helm/aragora/values.schema.json ]; then
@@ -937,8 +937,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install tiktoken
-          pip install -e .
+          python -m pip install tiktoken
+          python -m pip install -e .
 
       - name: Regenerate API docs
         run: |

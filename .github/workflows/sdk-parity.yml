@@ -110,65 +110,72 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve Python runtime
-        id: sdk_parity_python
+      - name: Set up Python
+        continue-on-error: true
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Ensure python toolchain is available
         shell: bash
         run: |
           set -euo pipefail
-          PYTHON_BIN=""
-          for candidate in python3.13 python3.12 python3.11 python3.10 python3 python; do
-            if command -v "$candidate" >/dev/null 2>&1; then
-              PYTHON_BIN="$(command -v "$candidate")"
-              break
-            fi
-          done
-          if [[ -z "$PYTHON_BIN" ]]; then
-            echo "::error::Python runtime not found on runner"
+          PY_BIN=""
+          if [[ -n "${pythonLocation:-}" && -x "${pythonLocation}/bin/python" ]]; then
+            PY_BIN="${pythonLocation}/bin/python"
+          elif command -v python3.11 >/dev/null 2>&1; then
+            PY_BIN="$(command -v python3.11)"
+          elif command -v python3 >/dev/null 2>&1; then
+            PY_BIN="$(command -v python3)"
+          fi
+          if [[ -z "$PY_BIN" ]]; then
+            echo "::error::No python interpreter found on runner"
             exit 1
           fi
-          PYTHON_VERSION="$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-          if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-            echo "::error::Python >=3.10 required for sdk-parity, found ${PYTHON_VERSION} at ${PYTHON_BIN}"
-            exit 1
-          fi
-          echo "Using Python ${PYTHON_VERSION} at ${PYTHON_BIN}"
-          "$PYTHON_BIN" -m ensurepip --upgrade || true
-          "$PYTHON_BIN" -m pip install --upgrade pip
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "python_bin=$PYTHON_BIN" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/bin"
+          ln -sf "$PY_BIN" "$RUNNER_TEMP/bin/python"
+          # Create pip wrapper so bare `pip` works even when not on PATH
+          cat > "$RUNNER_TEMP/bin/pip" <<'PIPWRAP'
+          #!/usr/bin/env bash
+          exec python -m pip "$@"
+          PIPWRAP
+          chmod +x "$RUNNER_TEMP/bin/pip"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          "$PY_BIN" --version
 
       - name: Install dependencies
         run: |
-          "${{ steps.sdk_parity_python.outputs.python_bin }}" -m pip install --user -e .
+          python -m pip install --upgrade pip
+          python -m pip install -e .
 
       - name: Check Version Alignment
-        run: ${{ steps.sdk_parity_python.outputs.python_bin }} scripts/check_version_alignment.py
+        run: python scripts/check_version_alignment.py
 
       - name: Check SDK Parity
         run: |
           # Blocking gate: fail on any drift regression beyond tracked baseline
-          ${{ steps.sdk_parity_python.outputs.python_bin }} scripts/check_sdk_parity.py \
+          python scripts/check_sdk_parity.py \
             --strict \
             --baseline scripts/baselines/check_sdk_parity.json \
             --budget scripts/baselines/check_sdk_parity_budget.json
 
       - name: Check Namespace SDK Parity
         run: |
-          ${{ steps.sdk_parity_python.outputs.python_bin }} scripts/check_sdk_namespace_parity.py --strict --baseline scripts/baselines/check_sdk_namespace_parity.json
+          python scripts/check_sdk_namespace_parity.py --strict --baseline scripts/baselines/check_sdk_namespace_parity.json
 
       - name: Check Cross-Language SDK Parity
         run: |
-          ${{ steps.sdk_parity_python.outputs.python_bin }} scripts/check_cross_sdk_parity.py \
+          python scripts/check_cross_sdk_parity.py \
             --strict \
             --baseline scripts/baselines/cross_sdk_parity.json
 
       - name: Generate JSON Report
         if: always()
         run: |
-          ${{ steps.sdk_parity_python.outputs.python_bin }} scripts/check_sdk_parity.py --json > parity-report.json || true
-          ${{ steps.sdk_parity_python.outputs.python_bin }} scripts/check_sdk_namespace_parity.py --json > namespace-parity-report.json || true
-          ${{ steps.sdk_parity_python.outputs.python_bin }} scripts/check_cross_sdk_parity.py --json > cross-sdk-parity-report.json || true
-          ${{ steps.sdk_parity_python.outputs.python_bin }} scripts/contract_drift_report.py --json-out contract-drift-summary.json --md-out contract-drift-summary.md || true
+          python scripts/check_sdk_parity.py --json > parity-report.json || true
+          python scripts/check_sdk_namespace_parity.py --json > namespace-parity-report.json || true
+          python scripts/check_cross_sdk_parity.py --json > cross-sdk-parity-report.json || true
+          python scripts/contract_drift_report.py --json-out contract-drift-summary.json --md-out contract-drift-summary.md || true
 
       - name: Upload Parity Report
         if: always()
