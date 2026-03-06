@@ -270,12 +270,16 @@ class EloSystem(KMAdapterMixin):
     """
 
     # Class-level cache for leaderboard data (shared across instances)
-    _leaderboard_cache: TTLCache[list] = TTLCache(maxsize=50, ttl_seconds=CACHE_TTL_LEADERBOARD)
+    _leaderboard_cache: TTLCache[list[AgentRating]] = TTLCache(
+        maxsize=50, ttl_seconds=CACHE_TTL_LEADERBOARD
+    )
     _rating_cache: TTLCache[AgentRating] = TTLCache(
         maxsize=200, ttl_seconds=CACHE_TTL_RECENT_MATCHES
     )
-    _stats_cache: TTLCache[dict] = TTLCache(maxsize=10, ttl_seconds=CACHE_TTL_LB_STATS)
-    _calibration_cache: TTLCache[list] = TTLCache(maxsize=20, ttl_seconds=CACHE_TTL_CALIBRATION_LB)
+    _stats_cache: TTLCache[dict[str, Any]] = TTLCache(maxsize=10, ttl_seconds=CACHE_TTL_LB_STATS)
+    _calibration_cache: TTLCache[list[AgentRating]] = TTLCache(
+        maxsize=20, ttl_seconds=CACHE_TTL_CALIBRATION_LB
+    )
 
     def __init__(
         self,
@@ -387,7 +391,7 @@ class EloSystem(KMAdapterMixin):
         self._rating_cache.set(cache_key, rating)
         return rating
 
-    def _rating_from_row(self, row: tuple) -> AgentRating:
+    def _rating_from_row(self, row: tuple[Any, ...]) -> AgentRating:
         """Create AgentRating from a database row (leaderboard query format)."""
         return AgentRating(
             agent_name=row[0],
@@ -794,23 +798,23 @@ class EloSystem(KMAdapterMixin):
         """Get ELO history for an agent."""
         return self._leaderboard_engine.get_elo_history(agent_name, limit)
 
-    def get_recent_matches(self, limit: int = 10) -> list[dict]:
+    def get_recent_matches(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent match results with ELO changes."""
         return self._leaderboard_engine.get_recent_matches(limit)
 
-    def get_head_to_head(self, agent_a: str, agent_b: str) -> dict:
+    def get_head_to_head(self, agent_a: str, agent_b: str) -> dict[str, Any]:
         """Get head-to-head statistics between two agents."""
         return self._leaderboard_engine.get_head_to_head(agent_a, agent_b)
 
-    def get_stats(self, use_cache: bool = True) -> dict:
+    def get_stats(self, use_cache: bool = True) -> dict[str, Any]:
         """Get overall system statistics."""
         return self._leaderboard_engine.get_stats(use_cache)
 
-    def get_snapshot_leaderboard(self, limit: int = 20) -> list[dict]:
+    def get_snapshot_leaderboard(self, limit: int = 20) -> list[dict[str, Any]]:
         """Get leaderboard from JSON snapshot file."""
         return _get_snapshot_leaderboard(self.db_path, self.get_leaderboard, limit)
 
-    def get_cached_recent_matches(self, limit: int = 10) -> list[dict]:
+    def get_cached_recent_matches(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get recent matches from cache if available."""
         return _get_cached_recent_matches(self.db_path, self.get_recent_matches, limit)
 
@@ -838,7 +842,9 @@ class EloSystem(KMAdapterMixin):
         """Get agents ranked by calibration score."""
         return _get_calibration_leaderboard(self._db, self._calibration_cache, limit, use_cache)
 
-    def get_agent_calibration_history(self, agent_name: str, limit: int = 50) -> list[dict]:
+    def get_agent_calibration_history(
+        self, agent_name: str, limit: int = 50
+    ) -> list[dict[str, Any]]:
         """Get recent predictions made by an agent."""
         return _get_agent_calibration_history(self._db, agent_name, limit)
 
@@ -856,11 +862,13 @@ class EloSystem(KMAdapterMixin):
         """Record a domain-specific prediction."""
         self._domain_calibration_engine.record_prediction(agent_name, domain, confidence, correct)
 
-    def get_domain_calibration(self, agent_name: str, domain: str | None = None) -> dict:
+    def get_domain_calibration(self, agent_name: str, domain: str | None = None) -> dict[str, Any]:
         """Get calibration statistics for an agent."""
         return self._domain_calibration_engine.get_domain_stats(agent_name, domain)
 
-    def get_calibration_by_bucket(self, agent_name: str, domain: str | None = None) -> list[dict]:
+    def get_calibration_by_bucket(
+        self, agent_name: str, domain: str | None = None
+    ) -> list[dict[str, Any]]:
         """Get calibration broken down by confidence bucket."""
         buckets = self._domain_calibration_engine.get_calibration_curve(agent_name, domain)
         return [
@@ -920,11 +928,11 @@ class EloSystem(KMAdapterMixin):
             b_win=b_win,
         )
 
-    def update_relationships_batch(self, updates: list[dict]) -> None:
+    def update_relationships_batch(self, updates: list[dict[str, Any]]) -> None:
         """Batch update multiple agent relationships."""
         self.relationship_tracker.update_batch(updates)
 
-    def get_relationship_raw(self, agent_a: str, agent_b: str) -> dict | None:
+    def get_relationship_raw(self, agent_a: str, agent_b: str) -> dict[str, Any] | None:
         """Get raw relationship data between two agents."""
         stats = self.relationship_tracker.get_raw(agent_a, agent_b)
         if stats is None:
@@ -944,7 +952,9 @@ class EloSystem(KMAdapterMixin):
             "b_wins_over_a": stats.b_wins_over_a,
         }
 
-    def get_all_relationships_for_agent(self, agent_name: str, limit: int = 100) -> list[dict]:
+    def get_all_relationships_for_agent(
+        self, agent_name: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
         """Get all relationships involving an agent."""
         _validate_agent_name(agent_name)
         stats_list = self.relationship_tracker.get_all_for_agent(agent_name, limit)
@@ -966,7 +976,7 @@ class EloSystem(KMAdapterMixin):
             for s in stats_list
         ]
 
-    def compute_relationship_metrics(self, agent_a: str, agent_b: str) -> dict:
+    def compute_relationship_metrics(self, agent_a: str, agent_b: str) -> dict[str, Any]:
         """Compute rivalry and alliance scores between two agents."""
         metrics = self.relationship_tracker.compute_metrics(agent_a, agent_b)
         return {
@@ -980,7 +990,9 @@ class EloSystem(KMAdapterMixin):
             "head_to_head": metrics.head_to_head,
         }
 
-    def _compute_metrics_from_raw(self, agent_a: str, agent_b: str, raw: dict) -> dict:
+    def _compute_metrics_from_raw(
+        self, agent_a: str, agent_b: str, raw: dict[str, Any]
+    ) -> dict[str, Any]:
         """Compute relationship metrics from raw data (no database call)."""
         stats = RelationshipStats(
             agent_a=raw.get("agent_a", agent_a),
@@ -1006,7 +1018,7 @@ class EloSystem(KMAdapterMixin):
             "debate_count": metrics.debate_count,
         }
 
-    def get_rivals(self, agent_name: str, limit: int = 5) -> list[dict]:
+    def get_rivals(self, agent_name: str, limit: int = 5) -> list[dict[str, Any]]:
         """Get agent's top rivals by rivalry score."""
         _validate_agent_name(agent_name)
         metrics_list = self.relationship_tracker.get_rivals(agent_name, limit)
@@ -1022,7 +1034,7 @@ class EloSystem(KMAdapterMixin):
             for m in metrics_list
         ]
 
-    def get_allies(self, agent_name: str, limit: int = 5) -> list[dict]:
+    def get_allies(self, agent_name: str, limit: int = 5) -> list[dict[str, Any]]:
         """Get agent's top allies by alliance score."""
         _validate_agent_name(agent_name)
         metrics_list = self.relationship_tracker.get_allies(agent_name, limit)
@@ -1061,7 +1073,7 @@ class EloSystem(KMAdapterMixin):
             session_id=session_id,
         )
 
-    def get_vulnerability_summary(self, agent_name: str) -> dict:
+    def get_vulnerability_summary(self, agent_name: str) -> dict[str, Any]:
         """Get summary of agent's red team history."""
         summary = self.redteam_integrator.get_vulnerability_summary(agent_name)
         return {
@@ -1115,7 +1127,7 @@ class EloSystem(KMAdapterMixin):
         )
         return net_change
 
-    def get_verification_impact(self, agent_name: str) -> dict:
+    def get_verification_impact(self, agent_name: str) -> dict[str, Any]:
         """Get summary of verification impact on an agent's ELO."""
         _validate_agent_name(agent_name)
         return calculate_verification_impact(self._db, agent_name)
@@ -1144,23 +1156,23 @@ class EloSystem(KMAdapterMixin):
             bonus_k_factor,
         )
 
-    def get_voting_accuracy(self, agent_name: str) -> dict:
+    def get_voting_accuracy(self, agent_name: str) -> dict[str, Any]:
         """Get voting accuracy statistics for an agent."""
         return _get_voting_accuracy(self, agent_name)
 
-    def get_voting_accuracy_batch(self, agent_names: list[str]) -> dict[str, dict]:
+    def get_voting_accuracy_batch(self, agent_names: list[str]) -> dict[str, dict[str, Any]]:
         """Get voting accuracy statistics for multiple agents in one query."""
         return _get_voting_accuracy_batch(self, agent_names)
 
     def get_learning_efficiency(
         self, agent_name: str, domain: str | None = None, window_debates: int = 20
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Compute learning efficiency for an agent based on ELO improvement rate."""
         return _get_learning_efficiency(self, agent_name, domain, window_debates)
 
     def get_learning_efficiency_batch(
         self, agent_names: list[str], domain: str | None = None, window_debates: int = 20
-    ) -> dict[str, dict]:
+    ) -> dict[str, dict[str, Any]]:
         """Get learning efficiency for multiple agents with batch optimization."""
         return _get_learning_efficiency_batch(self, agent_names, domain, window_debates)
 
