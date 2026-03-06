@@ -801,6 +801,106 @@ async def init_decision_router() -> bool:
         return False
 
 
+async def init_mfa_drift_monitor() -> bool:
+    """Initialize the MFA policy drift monitor for admin-role users.
+
+    Starts a periodic background scanner that detects admin accounts
+    without MFA enabled (policy drift) and emits structured log alerts.
+
+    SOC 2 Control: CC5-01 - Enforce MFA for administrative access.
+
+    The monitor only starts when auth is configured (i.e. a user store
+    is available).  If the notification service is available, violation
+    callbacks are wired; otherwise structured logging is used as the
+    default alerting mechanism.
+
+    Failure to start the monitor does NOT prevent server startup
+    (graceful degradation).
+
+    Environment Variables:
+        ARAGORA_MFA_DRIFT_ENABLED: Set to "true" to enable
+            (default: "true" in production, "false" otherwise)
+        ARAGORA_MFA_DRIFT_INTERVAL: Seconds between scans (default: 3600)
+        ARAGORA_MFA_DRIFT_THRESHOLD: Minimum compliance rate 0.0-1.0
+            (default: 1.0 = 100%% of admins must have MFA)
+
+    Returns:
+        True if the monitor was started, False otherwise
+    """
+    import os
+
+    env = os.environ.get("ARAGORA_ENV", "development")
+    default_enabled = "true" if env == "production" else "false"
+    enabled = os.environ.get("ARAGORA_MFA_DRIFT_ENABLED", default_enabled).lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+
+    if not enabled:
+        logger.debug("MFA drift monitor disabled (set ARAGORA_MFA_DRIFT_ENABLED=true to enable)")
+        return False
+
+    try:
+        from aragora.auth.mfa_drift_monitor import init_mfa_drift_monitor as _init_monitor
+        from aragora.storage.user_store.singleton import get_user_store
+
+        user_store = get_user_store()
+        if user_store is None:
+            logger.debug("MFA drift monitor not started: no user store available")
+            return False
+
+        # Read configuration from environment
+        interval = int(os.environ.get("ARAGORA_MFA_DRIFT_INTERVAL", "3600"))
+        threshold = float(os.environ.get("ARAGORA_MFA_DRIFT_THRESHOLD", "1.0"))
+
+        # Wire notification callback if the notification service is available
+        on_violation = None
+        try:
+            from aragora.notifications.service import get_notification_service
+
+            notif_svc = get_notification_service()
+            if notif_svc is not None:
+
+                def _notify_violation(report) -> None:
+                    """Forward MFA drift violation to the notification service."""
+                    try:
+                        notif_svc.send(
+                            channel="security",
+                            subject="MFA policy drift detected",
+                            body=report.summary,
+                            metadata=report.to_dict(),
+                        )
+                    except (RuntimeError, OSError, ValueError, AttributeError) as exc:
+                        logger.warning("Failed to send MFA drift notification: %s", exc)
+
+                on_violation = _notify_violation
+        except ImportError:
+            logger.debug("Notification service not available, using log-only MFA drift alerts")
+
+        # Initialize and start the monitor
+        monitor = _init_monitor(
+            user_store=user_store,
+            alert_threshold=threshold,
+            on_violation=on_violation,
+        )
+        await monitor.start(interval_seconds=interval)
+
+        logger.info(
+            "MFA drift monitor started (interval=%ds, threshold=%.0f%%)",
+            interval,
+            threshold * 100,
+        )
+        return True
+
+    except ImportError as e:
+        logger.debug("MFA drift monitor not available: %s", e)
+    except (OSError, RuntimeError, ValueError) as e:
+        logger.warning("Failed to start MFA drift monitor: %s", e)
+
+    return False
+
+
 async def init_aws_rotation_monitor() -> bool:
     """Initialize the AWS Secrets Manager rotation monitor.
 
