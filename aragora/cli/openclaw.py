@@ -622,6 +622,32 @@ def cmd_next_steps(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_watch(args: argparse.Namespace) -> int:
+    """Run the PR watch daemon that polls repos for new PRs to review."""
+    import asyncio
+
+    from aragora.compat.openclaw.pr_watch_daemon import WatcherConfig, run_daemon
+
+    repos = args.repo or os.environ.get("ARAGORA_WATCH_REPOS", "").split(",")
+    repos = [r.strip() for r in repos if r.strip()]
+
+    if not repos:
+        print("Error: At least one --repo is required (or set ARAGORA_WATCH_REPOS).")
+        return 1
+
+    config = WatcherConfig(
+        repos=repos,
+        poll_interval=args.poll_interval,
+        dry_run=args.dry_run,
+        agents=args.agents,
+        rounds=args.rounds,
+        gauntlet=args.gauntlet,
+    )
+
+    asyncio.run(run_daemon(config))
+    return 0
+
+
 def _cmd_serve_gateway(args: argparse.Namespace) -> int:
     """Launch the standalone OpenClaw governance gateway."""
     from aragora.compat.openclaw.standalone import cmd_openclaw_serve
@@ -933,3 +959,52 @@ Examples:
         help="Skip documentation gap scanning",
     )
     ns_parser.set_defaults(func=cmd_next_steps)
+
+    # Watch command -- PR watch daemon
+    watch_parser = openclaw_subparsers.add_parser(
+        "watch",
+        help="Run PR watch daemon that polls repos for new PRs to review",
+        description="""
+Continuously watch repositories for new pull requests and
+automatically run multi-agent code review on them.
+
+Examples:
+    aragora openclaw watch --repo owner/repo
+    aragora openclaw watch --repo owner/repo1 --repo owner/repo2
+    aragora openclaw watch --repo owner/repo --poll-interval 60 --dry-run
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    watch_parser.add_argument(
+        "--repo",
+        action="append",
+        help="Repository to watch (owner/repo format, repeatable)",
+    )
+    watch_parser.add_argument(
+        "--poll-interval",
+        type=int,
+        default=120,
+        help="Poll interval in seconds (default: 120)",
+    )
+    watch_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Analyze but don't post PR comments",
+    )
+    watch_parser.add_argument(
+        "--agents",
+        default="anthropic-api,openai-api",
+        help="Comma-separated agent list (default: anthropic-api,openai-api)",
+    )
+    watch_parser.add_argument(
+        "--rounds",
+        type=int,
+        default=2,
+        help="Number of debate rounds (default: 2)",
+    )
+    watch_parser.add_argument(
+        "--gauntlet",
+        action="store_true",
+        help="Run adversarial stress-test on findings",
+    )
+    watch_parser.set_defaults(func=cmd_watch)

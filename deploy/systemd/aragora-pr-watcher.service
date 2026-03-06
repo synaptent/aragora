@@ -1,0 +1,21 @@
+[Unit]
+Description=Aragora PR Review Watcher Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aragora
+Group=aragora
+WorkingDirectory=/opt/aragora
+EnvironmentFile=-/etc/aragora/pr-watcher.env
+ExecStart=/opt/aragora/.venv/bin/python -m aragora.compat.openclaw.pr_watch_daemon
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+MemoryMax=2G
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
