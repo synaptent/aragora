@@ -27,12 +27,12 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Agent-first beta via REST API | **In progress** | OpenClaw instances as non-human beta users calling `POST /api/v1/debates`. Self-hosted runner fleet deployed for end-to-end dogfooding and CI validation. |
-| GitHub Actions pre-merge gate | **Merged (#648)** | `aragora-review.yml` deployed. Gates on critical findings. Needs branch protection config + beta testing with real repos. |
-| Public demo at aragora.ai/demo | **Demo page + share URLs live** | Standalone demo page merged (#648). Share URL persistence fixed. Needs frontend routing verification at aragora.ai/demo. |
+| Agent-first beta via PR watch daemon | **Daemon built (PR #663)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. Systemd service + env template included. Deploy on spare machines for autonomous agent "beta users". |
+| GitHub Actions pre-merge gate | **Workflow created** | `aragora-review-gate.yml` manual-only (workflow_dispatch). Re-enable pull_request trigger when ready. |
+| Public demo at aragora.ai/demo | **Live and verified** | `/demo` (pipeline), `/demo/instant` (debate replay), share URLs, landing page all return 200. API playground healthy. |
 | EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14/15 dedicated bundles + CLI export + compliance scoring + demo script + customer playbook. **Deadline: Aug 2, 2026.** |
 | First 2 enterprise pilot engagements | Not started | Closed partnerships — target fintech + healthcare |
-| Developer onboarding <10 min | **Quickstart exists** | `docs/QUICKSTART.md` covers install → zero-key demo → real AI → TypeScript → Docker → CLI in 7 steps. Needs cold-start user testing. |
+| Developer onboarding <10 min | **Working (2-5 min)** | `aragora quickstart --demo` (zero-config), `aragora review --demo`, Docker quickstart all verified working. Needs cold-start user testing. |
 
 ---
 
@@ -120,3 +120,6 @@ These items were planned and are now shipped:
 | Article 9 dedicated artifact bundle | Mar 2026 |
 | Debate output quality (10-domain benchmark) | Mar 2026 |
 | Nomic Loop safety gates (production gate, gauntlet, audit) | Mar 2026 |
+| CI setup-python-safe composite action (51 workflows) | Mar 2026 |
+| CI push-to-main noise reduction (35→6 workflows) | Mar 2026 |
+| Self-hosted runner fleet (12 runners: 3 Hetzner + 6 EC2 + 3 Mac) | Mar 2026 |
