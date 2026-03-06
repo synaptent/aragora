@@ -709,13 +709,29 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono text-[var(--text-muted)]">CONFIDENCE</span>
-                    <div className="w-24 h-2 bg-[var(--bg)] border border-[var(--acid-green)]/20 overflow-hidden">
+                    <div className="w-32 h-2.5 bg-[var(--bg)] border border-[var(--border)] overflow-hidden rounded-sm">
                       <div
-                        className="h-full bg-[var(--acid-green)] transition-all duration-1000"
-                        style={{ width: `${Math.round(receipt.confidence * 100)}%` }}
+                        className="h-full transition-all duration-1000 rounded-sm"
+                        style={{
+                          width: `${Math.round(receipt.confidence * 100)}%`,
+                          backgroundColor: receipt.confidence >= 0.8
+                            ? 'var(--acid-green)'
+                            : receipt.confidence >= 0.6
+                              ? 'var(--acid-yellow, #ffd700)'
+                              : 'var(--acid-magenta)',
+                        }}
                       />
                     </div>
-                    <span className="text-xs font-mono text-[var(--acid-green)]">
+                    <span
+                      className="text-xs font-mono font-bold"
+                      style={{
+                        color: receipt.confidence >= 0.8
+                          ? 'var(--acid-green)'
+                          : receipt.confidence >= 0.6
+                            ? 'var(--acid-yellow, #ffd700)'
+                            : 'var(--acid-magenta)',
+                      }}
+                    >
                       {Math.round(receipt.confidence * 100)}%
                     </span>
                   </div>
@@ -747,7 +763,15 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
                 </div>
 
                 {finalAnswer && (
-                  <div className="mt-4 pt-3 border-t border-[var(--acid-green)]/20">
+                  <div
+                    className="mt-4 p-3 rounded-sm"
+                    style={{
+                      border: '1px solid var(--acid-green)',
+                      backgroundColor: 'var(--acid-green)',
+                      // Use a translucent background for the verdict highlight box
+                      background: 'color-mix(in srgb, var(--acid-green) 5%, transparent)',
+                    }}
+                  >
                     <p className="text-xs font-mono text-[var(--text)] leading-relaxed">
                       <span className="text-[var(--acid-green)] font-bold">Verdict: </span>
                       {finalAnswer}
