@@ -247,6 +247,10 @@ class NotificationTemplatesHandler(BaseHandler):
         "/api/v1/notifications/templates/{id}/reset",
         "/api/v1/notifications/templates/{id}/preview",
     ]
+    ROUTE_PREFIXES = [
+        "/api/notifications/templates",
+        "/api/v1/notifications/templates",
+    ]
 
     def __init__(self, ctx: dict[str, Any] | None = None):
         self.ctx = ctx or {}

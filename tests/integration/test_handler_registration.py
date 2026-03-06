@@ -155,6 +155,35 @@ class TestRouteIndex:
         result = index.get_handler("/api/nonexistent/path")
         assert result is None
 
+    def test_notification_templates_dynamic_routes_resolve_before_generic_notifications(self):
+        """Template detail/reset/preview routes must not fall through to generic notifications."""
+        from aragora.server.handler_registry import RouteIndex
+        from aragora.server.handlers.notifications.templates import NotificationTemplatesHandler
+        from aragora.server.handlers.social.notifications import NotificationsHandler
+
+        class StubRegistry:
+            _notifications_handler = NotificationsHandler({})
+            _notification_templates_handler = NotificationTemplatesHandler({})
+
+        index = RouteIndex()
+        index.build(
+            StubRegistry,
+            [
+                ("_notifications_handler", NotificationsHandler),
+                ("_notification_templates_handler", NotificationTemplatesHandler),
+            ],
+        )
+
+        for path in (
+            "/api/v1/notifications/templates/debate_completed",
+            "/api/v1/notifications/templates/debate_completed/reset",
+            "/api/v1/notifications/templates/debate_completed/preview",
+        ):
+            result = index.get_handler(path)
+            assert result is not None
+            attr_name, _handler = result
+            assert attr_name == "_notification_templates_handler"
+
 
 class TestHandlerValidation:
     """Test handler validation functions."""
