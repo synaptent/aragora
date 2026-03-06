@@ -61,17 +61,17 @@ export const metadata: Metadata = {
     apple: '/icons/icon-152x152.png',
   },
   openGraph: {
-    title: 'ARAGORA // LIVE',
+    title: 'Aragora — AI Decision Intelligence',
     description: 'Multiple AI models debate your decisions. Confidence scores, minority opinions, and full audit trails.',
     type: 'website',
     siteName: 'Aragora',
-    images: [{ url: '/aragora-logo.png', width: 512, height: 512, alt: 'Aragora' }],
+    images: [{ url: '/screenshots/debate-desktop.png', width: 1920, height: 1080, alt: 'Aragora AI debate in action' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ARAGORA // LIVE',
+    title: 'Aragora — AI Decision Intelligence',
     description: 'Multiple AI models debate your decisions. Confidence scores, minority opinions, and full audit trails.',
-    images: ['/aragora-logo.png'],
+    images: ['/screenshots/debate-desktop.png'],
   },
 };
 

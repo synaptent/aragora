@@ -1,12 +1,9 @@
-# Aragora LiveWire - Robots.txt
-# https://aragora.pages.dev
+# Aragora - robots.txt
+# https://aragora.ai
 
 User-agent: *
 Allow: /
-
-# API endpoints should not be indexed
-User-agent: *
 Disallow: /api/
 
 # Sitemap
-Sitemap: https://aragora.pages.dev/sitemap.xml
+Sitemap: https://aragora.ai/sitemap.xml
