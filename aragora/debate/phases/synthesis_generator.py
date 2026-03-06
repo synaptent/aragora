@@ -689,26 +689,60 @@ VIOLATIONS (any of these = failure):
 - Putting placeholder text like "[Section not produced]", "TBD", "TODO"
 - Inventing file paths not in REPOSITORY FILE REFERENCE
 - Writing vague lines like "Improve X" — use specific actions like "Add validation to `path/file.py:function()`"
+- Gate Criteria without numeric thresholds (>= <= < > ==) — EVERY gate must be measurable
 
 EVERY task line must include: action verb + real file path + pytest verify command.
 {repo_section}
 
 {contract_block}
 
-EXAMPLE (follow this exact style):
+EXAMPLE (follow this exact style — ALL 7 sections, no shortcuts):
 
 ## Ranked High-Level Tasks
-1. **Refactor `aragora/debate/orchestrator.py:Arena.run()` to emit phase-transition events** — Verify: `pytest tests/debate/test_orchestrator.py -v`
-2. **Update `aragora/debate/consensus.py:detect_consensus()` to weight by evidence quality** — Verify: `pytest tests/debate/test_consensus.py -v`
+1. **Refactor `aragora/debate/orchestrator.py:Arena.run()` to extract phase dispatch into `_dispatch_phase()` helper** — Verify: `pytest tests/debate/test_orchestrator.py -v`
+2. **Add circuit-breaker wrapper in `aragora/resilience/circuit_breaker.py:CircuitBreaker.call()` for agent timeout handling** — Verify: `pytest tests/resilience/test_circuit_breaker.py -v`
+3. **Migrate consensus detection in `aragora/debate/consensus.py:detect_consensus()` to weighted evidence scoring** — Verify: `pytest tests/debate/test_consensus.py -v`
 
 ## Suggested Subtasks
-- Add `PhaseEvent` dataclass to `aragora/events/schema.py` — Verify: `pytest tests/events/test_schema.py -v`
+- Extract `_dispatch_phase()` helper from `aragora/debate/orchestrator.py` lines 120-180 — Verify: `pytest tests/debate/test_orchestrator.py::test_dispatch_phase -v`
+- Add `TimeoutError` handling in `aragora/agents/airlock.py:AirlockProxy.forward()` — Verify: `pytest tests/agents/test_airlock.py -v`
 
 ## Owner module / file paths
 - `aragora/debate/orchestrator.py`
-- `aragora/events/schema.py`
+- `aragora/resilience/circuit_breaker.py`
+- `aragora/debate/consensus.py`
+- `aragora/agents/airlock.py`
 
-(continue with Test Plan, Rollback Plan, Gate Criteria, JSON Payload)"""
+## Test Plan
+- `pytest tests/debate/test_orchestrator.py -v --cov=aragora/debate/orchestrator --cov-fail-under=85`
+- `pytest tests/resilience/test_circuit_breaker.py -v --cov=aragora/resilience/circuit_breaker --cov-fail-under=80`
+- `pytest tests/debate/test_consensus.py -v`
+- Coverage threshold: >= 85% on all modified files
+
+## Rollback Plan
+- **Trigger**: If `pytest tests/debate/ -v` fails or coverage drops below 85%
+- **Action**: `git revert HEAD` to undo the refactor commit
+- **Trigger**: If p95 latency exceeds 500ms after deploy
+- **Action**: Revert deploy via `git revert HEAD && make deploy-staging`
+
+## Gate Criteria
+- Test coverage >= 85% on modified files
+- p95 latency <= 500ms for debate endpoints
+- 0 new lint errors (`ruff check` passes clean)
+- All 7 required section headers present
+- Error rate < 1.0% on staging for 30 minutes post-deploy
+
+## JSON Payload
+```json
+{{
+  "tasks": 3,
+  "subtasks": 2,
+  "owner_files": 4,
+  "coverage_threshold": 85,
+  "latency_threshold_ms": 500,
+  "error_rate_threshold": 1.0
+}}
+```"""
 
         user = f"""Extract actionable items from this debate and produce the structured action plan.
 Do NOT reproduce the proposals as prose. EXTRACT specific actions, file paths, and test commands.
