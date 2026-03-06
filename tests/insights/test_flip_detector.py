@@ -234,7 +234,7 @@ class TestFlipDetector:
     def test_compute_similarity_identical(self, detector):
         """Test similarity computation for identical texts."""
         similarity = detector._compute_similarity("This is a test", "This is a test")
-        assert similarity == 1.0
+        assert abs(similarity - 1.0) < 1e-9
 
     def test_compute_similarity_different(self, detector):
         """Test similarity computation for different texts."""
@@ -253,7 +253,7 @@ class TestFlipDetector:
     def test_compute_similarity_case_insensitive(self, detector):
         """Test similarity is case insensitive."""
         similarity = detector._compute_similarity("Hello World", "hello world")
-        assert similarity == 1.0
+        assert abs(similarity - 1.0) < 1e-9
 
     def test_classify_flip_type_contradiction(self, detector):
         """Test classification of contradiction."""

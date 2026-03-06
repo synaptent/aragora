@@ -84,6 +84,7 @@ class HarnessResultAdapter:
 
     def __init__(self, config: AdapterConfig | None = None):
         self.config = config or AdapterConfig()
+        self._similarity_backend = None
 
     def adapt(self, result: HarnessResult) -> list[AuditFinding]:
         """
@@ -202,8 +203,6 @@ class HarnessResultAdapter:
         Returns:
             Deduplicated list with merged confidence
         """
-        from difflib import SequenceMatcher
-
         from aragora.audit.document_auditor import AuditFinding as AuditFindingType
 
         merged: list[AuditFindingType] = []
@@ -217,12 +216,15 @@ class HarnessResultAdapter:
                 # Check for similar existing finding
                 for existing in merged:
                     if existing.document_id == finding.document_id:
-                        # Compare titles
-                        similarity = SequenceMatcher(
-                            None,
+                        # Compare titles (embedding-based)
+                        if self._similarity_backend is None:
+                            from aragora.debate.similarity.factory import get_backend
+
+                            self._similarity_backend = get_backend(preferred="auto")
+                        similarity = self._similarity_backend.compute_similarity(
                             existing.title.lower(),
                             finding.title.lower(),
-                        ).ratio()
+                        )
 
                         if similarity > 0.8:
                             # Merge - keep higher confidence

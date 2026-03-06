@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from difflib import SequenceMatcher
 import json
 import logging
 import os
@@ -25,6 +24,19 @@ import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_SIMILARITY_BACKEND_CACHE = None
+
+
+def _pipeline_similarity_backend():
+    """Lazy-initialize a module-level similarity backend for pipeline use."""
+    global _SIMILARITY_BACKEND_CACHE
+    if _SIMILARITY_BACKEND_CACHE is None:
+        from aragora.debate.similarity.factory import get_backend
+
+        _SIMILARITY_BACKEND_CACHE = get_backend(preferred="auto")
+    return _SIMILARITY_BACKEND_CACHE
+
 
 _GOAL_PRIORITY_ORDER = {
     "critical": 0,
@@ -186,7 +198,9 @@ def _extract_pipeline_objectives(
                 and (
                     normalized_title in normalized_description
                     or normalized_description in normalized_title
-                    or SequenceMatcher(None, normalized_title, normalized_description).ratio()
+                    or _pipeline_similarity_backend().compute_similarity(
+                        normalized_title, normalized_description
+                    )
                     >= 0.7
                 )
             ):

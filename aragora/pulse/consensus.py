@@ -14,7 +14,6 @@ Features:
 import logging
 import re
 from dataclasses import dataclass, field
-from difflib import SequenceMatcher
 from typing import Any
 
 from aragora.pulse.ingestor import TrendingTopic
@@ -97,6 +96,7 @@ class CrossSourceConsensus:
         self.min_platforms_for_consensus = min_platforms_for_consensus
         self.consensus_confidence_boost = consensus_confidence_boost
         self.keyword_weight = keyword_weight
+        self._similarity_backend = None
 
         # Common words to ignore in comparison
         self._stopwords = {
@@ -356,8 +356,12 @@ class CrossSourceConsensus:
         norm1 = self._normalize_text(text1)
         norm2 = self._normalize_text(text2)
 
-        # Text sequence similarity
-        sequence_sim = SequenceMatcher(None, norm1, norm2).ratio()
+        # Text sequence similarity (embedding-based)
+        if self._similarity_backend is None:
+            from aragora.debate.similarity.factory import get_backend
+
+            self._similarity_backend = get_backend(preferred="auto")
+        sequence_sim = self._similarity_backend.compute_similarity(norm1, norm2)
 
         # Keyword overlap
         keywords1 = self._extract_keywords(text1)

@@ -86,7 +86,7 @@ class SimilarityFactory:
             "tfidf",
             TFIDFBackend,
             description="TF-IDF cosine similarity",
-            requires=["scikit-learn"],
+            requires=["sklearn"],
             min_input_size=0,
             max_input_size=5000,
             accuracy="medium",
@@ -198,8 +198,13 @@ class SimilarityFactory:
         for pkg in info.requires:
             # Convert pip names to importable module names
             module_name = pkg.replace("-", "_")
-            if importlib.util.find_spec(module_name) is None:
-                logger.debug("Backend %s unavailable: missing %s", name, pkg)
+            try:
+                if importlib.util.find_spec(module_name) is None:
+                    logger.debug("Backend %s unavailable: missing %s", name, pkg)
+                    return False
+            except (ValueError, ModuleNotFoundError):
+                # ValueError: __spec__ is None (e.g. test-injected fake module)
+                logger.debug("Backend %s unavailable: %s spec check failed", name, pkg)
                 return False
         return True
 

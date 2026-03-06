@@ -14,7 +14,6 @@ import logging
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 
@@ -136,6 +135,7 @@ class FlipDetector:
         self.db = InsightsDatabase(str(db_path))
         self.similarity_threshold = similarity_threshold
         self._km_adapter = km_adapter
+        self._similarity_backend = None
         self._init_tables()
 
     def set_km_adapter(self, adapter: "InsightsAdapter") -> None:
@@ -191,12 +191,14 @@ class FlipDetector:
             conn.commit()
 
     def _compute_similarity(self, text1: str, text2: str) -> float:
-        """Compute semantic similarity between two texts using sequence matching."""
-        # Simple approach: use SequenceMatcher for now
-        # Could be enhanced with embeddings for better semantic matching
+        """Compute semantic similarity between two texts using embedding-based backend."""
+        if self._similarity_backend is None:
+            from aragora.debate.similarity.factory import get_backend
+
+            self._similarity_backend = get_backend(preferred="auto")
         text1_lower = text1.lower().strip()
         text2_lower = text2.lower().strip()
-        return SequenceMatcher(None, text1_lower, text2_lower).ratio()
+        return self._similarity_backend.compute_similarity(text1_lower, text2_lower)
 
     def _classify_flip_type(
         self,

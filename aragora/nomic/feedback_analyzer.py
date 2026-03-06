@@ -28,7 +28,6 @@ import logging
 import sqlite3
 import time
 from dataclasses import dataclass, field
-from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -269,6 +268,7 @@ class FeedbackAnalyzer:
         self._state = _ProcessingStateStore(db_path=state_db_path)
         self._queue_db_path = queue_db_path
         self._dedup_threshold = dedup_threshold
+        self._similarity_backend = None
 
     def _get_feedback_db_path(self) -> str:
         """Resolve the feedback database path lazily."""
@@ -509,8 +509,14 @@ class FeedbackAnalyzer:
 
     def _is_duplicate(self, description: str, existing: list[str]) -> bool:
         """Check if a goal description is too similar to an existing one."""
+        if self._similarity_backend is None:
+            from aragora.debate.similarity.factory import get_backend
+
+            self._similarity_backend = get_backend(preferred="auto")
         for existing_desc in existing:
-            ratio = SequenceMatcher(None, description.lower(), existing_desc.lower()).ratio()
+            ratio = self._similarity_backend.compute_similarity(
+                description.lower(), existing_desc.lower()
+            )
             if ratio >= self._dedup_threshold:
                 return True
         return False

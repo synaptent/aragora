@@ -452,7 +452,7 @@ class TestMergeDuplicateFindings:
 
         finding1 = AnalysisFinding(
             id="f1",
-            title="SQL Injection",
+            title="SQL Injection in database query",
             description="Issue in query",
             severity="high",
             confidence=0.8,
@@ -463,7 +463,7 @@ class TestMergeDuplicateFindings:
 
         finding2 = AnalysisFinding(
             id="f2",
-            title="SQL Injection Issue",  # Similar title
+            title="SQL Injection in database query handler",  # Similar title
             description="Same issue different harness",
             severity="high",
             confidence=0.9,  # Higher confidence
