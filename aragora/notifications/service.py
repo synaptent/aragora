@@ -34,6 +34,10 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aragora.resilience.circuit_breaker import CircuitBreaker
 
 from .models import (
     EmailConfig,
@@ -51,8 +55,34 @@ from .providers import (
     WebhookProvider,
     _record_notification_metric,
 )
+from .retry_queue import NotificationRetryQueue, RetryEntry
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_notification_event(event_type_name: str, data: dict) -> None:
+    """Best-effort emit a notification event for unified telemetry.
+
+    Does not raise on failure — telemetry is fire-and-forget.
+    """
+    try:
+        from aragora.events.types import StreamEvent, StreamEventType
+
+        event_type = StreamEventType(event_type_name)
+        event = StreamEvent(type=event_type, data=data)
+
+        # Try to use the global event emitter if available
+        try:
+            from aragora.server.stream.emitter import get_emitter
+
+            emitter = get_emitter()
+            if emitter is not None:
+                emitter.emit(event)
+        except (ImportError, RuntimeError, AttributeError):
+            pass  # No emitter wired — that's fine
+    except (ImportError, ValueError, RuntimeError, AttributeError):
+        pass  # Events module not available
+
 
 # Re-export everything for backward compatibility
 __all__ = [
@@ -105,13 +135,16 @@ class NotificationService:
     Main notification service orchestrating multiple channels.
 
     Handles routing notifications to appropriate channels and
-    managing provider configurations.
+    managing provider configurations.  Integrates circuit breakers
+    per channel and an automatic retry queue for failed deliveries.
     """
 
     def __init__(
         self,
         slack_config: SlackConfig | None = None,
         email_config: EmailConfig | None = None,
+        retry_queue: NotificationRetryQueue | None = None,
+        enable_circuit_breakers: bool = True,
     ):
         self.providers: dict[NotificationChannel, NotificationProvider] = {}
 
@@ -126,9 +159,32 @@ class NotificationService:
 
         self.providers[NotificationChannel.WEBHOOK] = WebhookProvider()
 
+        # Retry queue for failed deliveries
+        self._retry_queue = retry_queue or NotificationRetryQueue(max_size=1000)
+
+        # Per-channel circuit breakers
+        self._circuit_breakers: dict[NotificationChannel, "CircuitBreaker"] = {}
+        if enable_circuit_breakers:
+            self._init_circuit_breakers()
+
         # Notification history (in-memory, could be persisted)
         self._history: list[tuple[Notification, list[NotificationResult]]] = []
         self._history_limit = 1000
+
+    def _init_circuit_breakers(self) -> None:
+        """Create a circuit breaker per notification channel."""
+        try:
+            from aragora.resilience.circuit_breaker import CircuitBreaker
+
+            for channel in self.providers:
+                self._circuit_breakers[channel] = CircuitBreaker(
+                    name=f"notification-{channel.value}",
+                    failure_threshold=5,
+                    cooldown_seconds=60.0,
+                    half_open_success_threshold=2,
+                )
+        except ImportError:
+            logger.debug("Circuit breaker module not available; skipping")
 
     def get_provider(self, channel: NotificationChannel) -> NotificationProvider | None:
         """Get a provider by channel."""
@@ -146,6 +202,18 @@ class NotificationService:
         """Get list of configured channels."""
         return [channel for channel, provider in self.providers.items() if provider.is_configured()]
 
+    @property
+    def retry_queue(self) -> NotificationRetryQueue:
+        """Access the retry queue for inspection or manual drain."""
+        return self._retry_queue
+
+    def get_circuit_breaker_states(self) -> dict[str, str]:
+        """Return current circuit breaker state per channel."""
+        return {
+            ch.value: cb.get_status() if hasattr(cb, "get_status") else "unknown"
+            for ch, cb in self._circuit_breakers.items()
+        }
+
     async def notify(
         self,
         notification: Notification,
@@ -154,6 +222,9 @@ class NotificationService:
     ) -> list[NotificationResult]:
         """
         Send notification to specified channels and recipients.
+
+        Failed deliveries are automatically enqueued for retry.
+        Channels with an open circuit breaker are skipped.
 
         Args:
             notification: The notification to send
@@ -173,6 +244,15 @@ class NotificationService:
             if not provider or not provider.is_configured():
                 continue
 
+            # Check circuit breaker
+            cb = self._circuit_breakers.get(channel)
+            if cb and not cb.can_proceed():
+                logger.debug(
+                    "Skipping %s channel — circuit breaker open",
+                    channel.value,
+                )
+                continue
+
             # Get recipients for this channel
             channel_recipients: list[str] = []
             if recipients and channel in recipients:
@@ -185,10 +265,124 @@ class NotificationService:
                 result = await provider.send(notification, recipient)
                 results.append(result)
 
+                # Update circuit breaker and emit telemetry
+                if cb:
+                    if result.success:
+                        cb.record_success()
+                    else:
+                        just_opened = cb.record_failure()
+                        if just_opened:
+                            _emit_notification_event(
+                                "notification_circuit_opened",
+                                {"channel": channel.value, "notification_id": notification.id},
+                            )
+
+                # Emit delivery telemetry
+                event_name = "notification_sent" if result.success else "notification_failed"
+                _emit_notification_event(
+                    event_name,
+                    {
+                        "channel": channel.value,
+                        "recipient": recipient,
+                        "notification_id": notification.id,
+                        "success": result.success,
+                        "error": result.error,
+                    },
+                )
+
+                # Enqueue failed deliveries for retry
+                if not result.success:
+                    self._enqueue_for_retry(notification, channel, recipient, result.error)
+
         # Store in history
         self._add_to_history(notification, results)
 
         return results
+
+    async def process_retry_queue(self) -> list[NotificationResult]:
+        """Drain the retry queue and re-attempt ready deliveries.
+
+        Call this periodically (e.g. from a background task) to retry
+        failed notifications.
+
+        Returns:
+            List of results from retried deliveries.
+        """
+        ready = self._retry_queue.dequeue_ready()
+        results: list[NotificationResult] = []
+
+        for entry in ready:
+            try:
+                channel = NotificationChannel(entry.channel)
+            except ValueError:
+                logger.warning("Unknown channel in retry entry: %s", entry.channel)
+                continue
+
+            provider = self.providers.get(channel)
+            if not provider or not provider.is_configured():
+                continue
+
+            # Respect circuit breaker during retries too
+            cb = self._circuit_breakers.get(channel)
+            if cb and not cb.can_proceed():
+                # Re-enqueue — don't consume the attempt
+                self._retry_queue.enqueue(entry)
+                continue
+
+            # Reconstruct a minimal Notification from the payload
+            notification = Notification(
+                id=entry.payload.get("id", entry.notification_id),
+                title=entry.payload.get("title", ""),
+                message=entry.payload.get("message", ""),
+                severity=entry.payload.get("severity", "info"),
+            )
+
+            result = await provider.send(notification, entry.recipient)
+            results.append(result)
+
+            if cb:
+                if result.success:
+                    cb.record_success()
+                else:
+                    cb.record_failure()
+
+            if result.success:
+                self._retry_queue.mark_success(entry.id)
+            else:
+                self._retry_queue.mark_failed(entry, result.error or "delivery failed")
+
+            _emit_notification_event(
+                "notification_retried",
+                {
+                    "channel": entry.channel,
+                    "recipient": entry.recipient,
+                    "notification_id": entry.notification_id,
+                    "attempt": entry.attempt,
+                    "success": result.success,
+                },
+            )
+
+        return results
+
+    def _enqueue_for_retry(
+        self,
+        notification: Notification,
+        channel: NotificationChannel,
+        recipient: str,
+        error: str | None,
+    ) -> None:
+        """Enqueue a failed delivery for automatic retry."""
+        import uuid as _uuid
+
+        entry = RetryEntry(
+            id=str(_uuid.uuid4()),
+            notification_id=notification.id,
+            channel=channel.value,
+            recipient=recipient,
+            payload=notification.to_dict(),
+            last_error=error or "",
+        )
+        self._retry_queue.enqueue(entry)
 
     async def notify_all_webhooks(
         self,

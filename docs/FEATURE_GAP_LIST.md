@@ -30,7 +30,7 @@
 | 3 beta users with `aragora review` | Not started | Need real PRs reviewed end-to-end via Aragora. Review gate workflow merged (#648). |
 | GitHub Actions pre-merge gate | **Merged (#648)** | `aragora-review.yml` deployed. Gates on critical findings. Needs branch protection config + beta testing with real repos. |
 | Public demo at aragora.ai/demo | **Demo page + share URLs live** | Standalone demo page merged (#648). Share URL persistence fixed. Needs frontend routing verification at aragora.ai/demo. |
-| EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14/15 dedicated bundles + CLI export + compliance scoring + demo script. Customer playbook needed. **Deadline: Aug 2, 2026.** |
+| EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14/15 dedicated bundles + CLI export + compliance scoring + demo script + customer playbook. **Deadline: Aug 2, 2026.** |
 | First 2 enterprise pilot engagements | Not started | Closed partnerships — target fintech + healthcare |
 | Developer onboarding <10 min | **Quickstart exists** | `docs/QUICKSTART.md` covers install → zero-key demo → real AI → TypeScript → Docker → CLI in 7 steps. Needs cold-start user testing. |
 
@@ -46,6 +46,7 @@
 | Decision-Integrity UI Workbench | Not started | No frontend for knowledge search, agent leaderboard, pipeline canvas. Backend APIs complete. |
 | SOC 2 Type II audit engagement | Not started | 98% controls implemented; formal audit vendor not engaged. |
 | Smart provider routing | Not started | Cost/quality-optimized routing across Claude/GPT/Mistral/DeepSeek. |
+| Enterprise Communication Hub (#293) | **~55%** | Delivery log + retry queue + circuit breakers + event telemetry wired. Remaining: notification templates, user preferences, inbox→debate trigger, Active Triage dashboard. |
 
 ---
 
