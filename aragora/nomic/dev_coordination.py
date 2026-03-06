@@ -502,6 +502,7 @@ class DevCoordinationStore:
         }
 
     def list_active_leases(self) -> list[WorkLease]:
+        self.reap_expired_leases()
         now = _utcnow()
         conn = self._connect()
         try:
@@ -517,6 +518,39 @@ class DevCoordinationStore:
                 continue
             active.append(lease)
         return active
+
+    def reap_expired_leases(self) -> list[WorkLease]:
+        now = _utcnow()
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM leases WHERE status = ?",
+                (LeaseStatus.ACTIVE.value,),
+            ).fetchall()
+            expired = [
+                WorkLease.from_row(row) for row in rows if _parse_dt(row["expires_at"]) <= now
+            ]
+            for lease in expired:
+                conn.execute(
+                    "UPDATE leases SET status = ?, updated_at = ? WHERE lease_id = ?",
+                    (LeaseStatus.EXPIRED.value, now.isoformat(), lease.lease_id),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        for lease in expired:
+            self._release_fleet_claims_for_lease(lease)
+            self._publish(
+                "task_expired",
+                track=lease.branch,
+                data={
+                    "lease_id": lease.lease_id,
+                    "task_id": lease.task_id,
+                    "worktree_path": lease.worktree_path,
+                },
+            )
+        return expired
 
     def list_completion_receipts(self, lease_id: str | None = None) -> list[CompletionReceipt]:
         conn = self._connect()
@@ -721,7 +755,7 @@ class DevCoordinationStore:
                 "worktree_path": lease.worktree_path,
             },
         )
-        claim_paths = lease.claimed_paths or lease.allowed_globs
+        claim_paths = self._fleet_claim_paths(lease)
         if claim_paths:
             self.fleet_store.claim_paths(
                 session_id=lease.owner_session_id,
@@ -758,7 +792,16 @@ class DevCoordinationStore:
             conn.close()
         if row is None:
             raise KeyError(f"Unknown lease_id: {lease_id}")
-        return WorkLease.from_row(row)
+        lease = WorkLease.from_row(row)
+        claim_paths = self._fleet_claim_paths(lease)
+        if claim_paths:
+            self.fleet_store.claim_paths(
+                session_id=lease.owner_session_id,
+                paths=claim_paths,
+                branch=lease.branch,
+                mode="exclusive",
+            )
+        return lease
 
     def release_lease(self, lease_id: str, status: LeaseStatus = LeaseStatus.RELEASED) -> WorkLease:
         now = _utcnow().isoformat()
@@ -775,9 +818,7 @@ class DevCoordinationStore:
         if row is None:
             raise KeyError(f"Unknown lease_id: {lease_id}")
         lease = WorkLease.from_row(row)
-        release_paths = lease.claimed_paths or lease.allowed_globs
-        if release_paths:
-            self.fleet_store.release_paths(session_id=lease.owner_session_id, paths=release_paths)
+        self._release_fleet_claims_for_lease(lease)
         self._publish(
             "task_completed",
             track=lease.branch,
@@ -829,6 +870,7 @@ class DevCoordinationStore:
             ).fetchone()
             if lease_row is None:
                 raise KeyError(f"Unknown lease_id: {lease_id}")
+            lease = WorkLease.from_row(lease_row)
             conn.execute(
                 "INSERT INTO completion_receipts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -892,6 +934,8 @@ class DevCoordinationStore:
             conn.commit()
         finally:
             conn.close()
+
+        self._release_fleet_claims_for_lease(lease)
 
         self._publish(
             "task_completed",
@@ -999,6 +1043,26 @@ class DevCoordinationStore:
             track=decision_row.target_branch,
             data=decision_row.to_dict(),
         )
+        queue_item = self._find_fleet_queue_item(receipt_id=receipt_id)
+        if queue_item is not None:
+            queue_status = {
+                IntegrationDecisionType.MERGE: "integrating",
+                IntegrationDecisionType.CHERRY_PICK: "integrating",
+                IntegrationDecisionType.REQUEST_CHANGES: "needs_human",
+                IntegrationDecisionType.DISCARD: "blocked",
+                IntegrationDecisionType.SALVAGE: "blocked",
+            }.get(decision)
+            if queue_status:
+                self.fleet_store.update_merge_queue_item(
+                    item_id=str(queue_item.get("id", "")),
+                    status=queue_status,
+                    metadata={
+                        "integration_decision_id": decision_row.decision_id,
+                        "integration_decision": decision_row.decision,
+                        "chosen_commits": decision_row.chosen_commits,
+                        "followups": decision_row.followups,
+                    },
+                )
         return decision_row
 
     def upsert_salvage_candidate(
@@ -1234,6 +1298,25 @@ class DevCoordinationStore:
             # Coordination state must not fail closed if the event bus is unavailable.
             pass
 
+    @staticmethod
+    def _fleet_claim_paths(lease: WorkLease) -> list[str]:
+        return lease.claimed_paths or lease.allowed_globs
+
+    def _release_fleet_claims_for_lease(self, lease: WorkLease) -> None:
+        release_paths = self._fleet_claim_paths(lease)
+        if release_paths:
+            self.fleet_store.release_paths(
+                session_id=lease.owner_session_id,
+                paths=release_paths,
+            )
+
+    def _find_fleet_queue_item(self, *, receipt_id: str) -> dict[str, Any] | None:
+        for item in self.fleet_store.list_merge_queue():
+            metadata = item.get("metadata")
+            if isinstance(metadata, dict) and str(metadata.get("receipt_id", "")) == receipt_id:
+                return item
+        return None
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -1411,6 +1494,11 @@ def _build_parser() -> argparse.ArgumentParser:
     complete.add_argument("--confidence", type=float, default=0.0)
     complete.add_argument("--json", action="store_true")
 
+    heartbeat = sub.add_parser("heartbeat", help="Refresh a lease TTL")
+    heartbeat.add_argument("--lease-id", required=True)
+    heartbeat.add_argument("--ttl-hours", type=float, default=None)
+    heartbeat.add_argument("--json", action="store_true")
+
     decide = sub.add_parser("decide", help="Record an integration decision")
     decide.add_argument("--receipt-id", required=True)
     decide.add_argument(
@@ -1431,6 +1519,9 @@ def _build_parser() -> argparse.ArgumentParser:
     salvage.add_argument("--no-stashes", action="store_true")
     salvage.add_argument("--max-stashes", type=int, default=25)
     salvage.add_argument("--json", action="store_true")
+
+    reap = sub.add_parser("reap", help="Expire stale leases and release mirrored fleet claims")
+    reap.add_argument("--json", action="store_true")
 
     return parser
 
@@ -1501,6 +1592,17 @@ def main() -> int:
             print(receipt.receipt_id)  # noqa: T201
         return 0
 
+    if args.command == "heartbeat":
+        lease = store.heartbeat_lease(
+            lease_id=args.lease_id,
+            ttl_hours=args.ttl_hours,
+        )
+        if args.json:
+            print(json.dumps({"ok": True, "lease": lease.to_dict()}, indent=2))  # noqa: T201
+        else:
+            print(lease.lease_id)  # noqa: T201
+        return 0
+
     if args.command == "decide":
         decision = store.record_integration_decision(
             receipt_id=args.receipt_id,
@@ -1528,6 +1630,19 @@ def main() -> int:
             "ok": True,
             "count": len(items),
             "candidates": [item.to_dict() for item in items],
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))  # noqa: T201
+        else:
+            print(payload["count"])  # noqa: T201
+        return 0
+
+    if args.command == "reap":
+        expired = store.reap_expired_leases()
+        payload = {
+            "ok": True,
+            "count": len(expired),
+            "leases": [lease.to_dict() for lease in expired],
         }
         if args.json:
             print(json.dumps(payload, indent=2))  # noqa: T201

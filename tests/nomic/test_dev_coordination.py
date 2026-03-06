@@ -155,6 +155,7 @@ def test_record_completion_creates_pending_integration(store: DevCoordinationSto
     assert len(pending) == 1
     assert pending[0].receipt_id == receipt.receipt_id
     assert pending[0].decision == IntegrationDecisionType.PENDING_REVIEW.value
+    assert store.fleet_store.list_claims() == []
     merge_queue = store.fleet_store.list_merge_queue()
     assert len(merge_queue) == 1
     assert merge_queue[0]["metadata"]["receipt_id"] == receipt.receipt_id
@@ -194,6 +195,64 @@ def test_record_integration_decision_updates_queue(store: DevCoordinationStore) 
         store.pending_work_items()[0].metadata["decision"]
         == IntegrationDecisionType.PENDING_REVIEW.value
     )
+    merge_queue = store.fleet_store.list_merge_queue()
+    assert merge_queue[0]["status"] == "integrating"
+    assert merge_queue[0]["metadata"]["integration_decision"] == "cherry_pick"
+
+
+def test_heartbeat_lease_refreshes_expiry_and_fleet_claim(store: DevCoordinationStore) -> None:
+    lease = store.claim_lease(
+        task_id="clb-heartbeat",
+        title="Heartbeat path",
+        owner_agent="codex",
+        owner_session_id="sess-heartbeat",
+        branch="codex/heartbeat",
+        worktree_path="/tmp/wt-heartbeat",
+        claimed_paths=["aragora/server/auth_checks.py"],
+        ttl_hours=0.01,
+    )
+
+    original_expiry = lease.expires_at
+    refreshed = store.heartbeat_lease(lease.lease_id, ttl_hours=2.0)
+
+    assert refreshed.expires_at > original_expiry
+    claims = store.fleet_store.list_claims()
+    assert len(claims) == 1
+    assert claims[0]["session_id"] == "sess-heartbeat"
+
+
+def test_reap_expired_leases_releases_fleet_claims(store: DevCoordinationStore) -> None:
+    lease = store.claim_lease(
+        task_id="clb-expired",
+        title="Expired path",
+        owner_agent="codex",
+        owner_session_id="sess-expired",
+        branch="codex/expired",
+        worktree_path="/tmp/wt-expired",
+        claimed_paths=["aragora/server/auth_checks.py"],
+        ttl_hours=2.0,
+    )
+    assert store.fleet_store.list_claims()
+
+    conn = store._connect()
+    try:
+        conn.execute(
+            "UPDATE leases SET expires_at = ?, updated_at = ? WHERE lease_id = ?",
+            (
+                "2000-01-01T00:00:00+00:00",
+                "2000-01-01T00:00:00+00:00",
+                lease.lease_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    expired = store.reap_expired_leases()
+
+    assert [item.lease_id for item in expired] == [lease.lease_id]
+    assert store.list_active_leases() == []
+    assert store.fleet_store.list_claims() == []
 
 
 def test_scan_salvage_sources_finds_worktree_and_stash(

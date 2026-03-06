@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from aragora.nomic.pipeline_bridge import NomicPipelineBridge
+from aragora.nomic.task_decomposer import SubTask
 
 
 def _make_mock_assignment(title, description, status="completed", file_scope=None, deps=None):
@@ -98,6 +99,51 @@ class TestDesignPhaseToGoals:
         bridge = NomicPipelineBridge()
         goals = bridge.design_phase_to_goals({})
         assert goals == []
+
+
+class TestBoundedWorkOrders:
+    def test_build_work_orders_preserves_scope_and_dependencies(self):
+        bridge = NomicPipelineBridge()
+        subtasks = [
+            SubTask(
+                id="sub-1",
+                title="Harden auth",
+                description="Harden auth checks",
+                file_scope=["aragora/server/auth_checks.py"],
+                success_criteria={"tests": ["python -m pytest tests/auth -q"]},
+            ),
+            SubTask(
+                id="sub-2",
+                title="Add tests",
+                description="Add auth tests",
+                dependencies=["sub-1"],
+                file_scope=["tests/auth/test_auth_checks.py"],
+            ),
+        ]
+
+        work_orders = bridge.build_work_orders(subtasks)
+
+        assert len(work_orders) == 2
+        assert work_orders[0].pipeline_task_id == "task-1"
+        assert work_orders[0].file_scope == ["aragora/server/auth_checks.py"]
+        assert work_orders[1].dependency_ids == ["task-1"]
+
+    def test_build_plan_metadata_includes_protocol_and_orders(self):
+        bridge = NomicPipelineBridge()
+        subtasks = [
+            SubTask(
+                id="sub-1",
+                title="Receipt gate",
+                description="Add bounded work order metadata",
+                file_scope=["aragora/nomic/pipeline_bridge.py"],
+            )
+        ]
+
+        metadata = bridge.build_plan_metadata("Improve self-improvement execution", subtasks)
+
+        assert metadata["work_order_protocol"] == "bounded-work-order/v1"
+        assert metadata["subtask_count"] == 1
+        assert metadata["bounded_work_orders"][0]["work_order_id"] == "sub-1"
 
 
 class TestCreatePipelineFromCycle:

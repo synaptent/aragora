@@ -11,7 +11,17 @@ from pathlib import Path
 from typing import Any
 import uuid
 
-ACTIVE_QUEUE_STATUSES = {"queued", "in_progress"}
+ACTIVE_QUEUE_STATUSES = {"queued", "in_progress", "validating", "integrating"}
+MERGE_QUEUE_STATUS_ORDER = {
+    "queued": 0,
+    "validating": 1,
+    "integrating": 2,
+    "needs_human": 3,
+    "blocked": 4,
+    "failed": 5,
+    "merged": 6,
+}
+MERGE_QUEUE_ALLOWED_STATUSES = set(MERGE_QUEUE_STATUS_ORDER)
 SUPPORTED_ORCHESTRATORS = {
     "gastown",
     "langchain",
@@ -442,6 +452,72 @@ class FleetCoordinationStore:
         self._save(state)
         return {"queued": True, "item": row, "duplicate": False}
 
+    def claim_next_merge(
+        self,
+        *,
+        worker_session_id: str,
+        from_status: str = "queued",
+        to_status: str = "validating",
+    ) -> dict[str, Any] | None:
+        if from_status not in MERGE_QUEUE_ALLOWED_STATUSES:
+            raise ValueError(f"unknown merge queue status: {from_status}")
+        if to_status not in MERGE_QUEUE_ALLOWED_STATUSES:
+            raise ValueError(f"unknown merge queue status: {to_status}")
+
+        state = self._load()
+        queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
+        candidates = [q for q in queue if str(q.get("status", "")) == from_status]
+        if not candidates:
+            return None
+        candidates.sort(
+            key=lambda row: (
+                -int(row.get("priority", 0)),
+                str(row.get("created_at", "")),
+            )
+        )
+        chosen_id = str(candidates[0].get("id", ""))
+        if not chosen_id:
+            return None
+        updated = self.update_merge_queue_item(
+            item_id=chosen_id,
+            status=to_status,
+            metadata={"worker_session_id": worker_session_id},
+        )
+        return updated
+
+    def update_merge_queue_item(
+        self,
+        *,
+        item_id: str,
+        status: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        title: str | None = None,
+    ) -> dict[str, Any]:
+        if status is not None and status not in MERGE_QUEUE_ALLOWED_STATUSES:
+            raise ValueError(f"unknown merge queue status: {status}")
+
+        state = self._load()
+        queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
+        now = datetime.now(timezone.utc).isoformat()
+        for item in queue:
+            if str(item.get("id", "")) != item_id:
+                continue
+            if status is not None:
+                item["status"] = status
+            if title is not None:
+                item["title"] = title.strip()
+            if metadata:
+                existing_metadata = item.get("metadata")
+                if not isinstance(existing_metadata, dict):
+                    existing_metadata = {}
+                existing_metadata.update(metadata)
+                item["metadata"] = existing_metadata
+            item["updated_at"] = now
+            state["merge_queue"] = queue
+            self._save(state)
+            return item
+        raise KeyError(f"Unknown merge queue item: {item_id}")
+
     def list_merge_queue(self, status: str | None = None) -> list[dict[str, Any]]:
         state = self._load()
         queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
@@ -449,7 +525,7 @@ class FleetCoordinationStore:
             queue = [q for q in queue if str(q.get("status", "")) == status]
         queue.sort(
             key=lambda row: (
-                0 if str(row.get("status", "queued")) == "queued" else 1,
+                MERGE_QUEUE_STATUS_ORDER.get(str(row.get("status", "queued")), 99),
                 -int(row.get("priority", 0)),
                 str(row.get("created_at", "")),
             )
