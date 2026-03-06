@@ -210,9 +210,15 @@ class HMACSigner(SigningBackend):
         Raises:
             RuntimeError: If running in production without a configured key.
         """
-        key_hex = os.environ.get(env_var)
+        key_hex = (os.environ.get(env_var) or "").strip()
         if key_hex:
-            return cls(secret_key=bytes.fromhex(key_hex))
+            try:
+                key_bytes = bytes.fromhex(key_hex)
+            except ValueError:
+                import base64 as _b64
+
+                key_bytes = _b64.urlsafe_b64decode(key_hex + "==")
+            return cls(secret_key=key_bytes)
 
         # Check if we are running in production
         env_mode = os.environ.get("ARAGORA_ENV", "").lower()
@@ -321,6 +327,53 @@ class RSASigner(SigningBackend):
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         ).decode()
+
+
+class DurableFileSigner(HMACSigner):
+    """HMAC signer backed by a persistent key file on disk.
+
+    On first use the key is generated and saved to ``key_path``.  On
+    subsequent starts the same key is loaded, so receipts signed in one
+    session can be verified after restart.
+
+    The default path is ``~/.aragora/signing.key``.
+    """
+
+    DEFAULT_KEY_PATH = os.path.join(os.path.expanduser("~"), ".aragora", "signing.key")
+
+    def __init__(self, key_path: str | None = None, key_id: str | None = None):
+        resolved = key_path or self.DEFAULT_KEY_PATH
+        secret_key = self._load_or_create_key(resolved)
+        # Derive a stable key_id from the key material so verifiers can match.
+        derived_id = key_id or f"durable-{hashlib.sha256(secret_key).hexdigest()[:8]}"
+        super().__init__(secret_key=secret_key, key_id=derived_id)
+        self._key_path = resolved
+
+    # -- internal helpers ------------------------------------------------
+
+    @staticmethod
+    def _load_or_create_key(path: str) -> bytes:
+        """Load an existing key or create one on first run."""
+        if os.path.isfile(path):
+            with open(path, "rb") as fh:
+                data = fh.read().strip()
+            try:
+                return bytes.fromhex(data.decode("ascii"))
+            except (ValueError, UnicodeDecodeError):
+                return data  # raw bytes fallback
+
+        # First-run: generate and persist
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, mode=0o700, exist_ok=True)
+        key = secrets.token_bytes(32)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            os.write(fd, key.hex().encode("ascii"))
+        finally:
+            os.close(fd)
+        _logger.info("Created durable signing key at %s", path)
+        return key
 
 
 class Ed25519Signer(SigningBackend):
@@ -499,10 +552,45 @@ _default_signer: ReceiptSigner | None = None
 
 
 def get_default_signer() -> ReceiptSigner:
-    """Get or create the default receipt signer."""
+    """Get or create the default receipt signer.
+
+    Key selection order:
+    1. ``ARAGORA_RECEIPT_SIGNING_KEY`` env var (hex-encoded HMAC key)
+    2. Durable file key at ``~/.aragora/signing.key``
+    3. Ephemeral random key (non-production only)
+    """
     global _default_signer
     if _default_signer is None:
-        _default_signer = ReceiptSigner()
+        env_key = (os.environ.get("ARAGORA_RECEIPT_SIGNING_KEY") or "").strip()
+        if env_key:
+            try:
+                key_bytes = bytes.fromhex(env_key)
+            except ValueError:
+                # Accept base64-encoded keys as well (common in cloud secrets)
+                import base64 as _b64
+
+                key_bytes = _b64.urlsafe_b64decode(env_key + "==")
+            backend: SigningBackend = HMACSigner(secret_key=key_bytes)
+        else:
+            env_mode = os.environ.get("ARAGORA_ENV", "").lower()
+            if env_mode == "production":
+                raise RuntimeError(
+                    "Receipt signing key (ARAGORA_RECEIPT_SIGNING_KEY) is required "
+                    "in production. Ephemeral keys cannot verify receipts after "
+                    "restart. Set the environment variable to a 64-character hex "
+                    "string (32 bytes)."
+                )
+            # Use durable file signer so receipts survive restarts
+            try:
+                backend = DurableFileSigner()
+            except OSError as exc:
+                _logger.warning(
+                    "Could not create durable file signer (%s), falling back "
+                    "to ephemeral key. Receipts will NOT be verifiable after restart.",
+                    exc,
+                )
+                backend = HMACSigner()
+        _default_signer = ReceiptSigner(backend=backend)
     return _default_signer
 
 

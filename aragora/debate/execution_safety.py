@@ -215,8 +215,75 @@ def _context_taint_detected(result: Any) -> bool:
     return isinstance(patterns, list) and len(patterns) > 0
 
 
+def _retrieve_persisted_receipt(
+    receipt_id: str | None,
+) -> tuple[DecisionReceipt | None, bool, bool, bool]:
+    """Retrieve and verify a previously-persisted receipt.
+
+    When ``receipt_id`` is provided, the receipt is fetched from the
+    durable ReceiptStore and its signature is validated against the
+    configured signing key.  This closes the attestation-inversion gap:
+    the execution gate no longer builds and signs a receipt inline.
+
+    Falls back to the legacy inline path (build+sign from result) when
+    no ``receipt_id`` is supplied so that existing callers without the
+    trust-wedge changes still work.
+
+    Returns:
+        (receipt, signed, integrity_valid, signature_valid)
+    """
+    if not receipt_id:
+        return None, False, False, False
+
+    try:
+        from aragora.gauntlet.receipt_store import ReceiptState, get_receipt_store
+
+        store = get_receipt_store()
+        stored = store.get(receipt_id)
+        if stored is None:
+            return None, False, False, False
+
+        # Reject receipts that are not in APPROVED state
+        if stored.state not in (ReceiptState.APPROVED, ReceiptState.CREATED):
+            return None, False, False, False
+
+        # Rebuild a DecisionReceipt from stored data for trust evaluation
+        receipt_data = stored.receipt_data
+        receipt = DecisionReceipt(
+            receipt_id=receipt_data.get("receipt_id", receipt_id),
+            gauntlet_id=receipt_data.get("gauntlet_id", ""),
+            timestamp=receipt_data.get("timestamp", ""),
+            input_summary=receipt_data.get("input_summary", ""),
+            input_hash=receipt_data.get("input_hash", ""),
+            risk_summary=receipt_data.get("risk_summary", {}),
+            attacks_attempted=receipt_data.get("attacks_attempted", 0),
+            attacks_successful=receipt_data.get("attacks_successful", 0),
+            probes_run=receipt_data.get("probes_run", 0),
+            vulnerabilities_found=receipt_data.get("vulnerabilities_found", 0),
+            verdict=receipt_data.get("verdict", "FAIL"),
+            confidence=receipt_data.get("confidence", 0.0),
+            robustness_score=receipt_data.get("robustness_score", 0.0),
+            signature=stored.signature,
+            signature_algorithm=stored.signature_algorithm,
+            signature_key_id=stored.signature_key_id,
+            signed_at=stored.signed_at,
+            artifact_hash=receipt_data.get("artifact_hash", ""),
+        )
+
+        signed = bool(receipt.signature)
+        integrity_valid = receipt.verify_integrity()
+        signature_valid = store.verify_receipt(receipt_id) if signed else False
+        return receipt, signed, integrity_valid, signature_valid
+
+    except (ImportError, RuntimeError, ValueError, TypeError, AttributeError, OSError):
+        return None, False, False, False
+
+
 def _build_signed_receipt(result: Any) -> tuple[DecisionReceipt | None, bool, bool, bool]:
-    """Build, sign, and verify a receipt for execution gating.
+    """Legacy path: build, sign, and verify a receipt inline.
+
+    Used only when ``receipt_id`` is not available (backward compat).
+    New callers should use ``_retrieve_persisted_receipt`` instead.
 
     Returns:
         (receipt, signed, integrity_valid, signature_valid)
@@ -331,8 +398,18 @@ def evaluate_auto_execution_safety(
     *,
     agents: list[Any] | None = None,
     policy: ExecutionSafetyPolicy | None = None,
+    receipt_id: str | None = None,
 ) -> ExecutionSafetyDecision:
-    """Evaluate whether post-debate auto-execution should proceed."""
+    """Evaluate whether post-debate auto-execution should proceed.
+
+    Args:
+        result: Debate result object.
+        agents: Participating agents for diversity checks.
+        policy: Safety policy configuration.
+        receipt_id: ID of a previously-persisted signed receipt.  When
+            provided the gate validates the stored receipt instead of
+            building one inline (trust-wedge fix).
+    """
     policy = policy or ExecutionSafetyPolicy()
 
     providers, model_families, operators = _extract_ensemble(agents)
@@ -340,7 +417,13 @@ def evaluate_auto_execution_safety(
     model_family_diversity = len(model_families)
     operator_diversity = len(operators)
 
-    receipt, receipt_signed, integrity_valid, signature_valid = _build_signed_receipt(result)
+    # Prefer persisted receipt; fall back to legacy inline path.
+    if receipt_id:
+        receipt, receipt_signed, integrity_valid, signature_valid = _retrieve_persisted_receipt(
+            receipt_id
+        )
+    else:
+        receipt, receipt_signed, integrity_valid, signature_valid = _build_signed_receipt(result)
     receipt_trust = _evaluate_receipt_trust(receipt, policy)
     context_taint = _context_taint_detected(result)
     high_dissent = _has_high_severity_dissent(result, policy.high_severity_dissent_threshold)
