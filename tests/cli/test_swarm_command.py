@@ -65,6 +65,19 @@ class TestSwarmParser:
         assert args.run_id == "run-123"
         assert args.json is True
 
+    def test_swarm_reconcile_parser(self):
+        from aragora.cli.parser import build_parser
+
+        parser = build_parser()
+        args = parser.parse_args(
+            ["swarm", "reconcile", "--run-id", "run-123", "--watch", "--interval-seconds", "1.5"]
+        )
+        assert args.command == "swarm"
+        assert args.swarm_action_or_goal == "reconcile"
+        assert args.run_id == "run-123"
+        assert args.watch is True
+        assert args.interval_seconds == 1.5
+
 
 class TestSwarmCommand:
     def test_cmd_swarm_requires_goal_or_spec(self, capsys):
@@ -206,3 +219,50 @@ class TestSwarmCommand:
 
         out = capsys.readouterr().out
         assert "runs=1 queued=2 leased=1 completed=0" in out
+
+    def test_cmd_swarm_reconcile_uses_reconciler(self, capsys):
+        args = argparse.Namespace(
+            swarm_action_or_goal="reconcile",
+            swarm_goal=None,
+            spec=None,
+            skip_interrogation=False,
+            dry_run=False,
+            budget_limit=9.0,
+            require_approval=True,
+            save_spec=None,
+            from_obsidian=None,
+            obsidian_vault=None,
+            no_obsidian_receipts=False,
+            profile="developer",
+            autonomy="propose",
+            max_parallel=20,
+            no_loop=False,
+            target_branch="main",
+            concurrency_cap=8,
+            managed_dir_pattern=".worktrees/{agent}-auto",
+            json=False,
+            run_id="run-123",
+            status_limit=20,
+            refresh_scaling=False,
+            no_dispatch=False,
+            watch=False,
+            interval_seconds=5.0,
+            max_ticks=None,
+            all_runs=False,
+        )
+
+        fake_run = MagicMock()
+        fake_run.to_dict.return_value = {
+            "run_id": "run-123",
+            "status": "active",
+            "target_branch": "main",
+            "goal": "goal",
+            "work_orders": [],
+        }
+
+        with patch("aragora.swarm.SwarmReconciler") as reconciler_cls:
+            reconciler_cls.return_value.tick_run = AsyncMock(return_value=fake_run)
+            cmd_swarm(args)
+
+        out = capsys.readouterr().out
+        assert "run_id=run-123" in out

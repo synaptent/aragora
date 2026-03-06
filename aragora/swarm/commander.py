@@ -13,6 +13,7 @@ from typing import Any
 
 from aragora.swarm.config import SwarmCommanderConfig
 from aragora.swarm.interrogator import SwarmInterrogator
+from aragora.swarm.reconciler import SwarmReconciler
 from aragora.swarm.reporter import SwarmReport, SwarmReporter
 from aragora.swarm.spec import SwarmSpec
 from aragora.swarm.supervisor import SupervisorRun, SwarmApprovalPolicy, SwarmSupervisor
@@ -184,6 +185,10 @@ class SwarmCommander:
         max_concurrency: int = 8,
         managed_dir_pattern: str = ".worktrees/{agent}-auto",
         approval_policy: SwarmApprovalPolicy | None = None,
+        dispatch_workers: bool = False,
+        watch: bool = False,
+        interval_seconds: float = 5.0,
+        max_ticks: int | None = None,
         input_fn: Any | None = None,
         print_fn: Any | None = None,
     ) -> SupervisorRun:
@@ -200,6 +205,10 @@ class SwarmCommander:
             max_concurrency=max_concurrency,
             managed_dir_pattern=managed_dir_pattern,
             approval_policy=approval_policy,
+            dispatch_workers=dispatch_workers,
+            watch=watch,
+            interval_seconds=interval_seconds,
+            max_ticks=max_ticks,
         )
 
     async def run_supervised_from_spec(
@@ -211,17 +220,34 @@ class SwarmCommander:
         max_concurrency: int = 8,
         managed_dir_pattern: str = ".worktrees/{agent}-auto",
         approval_policy: SwarmApprovalPolicy | None = None,
+        dispatch_workers: bool = False,
+        watch: bool = False,
+        interval_seconds: float = 5.0,
+        max_ticks: int | None = None,
     ) -> SupervisorRun:
         """Dispatch a spec through the supervisor-backed Codex/Claude worker pool."""
         self._spec = spec
         supervisor = SwarmSupervisor(repo_root=repo_path or Path.cwd())
-        return supervisor.start_run(
+        run = supervisor.start_run(
             spec=spec,
             target_branch=target_branch,
             max_concurrency=max_concurrency,
             managed_dir_pattern=managed_dir_pattern,
             approval_policy=approval_policy,
         )
+        if dispatch_workers:
+            await supervisor.dispatch_workers(run.run_id)
+            record = supervisor.store.get_supervisor_run(run.run_id)
+            if record is not None:
+                run = SupervisorRun.from_record(record)
+        if watch:
+            reconciler = SwarmReconciler(supervisor=supervisor)
+            run = await reconciler.watch_run(
+                run.run_id,
+                interval_seconds=interval_seconds,
+                max_ticks=max_ticks,
+            )
+        return run
 
     async def _dispatch(self, spec: SwarmSpec) -> Any:
         """Dispatch the swarm using HardenedOrchestrator.

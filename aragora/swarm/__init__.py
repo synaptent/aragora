@@ -23,6 +23,7 @@ Usage:
 
 from aragora.swarm.commander import SwarmCommander
 from aragora.swarm.config import InterrogatorConfig, SwarmCommanderConfig
+from aragora.swarm.reconciler import SwarmReconciler, SwarmReconcilerConfig
 from aragora.swarm.reporter import SwarmReport, SwarmReporter
 from aragora.swarm.spec import SwarmSpec
 from aragora.swarm.supervisor import SupervisorRun, SwarmApprovalPolicy, SwarmSupervisor
@@ -33,6 +34,8 @@ __all__ = [
     "LaunchConfig",
     "SwarmCommander",
     "SwarmCommanderConfig",
+    "SwarmReconciler",
+    "SwarmReconcilerConfig",
     "SupervisorRun",
     "SwarmReport",
     "SwarmReporter",

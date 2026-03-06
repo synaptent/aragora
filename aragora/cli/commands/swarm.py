@@ -26,7 +26,7 @@ from uuid import uuid4
 def _resolve_swarm_action_goal(args: argparse.Namespace) -> tuple[str, str | None]:
     first = getattr(args, "swarm_action_or_goal", None)
     second = getattr(args, "swarm_goal", None)
-    if first in {"run", "status"}:
+    if first in {"run", "status", "reconcile"}:
         return str(first), second
     return "run", first
 
@@ -54,6 +54,7 @@ def cmd_swarm(args: argparse.Namespace) -> None:
         SwarmApprovalPolicy,
         SwarmCommander,
         SwarmCommanderConfig,
+        SwarmReconciler,
         SwarmSpec,
         SwarmSupervisor,
     )
@@ -77,6 +78,11 @@ def cmd_swarm(args: argparse.Namespace) -> None:
     as_json = bool(getattr(args, "json", False))
     run_id = getattr(args, "run_id", None)
     refresh_scaling = bool(getattr(args, "refresh_scaling", False))
+    no_dispatch = bool(getattr(args, "no_dispatch", False))
+    watch = bool(getattr(args, "watch", False))
+    interval_seconds = float(getattr(args, "interval_seconds", 5.0) or 5.0)
+    max_ticks = getattr(args, "max_ticks", None)
+    all_runs = bool(getattr(args, "all_runs", False))
 
     # Phase 2: User profile
     profile_str = getattr(args, "profile", "ceo")
@@ -127,6 +133,39 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                     _print_supervisor_run(run)
         return
 
+    if action == "reconcile":
+        reconciler = SwarmReconciler(repo_root=Path.cwd())
+        if all_runs:
+            runs = asyncio.run(
+                reconciler.tick_open_runs(limit=int(getattr(args, "status_limit", 20)))
+            )
+            payload = {"runs": [run.to_dict() for run in runs], "count": len(runs)}
+            if as_json:
+                print(json.dumps(payload, indent=2))
+            else:
+                print(f"runs={payload['count']}")
+                for run in payload["runs"]:
+                    print("---")
+                    _print_supervisor_run(run)
+            return
+        if not run_id:
+            print("Error: provide --run-id or --all-runs for 'reconcile'")
+            return
+        run = asyncio.run(
+            reconciler.watch_run(
+                run_id,
+                interval_seconds=interval_seconds,
+                max_ticks=max_ticks,
+            )
+            if watch
+            else reconciler.tick_run(run_id)
+        )
+        if as_json:
+            print(json.dumps(run.to_dict(), indent=2))
+        else:
+            _print_supervisor_run(run.to_dict())
+        return
+
     if not goal and not spec_file and not from_obsidian:
         print("Error: provide a goal or --spec file (or --from-obsidian vault)")
         print('Usage: aragora swarm run "your goal here"')
@@ -175,6 +214,10 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_concurrency=concurrency_cap,
                 managed_dir_pattern=managed_dir_pattern,
                 approval_policy=approval_policy,
+                dispatch_workers=not no_dispatch,
+                watch=watch,
+                interval_seconds=interval_seconds,
+                max_ticks=max_ticks,
             )
         )
         if as_json:
@@ -208,6 +251,10 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_concurrency=concurrency_cap,
                 managed_dir_pattern=managed_dir_pattern,
                 approval_policy=approval_policy,
+                dispatch_workers=not no_dispatch,
+                watch=watch,
+                interval_seconds=interval_seconds,
+                max_ticks=max_ticks,
             )
         )
         if as_json:
@@ -223,6 +270,10 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_concurrency=concurrency_cap,
                 managed_dir_pattern=managed_dir_pattern,
                 approval_policy=approval_policy,
+                dispatch_workers=not no_dispatch,
+                watch=watch,
+                interval_seconds=interval_seconds,
+                max_ticks=max_ticks,
             )
         )
         if as_json:

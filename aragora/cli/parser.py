@@ -2065,7 +2065,7 @@ def _add_swarm_parser(subparsers) -> None:
     swarm_parser.add_argument(
         "swarm_action_or_goal",
         nargs="?",
-        help="Action (run/status) or your goal in plain language",
+        help="Action (run/status/reconcile) or your goal in plain language",
     )
     swarm_parser.add_argument(
         "swarm_goal",
@@ -2170,6 +2170,33 @@ def _add_swarm_parser(subparsers) -> None:
         "--refresh-scaling",
         action="store_true",
         help="Top up queued work orders when showing status",
+    )
+    swarm_parser.add_argument(
+        "--no-dispatch",
+        action="store_true",
+        help="Create or refresh supervisor state without launching worker sessions",
+    )
+    swarm_parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Keep reconciling the run until it reaches a stable stop condition",
+    )
+    swarm_parser.add_argument(
+        "--interval-seconds",
+        type=float,
+        default=5.0,
+        help="Reconciler polling interval for --watch or reconcile (default: 5.0)",
+    )
+    swarm_parser.add_argument(
+        "--max-ticks",
+        type=int,
+        default=None,
+        help="Maximum reconcile ticks for --watch",
+    )
+    swarm_parser.add_argument(
+        "--all-runs",
+        action="store_true",
+        help="Reconcile all open runs instead of requiring --run-id",
     )
     swarm_parser.add_argument(
         "--json",

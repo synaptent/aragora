@@ -27,6 +27,7 @@ RECONCILE=true
 MAINTAIN=true
 TTL_HOURS="${CODEX_WORKTREE_TTL_HOURS:-24}"
 MANAGED_DIR="${CODEX_WORKTREE_MANAGED_DIR:-.worktrees/codex-auto}"
+SESSION_ID_OVERRIDE="${CODEX_WORKTREE_SESSION_ID:-}"
 ORCHESTRATOR="${CODEX_ORCHESTRATOR:-}"
 TASK_ID="${CODEX_WORK_LEASE_TASK_ID:-}"
 LEASE_TITLE="${CODEX_WORK_LEASE_TITLE:-}"
@@ -60,6 +61,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --managed-dir)
             MANAGED_DIR="${2:-.worktrees/codex-auto}"
+            shift 2
+            ;;
+        --session-id)
+            SESSION_ID_OVERRIDE="${2:-}"
             shift 2
             ;;
         --orchestrator)
@@ -109,6 +114,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 ENSURE_ARGS=(ensure --agent "${AGENT}" --base "${BASE_BRANCH}" --print-path)
+if [[ -n "${SESSION_ID_OVERRIDE}" ]]; then
+    ENSURE_ARGS+=(--session-id "${SESSION_ID_OVERRIDE}")
+fi
 if ${RECONCILE}; then
     ENSURE_ARGS+=(--reconcile --strategy ff-only)
 fi

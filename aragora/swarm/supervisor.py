@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Any
 
 from aragora.nomic.approval import ApprovalLevel, ApprovalPolicy
-from aragora.nomic.dev_coordination import DevCoordinationStore, LeaseConflictError
+from aragora.nomic.dev_coordination import (
+    DevCoordinationStore,
+    LeaseConflictError,
+    LeaseStatus,
+)
 from aragora.nomic.pipeline_bridge import BoundedWorkOrder, NomicPipelineBridge
 from aragora.nomic.task_decomposer import SubTask, TaskDecomposer
 from aragora.swarm.spec import SwarmSpec
@@ -342,19 +346,8 @@ class SwarmSupervisor:
                 continue
 
             result = await self.launcher.wait(work_order_id, timeout=timeout)
+            self._apply_worker_result(item, result)
             completed.append(result)
-
-            if result.exit_code == 0:
-                item["status"] = "completed"
-                item["diff_lines"] = result.diff.count("\n")
-            elif result.exit_code == -1:
-                item["status"] = "timed_out"
-            else:
-                item["status"] = "failed"
-                item["exit_code"] = result.exit_code
-
-            item["completed_at"] = result.completed_at
-            item.pop("pid", None)
 
         self.store.update_supervisor_run(
             run_id,
@@ -362,6 +355,36 @@ class SwarmSupervisor:
             work_orders=work_orders,
         )
         return completed
+
+    async def collect_finished_results(self, run_id: str) -> list[WorkerProcess]:
+        """Collect only workers that have already finished."""
+        record = self.store.get_supervisor_run(run_id)
+        if record is None:
+            raise KeyError(f"Unknown supervisor run: {run_id}")
+
+        work_orders = [dict(item) for item in record.get("work_orders", [])]
+        dispatched_ids = [
+            str(item.get("work_order_id", "")).strip()
+            for item in work_orders
+            if str(item.get("status", "")) == "dispatched"
+        ]
+        finished = await self.launcher.collect_finished(work_order_ids=dispatched_ids)
+        if not finished:
+            return []
+
+        finished_by_id = {worker.work_order_id: worker for worker in finished}
+        for item in work_orders:
+            worker = finished_by_id.get(str(item.get("work_order_id", "")).strip())
+            if worker is None:
+                continue
+            self._apply_worker_result(item, worker)
+
+        self.store.update_supervisor_run(
+            run_id,
+            status=self._derive_status(work_orders),
+            work_orders=work_orders,
+        )
+        return finished
 
     def _build_supervised_work_orders(self, spec: SwarmSpec) -> list[BoundedWorkOrder]:
         goal = spec.refined_goal or spec.raw_goal
@@ -452,6 +475,56 @@ class SwarmSupervisor:
                 or approval_policy.require_merge_approval,
             }
         )
+
+    def _apply_worker_result(self, item: dict[str, Any], result: WorkerProcess) -> None:
+        item["completed_at"] = result.completed_at
+        item["diff_lines"] = result.diff.count("\n")
+        item["changed_paths"] = list(result.changed_paths)
+        item["tests_run"] = list(result.tests_run)
+        item["commit_shas"] = list(result.commit_shas)
+        item["head_sha"] = result.head_sha
+        item.pop("pid", None)
+
+        lease_id = str(item.get("lease_id", "")).strip()
+        if result.exit_code == 0:
+            receipt_id = str(item.get("receipt_id", "")).strip()
+            if lease_id and not receipt_id:
+                receipt = self.store.record_completion(
+                    lease_id=lease_id,
+                    owner_agent=str(item.get("target_agent", result.agent)),
+                    owner_session_id=str(item.get("owner_session_id", result.session_id)),
+                    branch=str(item.get("branch", result.branch)),
+                    worktree_path=str(item.get("worktree_path", result.worktree_path)),
+                    commit_shas=list(result.commit_shas),
+                    changed_paths=list(result.changed_paths),
+                    tests_run=list(result.tests_run),
+                    assumptions=[],
+                    blockers=[],
+                    confidence=self._completion_confidence(item, result),
+                )
+                item["receipt_id"] = receipt.receipt_id
+                item["confidence"] = receipt.confidence
+            item["status"] = "completed"
+            item["review_status"] = "pending_heterogeneous_review"
+            return
+
+        if lease_id:
+            self.store.release_lease(lease_id, status=LeaseStatus.RELEASED)
+        item["status"] = "timed_out" if result.exit_code == -1 else "failed"
+        item["exit_code"] = result.exit_code
+        if result.stderr.strip():
+            item["blockers"] = [result.stderr.strip()]
+
+    @staticmethod
+    def _completion_confidence(item: dict[str, Any], result: WorkerProcess) -> float:
+        expected_tests = [str(test) for test in item.get("expected_tests", []) if str(test).strip()]
+        if result.exit_code != 0:
+            return 0.0
+        if expected_tests:
+            return 0.8 if result.tests_run else 0.65
+        if result.commit_shas or result.changed_paths:
+            return 0.6
+        return 0.4
 
     @staticmethod
     def _derive_status(work_orders: list[dict[str, Any]]) -> str:

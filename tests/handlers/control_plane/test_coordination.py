@@ -218,7 +218,10 @@ class TestSwarmRun:
         mock_resolve.return_value = Path("/tmp/repo")
         fake_run = MagicMock()
         fake_run.to_dict.return_value = {"run_id": "run-123", "status": "active"}
-        mock_supervisor_cls.return_value.start_run.return_value = fake_run
+        mock_supervisor = mock_supervisor_cls.return_value
+        mock_supervisor.start_run.return_value = fake_run
+        mock_supervisor.dispatch_workers = AsyncMock(return_value=[])
+        mock_supervisor.store.get_supervisor_run.return_value = None
 
         result = handler._handle_swarm_run(
             {
@@ -229,6 +232,25 @@ class TestSwarmRun:
         )
 
         assert result.status_code == 201
+        data = json.loads(result.body)
+        assert data["run_id"] == "run-123"
+
+    @patch("aragora.swarm.SwarmReconciler")
+    @patch("aragora.server.handlers.control_plane.coordination.resolve_repo_root")
+    def test_swarm_reconcile_run(
+        self,
+        mock_resolve,
+        mock_reconciler_cls,
+        handler: ControlPlaneHandler,
+    ):
+        mock_resolve.return_value = Path("/tmp/repo")
+        fake_run = MagicMock()
+        fake_run.to_dict.return_value = {"run_id": "run-123", "status": "active"}
+        mock_reconciler_cls.return_value.tick_run = AsyncMock(return_value=fake_run)
+
+        result = handler._handle_swarm_reconcile({"run_id": "run-123"})
+
+        assert result.status_code == 200
         data = json.loads(result.body)
         assert data["run_id"] == "run-123"
 

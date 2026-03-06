@@ -69,6 +69,7 @@ class TestLaunchConfig:
         assert cfg.codex_path == "codex"
         assert cfg.timeout_seconds == 600.0
         assert cfg.auto_commit is True
+        assert cfg.use_managed_session_script is True
 
 
 class TestBuildPrompt:
@@ -107,7 +108,10 @@ class TestBuildCommand:
     def test_claude_command(self):
         launcher = WorkerLauncher(LaunchConfig(claude_model="claude-opus-4-6"))
         cmd = launcher._build_command("claude", "fix bug", "/tmp/wt")
-        assert cmd[0] == "claude"
+        assert cmd[0] == "bash"
+        assert "scripts/codex_session.sh" in cmd[1]
+        assert "--session-id" not in cmd
+        assert "--" in cmd
         assert "-p" in cmd
         assert "fix bug" in cmd
         assert "--yes" in cmd
@@ -117,7 +121,7 @@ class TestBuildCommand:
     def test_codex_command(self):
         launcher = WorkerLauncher(LaunchConfig(codex_model="o3"))
         cmd = launcher._build_command("codex", "fix bug", "/tmp/wt")
-        assert cmd[0] == "codex"
+        assert cmd[0] == "bash"
         assert "exec" in cmd
         assert "fix bug" in cmd
         assert "--full-auto" in cmd
@@ -127,7 +131,7 @@ class TestBuildCommand:
     def test_unknown_agent_falls_back_to_claude(self):
         launcher = WorkerLauncher()
         cmd = launcher._build_command("gpt5", "do thing", "/tmp/wt")
-        assert cmd[0] == "claude"
+        assert cmd[0] == "bash"
         assert "--yes" in cmd
 
     def test_no_model_flag_when_none(self):
@@ -135,21 +139,33 @@ class TestBuildCommand:
         cmd = launcher._build_command("claude", "task", "/tmp/wt")
         assert "--model" not in cmd
 
+    def test_direct_cli_command_when_session_wrapper_disabled(self):
+        launcher = WorkerLauncher(LaunchConfig(use_managed_session_script=False))
+        cmd = launcher._build_command("claude", "task", "/tmp/wt")
+        assert cmd[0] == "claude"
+        assert "-p" in cmd
+
 
 class TestLaunch:
     @pytest.mark.asyncio
-    async def test_launch_creates_worker(self):
+    async def test_launch_creates_worker(self, tmp_path: Path):
         launcher = WorkerLauncher()
         mock_proc = AsyncMock()
         mock_proc.pid = 42
+        worktree = tmp_path / "wt"
+        (worktree / "scripts").mkdir(parents=True)
+        (worktree / "scripts" / "codex_session.sh").write_text(
+            "#!/usr/bin/env bash\n", encoding="utf-8"
+        )
 
         wo = {"work_order_id": "wo-abc", "target_agent": "claude", "title": "Test"}
 
         with (
             patch("shutil.which", return_value="/usr/bin/claude"),
+            patch.object(WorkerLauncher, "_git_output", return_value=""),
             patch("asyncio.create_subprocess_exec", return_value=mock_proc),
         ):
-            worker = await launcher.launch(wo, worktree_path="/tmp/wt", branch="feat")
+            worker = await launcher.launch(wo, worktree_path=str(worktree), branch="feat")
 
         assert worker.work_order_id == "wo-abc"
         assert worker.agent == "claude"
@@ -230,9 +246,14 @@ class TestWait:
 
 class TestLaunchAndWait:
     @pytest.mark.asyncio
-    async def test_launch_and_wait_combined(self):
+    async def test_launch_and_wait_combined(self, tmp_path: Path):
         launcher = WorkerLauncher(LaunchConfig(auto_commit=False))
         wo = {"work_order_id": "wo-combo", "target_agent": "claude", "title": "Test"}
+        worktree = tmp_path / "wt"
+        (worktree / "scripts").mkdir(parents=True)
+        (worktree / "scripts" / "codex_session.sh").write_text(
+            "#!/usr/bin/env bash\n", encoding="utf-8"
+        )
 
         mock_proc = AsyncMock()
         mock_proc.pid = 55
@@ -241,10 +262,11 @@ class TestLaunchAndWait:
 
         with (
             patch("shutil.which", return_value="/usr/bin/claude"),
+            patch.object(WorkerLauncher, "_git_output", return_value=""),
             patch("asyncio.create_subprocess_exec", return_value=mock_proc),
             patch.object(WorkerLauncher, "_collect_diff", return_value=""),
         ):
-            result = await launcher.launch_and_wait(wo, worktree_path="/tmp/wt")
+            result = await launcher.launch_and_wait(wo, worktree_path=str(worktree))
 
         assert result.exit_code == 0
         assert result.stdout == "done"
