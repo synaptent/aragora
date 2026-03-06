@@ -547,10 +547,128 @@ def handle_mfa_backup_codes(handler_instance: AuthHandler, handler) -> HandlerRe
     )
 
 
+@api_endpoint(
+    method="GET",
+    path="/api/v1/admin/mfa/compliance",
+    summary="Get admin MFA compliance report",
+    description="Returns a compliance report showing how many admin users have MFA enabled.",
+    tags=["Admin", "MFA", "Compliance"],
+    responses={
+        "200": {
+            "description": "MFA compliance report",
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "total_admins": {"type": "integer"},
+                            "mfa_enabled_count": {"type": "integer"},
+                            "mfa_disabled_count": {"type": "integer"},
+                            "in_grace_period": {"type": "integer"},
+                            "compliance_pct": {"type": "number"},
+                            "non_compliant_users": {
+                                "type": "array",
+                                "items": {"type": "object"},
+                            },
+                        },
+                    }
+                }
+            },
+        },
+        "401": {"description": "Unauthorized"},
+        "403": {"description": "Permission denied"},
+    },
+)
+@handle_errors("MFA compliance report")
+@log_request("MFA compliance report")
+def handle_mfa_compliance(handler_instance: "AuthHandler", handler) -> HandlerResult:
+    """Return an admin MFA compliance report.
+
+    Scans all users from the user store, filters for admin roles, and
+    reports how many have MFA enabled, disabled, or are still within
+    the grace period.
+    """
+    from aragora.auth.mfa_enforcement import DEFAULT_MFA_REQUIRED_ROLES
+
+    # RBAC check: admin:read permission required
+    if error := handler_instance._check_permission(handler, "admin:read"):
+        return error
+
+    user_store = handler_instance._get_user_store()
+    if not user_store:
+        return error_response("User service unavailable", 503)
+
+    # Get all users from store
+    list_fn = getattr(user_store, "list_users", None) or getattr(user_store, "get_all_users", None)
+    if list_fn is None:
+        return error_response("User store does not support listing users", 501)
+
+    try:
+        all_users = list(list_fn())
+    except (RuntimeError, ValueError, TypeError, AttributeError):
+        return error_response("Failed to list users", 500)
+
+    # Filter for admin roles
+    admin_users = []
+    for user in all_users:
+        role = str(getattr(user, "role", "")).lower()
+        roles = getattr(user, "roles", None)
+        is_admin = role in DEFAULT_MFA_REQUIRED_ROLES
+        if not is_admin and roles:
+            for r in roles:
+                if str(r).lower() in DEFAULT_MFA_REQUIRED_ROLES:
+                    is_admin = True
+                    break
+        if is_admin:
+            admin_users.append(user)
+
+    # Compute compliance
+    mfa_enabled_count = 0
+    in_grace_period = 0
+    non_compliant_users: list[dict] = []
+
+    for user in admin_users:
+        user_id = str(getattr(user, "id", getattr(user, "user_id", "unknown")))
+        role = str(getattr(user, "role", "admin"))
+        mfa_enabled = bool(getattr(user, "mfa_enabled", False))
+
+        if mfa_enabled:
+            mfa_enabled_count += 1
+            continue
+
+        has_grace = bool(getattr(user, "mfa_grace_period_started_at", None))
+        if has_grace:
+            in_grace_period += 1
+
+        non_compliant_users.append(
+            {
+                "user_id": user_id,
+                "role": role,
+                "in_grace_period": has_grace,
+            }
+        )
+
+    total_admins = len(admin_users)
+    mfa_disabled_count = total_admins - mfa_enabled_count
+    compliance_pct = (mfa_enabled_count / total_admins * 100.0) if total_admins > 0 else 100.0
+
+    return json_response(
+        {
+            "total_admins": total_admins,
+            "mfa_enabled_count": mfa_enabled_count,
+            "mfa_disabled_count": mfa_disabled_count,
+            "in_grace_period": in_grace_period,
+            "compliance_pct": round(compliance_pct, 2),
+            "non_compliant_users": non_compliant_users,
+        }
+    )
+
+
 __all__ = [
     "handle_mfa_setup",
     "handle_mfa_enable",
     "handle_mfa_disable",
     "handle_mfa_verify",
     "handle_mfa_backup_codes",
+    "handle_mfa_compliance",
 ]

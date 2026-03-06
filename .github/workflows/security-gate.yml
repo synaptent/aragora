@@ -113,6 +113,15 @@ jobs:
           python scripts/pre_release_check.py --gate secrets-only
           echo "No hardcoded secret patterns detected"
 
+      # ---------------------------------------------------------------
+      # Data classification PII scan: checks Python source for PII
+      # patterns in string literals. Non-blocking (advisory only).
+      # ---------------------------------------------------------------
+      - name: "NON-BLOCKING: Data classification PII scan"
+        run: |
+          python scripts/classification_scan.py --allowlist scripts/pii_allowlist.txt || true
+        continue-on-error: true
+
       - name: Upload Bandit report
         uses: actions/upload-artifact@v4
         if: always()

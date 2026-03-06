@@ -174,6 +174,29 @@ class RetentionPolicyManager:
             action=RetentionAction.ARCHIVE,
         )
 
+        # Classification-derived retention policies
+        self._policies["classification_public_365d"] = RetentionPolicy(
+            id="classification_public_365d",
+            name="Public Data Retention (365 Days)",
+            description="Delete public-classified data after 365 days",
+            retention_days=365,
+            action=RetentionAction.DELETE,
+        )
+        self._policies["classification_confidential_180d"] = RetentionPolicy(
+            id="classification_confidential_180d",
+            name="Confidential Data Retention (180 Days)",
+            description="Archive confidential-classified data after 180 days",
+            retention_days=180,
+            action=RetentionAction.ARCHIVE,
+        )
+        self._policies["classification_restricted_90d"] = RetentionPolicy(
+            id="classification_restricted_90d",
+            name="Restricted Data Retention (90 Days)",
+            description="Delete restricted-classified data after 90 days",
+            retention_days=90,
+            action=RetentionAction.DELETE,
+        )
+
     def create_policy(
         self,
         name: str,

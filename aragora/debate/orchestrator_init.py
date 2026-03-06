@@ -226,6 +226,8 @@ def store_post_tracker_config(
     arena.live_explainability_stream = None
     # Sandbox verification of code proposals
     arena.enable_sandbox_verification = getattr(cfg, "enable_sandbox_verification", False)
+    # Data classification (tag results with sensitivity metadata)
+    arena.enable_data_classification = getattr(cfg, "enable_data_classification", False)
     # Active introspection tracker (created per-debate in setup_debate_infrastructure)
     arena.enable_introspection = getattr(cfg, "enable_introspection", True)
     arena.active_introspection_tracker = None

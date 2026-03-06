@@ -212,6 +212,61 @@ def get_encrypted_field_names(data: dict[str, Any]) -> list[str]:
     ]
 
 
+def encrypt_by_classification(
+    data: dict[str, Any],
+    classification_level: str,
+    record_id: str | None = None,
+) -> dict[str, Any]:
+    """Encrypt data fields based on classification level.
+
+    If the classification level is ``CONFIDENTIAL``, ``RESTRICTED``, or ``PII``,
+    all string values in *data* are encrypted.  For lower levels the data is
+    returned unchanged.
+
+    Args:
+        data: Dictionary of data to potentially encrypt.
+        classification_level: Classification level string (e.g. ``"confidential"``).
+        record_id: Optional record ID for AAD binding.
+
+    Returns:
+        Dictionary with string values encrypted when required, plus an
+        ``_encrypted: True`` marker.  If encryption is not available but
+        required, a warning is logged and the data is returned as-is.
+    """
+    if not data:
+        return data
+
+    sensitive_levels = {"confidential", "restricted", "pii"}
+    if classification_level.lower() not in sensitive_levels:
+        return data
+
+    if not is_encryption_available():
+        logger.warning(
+            "Encryption required for classification level '%s' but cryptography library "
+            "is not available — storing data unencrypted",
+            classification_level,
+        )
+        return data
+
+    try:
+        service = _get_encryption_service()
+        # Encrypt all string-valued fields
+        string_fields = [k for k, v in data.items() if isinstance(v, str) and not k.startswith("_")]
+        if not string_fields:
+            return data
+
+        encrypted = service.encrypt_fields(
+            record=data,
+            sensitive_fields=string_fields,
+            associated_data=record_id,
+        )
+        encrypted["_encrypted"] = True
+        return encrypted
+    except (ValueError, RuntimeError, OSError) as e:
+        logger.error("Failed to encrypt by classification: %s", e)
+        raise EncryptionError(f"Classification-based encryption failed: {e}") from e
+
+
 class EncryptionError(Exception):
     """Raised when encryption fails."""
 
@@ -228,6 +283,7 @@ __all__ = [
     "SENSITIVE_FIELDS",
     "encrypt_sensitive",
     "decrypt_sensitive",
+    "encrypt_by_classification",
     "is_encryption_available",
     "is_encryption_configured",
     "is_field_encrypted",

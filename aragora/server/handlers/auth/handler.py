@@ -75,6 +75,7 @@ from .mfa import (
     handle_mfa_disable,
     handle_mfa_verify,
     handle_mfa_backup_codes,
+    handle_mfa_compliance,
 )
 from .sessions import handle_list_sessions, handle_revoke_session
 from .session_health import (
@@ -152,6 +153,7 @@ class AuthHandler(SecureHandler):
         "/api/auth/mfa/verify",
         "/api/auth/mfa/backup-codes",
         "/api/auth/mfa",
+        "/api/admin/mfa/compliance",
         "/api/auth/sessions",
         "/api/auth/sessions/health",
         "/api/auth/sessions/sweep",
@@ -317,6 +319,10 @@ class AuthHandler(SecureHandler):
 
         if path == "/api/auth/mfa/backup-codes" and method == "POST":
             return self._handle_mfa_backup_codes(handler)
+
+        # Admin MFA compliance endpoint
+        if path == "/api/admin/mfa/compliance" and method == "GET":
+            return self._handle_mfa_compliance(handler)
 
         # Session management endpoints
         if path == "/api/auth/sessions" and method == "GET":
@@ -1008,6 +1014,10 @@ class AuthHandler(SecureHandler):
     def _handle_mfa_backup_codes(self, handler: Any) -> HandlerResult:
         """Regenerate MFA backup codes."""
         return handle_mfa_backup_codes(self, handler)
+
+    def _handle_mfa_compliance(self, handler: Any) -> HandlerResult:
+        """Return admin MFA compliance report."""
+        return handle_mfa_compliance(self, handler)
 
     # =========================================================================
     # Session Management - Delegated to sessions.py

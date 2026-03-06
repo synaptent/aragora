@@ -59,6 +59,10 @@ class TenantConfig:
     storage_quota: int = 10 * 1024 * 1024 * 1024  # 10GB
     knowledge_quota: int = 1 * 1024 * 1024 * 1024  # 1GB
 
+    # MFA enforcement
+    require_admin_mfa: bool = True
+    mfa_grace_period_days: int = 7
+
     # Rate limits
     api_requests_per_minute: int = 60
     api_requests_per_day: int = 10000

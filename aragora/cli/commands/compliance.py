@@ -6,6 +6,7 @@ Provides CLI access to EU AI Act compliance tooling and the compliance framework
 - aragora compliance classify <description> -- Classify use case by risk level
 - aragora compliance eu-ai-act generate    -- Generate full artifact bundle (Art. 9, 12-15)
 - aragora compliance export                -- Export structured compliance bundle for a debate
+- aragora compliance evidence              -- Generate data classification audit evidence bundle
 - aragora compliance --generate-artifacts  -- Shorthand for eu-ai-act generate
 - aragora compliance status                -- Show compliance framework status
 - aragora compliance report                -- Generate a compliance framework report
@@ -173,6 +174,37 @@ def add_compliance_parser(subparsers: argparse._SubParsersAction) -> None:
 
     add_export_subparser(sub)
 
+    # -- aragora compliance evidence --
+    evidence_p = sub.add_parser(
+        "evidence",
+        help="Generate a data classification audit evidence bundle",
+        description=(
+            "Generate an audit evidence bundle documenting the active data "
+            "classification policy, enforcement rules, encryption status, "
+            "retention policies, and CI scan configuration. The bundle includes "
+            "a SHA-256 integrity hash for tamper detection."
+        ),
+    )
+    evidence_p.add_argument(
+        "--output-dir",
+        dest="output_dir",
+        default="./evidence-bundle",
+        help="Output directory for evidence files (default: ./evidence-bundle)",
+    )
+    evidence_p.add_argument(
+        "--period",
+        type=int,
+        default=30,
+        help="Reporting period in days (default: 30)",
+    )
+    evidence_p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=["json", "markdown", "all"],
+        default="all",
+        help="Output format (default: all)",
+    )
+
     # -- aragora compliance eu-ai-act generate --
     eu_p = sub.add_parser(
         "eu-ai-act",
@@ -269,6 +301,8 @@ def cmd_compliance(args: argparse.Namespace) -> None:
         from aragora.cli.commands.compliance_export import cmd_compliance_export
 
         cmd_compliance_export(args)
+    elif command == "evidence":
+        _cmd_evidence(args)
     elif command == "eu-ai-act":
         eu_command = getattr(args, "eu_ai_act_command", None)
         if eu_command == "generate":
@@ -282,7 +316,9 @@ def cmd_compliance(args: argparse.Namespace) -> None:
             print("Omit receipt_file to generate a demonstration bundle with synthetic data.")
             sys.exit(1)
     else:
-        print("Usage: aragora compliance {status,report,check,audit,classify,export,eu-ai-act}")
+        print(
+            "Usage: aragora compliance {status,report,check,audit,classify,export,evidence,eu-ai-act}"
+        )
         print()
         print("  Framework commands (offline):")
         print("    status     Show compliance framework status")
@@ -293,6 +329,7 @@ def cmd_compliance(args: argparse.Namespace) -> None:
         print("    audit      Generate EU AI Act conformity report from a receipt")
         print("    classify   Classify a use case by EU AI Act risk level")
         print("    export     Export structured compliance bundle for a debate")
+        print("    evidence   Generate data classification audit evidence bundle")
         print("    eu-ai-act  Generate compliance artifact bundles (Articles 9/12/13/14/15)")
         sys.exit(1)
 
@@ -477,6 +514,52 @@ def _format_check_result_text(result) -> str:
 
     lines.append("")
     return "\n".join(lines)
+
+
+def _cmd_evidence(args: argparse.Namespace) -> None:
+    """Generate data classification audit evidence bundle."""
+    from aragora.compliance.evidence_bundle import DataClassificationEvidenceBundle
+
+    period = getattr(args, "period", 30)
+    output_dir = getattr(args, "output_dir", "./evidence-bundle")
+    output_format = getattr(args, "output_format", "all")
+
+    bundle_gen = DataClassificationEvidenceBundle()
+    bundle = bundle_gen.generate(period_days=period)
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Write JSON
+    if output_format in ("json", "all"):
+        json_path = os.path.join(output_dir, "evidence_bundle.json")
+        with open(json_path, "w") as f:
+            json.dump(bundle, f, indent=2, default=str)
+
+    # Write Markdown
+    if output_format in ("markdown", "all"):
+        md_path = os.path.join(output_dir, "evidence_bundle.md")
+        with open(md_path, "w") as f:
+            f.write(bundle_gen.to_markdown())
+
+    # Print summary
+    print()
+    print("Data Classification Evidence Bundle")
+    print("=" * 50)
+    print(f"  Period:         {period} days")
+    print(f"  Levels:         {', '.join(bundle['classification_levels'])}")
+    print(f"  Integrity Hash: {bundle['integrity_hash']}")
+    enc = bundle["encryption_status"]
+    print(
+        f"  Encryption:     {'Available' if enc['crypto_available'] else 'Unavailable'}"
+        f" ({enc['algorithm']})"
+    )
+    print()
+    print(f"  Output: {output_dir}/")
+    if output_format in ("json", "all"):
+        print("    evidence_bundle.json   Machine-readable bundle")
+    if output_format in ("markdown", "all"):
+        print("    evidence_bundle.md     Human-readable report")
+    print()
 
 
 def _cmd_audit(args: argparse.Namespace) -> None:

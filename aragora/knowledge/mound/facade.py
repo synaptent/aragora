@@ -140,12 +140,36 @@ class KnowledgeMound(  # type: ignore[misc]
     async def ingest(self, item: Any) -> Any:
         """Ingest a knowledge item (alias for store).
 
+        If ``enable_data_classification`` is set on the MoundConfig and the
+        item carries no ``_classification`` metadata, the item is automatically
+        tagged with a classification level before storage.
+
         Args:
             item: Knowledge item or IngestionRequest to store
 
         Returns:
             IngestionResult with stored item details
         """
+        if getattr(self.config, "enable_data_classification", False):
+            try:
+                item_dict: dict[str, Any] | None = None
+                if isinstance(item, dict):
+                    item_dict = item
+                elif hasattr(item, "metadata") and isinstance(item.metadata, dict):
+                    item_dict = item.metadata
+
+                if item_dict is not None and "_classification" not in item_dict:
+                    from aragora.compliance.data_classification import PolicyEnforcer
+
+                    enforcer = PolicyEnforcer()
+                    classified = enforcer.classify_knowledge_item(item_dict)
+                    item_dict["_classification"] = classified.get("_classification", {})
+            except (ImportError, RuntimeError, TypeError, ValueError) as e:
+                import logging
+
+                logging.getLogger(__name__).debug(
+                    "[data_classification] Classification failed (non-critical): %s", e
+                )
         return await self.store(item)
 
     """

@@ -426,6 +426,8 @@ class ArenaConfig:
         anonymization_method: str = "redact",
         # Sandbox verification of code proposals
         enable_sandbox_verification: bool = False,
+        # Data classification (tag results with sensitivity metadata)
+        enable_data_classification: bool = False,
         # Protocol-level flags (stored for preset passthrough to Arena/Protocol)
         enable_adaptive_consensus: bool = False,
         enable_synthesis: bool = False,
@@ -532,6 +534,9 @@ class ArenaConfig:
 
         # Sandbox verification of code proposals
         self.enable_sandbox_verification = enable_sandbox_verification
+
+        # Data classification (tag results with sensitivity metadata)
+        self.enable_data_classification = enable_data_classification
 
         # Protocol-level flags (preset passthrough)
         self.enable_adaptive_consensus = enable_adaptive_consensus
