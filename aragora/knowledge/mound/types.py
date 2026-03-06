@@ -186,6 +186,7 @@ class MoundConfig:
     enable_auto_revalidation: bool = False
     enable_deduplication: bool = True
     enable_provenance_tracking: bool = True
+    enable_data_classification: bool = False
 
     # Bidirectional adapter flags
     enable_evidence_adapter: bool = True

@@ -1346,6 +1346,19 @@ async def cleanup_debate_resources(
         except (ImportError, RuntimeError, OSError, TypeError, ValueError) as e:
             logger.debug("[result_routing] Failed (non-critical): %s", e)
 
+    # Data classification: tag result with sensitivity metadata (opt-in)
+    if result and getattr(arena, "enable_data_classification", False):
+        try:
+            from aragora.compliance.data_classification import PolicyEnforcer
+
+            _enforcer = PolicyEnforcer()
+            result_dict = result.to_dict() if hasattr(result, "to_dict") else {"_raw": str(result)}
+            classified = _enforcer.classify_debate_result(result_dict)
+            result.metadata["_classification"] = classified.get("_classification", {})
+            logger.debug("[data_classification] Tagged debate result with classification metadata")
+        except (ImportError, RuntimeError, OSError, TypeError, ValueError, AttributeError) as e:
+            logger.debug("[data_classification] Classification failed (non-critical): %s", e)
+
     return result
 
 

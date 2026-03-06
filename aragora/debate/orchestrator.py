@@ -354,6 +354,7 @@ class Arena(ArenaDelegatesMixin):
     enable_introspection: bool
     active_introspection_tracker: Any
     enable_sandbox_verification: bool
+    enable_data_classification: bool
 
     # Selection feedback / cost / health (initialized by orchestrator_setup helpers)
     _selection_feedback_loop: Any

@@ -80,7 +80,7 @@ class _MultiRoleUser:
 
 def _store(*users: object) -> MagicMock:
     """Return a mock user store that yields *users*."""
-    store = MagicMock()
+    store = MagicMock(spec=["list_users"])
     store.list_users.return_value = list(users)
     return store
 
@@ -356,6 +356,14 @@ class TestAdminDetection:
 
 
 class TestUserStoreFallback:
+    def test_supports_list_all_users_tuple(self):
+        store = MagicMock(spec=["list_all_users"])
+        user = _AdminUser(id="a-1", mfa_enabled=True)
+        store.list_all_users.return_value = ([user], 1)
+        monitor = MFADriftMonitor(user_store=store)
+        report = monitor.scan()
+        assert report.total_admins == 1
+
     def test_falls_back_to_get_all_users(self):
         store = MagicMock(spec=[])  # no list_users
         user = _AdminUser(id="a-1", mfa_enabled=True)

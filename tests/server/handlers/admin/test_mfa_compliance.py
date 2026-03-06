@@ -39,6 +39,10 @@ class FakeUserStore:
     def list_users(self) -> list[FakeUser]:
         return self._users
 
+    def list_all_users(self, limit: int = 50, offset: int = 0) -> tuple[list[FakeUser], int]:
+        batch = self._users[offset : offset + limit]
+        return batch, len(self._users)
+
     def get_user_by_id(self, user_id: str) -> FakeUser | None:
         for u in self._users:
             if u.id == user_id:
@@ -142,3 +146,15 @@ class TestMFAComplianceEndpoint:
         data = _parse_data(result)
         assert data["in_grace_period"] == 1
         assert data["mfa_disabled"] == 0
+
+    def test_list_all_users_tuple_supported(self):
+        users = [
+            FakeUser(id="a1", role="admin", mfa_enabled=True),
+            FakeUser(id="m1", role="member", mfa_enabled=False),
+        ]
+        handler = MFAComplianceHandler(ctx={"user_store": FakeUserStore(users)})
+        result = handler._get_compliance(handler=None)
+
+        data = _parse_data(result)
+        assert data["total_admins"] == 1
+        assert data["mfa_enabled"] == 1

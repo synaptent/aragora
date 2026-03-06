@@ -269,6 +269,7 @@ export default function MarketplacePage() {
                         onSelect={() => selectListing(listing)}
                         onInstall={() => setShowInstallConfirm(listing)}
                         onRate={() => setShowRateModal(listing)}
+                        onLaunchDebate={() => router.push(`/arena?template=${encodeURIComponent(listing.id)}`)}
                         featured
                       />
                     ))}
@@ -309,6 +310,7 @@ export default function MarketplacePage() {
                       onSelect={() => selectListing(listing)}
                       onInstall={() => setShowInstallConfirm(listing)}
                       onRate={() => setShowRateModal(listing)}
+                      onLaunchDebate={() => router.push(`/arena?template=${encodeURIComponent(listing.id)}`)}
                     />
                   ))}
                 </div>
@@ -515,6 +517,7 @@ interface ListingCardProps {
   onSelect: () => void;
   onInstall: () => void;
   onRate: () => void;
+  onLaunchDebate?: () => void;
   featured?: boolean;
 }
 
@@ -524,6 +527,7 @@ function ListingCard({
   onSelect,
   onInstall,
   onRate,
+  onLaunchDebate,
   featured,
 }: ListingCardProps) {
   const typeStyle = LISTING_TYPE_COLORS[listing.type];
@@ -581,6 +585,17 @@ function ListingCard({
           </span>
         </div>
         <div className="flex gap-1">
+          {onLaunchDebate && (listing.type === 'template' || listing.type === 'agent_pack') && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onLaunchDebate();
+              }}
+              className="px-2 py-1 text-xs font-mono bg-acid-cyan/10 text-acid-cyan border border-acid-cyan/30 hover:bg-acid-cyan/20 transition-colors"
+            >
+              LAUNCH DEBATE
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();

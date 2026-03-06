@@ -322,15 +322,43 @@ class MFADriftMonitor:
                 break
 
     def _list_users(self) -> list[Any]:
-        """List users from the store; tries list_users then get_all_users."""
-        list_fn = getattr(self._user_store, "list_users", None) or getattr(
-            self._user_store, "get_all_users", None
-        )
-        if list_fn is None:
-            logger.warning("MFADriftMonitor: user_store has no list_users / get_all_users method")
-            return []
+        """List users from the store, supporting paginated admin stores."""
         try:
-            return list(list_fn())
+            list_all_fn = getattr(self._user_store, "list_all_users", None)
+            if callable(list_all_fn):
+                limit = 1000
+                offset = 0
+                users: list[Any] = []
+                while True:
+                    batch_result = list_all_fn(limit=limit, offset=offset)
+                    if isinstance(batch_result, tuple) and len(batch_result) == 2:
+                        batch, total = batch_result
+                    else:
+                        batch, total = batch_result, None
+                    batch_users = list(batch)
+                    users.extend(batch_users)
+                    if not batch_users:
+                        break
+                    if total is not None and len(users) >= int(total):
+                        break
+                    if total is None and len(batch_users) < limit:
+                        break
+                    offset += limit
+                return users
+
+            list_fn = getattr(self._user_store, "list_users", None) or getattr(
+                self._user_store, "get_all_users", None
+            )
+            if list_fn is None:
+                logger.warning(
+                    "MFADriftMonitor: user_store has no list_all_users / list_users / get_all_users method"
+                )
+                return []
+
+            result = list_fn()
+            if isinstance(result, tuple) and len(result) == 2:
+                result, _ = result
+            return list(result)
         except (RuntimeError, ValueError, TypeError, AttributeError) as exc:
             logger.warning("MFADriftMonitor: failed to list users: %s", exc)
             return []
@@ -348,12 +376,115 @@ class MFADriftMonitor:
                     return True
         return False
 
+    def send_drift_alerts(self, report: MFADriftReport) -> None:
+        """Send notifications for critical-level drift alerts.
+
+        Sends a notification for each critical alert (grace period expired or
+        admin without MFA) and an overall summary when policy is not met.
+        Uses the notification service if available; logs warnings otherwise.
+        """
+        critical_alerts = report.critical_violations
+        if not critical_alerts and report.policy_met:
+            return
+
+        try:
+            from aragora.notifications.service import get_notification_service
+            from aragora.notifications.models import (
+                Notification,
+                NotificationChannel,
+                NotificationPriority,
+            )
+
+            service = get_notification_service()
+        except ImportError:
+            logger.warning(
+                "MFADriftMonitor: notification service not available; skipping drift alert delivery"
+            )
+            return
+
+        # Send per-user critical alerts
+        for alert in critical_alerts:
+            try:
+                notification = Notification(
+                    title="MFA Enforcement: Admin Without MFA",
+                    message=(
+                        f"Admin user {alert.user_id} (role={alert.role}) does not "
+                        f"have MFA enabled and their grace period has expired. "
+                        f"Immediate action required."
+                    ),
+                    severity="critical",
+                    priority=NotificationPriority.URGENT,
+                    resource_type="mfa_compliance",
+                    resource_id=alert.user_id,
+                )
+
+                import asyncio
+
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        service.notify(
+                            notification=notification,
+                            channels=[NotificationChannel.SLACK, NotificationChannel.EMAIL],
+                        )
+                    )
+                except RuntimeError:
+                    # No running event loop — run synchronously
+                    asyncio.run(
+                        service.notify(
+                            notification=notification,
+                            channels=[NotificationChannel.SLACK, NotificationChannel.EMAIL],
+                        )
+                    )
+            except Exception:  # noqa: BLE001 — notification delivery must not break the monitor
+                logger.exception(
+                    "MFADriftMonitor: failed to send drift alert for user %s",
+                    alert.user_id,
+                )
+
+        # Send overall summary if policy is not met
+        if not report.policy_met:
+            try:
+                summary_notification = Notification(
+                    title="MFA Policy Non-Compliance Detected",
+                    message=(
+                        f"MFA compliance rate is {report.compliance_rate:.1%} "
+                        f"({report.non_compliant}/{report.total_admins} admins non-compliant, "
+                        f"{len(critical_alerts)} critical). "
+                        f"Compliance threshold not met."
+                    ),
+                    severity="critical",
+                    priority=NotificationPriority.URGENT,
+                    resource_type="mfa_compliance",
+                )
+
+                import asyncio
+
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        service.notify(
+                            notification=summary_notification,
+                            channels=[NotificationChannel.SLACK, NotificationChannel.EMAIL],
+                        )
+                    )
+                except RuntimeError:
+                    asyncio.run(
+                        service.notify(
+                            notification=summary_notification,
+                            channels=[NotificationChannel.SLACK, NotificationChannel.EMAIL],
+                        )
+                    )
+            except Exception:  # noqa: BLE001 — notification delivery must not break the monitor
+                logger.exception("MFADriftMonitor: failed to send policy summary notification")
+
     def _emit(self, report: MFADriftReport) -> None:
         """
         Emit the scan report as structured log events and invoke callbacks.
 
         Compliance rate and violation counts are logged at WARNING level when
-        policy is not met, and at INFO level when compliant.
+        policy is not met, and at INFO level when compliant.  Also sends
+        notifications for critical drift alerts.
         """
         if report.has_violations:
             logger.warning(
@@ -390,6 +521,9 @@ class MFADriftMonitor:
                     self._on_violation(report)
                 except Exception:  # noqa: BLE001 — external callback
                     logger.exception("MFADriftMonitor: on_violation callback raised")
+
+            # Send notifications for critical drift
+            self.send_drift_alerts(report)
         else:
             logger.info(
                 "MFA compliance check passed: %s",

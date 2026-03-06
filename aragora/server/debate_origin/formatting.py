@@ -17,8 +17,20 @@ def _format_result_message(
     origin: DebateOrigin,
     markdown: bool = True,
     html: bool = False,
-) -> str:
+) -> str | dict[str, Any]:
     """Format debate result as a message."""
+    # Try rich channel-specific formatter first
+    try:
+        from aragora.channels.debate_formatter import format_result_for_channel
+
+        platform = origin.platform
+        if platform:
+            formatted = format_result_for_channel(platform, result)
+            if formatted and isinstance(formatted, dict):
+                return formatted
+    except ImportError:
+        pass
+
     # Capability events are pre-formatted; return as-is
     if result.get("_capability_event"):
         return result.get("final_answer", "")
