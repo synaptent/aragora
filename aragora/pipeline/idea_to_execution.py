@@ -1815,6 +1815,61 @@ class IdeaToExecutionPipeline:
 
         return sr
 
+    def _build_task_work_lease(self, task: dict[str, Any]) -> dict[str, Any]:
+        """Build a bounded work lease artifact for one orchestration task."""
+        return {
+            "lease_id": f"lease-{uuid.uuid4().hex[:12]}",
+            "task_id": task["id"],
+            "name": task["name"],
+            "issued_at": time.time(),
+            "bounded_scope": {
+                "task_type": task.get("type", "agent_task"),
+                "test_scope": list(task.get("test_scope", [])),
+            },
+        }
+
+    def _build_task_completion_receipt(
+        self,
+        task: dict[str, Any],
+        task_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Build a completion receipt for one orchestration task result."""
+        output_hash = hashlib.sha256(repr(task_result.get("output")).encode()).hexdigest()[:16]
+        return {
+            "receipt_id": f"receipt-{uuid.uuid4().hex[:12]}",
+            "task_id": task["id"],
+            "status": task_result.get("status", "unknown"),
+            "backend": task_result.get("backend", "unknown"),
+            "output_hash": output_hash,
+            "completed_at": time.time(),
+        }
+
+    def _build_integration_decision(
+        self,
+        *,
+        completed: int,
+        agent_total: int,
+        awaiting_approval: int,
+    ) -> dict[str, Any]:
+        """Build the stage-level integration decision for orchestration output."""
+        if awaiting_approval > 0:
+            decision = "needs_human_approval"
+        elif agent_total > 0 and completed == agent_total:
+            decision = "ready_for_integration"
+        elif completed > 0:
+            decision = "needs_review"
+        else:
+            decision = "blocked"
+
+        return {
+            "decision": decision,
+            "issued_at": time.time(),
+            "policy_basis": "bounded-work-order/v1",
+            "agent_tasks_completed": completed,
+            "agent_tasks_total": agent_total,
+            "awaiting_approval": awaiting_approval,
+        }
+
     async def _run_orchestration(
         self,
         pipeline_id: str,
@@ -1870,14 +1925,18 @@ class IdeaToExecutionPipeline:
 
             results: list[dict[str, Any]] = []
             for task in execution_plan["tasks"]:
+                work_lease = self._build_task_work_lease(task)
                 if task["type"] == "human_gate":
-                    results.append(
-                        {
-                            "task_id": task["id"],
-                            "status": "awaiting_approval",
-                            "name": task["name"],
-                        }
+                    task_result = {
+                        "task_id": task["id"],
+                        "status": "awaiting_approval",
+                        "name": task["name"],
+                        "work_lease": work_lease,
+                    }
+                    task_result["completion_receipt"] = self._build_task_completion_receipt(
+                        task, task_result
                     )
+                    results.append(task_result)
                     self._emit(
                         cfg,
                         "pipeline_node_added",
@@ -1900,6 +1959,10 @@ class IdeaToExecutionPipeline:
                 )
 
                 task_result = await self._execute_task(task, cfg)
+                task_result["work_lease"] = work_lease
+                task_result["completion_receipt"] = self._build_task_completion_receipt(
+                    task, task_result
+                )
                 results.append(task_result)
 
                 # Update bead lifecycle
@@ -1936,6 +1999,8 @@ class IdeaToExecutionPipeline:
 
             completed = sum(1 for r in results if r["status"] == "completed")
             total = len(results)
+            awaiting_approval = sum(1 for r in results if r["status"] == "awaiting_approval")
+            agent_total = sum(1 for task in execution_plan["tasks"] if task["type"] != "human_gate")
 
             # Finalize convoy lifecycle if beads were used
             if bead_manager and completed > 0:
@@ -1957,6 +2022,11 @@ class IdeaToExecutionPipeline:
                 "tasks_completed": completed,
                 "tasks_total": total,
                 "results": results,
+                "integration_decision": self._build_integration_decision(
+                    completed=completed,
+                    agent_total=agent_total,
+                    awaiting_approval=awaiting_approval,
+                ),
             }
 
             sr.output = {"orchestration": orch_result}

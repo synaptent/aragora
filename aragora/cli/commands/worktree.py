@@ -406,6 +406,12 @@ def _cmd_worktree_fleet_status(
     store = FleetCoordinationStore(repo_path)
     claims = store.list_claims()
     queue = store.list_merge_queue()
+    try:
+        from aragora.nomic.dev_coordination import DevCoordinationStore
+
+        coordination_summary = DevCoordinationStore(repo_root=repo_path).status_summary()
+    except (ImportError, RuntimeError, OSError, ValueError) as exc:
+        coordination_summary = {"error": str(exc), "counts": {}}
     claims_by_session: dict[str, list[str]] = {}
     for claim in claims:
         sid = str(claim.get("session_id", "")).strip()
@@ -431,11 +437,22 @@ def _cmd_worktree_fleet_status(
             "worktrees": rows,
             "claims": claims,
             "merge_queue": queue,
+            "coordination": coordination_summary,
         }
         print(json.dumps(payload, indent=2))
         return
 
     print(f"Fleet status: {len(rows)} worktree(s)")
+    counts = coordination_summary.get("counts", {})
+    if counts:
+        print(
+            "Coordination: "
+            f"leases={counts.get('active_leases', 0)} "
+            f"pending_integrations={counts.get('pending_integrations', 0)} "
+            f"salvage={counts.get('open_salvage_candidates', 0)} "
+            f"fleet_claims={counts.get('fleet_claims', 0)} "
+            f"fleet_queue={counts.get('fleet_merge_queue', 0)}"
+        )
     if not rows:
         return
 

@@ -566,6 +566,12 @@ class CoordinationHandlerMixin:
         store = self._fleet_store(repo_root)
         claims = store.list_claims()
         queue = store.list_merge_queue()
+        try:
+            from aragora.nomic.dev_coordination import DevCoordinationStore
+
+            coordination_summary = DevCoordinationStore(repo_root=repo_root).status_summary()
+        except (ImportError, RuntimeError, OSError, ValueError) as exc:
+            coordination_summary = {"error": str(exc), "counts": {}}
         claims_by_session: dict[str, list[str]] = {}
         for claim in claims:
             sid = str(claim.get("session_id", "")).strip()
@@ -590,6 +596,7 @@ class CoordinationHandlerMixin:
                 "worktrees": rows,
                 "claims": claims,
                 "merge_queue": queue,
+                "coordination": coordination_summary,
                 "total": len(rows),
             }
         )

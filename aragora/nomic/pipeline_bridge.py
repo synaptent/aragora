@@ -33,6 +33,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -43,6 +44,39 @@ if TYPE_CHECKING:
     from aragora.pipeline.universal_node import UniversalGraph
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BoundedWorkOrder:
+    """Execution-bounded work order derived from a Nomic subtask.
+
+    This is the product-side analogue of the dev-swarm WorkLease. It gives
+    downstream pipeline stages an explicit unit of work with owned scope,
+    dependencies, and success criteria.
+    """
+
+    work_order_id: str
+    pipeline_task_id: str
+    title: str
+    description: str
+    file_scope: list[str] = field(default_factory=list)
+    dependency_ids: list[str] = field(default_factory=list)
+    success_criteria: dict[str, Any] = field(default_factory=dict)
+    estimated_complexity: str = "medium"
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "work_order_id": self.work_order_id,
+            "pipeline_task_id": self.pipeline_task_id,
+            "title": self.title,
+            "description": self.description,
+            "file_scope": list(self.file_scope),
+            "dependency_ids": list(self.dependency_ids),
+            "success_criteria": dict(self.success_criteria),
+            "estimated_complexity": self.estimated_complexity,
+            "metadata": dict(self.metadata),
+        }
 
 
 def _subtask_to_implement_task(
@@ -180,6 +214,45 @@ class NomicPipelineBridge:
         self._budget_limit_usd = budget_limit_usd
         self._execution_mode = execution_mode
 
+    def build_work_orders(self, subtasks: list[SubTask]) -> list[BoundedWorkOrder]:
+        """Build bounded work orders from decomposed subtasks."""
+        pipeline_id_by_subtask = {st.id: f"task-{i + 1}" for i, st in enumerate(subtasks)}
+        work_orders: list[BoundedWorkOrder] = []
+        for i, subtask in enumerate(subtasks, 1):
+            work_orders.append(
+                BoundedWorkOrder(
+                    work_order_id=subtask.id,
+                    pipeline_task_id=f"task-{i}",
+                    title=subtask.title,
+                    description=subtask.description,
+                    file_scope=list(subtask.file_scope),
+                    dependency_ids=[
+                        pipeline_id_by_subtask[dep_id]
+                        for dep_id in subtask.dependencies
+                        if dep_id in pipeline_id_by_subtask
+                    ],
+                    success_criteria=dict(subtask.success_criteria),
+                    estimated_complexity=subtask.estimated_complexity,
+                    metadata={
+                        "source": "nomic_subtask",
+                        "depth": subtask.depth,
+                        "parent_id": subtask.parent_id,
+                    },
+                )
+            )
+        return work_orders
+
+    def build_plan_metadata(self, goal: str, subtasks: list[SubTask]) -> dict[str, Any]:
+        """Build execution metadata for DecisionPlanFactory handoff."""
+        work_orders = self.build_work_orders(subtasks)
+        return {
+            "source": "nomic_loop",
+            "goal": goal,
+            "subtask_count": len(subtasks),
+            "work_order_protocol": "bounded-work-order/v1",
+            "bounded_work_orders": [item.to_dict() for item in work_orders],
+        }
+
     def build_decision_plan(
         self,
         goal: str,
@@ -230,11 +303,7 @@ class NomicPipelineBridge:
             approval_mode=ApprovalMode.NEVER,  # Self-improvement is automated
             repo_path=self._repo_path,
             implement_plan=implement_plan,
-            metadata={
-                "source": "nomic_loop",
-                "goal": goal,
-                "subtask_count": len(subtasks),
-            },
+            metadata=self.build_plan_metadata(goal, subtasks),
         )
 
         logger.info(

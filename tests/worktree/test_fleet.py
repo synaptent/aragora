@@ -56,3 +56,32 @@ def test_enqueue_merge_deduplicates_active_branch(tmp_path: Path) -> None:
     assert second["duplicate"] is True
     queue = store.list_merge_queue()
     assert len(queue) == 1
+
+
+def test_claim_next_merge_prefers_highest_priority(tmp_path: Path) -> None:
+    store = FleetCoordinationStore(tmp_path)
+    store.enqueue_merge(session_id="session-a", branch="codex/low", priority=20)
+    high = store.enqueue_merge(session_id="session-b", branch="codex/high", priority=90)
+
+    claimed = store.claim_next_merge(worker_session_id="integrator-1")
+
+    assert claimed is not None
+    assert claimed["id"] == high["item"]["id"]
+    assert claimed["status"] == "validating"
+    assert claimed["metadata"]["worker_session_id"] == "integrator-1"
+
+
+def test_update_merge_queue_item_persists_status_and_metadata(tmp_path: Path) -> None:
+    store = FleetCoordinationStore(tmp_path)
+    queued = store.enqueue_merge(session_id="session-a", branch="codex/session-a", priority=50)
+
+    updated = store.update_merge_queue_item(
+        item_id=queued["item"]["id"],
+        status="integrating",
+        metadata={"receipt_id": "rcpt-1", "note": "approved"},
+    )
+
+    assert updated["status"] == "integrating"
+    assert updated["metadata"]["receipt_id"] == "rcpt-1"
+    listed = store.list_merge_queue()
+    assert listed[0]["status"] == "integrating"

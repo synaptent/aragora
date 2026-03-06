@@ -371,6 +371,7 @@ class TestRunOrchestration:
         # 3 agent tasks completed, 1 human gate awaiting
         assert orch["tasks_completed"] == 3
         assert orch["tasks_total"] == 4
+        assert orch["integration_decision"]["decision"] == "needs_human_approval"
 
     @pytest.mark.asyncio
     async def test_orchestration_empty_tasks(self, pipeline, event_collector):
@@ -459,6 +460,10 @@ class TestRunOrchestration:
 
         results = sr.output["orchestration"]["results"]
         assert len(results) == 4  # 3 agent_task + 1 human_gate
+        for result in results:
+            assert "work_lease" in result
+            assert "completion_receipt" in result
+            assert result["completion_receipt"]["task_id"] == result["task_id"]
 
 
 # =============================================================================

@@ -325,6 +325,23 @@ def _cmd_status(args: argparse.Namespace) -> None:
     except (ImportError, OSError, ValueError, TypeError, KeyError):
         recent_events = []
 
+    # Get lease/integration/salvage state
+    try:
+        from aragora.nomic.dev_coordination import DevCoordinationStore
+
+        coordination_summary = DevCoordinationStore(repo_root=repo_root).status_summary()
+    except (ImportError, OSError, ValueError, TypeError, KeyError, RuntimeError):
+        coordination_summary = {
+            "active_leases": [],
+            "pending_integrations": [],
+            "open_salvage_candidates": [],
+            "counts": {
+                "active_leases": 0,
+                "pending_integrations": 0,
+                "open_salvage_candidates": 0,
+            },
+        }
+
     if json_output:
         print(
             json.dumps(
@@ -335,6 +352,7 @@ def _cmd_status(args: argparse.Namespace) -> None:
                         for s in sessions
                     ],
                     "recent_events": len(recent_events),
+                    "coordination": coordination_summary,
                 },
                 indent=2,
             )
@@ -370,6 +388,16 @@ def _cmd_status(args: argparse.Namespace) -> None:
         print("  " + "-" * 50)
         for e in recent_events[-5:]:
             print(f"  [{e.event_type}] {e.track}: {e.data.get('message', '')}")
+
+    counts = coordination_summary.get("counts", {})
+    print("\n  Coordination State:")
+    print("  " + "-" * 50)
+    print(
+        "  "
+        f"Active leases: {counts.get('active_leases', 0)} | "
+        f"Pending integrations: {counts.get('pending_integrations', 0)} | "
+        f"Open salvage candidates: {counts.get('open_salvage_candidates', 0)}"
+    )
 
     print()
 

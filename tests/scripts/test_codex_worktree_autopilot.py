@@ -302,6 +302,71 @@ def test_cmd_cleanup_reports_failed_branch_deletions(
     assert saved_state["sessions"] == []
 
 
+def test_cmd_cleanup_skips_worktree_with_active_lease(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import codex_worktree_autopilot as mod
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    leased_path = tmp_path / "leased-wt"
+    leased_path.mkdir()
+    state = {
+        "sessions": [
+            {
+                "session_id": "lease1",
+                "agent": "codex",
+                "branch": "codex/lease1",
+                "path": str(leased_path),
+                "created_at": "2026-02-01T00:00:00+00:00",
+            }
+        ]
+    }
+    saved_state: dict[str, object] = {}
+
+    monkeypatch.setattr(mod, "_repo_root_from", lambda _path: repo_root)
+    monkeypatch.setattr(
+        mod,
+        "_get_worktree_entries",
+        lambda _repo: [mod.WorktreeEntry(path=leased_path, branch="codex/lease1")],
+    )
+    monkeypatch.setattr(mod, "_load_state", lambda _state_file: state)
+    monkeypatch.setattr(mod, "_has_active_session", lambda _path: False)
+    monkeypatch.setattr(mod, "_has_active_lease", lambda _repo_root, _path: True)
+    monkeypatch.setattr(
+        mod,
+        "_run_git",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["git", "worktree", "prune"],
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        mod, "_save_state", lambda _state_file, payload: saved_state.update(payload)
+    )
+
+    args = argparse.Namespace(
+        repo=".",
+        managed_dir=".worktrees/codex-auto",
+        base="main",
+        ttl_hours=0,
+        force_unmerged=False,
+        delete_branches=True,
+        json=True,
+    )
+    rc = mod.cmd_cleanup(args)
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["removed"] == 0
+    assert payload["kept"] == 1
+    assert payload["skipped_active_lease"] == 1
+    assert payload["skipped_active_session"] == 0
+    assert saved_state["sessions"] == state["sessions"]
+
+
 def test_has_active_session_detects_codex_lock_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
