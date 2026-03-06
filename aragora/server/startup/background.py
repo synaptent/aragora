@@ -485,6 +485,98 @@ def _store_daemon_singleton(daemon: Any) -> None:
         pass
 
 
+async def init_inbox_debate_router() -> bool:
+    """Start the InboxDebateRouter and subscribe to connector message events.
+
+    The router evaluates incoming messages from integration channels against
+    configurable trigger rules and auto-spawns debates for matches.
+
+    Environment:
+        ARAGORA_INBOX_DEBATE_ENABLED: "true" to enable (default: "false")
+
+    Returns:
+        True if the router was started, False otherwise.
+    """
+    import os
+
+    if os.environ.get("PYTEST_CURRENT_TEST") and not os.environ.get(
+        "ARAGORA_TEST_ENABLE_BACKGROUND_TASKS"
+    ):
+        return False
+
+    enabled = os.environ.get("ARAGORA_INBOX_DEBATE_ENABLED", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+    if not enabled:
+        logger.debug("Inbox debate router disabled (set ARAGORA_INBOX_DEBATE_ENABLED=true)")
+        return False
+
+    try:
+        from aragora.inbox.debate_router import get_inbox_debate_router
+
+        router = get_inbox_debate_router()
+        await router.start()
+
+        # Subscribe to connector message events through the event dispatcher.
+        # Connectors emit "connector_webhook_received" events; we also listen
+        # for the generic "inbox_message_received" event type.
+        _subscribe_router_events(router)
+
+        logger.info("InboxDebateRouter started and subscribed to message events")
+        return True
+
+    except ImportError as e:
+        logger.debug("Inbox debate router not available: %s", e)
+        return False
+    except (RuntimeError, OSError, ValueError) as e:
+        logger.warning("Failed to start inbox debate router: %s", e)
+        return False
+
+
+def _subscribe_router_events(router: Any) -> None:
+    """Subscribe the router to relevant event sources.
+
+    Wires the router's ``on_message_received`` callback to:
+    1. The global SyncEventEmitter (if available) for stream events
+    2. The debate EventBus (if available) for debate-related events
+    """
+    # Subscribe via the global stream emitter
+    try:
+        from aragora.server.stream.emitter import get_emitter
+
+        emitter = get_emitter()
+        if emitter is not None and hasattr(emitter, "subscribe"):
+
+            def _on_stream_event(event: Any) -> None:
+                """Forward connector events to inbox router."""
+                event_type = getattr(event, "type", None)
+                if event_type is None:
+                    return
+                type_value = event_type.value if hasattr(event_type, "value") else str(event_type)
+                # Forward connector webhook events and inbox message events
+                if type_value in (
+                    "connector_webhook_received",
+                    "inbox_message_received",
+                ):
+                    import asyncio
+
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(router.on_message_received(event))
+                    except RuntimeError:
+                        pass  # No running loop; skip
+
+            emitter.subscribe(_on_stream_event)
+            logger.debug("InboxDebateRouter subscribed to stream emitter")
+
+    except ImportError:
+        logger.debug("Stream emitter not available for router subscription")
+    except (RuntimeError, AttributeError) as e:
+        logger.debug("Stream emitter subscription failed: %s", e)
+
+
 async def init_debate_settlement_scheduler() -> bool:
     """Start the debate-side settlement review scheduler.
 

@@ -36,6 +36,7 @@ from aragora.server.startup.observability import (
 from aragora.server.startup.background import (
     init_background_tasks,
     init_circuit_breaker_persistence,
+    init_inbox_debate_router,
     init_pulse_scheduler,
     init_settlement_review_scheduler,
     init_self_improvement_daemon,
@@ -416,6 +417,7 @@ def _build_initial_status(
         "budget_notifications": False,
         "spectate_bridge": False,
         "mfa_drift_monitor": False,
+        "inbox_debate_router": False,
     }
 
 
@@ -544,6 +546,7 @@ async def _init_all_components(
     dr_scheduler = await start_dr_drilling()
     status["dr_drill_scheduler"] = dr_scheduler is not None
     status["notification_worker"] = await init_notification_worker()
+    status["inbox_debate_router"] = await init_inbox_debate_router()
     status["testfixer_worker"] = await init_testfixer_worker()
     status["testfixer_task_worker"] = await init_testfixer_task_worker()
     status["settlement_review_scheduler"] = await init_settlement_review_scheduler()
@@ -741,6 +744,7 @@ __all__ = [
     "init_rbac_distributed_cache",
     "init_approval_gate_recovery",
     "init_notification_worker",
+    "init_inbox_debate_router",
     "init_graphql_routes",
     "init_deployment_validation",
     "init_witness_patrol",

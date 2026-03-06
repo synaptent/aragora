@@ -844,6 +844,55 @@ class InboxDebateRouter:
             logger.debug("Webhook event dispatch failed: %s", e)
 
     # -----------------------------------------------------------------
+    # Event subscription
+    # -----------------------------------------------------------------
+
+    async def on_message_received(self, event: Any) -> None:
+        """Handle an incoming connector message event.
+
+        Extracts message data from the event payload and evaluates it.
+        If the message triggers a rule, a debate is spawned.
+
+        This method is designed to be subscribed to the event dispatcher
+        so that connector message events are automatically routed here.
+
+        Args:
+            event: Event object or dict with ``data`` containing message fields
+                   (``message_id``, ``channel``, ``sender``, ``content``,
+                   ``subject``, ``priority``, ``metadata``).
+        """
+        if not self._running:
+            return
+
+        # Normalize: accept both StreamEvent objects and plain dicts
+        if hasattr(event, "data"):
+            data = event.data if isinstance(event.data, dict) else {}
+        elif isinstance(event, dict):
+            data = event.get("data", event)
+        else:
+            logger.debug("on_message_received: unrecognized event type %s", type(event))
+            return
+
+        # Build message dict from event data
+        message: dict[str, Any] = {
+            "message_id": data.get("message_id", ""),
+            "channel": data.get("channel", data.get("platform", "")),
+            "sender": data.get("sender", data.get("user_id", "")),
+            "content": data.get("content", data.get("text", data.get("body", ""))),
+            "subject": data.get("subject", ""),
+            "priority": data.get("priority", "normal"),
+            "metadata": data.get("metadata", {}),
+        }
+
+        if not message["content"] and not message["subject"]:
+            return
+
+        try:
+            await self.spawn_debate(message)
+        except (RuntimeError, OSError, ValueError, TypeError) as exc:
+            logger.warning("on_message_received: spawn_debate failed: %s", exc)
+
+    # -----------------------------------------------------------------
     # Rule management
     # -----------------------------------------------------------------
 

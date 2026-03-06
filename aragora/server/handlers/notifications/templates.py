@@ -32,6 +32,16 @@ logger = logging.getLogger(__name__)
 
 _templates_limiter = RateLimiter(requests_per_minute=60)
 
+
+def _get_template_store():
+    """Lazy-load the template store to avoid circular imports."""
+    from aragora.storage.notification_template_store import (
+        get_notification_template_store,
+    )
+
+    return get_notification_template_store()
+
+
 # ---------------------------------------------------------------------------
 # Default templates
 # ---------------------------------------------------------------------------
@@ -201,9 +211,6 @@ _DEFAULT_TEMPLATES: list[dict[str, Any]] = [
 # template_id → default dict, for fast lookup
 _DEFAULT_TEMPLATES_BY_ID: dict[str, dict[str, Any]] = {t["id"]: t for t in _DEFAULT_TEMPLATES}
 
-# Per-user overrides: { user_id → { template_id → { "subject": …, "body": … } } }
-_user_template_overrides: dict[str, dict[str, dict[str, str]]] = {}
-
 _VARIABLE_RE = re.compile(r"\{\{(\w+)\}\}")
 
 
@@ -221,7 +228,9 @@ def _template_with_overrides(template_id: str, user_id: str) -> dict[str, Any] |
     if base is None:
         return None
     result = copy.deepcopy(base)
-    user_overrides = _user_template_overrides.get(user_id, {})
+    store = _get_template_store()
+    with store._lock:
+        user_overrides = store._read_user_file(user_id)
     tpl_overrides = user_overrides.get(template_id, {})
     if "subject" in tpl_overrides:
         result["subject"] = tpl_overrides["subject"]
@@ -386,15 +395,17 @@ class NotificationTemplatesHandler(BaseHandler):
             return error_response("'body' must be a string", 400)
 
         user_id = self._get_user_id(handler)
-        if user_id not in _user_template_overrides:
-            _user_template_overrides[user_id] = {}
-        if template_id not in _user_template_overrides[user_id]:
-            _user_template_overrides[user_id][template_id] = {}
+        store = _get_template_store()
+        with store._lock:
+            user_overrides = store._read_user_file(user_id)
+            if template_id not in user_overrides:
+                user_overrides[template_id] = {}
 
-        if subject is not None:
-            _user_template_overrides[user_id][template_id]["subject"] = subject
-        if body_text is not None:
-            _user_template_overrides[user_id][template_id]["body"] = body_text
+            if subject is not None:
+                user_overrides[template_id]["subject"] = subject
+            if body_text is not None:
+                user_overrides[template_id]["body"] = body_text
+            store._write_user_file(user_id, user_overrides)
 
         tpl = _template_with_overrides(template_id, user_id)
         return json_response({"template": tpl, "updated": True})
@@ -404,10 +415,18 @@ class NotificationTemplatesHandler(BaseHandler):
             return error_response(f"Template '{template_id}' not found", 404)
 
         user_id = self._get_user_id(handler)
-        user_overrides = _user_template_overrides.get(user_id, {})
-        user_overrides.pop(template_id, None)
-        if not user_overrides and user_id in _user_template_overrides:
-            del _user_template_overrides[user_id]
+        store = _get_template_store()
+        with store._lock:
+            user_overrides = store._read_user_file(user_id)
+            user_overrides.pop(template_id, None)
+            if user_overrides:
+                store._write_user_file(user_id, user_overrides)
+            else:
+                path = store._user_path(user_id)
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    logger.debug("Failed to remove empty template override file for %s", user_id)
 
         tpl = _template_with_overrides(template_id, user_id)
         return json_response({"template": tpl, "reset": True})

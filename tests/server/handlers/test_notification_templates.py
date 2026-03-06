@@ -31,13 +31,22 @@ def handler(mock_server_context):
 
 
 @pytest.fixture(autouse=True)
-def _clear_overrides():
-    """Reset in-memory overrides before each test."""
+def _clear_overrides(tmp_path, monkeypatch):
+    """Reset the persistent override store before each test."""
     from aragora.server.handlers.notifications import templates as tpl_mod
+    from aragora.storage.notification_template_store import (
+        get_notification_template_store,
+        reset_notification_template_store,
+    )
 
-    tpl_mod._user_template_overrides.clear()
+    reset_notification_template_store()
+    monkeypatch.setattr(
+        tpl_mod,
+        "_get_template_store",
+        lambda: get_notification_template_store(data_dir=str(tmp_path)),
+    )
     yield
-    tpl_mod._user_template_overrides.clear()
+    reset_notification_template_store()
 
 
 def _make_http(method: str = "GET", body: dict | None = None) -> MagicMock:
