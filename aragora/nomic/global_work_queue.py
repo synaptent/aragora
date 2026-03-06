@@ -435,6 +435,53 @@ class GlobalWorkQueue:
 
             return work
 
+    async def upsert(
+        self,
+        work: WorkItem,
+        *,
+        priority: int | None = None,
+        allow_reopen: bool = False,
+        preserve_claimed: bool = True,
+    ) -> WorkItem:
+        """Create or refresh a work item without stomping active claims."""
+        async with self._lock:
+            existing = self._items.get(work.id)
+
+            if (
+                existing
+                and preserve_claimed
+                and existing.status
+                in (
+                    WorkStatus.CLAIMED,
+                    WorkStatus.IN_PROGRESS,
+                )
+            ):
+                return existing
+
+            if priority is not None:
+                work.base_priority = priority
+
+            if existing:
+                work.created_at = existing.created_at
+                work.assigned_to = existing.assigned_to
+
+            if existing and existing.status in (WorkStatus.COMPLETED, WorkStatus.FAILED):
+                if not allow_reopen:
+                    return existing
+                self._completed.discard(work.id)
+
+            work.updated_at = datetime.now(timezone.utc)
+            work.status = WorkStatus.PENDING
+            if work.is_ready(self._completed):
+                work.status = WorkStatus.READY
+
+            self._items[work.id] = work
+            self._add_to_heap(work)
+            await self._save_queue()
+
+            logger.debug("Upserted work %s with priority %s", work.id, work.computed_priority)
+            return work
+
     async def pop(
         self,
         work_type: WorkType | None = None,

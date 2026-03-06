@@ -600,6 +600,43 @@ class TestGlobalWorkQueuePush:
         assert len(queue._items) == 5
         assert len(queue._heap) == 5
 
+    @pytest.mark.asyncio
+    async def test_upsert_reopens_completed_when_allowed(self, queue: GlobalWorkQueue):
+        await queue.initialize()
+        item = _make_work_item(id="salvage:1", work_type=WorkType.MAINTENANCE)
+        await queue.push(item)
+        await queue.complete(item.id, result={"reason": "done"})
+
+        refreshed = _make_work_item(
+            id="salvage:1",
+            work_type=WorkType.MAINTENANCE,
+            base_priority=80,
+        )
+        stored = await queue.upsert(refreshed, allow_reopen=True)
+
+        assert stored.status == WorkStatus.READY
+        reopened = await queue.get(item.id)
+        assert reopened is not None
+        assert reopened.status == WorkStatus.READY
+
+    @pytest.mark.asyncio
+    async def test_upsert_preserves_claimed_items(self, queue: GlobalWorkQueue):
+        await queue.initialize()
+        item = _make_work_item(id="salvage:2", work_type=WorkType.MAINTENANCE)
+        await queue.push(item)
+        claimed = await queue.pop()
+
+        refreshed = _make_work_item(
+            id="salvage:2",
+            work_type=WorkType.MAINTENANCE,
+            title="Refreshed title",
+        )
+        stored = await queue.upsert(refreshed)
+
+        assert claimed is not None
+        assert stored.status == WorkStatus.CLAIMED
+        assert stored.title == item.title
+
 
 # ===========================================================================
 # GlobalWorkQueue - Pop

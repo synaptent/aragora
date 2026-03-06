@@ -16,6 +16,7 @@ The design intentionally builds on existing Aragora orchestration patterns:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import json
 import sqlite3
@@ -28,7 +29,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from aragora.nomic.event_bus import EventBus
-from aragora.nomic.global_work_queue import WorkItem, WorkStatus, WorkType
+from aragora.nomic.global_work_queue import GlobalWorkQueue, WorkItem, WorkStatus, WorkType
 from aragora.worktree.fleet import FleetCoordinationStore
 
 UTC = timezone.utc
@@ -1220,6 +1221,64 @@ class DevCoordinationStore:
         )
         return items
 
+    async def sync_pending_work_queue(
+        self,
+        queue: GlobalWorkQueue | None = None,
+        *,
+        complete_missing: bool = True,
+    ) -> dict[str, int]:
+        """Project pending integration/salvage items into the global work queue."""
+        work_queue = queue or GlobalWorkQueue(storage_dir=self.repo_root / ".work_queue")
+        await work_queue.initialize()
+
+        desired_items = {item.id: item for item in self.pending_work_items()}
+        existing_items = {item.id: item for item in await work_queue.list_items(limit=10_000)}
+        managed_prefixes = ("integration:", "salvage:")
+
+        counts = {
+            "created": 0,
+            "updated": 0,
+            "reopened": 0,
+            "completed": 0,
+            "skipped_active": 0,
+            "open_items": len(desired_items),
+        }
+
+        for item_id, item in desired_items.items():
+            existing = existing_items.get(item_id)
+            if existing and existing.status in (WorkStatus.CLAIMED, WorkStatus.IN_PROGRESS):
+                counts["skipped_active"] += 1
+                continue
+
+            await work_queue.upsert(item, allow_reopen=True, preserve_claimed=True)
+            if existing is None:
+                counts["created"] += 1
+            elif existing.status in (WorkStatus.COMPLETED, WorkStatus.FAILED):
+                counts["reopened"] += 1
+            else:
+                counts["updated"] += 1
+
+        if complete_missing:
+            for item_id, existing in existing_items.items():
+                if not item_id.startswith(managed_prefixes) or item_id in desired_items:
+                    continue
+                if existing.status in (
+                    WorkStatus.CLAIMED,
+                    WorkStatus.IN_PROGRESS,
+                    WorkStatus.COMPLETED,
+                    WorkStatus.FAILED,
+                ):
+                    continue
+                completed = await work_queue.complete(
+                    item_id,
+                    result={"source": "dev_coordination", "reason": "no_longer_pending"},
+                )
+                if completed is not None:
+                    counts["completed"] += 1
+
+        await work_queue.reprioritize()
+        return counts
+
     def scan_salvage_sources(
         self,
         *,
@@ -1584,6 +1643,12 @@ def _build_parser() -> argparse.ArgumentParser:
     salvage.add_argument("--max-stashes", type=int, default=25)
     salvage.add_argument("--json", action="store_true")
 
+    sync_queue = sub.add_parser(
+        "sync-queue",
+        help="Project pending integration/salvage items into the global work queue",
+    )
+    sync_queue.add_argument("--json", action="store_true")
+
     reap = sub.add_parser("reap", help="Expire stale leases and release mirrored fleet claims")
     reap.add_argument("--json", action="store_true")
 
@@ -1699,6 +1764,17 @@ def main() -> int:
             print(json.dumps(payload, indent=2))  # noqa: T201
         else:
             print(payload["count"])  # noqa: T201
+        return 0
+
+    if args.command == "sync-queue":
+        payload = {
+            "ok": True,
+            "counts": asyncio.run(store.sync_pending_work_queue()),
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))  # noqa: T201
+        else:
+            print(json.dumps(payload["counts"], indent=2))  # noqa: T201
         return 0
 
     if args.command == "reap":

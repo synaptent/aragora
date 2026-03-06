@@ -14,6 +14,7 @@ from aragora.nomic.dev_coordination import (
     LeaseConflictError,
     SalvageStatus,
 )
+from aragora.nomic.global_work_queue import GlobalWorkQueue, WorkStatus
 
 
 @pytest.fixture()
@@ -357,6 +358,110 @@ def test_scan_salvage_sources_finds_worktree_and_stash(
     work_items = store.pending_work_items()
     assert any(item.metadata.get("source_kind") == "worktree" for item in work_items)
     assert any(item.metadata.get("source_kind") == "stash" for item in work_items)
+
+
+@pytest.mark.asyncio
+async def test_sync_pending_work_queue_projects_items(
+    repo: Path, store: DevCoordinationStore
+) -> None:
+    lease = store.claim_lease(
+        task_id="clb-sync",
+        title="Queue sync lane",
+        owner_agent="codex",
+        owner_session_id="sess-sync",
+        branch="codex/sync",
+        worktree_path="/tmp/wt-sync",
+        claimed_paths=["aragora/server/auth_checks.py"],
+    )
+    receipt = store.record_completion(
+        lease_id=lease.lease_id,
+        owner_agent="codex",
+        owner_session_id="sess-sync",
+        branch="codex/sync",
+        worktree_path="/tmp/wt-sync",
+        commit_shas=["abc12345"],
+    )
+    salvage = store.upsert_salvage_candidate(
+        source_kind="stash",
+        source_ref="stash@{0}",
+        stash_ref="stash@{0}",
+        changed_paths=["aragora/server/auth_checks.py"],
+        summary="useful stash",
+        likely_value=0.75,
+    )
+    queue = GlobalWorkQueue(storage_dir=repo / ".work_queue")
+
+    counts = await store.sync_pending_work_queue(queue)
+
+    assert counts["created"] == 2
+    items = await queue.list_items(limit=10)
+    item_ids = {item.id for item in items}
+    assert f"salvage:{salvage.candidate_id}" in item_ids
+    assert any(item_id.startswith("integration:") for item_id in item_ids)
+    integration_item = next(item for item in items if item.id.startswith("integration:"))
+    assert integration_item.metadata["receipt_id"] == receipt.receipt_id
+
+
+@pytest.mark.asyncio
+async def test_sync_pending_work_queue_completes_resolved_items(
+    repo: Path, store: DevCoordinationStore
+) -> None:
+    candidate = store.upsert_salvage_candidate(
+        source_kind="stash",
+        source_ref="stash@{0}",
+        stash_ref="stash@{0}",
+        changed_paths=["aragora/server/auth_checks.py"],
+        summary="useful stash",
+        likely_value=0.75,
+    )
+    queue = GlobalWorkQueue(storage_dir=repo / ".work_queue")
+
+    await store.sync_pending_work_queue(queue)
+    store.upsert_salvage_candidate(
+        source_kind="stash",
+        source_ref="stash@{0}",
+        stash_ref="stash@{0}",
+        changed_paths=["aragora/server/auth_checks.py"],
+        summary="useful stash",
+        likely_value=0.75,
+        status=SalvageStatus.DISCARDED,
+    )
+
+    counts = await store.sync_pending_work_queue(queue)
+    work = await queue.get(f"salvage:{candidate.candidate_id}")
+
+    assert counts["completed"] == 1
+    assert work is not None
+    assert work.status == WorkStatus.COMPLETED
+    assert work.metadata["result"]["reason"] == "no_longer_pending"
+
+
+@pytest.mark.asyncio
+async def test_sync_pending_work_queue_reopens_terminal_items(
+    repo: Path, store: DevCoordinationStore
+) -> None:
+    candidate = store.upsert_salvage_candidate(
+        source_kind="stash",
+        source_ref="stash@{0}",
+        stash_ref="stash@{0}",
+        changed_paths=["aragora/server/auth_checks.py"],
+        summary="useful stash",
+        likely_value=0.75,
+    )
+    queue = GlobalWorkQueue(storage_dir=repo / ".work_queue")
+
+    await store.sync_pending_work_queue(queue)
+    await queue.complete(
+        f"salvage:{candidate.candidate_id}",
+        result={"source": "test", "reason": "closed early"},
+    )
+
+    counts = await store.sync_pending_work_queue(queue)
+    work = await queue.get(f"salvage:{candidate.candidate_id}")
+
+    assert counts["reopened"] == 1
+    assert work is not None
+    assert work.status in (WorkStatus.PENDING, WorkStatus.READY)
 
 
 def test_release_lease_releases_fleet_claims(store: DevCoordinationStore) -> None:
