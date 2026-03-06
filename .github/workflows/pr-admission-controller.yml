@@ -41,44 +41,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Python
-        id: setup-python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
-        continue-on-error: true
-
-      - name: Fallback to system Python
-        if: steps.setup-python.outcome == 'failure'
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "::warning::actions/setup-python failed — falling back to system Python"
-          PY_BIN=""
-          for cmd in python3.11 python3 python; do
-            if command -v "$cmd" &>/dev/null; then
-              PY_BIN="$(command -v "$cmd")"
-              echo "Found $cmd: $("$cmd" --version)"
-              break
-            fi
-          done
-          if [[ -z "${PY_BIN}" ]]; then
-            echo "::error::No Python interpreter found"
-            exit 1
-          fi
-
-          sudo ln -sf "${PY_BIN}" /usr/local/bin/python
-          sudo ln -sf "${PY_BIN}" /usr/local/bin/python3
-          /usr/local/bin/python -m ensurepip --upgrade || true
-
-          cat <<'EOF' | sudo tee /usr/local/bin/pip >/dev/null
-          #!/usr/bin/env bash
-          exec /usr/local/bin/python -m pip "$@"
-          EOF
-          sudo chmod +x /usr/local/bin/pip
-          sudo ln -sf /usr/local/bin/pip /usr/local/bin/pip3
-
-          python --version
-          pip --version || /usr/local/bin/python -m pip --version
 
       - name: Resolve PR number
         id: resolve
@@ -105,7 +70,7 @@ jobs:
           fi
 
           set +e
-          python3 scripts/pr_admission_controller.py \
+          python scripts/pr_admission_controller.py \
             --repo "${GITHUB_REPOSITORY}" \
             --pr-number "${{ steps.resolve.outputs.pr_number }}" \
             --max-ready-per-stream "${MAX_READY}" \

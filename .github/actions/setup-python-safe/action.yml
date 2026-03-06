@@ -20,6 +20,15 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Prepare writable tool cache
+      shell: bash
+      run: |
+        set -euo pipefail
+        TOOL_CACHE="${RUNNER_TEMP:-/tmp}/hostedtoolcache"
+        mkdir -p "${TOOL_CACHE}"
+        echo "AGENT_TOOLSDIRECTORY=${TOOL_CACHE}" >> "${GITHUB_ENV}"
+        echo "RUNNER_TOOL_CACHE=${TOOL_CACHE}" >> "${GITHUB_ENV}"
+
     - name: Set up Python ${{ inputs.python-version }}
       id: setup-python
       uses: actions/setup-python@v5
