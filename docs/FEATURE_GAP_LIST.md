@@ -29,7 +29,7 @@
 |---------|--------|-------|
 | Agent-first beta via PR watch daemon | **Daemon built (PR #663)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. Systemd service + env template included. Deploy on spare machines for autonomous agent "beta users". |
 | GitHub Actions pre-merge gate | **Workflow created** | `aragora-review-gate.yml` manual-only (workflow_dispatch). Re-enable pull_request trigger when ready. |
-| Public demo at aragora.ai/demo | **Live and verified** | `/demo` (pipeline), `/demo/instant` (debate replay), share URLs, landing page all return 200. API playground healthy. |
+| Public demo at aragora.ai/demo | **Live (PR #705)** | `(standalone)/demo` — public adversarial debate demo at `/demo`, no auth, sign-up CTA. Pipeline demo moved to `/demo/pipeline`. Landing page CTA `href="/demo"` wired. |
 | EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14/15 dedicated bundles + CLI export + compliance scoring + demo script + customer playbook. **Deadline: Aug 2, 2026.** |
 | First 2 enterprise pilot engagements | Not started | Closed partnerships — target fintech + healthcare |
 | Developer onboarding <10 min | **Working (2-5 min)** | `aragora quickstart --demo` (zero-config), `aragora review --demo`, Docker quickstart all verified working. Needs cold-start user testing. |
@@ -43,10 +43,10 @@
 | Semantic convergence (full embedding) | Partial | Sentence-transformers + TF-IDF + Jaccard wired; difflib still used in some paths. Target: 100% embedding-based. |
 | ERC-8004 on-chain deployment | Contracts written | Solidity contracts exist; not deployed to any mainnet. Needs chain endpoint config + gas management. |
 | OpenClaw end-to-end demo | Partial | Debate → decision works; execution → receipt integration incomplete. |
-| Decision-Integrity UI Workbench | Not started | No frontend for knowledge search, agent leaderboard, pipeline canvas. Backend APIs complete. |
+| Decision-Integrity UI Workbench | **~90% done** | `(app)/decision-integrity/page.tsx` (910 lines), `(app)/leaderboard/page.tsx`, `(app)/knowledge/page.tsx` (1042 lines) all ship. Remaining: Canvas GUI 8-stage visual DAG (moved to P4). |
 | SOC 2 Type II audit engagement | Not started | 98% controls implemented; formal audit vendor not engaged. |
 | Smart provider routing | Not started | Cost/quality-optimized routing across Claude/GPT/Mistral/DeepSeek. |
-| Enterprise Communication Hub (#293) | **~55%** | Delivery log + retry queue + circuit breakers + event telemetry wired. Remaining: notification templates, user preferences, inbox→debate trigger, Active Triage dashboard. |
+| Enterprise Communication Hub (#293) | **~85%** | Delivery log, retry queue, circuit breakers, event telemetry, user preference UI (NotificationsTab), Active Triage dashboard (CommandCenter), TriageRulesPanel all shipped. Remaining: notification template editor (user-facing Jinja2 template CRUD), inbox→debate trigger wiring end-to-end validation. |
 
 ---
 
@@ -123,3 +123,5 @@ These items were planned and are now shipped:
 | CI setup-python-safe composite action (51 workflows) | Mar 2026 |
 | CI push-to-main noise reduction (35→6 workflows) | Mar 2026 |
 | Self-hosted runner fleet (12 runners: 3 Hetzner + 6 EC2 + 3 Mac) | Mar 2026 |
+| Decision-Integrity Workbench frontend | Mar 2026 |
+| G1 Signed Context Manifests (HMAC-SHA256 + CLI) | Mar 2026 |
