@@ -326,7 +326,6 @@ def test_directional_verbs_score_partial_credit():
         "standardize",
         "consolidate",
         "simplify",
-        "normalize",
     ]
     for verb in directional_verbs:
         score = _line_concreteness(

@@ -24,8 +24,8 @@ _ACTION_VERB_RE = re.compile(
     r"|initialize|instantiate|enable|monitor|track|define|connect|aggregate|extract|detect|optimize|fix|resolve"
     r"|extend|introduce|scaffold|verify|ensure|check"
     r"|modularize|encapsulate|decouple|deprecate|emit|inject|register|rewrite|split|merge|expose|publish"
-    r"|measure|benchmark|profile|audit|scan|lint|format|generate|transform|convert|serialize"
-    r"|throttle|debounce|cache|index|query|fetch|load|store|persist|flush|evict|invalidate"
+    r"|measure|benchmark|profile|audit|scan|lint|format|generate|transform|convert|serialize|deserialize|normalize"
+    r"|throttle|debounce|cache|index|query|fetch|load|store|persist|flush|evict|invalidate|schedule|restrict"
     r"|assert|mock|stub|parametrize|isolate|snapshot|replay|record|capture|intercept"
     r"|rename|move|relocate|deduplicate|dedupe|prune|trim|compress|decompress|encrypt|decrypt)\b"
 )
@@ -34,7 +34,7 @@ _ACTION_VERB_RE = re.compile(
 # Gets partial credit (0.15) instead of full action verb credit (0.35).
 _DIRECTIONAL_VERB_RE = re.compile(
     r"(?i)\b(improve|enhance|strengthen|upgrade|increase|decrease|reduce|augment"
-    r"|standardize|consolidate|unify|simplify|normalize|expand|scale|align|refine"
+    r"|standardize|consolidate|unify|simplify|expand|scale|align|refine"
     r"|streamline|accelerate|harden|tighten|broaden|deepen|elevate|bolster"
     r"|wrap|patch|document)\b"
 )
