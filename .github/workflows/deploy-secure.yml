@@ -260,13 +260,28 @@ jobs:
 
       - name: Fix AWS CLI path
         run: |
-          # AWS CLI v2 standalone binary lives at /usr/local/bin/aws on AL2023.
-          # actions/setup-python can shadow /usr/bin/aws (Python wrapper) by
-          # changing sys.executable, breaking the awscli import. Prefer v2.
-          if /usr/local/bin/aws --version 2>/dev/null; then
-            echo "/usr/local/bin" >> "$GITHUB_PATH"
+          # Find aws CLI across Linux (AL2023) and macOS (self-hosted) runners.
+          # Try paths in priority order: system PATH first, then common locations.
+          AWS_BIN=""
+          for candidate in \
+              "$(command -v aws 2>/dev/null)" \
+              /usr/local/bin/aws \
+              /opt/homebrew/bin/aws \
+              "$HOME/local/aws-cli/aws" \
+              /usr/bin/aws; do
+            if [ -n "$candidate" ] && "$candidate" --version 2>/dev/null; then
+              AWS_BIN="$candidate"
+              break
+            fi
+          done
+          if [ -n "$AWS_BIN" ]; then
+            AWS_DIR="$(dirname "$AWS_BIN")"
+            echo "Found aws at $AWS_BIN"
+            echo "$AWS_DIR" >> "$GITHUB_PATH"
           else
+            echo "aws not found in common paths; installing via pip"
             pip3 install awscli --quiet
+            echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
           fi
 
       - name: Get staging instance IDs
@@ -688,13 +703,28 @@ jobs:
 
       - name: Fix AWS CLI path
         run: |
-          # AWS CLI v2 standalone binary lives at /usr/local/bin/aws on AL2023.
-          # actions/setup-python can shadow /usr/bin/aws (Python wrapper) by
-          # changing sys.executable, breaking the awscli import. Prefer v2.
-          if /usr/local/bin/aws --version 2>/dev/null; then
-            echo "/usr/local/bin" >> "$GITHUB_PATH"
+          # Find aws CLI across Linux (AL2023) and macOS (self-hosted) runners.
+          # Try paths in priority order: system PATH first, then common locations.
+          AWS_BIN=""
+          for candidate in \
+              "$(command -v aws 2>/dev/null)" \
+              /usr/local/bin/aws \
+              /opt/homebrew/bin/aws \
+              "$HOME/local/aws-cli/aws" \
+              /usr/bin/aws; do
+            if [ -n "$candidate" ] && "$candidate" --version 2>/dev/null; then
+              AWS_BIN="$candidate"
+              break
+            fi
+          done
+          if [ -n "$AWS_BIN" ]; then
+            AWS_DIR="$(dirname "$AWS_BIN")"
+            echo "Found aws at $AWS_BIN"
+            echo "$AWS_DIR" >> "$GITHUB_PATH"
           else
+            echo "aws not found in common paths; installing via pip"
             pip3 install awscli --quiet
+            echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
           fi
 
       - name: Get production instance IDs
@@ -1121,13 +1151,28 @@ jobs:
 
       - name: Fix AWS CLI path
         run: |
-          # AWS CLI v2 standalone binary lives at /usr/local/bin/aws on AL2023.
-          # actions/setup-python can shadow /usr/bin/aws (Python wrapper) by
-          # changing sys.executable, breaking the awscli import. Prefer v2.
-          if /usr/local/bin/aws --version 2>/dev/null; then
-            echo "/usr/local/bin" >> "$GITHUB_PATH"
+          # Find aws CLI across Linux (AL2023) and macOS (self-hosted) runners.
+          # Try paths in priority order: system PATH first, then common locations.
+          AWS_BIN=""
+          for candidate in \
+              "$(command -v aws 2>/dev/null)" \
+              /usr/local/bin/aws \
+              /opt/homebrew/bin/aws \
+              "$HOME/local/aws-cli/aws" \
+              /usr/bin/aws; do
+            if [ -n "$candidate" ] && "$candidate" --version 2>/dev/null; then
+              AWS_BIN="$candidate"
+              break
+            fi
+          done
+          if [ -n "$AWS_BIN" ]; then
+            AWS_DIR="$(dirname "$AWS_BIN")"
+            echo "Found aws at $AWS_BIN"
+            echo "$AWS_DIR" >> "$GITHUB_PATH"
           else
+            echo "aws not found in common paths; installing via pip"
             pip3 install awscli --quiet
+            echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
           fi
 
       - name: Get DR instance IDs
