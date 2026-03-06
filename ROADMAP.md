@@ -29,7 +29,7 @@ Aragora is **98% GA-ready**. The platform has shipped all core infrastructure an
 **Remaining blockers before GA:**
 - External penetration test (vendor-dependent; kickoff target Mar 3, 2026)
 - Agent-first beta: OpenClaw instances running reviews via REST API on real PRs
-- Public demo at aragora.ai/demo
+- ~~Public demo at aragora.ai/demo~~ (shipped in PR #705)
 
 **EU AI Act enforcement date: August 2, 2026** — the compliance CLI and audit trail infrastructure
 position Aragora as a natural adoption path for enterprises facing this deadline.
@@ -197,7 +197,7 @@ for capturing this cohort is now.
 ### Q2 2026 Priorities
 - [ ] Agent-first beta: OpenClaw instances running `aragora review` on real PRs via REST API
 - [x] GitHub Actions pre-merge gate (`aragora-review-gate.yml` shipped)
-- [ ] Public demo at aragora.ai/demo
+- [x] Public demo at aragora.ai/demo (PR #705)
 - [ ] EU AI Act compliance package — full audit bundle documentation and customer playbook
 - [ ] SOC 2 Type II audit engagement kickoff (controls are ready; external auditor engagement pending)
 
