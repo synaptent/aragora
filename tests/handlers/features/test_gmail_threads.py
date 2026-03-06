@@ -655,6 +655,23 @@ class TestArchiveThread:
 
         assert _status(result) == 500
 
+    @pytest.mark.asyncio
+    async def test_archive_receipt_request_rejected(
+        self, handler, gmail_state, mock_http_with_body
+    ):
+        http = mock_http_with_body({"create_receipt": True})
+        with patch(
+            "aragora.server.handlers.features.gmail_threads.get_user_state",
+            new_callable=AsyncMock,
+            return_value=gmail_state,
+        ):
+            result = await handler.handle_post("/api/v1/gmail/threads/t1/archive", {}, http)
+
+        assert _status(result) == 400
+        assert (
+            "does not support thread-level gmail archive receipts" in _body(result)["error"].lower()
+        )
+
 
 # ---------------------------------------------------------------------------
 # POST /api/v1/gmail/threads/:id/trash - Trash thread
@@ -838,6 +855,21 @@ class TestModifyThreadLabels:
                 result = await handler.handle_post("/api/v1/gmail/threads/t1/labels", {}, http)
 
         assert _status(result) == 500
+
+    @pytest.mark.asyncio
+    async def test_receipt_request_rejected(self, handler, gmail_state, mock_http_with_body):
+        http = mock_http_with_body({"add": ["STARRED"], "receipt_id": "receipt-123"})
+        with patch(
+            "aragora.server.handlers.features.gmail_threads.get_user_state",
+            new_callable=AsyncMock,
+            return_value=gmail_state,
+        ):
+            result = await handler.handle_post("/api/v1/gmail/threads/t1/labels", {}, http)
+
+        assert _status(result) == 400
+        assert (
+            "does not support thread-level gmail label receipts" in _body(result)["error"].lower()
+        )
 
 
 # ---------------------------------------------------------------------------

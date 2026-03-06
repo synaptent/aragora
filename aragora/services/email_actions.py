@@ -64,6 +64,8 @@ class EmailActionConnector(Protocol):
 
     async def star_message(self, message_id: str) -> dict[str, Any]: ...
 
+    async def add_label(self, message_id: str, label_id: str) -> dict[str, Any]: ...
+
     async def move_to_folder(self, message_id: str, folder: str) -> dict[str, Any]: ...
 
     async def batch_archive(self, message_ids: list[str]) -> dict[str, Any]: ...
@@ -90,6 +92,7 @@ class ActionType(str, Enum):
     MARK_READ = "mark_read"
     MARK_UNREAD = "mark_unread"
     STAR = "star"
+    IGNORE = "ignore"
     UNSTAR = "unstar"
     MARK_IMPORTANT = "mark_important"
     MARK_NOT_IMPORTANT = "mark_not_important"
@@ -257,11 +260,18 @@ class EmailActionsService:
         if key not in self._connectors:
             if provider_str == "gmail":
                 from aragora.connectors.enterprise.communication.gmail import GmailConnector
+                from aragora.storage.gmail_token_store import get_gmail_token_store
 
                 # GmailConnector uses mixins to implement abstract methods from EnterpriseConnector.
                 # The type checker cannot verify this statically, so we cast to the Protocol.
                 connector = cast(EmailActionConnector, GmailConnector())
-                # In production: await connector.authenticate(tokens_from_db)
+                token_store = get_gmail_token_store()
+                state = await token_store.get(user_id)
+                if state is None or not state.refresh_token:
+                    raise RuntimeError(f"Gmail connector not authenticated for user: {user_id}")
+                setattr(connector, "_access_token", state.access_token or None)
+                setattr(connector, "_refresh_token", state.refresh_token or None)
+                setattr(connector, "_token_expiry", state.token_expiry)
                 self._connectors[key] = connector
             elif provider_str == "outlook":
                 from aragora.connectors.enterprise.communication.outlook import OutlookConnector
@@ -782,6 +792,99 @@ class EmailActionsService:
                 message_ids=[message_id],
                 error="Star failed",
             )
+
+    async def add_label(
+        self,
+        provider: str | EmailProvider,
+        user_id: str,
+        message_id: str,
+        label_id: str,
+    ) -> ActionResult:
+        """Add a provider label to a message.
+
+        This is currently implemented for Gmail connectors that expose
+        ``add_label(message_id, label_id)`` on the connector instance.
+        """
+        start_time = datetime.now(timezone.utc)
+
+        try:
+            connector = await self._get_connector(provider, user_id)
+            add_label = getattr(connector, "add_label", None)
+            if not callable(add_label):
+                raise ValueError(f"Provider does not support label actions: {provider}")
+            result = await add_label(message_id, label_id)
+
+            duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+
+            await self._log_action(
+                user_id=user_id,
+                action_type=ActionType.ADD_LABEL,
+                provider=provider,
+                message_ids=[message_id],
+                status=ActionStatus.SUCCESS,
+                details={"label_id": label_id},
+                duration_ms=duration_ms,
+            )
+
+            return ActionResult(
+                success=True,
+                action_type=ActionType.ADD_LABEL,
+                message_ids=[message_id],
+                details=result,
+            )
+
+        except (ValueError, OSError, ConnectionError, RuntimeError) as e:
+            duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            logger.warning("Email add_label failed: %s", e)
+
+            await self._log_action(
+                user_id=user_id,
+                action_type=ActionType.ADD_LABEL,
+                provider=provider,
+                message_ids=[message_id],
+                status=ActionStatus.FAILED,
+                details={"label_id": label_id},
+                error_message=str(e),
+                duration_ms=duration_ms,
+            )
+
+            return ActionResult(
+                success=False,
+                action_type=ActionType.ADD_LABEL,
+                message_ids=[message_id],
+                error="Add label failed",
+            )
+
+    async def ignore(
+        self,
+        provider: str | EmailProvider,
+        user_id: str,
+        message_id: str,
+    ) -> ActionResult:
+        """Record a deliberate no-op action for inbox triage.
+
+        This is used by the inbox trust wedge when the debated decision is to
+        leave the message unchanged after approval.
+        """
+        start_time = datetime.now(timezone.utc)
+        duration_ms = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+
+        await self._log_action(
+            user_id=user_id,
+            action_type=ActionType.IGNORE,
+            provider=provider,
+            message_ids=[message_id],
+            status=ActionStatus.SUCCESS,
+            details={"no_op": True},
+            duration_ms=duration_ms,
+        )
+
+        return ActionResult(
+            success=True,
+            action_type=ActionType.IGNORE,
+            message_ids=[message_id],
+            details={"ignored": True},
+        )
 
     async def move_to_folder(
         self,

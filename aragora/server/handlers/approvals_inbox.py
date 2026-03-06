@@ -45,7 +45,7 @@ class UnifiedApprovalsHandler(BaseHandler):
             sources = [s.strip() for s in str(sources_raw).split(",") if s.strip()]
 
         try:
-            from aragora.approvals.inbox import collect_pending_approvals
+            from aragora.approvals.inbox import DEFAULT_APPROVAL_SOURCES, collect_pending_approvals
 
             approvals = collect_pending_approvals(limit=limit, sources=sources)
         except (
@@ -65,7 +65,7 @@ class UnifiedApprovalsHandler(BaseHandler):
                 "approvals": approvals,
                 "count": len(approvals),
                 "requested_by": getattr(user, "user_id", None),
-                "sources": sources or ["workflow", "decision_plan", "computer_use", "gateway"],
+                "sources": sources or DEFAULT_APPROVAL_SOURCES,
             }
         )
 

@@ -115,7 +115,7 @@ class UnifiedInboxHandler(BaseHandler):
 
     def can_handle(self, path: str, method: str = "GET") -> bool:
         """Check if this handler can process the given path."""
-        return path.startswith("/api/v1/inbox")
+        return path.startswith("/api/v1/inbox") and not path.startswith("/api/v1/inbox/wedge/")
 
     @require_permission("inbox:read")
     async def handle_request(self, request: Any, path: str, method: str) -> HandlerResult:
@@ -486,6 +486,7 @@ class UnifiedInboxHandler(BaseHandler):
     ) -> HandlerResult:
         """Spawn a multi-agent debate to triage a message."""
         try:
+            body = await self._get_json_body(request)
             record = await self._store.get_message(tenant_id, message_id)
             if not record:
                 return error_response("Message not found", 404)
@@ -493,12 +494,167 @@ class UnifiedInboxHandler(BaseHandler):
             message = record_to_message(record)
 
             from aragora.server.debate_factory import DebateFactory
-            from .auto_debate import auto_spawn_debate_for_message
+            from aragora.inbox import (
+                ActionIntent,
+                ReceiptState,
+                TriageDecision,
+                get_inbox_trust_wedge_service,
+            )
+            from .auto_debate import (
+                auto_spawn_debate_for_message,
+                build_inbox_trust_wedge_plan,
+                build_inbox_trust_wedge_question,
+                parse_inbox_trust_wedge_output,
+            )
+
+            try:
+                wedge_plan = build_inbox_trust_wedge_plan(body)
+            except ValueError as exc:
+                return error_response(str(exc), 400)
+
+            provider_message_id = message.external_id or message.id
+            response_payload: dict[str, Any] = {
+                "source_message_id": message.id,
+                "provider_message_id": provider_message_id,
+            }
+
+            question_override = None
+            metadata = None
+            if wedge_plan is not None:
+                if message.provider is not EmailProvider.GMAIL:
+                    return error_response(
+                        "Inbox trust wedge currently supports Gmail unified inbox messages only",
+                        400,
+                    )
+                if not message.account_id:
+                    return error_response("Message missing connected account ID", 400)
+                if not provider_message_id:
+                    return error_response("Message missing provider message ID", 400)
+
+                metadata = {
+                    "mode": "inbox_trust_wedge",
+                    "provider_message_id": provider_message_id,
+                    "allowed_actions": [action.value for action in wedge_plan.allowed_actions],
+                }
+                if wedge_plan.label_id:
+                    metadata["label_id"] = wedge_plan.label_id
+                question_override = build_inbox_trust_wedge_question(message, wedge_plan)
 
             factory = DebateFactory()
-            result = await auto_spawn_debate_for_message(message, factory, tenant_id)
+            result = await auto_spawn_debate_for_message(
+                message,
+                factory,
+                tenant_id,
+                question_override=question_override,
+                metadata=metadata,
+            )
+            response_payload["data"] = result
 
-            return success_response({"data": result})
+            if wedge_plan is None:
+                return success_response(response_payload)
+
+            parsed = parse_inbox_trust_wedge_output(
+                str(result.get("final_answer") or ""),
+                plan=wedge_plan,
+                fallback_confidence=float(result.get("confidence") or 0.0),
+            )
+            if parsed is None:
+                response_payload.update(
+                    {
+                        "receipt_created": False,
+                        "receipt_error": ("Debate did not produce a safe inbox trust wedge action"),
+                        "receipt": None,
+                        "intent": None,
+                        "decision": None,
+                        "executed": False,
+                    }
+                )
+                return success_response(response_payload)
+
+            intent = ActionIntent.create(
+                provider=message.provider.value,
+                user_id=message.account_id,
+                message_id=provider_message_id,
+                action=parsed["action"],
+                content_hash=ActionIntent.compute_content_hash(
+                    provider_message_id,
+                    message.subject,
+                    message.snippet,
+                    message.body_preview,
+                    message.sender_email,
+                ),
+                synthesized_rationale=parsed["rationale"],
+                confidence=parsed["confidence"],
+                provider_route=wedge_plan.provider_route,
+                debate_id=str(result.get("debate_id") or "") or None,
+                label_id=parsed.get("label_id"),
+            )
+            decision = TriageDecision.create(
+                final_action=parsed["action"],
+                confidence=parsed["confidence"],
+                dissent_summary=parsed["dissent_summary"],
+                label_id=parsed.get("label_id"),
+                cost_usd=(
+                    float(result["cost_usd"]) if result.get("cost_usd") is not None else None
+                ),
+                latency_seconds=(
+                    float(result["latency_seconds"])
+                    if result.get("latency_seconds") is not None
+                    else None
+                ),
+            )
+            wedge_service = get_inbox_trust_wedge_service()
+            envelope = wedge_service.create_receipt(
+                intent,
+                decision,
+                expires_in_hours=wedge_plan.expires_in_hours,
+                auto_approve=wedge_plan.auto_approve,
+            )
+            response_payload.update(
+                {
+                    "receipt_created": True,
+                    "receipt": envelope.receipt.to_dict(),
+                    "intent": envelope.intent.to_dict(),
+                    "decision": envelope.decision.to_dict(),
+                    "provider_route": envelope.provider_route,
+                    "debate_id": envelope.debate_id,
+                    "executed": False,
+                }
+            )
+
+            if wedge_plan.auto_execute and envelope.receipt.state is ReceiptState.APPROVED:
+                try:
+                    execution_result = await wedge_service.execute_receipt(
+                        envelope.receipt.receipt_id
+                    )
+                    updated = wedge_service.store.get_receipt(envelope.receipt.receipt_id)
+                    if updated is not None:
+                        envelope = updated
+                    response_payload.update(
+                        {
+                            "receipt": envelope.receipt.to_dict(),
+                            "intent": envelope.intent.to_dict(),
+                            "decision": envelope.decision.to_dict(),
+                            "provider_route": envelope.provider_route,
+                            "debate_id": envelope.debate_id,
+                            "executed": True,
+                            "execution_result": execution_result.to_dict(),
+                        }
+                    )
+                except ValueError as exc:
+                    response_payload["execution_error"] = str(exc)
+                except (
+                    AttributeError,
+                    RuntimeError,
+                    OSError,
+                    ConnectionError,
+                    TypeError,
+                    KeyError,
+                ):
+                    logger.exception("Error auto-executing inbox trust wedge receipt")
+                    response_payload["execution_error"] = "Receipt execution failed"
+
+            return success_response(response_payload)
 
         except (ValueError, TypeError, RuntimeError, OSError, KeyError) as e:
             logger.exception("Error spawning auto-debate: %s", e)

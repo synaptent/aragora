@@ -23,6 +23,7 @@ from .action_items import (
 
 from .email_actions import (
     get_email_actions_handlers,
+    get_inbox_trust_wedge_service_instance,
     handle_send_email,
     handle_reply_email,
     handle_archive_message,
@@ -42,6 +43,7 @@ from .email_actions import (
     handle_get_action_logs,
     handle_export_action_logs,
 )
+from .trust_wedge_handler import InboxTrustWedgeHandler
 
 from .team_inbox import (
     get_team_inbox_handlers,
@@ -90,6 +92,8 @@ __all__ = [
     "handle_get_action_logs",
     "handle_export_action_logs",
     "get_email_actions_handlers",
+    "get_inbox_trust_wedge_service_instance",
+    "InboxTrustWedgeHandler",
     # Team inbox handlers
     "handle_get_team_members",
     "handle_add_team_member",

@@ -224,6 +224,7 @@ class TestListApprovals:
         assert "decision_plan" in data["sources"]
         assert "computer_use" in data["sources"]
         assert "gateway" in data["sources"]
+        assert "inbox_wedge" in data["sources"]
 
     def test_status_non_pending_returns_400(self, handler, mock_http_get):
         """Should reject non-pending status filter."""

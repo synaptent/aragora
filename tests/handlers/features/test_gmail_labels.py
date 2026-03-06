@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.server.handlers.base import json_response
 from aragora.server.handlers.features.gmail_labels import GmailLabelsHandler
 from aragora.storage.gmail_token_store import GmailUserState
 
@@ -771,6 +772,32 @@ class TestModifyMessageLabels:
         assert _status(result) == 200
         assert _body(result)["labels"] == []
 
+    @pytest.mark.asyncio
+    async def test_modify_labels_receipt_routes_to_inbox_wedge(self, handler, gmail_state):
+        with patch(
+            "aragora.server.handlers.inbox.email_actions.handle_add_label",
+            new_callable=AsyncMock,
+            return_value=json_response({"delegated": True}),
+        ) as mock_handle:
+            result = await handler._modify_message_labels(
+                gmail_state,
+                "msg1",
+                {"add": ["TRIAGE"], "create_receipt": True, "user_id": "default"},
+            )
+        assert _status(result) == 200
+        assert _body(result)["delegated"] is True
+        mock_handle.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_modify_labels_receipt_rejects_remove_labels(self, handler, gmail_state):
+        result = await handler._modify_message_labels(
+            gmail_state,
+            "msg1",
+            {"add": ["TRIAGE"], "remove": ["INBOX"], "create_receipt": True},
+        )
+        assert _status(result) == 400
+        assert "does not support remove labels" in _body(result)["error"].lower()
+
 
 # ---------------------------------------------------------------------------
 # Private method: _mark_read
@@ -863,6 +890,28 @@ class TestStarMessage:
             result = await handler._star_message(gmail_state, "msg1", {"starred": True})
         assert _status(result) == 500
 
+    @pytest.mark.asyncio
+    async def test_star_receipt_routes_to_inbox_wedge(self, handler, gmail_state):
+        with patch(
+            "aragora.server.handlers.inbox.email_actions.handle_star_message",
+            new_callable=AsyncMock,
+            return_value=json_response({"delegated": True}),
+        ) as mock_handle:
+            result = await handler._star_message(
+                gmail_state, "msg1", {"starred": True, "receipt_id": "receipt-123"}
+            )
+        assert _status(result) == 200
+        assert _body(result)["delegated"] is True
+        mock_handle.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_unstar_receipt_is_rejected(self, handler, gmail_state):
+        result = await handler._star_message(
+            gmail_state, "msg1", {"starred": False, "receipt_id": "receipt-123"}
+        )
+        assert _status(result) == 400
+        assert "does not support gmail unstar receipts" in _body(result)["error"].lower()
+
 
 # ---------------------------------------------------------------------------
 # Private method: _archive_message
@@ -897,6 +946,22 @@ class TestArchiveMessage:
             result = await handler._archive_message(gmail_state, "msg1")
         assert _status(result) == 500
         assert "archive" in _body(result)["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_archive_receipt_routes_to_inbox_wedge(self, handler, gmail_state):
+        with patch(
+            "aragora.server.handlers.inbox.email_actions.handle_archive_message",
+            new_callable=AsyncMock,
+            return_value=json_response({"delegated": True}),
+        ) as mock_handle:
+            result = await handler._archive_message(
+                gmail_state,
+                "msg1",
+                {"create_receipt": True, "confidence": 0.9},
+            )
+        assert _status(result) == 200
+        assert _body(result)["delegated"] is True
+        mock_handle.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

@@ -47,6 +47,8 @@ logger = logging.getLogger(__name__)
 # Thread-safe service instance
 _email_actions_service: Any | None = None
 _email_actions_service_lock = threading.Lock()
+_inbox_trust_wedge_service: Any | None = None
+_inbox_trust_wedge_service_lock = threading.Lock()
 
 
 def get_email_actions_service_instance():
@@ -61,6 +63,249 @@ def get_email_actions_service_instance():
 
             _email_actions_service = get_email_actions_service()
         return _email_actions_service
+
+
+def get_inbox_trust_wedge_service_instance():
+    """Get or create inbox trust wedge service (thread-safe)."""
+    global _inbox_trust_wedge_service
+    if _inbox_trust_wedge_service is not None:
+        return _inbox_trust_wedge_service
+
+    with _inbox_trust_wedge_service_lock:
+        if _inbox_trust_wedge_service is None:
+            from aragora.inbox import get_inbox_trust_wedge_service
+
+            _inbox_trust_wedge_service = get_inbox_trust_wedge_service()
+        return _inbox_trust_wedge_service
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _content_hash_from_payload(data: dict[str, Any], message_id: str) -> str:
+    from aragora.inbox import ActionIntent
+
+    raw_parts: list[str] = [message_id]
+    for key in ("content_hash", "subject", "snippet", "body", "preview", "message_text"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            raw_parts.append(value)
+
+    message = data.get("message")
+    if isinstance(message, dict):
+        for key in ("subject", "snippet", "body", "preview", "text"):
+            value = message.get(key)
+            if isinstance(value, str) and value:
+                raw_parts.append(value)
+
+    return ActionIntent.compute_content_hash(*raw_parts)
+
+
+def _single_label_from_payload(data: dict[str, Any]) -> str | None:
+    label_id = data.get("label_id")
+    if isinstance(label_id, str) and label_id.strip():
+        return label_id.strip()
+
+    labels = data.get("labels")
+    if isinstance(labels, list):
+        string_labels = [str(label).strip() for label in labels if str(label).strip()]
+        if len(string_labels) == 1:
+            return string_labels[0]
+    return None
+
+
+def _receipt_response_payload(
+    envelope: Any,
+    *,
+    action_name: str,
+    message_id: str,
+    executed: bool = False,
+    execution_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "message_id": message_id,
+        "action": action_name,
+        "success": True,
+        "receipt": envelope.receipt.to_dict(),
+        "intent": envelope.intent.to_dict(),
+        "decision": envelope.decision.to_dict(),
+        "provider_route": envelope.provider_route,
+        "debate_id": envelope.debate_id,
+        "requires_approval": envelope.receipt.state.value == "created",
+        "executed": executed,
+        "execution_result": execution_result,
+    }
+
+
+async def _maybe_handle_wedge_action(
+    data: dict[str, Any],
+    *,
+    message_id: str,
+    user_id: str,
+    action: str,
+    provider: str,
+    action_name: str,
+    requires_label: bool = False,
+) -> HandlerResult | None:
+    from aragora.inbox import (
+        ActionIntent,
+        InboxWedgeAction,
+        ReceiptState,
+        TriageDecision,
+    )
+
+    receipt_id = str(data.get("receipt_id", "") or "").strip()
+    create_receipt = bool(data.get("create_receipt"))
+    if not receipt_id and not create_receipt:
+        return None
+
+    wedge_service = get_inbox_trust_wedge_service_instance()
+    expected_action = InboxWedgeAction.parse(action)
+    label_id = _single_label_from_payload(data) if requires_label else None
+
+    if requires_label and create_receipt and not label_id:
+        return error_response(
+            "Inbox trust wedge LABEL actions require exactly one label_id or labels entry",
+            status=400,
+        )
+
+    if receipt_id:
+        validation = wedge_service.validate_receipt(receipt_id, require_state=ReceiptState.APPROVED)
+        if not validation.valid or validation.envelope is None:
+            return error_response(validation.error or "receipt validation failed", status=400)
+
+        envelope = validation.envelope
+        if envelope.intent.provider != provider:
+            return error_response("receipt provider mismatch", status=400)
+        if envelope.intent.user_id != user_id:
+            return error_response("receipt user mismatch", status=400)
+        if envelope.intent.message_id != message_id:
+            return error_response("receipt message mismatch", status=400)
+        if envelope.intent.action is not expected_action:
+            return error_response("receipt action mismatch", status=400)
+        if (
+            requires_label
+            and label_id is not None
+            and (envelope.intent.label_id or envelope.decision.label_id) != label_id
+        ):
+            return error_response("receipt label mismatch", status=400)
+
+        try:
+            result = await wedge_service.execute_receipt(receipt_id)
+        except ValueError as exc:
+            return error_response(str(exc), status=400)
+        except (
+            AttributeError,
+            RuntimeError,
+            OSError,
+            ConnectionError,
+            TypeError,
+            KeyError,
+        ):
+            logger.exception("Failed to execute inbox trust wedge receipt")
+            return error_response("Receipt execution failed", status=500)
+
+        updated = wedge_service.store.get_receipt(receipt_id)
+        if updated is None:
+            return error_response("Receipt disappeared after execution", status=500)
+        return success_response(
+            _receipt_response_payload(
+                updated,
+                action_name=action_name,
+                message_id=message_id,
+                executed=True,
+                execution_result=result.to_dict(),
+            )
+        )
+
+    intent = ActionIntent.create(
+        provider=provider,
+        user_id=user_id,
+        message_id=message_id,
+        action=expected_action,
+        content_hash=_content_hash_from_payload(data, message_id),
+        synthesized_rationale=str(
+            data.get("synthesized_rationale") or data.get("rationale") or data.get("reason") or ""
+        ),
+        confidence=_safe_float(data.get("confidence", data.get("debate_confidence")), 0.0),
+        provider_route=str(data.get("provider_route", "direct")),
+        debate_id=str(data["debate_id"]) if data.get("debate_id") else None,
+        label_id=label_id,
+    )
+    decision = TriageDecision.create(
+        final_action=expected_action,
+        confidence=_safe_float(data.get("confidence", data.get("debate_confidence")), 0.0),
+        dissent_summary=str(data.get("dissent_summary", "")),
+        label_id=label_id,
+        blocked_by_policy=bool(data.get("blocked_by_policy", False)),
+        cost_usd=(_safe_float(data.get("cost_usd")) if data.get("cost_usd") is not None else None),
+        latency_seconds=(
+            _safe_float(data.get("latency_seconds"))
+            if data.get("latency_seconds") is not None
+            else None
+        ),
+    )
+
+    try:
+        envelope = wedge_service.create_receipt(
+            intent,
+            decision,
+            expires_in_hours=_safe_float(data.get("expires_in_hours"), 24.0),
+            auto_approve=bool(data.get("auto_approve", False)),
+        )
+    except ValueError as exc:
+        return error_response(str(exc), status=400)
+    except (
+        AttributeError,
+        RuntimeError,
+        OSError,
+        ConnectionError,
+        TypeError,
+        KeyError,
+    ):
+        logger.exception("Failed to create inbox trust wedge receipt")
+        return error_response("Receipt creation failed", status=500)
+
+    auto_execute = bool(data.get("auto_execute", False))
+    if auto_execute and envelope.receipt.state is ReceiptState.APPROVED:
+        try:
+            result = await wedge_service.execute_receipt(envelope.receipt.receipt_id)
+        except ValueError as exc:
+            return error_response(str(exc), status=400)
+        except (
+            AttributeError,
+            RuntimeError,
+            OSError,
+            ConnectionError,
+            TypeError,
+            KeyError,
+        ):
+            logger.exception("Failed to auto-execute inbox trust wedge receipt")
+            return error_response("Receipt execution failed", status=500)
+        updated = wedge_service.store.get_receipt(envelope.receipt.receipt_id)
+        if updated is None:
+            return error_response("Receipt disappeared after execution", status=500)
+        return success_response(
+            _receipt_response_payload(
+                updated,
+                action_name=action_name,
+                message_id=message_id,
+                executed=True,
+                execution_result=result.to_dict(),
+            )
+        )
+
+    return success_response(
+        _receipt_response_payload(
+            envelope,
+            action_name=action_name,
+            message_id=message_id,
+        )
+    )
 
 
 # =============================================================================
@@ -223,6 +468,16 @@ async def handle_archive_message(
             return error_response("message_id is required", status=400)
 
         provider = data.get("provider", "gmail")
+        wedge_result = await _maybe_handle_wedge_action(
+            data,
+            message_id=message_id,
+            user_id=user_id,
+            action="archive",
+            provider=provider,
+            action_name="archive",
+        )
+        if wedge_result is not None:
+            return wedge_result
 
         result = await service.archive(
             provider=provider,
@@ -580,6 +835,16 @@ async def handle_star_message(
             return error_response("message_id is required", status=400)
 
         provider = data.get("provider", "gmail")
+        wedge_result = await _maybe_handle_wedge_action(
+            data,
+            message_id=message_id,
+            user_id=user_id,
+            action="star",
+            provider=provider,
+            action_name="star",
+        )
+        if wedge_result is not None:
+            return wedge_result
 
         result = await service.star(
             provider=provider,
@@ -750,11 +1015,22 @@ async def handle_add_label(
         if not message_id:
             return error_response("message_id is required", status=400)
 
+        provider = data.get("provider", "gmail")
+        wedge_result = await _maybe_handle_wedge_action(
+            data,
+            message_id=message_id,
+            user_id=user_id,
+            action="label",
+            provider=provider,
+            action_name="add_labels",
+            requires_label=True,
+        )
+        if wedge_result is not None:
+            return wedge_result
+
         labels = data.get("labels", [])
         if not labels:
             return error_response("'labels' is required", status=400)
-
-        provider = data.get("provider", "gmail")
 
         # Get connector and call modify_message
         connector = await service._get_connector(provider, user_id)
@@ -1245,6 +1521,8 @@ def get_email_actions_handlers() -> dict[str, Any]:
 
 
 __all__ = [
+    "get_email_actions_service_instance",
+    "get_inbox_trust_wedge_service_instance",
     # Send / Reply
     "handle_send_email",
     "handle_reply_email",

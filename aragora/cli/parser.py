@@ -133,6 +133,7 @@ Examples:
     _add_consensus_parser(subparsers)
     _add_ideacloud_parser(subparsers)
     _add_signing_parser(subparsers)
+    _add_inbox_wedge_parser(subparsers)
     _add_triage_parser(subparsers)
 
     return parser
@@ -627,6 +628,13 @@ Examples:
         help="Save decision receipt to file (.json, .html, or .md)",
     )
     demo_parser.set_defaults(func=_lazy("aragora.cli.commands.delegated", "cmd_demo"))
+
+
+def _add_inbox_wedge_parser(subparsers) -> None:
+    """Add the inbox trust wedge parser."""
+    from aragora.cli.commands.inbox_wedge import add_inbox_wedge_parser
+
+    add_inbox_wedge_parser(subparsers)
 
 
 def _add_templates_parser(subparsers) -> None:
@@ -2022,6 +2030,13 @@ def _add_signing_parser(subparsers) -> None:
     from aragora.cli.commands.signing import add_signing_parser
 
     add_signing_parser(subparsers)
+
+
+def _add_inbox_wedge_parser(subparsers) -> None:
+    """Add the 'inbox-wedge' subcommand for trust wedge receipts and review."""
+    from aragora.cli.commands.inbox_wedge import add_inbox_wedge_parser
+
+    add_inbox_wedge_parser(subparsers)
 
 
 def _add_triage_parser(subparsers) -> None:

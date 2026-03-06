@@ -9,6 +9,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_APPROVAL_SOURCES = [
+    "workflow",
+    "decision_plan",
+    "computer_use",
+    "gateway",
+    "inbox_wedge",
+]
+
 
 def _iso_timestamp(value: datetime | float | int | None) -> str | None:
     if value is None:
@@ -57,9 +65,7 @@ def collect_pending_approvals(
 ) -> list[dict[str, Any]]:
     """Collect pending approvals across subsystems."""
     items: list[UnifiedApprovalItem] = []
-    sources = [
-        s.lower() for s in (sources or ["workflow", "decision_plan", "computer_use", "gateway"])
-    ]
+    sources = [s.lower() for s in (sources or DEFAULT_APPROVAL_SOURCES)]
 
     if "workflow" in sources:
         try:
@@ -223,6 +229,55 @@ def collect_pending_approvals(
         except (ImportError, AttributeError, OSError):
             logger.debug("Failed to fetch gateway approvals for inbox", exc_info=True)
 
+    if "inbox_wedge" in sources:
+        try:
+            from aragora.inbox import ReceiptState, get_inbox_trust_wedge_store
+
+            store = get_inbox_trust_wedge_store()
+            for envelope in store.list_receipts(state=ReceiptState.CREATED, limit=limit):
+                created_at = envelope.receipt.created_at
+                label_id = envelope.intent.label_id or envelope.decision.label_id
+                action_label = envelope.intent.action.value.upper()
+                items.append(
+                    UnifiedApprovalItem(
+                        id=envelope.receipt.receipt_id,
+                        kind="inbox_wedge",
+                        status=envelope.receipt.state.value,
+                        title=f"Inbox {action_label} Approval",
+                        description=(
+                            envelope.intent.synthesized_rationale
+                            or f"{envelope.intent.action.value} message {envelope.intent.message_id}"
+                        ),
+                        requested_at=_iso_timestamp(created_at),
+                        requested_by=envelope.intent.user_id,
+                        metadata={
+                            "provider": envelope.intent.provider,
+                            "message_id": envelope.intent.message_id,
+                            "action": envelope.intent.action.value,
+                            "label_id": label_id,
+                            "confidence": envelope.decision.confidence,
+                            "dissent_summary": envelope.decision.dissent_summary,
+                            "provider_route": envelope.provider_route,
+                            "debate_id": envelope.debate_id,
+                        },
+                        actions={
+                            "approve": {
+                                "method": "POST",
+                                "path": f"/api/v1/inbox/wedge/receipts/{envelope.receipt.receipt_id}/review",
+                                "body": {"choice": "approve", "execute": True},
+                            },
+                            "reject": {
+                                "method": "POST",
+                                "path": f"/api/v1/inbox/wedge/receipts/{envelope.receipt.receipt_id}/review",
+                                "body": {"choice": "reject"},
+                            },
+                        },
+                        _sort_ts=_to_sort_ts(created_at),
+                    )
+                )
+        except (ImportError, AttributeError, OSError):
+            logger.debug("Failed to fetch inbox trust wedge approvals for inbox", exc_info=True)
+
     items.sort(key=lambda item: item._sort_ts, reverse=True)
     return [item.to_dict() for item in items[:limit]]
 
@@ -244,4 +299,4 @@ def _run_async(coro):
     return run_async(coro)
 
 
-__all__ = ["collect_pending_approvals"]
+__all__ = ["DEFAULT_APPROVAL_SOURCES", "collect_pending_approvals"]
