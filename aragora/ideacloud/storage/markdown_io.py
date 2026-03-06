@@ -30,14 +30,21 @@ logger = logging.getLogger(__name__)
 FM_DELIMITER = "---"
 
 
-def write_node(node: IdeaNode, vault_path: str | Path) -> Path:
+def write_node(
+    node: IdeaNode,
+    vault_path: str | Path,
+    hierarchical: bool = False,
+) -> Path:
     """Write an IdeaNode to a markdown file in the vault.
 
-    File is named ``{node.id}.md`` in the vault root.
+    File is named ``{node.id}.md``. In flat mode (default), it's placed
+    in the vault root. In hierarchical mode, it's placed in a subdirectory
+    matching ``node.pipeline_status`` (e.g., ``inbox/``, ``prioritized/``).
 
     Args:
         node: The idea node to persist.
         vault_path: Root directory of the idea vault.
+        hierarchical: If True, organize into status subdirectories.
 
     Returns:
         Path to the written file.
@@ -45,7 +52,14 @@ def write_node(node: IdeaNode, vault_path: str | Path) -> Path:
     vault = Path(vault_path)
     vault.mkdir(parents=True, exist_ok=True)
 
-    file_path = vault / f"{node.id}.md"
+    if hierarchical and node.pipeline_status:
+        target_dir = vault / node.pipeline_status
+        target_dir.mkdir(exist_ok=True)
+        file_path = target_dir / f"{node.id}.md"
+        # Remove from old location if it moved between statuses
+        _cleanup_old_locations(vault, node.id, exclude=target_dir)
+    else:
+        file_path = vault / f"{node.id}.md"
     fm_dict = node.to_frontmatter_dict()
 
     # Build file content
@@ -102,14 +116,37 @@ def read_node(file_path: str | Path) -> IdeaNode:
 def list_node_files(vault_path: str | Path) -> list[Path]:
     """List all idea markdown files in the vault.
 
-    Returns files matching the ``ic_*.md`` naming convention.
+    Searches both the vault root and status subdirectories
+    (inbox/, candidate/, prioritized/, exported/) for files
+    matching the ``ic_*.md`` naming convention.
     """
     vault = Path(vault_path)
     if not vault.is_dir():
         return []
-    # Match idea files by prefix; also accept any .md for flexibility
-    files = sorted(vault.glob("ic_*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return files
+
+    # Flat files in vault root
+    files = list(vault.glob("ic_*.md"))
+
+    # Hierarchical files in status subdirectories
+    for subdir in _STATUS_DIRS:
+        sub = vault / subdir
+        if sub.is_dir():
+            files.extend(sub.glob("ic_*.md"))
+
+    # Deduplicate (in case the same file somehow exists in both)
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for f in files:
+        if f.name not in seen:
+            seen.add(f.name)
+            unique.append(f)
+
+    unique.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return unique
+
+
+# Status directories for hierarchical organization
+_STATUS_DIRS = ("inbox", "candidate", "prioritized", "exported")
 
 
 def delete_node_file(vault_path: str | Path, node_id: str) -> bool:
@@ -167,3 +204,62 @@ def _parse_frontmatter(raw: str) -> tuple[dict[str, Any], str]:
     body = "\n".join(body_lines).rstrip()
 
     return fm_dict, body
+
+
+def _cleanup_old_locations(vault: Path, node_id: str, exclude: Path) -> None:
+    """Remove a node file from all locations except the target directory.
+
+    Used during hierarchical writes when a node moves between status directories.
+    """
+    filename = f"{node_id}.md"
+
+    # Check vault root
+    root_file = vault / filename
+    if root_file.exists() and root_file.parent != exclude:
+        root_file.unlink()
+        logger.debug("Cleaned up %s from vault root", filename)
+
+    # Check status subdirectories
+    for subdir in _STATUS_DIRS:
+        sub = vault / subdir
+        old_file = sub / filename
+        if old_file.exists() and sub != exclude:
+            old_file.unlink()
+            logger.debug("Cleaned up %s from %s/", filename, subdir)
+
+
+def migrate_to_hierarchical(vault_path: str | Path) -> dict[str, int]:
+    """Migrate a flat vault to hierarchical organization.
+
+    Reads all node files from the vault root, then writes them
+    into status subdirectories based on their ``pipeline_status``.
+
+    Args:
+        vault_path: Root directory of the idea vault.
+
+    Returns:
+        Dict of status → count of files moved.
+    """
+    vault = Path(vault_path)
+    if not vault.is_dir():
+        return {}
+
+    moved: dict[str, int] = {}
+    for file_path in vault.glob("ic_*.md"):
+        if file_path.parent != vault:
+            continue  # Already in a subdirectory
+
+        try:
+            node = read_node(file_path)
+            status = node.pipeline_status or "inbox"
+            target_dir = vault / status
+            target_dir.mkdir(exist_ok=True)
+
+            target_path = target_dir / file_path.name
+            file_path.rename(target_path)
+            moved[status] = moved.get(status, 0) + 1
+            logger.debug("Migrated %s to %s/", file_path.name, status)
+        except Exception as exc:
+            logger.warning("Failed to migrate %s: %s", file_path.name, exc)
+
+    return moved

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter, defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aragora.ideacloud.graph.cluster import IdeaCluster, _generate_cluster_id
 from aragora.ideacloud.graph.edge import IdeaEdge
@@ -30,19 +30,24 @@ def auto_link(
     min_similarity: float = 0.3,
     max_suggestions: int = 5,
     inject_wiki_links: bool = True,
+    embedding_provider: Any | None = None,
 ) -> list[IdeaEdge]:
     """Find and create connections between ideas based on text similarity.
 
     If ``node_id`` is provided, only link that node to existing nodes.
     If ``None``, run auto-linking across all unlinked node pairs.
 
-    MVP: keyword/tag overlap scoring.
+    Uses keyword/tag overlap scoring by default. When ``embedding_provider``
+    is supplied, blends embedding-based cosine similarity for higher-quality
+    semantic matching.
 
     Args:
         graph: The idea graph.
         node_id: Specific node to link, or None for all.
         min_similarity: Minimum similarity threshold for creating an edge.
         max_suggestions: Max new edges per node.
+        inject_wiki_links: Whether to inject [[wiki-links]] into node bodies.
+        embedding_provider: Optional EmbeddingProvider for semantic similarity.
 
     Returns:
         List of newly created edges.
@@ -56,7 +61,7 @@ def auto_link(
         candidates = [n for n in graph.nodes.values() if n.id != node_id]
         new_edges.extend(
             _link_node_to_candidates(
-                graph, target_node, candidates, min_similarity, max_suggestions
+                graph, target_node, candidates, min_similarity, max_suggestions, embedding_provider
             )
         )
     else:
@@ -68,7 +73,9 @@ def auto_link(
             remaining = max_suggestions - len(existing_edges)
             candidates = [n for n in graph.nodes.values() if n.id != node.id]
             new_edges.extend(
-                _link_node_to_candidates(graph, node, candidates, min_similarity, remaining)
+                _link_node_to_candidates(
+                    graph, node, candidates, min_similarity, remaining, embedding_provider
+                )
             )
 
     # Add edges to graph and inject wiki-links into node bodies
@@ -89,8 +96,14 @@ def _link_node_to_candidates(
     candidates: list[IdeaNode],
     min_similarity: float,
     max_results: int,
+    embedding_provider: Any | None = None,
 ) -> list[IdeaEdge]:
-    """Score and link a node to its best candidate matches."""
+    """Score and link a node to its best candidate matches.
+
+    When ``embedding_provider`` is available, blends keyword similarity
+    (40%) with embedding cosine similarity (60%) for better semantic
+    matching. Otherwise uses keyword similarity only.
+    """
     scored: list[tuple[IdeaNode, float]] = []
 
     for candidate in candidates:
@@ -104,7 +117,21 @@ def _link_node_to_candidates(
         if existing:
             continue
 
-        sim = _pairwise_similarity(node, candidate)
+        keyword_sim = _pairwise_similarity(node, candidate)
+
+        # Blend with embedding similarity if available
+        if embedding_provider and getattr(embedding_provider, "available", False):
+            try:
+                text_a = f"{node.title} {node.body}"
+                text_b = f"{candidate.title} {candidate.body}"
+                embed_sim = embedding_provider.similarity(text_a, text_b)
+                # Blend: 40% keyword + 60% embedding
+                sim = 0.4 * keyword_sim + 0.6 * embed_sim
+            except Exception:
+                sim = keyword_sim
+        else:
+            sim = keyword_sim
+
         if sim >= min_similarity:
             scored.append((candidate, sim))
 

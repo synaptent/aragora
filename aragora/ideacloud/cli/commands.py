@@ -8,6 +8,11 @@ Subcommands:
     aragora ideacloud cluster  — Auto-cluster ideas
     aragora ideacloud link     — Auto-link ideas
     aragora ideacloud stats    — Show graph statistics
+    aragora ideacloud export   — Export cluster for pipeline/debate
+    aragora ideacloud promote  — Change node/cluster pipeline status
+    aragora ideacloud rss      — Ingest from RSS/Atom feeds
+    aragora ideacloud pulse    — Ingest trending topics from Pulse
+    aragora ideacloud sync-km  — Sync with KnowledgeMound
 """
 # ruff: noqa: T201
 
@@ -17,9 +22,23 @@ import argparse
 import asyncio
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _lazy(module_path: str, func_name: str):
+    """Defer command module import to invocation time."""
+
+    def wrapper(args):
+        from importlib import import_module
+
+        return getattr(import_module(module_path), func_name)(args)
+
+    wrapper.__name__ = func_name
+    wrapper.__qualname__ = func_name
+    return wrapper
 
 
 def add_ideacloud_commands(subparsers: Any) -> None:
@@ -28,8 +47,18 @@ def add_ideacloud_commands(subparsers: Any) -> None:
     ic_parser = subparsers.add_parser(
         "ideacloud",
         help="Manage the Idea Cloud knowledge graph",
+        description=(
+            "Idea Cloud: graph-structured knowledge capture.\n\n"
+            "Ingest ideas from Twitter, RSS, Pulse, or manually.\n"
+            "Auto-link, cluster, and export for the debate pipeline.\n"
+            "Obsidian-compatible markdown storage."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ic_sub = ic_parser.add_subparsers(dest="ideacloud_cmd")
+
+    # Common vault argument
+    vault_kwargs = {"default": ".aragora_ideas", "help": "Vault path"}
 
     # ---- load ----
     load_p = ic_sub.add_parser("load", help="Ingest ideas from a source")
@@ -44,7 +73,7 @@ def add_ideacloud_commands(subparsers: Any) -> None:
     load_p.add_argument("--url", help="URL (for manual)")
     load_p.add_argument("--title", help="Title (for manual)")
     load_p.add_argument("--tags", help="Comma-separated tags")
-    load_p.add_argument("--vault", default=".aragora_ideas", help="Vault path")
+    load_p.add_argument("--vault", **vault_kwargs)
 
     # ---- list ----
     list_p = ic_sub.add_parser("list", help="List ideas or clusters")
@@ -52,34 +81,90 @@ def add_ideacloud_commands(subparsers: Any) -> None:
     list_p.add_argument("--status", help="Filter by pipeline status")
     list_p.add_argument("--source", help="Filter by source type")
     list_p.add_argument("--limit", type=int, default=20, help="Max results")
-    list_p.add_argument("--vault", default=".aragora_ideas", help="Vault path")
+    list_p.add_argument("--vault", **vault_kwargs)
 
     # ---- search ----
     search_p = ic_sub.add_parser("search", help="Search ideas by text")
     search_p.add_argument("query", help="Search query")
     search_p.add_argument("--limit", type=int, default=10, help="Max results")
-    search_p.add_argument("--vault", default=".aragora_ideas", help="Vault path")
+    search_p.add_argument("--vault", **vault_kwargs)
 
     # ---- show ----
     show_p = ic_sub.add_parser("show", help="Show idea or cluster details")
     show_p.add_argument("id", help="Node ID (ic_...) or cluster ID (cl_...)")
     show_p.add_argument("--format", choices=["markdown", "json"], default="markdown")
-    show_p.add_argument("--vault", default=".aragora_ideas", help="Vault path")
+    show_p.add_argument("--vault", **vault_kwargs)
 
     # ---- cluster ----
     cluster_p = ic_sub.add_parser("cluster", help="Auto-cluster ideas")
     cluster_p.add_argument("--min-size", type=int, default=2, help="Min cluster size")
-    cluster_p.add_argument("--vault", default=".aragora_ideas", help="Vault path")
+    cluster_p.add_argument("--vault", **vault_kwargs)
 
     # ---- link ----
     link_p = ic_sub.add_parser("link", help="Auto-link related ideas")
     link_p.add_argument("--node", help="Specific node ID to link (default: all)")
     link_p.add_argument("--min-similarity", type=float, default=0.3)
-    link_p.add_argument("--vault", default=".aragora_ideas", help="Vault path")
+    link_p.add_argument("--no-wiki-links", action="store_true", help="Skip wiki-link injection")
+    link_p.add_argument("--vault", **vault_kwargs)
 
     # ---- stats ----
     stats_p = ic_sub.add_parser("stats", help="Show graph statistics")
-    stats_p.add_argument("--vault", default=".aragora_ideas", help="Vault path")
+    stats_p.add_argument("--vault", **vault_kwargs)
+
+    # ---- export ----
+    export_p = ic_sub.add_parser("export", help="Export cluster for pipeline or debate")
+    export_p.add_argument("cluster_id", help="Cluster ID to export")
+    export_p.add_argument(
+        "--format",
+        choices=["ideas", "brain-dump", "debate", "universal-nodes", "propositions"],
+        default="ideas",
+        help="Export format",
+    )
+    export_p.add_argument("--output", "-o", help="Output file (default: stdout)")
+    export_p.add_argument("--vault", **vault_kwargs)
+
+    # ---- promote ----
+    promote_p = ic_sub.add_parser("promote", help="Change pipeline status")
+    promote_p.add_argument("target_id", help="Node ID or cluster ID")
+    promote_p.add_argument(
+        "status",
+        choices=["inbox", "candidate", "prioritized", "exported"],
+        help="New pipeline status",
+    )
+    promote_p.add_argument("--vault", **vault_kwargs)
+
+    # ---- rss ----
+    rss_p = ic_sub.add_parser("rss", help="Ingest from RSS/Atom feeds")
+    rss_p.add_argument("--url", action="append", help="Feed URL (can specify multiple)")
+    rss_p.add_argument("--keywords", help="Comma-separated relevance keywords")
+    rss_p.add_argument("--min-relevance", type=float, default=0.0, help="Min relevance score")
+    rss_p.add_argument("--vault", **vault_kwargs)
+
+    # ---- pulse ----
+    pulse_p = ic_sub.add_parser("pulse", help="Ingest trending topics from Pulse")
+    pulse_p.add_argument(
+        "--platforms",
+        help="Comma-separated platforms (hackernews,reddit,arxiv,etc.)",
+        default="hackernews,reddit",
+    )
+    pulse_p.add_argument("--limit", type=int, default=5, help="Max topics per platform")
+    pulse_p.add_argument("--keywords", help="Comma-separated relevance keywords")
+    pulse_p.add_argument("--min-volume", type=int, default=50, help="Min engagement volume")
+    pulse_p.add_argument(
+        "--categories",
+        help="Comma-separated allowed categories (tech,ai,science,etc.)",
+        default="tech,ai,science,programming",
+    )
+    pulse_p.add_argument("--vault", **vault_kwargs)
+
+    # ---- sync-km ----
+    synckm_p = ic_sub.add_parser("sync-km", help="Sync with KnowledgeMound")
+    synckm_p.add_argument("--direction", choices=["forward", "reverse", "both"], default="forward")
+    synckm_p.add_argument("--force", action="store_true", help="Re-sync already-synced nodes")
+    synckm_p.add_argument("--vault", **vault_kwargs)
+
+    # Set the handler
+    ic_parser.set_defaults(func=_lazy("aragora.ideacloud.cli.commands", "handle_ideacloud"))
 
 
 def handle_ideacloud(args: argparse.Namespace) -> int:
@@ -88,7 +173,8 @@ def handle_ideacloud(args: argparse.Namespace) -> int:
     cmd = getattr(args, "ideacloud_cmd", None)
     if not cmd:
         print("Usage: aragora ideacloud <command>")
-        print("Commands: load, list, search, show, cluster, link, stats")
+        print("Commands: load, list, search, show, cluster, link, stats,")
+        print("          export, promote, rss, pulse, sync-km")
         return 1
 
     # Import here to avoid circular imports
@@ -106,6 +192,11 @@ def handle_ideacloud(args: argparse.Namespace) -> int:
         "cluster": _cmd_cluster,
         "link": _cmd_link,
         "stats": _cmd_stats,
+        "export": _cmd_export,
+        "promote": _cmd_promote,
+        "rss": _cmd_rss,
+        "pulse": _cmd_pulse,
+        "sync-km": _cmd_sync_km,
     }
 
     handler = dispatch.get(cmd)
@@ -267,4 +358,123 @@ def _cmd_stats(cloud: Any, args: argparse.Namespace) -> int:
         print("\nBy source:")
         for source, count in sorted(s["by_source"].items()):
             print(f"  {source}: {count}")
+    return 0
+
+
+def _cmd_export(cloud: Any, args: argparse.Namespace) -> int:
+    """Handle 'ideacloud export'."""
+    cid = args.cluster_id
+    fmt = args.format
+
+    if fmt == "ideas":
+        result = cloud.export_for_pipeline(cid)
+        output = "\n".join(result)
+    elif fmt == "brain-dump":
+        output = cloud.export_for_brain_dump(cid)
+    elif fmt == "debate":
+        result = cloud.export_for_debate(cid)
+        output = json.dumps(result, indent=2)
+    elif fmt == "universal-nodes":
+        result = cloud.export_universal_nodes(cid)
+        output = json.dumps(result, indent=2)
+    elif fmt == "propositions":
+        result = cloud.extract_propositions(cid)
+        output = "\n".join(f"- {p}" for p in result)
+    else:
+        print(f"Unknown format: {fmt}")
+        return 1
+
+    if args.output:
+        Path(args.output).write_text(output)
+        print(f"Exported to {args.output}")
+    else:
+        print(output)
+    return 0
+
+
+def _cmd_promote(cloud: Any, args: argparse.Namespace) -> int:
+    """Handle 'ideacloud promote'."""
+    target = args.target_id
+    status = args.status
+
+    if target.startswith("cl_"):
+        count = cloud.promote_cluster(target, status)
+        print(f"Promoted {count} nodes in cluster {target} to [{status}]")
+    else:
+        ok = cloud.promote_node(target, status)
+        if ok:
+            print(f"Promoted {target} to [{status}]")
+        else:
+            print(f"Failed to promote {target} (not found or invalid status)")
+            return 1
+    return 0
+
+
+def _cmd_rss(cloud: Any, args: argparse.Namespace) -> int:
+    """Handle 'ideacloud rss'."""
+    urls = args.url or []
+    if not urls:
+        print("At least one --url required")
+        return 1
+
+    keywords = args.keywords.split(",") if args.keywords else []
+    feeds = [{"url": u} for u in urls]
+
+    nodes = asyncio.run(
+        cloud.ingest_rss(
+            feeds=feeds,
+            relevance_keywords=keywords,
+            min_relevance=args.min_relevance,
+        )
+    )
+    print(f"Ingested {len(nodes)} ideas from {len(urls)} RSS feed(s)")
+    for n in nodes[:10]:
+        print(f"  {n.id}  {n.title[:60]}")
+    return 0
+
+
+def _cmd_pulse(cloud: Any, args: argparse.Namespace) -> int:
+    """Handle 'ideacloud pulse'."""
+    platforms = args.platforms.split(",") if args.platforms else ["hackernews", "reddit"]
+    keywords = args.keywords.split(",") if args.keywords else []
+    categories = args.categories.split(",") if args.categories else []
+
+    nodes = asyncio.run(
+        cloud.ingest_pulse(
+            platforms=platforms,
+            limit_per_platform=args.limit,
+            relevance_keywords=keywords,
+            min_volume=args.min_volume,
+            categories=categories,
+        )
+    )
+    print(f"Ingested {len(nodes)} ideas from Pulse ({', '.join(platforms)})")
+    for n in nodes[:10]:
+        print(f"  {n.id}  [{n.source_type}]  {n.title[:55]}")
+    return 0
+
+
+def _cmd_sync_km(cloud: Any, args: argparse.Namespace) -> int:
+    """Handle 'ideacloud sync-km'."""
+    from aragora.ideacloud.adapters.km_adapter import IdeaCloudAdapter
+
+    adapter = IdeaCloudAdapter(idea_cloud=cloud)
+
+    direction = args.direction
+
+    if direction in ("forward", "both"):
+        result = asyncio.run(adapter.sync_to_km())
+        print(
+            f"Forward sync: {result.get('records_synced', 0)} synced, "
+            f"{result.get('records_skipped', 0)} skipped, "
+            f"{result.get('records_failed', 0)} failed"
+        )
+
+    if direction in ("reverse", "both"):
+        result = asyncio.run(adapter.sync_from_km())
+        print(
+            f"Reverse sync: {result.get('records_updated', 0)} updated "
+            f"from {result.get('records_analyzed', 0)} analyzed"
+        )
+
     return 0

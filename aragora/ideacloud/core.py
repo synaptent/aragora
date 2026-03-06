@@ -300,6 +300,45 @@ class IdeaCloud:
         raw_nodes = await ingestor.ingest()
         return self._ingest_batch(raw_nodes)
 
+    # ---- Pulse Ingestion ----
+
+    async def ingest_pulse(
+        self,
+        platforms: list[str] | None = None,
+        limit_per_platform: int = 5,
+        relevance_keywords: list[str] | None = None,
+        min_volume: int = 50,
+        categories: list[str] | None = None,
+    ) -> list[IdeaNode]:
+        """Ingest trending topics from Pulse.
+
+        Bridges aragora's Pulse system (trending topics from HackerNews,
+        Reddit, ArXiv, etc.) into the Idea Cloud graph.
+
+        Args:
+            platforms: Platforms to query (default: hackernews, reddit).
+            limit_per_platform: Max topics per platform.
+            relevance_keywords: Keywords for relevance filtering.
+            min_volume: Minimum engagement volume.
+            categories: Allowed topic categories.
+
+        Returns:
+            List of successfully added nodes.
+        """
+        from aragora.ideacloud.ingestion.pulse_bridge import PulseBridge
+
+        bridge = PulseBridge(
+            relevance_keywords=relevance_keywords or [],
+            min_volume=min_volume,
+            categories=categories or ["tech", "ai", "science"],
+        )
+
+        raw_nodes = await bridge.fetch_and_convert(
+            platforms=platforms,
+            limit_per_platform=limit_per_platform,
+        )
+        return self._ingest_batch(raw_nodes)
+
     # ---- Pipeline Bridge ----
 
     def export_for_pipeline(self, cluster_id: str) -> list[str]:
