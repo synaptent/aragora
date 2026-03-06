@@ -66,12 +66,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install datamodel-code-generator pyyaml
+          python -m pip install datamodel-code-generator pyyaml
 
       - name: Generate OpenAPI spec (if needed)
         run: |
           if [ ! -f docs/api/openapi.json ]; then
-            pip install -e .
+            python -m pip install -e .
             python scripts/generate_openapi.py --output docs/api/openapi.json
           fi
 

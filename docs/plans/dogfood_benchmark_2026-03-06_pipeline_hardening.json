@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-03-06T03:56:28.266568+00:00",
+  "base_report": "docs/plans/dogfood_pipeline_self_improve_base_report.json",
+  "command": [
+    "python3",
+    "-m",
+    "aragora.cli.main",
+    "pipeline",
+    "self-improve",
+    "Please describe the relationship between the completed dogfood stress test, the ideas-to-execution pipeline, the self-improvement pipeline, the heterogeneous agent codebase assessment/coding-change pipeline, and the self bug-fixing pipeline. Can all of these be more tightly integrated? This is intentionally vague and poorly specified; treat it as a dogfooding prompt and produce an execution-ready integration plan.",
+    "--dry-run",
+    "--pipeline-mode",
+    "live",
+    "--plan-quality-min-score",
+    "6.0",
+    "--plan-quality-min-practicality",
+    "5.0",
+    "--max-goals",
+    "1"
+  ],
+  "strict_timeout_seconds": 180,
+  "runs": [
+    {
+      "duration_seconds": 210.02,
+      "exit_code": 124,
+      "timed_out": true,
+      "quality": {
+        "present": false,
+        "verdict": null,
+        "score": null,
+        "practicality": null,
+        "loops": null,
+        "upgraded": null
+      },
+      "pipeline_checks": {
+        "present": false,
+        "execution_path": null,
+        "live_stages_completed": null,
+        "provider_calls_detected": null,
+        "quality_gate_verdict": null,
+        "top_track": null,
+        "track_lines": [],
+        "checks": {
+          "execution_path_live": null,
+          "quality_gate_pass": null,
+          "top_track_is_infra_or_security": null,
+          "no_cross_track_clones": null
+        },
+        "required_checks_present": false,
+        "hard_checks_pass": false
+      },
+      "runtime_blockers": [
+        "debate_timeout",
+        "generic_timeout"
+      ],
+      "warning_signals": [
+        "resource_warning",
+        "tracemalloc_hint"
+      ],
+      "warning_only": false,
+      "stdout_excerpt": "",
+      "stderr_excerpt": "/Users/armand/Development/aragora/.worktrees/codex-auto/codex-20260306-032004-0dc2a00b/aragora/nomic/learning_bus.py:290: RuntimeWarning: coroutine 'LearningBus._load_historical_findings_async' was never awaited\n  logger.debug(\"Could not load historical findings from KM\")\nRuntimeWarning: Enable tracemalloc to get the object allocation traceback\n/Users/armand/.pyenv/versions/3.11.11/lib/python3.11/site-packages/rlm/core/lm_handler.py:177: ResourceWarning: unclosed <socket.socket fd=23, family=2, type=1, proto=0, laddr=('127.0.0.1', 65336)>\n  self._server = None\nResourceWarning: Enable tracemalloc to get the object allocation traceback\n\nDebate timed out after 180s"
+    }
+  ],
+  "summary": {
+    "total_runs": 1,
+    "non_timeout_runs": 0,
+    "successful_runs": 0,
+    "quality_present_runs": 0,
+    "passed_quality_and_practicality_runs": 0,
+    "pass_rate": 0.0,
+    "duration_seconds": {
+      "mean": 210.02,
+      "median": 210.02,
+      "min": 210.02,
+      "max": 210.02
+    },
+    "quality_score_10": {
+      "mean": null,
+      "median": null,
+      "min": null,
+      "max": null
+    },
+    "practicality_score_10": {
+      "mean": null,
+      "median": null,
+      "min": null,
+      "max": null
+    },
+    "loops_used": {
+      "mean": null,
+      "median": null,
+      "min": null,
+      "max": null
+    },
+    "pipeline_hard_checks": {
+      "present_runs": 0,
+      "required_checks_present_runs": 0,
+      "hard_check_pass_runs": 0,
+      "hard_check_pass_rate": null,
+      "check_pass_rates": {
+        "execution_path_live": null,
+        "quality_gate_pass": null,
+        "top_track_is_infra_or_security": null,
+        "no_cross_track_clones": null
+      }
+    },
+    "runtime_blockers": {
+      "debate_timeout": 1,
+      "generic_timeout": 1
+    }
+  }
+}

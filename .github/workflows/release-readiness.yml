@@ -31,7 +31,7 @@ jobs:
   release-readiness:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Release Readiness
-    runs-on: aragora
+    runs-on: ubuntu-latest
     timeout-minutes: 35
 
     steps:
@@ -77,7 +77,7 @@ jobs:
       - name: Install (dev)
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Run release-readiness gate
         # Keep this gate deterministic: never rely on optional external

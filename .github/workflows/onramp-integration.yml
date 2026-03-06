@@ -38,7 +38,7 @@ jobs:
           python-version: "3.11"
       - name: Install and run quickstart
         run: |
-          pip install -e .
+          python -m pip install -e .
           timeout 300 python examples/quickstart.py
         env:
           ARAGORA_OFFLINE: "1"

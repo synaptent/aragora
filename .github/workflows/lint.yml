@@ -162,6 +162,9 @@ jobs:
       - name: Enforce required-check-priority keep-list policy
         run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_required_check_priority_policy.py
 
+      - name: Enforce workflow pip install policy
+        run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_workflow_pip_install_policy.py
+
       - name: Enforce execution-gate default hardening policy
         run: ${{ steps.lint_python.outputs.python_bin }} scripts/check_execution_gate_defaults.py
 

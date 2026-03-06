@@ -130,9 +130,9 @@ jobs:
         run: |
           python -m venv /tmp/main-venv
           source /tmp/main-venv/bin/activate
-          pip install --upgrade pip
-          pip install -e "main-branch/[test]"
-          pip install pytest-benchmark
+          python -m pip install --upgrade pip
+          python -m pip install -e "main-branch/[test]"
+          python -m pip install pytest-benchmark
           cd main-branch
           pytest tests/benchmarks/test_performance.py \
             --benchmark-only \

@@ -68,7 +68,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run backup manager tests
         run: |
@@ -128,7 +128,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run DR drill tests
         run: |
@@ -182,7 +182,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run backup handler tests
         run: |

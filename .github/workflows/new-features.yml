@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run migration tests
         run: |
@@ -117,7 +117,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Test worker imports
         run: |
@@ -175,7 +175,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run E2E tests for new features
         run: |
@@ -223,8 +223,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install prometheus-client
+          python -m pip install -e ".[dev]"
+          python -m pip install prometheus-client
 
       - name: Test metrics initialization
         run: |

@@ -74,7 +74,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Lint
         run: python -m ruff check aragora_sdk/ tests/
@@ -127,7 +127,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install build tools
-        run: pip install build hatchling twine
+        run: python -m pip install build hatchling twine
 
       - name: Determine version
         id: version
@@ -163,7 +163,7 @@ jobs:
       - name: Check version not already published
         if: ${{ !(github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true') }}
         run: |
-          pip install aragora-sdk==${{ steps.version.outputs.version }} --dry-run 2>/dev/null && {
+          python -m pip install aragora-sdk==${{ steps.version.outputs.version }} --dry-run 2>/dev/null && {
             echo "::error::Version ${{ steps.version.outputs.version }} already exists on PyPI"
             exit 1
           } || echo "Version ${{ steps.version.outputs.version }} not yet published -- OK"
@@ -200,7 +200,7 @@ jobs:
 
             Install with:
             ```bash
-            pip install aragora-sdk==${{ steps.version.outputs.version }}
+            python -m pip install aragora-sdk==${{ steps.version.outputs.version }}
             ```
 
             See [documentation](https://docs.aragora.ai/sdk/python) for usage.

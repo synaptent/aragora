@@ -92,7 +92,7 @@ jobs:
       - name: Install OpenAPI generation dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Check version alignment
         run: python scripts/check_version_alignment.py
@@ -115,7 +115,7 @@ jobs:
 
       - name: Check Python SDK types are up to date
         run: |
-          pip install datamodel-code-generator
+          python -m pip install datamodel-code-generator
           python scripts/generate_python_sdk_types.py --openapi docs/api/openapi_generated.json --check
 
       - name: Check capability matrix is up to date
@@ -215,7 +215,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Install TypeScript SDK dependencies
         working-directory: sdk/typescript
@@ -270,7 +270,7 @@ jobs:
       - name: Install baseline test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
+          python -m pip install -e ".[dev,research,test]"
 
       - name: Verify deterministic baseline command
         run: python scripts/run_test_baseline.py
@@ -389,7 +389,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Run status reconciliation
         run: |
@@ -449,7 +449,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test]"
+          python -m pip install -e ".[dev,test]"
 
       - name: Check for new zero-coverage files
         run: |
@@ -551,8 +551,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout pytest-xdist
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout pytest-xdist
 
       - name: Run ${{ matrix.category.name }} tests
         run: |
@@ -611,8 +611,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout
 
       - name: Run epistemic hygiene + settlement gate
         run: bash scripts/run_epistemic_settlement_gate.sh
@@ -731,8 +731,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout
 
       - name: Run integration minimal marker suite
         run: |
@@ -802,8 +802,8 @@ jobs:
         if: steps.changes.outputs.high_risk == 'true'
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout
 
       - name: Run integration smoke tests
         if: steps.changes.outputs.high_risk == 'true'
@@ -868,8 +868,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout pytest-xdist pytest-randomly
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout pytest-xdist pytest-randomly
 
       - name: Compute dynamic seed
         id: dynamic-seed
@@ -946,7 +946,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: Run golden-path harness (fast)
         run: |
@@ -995,7 +995,7 @@ jobs:
       - name: Install aragora-debate with dev deps
         run: |
           python -m pip install --upgrade pip
-          pip install -e "aragora-debate[dev]"
+          python -m pip install -e "aragora-debate[dev]"
 
       - name: Run aragora-debate tests
         run: |
@@ -1101,8 +1101,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-cov pytest-timeout pytest-xdist
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-cov pytest-timeout pytest-xdist
 
       - name: Run tests – shard ${{ matrix.shard.name }} (parallel with xdist)
         run: |
@@ -1198,7 +1198,7 @@ jobs:
       - name: Install coverage tools
         run: |
           python -m pip install --upgrade pip
-          pip install coverage
+          python -m pip install coverage
 
       - name: Download all coverage artifacts
         uses: actions/download-artifact@v4
@@ -1380,7 +1380,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Smoke - demo ask
         run: |
@@ -1474,8 +1474,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,research,test]"
-          pip install pytest-timeout
+          python -m pip install -e ".[dev,research,test]"
+          python -m pip install pytest-timeout
 
       - name: Run slow/load/e2e/benchmark tier
         run: |
@@ -1675,7 +1675,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install bandit
-        run: pip install bandit[toml]
+        run: python -m pip install bandit[toml]
 
       - name: Run bandit security scan
         run: |
@@ -1732,8 +1732,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install mypy types-requests types-aiofiles
+          python -m pip install -e ".[dev]"
+          python -m pip install mypy types-requests types-aiofiles
 
       - name: Run mypy
         run: |
@@ -1801,8 +1801,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install alembic psycopg2-binary asyncpg
+          python -m pip install -e ".[dev]"
+          python -m pip install alembic psycopg2-binary asyncpg
 
       - name: Verify migration files
         run: |
@@ -1915,8 +1915,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev,test,research]"
-          pip install mcp || true
+          python -m pip install -e ".[dev,test,research]"
+          python -m pip install mcp || true
 
       - name: Run optional-deps test suite
         run: |
@@ -1984,7 +1984,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[dev]"
 
       - name: RBAC coverage audit
         run: python scripts/audit_rbac_coverage.py
@@ -2035,8 +2035,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          pip install pytest-rerunfailures
+          python -m pip install -e ".[dev]"
+          python -m pip install pytest-rerunfailures
 
       - name: Run tests with JUnit output
         id: tests

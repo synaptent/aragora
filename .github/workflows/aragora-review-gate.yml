@@ -132,7 +132,7 @@ jobs:
       - name: Install Aragora
         run: |
           python -m pip install --upgrade pip
-          pip install -e . 2>/dev/null || pip install -r requirements.txt
+          python -m pip install -e . 2>/dev/null || python -m pip install -r requirements.txt
 
       - name: Run Aragora Review
         id: review

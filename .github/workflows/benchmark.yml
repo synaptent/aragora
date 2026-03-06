@@ -76,7 +76,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           bash scripts/ci_install_project.sh --extras test
-          pip install pytest-benchmark
+          python -m pip install pytest-benchmark
 
       - name: Run benchmark tests
         run: |
@@ -235,7 +235,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           bash scripts/ci_install_project.sh --extras test
-          pip install pytest-benchmark
+          python -m pip install pytest-benchmark
 
       - name: Run PR benchmarks
         run: |

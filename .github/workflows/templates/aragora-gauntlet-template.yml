@@ -83,7 +83,7 @@ jobs:
           cache: 'pip'
 
       - name: Install Aragora
-        run: pip install aragora
+        run: python -m pip install aragora
 
       - name: Check API Keys
         id: check-keys

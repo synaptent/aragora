@@ -62,7 +62,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e .
 
       - name: Generate drift summary and planning artifacts
         run: |

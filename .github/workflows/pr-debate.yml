@@ -130,8 +130,8 @@ jobs:
       - name: Install aragora from base branch
         if: github.event_name == 'workflow_dispatch'
         run: |
-          pip install --upgrade pip
-          pip install -e .
+          python -m pip install --upgrade pip
+          python -m pip install -e .
 
       - name: Get PR diff
         if: github.event_name == 'workflow_dispatch'

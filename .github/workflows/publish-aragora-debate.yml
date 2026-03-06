@@ -101,7 +101,7 @@ jobs:
           python-version: "${{"
 
       - name: Install package with dev deps
-        run: pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev]"
 
       - name: Run tests
         run: python -m pytest tests/ -v
@@ -153,7 +153,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install build
+        run: python -m pip install build
 
       - name: Set version in source files
         env:
@@ -170,7 +170,7 @@ jobs:
 
       - name: Verify package
         run: |
-          pip install dist/aragora_debate-*.whl
+          python -m pip install dist/aragora_debate-*.whl
           python -c "import aragora_debate; print(f'Version: {aragora_debate.__version__}')"
           python -c "from aragora_debate import Arena, Debate, EvidencePoweredTrickster; print('All imports OK')"
           python -c "from aragora_debate import ConvergenceDetector, CrossProposalAnalyzer; print('Analysis imports OK')"
@@ -192,12 +192,12 @@ jobs:
 
             Install:
             ```bash
-            pip install aragora-debate==${{ needs.resolve-version.outputs.version }}
+            python -m pip install aragora-debate==${{ needs.resolve-version.outputs.version }}
             ```
 
             With all providers:
             ```bash
-            pip install "aragora-debate[all]==${{ needs.resolve-version.outputs.version }}"
+            python -m pip install "aragora-debate[all]==${{ needs.resolve-version.outputs.version }}"
             ```
 
             [Changelog](https://github.com/an0mium/aragora/blob/main/aragora-debate/CHANGELOG.md) |

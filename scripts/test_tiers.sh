@@ -23,6 +23,7 @@
 set -euo pipefail
 
 tier="${1:-fast}"
+PYTEST_BIN="${PYTEST_BIN:-python -m pytest}"
 
 # Color output
 RED='\033[0;31m'
@@ -34,7 +35,7 @@ echo -e "${GREEN}Running test tier: ${tier}${NC}"
 
 case "$tier" in
   smoke)
-    pytest -m smoke \
+    ${PYTEST_BIN} -m smoke \
       --timeout=60 \
       -v \
       --tb=short \
@@ -44,7 +45,7 @@ case "$tier" in
 
   fast)
     # Quick tests for local dev - exclude slow, load, e2e, integration
-    pytest tests/ -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
+    ${PYTEST_BIN} tests/ -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
       --timeout=30 \
       -q \
       --tb=line \
@@ -57,7 +58,7 @@ case "$tier" in
 
   unit)
     # Unit tests with extended timeout - ideal for quick feedback
-    pytest tests/ -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
+    ${PYTEST_BIN} tests/ -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
       --timeout=120 \
       -v \
       --tb=short \
@@ -72,7 +73,7 @@ case "$tier" in
     # CI tier - balanced coverage vs speed
     # Skip slow/e2e/load/benchmark/integration tests
     # Coverage threshold: 50% (raised from 30%)
-    pytest tests/ \
+    ${PYTEST_BIN} tests/ \
       -m "not slow and not load and not e2e and not benchmark and not integration and not integration_minimal" \
       --timeout=120 \
       --cov=aragora \
@@ -87,7 +88,7 @@ case "$tier" in
 
   full)
     # Full test suite with extended timeouts
-    pytest tests/ \
+    ${PYTEST_BIN} tests/ \
       --timeout=300 \
       --cov=aragora \
       --cov-report=term-missing \
@@ -98,7 +99,7 @@ case "$tier" in
 
   slow)
     # Only slow-marked tests
-    pytest tests/ -m "slow" \
+    ${PYTEST_BIN} tests/ -m "slow" \
       --timeout=600 \
       -v \
       --tb=short
@@ -106,7 +107,7 @@ case "$tier" in
 
   integration)
     # Integration tests (services required)
-    pytest tests/integration/ -m "integration or integration_minimal" \
+    ${PYTEST_BIN} tests/integration/ -m "integration or integration_minimal" \
       --timeout=180 \
       -v \
       --tb=short
@@ -114,7 +115,7 @@ case "$tier" in
 
   nightly)
     # Nightly tier: slow/load/e2e/benchmark
-    pytest tests/ -m "slow or load or e2e or benchmark" \
+    ${PYTEST_BIN} tests/ -m "slow or load or e2e or benchmark" \
       --timeout=600 \
       -v \
       --tb=short
@@ -122,7 +123,7 @@ case "$tier" in
 
   benchmark)
     # Benchmark-only tests
-    pytest tests/ -m "benchmark" \
+    ${PYTEST_BIN} tests/ -m "benchmark" \
       --benchmark-only \
       --benchmark-sort=mean \
       --benchmark-warmup=on \
@@ -131,7 +132,7 @@ case "$tier" in
 
   handlers)
     # Handler tests only - quick feedback on API changes
-    pytest tests/server/handlers/ \
+    ${PYTEST_BIN} tests/server/handlers/ \
       --timeout=120 \
       -v \
       --tb=short
@@ -139,7 +140,7 @@ case "$tier" in
 
   security)
     # Security-related tests
-    pytest tests/security/ tests/server/handlers/test_admin.py tests/server/handlers/test_privacy.py tests/server/middleware/ \
+    ${PYTEST_BIN} tests/security/ tests/server/handlers/test_admin.py tests/server/handlers/test_privacy.py tests/server/middleware/ \
       --timeout=120 \
       -v \
       --tb=short
@@ -147,7 +148,7 @@ case "$tier" in
 
   storage)
     # Storage/database tests
-    pytest tests/storage/ tests/ranking/ tests/memory/ \
+    ${PYTEST_BIN} tests/storage/ tests/ranking/ tests/memory/ \
       --timeout=120 \
       -v \
       --tb=short
@@ -155,7 +156,7 @@ case "$tier" in
 
   privacy)
     # Privacy handler tests only
-    pytest tests/server/handlers/test_privacy.py \
+    ${PYTEST_BIN} tests/server/handlers/test_privacy.py \
       --timeout=60 \
       -v \
       --tb=short

@@ -251,6 +251,15 @@ class TestInferTrack:
         )
         assert track == Track.CORE
 
+    def test_infer_infrastructure_integration_prompt_not_sme(self):
+        """Infrastructure integration objectives should not be mapped to SME."""
+        planner = MetaPlanner()
+        track = planner._infer_track(
+            "Tightly integrate pipeline self-improve, testfixer feedback loops, and quality gates",
+            [Track.SME, Track.CORE, Track.SELF_HOSTED, Track.SECURITY, Track.QA],
+        )
+        assert track in {Track.CORE, Track.SELF_HOSTED, Track.SECURITY}
+
     def test_infer_defaults_to_first(self):
         """Should default to first available track."""
         planner = MetaPlanner()
@@ -310,14 +319,16 @@ class TestHeuristicPrioritize:
     def test_generic_objective_not_broadcast_to_all_tracks(self):
         """Fallback heuristic should pick one best track, not clone to all tracks."""
         planner = MetaPlanner()
+        objective = "Create a shared WorkItem protocol and UnifiedCycleOrchestrator"
         goals = planner._heuristic_prioritize(
-            "Create a shared WorkItem protocol and UnifiedCycleOrchestrator",
+            objective,
             [Track.SME, Track.QA, Track.CORE, Track.SELF_HOSTED, Track.SECURITY],
         )
 
         assert len(goals) == 1
         assert goals[0].track in {Track.CORE, Track.SELF_HOSTED, Track.SECURITY}
         assert goals[0].track != Track.SME
+        assert planner._goal_fidelity_score(objective, goals[0].description) >= 0.2
 
     @pytest.mark.asyncio
     async def test_prioritize_work_recovers_when_objective_fidelity_is_low(self):

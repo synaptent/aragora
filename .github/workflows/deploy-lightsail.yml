@@ -106,7 +106,7 @@ jobs:
 
             # Install
             source venv/bin/activate 2>/dev/null || source .venv/bin/activate 2>/dev/null || true
-            pip install -e . --quiet --no-cache-dir 2>/dev/null || true
+            python -m pip install -e . --quiet --no-cache-dir 2>/dev/null || true
 
             # Import check
             python -c "from aragora.server.unified_server import UnifiedServer; print('Import OK')"

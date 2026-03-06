@@ -52,8 +52,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install cyclonedx-bom pip-tools
-          pip install -e .
+          python -m pip install cyclonedx-bom pip-tools
+          python -m pip install -e .
 
       - name: Generate CycloneDX SBOM
         run: |

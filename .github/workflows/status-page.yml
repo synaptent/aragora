@@ -328,7 +328,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install python-socketio websocket-client
+          python -m pip install python-socketio websocket-client
 
       - name: Provision monitors
         env:
