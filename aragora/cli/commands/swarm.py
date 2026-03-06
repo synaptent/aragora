@@ -77,6 +77,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
     as_json = bool(getattr(args, "json", False))
     run_id = getattr(args, "run_id", None)
     refresh_scaling = bool(getattr(args, "refresh_scaling", False))
+    dispatch_only = bool(getattr(args, "dispatch_only", False))
+    no_wait = bool(getattr(args, "no_wait", False))
 
     # Phase 2: User profile
     profile_str = getattr(args, "profile", "ceo")
@@ -175,6 +177,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_concurrency=concurrency_cap,
                 managed_dir_pattern=managed_dir_pattern,
                 approval_policy=approval_policy,
+                dispatch=not dispatch_only,
+                wait=not no_wait,
             )
         )
         if as_json:
@@ -182,7 +186,21 @@ def cmd_swarm(args: argparse.Namespace) -> None:
         else:
             _print_supervisor_run(run.to_dict())
     elif dry_run:
-        spec = asyncio.run(commander.dry_run(goal))
+        if skip_interrogation:
+            spec = SwarmSpec(
+                id=str(uuid4()),
+                created_at=datetime.now(timezone.utc),
+                raw_goal=goal,
+                refined_goal=goal,
+                budget_limit_usd=budget_limit,
+                requires_approval=require_approval,
+                interrogation_turns=0,
+                user_expertise="developer",
+            )
+            print("\n[DRY RUN] Skipping interrogation and building a direct spec.\n")
+            print(spec.to_json(indent=2))
+        else:
+            spec = asyncio.run(commander.dry_run(goal))
         save_path = getattr(args, "save_spec", None)
         if save_path:
             Path(save_path).write_text(spec.to_yaml())
@@ -208,6 +226,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_concurrency=concurrency_cap,
                 managed_dir_pattern=managed_dir_pattern,
                 approval_policy=approval_policy,
+                dispatch=not dispatch_only,
+                wait=not no_wait,
             )
         )
         if as_json:
@@ -223,6 +243,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_concurrency=concurrency_cap,
                 managed_dir_pattern=managed_dir_pattern,
                 approval_policy=approval_policy,
+                dispatch=not dispatch_only,
+                wait=not no_wait,
             )
         )
         if as_json:

@@ -2176,6 +2176,16 @@ def _add_swarm_parser(subparsers) -> None:
         action="store_true",
         help="Emit JSON output",
     )
+    swarm_parser.add_argument(
+        "--dispatch-only",
+        action="store_true",
+        help="Only provision worktrees and create work orders (don't spawn workers)",
+    )
+    swarm_parser.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="Spawn workers but don't wait for completion (fire-and-forget)",
+    )
     swarm_parser.set_defaults(
         func=lambda args: __import__(
             "aragora.cli.commands.swarm", fromlist=["cmd_swarm"]

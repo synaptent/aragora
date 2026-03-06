@@ -78,13 +78,19 @@ class TestSwarmCommanderRunFromSpec:
         spec = SwarmSpec(raw_goal="Test goal", refined_goal="Test goal refined")
         commander = SwarmCommander()
         fake_run = MagicMock()
+        fake_run.run_id = "test-run-id"
 
         with patch("aragora.swarm.commander.SwarmSupervisor") as mock_supervisor_cls:
-            mock_supervisor_cls.return_value.start_run.return_value = fake_run
+            mock_sup = mock_supervisor_cls.return_value
+            mock_sup.start_run.return_value = fake_run
+            mock_sup.dispatch_workers = AsyncMock(return_value=[])
+            mock_sup.collect_results = AsyncMock(return_value=[])
+            mock_sup.refresh_run.return_value = fake_run
             result = await commander.run_supervised_from_spec(spec)
 
-        assert result is fake_run
-        mock_supervisor_cls.return_value.start_run.assert_called_once()
+        mock_sup.start_run.assert_called_once()
+        mock_sup.dispatch_workers.assert_called_once_with(fake_run.run_id)
+        mock_sup.refresh_run.assert_called_once_with(fake_run.run_id)
 
 
 class TestSwarmCommanderDryRun:

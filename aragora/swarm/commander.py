@@ -184,6 +184,8 @@ class SwarmCommander:
         max_concurrency: int = 8,
         managed_dir_pattern: str = ".worktrees/{agent}-auto",
         approval_policy: SwarmApprovalPolicy | None = None,
+        dispatch: bool = True,
+        wait: bool = True,
         input_fn: Any | None = None,
         print_fn: Any | None = None,
     ) -> SupervisorRun:
@@ -200,6 +202,8 @@ class SwarmCommander:
             max_concurrency=max_concurrency,
             managed_dir_pattern=managed_dir_pattern,
             approval_policy=approval_policy,
+            dispatch=dispatch,
+            wait=wait,
         )
 
     async def run_supervised_from_spec(
@@ -211,17 +215,34 @@ class SwarmCommander:
         max_concurrency: int = 8,
         managed_dir_pattern: str = ".worktrees/{agent}-auto",
         approval_policy: SwarmApprovalPolicy | None = None,
+        dispatch: bool = True,
+        wait: bool = True,
     ) -> SupervisorRun:
-        """Dispatch a spec through the supervisor-backed Codex/Claude worker pool."""
+        """Dispatch a spec through the supervisor-backed Codex/Claude worker pool.
+
+        Args:
+            dispatch: If True, spawn CLI worker processes after provisioning.
+            wait: If True, wait for all workers to complete before returning.
+        """
         self._spec = spec
         supervisor = SwarmSupervisor(repo_root=repo_path or Path.cwd())
-        return supervisor.start_run(
+        run = supervisor.start_run(
             spec=spec,
             target_branch=target_branch,
             max_concurrency=max_concurrency,
             managed_dir_pattern=managed_dir_pattern,
             approval_policy=approval_policy,
         )
+
+        if dispatch:
+            launched = await supervisor.dispatch_workers(run.run_id)
+            logger.info("Dispatched %d workers for run %s", len(launched), run.run_id)
+
+            if wait and launched:
+                completed = await supervisor.collect_results(run.run_id)
+                logger.info("Collected %d results for run %s", len(completed), run.run_id)
+
+        return supervisor.refresh_run(run.run_id)
 
     async def _dispatch(self, spec: SwarmSpec) -> Any:
         """Dispatch the swarm using HardenedOrchestrator.
