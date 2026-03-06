@@ -497,6 +497,46 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
 
         {/* Result preview */}
         {result && <DebateResultPreview result={result} />}
+
+        {/* Post-debate CTAs — 2 focused actions */}
+        {result && (
+          <div className="flex gap-3 mt-6 max-w-xl mx-auto">
+            <button
+              onClick={() => { setResult(null); setQuestion(''); setError(null); }}
+              className="flex-1 text-sm font-bold font-mono py-3 transition-all hover:opacity-90 cursor-pointer"
+              style={{
+                backgroundColor: 'var(--accent)',
+                color: 'var(--bg)',
+                borderRadius: 'var(--radius-button)',
+              }}
+            >
+              Try Another
+            </button>
+            <button
+              onClick={() => {
+                const shareUrl = result.id
+                  ? `${window.location.origin}/debate/${result.id}`
+                  : window.location.href;
+                if (typeof navigator.share === 'function') {
+                  navigator.share({ title: 'Aragora Debate', url: shareUrl }).catch(() => {
+                    navigator.clipboard.writeText(shareUrl).catch(() => {});
+                  });
+                } else {
+                  navigator.clipboard.writeText(shareUrl).catch(() => {});
+                }
+              }}
+              className="flex-1 text-sm font-bold font-mono py-3 transition-all hover:opacity-80 cursor-pointer"
+              style={{
+                backgroundColor: 'transparent',
+                color: 'var(--accent)',
+                border: '1px solid var(--accent)',
+                borderRadius: 'var(--radius-button)',
+              }}
+            >
+              Share
+            </button>
+          </div>
+        )}
       </div>
     </section>
   );
