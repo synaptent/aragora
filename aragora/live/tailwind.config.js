@@ -58,6 +58,8 @@ module.exports = {
         'acid-shift': 'acid-shift 4s ease infinite',
         'cursor-blink': 'cursor-blink 1s step-end infinite',
         'boot-line': 'boot-line 0.3s ease forwards',
+        // Loading animation for debate progress bar
+        'loading-bar': 'loading-bar 2s ease-in-out infinite',
         // Mobile accessibility animations
         'ripple': 'ripple 0.6s linear forwards',
         'slide-in-from-bottom': 'slide-in-from-bottom 0.3s ease-out',
@@ -85,6 +87,11 @@ module.exports = {
         'fade-in': {
           'from': { opacity: '0' },
           'to': { opacity: '1' },
+        },
+        'loading-bar': {
+          '0%': { width: '0%', marginLeft: '0%' },
+          '50%': { width: '40%', marginLeft: '30%' },
+          '100%': { width: '0%', marginLeft: '100%' },
         },
       },
       borderRadius: {
