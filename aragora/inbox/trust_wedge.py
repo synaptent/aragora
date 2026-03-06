@@ -126,7 +126,7 @@ class ReceiptState(str, Enum):
     EXPIRED = "expired"
 
 
-@dataclass(frozen=True)
+@dataclass
 class ActionIntent:
     """Canonical execution intent for a single inbox action."""
 
@@ -228,7 +228,7 @@ class PersistedReceipt:
         }
 
 
-@dataclass(frozen=True)
+@dataclass
 class TriageDecision:
     """Final debated triage decision for the inbox wedge."""
 
@@ -237,6 +237,9 @@ class TriageDecision:
     dissent_summary: str
     receipt_id: str | None = None
     auto_approval_eligible: bool = False
+    receipt_state: str = "created"
+    intent: ActionIntent | None = None
+    provider_route: str = "direct"
     label_id: str | None = None
     blocked_by_policy: bool = False
     cost_usd: float | None = None
@@ -251,6 +254,9 @@ class TriageDecision:
         dissent_summary: str,
         receipt_id: str | None = None,
         auto_approval_eligible: bool = False,
+        receipt_state: str = "created",
+        intent: ActionIntent | None = None,
+        provider_route: str = "direct",
         label_id: str | None = None,
         blocked_by_policy: bool = False,
         cost_usd: float | None = None,
@@ -262,6 +268,9 @@ class TriageDecision:
             dissent_summary=dissent_summary,
             receipt_id=receipt_id,
             auto_approval_eligible=auto_approval_eligible,
+            receipt_state=receipt_state,
+            intent=intent,
+            provider_route=provider_route,
             label_id=label_id,
             blocked_by_policy=blocked_by_policy,
             cost_usd=cost_usd,
@@ -269,17 +278,24 @@ class TriageDecision:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "final_action": self.final_action.value,
+        result: dict[str, Any] = {
+            "final_action": self.final_action.value
+            if isinstance(self.final_action, Enum)
+            else self.final_action,
             "confidence": self.confidence,
             "dissent_summary": self.dissent_summary,
             "receipt_id": self.receipt_id,
             "auto_approval_eligible": self.auto_approval_eligible,
+            "receipt_state": self.receipt_state,
+            "provider_route": self.provider_route,
             "label_id": self.label_id,
             "blocked_by_policy": self.blocked_by_policy,
             "cost_usd": self.cost_usd,
             "latency_seconds": self.latency_seconds,
         }
+        if self.intent is not None:
+            result["intent"] = self.intent.to_dict()
+        return result
 
 
 @dataclass(frozen=True)

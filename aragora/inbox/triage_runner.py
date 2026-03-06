@@ -23,6 +23,7 @@ from aragora.inbox.auto_approval import AutoApprovalPolicy
 from aragora.inbox.trust_wedge import (
     ActionIntent,
     AllowedAction,
+    InboxWedgeAction,
     ReceiptState,
     TriageDecision,
     compute_content_hash,
@@ -211,10 +212,12 @@ class InboxTriageRunner:
         elif isinstance(debate_result, dict):
             rationale = str(debate_result.get("final_answer", ""))
 
+        parsed_action = InboxWedgeAction.parse(action)
+
         intent = ActionIntent(
             provider="arena-consensus",
             message_id=message_id,
-            action=action,
+            action=parsed_action,
             content_hash=content_hash,
             synthesized_rationale=rationale[:500],
             confidence=confidence,
@@ -227,7 +230,7 @@ class InboxTriageRunner:
         intent._snippet = msg.get("snippet", body[:120])  # type: ignore[attr-defined]
 
         decision = TriageDecision(
-            final_action=action,
+            final_action=parsed_action,
             confidence=confidence,
             dissent_summary=dissent,
             auto_approval_eligible=False,

@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 from aragora.inbox.trust_wedge import (
     AllowedAction,
+    InboxWedgeAction,
     ReceiptState,
     TriageDecision,
 )
@@ -176,9 +177,10 @@ class CLIReviewLoop:
             self._print(f"  Invalid. Choose from: {', '.join(valid_actions)}")
 
         old_action = decision.final_action
-        decision.final_action = new_action
+        parsed_action = InboxWedgeAction.parse(new_action)
+        decision.final_action = parsed_action
         if decision.intent:
-            decision.intent.action = new_action
+            decision.intent.action = parsed_action
         # Reset state to CREATED (re-sign needed)
         decision.receipt_state = ReceiptState.CREATED.value
         self._print(f"  -> EDITED: {old_action} -> {new_action}")
