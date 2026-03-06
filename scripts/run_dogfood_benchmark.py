@@ -32,6 +32,12 @@ PROVIDER_CALLS_RE = re.compile(r"Provider calls detected:\s*(?P<flag>True|False)
 QUALITY_GATE_RE = re.compile(r"\[QUALITY GATE\]\s+(?P<verdict>PASS|FAIL)", re.IGNORECASE)
 TOP_TRACK_RE = re.compile(r"^\s*1\.\s+\[(?P<track>[a-z_]+)\]", re.IGNORECASE | re.MULTILINE)
 TRACK_LINE_RE = re.compile(r"^\s*\d+\.\s+\[(?P<track>[a-z_]+)\]", re.IGNORECASE | re.MULTILINE)
+REQUIRED_HARD_CHECK_KEYS = (
+    "execution_path_live",
+    "quality_gate_pass",
+    "top_track_is_infra_or_security",
+    "no_cross_track_clones",
+)
 
 
 def _utc_now() -> str:
@@ -130,8 +136,9 @@ def _extract_pipeline_checks(stdout: str) -> dict[str, Any]:
         ),
     }
     checks_present = any(value is not None for value in checks.values())
-    hard_checks_pass = checks_present and all(
-        value is True for value in checks.values() if value is not None
+    required_checks_present = all(checks.get(key) is not None for key in REQUIRED_HARD_CHECK_KEYS)
+    hard_checks_pass = required_checks_present and all(
+        checks.get(key) is True for key in REQUIRED_HARD_CHECK_KEYS
     )
 
     return {
@@ -143,6 +150,7 @@ def _extract_pipeline_checks(stdout: str) -> dict[str, Any]:
         "top_track": top_track,
         "track_lines": track_lines,
         "checks": checks,
+        "required_checks_present": required_checks_present,
         "hard_checks_pass": hard_checks_pass,
     }
 
@@ -256,22 +264,23 @@ def _summarize(runs: list[dict[str, Any]]) -> dict[str, Any]:
         for blocker in run.get("runtime_blockers") or []:
             blocker_counts[blocker] = blocker_counts.get(blocker, 0) + 1
 
-    check_keys = [
-        "execution_path_live",
-        "quality_gate_pass",
-        "top_track_is_infra_or_security",
-        "no_cross_track_clones",
-    ]
+    check_keys = list(REQUIRED_HARD_CHECK_KEYS)
     check_pass_rates: dict[str, float | None] = {}
     for key in check_keys:
         values = [
             run.get("pipeline_checks", {}).get("checks", {}).get(key) for run in pipeline_present
         ]
-        bool_values = [bool(v) for v in values if v is not None]
-        if not bool_values:
+        if not values:
             check_pass_rates[key] = None
         else:
-            check_pass_rates[key] = round(sum(bool_values) / len(bool_values), 4)
+            pass_count = sum(1 for value in values if value is True)
+            check_pass_rates[key] = round(pass_count / len(values), 4)
+
+    required_present_runs = [
+        run
+        for run in pipeline_present
+        if run.get("pipeline_checks", {}).get("required_checks_present")
+    ]
 
     return {
         "total_runs": total,
@@ -306,6 +315,7 @@ def _summarize(runs: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "pipeline_hard_checks": {
             "present_runs": len(pipeline_present),
+            "required_checks_present_runs": len(required_present_runs),
             "hard_check_pass_runs": len(pipeline_hard_pass),
             "hard_check_pass_rate": (
                 round(len(pipeline_hard_pass) / len(pipeline_present), 4)

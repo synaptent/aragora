@@ -268,6 +268,22 @@ class TestPipelineSelfImproveCommand:
         assert _FakeIdeaToExecutionPipeline.run_calls == 1
         assert _FakeIdeaToExecutionPipeline.from_ideas_calls == 1
 
+    def test_self_improve_dry_run_without_execute_skips_handoff(self, capsys):
+        args = self._args(execute=False, dry_run=True)
+        _FakeIdeaToExecutionPipeline.reset()
+
+        with (
+            patch.dict("sys.modules", _fake_module_payload()),
+            patch("aragora.cli.commands.pipeline._run_self_improve_handoff") as mock_handoff,
+        ):
+            _cmd_pipeline_self_improve(args)
+
+        out = capsys.readouterr().out
+        assert "Handoff skipped in dry-run mode" in out
+        mock_handoff.assert_not_called()
+        assert _FakeIdeaToExecutionPipeline.run_calls == 1
+        assert _FakeIdeaToExecutionPipeline.from_ideas_calls == 1
+
     def test_self_improve_execute_calls_handoff_with_ranked_objective(self):
         args = self._args(execute=True, max_goals=1)
         _FakeIdeaToExecutionPipeline.reset()

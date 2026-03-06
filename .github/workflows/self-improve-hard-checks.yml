@@ -258,7 +258,7 @@ jobs:
           python3 scripts/run_dogfood_benchmark.py \
             --base-report docs/plans/dogfood_pipeline_self_improve_base_report.json \
             --runs 1 \
-            --timeout 900 \
+            --timeout 450 \
             --output /tmp/dogfood_pipeline_self_improve_benchmark_ci.json \
             --enforce-pipeline-hard-checks \
             --require-pipeline-hard-checks-presence

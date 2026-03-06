@@ -860,8 +860,11 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
         print(f"  {i}. {objective}")
     print()
 
-    if not execute and not dry_run:
-        print("Handoff not executed (planning mode).")
+    if not execute:
+        if dry_run:
+            print("Handoff skipped in dry-run mode unless --execute is set.")
+        else:
+            print("Handoff not executed (planning mode).")
         print("\nTo execute the handoff:")
         cmd = f'aragora pipeline self-improve "{goal}" --execute'
         if budget_limit is not None:
@@ -880,7 +883,7 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
         if plan_quality_fail_closed:
             cmd += " --plan-quality-fail-closed"
         print(f"  {cmd}")
-        print("\nTo preview the plan first:")
+        print("\nTo preview the handoff plan only:")
         print(f"  {cmd} --dry-run")
         print()
         return
