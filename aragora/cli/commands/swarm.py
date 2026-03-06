@@ -85,7 +85,9 @@ def cmd_swarm(args: argparse.Namespace) -> None:
     all_runs = bool(getattr(args, "all_runs", False))
     dispatch_only = bool(getattr(args, "dispatch_only", False))
     no_wait = bool(getattr(args, "no_wait", False))
-    dispatch_workers = not (no_dispatch or dispatch_only)
+    dispatch_workers = not no_dispatch
+    if dispatch_only:
+        no_wait = True
 
     # Phase 2: User profile
     profile_str = getattr(args, "profile", "ceo")

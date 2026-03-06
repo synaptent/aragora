@@ -232,7 +232,10 @@ class SwarmCommander:
             wait: If True, reconcile until the run reaches a stable stop condition.
         """
         self._spec = spec
-        supervisor = SwarmSupervisor(repo_root=repo_path or Path.cwd())
+        from aragora.swarm.worker_launcher import LaunchConfig, WorkerLauncher
+
+        launcher = WorkerLauncher(config=LaunchConfig(detach=not wait))
+        supervisor = SwarmSupervisor(repo_root=repo_path or Path.cwd(), launcher=launcher)
         run = supervisor.start_run(
             spec=spec,
             target_branch=target_branch,

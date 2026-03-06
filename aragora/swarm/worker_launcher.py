@@ -77,6 +77,7 @@ class LaunchConfig:
     auto_commit: bool = True
     use_managed_session_script: bool = True
     base_branch: str = "main"
+    detach: bool = False
 
 
 class WorkerLauncher:
@@ -120,12 +121,27 @@ class WorkerLauncher:
             worktree_path,
         )
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=worktree_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        if self.config.detach:
+            log_dir = Path(worktree_path)
+            stdout_file = open(log_dir / ".swarm_worker_stdout.log", "w")  # noqa: SIM115
+            stderr_file = open(log_dir / ".swarm_worker_stderr.log", "w")  # noqa: SIM115
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=worktree_path,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                start_new_session=True,
+            )
+        else:
+            stdout_file = None
+            stderr_file = None
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                cwd=worktree_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
 
         worker = WorkerProcess(
             work_order_id=work_order_id,
