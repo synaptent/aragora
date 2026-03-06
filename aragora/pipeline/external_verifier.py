@@ -137,3 +137,94 @@ class ExternalVerifier:
             )
 
         return self._hook(action)
+
+
+# Impact levels ordered from lowest to highest.
+_IMPACT_LEVELS = ("low", "medium", "high", "critical")
+
+_DEFAULT_THRESHOLD = "high"
+
+
+@dataclass
+class VerificationRecord:
+    """Immutable record of an external verification decision."""
+
+    verifier_id: str
+    approved: bool
+    notes: str
+    recorded_at: str = ""
+    extras: dict[str, Any] = field(default_factory=dict)
+
+
+class ExternalVerifierGate:
+    """Gate that blocks execution until an external reviewer approves.
+
+    Parameters
+    ----------
+    impact_threshold:
+        Minimum impact level that triggers external review.
+        One of ``"low"``, ``"medium"``, ``"high"``, ``"critical"``.
+    taint_triggers:
+        If the plan's taint_flags contain any of these strings, external
+        review is required regardless of impact level.
+    """
+
+    def __init__(
+        self,
+        *,
+        impact_threshold: str = _DEFAULT_THRESHOLD,
+        taint_triggers: list[str] | None = None,
+    ) -> None:
+        threshold = impact_threshold.strip().lower()
+        if threshold not in _IMPACT_LEVELS:
+            raise ValueError(
+                f"impact_threshold must be one of {_IMPACT_LEVELS!r}, got {impact_threshold!r}"
+            )
+        self._threshold_index = _IMPACT_LEVELS.index(threshold)
+        self._taint_triggers: set[str] = set(
+            taint_triggers if taint_triggers is not None else ["external_unverified"]
+        )
+        self._verifications: list[VerificationRecord] = []
+
+    def requires_external_review(
+        self,
+        plan_impact: str,
+        taint_flags: list[str] | None = None,
+    ) -> bool:
+        """Return True when execution should be blocked pending review."""
+        impact = plan_impact.strip().lower()
+        if impact in _IMPACT_LEVELS:
+            if _IMPACT_LEVELS.index(impact) >= self._threshold_index:
+                return True
+        if taint_flags:
+            if self._taint_triggers & set(taint_flags):
+                return True
+        return False
+
+    def record_verification(
+        self,
+        verifier_id: str,
+        approved: bool,
+        notes: str = "",
+    ) -> dict[str, Any]:
+        """Record an external verification decision and return its dict form."""
+        from datetime import datetime, timezone
+
+        record = VerificationRecord(
+            verifier_id=verifier_id.strip(),
+            approved=approved,
+            notes=notes.strip(),
+            recorded_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self._verifications.append(record)
+        return {
+            "verifier_id": record.verifier_id,
+            "approved": record.approved,
+            "notes": record.notes,
+            "recorded_at": record.recorded_at,
+        }
+
+    @property
+    def verifications(self) -> list[VerificationRecord]:
+        """All recorded verification decisions (read-only snapshot)."""
+        return list(self._verifications)
