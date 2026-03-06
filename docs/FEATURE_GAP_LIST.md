@@ -40,13 +40,13 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Semantic convergence (full embedding) | Partial | Sentence-transformers + TF-IDF + Jaccard wired; difflib still used in some paths. Target: 100% embedding-based. |
+| Semantic convergence (full embedding) | **VALIDATED — moved to Completed** | PR #723: 5 similarity modules migrated from difflib to embeddings. Remaining difflib usage is `unified_diff` (text diffs, not similarity). |
 | ERC-8004 on-chain deployment | Contracts written | Solidity contracts exist; not deployed to any mainnet. Needs chain endpoint config + gas management. |
-| OpenClaw end-to-end demo | Partial | Debate → decision works; execution → receipt integration incomplete. |
+| OpenClaw end-to-end demo | **Core loop shipped** | PR #727: CodeImplementationTask, SpecExtractor, ComputerUseActionBundle, receipt linkage. Remaining: production E2E validation with live agents. |
 | Decision-Integrity UI Workbench | **~90% done** | `(app)/decision-integrity/page.tsx` (910 lines), `(app)/leaderboard/page.tsx`, `(app)/knowledge/page.tsx` (1042 lines) all ship. Remaining: Canvas GUI 8-stage visual DAG (moved to P4). |
 | SOC 2 Type II audit engagement | Scope doc ready | 60+ controls implemented (98%); pentest scope doc v3.1.0 finalized; vendor shortlisted (NCC, Bishop Fox, Trail of Bits, Cure53). Blocker: vendor selection + engagement. |
-| Smart provider routing | Not started | Cost/quality-optimized routing across Claude/GPT/Mistral/DeepSeek. |
-| Enterprise Communication Hub (#293) | **~90%** | Delivery log, retry queue, circuit breakers, event telemetry, user preference UI (NotificationsTab), Active Triage dashboard (CommandCenter), TriageRulesPanel all shipped. Notification template editor in PR #717 (auto-merge). Remaining: inbox→debate trigger wiring end-to-end validation. |
+| Smart provider routing | **Phase 1 shipped** | PR #724: Pareto optimizer, 8-model pricing database, ProviderRouter. Remaining: runtime integration with Arena agent selection. |
+| Enterprise Communication Hub (#293) | **~95%** | PR #717 (template editor) + PR #726 (persistence, router wiring, E2E tests) merged. Remaining: inbox→debate trigger production validation. |
 
 ---
 
@@ -94,8 +94,8 @@
 |---------|---------------|-----|
 | Self-improving platform quality | Nomic Loop 100% wired; 82 E2E tests; CLB backbone hardened (14/14 issues closed); safety gates + gauntlet gate + evolution audit + golden-path test | Diverse benchmark validated (100% pass). Production safety gate requires ENABLE_NOMIC_LOOP=true. |
 | Blockchain receipts | SHA-256 cryptographic hashing works | On-chain storage with ERC-8004 (not deployed) |
-| Semantic convergence | Embedding detection wired (sentence-transformers) | Not default; some debate paths still use difflib |
-| OpenClaw execution | Computer use detection works | Production E2E flow (debate → computer use → receipt) not validated |
+| Semantic convergence | **Migrated** (PR #723) | All similarity paths use embeddings. Only `unified_diff` (text display) uses difflib. |
+| OpenClaw execution | **Core loop shipped** (PR #727) | CodeImplementationTask + SpecExtractor + receipt linkage. Production validation pending. |
 | RLM context access | Code complete (283 exports) | No user-facing guide; integration with default Arena config unclear |
 
 ---
@@ -141,3 +141,8 @@ These items were planned and are now shipped:
 | Dogfood backbone profile script | Mar 2026 |
 | PR watch daemon fleet (3 Mac machines, 30 reviews/hour) | Mar 2026 |
 | Dev swarm coordination layer (lease-aware) | Mar 2026 |
+| Semantic convergence — 5 modules migrated to embeddings (PR #723) | Mar 2026 |
+| Smart provider routing Phase 1 — Pareto optimizer + 8-model pricing (PR #724) | Mar 2026 |
+| EU AI Act playbook GTM polish + Art. 10/11/43/49 appendix (PR #725) | Mar 2026 |
+| Enterprise Comms Hub #293 — template persistence + router wiring (PR #726) | Mar 2026 |
+| OpenClaw E2E core loop — CodeImplementationTask + ComputerUseActionBundle (PR #727) | Mar 2026 |
