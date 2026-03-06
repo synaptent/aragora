@@ -676,7 +676,13 @@ def hydrate_env_from_secrets(
         for name in target_names:
             if not overwrite and os.environ.get(name):
                 continue
-            value = manager.get(name)
+            try:
+                # Use strict=False so strict-mode environments don't raise here.
+                # hydrate_env_from_secrets is best-effort pre-loading; strict enforcement
+                # happens when the application actively calls get_secret() for the value.
+                value = manager.get(name, strict=False)
+            except Exception:  # noqa: BLE001
+                continue
             if value:
                 os.environ[name] = value
                 hydrated[name] = value

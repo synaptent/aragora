@@ -94,8 +94,9 @@ try:
         from aragora.config.secrets import hydrate_env_from_secrets
 
         hydrate_env_from_secrets(overwrite=True)
-except (ImportError, OSError, RuntimeError, ValueError) as exc:
+except Exception as exc:  # noqa: BLE001
     # Best-effort: avoid blocking imports if secrets hydration fails.
+    # Catches SecretNotFoundError (strict mode + missing AWS secret) and other infra errors.
     import logging as _logging
 
     _logging.getLogger(__name__).debug("Secrets hydration skipped: %s", exc)
