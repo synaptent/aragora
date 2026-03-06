@@ -582,6 +582,20 @@ _ADAPTER_DEFS: list[tuple[str, str, dict[str, Any]]] = [
             "config_key": "km_confluence_adapter",
         },
     ),
+    # Idea Cloud - personal knowledge graph for debate pipeline input
+    (
+        "aragora.ideacloud.adapters.km_adapter",
+        "IdeaCloudAdapter",
+        {
+            "name": "ideacloud",
+            "required_deps": [],
+            "forward_method": "sync_to_km",
+            "reverse_method": "sync_from_km",
+            "priority": 17,
+            "enabled_by_default": False,
+            "config_key": "km_ideacloud_adapter",
+        },
+    ),
 ]
 
 
