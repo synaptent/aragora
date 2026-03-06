@@ -43,7 +43,7 @@ The debate engine is real, functional, and battle-tested.
 | ELO rankings | Domain-specific ratings, Brier score calibration, persistent leaderboards |
 | Demo mode | Works end-to-end with no API keys required |
 | CLI | `aragora review`, `aragora gauntlet` work in both live and demo modes |
-| Test coverage | 213,000+ automated tests, 0 mypy type errors |
+| Test coverage | 208,000+ automated tests, 0 mypy type errors |
 
 ### Idea-to-Execution Pipeline (90% Working)
 
@@ -285,7 +285,7 @@ Aragora's core value proposition is **real and defensible**: multi-agent adversa
 - The CLI works.
 - The API works.
 - The enterprise security works.
-- 213,000+ tests prove it.
+- 208,000+ tests prove it.
 
 This combination is unique. No funded competitor does it. It represents a new category -- Decision Integrity -- not a feature added to an existing category.
 
