@@ -108,6 +108,9 @@ class AutonomousOrchestrator:
         enable_preflight: bool = False,
         enable_stuck_detection: bool = False,
         stuck_detector: Any | None = None,
+        enable_cost_forecast: bool = False,
+        cost_forecaster: Any | None = None,
+        cost_alert_callback: Callable[[Any], None] | None = None,
     ):
         """
         Initialize the orchestrator.
@@ -157,6 +160,15 @@ class AutonomousOrchestrator:
             stuck_detector: Optional StuckDetector instance. Created
                 automatically when enable_stuck_detection is True and no
                 detector is provided.
+            enable_cost_forecast: Run pre-execution cost estimation and
+                mid-run budget monitoring. Warns when projected spend
+                approaches or exceeds the budget limit.
+            cost_forecaster: Optional NomicCostForecaster instance. Created
+                automatically when enable_cost_forecast is True and no
+                forecaster is provided.
+            cost_alert_callback: Optional callback invoked with a
+                BudgetCheckResult whenever a mid-run budget check returns
+                warning or critical status.
         """
         self.aragora_path = aragora_path or Path.cwd()
         self.track_configs = track_configs or DEFAULT_TRACK_CONFIGS
@@ -254,6 +266,11 @@ class AutonomousOrchestrator:
             except ImportError:
                 logger.debug("StuckDetector unavailable")
 
+        # Cost forecasting — initialized after _cycle_telemetry (see below)
+        self.enable_cost_forecast = enable_cost_forecast
+        self._cost_forecaster = cost_forecaster
+        self._cost_alert_callback = cost_alert_callback
+
         # Convoy/bead IDs for tracking (populated when convoy tracking enabled)
         self._convoy_id: str | None = None
         self._bead_ids: dict[str, str] = {}  # subtask_id -> bead_id
@@ -296,6 +313,17 @@ class AutonomousOrchestrator:
             )
         except ImportError:
             pass
+
+        # Cost forecaster auto-init (after _cycle_telemetry is available)
+        if self.enable_cost_forecast and self._cost_forecaster is None:
+            try:
+                from aragora.nomic.cost_forecast import NomicCostForecaster
+
+                self._cost_forecaster = NomicCostForecaster(
+                    telemetry=self._cycle_telemetry,
+                )
+            except ImportError:
+                logger.debug("NomicCostForecaster unavailable")
 
         # KM feedback bridge: cross-cycle learning via Knowledge Mound
         self._km_feedback_bridge = None
@@ -549,7 +577,39 @@ class AutonomousOrchestrator:
             if self.enable_convoy_tracking:
                 await self._create_convoy_for_goal(goal, assignments)
 
-            # Step 2c: Capture outcome baseline if tracking enabled
+            # Step 2c: Pre-run cost forecast
+            if self.enable_cost_forecast and self._cost_forecaster is not None:
+                try:
+                    track_names = [a.track.value for a in assignments]
+                    cost_estimate = self._cost_forecaster.estimate_run_cost(
+                        subtask_count=len(assignments),
+                        tracks=track_names,
+                        max_cycles=max_cycles,
+                        budget_limit=self.budget_limit,
+                    )
+                    logger.info(
+                        "cost_forecast_prerun estimated=%.2f budget=%.2f confidence=%.2f",
+                        cost_estimate.estimated_total_usd,
+                        self.budget_limit or 0.0,
+                        cost_estimate.confidence,
+                    )
+                    if cost_estimate.will_exceed_budget and cost_estimate.warning_message:
+                        logger.warning(
+                            "cost_forecast_will_exceed: %s",
+                            cost_estimate.warning_message,
+                        )
+                    self._checkpoint(
+                        "cost_forecast",
+                        {
+                            "estimated_total_usd": cost_estimate.estimated_total_usd,
+                            "will_exceed_budget": cost_estimate.will_exceed_budget,
+                            "confidence": cost_estimate.confidence,
+                        },
+                    )
+                except (RuntimeError, OSError, ValueError, TypeError) as e:
+                    logger.debug("cost_forecast_prerun_failed: %s", e)
+
+            # Step 2d: Capture outcome baseline if tracking enabled
             _outcome_baseline = None
             if self.enable_outcome_tracking and self._outcome_tracker is not None:
                 try:
@@ -917,6 +977,33 @@ class AutonomousOrchestrator:
                     asyncio.TimeoutError,
                 ) as e:
                     logger.exception("Task failed: %s", e)
+
+            # Mid-run cost forecast check after each batch of completions
+            if (
+                self.enable_cost_forecast
+                and self._cost_forecaster is not None
+                and self.budget_limit is not None
+                and pending
+            ):
+                try:
+                    budget_check = self._cost_forecaster.check_mid_run_budget(
+                        spent_so_far=self._total_cost_usd,
+                        remaining_subtasks=len(pending),
+                        budget_limit=self.budget_limit,
+                    )
+                    if budget_check.status in ("warning", "critical"):
+                        logger.warning(
+                            "cost_forecast_midrun status=%s msg=%s",
+                            budget_check.status,
+                            budget_check.message,
+                        )
+                        if self._cost_alert_callback is not None:
+                            try:
+                                self._cost_alert_callback(budget_check)
+                            except (RuntimeError, TypeError, ValueError) as cb_err:
+                                logger.debug("cost_alert_callback_failed: %s", cb_err)
+                except (RuntimeError, OSError, ValueError, TypeError) as e:
+                    logger.debug("cost_forecast_midrun_failed: %s", e)
 
         # Stop stuck detection monitoring
         if self.enable_stuck_detection and self._stuck_detector is not None:
