@@ -503,7 +503,7 @@ jobs:
               "for i in $(seq 1 12); do if curl -sf http://localhost:8080/api/health; then echo; echo HEALTH_OK; break; fi; echo \"Waiting for server... attempt $i/12\"; sleep 5; done",
               "if ! curl -sf http://localhost:8080/api/health > /dev/null; then echo HEALTH_FAIL; exit 1; fi",
               "echo Verifying build SHA...",
-              "DEPLOYED_SHA=$(cd /home/ec2-user/aragora && git rev-parse HEAD)",
+              "DEPLOYED_SHA=$(sudo -u ec2-user git -C /home/ec2-user/aragora rev-parse HEAD 2>/dev/null || echo unknown)",
               "echo DEPLOYED_SHA=$DEPLOYED_SHA",
               "EXPECTED_SHA=${{ github.sha }}",
               "if [ \"$DEPLOYED_SHA\" != \"$EXPECTED_SHA\" ]; then echo SHA_MISMATCH: expected=$EXPECTED_SHA deployed=$DEPLOYED_SHA; exit 1; fi",
