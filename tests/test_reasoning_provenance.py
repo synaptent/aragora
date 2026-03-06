@@ -42,6 +42,8 @@ class TestSourceTypeEnum:
             "database",
             "computation",
             "synthesis",
+            "audio_transcript",
+            "blockchain",
             "unknown",
         ]
         actual = [st.value for st in SourceType]

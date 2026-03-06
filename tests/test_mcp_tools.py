@@ -30,7 +30,7 @@ class TestToolsMetadata:
 
     def test_metadata_has_all_tools(self):
         """Test that metadata defines all registered tools."""
-        assert len(TOOLS_METADATA) == 67
+        assert len(TOOLS_METADATA) == 80
 
     def test_metadata_core_tool_names(self):
         """Test core tool names are present in metadata."""
