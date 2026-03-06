@@ -26,10 +26,51 @@ jobs:
             const repo = context.repo.repo;
             const bypassTag = "[allow-direct-main]";
             const violations = [];
+            const titlePatterns = [
+              /\(#(\d+)\)\s*$/,
+              /^Merge pull request #(\d+)\b/,
+            ];
 
             if (commits.length === 0) {
               core.info("No commits in payload; skipping direct-push check.");
               return;
+            }
+
+            async function isVerifiedPullMerge(prNumber, commitSha) {
+              try {
+                const { data: pr } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                });
+                return Boolean(
+                  pr &&
+                    pr.merged_at &&
+                    pr.base &&
+                    pr.base.ref === "main" &&
+                    (pr.merge_commit_sha || "").trim() === commitSha
+                );
+              } catch (error) {
+                core.warning(`PR lookup by number failed for #${prNumber}: ${String(error)}`);
+                return false;
+              }
+            }
+
+            async function hasAssociatedMainPull(commitSha) {
+              const resp = await github.request(
+                "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
+                {
+                  owner,
+                  repo,
+                  commit_sha: commitSha,
+                  mediaType: { previews: ["groot"] },
+                }
+              );
+              const prs = Array.isArray(resp.data) ? resp.data : [];
+              return prs.some((pr) => {
+                const baseRef = pr?.base?.ref || "";
+                return baseRef === "main" && Boolean(pr?.merged_at);
+              });
             }
 
             for (const commit of commits) {
@@ -39,18 +80,24 @@ jobs:
                 continue;
               }
 
+              let verifiedByTitle = false;
+              for (const pattern of titlePatterns) {
+                const match = title.match(pattern);
+                if (!match) {
+                  continue;
+                }
+                verifiedByTitle = await isVerifiedPullMerge(Number(match[1]), commit.id);
+                if (verifiedByTitle) {
+                  break;
+                }
+              }
+              if (verifiedByTitle) {
+                continue;
+              }
+
               try {
-                const resp = await github.request(
-                  "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
-                  {
-                    owner,
-                    repo,
-                    commit_sha: commit.id,
-                    mediaType: { previews: ["groot"] },
-                  }
-                );
-                const prs = Array.isArray(resp.data) ? resp.data : [];
-                if (prs.length === 0) {
+                const associated = await hasAssociatedMainPull(commit.id);
+                if (!associated) {
                   violations.push(`${commit.id.slice(0, 7)} ${title}`);
                 }
               } catch (error) {

@@ -42,11 +42,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: ./.github/actions/setup-python-safe
-        with:
-          python-version: "3.11"
-
       - name: Evaluate and revert failed required checks
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
