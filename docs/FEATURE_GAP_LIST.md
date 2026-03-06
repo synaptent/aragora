@@ -19,7 +19,7 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | External penetration test | Vendor outreach in progress | Kickoff target: Mar 3, 2026. Only remaining external blocker. |
-| Debate output quality | Substantially improved — needs consistency validation | Run 012 (Mar 5): composite scores 8.38-9.39/10 (was 3.46-3.55). Practicality scoring fixes merged. Goal: validate 80%+ pass rate consistency across diverse tasks. |
+| Debate output quality | **VALIDATED — 100% pass rate** | Run 012 (Mar 5): composite 8.38-9.39/10. Diverse benchmark (10 domains): 100% pass, avg composite 0.938. Move to Completed next update. |
 
 ---
 
@@ -46,7 +46,6 @@
 | Decision-Integrity UI Workbench | Not started | No frontend for knowledge search, agent leaderboard, pipeline canvas. Backend APIs complete. |
 | SOC 2 Type II audit engagement | Not started | 98% controls implemented; formal audit vendor not engaged. |
 | Smart provider routing | Not started | Cost/quality-optimized routing across Claude/GPT/Mistral/DeepSeek. |
-| Article 9 dedicated artifact bundle | **Complete** | `Article9Artifact` dataclass + `_generate_art9()` generator + CLI export. Risk assessment, mitigation measures, residual risk, monitoring plan, incident response all included. Move to Completed table next update. |
 
 ---
 
@@ -92,7 +91,7 @@
 
 | Feature | Current State | Gap |
 |---------|---------------|-----|
-| Self-improving platform quality | Nomic Loop 100% wired; 66 E2E tests; pipeline hardened (live async default, quality gate, bidirectional handoff — PRs #650, #649 merged) | Validate 80%+ pass rate consistency across diverse tasks; diverse benchmark in progress |
+| Self-improving platform quality | Nomic Loop 100% wired; 82 E2E tests; pipeline hardened (PRs #650, #649, #659 merged); safety gates + gauntlet gate + evolution audit | Diverse benchmark validated (100% pass). Production safety gate requires ENABLE_NOMIC_LOOP=true. |
 | Blockchain receipts | SHA-256 cryptographic hashing works | On-chain storage with ERC-8004 (not deployed) |
 | Semantic convergence | Embedding detection wired (sentence-transformers) | Not default; some debate paths still use difflib |
 | OpenClaw execution | Computer use detection works | Production E2E flow (debate → computer use → receipt) not validated |
@@ -117,3 +116,6 @@ These items were planned and are now shipped:
 | Compliance CLI (EU AI Act artifact export) | Mar 2026 |
 | Settlement hooks | Mar 2026 |
 | Gauntlet receipts (SHA-256 audit trails) | Feb 2026 |
+| Article 9 dedicated artifact bundle | Mar 2026 |
+| Debate output quality (10-domain benchmark) | Mar 2026 |
+| Nomic Loop safety gates (production gate, gauntlet, audit) | Mar 2026 |

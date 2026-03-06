@@ -21,6 +21,7 @@ from email.mime.text import MIMEText
 
 from aragora.exceptions import SlackNotificationError, WebhookDeliveryError
 
+from .delivery_log import DeliveryLogEntry, get_delivery_log_store
 from .models import (
     EmailConfig,
     Notification,
@@ -31,6 +32,29 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def _log_delivery(
+    notification: Notification,
+    result: NotificationResult,
+    latency_seconds: float,
+) -> None:
+    """Record a delivery attempt in the delivery log store."""
+    try:
+        store = get_delivery_log_store()
+        entry = DeliveryLogEntry(
+            notification_id=notification.id,
+            channel=result.channel.value,
+            recipient=result.recipient,
+            status="delivered" if result.success else "failed",
+            external_id=result.external_id or "",
+            error=result.error or "",
+            latency_ms=latency_seconds * 1000,
+        )
+        await store.log(entry)
+    except (OSError, RuntimeError, ValueError) as exc:
+        logger.debug("Failed to log delivery entry: %s", exc)
+
 
 __all__ = [
     "NotificationProvider",
@@ -138,12 +162,14 @@ class SlackProvider(NotificationProvider):
             _record_notification_metric(
                 "slack", notification.severity, notification.priority.value, True, latency
             )
-            return NotificationResult(
+            result = NotificationResult(
                 success=True,
                 channel=self.channel,
                 recipient=recipient,
                 notification_id=notification.id,
             )
+            await _log_delivery(notification, result, latency)
+            return result
 
         except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.error("Failed to send Slack notification: %s", e)
@@ -157,13 +183,15 @@ class SlackProvider(NotificationProvider):
                 latency,
                 error_type,
             )
-            return NotificationResult(
+            result = NotificationResult(
                 success=False,
                 channel=self.channel,
                 recipient=recipient,
                 notification_id=notification.id,
                 error="Slack notification delivery failed",
             )
+            await _log_delivery(notification, result, latency)
+            return result
 
     def _build_message(self, notification: Notification) -> dict:
         """Build Slack message payload."""
@@ -327,12 +355,14 @@ class EmailProvider(NotificationProvider):
             _record_notification_metric(
                 "email", notification.severity, notification.priority.value, True, latency
             )
-            return NotificationResult(
+            result = NotificationResult(
                 success=True,
                 channel=self.channel,
                 recipient=recipient,
                 notification_id=notification.id,
             )
+            await _log_delivery(notification, result, latency)
+            return result
 
         except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.error("Failed to send email notification: %s", e)
@@ -346,13 +376,15 @@ class EmailProvider(NotificationProvider):
                 latency,
                 error_type,
             )
-            return NotificationResult(
+            result = NotificationResult(
                 success=False,
                 channel=self.channel,
                 recipient=recipient,
                 notification_id=notification.id,
                 error="Email notification delivery failed",
             )
+            await _log_delivery(notification, result, latency)
+            return result
 
     def _send_email(self, notification: Notification, recipient: str) -> None:
         """Send email via SMTP."""
@@ -565,12 +597,14 @@ class WebhookProvider(NotificationProvider):
             _record_notification_metric(
                 "webhook", notification.severity, notification.priority.value, True, latency
             )
-            return NotificationResult(
+            result = NotificationResult(
                 success=True,
                 channel=self.channel,
                 recipient=recipient,
                 notification_id=notification.id,
             )
+            await _log_delivery(notification, result, latency)
+            return result
 
         except (ConnectionError, TimeoutError, OSError, ValueError, RuntimeError) as e:
             logger.error("Failed to send webhook notification: %s", e)
@@ -584,13 +618,15 @@ class WebhookProvider(NotificationProvider):
                 latency,
                 error_type,
             )
-            return NotificationResult(
+            result = NotificationResult(
                 success=False,
                 channel=self.channel,
                 recipient=recipient,
                 notification_id=notification.id,
                 error="Webhook notification delivery failed",
             )
+            await _log_delivery(notification, result, latency)
+            return result
 
     async def send_to_matching(
         self,
