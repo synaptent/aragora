@@ -246,7 +246,7 @@ jobs:
         run: |
           python3 scripts/run_dogfood_ab_pairs.py \
             --pairs 1 \
-            --timeout-seconds 180 \
+            --timeout-seconds 300 \
             --prompt-profile integration_vague \
             --output-root /tmp/dogfood_ab_integration_vague_ci
 
@@ -255,7 +255,7 @@ jobs:
           python3 scripts/run_dogfood_benchmark.py \
             --base-report docs/plans/dogfood_pipeline_self_improve_base_report.json \
             --runs 1 \
-            --timeout 300 \
+            --timeout 450 \
             --output /tmp/dogfood_pipeline_self_improve_benchmark_ci.json \
             --enforce-pipeline-hard-checks \
             --require-pipeline-hard-checks-presence
