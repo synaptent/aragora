@@ -28,6 +28,8 @@ from datetime import datetime, timezone
 from typing import Any, TypedDict
 from uuid import uuid4
 
+from aragora.rbac.decorators import require_permission
+
 
 class ConnectorTypeMeta(TypedDict, total=False):
     """Metadata for a connector type."""
@@ -500,6 +502,7 @@ class ConnectorsHandler(SecureHandler):
 
         return self._json_response(200, connector)
 
+    @require_permission("connectors:delete")
     async def _delete_connector(self, request: Any, connector_id: str) -> dict[str, Any]:
         """Remove a connector (doesn't delete synced data)."""
         if connector_id not in _connectors:

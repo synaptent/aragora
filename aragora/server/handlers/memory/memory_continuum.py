@@ -327,6 +327,7 @@ class MemoryContinuumMixin:
 
     @rate_limit(requests_per_minute=10, limiter_name="memory_delete")
     @handle_errors("memory deletion")
+    @require_permission("memory:delete")
     def _delete_memory(self, memory_id: str) -> HandlerResult:
         """Delete a memory by ID."""
         from .memory import CONTINUUM_AVAILABLE

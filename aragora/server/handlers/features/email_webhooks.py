@@ -929,11 +929,13 @@ class EmailWebhooksHandler(BaseHandler):
             logger.exception("Error deleting subscription: %s", e)
             return error_response("Subscription deletion failed", 500)
 
+    @require_permission("email:delete")
     async def _delete_gmail_subscription(self, subscription: WebhookSubscription) -> None:
         """Delete Gmail Pub/Sub watch."""
         # In production, call Gmail API to stop the watch
         pass
 
+    @require_permission("email:delete")
     async def _delete_outlook_subscription(self, subscription: WebhookSubscription) -> None:
         """Delete Outlook Graph subscription."""
         # In production, call Microsoft Graph API to delete subscription
