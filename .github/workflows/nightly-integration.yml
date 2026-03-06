@@ -43,8 +43,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -112,8 +112,8 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 

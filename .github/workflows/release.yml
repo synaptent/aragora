@@ -102,7 +102,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -161,10 +161,10 @@ jobs:
             exit 1
           fi
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "${{"
 
       - name: Install dependencies
         run: |
@@ -216,7 +216,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -298,7 +298,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -439,7 +439,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -543,7 +543,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -626,7 +626,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 

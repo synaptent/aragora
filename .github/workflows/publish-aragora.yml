@@ -48,9 +48,9 @@ jobs:
           fi
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install package
         run: pip install -e ".[dev]"
@@ -90,9 +90,9 @@ jobs:
           fi
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install build tools
         run: pip install build twine

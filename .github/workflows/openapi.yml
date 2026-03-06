@@ -128,7 +128,7 @@ jobs:
       - name: Set up Python 3.11
         id: setup-python
         continue-on-error: true
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 

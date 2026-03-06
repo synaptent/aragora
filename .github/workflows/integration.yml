@@ -53,9 +53,9 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "${{"
 
       - name: Install dependencies
         run: |
@@ -186,9 +186,9 @@ jobs:
           echo "Successfully loaded $LOADED_COUNT API keys"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "${{"
           cache: 'pip'
 
       - name: Install dependencies
@@ -337,9 +337,9 @@ jobs:
           echo "Successfully loaded $LOADED_COUNT API keys"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "${{"
           cache: 'pip'
 
       - name: Install dependencies
@@ -479,9 +479,9 @@ jobs:
           echo "Successfully loaded $LOADED_COUNT API keys"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "${{"
           cache: 'pip'
 
       - name: Install dependencies

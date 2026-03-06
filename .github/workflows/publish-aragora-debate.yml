@@ -96,9 +96,9 @@ jobs:
           fi
 
       - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "${{"
 
       - name: Install package with dev deps
         run: pip install -e ".[dev]"
@@ -148,9 +148,9 @@ jobs:
           fi
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install build tools
         run: pip install build

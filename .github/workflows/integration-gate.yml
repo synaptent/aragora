@@ -51,7 +51,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -114,7 +114,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
           cache: 'pip'
@@ -188,8 +188,8 @@ jobs:
       # ---------------------------------------------------------------
       # SDK contract parity (Python vs TypeScript)
       # ---------------------------------------------------------------
-      - name: Set up Python for SDK parity check
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 
@@ -235,7 +235,7 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
 

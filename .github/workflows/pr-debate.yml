@@ -105,10 +105,10 @@ jobs:
 
       - name: Setup Python
         if: github.event_name == 'workflow_dispatch'
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: 'pip'
 
       - name: Ensure GitHub CLI is available
         if: github.event_name == 'workflow_dispatch'

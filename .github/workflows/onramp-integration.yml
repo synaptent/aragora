@@ -32,7 +32,8 @@ jobs:
             ls -la
             exit 1
           fi
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
       - name: Install and run quickstart
@@ -103,7 +104,8 @@ jobs:
             ls -la
             exit 1
           fi
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
         with:
           python-version: "3.11"
       - name: Check SDK parity

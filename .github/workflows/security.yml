@@ -99,9 +99,9 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install Bandit
         run: pip install bandit[toml]
@@ -153,9 +153,9 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install dependencies
         run: pip install -e ".[dev]" 2>/dev/null || pip install -e . || true
@@ -205,9 +205,9 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install security tools
         run: pip install safety pip-audit
@@ -324,9 +324,9 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Check unresolved pentest findings
         run: python scripts/check_pentest_findings.py --file security/pentest/findings.json
@@ -364,9 +364,9 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Check RBAC decorator coverage
         run: python scripts/audit_rbac_coverage.py --summary --min-coverage 55

@@ -76,9 +76,9 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "${{"
 
       - name: Install k6
         run: |
@@ -452,9 +452,9 @@ jobs:
           fi
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: ./.github/actions/setup-python-safe
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "${{"
 
       - name: Install dependencies
         run: |
