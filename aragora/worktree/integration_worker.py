@@ -21,6 +21,9 @@ from aragora.nomic.branch_coordinator import (
     BranchCoordinatorConfig,
 )
 from aragora.worktree.fleet import FleetCoordinationStore
+from aragora.worktree.integration_target_workspace import (
+    FleetIntegrationTargetWorkspace,
+)
 
 
 @dataclass
@@ -29,6 +32,8 @@ class FleetIntegrationWorkerConfig:
 
     target_branch: str = "main"
     execute_with_test_gate: bool = False
+    use_dedicated_integration_workspace: bool = True
+    integration_workspace_path: Path | None = None
 
 
 @dataclass
@@ -72,18 +77,14 @@ class FleetIntegrationWorker:
         fleet_store: FleetCoordinationStore | None = None,
         branch_coordinator: BranchCoordinator | None = None,
         reconciler: GitReconciler | None = None,
+        integration_workspace: FleetIntegrationTargetWorkspace | None = None,
     ) -> None:
         self.repo_path = (repo_path or Path.cwd()).resolve()
         self.config = config or FleetIntegrationWorkerConfig()
         self.fleet_store = fleet_store or FleetCoordinationStore(self.repo_path)
-        self.branch_coordinator = branch_coordinator or BranchCoordinator(
-            repo_path=self.repo_path,
-            config=BranchCoordinatorConfig(
-                base_branch=self.config.target_branch,
-                use_worktrees=True,
-            ),
-        )
-        self.reconciler = reconciler or GitReconciler(repo_path=self.repo_path)
+        self.branch_coordinator = branch_coordinator
+        self.reconciler = reconciler
+        self.integration_workspace = integration_workspace
 
     @staticmethod
     def _is_checkout_constraint(error: str | None) -> bool:
@@ -92,6 +93,34 @@ class FleetIntegrationWorker:
             return False
         lowered = error.lower()
         return "failed to checkout target branch" in lowered and "already checked out" in lowered
+
+    def _merge_engines(self, source_branch: str) -> tuple[BranchCoordinator, GitReconciler, Path]:
+        """Resolve merge engines, optionally via a dedicated integration workspace."""
+        if self.branch_coordinator is not None and self.reconciler is not None:
+            return self.branch_coordinator, self.reconciler, self.repo_path
+
+        engine_repo_path = self.repo_path
+        if self.config.use_dedicated_integration_workspace:
+            workspace = self.integration_workspace or FleetIntegrationTargetWorkspace(
+                repo_root=self.repo_path,
+                target_branch=self.config.target_branch,
+                workspace_path=self.config.integration_workspace_path,
+            )
+            self.integration_workspace = workspace
+            engine_repo_path = workspace.ensure_ready(source_branch=source_branch)
+
+        if self.branch_coordinator is None:
+            self.branch_coordinator = BranchCoordinator(
+                repo_path=engine_repo_path,
+                config=BranchCoordinatorConfig(
+                    base_branch=self.config.target_branch,
+                    use_worktrees=True,
+                ),
+            )
+        if self.reconciler is None:
+            self.reconciler = GitReconciler(repo_path=engine_repo_path)
+
+        return self.branch_coordinator, self.reconciler, engine_repo_path
 
     async def process_next(
         self,
@@ -116,10 +145,11 @@ class FleetIntegrationWorker:
         item_id = str(item.get("id", ""))
         branch = str(item.get("branch", ""))
         metadata = dict(item.get("metadata") or {})
-        changed_files = self.reconciler.get_changed_files(branch, self.config.target_branch)
-        commits_ahead = self.reconciler.get_commits_ahead(branch, self.config.target_branch)
+        branch_coordinator, reconciler, engine_repo_path = self._merge_engines(source_branch=branch)
+        changed_files = reconciler.get_changed_files(branch, self.config.target_branch)
+        commits_ahead = reconciler.get_commits_ahead(branch, self.config.target_branch)
 
-        conflict_infos = self.reconciler.detect_conflicts(branch, self.config.target_branch)
+        conflict_infos = reconciler.detect_conflicts(branch, self.config.target_branch)
         conflict_details = [
             {
                 "file_path": info.file_path,
@@ -136,6 +166,7 @@ class FleetIntegrationWorker:
             "reconciler_conflicts": conflict_details,
             "changed_files": changed_files,
             "commits_ahead": commits_ahead,
+            "integration_workspace_path": str(engine_repo_path),
         }
 
         if conflict_details:
@@ -156,7 +187,7 @@ class FleetIntegrationWorker:
                 metadata=dict(updated.get("metadata") or {}),
             )
 
-        dry_run = await self.branch_coordinator.safe_merge(
+        dry_run = await branch_coordinator.safe_merge(
             branch,
             self.config.target_branch,
             dry_run=True,
@@ -208,12 +239,12 @@ class FleetIntegrationWorker:
         )
 
         if self.config.execute_with_test_gate:
-            merge_result = await self.branch_coordinator.safe_merge_with_gate(
+            merge_result = await branch_coordinator.safe_merge_with_gate(
                 branch,
                 target=self.config.target_branch,
             )
         else:
-            merge_result = await self.branch_coordinator.safe_merge(
+            merge_result = await branch_coordinator.safe_merge(
                 branch,
                 self.config.target_branch,
                 dry_run=False,

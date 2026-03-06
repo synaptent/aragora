@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -10,11 +11,43 @@ import pytest
 from aragora.coordination.reconciler import ConflictCategory, ConflictInfo
 from aragora.nomic.branch_coordinator import MergeResult
 from aragora.worktree.fleet import FleetCoordinationStore
+from aragora.worktree.integration_target_workspace import FleetIntegrationTargetWorkspace
 from aragora.worktree.integration_worker import FleetIntegrationWorker
 
 
 def _checkout_error() -> str:
     return "Failed to checkout target branch main: 'main' is already checked out at /tmp/main"
+
+
+def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603 -- fixed command arguments in tests
+        list(args),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return _run(cwd, "git", *args)
+
+
+def _make_git_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    (repo / "README.md").write_text("hello\n")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "initial")
+    _git(repo, "checkout", "-b", "feature/test")
+    (repo / "feature.py").write_text("VALUE = 1\n")
+    _git(repo, "add", "feature.py")
+    _git(repo, "commit", "-m", "feature")
+    _git(repo, "checkout", "main")
+    return repo
 
 
 @pytest.mark.asyncio
@@ -202,3 +235,25 @@ async def test_process_next_marks_execution_conflicts_blocked(tmp_path: Path) ->
     assert outcome.queue_status == "blocked"
     assert outcome.conflicts == ["aragora/x.py"]
     assert store.list_merge_queue()[0]["status"] == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_process_next_uses_dedicated_integration_workspace(tmp_path: Path) -> None:
+    repo = _make_git_repo(tmp_path)
+    store = FleetCoordinationStore(repo)
+    store.enqueue_merge(session_id="session-a", branch="feature/test", priority=60)
+
+    worker = FleetIntegrationWorker(
+        repo_path=repo,
+        fleet_store=store,
+        integration_workspace=FleetIntegrationTargetWorkspace(
+            repo_root=repo,
+            target_branch="main",
+        ),
+    )
+
+    outcome = await worker.process_next(worker_session_id="integrator-1")
+
+    assert outcome.action == "validated"
+    assert outcome.queue_status == "needs_human"
+    assert outcome.metadata["integration_workspace_path"] != str(repo)
