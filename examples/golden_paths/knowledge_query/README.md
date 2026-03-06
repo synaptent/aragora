@@ -70,7 +70,7 @@ Rounds:     1
 | `store.query()` | `km.query("...", limit=5)` with vector embeddings |
 | `store.ingest()` | `km.ingest({"title": ..., "content": ...})` |
 | Keyword matching | Semantic search via SentenceTransformer embeddings |
-| In-memory storage | SQLite / PostgreSQL with 41 adapters |
+| In-memory storage | SQLite / PostgreSQL with 45 adapters |
 
 ## Key APIs used
 

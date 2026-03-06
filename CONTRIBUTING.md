@@ -245,7 +245,7 @@ Aragora is a **control plane for multi-agent robust decisionmaking**. Here's how
 
 - **Protocol-based composition**: Features like calibration, rhetorical analysis, and trickster detection are enabled via `DebateProtocol` flags
 - **Circuit breaker resilience**: All external calls use `aragora/resilience.py` for fault tolerance
-- **Adapter pattern**: Knowledge Mound uses 41 adapters to integrate with subsystems
+- **Adapter pattern**: Knowledge Mound uses 45 adapters to integrate with subsystems
 - **Event-driven streaming**: WebSocket events for real-time debate updates
 
 ## Project Structure
@@ -256,13 +256,13 @@ aragora/
 │   ├── agents/        # Agent implementations (API + CLI)
 │   ├── debate/        # Debate orchestration (Arena, phases, consensus)
 │   ├── memory/        # Memory systems (Continuum, 4-tier)
-│   ├── knowledge/     # Knowledge Mound with 41 adapters
+│   ├── knowledge/     # Knowledge Mound with 45 adapters
 │   ├── server/        # HTTP/WebSocket API (3,000+ operations)
 │   ├── control_plane/ # Enterprise orchestration
-│   ├── connectors/    # 130+ external integrations
+│   ├── connectors/    # 200+ external integrations
 │   ├── cli/           # CLI commands
 │   └── rbac/          # Role-based access control
-├── tests/             # 50,000+ tests across 1,600+ files
+├── tests/             # 208,000+ tests across 4,500+ files
 ├── docs/              # Documentation (212 files)
 └── sdk/typescript/    # TypeScript SDK
 ```

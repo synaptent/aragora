@@ -485,7 +485,7 @@ await adapter.sync()  # Sync critique patterns to mound
 
 The Knowledge Mound supports bidirectional integration with all major subsystems through specialized adapters. These adapters enable:
 
-- **41 registered adapters** wired via `aragora/knowledge/mound/adapters/factory.py`
+- **45 registered adapters** wired via `aragora/knowledge/mound/adapters/factory.py`
 - **Additional adapter files** present but not factory-registered (`extraction`, `nomic_cycle`, `openclaw`, `ranking`)
 
 - **Data Flow IN**: Subsystems automatically sync relevant data to KM

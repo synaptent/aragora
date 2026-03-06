@@ -68,7 +68,7 @@ Healthcare, finance, legal, and government organizations that need auditable AI 
 | **Core Debate** | Propose/Critique/Revise/Vote/Synthesize loop; 8+ consensus modes; 50+ round extended debates; graph and matrix debate topologies; debate breakpoints (pause/resume) | 50+ concurrent debates |
 | **Decision Receipts** | SHA-256 hash chains; HMAC-SHA256, RSA-SHA256, Ed25519 signing; Markdown, HTML, PDF, SARIF, CSV export; retention policies | Tamper-evident audit artifacts |
 | **Pipeline** | 4-stage Idea-to-Execution; canvas orchestration; post-debate automated workflows; argument cartography | DAG-based automation |
-| **Knowledge & Memory** | 4-tier Continuum Memory (fast/medium/slow/glacial); Knowledge Mound with 41 adapters; cross-debate institutional memory; unified memory gateway | Semantic search + dedup |
+| **Knowledge & Memory** | 4-tier Continuum Memory (fast/medium/slow/glacial); Knowledge Mound with 45 adapters; cross-debate institutional memory; unified memory gateway | Semantic search + dedup |
 | **Agent System** | 43 agent types; 6+ LLM providers; ELO rankings per domain; Brier score calibration; Trickster hollow consensus detection; automatic OpenRouter fallback | Heterogeneous multi-provider |
 | **Enterprise Security** | OIDC/SAML SSO (Azure AD, Okta, Google, Auth0, Keycloak); MFA (TOTP/HOTP); SCIM 2.0 provisioning; RBAC v2 with 390+ permissions; multi-tenancy with isolation | 7 default roles |
 | **Compliance** | SOC 2 controls; GDPR (deletion/export/consent/anonymization); HIPAA (field-level encryption); EU AI Act artifact generation (Articles 9, 12-15) | 5 regulatory frameworks |
@@ -226,7 +226,7 @@ Profitability depends on team size and go-to-market spend, but the unit economic
 | **Slow developer adoption** | Delayed Pro conversions | Demo mode removes all friction; code review is immediately useful; EU AI Act creates urgency |
 | **Enterprise sales cycle longer than expected** | Revenue ramp delay | Focus on SMB Pro revenue first; enterprise is upside, not dependency |
 | **LLM provider pricing changes** | Customer cost concerns | BYOK model insulates Aragora; multi-provider support prevents lock-in |
-| **Competitor entry** | Category pressure | 1.49M LOC, 208K tests, 41 KM adapters create deep technical moat; self-improving Nomic Loop compounds advantage |
+| **Competitor entry** | Category pressure | 1.49M LOC, 208K tests, 45 KM adapters create deep technical moat; self-improving Nomic Loop compounds advantage |
 | **EU AI Act enforcement delayed** | Reduced urgency | Product value stands without regulation (decision quality + audit trails); regulation is accelerant, not dependency |
 
 ---

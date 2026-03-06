@@ -92,7 +92,7 @@ For small teams that need decision rigor and audit trails.
 | CI/CD integration | GitHub Actions, GitLab CI |
 | Channel delivery | Slack, Teams, Discord, email |
 | 4-tier Continuum Memory | Fast / medium / slow / glacial |
-| Knowledge Mound | 41 adapters |
+| Knowledge Mound | 45 adapters |
 | ELO rankings + Brier calibration | Per-agent, per-domain tracking |
 | Workflow engine | 50+ templates across 6 categories |
 | Vertical weight profiles | Healthcare, financial, legal |
@@ -150,7 +150,7 @@ For organizations with compliance, security, and governance requirements.
 | Anti-fragile agent reassignment | -- | Yes | Yes |
 | **Memory & Knowledge** | | | |
 | 4-tier Continuum Memory | -- | Yes | Yes |
-| Knowledge Mound (41 adapters) | -- | Yes | Yes |
+| Knowledge Mound (45 adapters) | -- | Yes | Yes |
 | Cross-debate institutional memory | -- | Yes | Yes |
 | **Integrations** | | | |
 | REST API + WebSocket | Limited | Full | Full |
@@ -288,7 +288,7 @@ Both SDKs provide typed clients for all 3,000+ API operations with full IntelliS
 | API operations | 2,000+ across 2,900+ paths |
 | WebSocket event types | 190+ |
 | SDK namespaces | 184 Python / 183 TypeScript (99.3% parity) |
-| Knowledge Mound adapters | 41 |
+| Knowledge Mound adapters | 45 |
 | RBAC permission combinations | 450+ (14 resource types × 8 actions × 4 scope levels) |
 | Agent types | 43 |
 | LLM providers | 6+ (Anthropic, OpenAI, Google, xAI, Mistral, OpenRouter) |

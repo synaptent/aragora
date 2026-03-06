@@ -24,7 +24,7 @@ Aragora is a **1.5M LOC Decision Integrity Platform** with genuine technical dep
 | Tests | 136K+ | **131,671 test methods, 259,971 asserts** | Real functions exist, but only ~13,500 collectible locally (full count requires all optional deps in CI). ~15-20% are config-default validators. 99.7% pass rate on cold run. |
 | API operations | 2,000+ | **~1,813 SDK endpoints** | Near-complete server coverage |
 | Connectors | Broad | **204 connector files, 122,979 LOC** | Real API integrations, not stubs |
-| KM adapters | 41 | **47 adapter files** | All wired into Knowledge Mound |
+| KM adapters | 45 | **47 adapter files** | All wired into Knowledge Mound |
 | Agent types | 43 | **12+ LLM providers + 10+ specialized agents** | Heterogeneous, real API integrations |
 
 ### What's Genuinely Deep (Hard to Replicate)
@@ -111,7 +111,7 @@ Aragora is a **1.5M LOC Decision Integrity Platform** with genuine technical dep
 
 **1. The competitors aren't building this.** LangGraph/CrewAI/AutoGen are building cooperative orchestration plumbing. OpenAI/Anthropic are building single-agent reliability. IBM/ServiceNow are building governance paperwork. Nobody is building adversarial multi-agent decision vetting with calibrated trust and audit receipts. The category doesn't exist yet.
 
-**2. The integration density is a moat.** 41 KM adapters, 200+ connectors, 5-system memory coordinator, 36 debate phases, 12 ELO modules -- all wired together. A funded competitor could replicate any single subsystem in weeks, but replicating the integration web would take 12-18 months of focused engineering.
+**2. The integration density is a moat.** 45 KM adapters, 200+ connectors, 5-system memory coordinator, 36 debate phases, 12 ELO modules -- all wired together. A funded competitor could replicate any single subsystem in weeks, but replicating the integration web would take 12-18 months of focused engineering.
 
 **3. The self-improvement loop compounds.** Each Nomic Loop cycle makes the platform better. This is a structural advantage that grows over time. No competitor has anything like this.
 
@@ -156,7 +156,7 @@ If individual AI models become so reliable that adversarial debate is unnecessar
 - *Who*: Organizations wanting AI-curated knowledge that's been adversarially validated
 - *Why Aragora*: Knowledge Mound + cross-debate learning + contradiction detection
 - *Competition*: Notion AI, Glean, Guru (but none do adversarial vetting)
-- *Moat*: 41 adapters, institutional memory accumulation, confidence decay
+- *Moat*: 45 adapters, institutional memory accumulation, confidence decay
 
 **E. Code Review / Decision Review Platform**
 - *Who*: Engineering teams wanting multi-model code review
@@ -378,7 +378,7 @@ git push -u origin reconcile/2026-02-12
 | ADRs | 16 (high quality, consistent format) |
 | Code-to-docs ratio | 1:0.13 |
 
-**Key finding**: Documentation is **honest but stale** — claims consistently *understate* the actual implementation rather than overstate it. As of March 2026: 3,790 Python modules, 41 KM adapters, 43 agent types, 360+ RBAC permissions, 5,000+ test files, 208,000+ tests. Stale counts have been systematically updated across all docs.
+**Key finding**: Documentation is **honest but stale** — claims consistently *understate* the actual implementation rather than overstate it. As of March 2026: 3,790 Python modules, 45 KM adapters, 43 agent types, 360+ RBAC permissions, 5,000+ test files, 208,000+ tests. Stale counts have been systematically updated across all docs.
 
 **Status**: Stale counts in CLAUDE.md, STATUS.md, and CAPABILITY_MATRIX.md have been updated to reflect current reality.
 

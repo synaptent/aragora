@@ -20,7 +20,7 @@ All aragoradocs should cite these values. Update monthly.
 | API operations | 3,000+ across 2,900+ paths | OpenAPI spec |
 | WebSocket event types | 190+ | Stream modules |
 | SDK namespaces | 184 Python / 183 TypeScript (99.3% parity) | SDK package |
-| Knowledge Mound adapters | 41 | adapter registry |
+| Knowledge Mound adapters | 45 | adapter registry |
 | RBAC permissions | 390+ across 165+ resource types | rbac/types.py |
 | Agent types | 43 across 6+ LLM providers | agent registry |
 | Workflow templates | 50+ across 6 categories | template registry |
@@ -482,7 +482,7 @@ These claims require qualification in all documents:
 | Zero paying customers | Fatal | Stop building, start selling | Ground-up analysis |
 | Debate quality inconsistent (33% good-run rate) | Blocks demos | Fix output contract parsing, quality gates | DOGFOOD_SPEC |
 | EU AI Act enforcement delayed | Reduced urgency | Product value stands without regulation | BUSINESS_SUMMARY |
-| Well-funded competitor adds adversarial features | Category pressure | Technical moat (210+ debate modules, 41 KM adapters) | STRATEGIC_ANALYSIS |
+| Well-funded competitor adds adversarial features | Category pressure | Technical moat (210+ debate modules, 45 KM adapters) | STRATEGIC_ANALYSIS |
 | Solo maintainer (bus factor) | Existential | Comprehensive docs, MIT license, CI coverage | COMPREHENSIVE_REPORT |
 | LLM provider reliability | Debate failures | Circuit breaker, OpenRouter fallback, multi-provider | HONEST_ASSESSMENT |
 | Engagement-driven revenue corrupts epistemic output | Existential to thesis | SaaS subscription primary; avoid ad-supported model entirely | Terrarium Model |

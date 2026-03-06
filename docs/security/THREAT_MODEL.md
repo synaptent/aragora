@@ -26,7 +26,7 @@
 | RBAC role assignments and permissions | Integrity-critical | PostgreSQL | Platform admin |
 | Tenant configuration and quotas | Confidential | PostgreSQL via `aragora/tenancy/quotas.py` | Tenant admin |
 | Audit logs (security events, authorization decisions) | Integrity-critical | PostgreSQL + in-memory (10K cap per F11) | Platform |
-| Knowledge Mound data (41 adapters, semantic search indices) | Confidential | PostgreSQL + file storage | Per-tenant |
+| Knowledge Mound data (45 adapters, semantic search indices) | Confidential | PostgreSQL + file storage | Per-tenant |
 | Skill definitions and marketplace content | Internal | SQLite / PostgreSQL via `aragora/skills/` | Platform |
 
 ### 1.2 Supporting Assets

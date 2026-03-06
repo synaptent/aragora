@@ -140,7 +140,7 @@ Nate quotes Anthropic's best practice: "Interview me in detail. Ask about techni
 Lütke's core insight — "state a problem with enough context that it's plausibly solvable without additional information" — is exactly what most users can't do. Aragora's interrogation engine is the mechanism that forces this to happen even when the user won't do it themselves.
 
 **4. The enterprise specification engineering opportunity is massive.**
-Nate's vision of "your entire organizational document corpus should be agent-readable" is exactly what Aragora's Knowledge Mound + 41 adapters + Obsidian sync is building toward. The one-person business advantage Nate describes ("just convert your Notion to be agent-readable and you're off to the races") is precisely Aragora's SME value proposition.
+Nate's vision of "your entire organizational document corpus should be agent-readable" is exactly what Aragora's Knowledge Mound + 45 adapters + Obsidian sync is building toward. The one-person business advantage Nate describes ("just convert your Notion to be agent-readable and you're off to the races") is precisely Aragora's SME value proposition.
 
 ### What Nate Misses That Aragora Should Exploit
 
@@ -172,7 +172,7 @@ Key differentiators:
 - **Idea-to-execution pipeline**: Vague prompts → goals → workflows → orchestrated agent execution
 - **Self-improvement loop (Nomic Loop)**: The system debates improvements to itself, implements them, verifies, and commits
 - **Decision accountability**: Cryptographic receipts, provenance chains, EU AI Act compliance artifacts
-- **Knowledge integration**: 41 Knowledge Mound adapters, Obsidian connector, memory tiers, Bayesian belief networks
+- **Knowledge integration**: 45 Knowledge Mound adapters, Obsidian connector, memory tiers, Bayesian belief networks
 
 ### What Aragora Should Become (Market-Aligned)
 
@@ -367,7 +367,7 @@ This creates an immutable chain: `Idea → Goal → Action → Agent Assignment 
 1. **Format network effects**: If the unified DAG format becomes standard for idea-to-execution pipelines, switching costs are high
 2. **Regulatory moat**: EU AI Act requires audit trails; cryptographic provenance from idea through execution is uniquely positioned
 3. **Institutional memory**: Each completed pipeline trains the system; compounding intelligence is nearly impossible to replicate
-4. **Integration depth**: 41 KM adapters, multiple LLM providers, Obsidian sync, enterprise connectors create a web expensive to copy
+4. **Integration depth**: 45 KM adapters, multiple LLM providers, Obsidian sync, enterprise connectors create a web expensive to copy
 5. **SME-specific design**: Large platforms optimize for broad markets; this targets the "10-200 person company that needs AI-orchestrated execution" segment that incumbents ignore
 
 ---

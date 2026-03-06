@@ -10,7 +10,7 @@ Aragora is **98% GA-ready**. The closed-loop backbone (CLB) sprint is now comple
 
 **By the numbers:**
 - 208,000+ tests across 5,000+ test files (0 failures on main)
-- 41 Knowledge Mound adapters registered (up from 34 in Q4 2025)
+- 45 Knowledge Mound adapters registered (up from 34 in Q4 2025)
 - 3,000+ API operations across 2,900+ paths
 - 14 RBAC resource types, 8 actions, 360+ permissions
 - SOC 2 controls framework: 98% implemented

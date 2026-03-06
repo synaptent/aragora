@@ -147,7 +147,7 @@ Aragora's architecture maps remarkably well to all four stages (~70% of backend 
 | Component | Location | Capabilities |
 |-----------|----------|-------------|
 | **ArgumentCartographer** | `aragora/visualization/mapper.py` | 7 node types (PROPOSAL, CRITIQUE, EVIDENCE, CONCESSION, REBUTTAL, VOTE, CONSENSUS), 5 edge relations, real-time graph construction, Mermaid/JSON/HTML export, structural annotation (fallacy detection, premise chains) |
-| **Knowledge Mound** | `aragora/knowledge/mound/core.py` | 41 adapters, semantic search, cross-debate learning, 4,300+ tests |
+| **Knowledge Mound** | `aragora/knowledge/mound/core.py` | 45 adapters, semantic search, cross-debate learning, 4,300+ tests |
 | **Workspace Beads/Convoys** | `aragora/workspace/` | Atomic work units with lifecycle tracking (PENDING, ASSIGNED, RUNNING, DONE, FAILED, SKIPPED) |
 
 **Missing:** No REST endpoint for raw idea graphs outside debate context. No concept-relationship graph for domain-agnostic ideas. No dedicated "idea capture" UI.
@@ -249,7 +249,7 @@ Aragora's architecture maps remarkably well to all four stages (~70% of backend 
 | grapher  |  tor     |  (existing)  |  (existing)                |
 |(existing)|  (new)   |              |                             |
 +----------+----------+--------------+-----------------------------+
-|              Knowledge Mound (41 adapters - existing)             |
+|              Knowledge Mound (45 adapters - existing)             |
 +-------------------------------------------------------------------+
 |         Provenance Chain (Gauntlet Receipts - existing)           |
 |         SHA-256 cryptographic audit trail                         |
@@ -265,7 +265,7 @@ Aragora's architecture maps remarkably well to all four stages (~70% of backend 
 No competitor has:
 - Multi-agent adversarial debate for idea vetting (Arena with 43 agent types)
 - Cryptographic decision receipts linking ideas to executed outcomes (Gauntlet)
-- 41-adapter knowledge management for cross-session learning
+- 45-adapter knowledge management for cross-session learning
 - Built-in heterogeneous model consensus (not just one AI provider)
 - Production-ready workflow engine with visual builder already using React Flow
 

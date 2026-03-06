@@ -130,7 +130,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 | **Memory Viewer** | Stable | HTML viewer for memory inspection | `aragora/server/handlers/memory/memory.py` | |
 | **Tool Usage Capture** | Optional | Opt-in tool usage capture into FAST tier | `aragora/memory/capture.py` | |
 | **Unified Memory Gateway** | Integrated | Fan-out query across ContinuumMemory, KM, Supermemory, claude-mem via `enable_unified_memory` (150 tests) | `aragora/memory/gateway/` | |
-| **ClaudeMemAdapter** | Integrated | KM adapter wrapping claude-mem MCP connector (one of 41 adapters) | `aragora/knowledge/mound/adapters/claude_mem_adapter.py` | |
+| **ClaudeMemAdapter** | Integrated | KM adapter wrapping claude-mem MCP connector (one of 45 adapters) | `aragora/knowledge/mound/adapters/claude_mem_adapter.py` | |
 
 ### Unified Memory Gateway Components
 
@@ -199,7 +199,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | **KM Resilience** | Stable | ResilientPostgresStore with retry, health, cache invalidation | `aragora/knowledge/mound/resilience.py` | |
 | **SLO Alerting** | Stable | Adapter performance monitoring with Prometheus | `aragora/config/performance_slos.py` | |
 
-### Knowledge Adapters (41 Total)
+### Knowledge Adapters (45 Total)
 
 | Adapter | Purpose | Key Files |
 |---------|---------|-----------|

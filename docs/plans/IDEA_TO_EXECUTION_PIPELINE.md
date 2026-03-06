@@ -175,7 +175,7 @@ All MIT-licensed, already in the project or ready to integrate:
 1. **Format network effects** — If the unified DAG format becomes standard for idea-to-execution pipelines, switching costs are high
 2. **Regulatory moat** — EU AI Act requires audit trails; cryptographic provenance from idea through execution is uniquely positioned
 3. **Institutional memory** — Each completed pipeline trains the system; compounding intelligence is nearly impossible to replicate
-4. **Integration depth** — 41 KM adapters, multiple LLM providers, external tool connectors create a web that's expensive to copy
+4. **Integration depth** — 45 KM adapters, multiple LLM providers, external tool connectors create a web that's expensive to copy
 5. **SME-specific design** — Large platforms optimize for broad markets; this targets "10-200 person company that needs AI-orchestrated execution"
 
 ---

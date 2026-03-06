@@ -107,7 +107,7 @@ These items were planned and are now shipped:
 | Feature | Shipped |
 |---------|---------|
 | Nomic Loop end-to-end | Jan 2026 |
-| Knowledge Mound Phase A2 (41 adapters) | Feb 2026 |
+| Knowledge Mound Phase A2 (45 adapters) | Feb 2026 |
 | Unified Memory Gateway | Feb 2026 |
 | Retention Gate (Titans/MIRAS) | Feb 2026 |
 | RBAC v2 (14 resource types, 8 actions) | Feb 2026 |

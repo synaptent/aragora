@@ -32,7 +32,7 @@
 - **Python modules**: 3,700+
 - **Tests**: 208,000+ across 5,000+ test files
 - **HTTP handlers**: 700+
-- **KM adapters**: 41
+- **KM adapters**: 45
 - **Agent types**: 43
 - **API operations**: 3,000+ across 2,900+ paths
 - **RBAC permissions**: 360+

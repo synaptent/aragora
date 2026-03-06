@@ -80,7 +80,7 @@ This is production-grade infrastructure, not prototyping code.
 | System | What It Does |
 |---|---|
 | Continuum Memory | 4-tier (Google's Nested Learning): FAST 1h, MEDIUM 24h, SLOW 7d, GLACIAL 30d with surprise-driven tier transitions |
-| Knowledge Mound | 41 bidirectional adapters creating federated knowledge graph across subsystems |
+| Knowledge Mound | 45 bidirectional adapters creating federated knowledge graph across subsystems |
 | ConsensusMemory | Cross-debate institutional learning |
 | CritiqueStore | Post-mortem critique-to-fix pattern extraction |
 

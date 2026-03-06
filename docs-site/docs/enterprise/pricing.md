@@ -146,7 +146,7 @@ Aragora is open source (MIT). Use the full debate engine for free, forever. Comm
 <td align="center">Yes</td>
 </tr>
 <tr>
-<td>Knowledge Mound (41 adapters)</td>
+<td>Knowledge Mound (45 adapters)</td>
 <td align="center">--</td>
 <td align="center">Yes</td>
 <td align="center">Yes</td>
@@ -282,7 +282,7 @@ For teams that need decision rigor, audit trails, and integrations.
 - Hollow consensus detection (Trickster)
 - Vertical weight profiles for healthcare, financial, and legal domains
 - 4-tier Continuum Memory (fast/medium/slow/glacial)
-- Knowledge Mound with 41 adapters and cross-debate learning
+- Knowledge Mound with 45 adapters and cross-debate learning
 - Workflow engine with 50+ templates
 - Slack, Teams, and Discord connectors with managed OAuth
 - CI/CD integration (GitHub Actions, GitLab CI)

@@ -94,7 +94,7 @@ aragora gauntlet architecture.md --profile thorough --output report.html
 
 **Problem**: Enterprise knowledge bases accumulate contradictions over time. Department A's documentation says one thing, Department B's says another. Single-model summarization inherits whichever source it reads first without flagging the conflict.
 
-**Aragora Solution**: The Knowledge Mound with 41 adapters ingests knowledge from across the organization. Cross-debate learning means that when a debate surfaces new information, it is validated against existing knowledge. Contradiction detection identifies when new findings conflict with established knowledge.
+**Aragora Solution**: The Knowledge Mound with 45 adapters ingests knowledge from across the organization. Cross-debate learning means that when a debate surfaces new information, it is validated against existing knowledge. Contradiction detection identifies when new findings conflict with established knowledge.
 
 **Connectors Used**: Confluence/Notion/SharePoint connectors for source ingestion, Knowledge Mound with contradiction detection, debate engine for validation.
 

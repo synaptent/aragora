@@ -123,7 +123,7 @@ flowchart TB
 | Debate Engine | `debate/orchestrator.py`, `consensus.py` | Multi-round structured debates |
 | Agents | `agents/api_agents/`, `cli_agents.py` | 43 agent types across 6+ LLM providers with fallback |
 | Memory | `memory/continuum/core.py`, `coordinator.py` | Four-tier memory with atomic writes |
-| Knowledge | `knowledge/mound/`, `bridges.py` | 41 registered adapters, semantic search, federation |
+| Knowledge | `knowledge/mound/`, `bridges.py` | 45 registered adapters, semantic search, federation |
 | Control Plane | `control_plane/` | Registry, scheduling, health, policy |
 | Connectors | `connectors/` | Chat platforms, enterprise event streams |
 | Persistence | External | Supabase/Postgres, Redis |
