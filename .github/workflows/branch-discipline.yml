@@ -69,7 +69,7 @@ jobs:
               const prs = Array.isArray(resp.data) ? resp.data : [];
               return prs.some((pr) => {
                 const baseRef = pr?.base?.ref || "";
-                return baseRef === "main" && Boolean(pr?.merged_at || pr?.state === "closed");
+                return baseRef === "main" && Boolean(pr?.merged_at);
               });
             }
 
