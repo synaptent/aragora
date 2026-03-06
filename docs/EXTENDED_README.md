@@ -213,7 +213,7 @@ print(f"Consensus: {result.consensus_reached} ({result.confidence:.0%})")
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │                 AGENT LAYER (30+ Agent Types)             │   │
+│  │                 AGENT LAYER (43 Agent Types)              │   │
 │  │  Claude | GPT | Gemini | Grok | Mistral | DeepSeek | Qwen │   │
 │  │              + Kimi, Yi, Local Models (Ollama)             │   │
 │  └───────────────────────────┬──────────────────────────────┘   │

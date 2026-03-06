@@ -16,7 +16,7 @@ flowchart TB
     subgraph Server["Server Layer"]
         HTTP["HTTP API (3,000+ operations)"]
         WS["WebSocket Streams (22 modules)"]
-        Handlers["90 HTTP Handlers"]
+        Handlers["640+ HTTP Handlers"]
         TTS["TTS / Voice Stream"]
     end
 
@@ -36,7 +36,7 @@ flowchart TB
         PromptBuilder["Prompt Builder"]
     end
 
-    subgraph Agents["Agents Layer (30+ Agent Types)"]
+    subgraph Agents["Agents Layer (43 Agent Types)"]
         direction LR
         APIAgents["API Agents"]
         CLIAgents["CLI Agents"]
@@ -66,7 +66,7 @@ flowchart TB
 
     subgraph Knowledge["Knowledge Mound"]
         Bridges["KnowledgeBridgeHub"]
-        Adapters["14 Adapters"]
+        Adapters["41 Adapters"]
         Sync["Sync and Revalidation"]
         Federation["Federation"]
         SemanticSearch["Semantic Search"]

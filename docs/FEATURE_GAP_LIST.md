@@ -27,7 +27,7 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| 3 beta users with `aragora review` | Not started | Need real PRs reviewed end-to-end via Aragora. Review gate workflow merged (#648). |
+| Agent-first beta via REST API | **In progress** | OpenClaw instances as non-human beta users calling `POST /api/v1/debates`. 3 self-hosted runners deployed (Mac Studio M3 Ultra, M1 MacBook, Intel MacBook). |
 | GitHub Actions pre-merge gate | **Merged (#648)** | `aragora-review.yml` deployed. Gates on critical findings. Needs branch protection config + beta testing with real repos. |
 | Public demo at aragora.ai/demo | **Demo page + share URLs live** | Standalone demo page merged (#648). Share URL persistence fixed. Needs frontend routing verification at aragora.ai/demo. |
 | EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14/15 dedicated bundles + CLI export + compliance scoring + demo script + customer playbook. **Deadline: Aug 2, 2026.** |

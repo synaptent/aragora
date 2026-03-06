@@ -28,8 +28,7 @@ Aragora is **98% GA-ready**. The platform has shipped all core infrastructure an
 
 **Remaining blockers before GA:**
 - External penetration test (vendor-dependent; kickoff target Mar 3, 2026)
-- 3 beta users running `aragora review` on real PRs
-- GitHub Actions pre-merge gate (in progress)
+- Agent-first beta: OpenClaw instances running reviews via REST API on real PRs
 - Public demo at aragora.ai/demo
 
 **EU AI Act enforcement date: August 2, 2026** — the compliance CLI and audit trail infrastructure
@@ -68,7 +67,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 ### Integrations
 - Slack, Discord, Microsoft Teams bots
 - Email-to-debate routing
-- REST API with 275+ endpoints
+- REST API with 3,000+ operations across 2,900+ paths
 - WebSocket real-time API
 - MCP server for Claude Desktop
 
@@ -143,7 +142,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 
 ### Extended Integrations
 - [x] Zapier / Make.com connectors
-- [ ] GitHub Actions for CI/CD debates (pre-merge gate — in progress)
+- [x] GitHub Actions for CI/CD debates (`aragora-review-gate.yml` shipped)
 - [ ] Jupyter notebook integration
 - [ ] VS Code extension
 
@@ -196,8 +195,8 @@ Enterprise teams evaluating AI governance solutions will be making decisions in 
 for capturing this cohort is now.
 
 ### Q2 2026 Priorities
-- [ ] 3 beta users with `aragora review` running on real production PRs
-- [ ] GitHub Actions pre-merge gate (CI/CD integration)
+- [ ] Agent-first beta: OpenClaw instances running `aragora review` on real PRs via REST API
+- [x] GitHub Actions pre-merge gate (`aragora-review-gate.yml` shipped)
 - [ ] Public demo at aragora.ai/demo
 - [ ] EU AI Act compliance package — full audit bundle documentation and customer playbook
 - [ ] SOC 2 Type II audit engagement kickoff (controls are ready; external auditor engagement pending)
