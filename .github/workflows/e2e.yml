@@ -63,7 +63,7 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-python-safe
         with:
-          python-version: "${{"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -238,7 +238,7 @@ jobs:
       - name: Set up Python
         uses: ./.github/actions/setup-python-safe
         with:
-          python-version: "${{"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Python dependencies
         run: |
