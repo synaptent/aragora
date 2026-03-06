@@ -8570,6 +8570,29 @@ Start directly with "## 1. FILE CHANGES" or similar."""
                 f"{rlm_context['summary']}"
             )
 
+        # G1: Verify context manifest integrity before injecting into debate
+        _manifest_result = None
+        try:
+            from aragora.security.context_signing import get_signing_key, verify_manifest
+
+            _manifest_result = verify_manifest(key=get_signing_key())
+            if _manifest_result.manifest_missing:
+                pass  # No manifest: proceed silently (backwards compatible)
+            elif not _manifest_result.ok:
+                logger.warning(
+                    "Context manifest violations detected: %s",
+                    _manifest_result.violations,
+                )
+            else:
+                logger.info(
+                    "Context manifest verified: %d file(s) clean",
+                    len(_manifest_result.verified_files),
+                )
+        except Exception as e:  # noqa: BLE001
+            # Never block the Nomic Loop for signing errors
+            logger.warning("Context manifest check failed: %s", e)
+            _manifest_result = None
+
         # Convert ContextResult (TypedDict) to dict for backward compatibility
         return {
             "phase": "context",
@@ -8577,6 +8600,16 @@ Start directly with "## 1. FILE CHANGES" or similar."""
             "duration": result["duration_seconds"],
             "agents_succeeded": result.get("data", {}).get("agents_succeeded", 0),
             "rlm": rlm_context or {},
+            "context_tainted": (
+                not _manifest_result.ok
+                if _manifest_result and not _manifest_result.manifest_missing
+                else False
+            ),
+            "context_violations": (
+                _manifest_result.violations
+                if _manifest_result and not _manifest_result.manifest_missing
+                else []
+            ),
         }
 
     async def phase_debate(self, codebase_context: str = None) -> dict:

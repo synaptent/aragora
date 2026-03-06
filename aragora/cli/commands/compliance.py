@@ -37,7 +37,7 @@ def add_compliance_parser(subparsers: argparse._SubParsersAction) -> None:
             "EU AI Act commands:\n"
             "  audit      Generate conformity report from a receipt\n"
             "  classify   Classify a use case by risk level\n"
-            "  eu-ai-act  Generate artifact bundles (Articles 12/13/14)"
+            "  eu-ai-act  Generate artifact bundles (Articles 9/12/13/14/15)"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -176,12 +176,13 @@ def add_compliance_parser(subparsers: argparse._SubParsersAction) -> None:
     # -- aragora compliance eu-ai-act generate --
     eu_p = sub.add_parser(
         "eu-ai-act",
-        help="Generate EU AI Act compliance artifact bundles (Articles 12, 13, 14)",
+        help="Generate EU AI Act compliance artifact bundles (Articles 9, 12, 13, 14, 15)",
         description=(
             "Generate complete EU AI Act compliance artifact bundles from a "
-            "DecisionReceipt JSON file. Produces dedicated Article 12 "
-            "(Record-Keeping), Article 13 (Transparency), and Article 14 "
-            "(Human Oversight) artifacts with SHA-256 integrity hash."
+            "DecisionReceipt JSON file. Produces dedicated Article 9 "
+            "(Risk Management), Article 12 (Record-Keeping), Article 13 "
+            "(Transparency), Article 14 (Human Oversight), and Article 15 "
+            "(Accuracy & Robustness) artifacts with SHA-256 integrity hash."
         ),
     )
     eu_sub = eu_p.add_subparsers(dest="eu_ai_act_command")
@@ -277,7 +278,7 @@ def cmd_compliance(args: argparse.Namespace) -> None:
                 "Usage: aragora compliance eu-ai-act generate [receipt_file] --output ./compliance-bundle/"
             )
             print()
-            print("Generate EU AI Act compliance artifact bundles (Articles 12, 13, 14).")
+            print("Generate EU AI Act compliance artifact bundles (Articles 9, 12, 13, 14, 15).")
             print("Omit receipt_file to generate a demonstration bundle with synthetic data.")
             sys.exit(1)
     else:
@@ -292,7 +293,7 @@ def cmd_compliance(args: argparse.Namespace) -> None:
         print("    audit      Generate EU AI Act conformity report from a receipt")
         print("    classify   Classify a use case by EU AI Act risk level")
         print("    export     Export structured compliance bundle for a debate")
-        print("    eu-ai-act  Generate compliance artifact bundles (Articles 12/13/14)")
+        print("    eu-ai-act  Generate compliance artifact bundles (Articles 9/12/13/14/15)")
         sys.exit(1)
 
 
@@ -606,6 +607,16 @@ def _cmd_eu_ai_act_generate(args: argparse.Namespace) -> None:
         with open(art14_path, "w") as f:
             json.dump(bundle.article_14.to_dict(), f, indent=2)
 
+        if bundle.article_9:
+            art9_path = os.path.join(output_dir, "article_9_risk_management.json")
+            with open(art9_path, "w") as f:
+                json.dump(bundle.article_9.to_dict(), f, indent=2)
+
+        if bundle.article_15:
+            art15_path = os.path.join(output_dir, "article_15_accuracy_robustness.json")
+            with open(art15_path, "w") as f:
+                json.dump(bundle.article_15.to_dict(), f, indent=2)
+
         # Write conformity report as markdown
         report_md_path = os.path.join(output_dir, "conformity_report.md")
         with open(report_md_path, "w") as f:
@@ -636,11 +647,13 @@ def _cmd_eu_ai_act_generate(args: argparse.Namespace) -> None:
     print(f"Generated files in {output_dir}/:")
     print("  compliance_bundle.json          Full artifact bundle")
     if args.output_format == "all":
-        print("  article_12_record_keeping.json  Art. 12 event log, tech docs, retention policy")
-        print("  article_13_transparency.json    Art. 13 provider identity, risks, interpretation")
+        print("  article_9_risk_management.json   Art. 9 risk identification and mitigation")
+        print("  article_12_record_keeping.json   Art. 12 event log, tech docs, retention policy")
+        print("  article_13_transparency.json     Art. 13 provider identity, risks, interpretation")
         print(
             "  article_14_human_oversight.json  Art. 14 oversight model, override, stop mechanisms"
         )
+        print("  article_15_accuracy_robustness.json  Art. 15 accuracy, robustness, cybersecurity")
         print("  conformity_report.md            Human-readable conformity assessment")
         print("  conformity_report.json          Machine-readable conformity assessment")
     print()
