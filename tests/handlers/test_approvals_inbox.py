@@ -458,6 +458,7 @@ class TestSuccessResponse:
                 "decision_plan",
                 "computer_use",
                 "gateway",
+                "inbox_wedge",
             ]
 
     def test_response_custom_sources_when_filtered(self, handler, http_handler):

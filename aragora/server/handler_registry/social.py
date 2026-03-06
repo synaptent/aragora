@@ -107,6 +107,9 @@ InboxCommandHandler = _safe_import("aragora.server.handlers.inbox_command", "Inb
 SharedInboxHandler = _safe_import(
     "aragora.server.handlers.shared_inbox.handler", "SharedInboxHandler"
 )
+InboxTrustWedgeHandler = _safe_import(
+    "aragora.server.handlers.inbox.trust_wedge_handler", "InboxTrustWedgeHandler"
+)
 
 # Email triage, feedback hub, notification history/preferences
 EmailTriageHandler = _safe_import("aragora.server.handlers.email_triage", "EmailTriageHandler")
@@ -167,6 +170,7 @@ SOCIAL_HANDLER_REGISTRY: list[tuple[str, object]] = [
     ("_notifications_handler", NotificationsHandler),
     ("_channel_health_handler", ChannelHealthHandler),
     # Inbox
+    ("_inbox_trust_wedge_handler", InboxTrustWedgeHandler),
     ("_unified_inbox_handler", UnifiedInboxHandler),
     ("_inbox_command_handler", InboxCommandHandler),
     ("_shared_inbox_handler", SharedInboxHandler),
@@ -218,6 +222,7 @@ __all__ = [
     "NotificationsHandler",
     "ChannelHealthHandler",
     # Inbox
+    "InboxTrustWedgeHandler",
     "UnifiedInboxHandler",
     "InboxCommandHandler",
     "SharedInboxHandler",

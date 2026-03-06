@@ -793,6 +793,190 @@ class TestGetMessage:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/v1/inbox/messages/{id}/debate
+# ---------------------------------------------------------------------------
+
+
+class TestAutoDebate:
+    """Tests for POST /api/v1/inbox/messages/{id}/debate."""
+
+    @pytest.mark.asyncio
+    async def test_auto_debate_success(self, handler, mock_store):
+        mock_store.get_message.return_value = _message_record("msg-1")
+        debate_result = {
+            "debate_id": "debate-1",
+            "final_answer": "Archive this low-priority message.",
+            "consensus_reached": True,
+            "confidence": 0.82,
+            "latency_seconds": 1.3,
+        }
+        with patch("aragora.server.debate_factory.DebateFactory", return_value=MagicMock()):
+            with patch(
+                "aragora.server.handlers.features.unified_inbox.auto_debate.auto_spawn_debate_for_message",
+                new_callable=AsyncMock,
+                return_value=debate_result,
+            ):
+                req = _req(
+                    method="POST",
+                    path="/api/v1/inbox/messages/msg-1/debate",
+                )
+                result = await handler.handle_request(
+                    req, "/api/v1/inbox/messages/msg-1/debate", "POST"
+                )
+
+        assert _status(result) == 200
+        body = _body(result)
+        assert body["success"] is True
+        assert body["data"]["data"]["debate_id"] == "debate-1"
+        assert body["data"]["source_message_id"] == "msg-1"
+        assert body["data"]["provider_message_id"] == "ext-123"
+
+    @pytest.mark.asyncio
+    async def test_auto_debate_creates_receipt_for_safe_gmail_action(self, handler, mock_store):
+        mock_store.get_message.return_value = _message_record("msg-1")
+        debate_result = {
+            "debate_id": "debate-archive-1",
+            "final_answer": json.dumps(
+                {
+                    "recommended_action": "archive",
+                    "confidence": 0.93,
+                    "rationale": "Low-value message that can be safely archived.",
+                    "dissent_summary": "No material dissent.",
+                }
+            ),
+            "consensus_reached": True,
+            "confidence": 0.91,
+            "latency_seconds": 2.4,
+        }
+        mock_service = MagicMock()
+        mock_envelope = MagicMock()
+        mock_envelope.receipt.to_dict.return_value = {
+            "receipt_id": "receipt-1",
+            "state": "created",
+        }
+        mock_envelope.intent.to_dict.return_value = {
+            "provider": "gmail",
+            "user_id": "acct-1",
+            "message_id": "ext-123",
+            "action": "archive",
+        }
+        mock_envelope.decision.to_dict.return_value = {
+            "final_action": "archive",
+            "confidence": 0.93,
+        }
+        mock_envelope.provider_route = "openrouter"
+        mock_envelope.debate_id = "debate-archive-1"
+        mock_service.create_receipt.return_value = mock_envelope
+
+        with patch("aragora.server.debate_factory.DebateFactory", return_value=MagicMock()):
+            with patch(
+                "aragora.server.handlers.features.unified_inbox.auto_debate.auto_spawn_debate_for_message",
+                new_callable=AsyncMock,
+                return_value=debate_result,
+            ):
+                with patch(
+                    "aragora.inbox.get_inbox_trust_wedge_service",
+                    return_value=mock_service,
+                ):
+                    req = _req(
+                        method="POST",
+                        path="/api/v1/inbox/messages/msg-1/debate",
+                        body={
+                            "create_receipt": True,
+                            "provider_route": "openrouter",
+                        },
+                    )
+                    result = await handler.handle_request(
+                        req, "/api/v1/inbox/messages/msg-1/debate", "POST"
+                    )
+
+        assert _status(result) == 200
+        body = _body(result)
+        assert body["success"] is True
+        assert body["data"]["receipt_created"] is True
+        assert body["data"]["receipt"]["receipt_id"] == "receipt-1"
+        assert body["data"]["provider_message_id"] == "ext-123"
+
+        intent_arg, decision_arg = mock_service.create_receipt.call_args.args[:2]
+        assert intent_arg.provider == "gmail"
+        assert intent_arg.user_id == "acct-1"
+        assert intent_arg.message_id == "ext-123"
+        assert intent_arg.provider_route == "openrouter"
+        assert intent_arg.action.value == "archive"
+        assert decision_arg.final_action.value == "archive"
+        assert decision_arg.latency_seconds == 2.4
+        assert mock_service.create_receipt.call_args.kwargs["expires_in_hours"] == 24.0
+        assert mock_service.create_receipt.call_args.kwargs["auto_approve"] is False
+
+    @pytest.mark.asyncio
+    async def test_auto_debate_receipt_not_created_without_safe_action(self, handler, mock_store):
+        mock_store.get_message.return_value = _message_record("msg-1")
+        debate_result = {
+            "debate_id": "debate-none-1",
+            "final_answer": json.dumps(
+                {
+                    "recommended_action": "none",
+                    "confidence": 0.61,
+                    "rationale": "Need human review before any safe inbox wedge action.",
+                    "dissent_summary": "Mixed views on urgency.",
+                }
+            ),
+            "consensus_reached": False,
+            "confidence": 0.61,
+            "latency_seconds": 1.9,
+        }
+        mock_service = MagicMock()
+
+        with patch("aragora.server.debate_factory.DebateFactory", return_value=MagicMock()):
+            with patch(
+                "aragora.server.handlers.features.unified_inbox.auto_debate.auto_spawn_debate_for_message",
+                new_callable=AsyncMock,
+                return_value=debate_result,
+            ):
+                with patch(
+                    "aragora.inbox.get_inbox_trust_wedge_service",
+                    return_value=mock_service,
+                ):
+                    req = _req(
+                        method="POST",
+                        path="/api/v1/inbox/messages/msg-1/debate",
+                        body={"create_receipt": True},
+                    )
+                    result = await handler.handle_request(
+                        req, "/api/v1/inbox/messages/msg-1/debate", "POST"
+                    )
+
+        assert _status(result) == 200
+        body = _body(result)
+        assert body["success"] is True
+        assert body["data"]["receipt_created"] is False
+        assert body["data"]["receipt"] is None
+        assert "safe inbox trust wedge action" in body["data"]["receipt_error"].lower()
+        mock_service.create_receipt.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_debate_receipt_rejected_for_non_gmail(self, handler, mock_store):
+        mock_store.get_message.return_value = _message_record("msg-1", provider="outlook")
+        with patch("aragora.server.debate_factory.DebateFactory", return_value=MagicMock()):
+            with patch(
+                "aragora.server.handlers.features.unified_inbox.auto_debate.auto_spawn_debate_for_message",
+                new_callable=AsyncMock,
+            ) as mock_auto_debate:
+                req = _req(
+                    method="POST",
+                    path="/api/v1/inbox/messages/msg-1/debate",
+                    body={"create_receipt": True},
+                )
+                result = await handler.handle_request(
+                    req, "/api/v1/inbox/messages/msg-1/debate", "POST"
+                )
+
+        assert _status(result) == 400
+        assert "gmail unified inbox messages only" in _body(result)["error"].lower()
+        mock_auto_debate.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # POST /api/v1/inbox/triage
 # ---------------------------------------------------------------------------
 

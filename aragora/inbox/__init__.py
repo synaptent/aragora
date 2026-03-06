@@ -33,6 +33,22 @@ from aragora.inbox.debate_router import (
     get_inbox_debate_router,
     reset_inbox_debate_router,
 )
+from aragora.inbox.trust_wedge import (
+    ActionIntent,
+    AllowedAction,
+    InboxTrustWedgeService,
+    InboxTrustWedgeStore,
+    InboxWedgeAction,
+    PersistedReceipt,
+    ReceiptState,
+    StoredInboxTrustEnvelope,
+    TriageDecision,
+    compute_content_hash,
+    get_inbox_trust_wedge_service,
+    get_inbox_trust_wedge_store,
+    reset_inbox_trust_wedge_service,
+    reset_inbox_trust_wedge_store,
+)
 
 __all__ = [
     "InboxDebateRouter",
@@ -41,4 +57,18 @@ __all__ = [
     "DebateSpawnResult",
     "get_inbox_debate_router",
     "reset_inbox_debate_router",
+    "ActionIntent",
+    "AllowedAction",
+    "InboxTrustWedgeService",
+    "InboxTrustWedgeStore",
+    "InboxWedgeAction",
+    "PersistedReceipt",
+    "ReceiptState",
+    "StoredInboxTrustEnvelope",
+    "TriageDecision",
+    "compute_content_hash",
+    "get_inbox_trust_wedge_service",
+    "get_inbox_trust_wedge_store",
+    "reset_inbox_trust_wedge_service",
+    "reset_inbox_trust_wedge_store",
 ]

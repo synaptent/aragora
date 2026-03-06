@@ -47,11 +47,11 @@ def __getattr__(name: str) -> Any:
 class _BeliefAdapterProtocol(Protocol):
     """Protocol for BeliefAdapter methods used in BeliefNetwork."""
 
-    def search_beliefs(self, query: str, limit: int, min_confidence: float) -> list[dict]:
+    def search_beliefs(self, query: str, limit: int, min_confidence: float) -> list[dict[str, Any]]:
         """Search for related beliefs."""
         ...
 
-    def search_cruxes(self, query: str, limit: int) -> list[dict]:
+    def search_cruxes(self, query: str, limit: int) -> list[dict[str, Any]]:
         """Search for historical cruxes."""
         ...
 
@@ -140,7 +140,7 @@ class BeliefDistribution:
                 kl += p_self * math.log2(p_self / p_other)
         return kl
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, float]:
         return {
             "p_true": self.p_true,
             "p_false": self.p_false,
@@ -163,7 +163,7 @@ class BeliefDistribution:
         return cls(p_true=0.5, p_false=0.5, p_unknown=0.0)
 
     @classmethod
-    def from_dict(cls, data: dict) -> BeliefDistribution:
+    def from_dict(cls, data: dict[str, Any]) -> BeliefDistribution:
         """Deserialize from dictionary."""
         return cls(
             p_true=data.get("p_true", 0.5),
@@ -227,7 +227,7 @@ class BeliefNode:
         self.update_count += 1
         self.last_update = datetime.now().isoformat()
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "node_id": self.node_id,
             "claim_id": self.claim_id,
@@ -243,7 +243,7 @@ class BeliefNode:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> BeliefNode:
+    def from_dict(cls, data: dict[str, Any]) -> BeliefNode:
         """Deserialize from dictionary."""
         return cls(
             node_id=data["node_id"],
@@ -336,7 +336,7 @@ class PropagationResult:
     node_posteriors: dict[str, BeliefDistribution]
     centralities: dict[str, float]
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "converged": self.converged,
             "iterations": self.iterations,
@@ -397,7 +397,7 @@ class BeliefNetwork:
         topic: str,
         limit: int = 10,
         min_confidence: float = 0.7,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Query Knowledge Mound for related beliefs (reverse flow).
 
         This enables seeding the belief network with prior knowledge.
@@ -427,7 +427,7 @@ class BeliefNetwork:
         self,
         topic: str,
         limit: int = 5,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Query Knowledge Mound for historical cruxes (reverse flow).
 
         This enables predicting which claims are likely to be cruxes
@@ -977,7 +977,7 @@ class BeliefNetwork:
 
         return "\n".join(lines)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize network to dictionary."""
         return {
             "debate_id": self.debate_id,
@@ -1003,7 +1003,7 @@ class BeliefNetwork:
         return json.dumps(self.to_dict(), indent=indent, default=str)
 
     @classmethod
-    def from_dict(cls, data: dict) -> BeliefNetwork:
+    def from_dict(cls, data: dict[str, Any]) -> BeliefNetwork:
         """Deserialize network from dictionary."""
         network = cls(
             debate_id=data.get("debate_id"),

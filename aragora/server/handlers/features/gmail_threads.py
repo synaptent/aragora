@@ -163,7 +163,7 @@ class GmailThreadsHandler(SecureHandler):
                 action = parts[6]
 
                 if action == "archive":
-                    return await self._archive_thread(state, thread_id)
+                    return await self._archive_thread(state, thread_id, body)
                 elif action == "trash":
                     return await self._trash_thread(state, thread_id, body)
                 elif action == "labels":
@@ -390,8 +390,19 @@ class GmailThreadsHandler(SecureHandler):
             logger.error("[GmailThreads] Get thread failed: %s", e)
             return error_response("Failed to retrieve thread", 500)
 
-    async def _archive_thread(self, state: GmailUserState, thread_id: str) -> HandlerResult:
+    async def _archive_thread(
+        self,
+        state: GmailUserState,
+        thread_id: str,
+        body: dict[str, Any] | None = None,
+    ) -> HandlerResult:
         """Archive a thread (remove INBOX label from all messages)."""
+        body = body or {}
+        if body.get("receipt_id") or body.get("create_receipt"):
+            return error_response(
+                "Inbox trust wedge does not support thread-level Gmail archive receipts; use message actions",
+                400,
+            )
         return await self._modify_thread_labels(state, thread_id, {"remove": ["INBOX"]})
 
     async def _trash_thread(
@@ -455,6 +466,12 @@ class GmailThreadsHandler(SecureHandler):
         """Modify labels on all messages in a thread."""
         add_labels = body.get("add", [])
         remove_labels = body.get("remove", [])
+
+        if body.get("receipt_id") or body.get("create_receipt"):
+            return error_response(
+                "Inbox trust wedge does not support thread-level Gmail label receipts; use message actions",
+                400,
+            )
 
         if not add_labels and not remove_labels:
             return error_response("Must specify labels to add or remove", 400)

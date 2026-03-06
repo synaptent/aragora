@@ -150,7 +150,7 @@ class GmailLabelsHandler(SecureHandler):
                 elif action == "star":
                     return await self._star_message(state, message_id, body)
                 elif action == "archive":
-                    return await self._archive_message(state, message_id)
+                    return await self._archive_message(state, message_id, body)
                 elif action == "trash":
                     return await self._trash_message(state, message_id, body)
 
@@ -394,6 +394,30 @@ class GmailLabelsHandler(SecureHandler):
         add_labels = body.get("add", [])
         remove_labels = body.get("remove", [])
 
+        if body.get("receipt_id") or body.get("create_receipt"):
+            if remove_labels:
+                return error_response(
+                    "Inbox trust wedge does not support remove labels for Gmail message receipts",
+                    400,
+                )
+            if len(add_labels) != 1:
+                return error_response(
+                    "Inbox trust wedge LABEL actions require exactly one added label",
+                    400,
+                )
+
+            from aragora.server.handlers.inbox.email_actions import handle_add_label
+
+            return await handle_add_label(
+                data={
+                    "provider": "gmail",
+                    "labels": list(add_labels),
+                    **body,
+                },
+                message_id=message_id,
+                user_id=body.get("user_id", getattr(state, "user_id", "default")),
+            )
+
         if not add_labels and not remove_labels:
             return error_response("Must specify labels to add or remove", 400)
 
@@ -471,6 +495,21 @@ class GmailLabelsHandler(SecureHandler):
         """Star or unstar a message."""
         is_starred = body.get("starred", True)
 
+        if body.get("receipt_id") or body.get("create_receipt"):
+            if not is_starred:
+                return error_response(
+                    "Inbox trust wedge does not support Gmail unstar receipts",
+                    400,
+                )
+
+            from aragora.server.handlers.inbox.email_actions import handle_star_message
+
+            return await handle_star_message(
+                data={"provider": "gmail", **body},
+                message_id=message_id,
+                user_id=body.get("user_id", getattr(state, "user_id", "default")),
+            )
+
         add_labels = ["STARRED"] if is_starred else []
         remove_labels = [] if is_starred else ["STARRED"]
 
@@ -488,8 +527,23 @@ class GmailLabelsHandler(SecureHandler):
             logger.error("[GmailLabels] Star message failed: %s", e)
             return error_response("Star operation failed", 500)
 
-    async def _archive_message(self, state: Any, message_id: str) -> HandlerResult:
+    async def _archive_message(
+        self,
+        state: Any,
+        message_id: str,
+        body: dict[str, Any] | None = None,
+    ) -> HandlerResult:
         """Archive a message (remove INBOX label)."""
+        body = body or {}
+        if body.get("receipt_id") or body.get("create_receipt"):
+            from aragora.server.handlers.inbox.email_actions import handle_archive_message
+
+            return await handle_archive_message(
+                data={"provider": "gmail", **body},
+                message_id=message_id,
+                user_id=body.get("user_id", getattr(state, "user_id", "default")),
+            )
+
         try:
             await self._api_modify_labels(state, message_id, [], ["INBOX"])
             return json_response(

@@ -31,6 +31,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.gauntlet.signing import HMACSigner, ReceiptSigner
+from aragora.inbox.trust_wedge import (
+    ActionIntent,
+    InboxTrustWedgeService,
+    InboxTrustWedgeStore,
+    TriageDecision,
+)
 from aragora.server.handlers.inbox.email_actions import (
     get_email_actions_handlers,
     get_email_actions_service_instance as _real_get_email_actions_service_instance,
@@ -54,6 +61,7 @@ from aragora.server.handlers.inbox.email_actions import (
     handle_unstar_message,
 )
 from aragora.server.handlers.utils.responses import HandlerResult
+from aragora.services.email_actions import EmailActionsService
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +163,27 @@ def _reset_singleton():
     original = mod._email_actions_service
     yield
     mod._email_actions_service = original
+
+
+@pytest.fixture
+def wedge_service(tmp_path):
+    """Create a real inbox trust wedge service backed by a mock connector."""
+    signer = ReceiptSigner(HMACSigner(secret_key=b"\x03" * 32, key_id="handler-test-key"))
+    store = InboxTrustWedgeStore(db_path=str(tmp_path / "wedge-handler.db"))
+    email_actions = EmailActionsService()
+    connector = AsyncMock()
+    connector.archive_message = AsyncMock(return_value={"archived": True})
+    connector.star_message = AsyncMock(return_value={"starred": True})
+    connector.add_label = AsyncMock(return_value={"label_id": "TRIAGE"})
+    email_actions._connectors["gmail:user-1"] = connector
+    service = InboxTrustWedgeService(
+        email_actions_service=email_actions,
+        store=store,
+        signer=signer,
+        auto_approval_threshold=0.85,
+    )
+    yield service, store, connector
+    store.close()
 
 
 # ===========================================================================
@@ -371,6 +400,70 @@ class TestHandleArchiveMessage:
         mock_service.archive.side_effect = OSError("disk")
         result = await handle_archive_message(data={}, message_id="msg-1")
         assert _status(result) == 500
+
+    @pytest.mark.asyncio
+    async def test_archive_can_create_trusted_receipt(self, wedge_service):
+        service, _store, connector = wedge_service
+        data = {
+            "provider": "gmail",
+            "create_receipt": True,
+            "confidence": 0.91,
+            "synthesized_rationale": "Debated decision to archive",
+            "provider_route": "openrouter-fallback",
+            "debate_id": "debate-archive-1",
+        }
+        with patch(
+            "aragora.server.handlers.inbox.email_actions.get_inbox_trust_wedge_service_instance",
+            return_value=service,
+        ):
+            result = await handle_archive_message(data=data, message_id="msg-1", user_id="user-1")
+
+        assert _status(result) == 200
+        body = _body(result)["data"]
+        assert body["receipt"]["state"] == "created"
+        assert body["requires_approval"] is True
+        connector.archive_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_archive_with_receipt_id_executes_approved_receipt(self, wedge_service):
+        service, store, connector = wedge_service
+        envelope = service.create_receipt(
+            ActionIntent.create(
+                provider="gmail",
+                user_id="user-1",
+                message_id="msg-1",
+                action="archive",
+                content_hash=ActionIntent.compute_content_hash("msg-1", "subject"),
+                synthesized_rationale="Archive after debate",
+                confidence=0.92,
+                provider_route="openrouter-fallback",
+                debate_id="debate-execute-1",
+            ),
+            TriageDecision.create(
+                final_action="archive",
+                confidence=0.92,
+                dissent_summary="",
+            ),
+        )
+        service.review_receipt(envelope.receipt.receipt_id, choice="approve")
+
+        with patch(
+            "aragora.server.handlers.inbox.email_actions.get_inbox_trust_wedge_service_instance",
+            return_value=service,
+        ):
+            result = await handle_archive_message(
+                data={"provider": "gmail", "receipt_id": envelope.receipt.receipt_id},
+                message_id="msg-1",
+                user_id="user-1",
+            )
+
+        assert _status(result) == 200
+        body = _body(result)["data"]
+        stored = store.get_receipt(envelope.receipt.receipt_id)
+        assert body["executed"] is True
+        assert stored is not None
+        assert stored.receipt.state.value == "executed"
+        connector.archive_message.assert_called_once_with("msg-1")
 
 
 # ===========================================================================
@@ -744,6 +837,48 @@ class TestHandleAddLabel:
         data = {"labels": ["urgent"]}
         result = await handle_add_label(data=data, message_id="msg-1")
         assert _status(result) == 500
+
+    @pytest.mark.asyncio
+    async def test_add_label_receipt_label_mismatch_returns_400(self, wedge_service):
+        service, _store, connector = wedge_service
+        envelope = service.create_receipt(
+            ActionIntent.create(
+                provider="gmail",
+                user_id="user-1",
+                message_id="msg-1",
+                action="label",
+                content_hash=ActionIntent.compute_content_hash("msg-1", "subject"),
+                synthesized_rationale="Apply TRIAGE label",
+                confidence=0.93,
+                provider_route="openrouter-fallback",
+                debate_id="debate-label-1",
+                label_id="TRIAGE",
+            ),
+            TriageDecision.create(
+                final_action="label",
+                confidence=0.93,
+                dissent_summary="",
+                label_id="TRIAGE",
+            ),
+        )
+        service.review_receipt(envelope.receipt.receipt_id, choice="approve")
+
+        with patch(
+            "aragora.server.handlers.inbox.email_actions.get_inbox_trust_wedge_service_instance",
+            return_value=service,
+        ):
+            result = await handle_add_label(
+                data={
+                    "provider": "gmail",
+                    "receipt_id": envelope.receipt.receipt_id,
+                    "labels": ["OTHER"],
+                },
+                message_id="msg-1",
+                user_id="user-1",
+            )
+
+        assert _status(result) == 400
+        connector.add_label.assert_not_called()
 
 
 # ===========================================================================

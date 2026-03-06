@@ -75,66 +75,6 @@ const ACTION_OPTIONS: { value: ActionType; label: string; icon: string; needsTar
   { value: 'forward', label: 'Forward To', icon: '➡️', needsTarget: true },
 ];
 
-// Demo rules for when API is unavailable (prefixed with _ as currently unused fallback)
-const _DEMO_RULES: TriageRule[] = [
-  {
-    id: 'rule-1',
-    name: 'Urgent Customer Issues',
-    description: 'Route urgent customer emails to support team',
-    conditions: [
-      { field: 'subject', operator: 'contains', value: 'urgent' },
-      { field: 'sender_domain', operator: 'contains', value: 'customer' },
-    ],
-    condition_logic: 'OR',
-    actions: [
-      { type: 'assign', target: 'support-team' },
-      { type: 'label', target: 'urgent' },
-      { type: 'notify', target: 'slack:#support-alerts' },
-    ],
-    priority: 1,
-    enabled: true,
-    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-    stats: { total_matches: 47, last_matched: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
-  },
-  {
-    id: 'rule-2',
-    name: 'Security Alerts',
-    description: 'Auto-escalate security-related emails',
-    conditions: [
-      { field: 'subject', operator: 'contains', value: 'security' },
-      { field: 'priority', operator: 'equals', value: 'critical' },
-    ],
-    condition_logic: 'AND',
-    actions: [
-      { type: 'escalate', target: 'security-team' },
-      { type: 'label', target: 'security-alert' },
-    ],
-    priority: 0,
-    enabled: true,
-    created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    stats: { total_matches: 12 },
-  },
-  {
-    id: 'rule-3',
-    name: 'Newsletter Archive',
-    description: 'Auto-archive newsletters and marketing emails',
-    conditions: [
-      { field: 'from', operator: 'contains', value: 'newsletter' },
-    ],
-    condition_logic: 'AND',
-    actions: [
-      { type: 'archive' },
-      { type: 'label', target: 'newsletter' },
-    ],
-    priority: 10,
-    enabled: false,
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    stats: { total_matches: 234 },
-  },
-];
 
 export function TriageRulesPanel({
   apiBase,
@@ -229,7 +169,7 @@ export function TriageRulesPanel({
 
   const handleToggleRule = async (ruleId: string, enabled: boolean) => {
     try {
-      await fetch(`${apiBase}/api/v1/inbox/routing/rules/${ruleId}`, {
+      const response = await fetch(`${apiBase}/api/v1/inbox/routing/rules/${ruleId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -237,27 +177,40 @@ export function TriageRulesPanel({
         },
         body: JSON.stringify({ enabled }),
       });
-    } catch {
-      // Ignore API errors in demo mode
-    }
 
-    // Update locally
-    setRules(rules.map(r => r.id === ruleId ? { ...r, enabled } : r));
+      if (!response.ok) {
+        setError(`Failed to toggle rule: ${response.status} ${response.statusText}`);
+        return;
+      }
+
+      // Update locally only after successful API call
+      setRules(rules.map(r => r.id === ruleId ? { ...r, enabled } : r));
+    } catch (error) {
+      console.error('Toggle rule failed:', error);
+      setError(`Failed to toggle rule: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const handleDeleteRule = async (ruleId: string) => {
     if (!confirm('Are you sure you want to delete this rule?')) return;
 
     try {
-      await fetch(`${apiBase}/api/v1/inbox/routing/rules/${ruleId}`, {
+      const response = await fetch(`${apiBase}/api/v1/inbox/routing/rules/${ruleId}`, {
         method: 'DELETE',
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
       });
-    } catch {
-      // Ignore API errors in demo mode
-    }
 
-    setRules(rules.filter(r => r.id !== ruleId));
+      if (!response.ok) {
+        setError(`Failed to delete rule: ${response.status} ${response.statusText}`);
+        return;
+      }
+
+      // Update locally only after successful API call
+      setRules(rules.filter(r => r.id !== ruleId));
+    } catch (error) {
+      console.error('Delete rule failed:', error);
+      setError(`Failed to delete rule: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
   const handleTestRule = async (rule: TriageRule) => {
@@ -272,8 +225,8 @@ export function TriageRulesPanel({
       });
 
       if (!response.ok) {
-        // Demo mode - simulate test
-        alert(`Rule "${rule.name}" would match approximately ${Math.floor(Math.random() * 20) + 5} emails`);
+        const errorText = await response.text();
+        setError(`Failed to test rule: ${response.status} ${errorText || response.statusText}`);
         return;
       }
 

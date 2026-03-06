@@ -94,8 +94,8 @@
 |---------|---------------|-----|
 | Self-improving platform quality | Nomic Loop 100% wired; 82 E2E tests; CLB backbone hardened (14/14 issues closed); safety gates + gauntlet gate + evolution audit + golden-path test | Diverse benchmark validated (100% pass). Production safety gate requires ENABLE_NOMIC_LOOP=true. |
 | Blockchain receipts | SHA-256 cryptographic hashing works | On-chain storage with ERC-8004 (not deployed) |
-| Semantic convergence | Embedding detection wired (sentence-transformers) | Not default; some debate paths still use difflib |
-| OpenClaw execution | Computer use detection works | Production E2E flow (debate → computer use → receipt) not validated |
+| Semantic convergence | **Migrated** (PR #723) | All similarity paths use embeddings. Only `unified_diff` (text display) uses difflib. |
+| OpenClaw execution | **Core loop shipped** (PR #727) | CodeImplementationTask + SpecExtractor + receipt linkage. Production validation pending. |
 | RLM context access | Code complete (283 exports) | No user-facing guide; integration with default Arena config unclear |
 
 ---
@@ -141,3 +141,8 @@ These items were planned and are now shipped:
 | Dogfood backbone profile script | Mar 2026 |
 | PR watch daemon fleet (3 Mac machines, 30 reviews/hour) | Mar 2026 |
 | Dev swarm coordination layer (lease-aware) | Mar 2026 |
+| Semantic convergence — 5 modules migrated to embeddings (PR #723) | Mar 2026 |
+| Smart provider routing Phase 1 — Pareto optimizer + 8-model pricing (PR #724) | Mar 2026 |
+| EU AI Act playbook GTM polish + Art. 10/11/43/49 appendix (PR #725) | Mar 2026 |
+| Enterprise Comms Hub #293 — template persistence + router wiring (PR #726) | Mar 2026 |
+| OpenClaw E2E core loop — CodeImplementationTask + ComputerUseActionBundle (PR #727) | Mar 2026 |

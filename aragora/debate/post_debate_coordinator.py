@@ -75,6 +75,10 @@ class PostDebateConfig:
     execution_gate_block_on_context_taint: bool = True
     execution_gate_block_on_high_severity_dissent: bool = True
     execution_gate_high_severity_dissent_threshold: float = 0.7
+    # Require receipt to be persisted *before* execution gate (trust-wedge fix).
+    # When True the execution safety gate validates a previously-persisted,
+    # signed receipt rather than building one inline.
+    require_persisted_receipt: bool = True
     # Settlement tracking: extract verifiable claims for future resolution
     auto_settlement_tracking: bool = False
     settlement_min_confidence: float = 0.3  # Min claim confidence for settlement
@@ -102,6 +106,7 @@ class PostDebateResult:
     pr_result: dict[str, Any] | None = None
     integrity_package: dict[str, Any] | None = None
     receipt_persisted: bool = False
+    receipt_id: str | None = None  # ID of persisted signed receipt (trust-wedge)
     gauntlet_result: dict[str, Any] | None = None
     argument_verification: dict[str, Any] | None = None
     improvement_queued: bool = False
@@ -213,9 +218,26 @@ class PostDebateCoordinator:
                 debate_id, debate_result, task
             )
 
+        # Step 2.75: Persist signed receipt BEFORE execution gate (trust-wedge).
+        # The execution safety gate must validate a previously-persisted receipt
+        # rather than building and signing one inline (attestation inversion fix).
+        if self.config.auto_persist_receipt and self.config.require_persisted_receipt:
+            receipt_id = self._step_persist_signed_receipt(
+                debate_id,
+                debate_result,
+                task,
+                confidence,
+                cost_breakdown=result.cost_breakdown,
+            )
+            if receipt_id:
+                result.receipt_persisted = True
+                result.receipt_id = receipt_id
+
         # Step 2.8: Execution safety gate (signed receipts + diversity + taint checks)
         if self.config.enforce_execution_safety_gate:
-            result.execution_gate = self._step_execution_gate(debate_result, agents)
+            result.execution_gate = self._step_execution_gate(
+                debate_result, agents, receipt_id=result.receipt_id
+            )
             self._apply_execution_gate_to_plan(result.plan, result.execution_gate)
 
         # Step 3: Send notifications
@@ -255,7 +277,8 @@ class PostDebateCoordinator:
             result.integrity_package = self._step_build_integrity_package(debate_id, debate_result)
 
         # Step 6: Persist receipt to Knowledge Mound (the flywheel)
-        if self.config.auto_persist_receipt:
+        # Skip if already persisted in step 2.75 (trust-wedge path)
+        if self.config.auto_persist_receipt and not result.receipt_persisted:
             result.receipt_persisted = self._step_persist_receipt(
                 debate_id,
                 debate_result,
@@ -343,6 +366,7 @@ class PostDebateCoordinator:
         self,
         debate_result: Any,
         agents: list[Any] | None = None,
+        receipt_id: str | None = None,
     ) -> dict[str, Any]:
         """Evaluate execution safety gate for high-impact automation."""
         try:
@@ -383,6 +407,7 @@ class PostDebateCoordinator:
                 debate_result,
                 agents=agents,
                 policy=policy,
+                receipt_id=receipt_id,
             )
             gate = decision.to_dict()
             try:
@@ -706,6 +731,78 @@ class PostDebateCoordinator:
         except (ValueError, TypeError, OSError, AttributeError, KeyError) as e:
             logger.warning("Receipt KM persistence failed: %s", e)
             return False
+
+    def _step_persist_signed_receipt(
+        self,
+        debate_id: str,
+        debate_result: Any,
+        task: str,
+        confidence: float,
+        cost_breakdown: dict[str, Any] | None = None,
+    ) -> str | None:
+        """Persist a *fully signed* DecisionReceipt before the execution gate.
+
+        This fixes the attestation inversion: the execution safety gate must
+        validate a previously-persisted receipt rather than building and
+        signing one inline.
+
+        Returns the ``receipt_id`` on success, ``None`` on failure.
+        """
+        try:
+            from aragora.gauntlet.receipt_models import DecisionReceipt
+            from aragora.gauntlet.receipt_store import ReceiptState, get_receipt_store
+            from aragora.gauntlet.signing import get_default_signer
+
+            # Build a full DecisionReceipt from the debate result
+            receipt = DecisionReceipt.from_debate_result(
+                debate_result,
+                cost_summary=cost_breakdown,
+            )
+
+            # Sign with the durable signer
+            signer = get_default_signer()
+            receipt.sign(signer)
+
+            # Build the dict to persist (includes signature fields)
+            receipt_dict = receipt.to_dict()
+
+            # Persist to the receipt store
+            store = get_receipt_store()
+            store.persist(
+                receipt_id=receipt.receipt_id,
+                receipt_data=receipt_dict,
+                signature=receipt.signature,
+                signature_key_id=receipt.signature_key_id,
+                signed_at=receipt.signed_at,
+                signature_algorithm=receipt.signature_algorithm,
+                state=ReceiptState.CREATED,
+            )
+
+            # Auto-approve if no manual approval is required
+            store.transition(receipt.receipt_id, ReceiptState.APPROVED)
+
+            # Also push to Knowledge Mound for the flywheel
+            try:
+                from aragora.knowledge.mound.adapters.receipt_adapter import (
+                    get_receipt_adapter,
+                )
+
+                adapter = get_receipt_adapter()
+                adapter.ingest(receipt_dict)
+            except ImportError:
+                logger.debug("ReceiptAdapter unavailable, KM flywheel skipped")
+            except (ValueError, TypeError, OSError, AttributeError, KeyError) as km_err:
+                logger.debug("KM receipt ingestion failed (non-critical): %s", km_err)
+
+            logger.info("Signed receipt persisted: %s (debate=%s)", receipt.receipt_id, debate_id)
+            return receipt.receipt_id
+
+        except ImportError:
+            logger.debug("Receipt models/store not available, skipping signed persistence")
+            return None
+        except (ValueError, TypeError, OSError, AttributeError, KeyError, RuntimeError) as e:
+            logger.warning("Signed receipt persistence failed: %s", e)
+            return None
 
     def _step_collect_cost_data(
         self,

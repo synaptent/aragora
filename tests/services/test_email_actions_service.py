@@ -37,6 +37,7 @@ class TestActionEnums:
         assert ActionType.SNOOZE.value == "snooze"
         assert ActionType.MARK_READ.value == "mark_read"
         assert ActionType.STAR.value == "star"
+        assert ActionType.IGNORE.value == "ignore"
         assert ActionType.MOVE_TO_FOLDER.value == "move_to_folder"
         assert ActionType.BATCH_ARCHIVE.value == "batch_archive"
 
@@ -298,15 +299,31 @@ class TestEmailActionsService:
         from aragora.services.email_actions import EmailActionsService
 
         service = EmailActionsService()
+        mock_store = MagicMock()
+        mock_store.get = AsyncMock(
+            return_value=MagicMock(
+                access_token="access-token",
+                refresh_token="refresh-token",
+                token_expiry=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+        )
 
         with patch(
             "aragora.connectors.enterprise.communication.gmail.GmailConnector"
         ) as mock_gmail:
-            mock_gmail.return_value = MagicMock()
-            connector = await service._get_connector("gmail", "user_123")
+            connector_instance = MagicMock()
+            mock_gmail.return_value = connector_instance
+            with patch(
+                "aragora.storage.gmail_token_store.get_gmail_token_store",
+                return_value=mock_store,
+            ):
+                connector = await service._get_connector("gmail", "user_123")
 
             assert connector is not None
             mock_gmail.assert_called_once()
+            mock_store.get.assert_awaited_once_with("user_123")
+            assert connector_instance._access_token == "access-token"
+            assert connector_instance._refresh_token == "refresh-token"
 
     @pytest.mark.asyncio
     async def test_get_connector_outlook(self):
@@ -340,17 +357,45 @@ class TestEmailActionsService:
         from aragora.services.email_actions import EmailActionsService
 
         service = EmailActionsService()
+        mock_store = MagicMock()
+        mock_store.get = AsyncMock(
+            return_value=MagicMock(
+                access_token="access-token",
+                refresh_token="refresh-token",
+                token_expiry=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+        )
 
         with patch(
             "aragora.connectors.enterprise.communication.gmail.GmailConnector"
         ) as mock_gmail:
             mock_gmail.return_value = MagicMock()
-
-            connector1 = await service._get_connector("gmail", "user_123")
-            connector2 = await service._get_connector("gmail", "user_123")
+            with patch(
+                "aragora.storage.gmail_token_store.get_gmail_token_store",
+                return_value=mock_store,
+            ):
+                connector1 = await service._get_connector("gmail", "user_123")
+                connector2 = await service._get_connector("gmail", "user_123")
 
             assert connector1 is connector2
             mock_gmail.assert_called_once()  # Only one instantiation
+            mock_store.get.assert_awaited_once_with("user_123")
+
+    @pytest.mark.asyncio
+    async def test_get_connector_gmail_requires_saved_tokens(self):
+        """Gmail connector creation should fail closed when no OAuth state exists."""
+        from aragora.services.email_actions import EmailActionsService
+
+        service = EmailActionsService()
+        mock_store = MagicMock()
+        mock_store.get = AsyncMock(return_value=None)
+
+        with patch(
+            "aragora.storage.gmail_token_store.get_gmail_token_store",
+            return_value=mock_store,
+        ):
+            with pytest.raises(RuntimeError, match="not authenticated"):
+                await service._get_connector("gmail", "user_123")
 
     @pytest.mark.asyncio
     async def test_log_action(self):
@@ -421,6 +466,7 @@ class TestEmailActionsServiceActions:
         connector.snooze_message = AsyncMock(return_value={"snoozed": True})
         connector.mark_as_read = AsyncMock(return_value={"read": True})
         connector.star_message = AsyncMock(return_value={"starred": True})
+        connector.add_label = AsyncMock(return_value={"labels": ["TRIAGE"]})
         connector.move_to_folder = AsyncMock(return_value={"moved": True})
         connector.batch_archive = AsyncMock(return_value={"archived_count": 3})
         return connector
@@ -588,6 +634,34 @@ class TestEmailActionsServiceActions:
         assert result.success is True
         assert result.action_type == ActionType.MOVE_TO_FOLDER
         mock_connector.move_to_folder.assert_called_once_with("msg_to_move", "Archive/2024")
+
+    @pytest.mark.asyncio
+    async def test_add_label_success(self, mock_connector):
+        """Test labeling a message."""
+        from aragora.services.email_actions import EmailActionsService, ActionType
+
+        service = EmailActionsService()
+        service._connectors["gmail:user_123"] = mock_connector
+
+        result = await service.add_label("gmail", "user_123", "msg_to_label", "TRIAGE")
+
+        assert result.success is True
+        assert result.action_type == ActionType.ADD_LABEL
+        mock_connector.add_label.assert_called_once_with("msg_to_label", "TRIAGE")
+
+    @pytest.mark.asyncio
+    async def test_ignore_success(self, mock_connector):
+        """Test no-op ignore action."""
+        from aragora.services.email_actions import EmailActionsService, ActionType
+
+        service = EmailActionsService()
+        service._connectors["gmail:user_123"] = mock_connector
+
+        result = await service.ignore("gmail", "user_123", "msg_to_ignore")
+
+        assert result.success is True
+        assert result.action_type == ActionType.IGNORE
+        assert result.details["ignored"] is True
 
     @pytest.mark.asyncio
     async def test_batch_archive_success(self, mock_connector):

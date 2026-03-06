@@ -71,82 +71,13 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'text-blue-400 bg-blue-500/10',
 };
 
-// Demo data (prefixed with _ as currently unused fallback data)
-const _DEMO_INBOX: SharedInbox = {
-  id: 'inbox_demo',
-  workspace_id: 'ws_demo',
-  name: 'Support Inbox',
-  description: 'Customer support emails',
-  email_address: 'support@company.com',
-  connector_type: 'gmail',
-  team_members: ['user1', 'user2', 'user3'],
-  admins: ['admin1'],
-  message_count: 47,
-  unread_count: 12,
-};
-
-const _DEMO_MESSAGES: SharedInboxMessage[] = [
-  {
-    id: 'msg_1',
-    inbox_id: 'inbox_demo',
-    email_id: 'email_123',
-    subject: 'URGENT: Production issue affecting customers',
-    from_address: 'ops@acmecorp.com',
-    to_addresses: ['support@company.com'],
-    snippet: 'We are experiencing critical downtime on our production servers...',
-    received_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    status: 'open',
-    tags: ['urgent', 'production'],
-    priority: 'critical',
-    notes: [],
-  },
-  {
-    id: 'msg_2',
-    inbox_id: 'inbox_demo',
-    email_id: 'email_124',
-    subject: 'Question about billing',
-    from_address: 'finance@clientinc.com',
-    to_addresses: ['support@company.com'],
-    snippet: 'Hi, I noticed a discrepancy in our last invoice...',
-    received_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    status: 'assigned',
-    assigned_to: 'user1',
-    assigned_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    tags: ['billing'],
-    priority: 'medium',
-    notes: [{ text: 'Checking with finance team', author: 'user1', created_at: new Date(Date.now() - 30 * 60 * 1000).toISOString() }],
-  },
-  {
-    id: 'msg_3',
-    inbox_id: 'inbox_demo',
-    email_id: 'email_125',
-    subject: 'Feature request: Dark mode',
-    from_address: 'user@startup.io',
-    to_addresses: ['support@company.com'],
-    snippet: 'Would love to see a dark mode option in the app...',
-    received_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    status: 'resolved',
-    assigned_to: 'user2',
-    resolved_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    resolved_by: 'user2',
-    tags: ['feature-request'],
-    priority: 'low',
-    notes: [],
-  },
-];
-
-const DEMO_TEAM: TeamMember[] = [
-  { id: 'user1', name: 'Alice Chen', email: 'alice@company.com' },
-  { id: 'user2', name: 'Bob Smith', email: 'bob@company.com' },
-  { id: 'user3', name: 'Carol Davis', email: 'carol@company.com' },
-];
 
 export function SharedInboxView({
   apiBase,
   workspaceId,
   authToken,
   currentUserId = 'user1',
-  teamMembers = DEMO_TEAM,
+  teamMembers = [],
 }: SharedInboxViewProps) {
   const [inboxes, setInboxes] = useState<SharedInbox[]>([]);
   const [selectedInbox, setSelectedInbox] = useState<SharedInbox | null>(null);
@@ -251,26 +182,15 @@ export function SharedInboxView({
       );
 
       if (!response.ok) {
-        // Update locally for demo
-        setMessages(messages.map(m =>
-          m.id === messageId
-            ? { ...m, assigned_to: userId, status: 'assigned', assigned_at: new Date().toISOString() }
-            : m
-        ));
-        setAssignModalOpen(false);
+        setError(`Failed to assign message: ${response.status} ${response.statusText}`);
         return;
       }
 
       await fetchMessages();
       setAssignModalOpen(false);
-    } catch {
-      // Update locally for demo
-      setMessages(messages.map(m =>
-        m.id === messageId
-          ? { ...m, assigned_to: userId, status: 'assigned', assigned_at: new Date().toISOString() }
-          : m
-      ));
-      setAssignModalOpen(false);
+    } catch (error) {
+      console.error('Assign failed:', error);
+      setError(`Failed to assign message: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -289,19 +209,14 @@ export function SharedInboxView({
       );
 
       if (!response.ok) {
-        // Update locally for demo
-        setMessages(messages.map(m =>
-          m.id === messageId ? { ...m, status } : m
-        ));
+        setError(`Failed to update status: ${response.status} ${response.statusText}`);
         return;
       }
 
       await fetchMessages();
-    } catch {
-      // Update locally for demo
-      setMessages(messages.map(m =>
-        m.id === messageId ? { ...m, status } : m
-      ));
+    } catch (error) {
+      console.error('Status change failed:', error);
+      setError(`Failed to update status: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

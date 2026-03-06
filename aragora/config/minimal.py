@@ -135,10 +135,27 @@ def check_minimal_requirements() -> dict[str, bool]:
     # Python standard library (always available)
     requirements["sqlite3"] = importlib.util.find_spec("sqlite3") is not None
 
-    # Check for AI providers (at least one needed)
+    # Minimal mode should treat direct providers and funded fallback routes
+    # consistently so local/dogfood validation matches runtime behavior.
     requirements["anthropic_key"] = bool(os.environ.get("ANTHROPIC_API_KEY"))
     requirements["openai_key"] = bool(os.environ.get("OPENAI_API_KEY"))
-    requirements["has_ai_provider"] = requirements["anthropic_key"] or requirements["openai_key"]
+    requirements["openrouter_key"] = bool(os.environ.get("OPENROUTER_API_KEY"))
+    requirements["mistral_key"] = bool(os.environ.get("MISTRAL_API_KEY"))
+    requirements["gemini_key"] = bool(
+        os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    )
+    requirements["xai_key"] = bool(os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY"))
+    requirements["has_ai_provider"] = any(
+        requirements[key]
+        for key in (
+            "anthropic_key",
+            "openai_key",
+            "openrouter_key",
+            "mistral_key",
+            "gemini_key",
+            "xai_key",
+        )
+    )
 
     # Optional dependencies
     requirements["httpx"] = importlib.util.find_spec("httpx") is not None

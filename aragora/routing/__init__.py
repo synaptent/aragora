@@ -58,6 +58,11 @@ from aragora.routing.provider_config import (
     get_estimated_cost,
 )
 from aragora.routing.provider_router import ProviderRouter, get_provider_router
+from aragora.routing.session_circuit_breaker import (
+    SessionCircuitBreaker,
+    get_session_circuit_breaker,
+    reset_session_circuit_breaker,
+)
 
 __all__ = [
     # Agent selection
@@ -97,4 +102,8 @@ __all__ = [
     "get_estimated_cost",
     "ProviderRouter",
     "get_provider_router",
+    # Session circuit breaker
+    "SessionCircuitBreaker",
+    "get_session_circuit_breaker",
+    "reset_session_circuit_breaker",
 ]

@@ -51,6 +51,34 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Session circuit-breaker integration (lazy import -- non-breaking)
+# ---------------------------------------------------------------------------
+
+_session_cb_module: Any = None
+_session_cb_import_attempted = False
+
+
+def _get_session_cb():
+    """Lazily import and return the SessionCircuitBreaker singleton, or None."""
+    global _session_cb_module, _session_cb_import_attempted
+    if _session_cb_import_attempted:
+        return _session_cb_module
+    _session_cb_import_attempted = True
+    try:
+        from aragora.routing.session_circuit_breaker import get_session_circuit_breaker
+
+        _session_cb_module = get_session_circuit_breaker()
+    except (ImportError, ModuleNotFoundError):
+        logger.debug("session_circuit_breaker not available, skipping integration")
+        _session_cb_module = None
+    return _session_cb_module
+
+
+# Status codes that should notify the session circuit breaker.
+_CB_NOTIFY_STATUS_CODES = frozenset({401, 403, 429})
+
+
 # Common keywords indicating quota/rate limit errors across providers
 QUOTA_ERROR_KEYWORDS = frozenset(
     [
@@ -132,6 +160,59 @@ class QuotaFallbackMixin:
                     self._fallback_agent.model,
                 )
         return self._fallback_agent
+
+    # ------------------------------------------------------------------
+    # Session circuit-breaker helpers
+    # ------------------------------------------------------------------
+
+    def _derive_provider_name(self) -> str:
+        """Derive a short provider name from the agent class name.
+
+        Maps class names to canonical provider strings used by the
+        session circuit breaker (e.g. ``"anthropic"``, ``"openai"``).
+        Falls back to the lowercased class name.
+        """
+        cls_name = type(self).__name__.lower()
+        for key in ("anthropic", "openai", "gemini", "grok", "mistral"):
+            if key in cls_name:
+                return key
+        # Use the agent ``name`` attribute if set (e.g. "claude-api")
+        agent_name = getattr(self, "name", cls_name)
+        return str(agent_name).split("-")[0].split("_")[0].lower()
+
+    def _notify_session_circuit_breaker(self, status_code: int) -> None:
+        """Notify the session circuit breaker of a provider failure.
+
+        Only notifies for auth/quota status codes (401, 403, 429).
+        Safe to call even when the circuit breaker module is unavailable.
+        """
+        if status_code not in _CB_NOTIFY_STATUS_CODES:
+            return
+        cb = _get_session_cb()
+        if cb is None:
+            return
+        provider = self._derive_provider_name()
+        reason = f"HTTP {status_code}"
+        logger.info(
+            "Notifying session circuit breaker: provider=%s status=%d",
+            provider,
+            status_code,
+        )
+        cb.mark_provider_failed(provider, reason=reason, status_code=status_code)
+
+    def is_provider_pinned(self) -> bool:
+        """Check whether this provider is pinned as failed for the session.
+
+        Returns ``False`` when the circuit breaker module is unavailable
+        (i.e. never blocks calls when the module is missing).
+        """
+        cb = _get_session_cb()
+        if cb is None:
+            return False
+        provider = self._derive_provider_name()
+        return not cb.is_provider_available(provider)
+
+    # ------------------------------------------------------------------
 
     def get_fallback_model(self) -> str:
         """Get the OpenRouter model for fallback based on current model.
@@ -266,6 +347,10 @@ class QuotaFallbackMixin:
         Returns:
             Generated response string if fallback succeeded, None otherwise
         """
+        # Notify session circuit breaker of the failure
+        if status_code is not None:
+            self._notify_session_circuit_breaker(status_code)
+
         if not getattr(self, "enable_fallback", True):
             return None
 
@@ -318,6 +403,10 @@ class QuotaFallbackMixin:
         Yields:
             Content tokens from fallback stream, or nothing if fallback unavailable
         """
+        # Notify session circuit breaker of the failure
+        if status_code is not None:
+            self._notify_session_circuit_breaker(status_code)
+
         if not getattr(self, "enable_fallback", True):
             return
 

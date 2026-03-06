@@ -93,6 +93,9 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "cmd_consensus_detect": ("aragora.cli.commands.consensus", "cmd_consensus_detect"),
     "cmd_consensus_status": ("aragora.cli.commands.consensus", "cmd_consensus_status"),
     "add_consensus_parser": ("aragora.cli.commands.consensus", "add_consensus_parser"),
+    # triage (inbox trust wedge)
+    "cmd_triage": ("aragora.cli.commands.triage", "cmd_triage"),
+    "add_triage_parser": ("aragora.cli.commands.triage", "add_triage_parser"),
 }
 
 __all__ = list(_LAZY_IMPORTS.keys())
