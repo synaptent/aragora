@@ -23,6 +23,7 @@ from aragora.worktree.integration_worker import (
     FleetIntegrationWorker,
     FleetIntegrationWorkerConfig,
 )
+from aragora.worktree.integration_target_workspace import FleetIntegrationTargetWorkspace
 
 __all__ = [
     "AUTOPILOT_ACTIONS",
@@ -40,4 +41,5 @@ __all__ = [
     "FleetIntegrationOutcome",
     "FleetIntegrationWorker",
     "FleetIntegrationWorkerConfig",
+    "FleetIntegrationTargetWorkspace",
 ]
