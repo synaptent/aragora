@@ -109,8 +109,7 @@ async def _run_triage(batch_size: int, auto_approve: bool) -> None:
             from aragora.inbox.cli_review import CLIReviewLoop
 
             loop = CLIReviewLoop()
-            for decision in decisions:
-                loop.review(decision)
+            loop.review_batch(decisions)
         except ImportError:
             # CLI review not available — print summary
             _print_decisions(decisions)
