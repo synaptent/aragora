@@ -19,7 +19,7 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | External penetration test | Vendor outreach in progress | Kickoff target: Mar 3, 2026. Only remaining external blocker. |
-| Debate output quality | **VALIDATED — 100% pass rate** | Run 012 (Mar 5): composite 8.38-9.39/10. Diverse benchmark (10 domains): 100% pass, avg composite 0.938. Move to Completed next update. |
+| Debate output quality | **VALIDATED — moved to Completed** | Run 012 (Mar 5): composite 8.38-9.39/10. Diverse benchmark (10 domains): 100% pass, avg composite 0.938. |
 
 ---
 
@@ -27,9 +27,9 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Agent-first beta via PR watch daemon | **Daemon built (PR #663)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. Systemd service + env template included. Deploy on spare machines for autonomous agent "beta users". |
+| Agent-first beta via PR watch daemon | **Fleet deployed (3 machines)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. Fleet: mac-studio + m1-pro + intel-mac running launchd daemons. 30 reviews/hour capacity. |
 | GitHub Actions pre-merge gate | **Workflow created** | `aragora-review-gate.yml` manual-only (workflow_dispatch). Re-enable pull_request trigger when ready. |
-| Public demo at aragora.ai/demo | **Live (PR #705)** | `(standalone)/demo` — public adversarial debate demo at `/demo`, no auth, sign-up CTA. Pipeline demo moved to `/demo/pipeline`. Landing page CTA `href="/demo"` wired. |
+| Public demo at aragora.ai/demo | **Live and verified** | `/demo` (standalone debate), `/demo/pipeline` (pipeline demo), `/demo/instant` (debate replay). All return 200. Landing page CTA wired. |
 | EU AI Act compliance package | **Substantially complete** | Art. 9/12/13/14/15 dedicated bundles + CLI export + compliance scoring + demo script + customer playbook. **Deadline: Aug 2, 2026.** |
 | First 2 enterprise pilot engagements | Not started | Closed partnerships — target fintech + healthcare |
 | Developer onboarding <10 min | **Working (2-5 min)** | `aragora quickstart --demo` (zero-config), `aragora review --demo`, Docker quickstart all verified working. Needs cold-start user testing. |
@@ -92,7 +92,7 @@
 
 | Feature | Current State | Gap |
 |---------|---------------|-----|
-| Self-improving platform quality | Nomic Loop 100% wired; 82 E2E tests; pipeline hardened (PRs #650, #649, #659 merged); safety gates + gauntlet gate + evolution audit | Diverse benchmark validated (100% pass). Production safety gate requires ENABLE_NOMIC_LOOP=true. |
+| Self-improving platform quality | Nomic Loop 100% wired; 82 E2E tests; CLB backbone hardened (14/14 issues closed); safety gates + gauntlet gate + evolution audit + golden-path test | Diverse benchmark validated (100% pass). Production safety gate requires ENABLE_NOMIC_LOOP=true. |
 | Blockchain receipts | SHA-256 cryptographic hashing works | On-chain storage with ERC-8004 (not deployed) |
 | Semantic convergence | Embedding detection wired (sentence-transformers) | Not default; some debate paths still use difflib |
 | OpenClaw execution | Computer use detection works | Production E2E flow (debate → computer use → receipt) not validated |
@@ -130,3 +130,14 @@ These items were planned and are now shipped:
 | Self-hosted runner fleet (12 runners: 3 Hetzner + 6 EC2 + 3 Mac) | Mar 2026 |
 | Decision-Integrity Workbench frontend | Mar 2026 |
 | G1 Signed Context Manifests (HMAC-SHA256 + CLI) | Mar 2026 |
+| Closed-loop backbone sprint (14 CLB issues) | Mar 2026 |
+| ExecutionBundle + VerificationBundle contracts | Mar 2026 |
+| Bug-fix loop after verification failure (auto-trigger) | Mar 2026 |
+| Receipt envelope normalization (success/fail/blocked) | Mar 2026 |
+| Outcome feedback → Nomic goal export pipeline | Mar 2026 |
+| Trust-tier + taint propagation across backbone | Mar 2026 |
+| External-verifier insertion point (CLB-012) | Mar 2026 |
+| Golden-path backbone test (intake → receipt E2E) | Mar 2026 |
+| Dogfood backbone profile script | Mar 2026 |
+| PR watch daemon fleet (3 Mac machines, 30 reviews/hour) | Mar 2026 |
+| Dev swarm coordination layer (lease-aware) | Mar 2026 |
