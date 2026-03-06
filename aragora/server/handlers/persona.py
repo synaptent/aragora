@@ -522,6 +522,7 @@ class PersonaHandler(BaseHandler):
 
         return None
 
+    @require_permission("persona:delete")
     def _delete_persona(self, agent: str) -> HandlerResult:
         """Delete an agent persona."""
         persona_manager = self.get_persona_manager()

@@ -439,6 +439,7 @@ class CrudOperationsMixin:
         },
     )
     @require_storage
+    @require_permission("debates:update")
     def _patch_debate(self: _DebatesHandlerProtocol, handler: Any, debate_id: str) -> HandlerResult:
         """Update debate metadata.
 

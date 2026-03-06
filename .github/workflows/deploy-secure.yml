@@ -268,8 +268,9 @@ jobs:
             --output text)
 
           if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" == "None" ]; then
-            echo "::error::No staging instances found with tags Environment=staging, Application=aragora"
-            exit 1
+            echo "::warning::No staging instances found with tags Environment=staging, Application=aragora — skipping staging deploy"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           # Convert whitespace-separated IDs to comma-separated for SSM
@@ -279,9 +280,11 @@ jobs:
 
           echo "instance_id=$FIRST_ID" >> $GITHUB_OUTPUT
           echo "instance_ids=$INSTANCE_IDS_CSV" >> $GITHUB_OUTPUT
+          echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "Found $COUNT staging instance(s): $INSTANCE_IDS_CSV"
 
       - name: Pre-deploy instance health check
+        if: steps.get-instance.outputs.skip != 'true'
         run: |
           echo "Verifying instance health before deployment..."
           IFS=',' read -ra IDS <<< "${{ steps.get-instance.outputs.instance_ids }}"
@@ -302,6 +305,7 @@ jobs:
 
       - name: Deploy via SSM
         id: deploy
+        if: steps.get-instance.outputs.skip != 'true'
         run: |
           # Send deployment command via SSM Run Command to ALL staging instances
           IFS=',' read -ra IDS <<< "${{ steps.get-instance.outputs.instance_ids }}"
@@ -609,7 +613,9 @@ jobs:
 
   deploy-ec2-production:
     needs: [test, deploy-ec2-staging]
-    # Run if: manual dispatch to production OR (staging succeeded AND auto-deploy)
+    # Run if: manual dispatch to production OR (staging succeeded/skipped AND auto-deploy)
+    # Staging is optional: when no staging instances exist, staging completes with 'success'
+    # (all steps skip gracefully) and production proceeds normally.
     # NOTE: The 'environment: production' setting enables GitHub Environment Protection Rules.
     # Configure required reviewers in: Settings > Environments > production > Required reviewers
     if: |

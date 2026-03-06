@@ -35,6 +35,7 @@ from uuid import uuid4
 
 from aragora.resilience import CircuitBreaker
 from aragora.server.handlers.secure import SecureHandler, ForbiddenError, UnauthorizedError
+from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.utils.rate_limit import rate_limit
 from aragora.server.validation.query_params import safe_query_int
 
@@ -297,6 +298,7 @@ class AuditSessionsHandler(SecureHandler):
 
         return self._json_response(200, session)
 
+    @require_permission("audit:delete")
     async def _delete_session(self, request: Any, session_id: str) -> dict[str, Any]:
         """Delete an audit session."""
         if session_id not in _sessions:

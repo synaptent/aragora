@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
+from aragora.rbac.decorators import require_permission
+
 if TYPE_CHECKING:
     from aragora.connectors.gmail import GmailConnector
     from aragora.server.handlers.inbox_command import EmailPrioritizer
@@ -278,6 +280,7 @@ class InboxActionsMixin:
         logger.info("[Demo] Blocking sender of %s", email_id)
         return {"blocked": True, "demo": True}
 
+    @require_permission("inbox:delete")
     async def _delete_email(self, email_id: str, params: dict[str, Any]) -> dict[str, Any]:
         """Delete email."""
         if self.gmail_connector and hasattr(self.gmail_connector, "trash_message"):
