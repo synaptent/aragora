@@ -323,6 +323,81 @@ class ReceiptEnvelope:
 
 
 @dataclass
+class DeliberationBundle:
+    """Stable handoff artifact for debate outputs between pipeline stages.
+
+    Normalizes DebateResult into a shape that preserves provenance, unresolved
+    risks, and agent diversity data so downstream stages (planning, receipts,
+    outcome feedback) can consume deliberation outputs without depending on the
+    full DebateResult object.
+    """
+
+    debate_id: str
+    verdict: str
+    confidence: float = 0.0
+    consensus_reached: bool = False
+    consensus_strength: str = ""
+    quality_verdict: str = "unknown"  # "passed", "failed", "unknown"
+    dissenting_views: list[str] = field(default_factory=list)
+    unresolved_risks: list[dict[str, Any]] = field(default_factory=list)
+    participant_count: int = 0
+    diversity_scores: dict[str, float] = field(default_factory=dict)
+    provenance_refs: list[dict[str, Any]] = field(default_factory=list)
+    extras: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_debate_result(cls, result: Any) -> DeliberationBundle:
+        """Normalize a DebateResult (or duck-typed equivalent) into a DeliberationBundle."""
+        confidence = float(getattr(result, "confidence", 0.0) or 0.0)
+        consensus_reached = bool(getattr(result, "consensus_reached", False))
+        consensus_strength = str(getattr(result, "consensus_strength", "") or "")
+
+        # Quality verdict: passed when consensus reached and confidence is meaningful
+        if consensus_reached and confidence >= 0.5:
+            quality_verdict = "passed"
+        elif not consensus_reached or confidence < 0.3:
+            quality_verdict = "failed"
+        else:
+            quality_verdict = "unknown"
+
+        dissenting_views = _string_list(getattr(result, "dissenting_views", []))
+        # debate_cruxes are contested claims - treat as unresolved risks
+        cruxes = list(getattr(result, "debate_cruxes", []) or [])
+        unresolved_risks = [c if isinstance(c, dict) else {"claim": str(c)} for c in cruxes]
+
+        participants = list(getattr(result, "participants", []) or [])
+        diversity_scores: dict[str, float] = {}
+        per_sim = getattr(result, "per_agent_similarity", {}) or {}
+        if isinstance(per_sim, dict):
+            diversity_scores = {k: float(v) for k, v in per_sim.items()}
+
+        metadata = getattr(result, "metadata", {}) or {}
+        provenance_refs = [dict(metadata)] if metadata else []
+
+        return cls(
+            debate_id=str(getattr(result, "debate_id", "") or ""),
+            verdict=str(getattr(result, "final_answer", "") or ""),
+            confidence=confidence,
+            consensus_reached=consensus_reached,
+            consensus_strength=consensus_strength,
+            quality_verdict=quality_verdict,
+            dissenting_views=dissenting_views,
+            unresolved_risks=unresolved_risks,
+            participant_count=len(participants),
+            diversity_scores=diversity_scores,
+            provenance_refs=provenance_refs,
+            extras={
+                "task": str(getattr(result, "task", "") or ""),
+                "convergence_status": str(getattr(result, "convergence_status", "") or ""),
+                "consensus_variance": float(getattr(result, "consensus_variance", 0.0) or 0.0),
+            },
+        )
+
+
+@dataclass
 class OutcomeFeedbackRecord:
     receipt_ref: str
     pipeline_id: str

@@ -262,6 +262,67 @@ class TestDecisionPlanFactory:
         assert plan.metadata["spec_bundle"]["title"] == "Execution-grade spec"
         assert "spec_bundle_missing_fields" not in plan.metadata
 
+    def test_from_debate_result_stores_deliberation_bundle_in_metadata(self):
+        result = _make_result(
+            consensus_reached=True,
+            confidence=0.82,
+            dissenting_views=["Dissenter view A"],
+        )
+
+        plan = DecisionPlanFactory.from_debate_result(result, approval_mode=ApprovalMode.ALWAYS)
+
+        db = plan.metadata.get("deliberation_bundle", {})
+        assert db.get("debate_id") == "test-debate-001"
+        assert db.get("quality_verdict") == "passed"
+        assert db.get("consensus_reached") is True
+        assert db.get("confidence") == pytest.approx(0.82)
+        assert "Dissenter view A" in db.get("dissenting_views", [])
+
+    def test_from_debate_result_halts_automated_planning_on_failed_quality(self):
+        result = _make_result(
+            consensus_reached=False,
+            confidence=0.15,
+        )
+
+        with pytest.raises(ValueError, match="quality verdict"):
+            DecisionPlanFactory.from_debate_result(
+                result,
+                approval_mode=ApprovalMode.NEVER,
+            )
+
+    def test_from_debate_result_allows_manual_lane_on_failed_quality(self):
+        result = _make_result(
+            consensus_reached=False,
+            confidence=0.15,
+        )
+
+        # ALWAYS approval mode should not raise even on failed quality
+        plan = DecisionPlanFactory.from_debate_result(result, approval_mode=ApprovalMode.ALWAYS)
+        db = plan.metadata.get("deliberation_bundle", {})
+        assert db.get("quality_verdict") == "failed"
+
+    def test_from_debate_result_accepts_explicit_deliberation_bundle(self):
+        from aragora.pipeline.backbone_contracts import DeliberationBundle
+
+        result = _make_result(consensus_reached=True, confidence=0.9)
+        bundle = DeliberationBundle(
+            debate_id="custom-debate",
+            verdict="Custom verdict",
+            confidence=0.9,
+            consensus_reached=True,
+            quality_verdict="passed",
+        )
+
+        plan = DecisionPlanFactory.from_debate_result(
+            result,
+            approval_mode=ApprovalMode.ALWAYS,
+            deliberation_bundle=bundle,
+        )
+
+        db = plan.metadata.get("deliberation_bundle", {})
+        assert db.get("debate_id") == "custom-debate"
+        assert db.get("verdict") == "Custom verdict"
+
 
 # ---------------------------------------------------------------------------
 # Approval Logic
@@ -292,7 +353,8 @@ class TestApprovalLogic:
         assert plan.requires_human_approval is True
 
     def test_never_mode(self):
-        result = _make_result(consensus_reached=False)
+        # consensus_reached=True with adequate confidence → quality_verdict="passed", gate passes
+        result = _make_result(consensus_reached=True, confidence=0.85)
         plan = DecisionPlanFactory.from_debate_result(result, approval_mode=ApprovalMode.NEVER)
         assert plan.requires_human_approval is False
 

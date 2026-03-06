@@ -3,6 +3,7 @@ from __future__ import annotations
 from aragora.interrogation.crystallizer import CrystallizedSpec, MoSCoWItem
 from aragora.interrogation.engine import InterrogationResult, PrioritizedQuestion
 from aragora.pipeline.backbone_contracts import (
+    DeliberationBundle,
     IntakeBundle,
     OutcomeFeedbackRecord,
     ReceiptEnvelope,
@@ -147,6 +148,98 @@ def test_receipt_envelope_from_pipeline_receipt_flattens_provenance() -> None:
         {"stage": "ideas", "id": "i1", "label": "Idea"},
         {"stage": "goals", "id": "g1", "label": "Goal"},
     ]
+
+
+def test_deliberation_bundle_from_debate_result_preserves_dissent_and_diversity() -> None:
+    from types import SimpleNamespace
+
+    result = SimpleNamespace(
+        debate_id="debate-abc",
+        task="Should we adopt microservices?",
+        final_answer="Prefer a modular monolith for now.",
+        confidence=0.78,
+        consensus_reached=True,
+        consensus_strength="medium",
+        consensus_variance=1.3,
+        dissenting_views=["Scale concerns are underweighted", "Org readiness not assessed"],
+        participants=["analyst", "critic", "synthesizer"],
+        per_agent_similarity={"analyst": 0.82, "critic": 0.61, "synthesizer": 0.91},
+        convergence_status="converged",
+        debate_cruxes=[{"claim": "team size matters", "contested": True}],
+        metadata={"source": "pipeline", "pipeline_id": "pipe-001"},
+    )
+
+    bundle = DeliberationBundle.from_debate_result(result)
+
+    assert bundle.debate_id == "debate-abc"
+    assert bundle.verdict == "Prefer a modular monolith for now."
+    assert bundle.confidence == 0.78
+    assert bundle.consensus_reached is True
+    assert bundle.consensus_strength == "medium"
+    assert bundle.dissenting_views == [
+        "Scale concerns are underweighted",
+        "Org readiness not assessed",
+    ]
+    assert bundle.participant_count == 3
+    assert bundle.diversity_scores == {"analyst": 0.82, "critic": 0.61, "synthesizer": 0.91}
+    assert bundle.unresolved_risks == [{"claim": "team size matters", "contested": True}]
+    assert bundle.provenance_refs == [{"source": "pipeline", "pipeline_id": "pipe-001"}]
+
+
+def test_deliberation_bundle_from_debate_result_failed_quality_verdict() -> None:
+    from types import SimpleNamespace
+
+    result = SimpleNamespace(
+        debate_id="debate-xyz",
+        task="Rewrite auth in Rust",
+        final_answer="",
+        confidence=0.2,
+        consensus_reached=False,
+        consensus_strength="weak",
+        consensus_variance=3.1,
+        dissenting_views=["Risk too high", "No rollback plan"],
+        participants=["agent-a", "agent-b"],
+        per_agent_similarity={},
+        convergence_status="diverging",
+        debate_cruxes=[],
+        metadata={},
+    )
+
+    bundle = DeliberationBundle.from_debate_result(result)
+
+    assert bundle.consensus_reached is False
+    assert bundle.quality_verdict == "failed"
+    assert len(bundle.dissenting_views) == 2
+    assert bundle.provenance_refs == []
+
+
+def test_deliberation_bundle_to_dict_is_serializable() -> None:
+    from types import SimpleNamespace
+
+    result = SimpleNamespace(
+        debate_id="d1",
+        task="t",
+        final_answer="a",
+        confidence=0.5,
+        consensus_reached=True,
+        consensus_strength="strong",
+        consensus_variance=0.5,
+        dissenting_views=[],
+        participants=["x"],
+        per_agent_similarity={"x": 0.9},
+        convergence_status="converged",
+        debate_cruxes=[],
+        metadata={"foo": "bar"},
+    )
+
+    bundle = DeliberationBundle.from_debate_result(result)
+    d = bundle.to_dict()
+
+    assert isinstance(d, dict)
+    assert d["debate_id"] == "d1"
+    assert d["quality_verdict"] == "passed"
+    assert "dissenting_views" in d
+    assert "unresolved_risks" in d
 
 
 def test_outcome_feedback_record_from_pipeline_outcome_derives_next_action() -> None:

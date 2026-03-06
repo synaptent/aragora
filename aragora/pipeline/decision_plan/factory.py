@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from aragora.core_types import DebateResult
 from aragora.implement.types import ImplementPlan, ImplementTask
-from aragora.pipeline.backbone_contracts import SpecBundle
+from aragora.pipeline.backbone_contracts import DeliberationBundle, SpecBundle
 from aragora.pipeline.decision_plan.core import (
     ApprovalMode,
     BudgetAllocation,
@@ -84,6 +84,7 @@ class DecisionPlanFactory:
         specification: Any | None = None,
         validation_result: ValidationResult | Any | None = None,
         fail_closed_spec_validation: bool | None = None,
+        deliberation_bundle: DeliberationBundle | None = None,
     ) -> DecisionPlan:
         """Create a DecisionPlan from a DebateResult.
 
@@ -102,16 +103,33 @@ class DecisionPlanFactory:
             repo_path: Repository root for implementation planning.
             metadata: Additional metadata to attach.
             implement_plan: Optional pre-built implementation plan to reuse.
+            deliberation_bundle: Optional pre-built deliberation bundle. When not
+                provided one is auto-created from the debate result. The bundle's
+                quality_verdict gates automated lanes (ApprovalMode.NEVER).
 
         Returns:
             A fully populated DecisionPlan ready for approval/execution.
         """
+        # Build or reuse deliberation bundle (CLB-005 / CLB-006)
+        if deliberation_bundle is None:
+            deliberation_bundle = DeliberationBundle.from_debate_result(result)
+
+        # Automated lanes must not proceed on a failed quality verdict
+        if approval_mode == ApprovalMode.NEVER and deliberation_bundle.quality_verdict == "failed":
+            raise ValueError(
+                f"Cannot create automated plan: quality verdict is '{deliberation_bundle.quality_verdict}'. "
+                "Use a manual approval mode or improve the debate quality before automating."
+            )
+
         merged_metadata: dict[str, Any] = {}
         result_metadata = getattr(result, "metadata", None)
         if isinstance(result_metadata, dict):
             merged_metadata.update(result_metadata)
         if isinstance(metadata, dict):
             merged_metadata.update(metadata)
+
+        # Persist the deliberation bundle so downstream stages can consume it
+        merged_metadata["deliberation_bundle"] = deliberation_bundle.to_dict()
 
         profile: ImplementationProfile | None = None
         if isinstance(implementation_profile, ImplementationProfile):
