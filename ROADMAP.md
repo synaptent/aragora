@@ -102,7 +102,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 - [ ] Complete third-party penetration testing (kickoff Mar 3, 2026 — vendor-dependent)
 - [ ] Deploy public status page at status.aragora.ai
 - [x] Implement quarterly disaster recovery drills (BackupScheduler with DR integration)
-- [ ] Finalize data classification policy
+- [x] Finalize data classification policy (runtime enforcement, CI PII gate, evidence bundles)
 - [x] MFA enforcement for admin access (TOTP/HOTP)
 - [x] Enhanced circuit breaker coverage for all connectors
 - [x] Redis Sentinel/Cluster support (RedisHAClient)

@@ -121,5 +121,10 @@ These items were planned and are now shipped:
 | Debate output quality (10-domain benchmark) | Mar 2026 |
 | Nomic Loop safety gates (production gate, gauntlet, audit) | Mar 2026 |
 | CI setup-python-safe composite action (51 workflows) | Mar 2026 |
+| MFA admin enforcement (compliance API, drift alerts, bypass docs) | Mar 2026 |
+| Data classification enforcement (runtime, CI PII gate, evidence bundles) | Mar 2026 |
+| Closed-loop backbone contracts (IntakeBundle, SpecBundle, DeliberationBundle, ReceiptEnvelope, OutcomeFeedbackRecord) | Mar 2026 |
+| Fail-closed spec validation (execution-grade field enforcement) | Mar 2026 |
+| Deliberation bundle handoff (dissent + quality gate into planning) | Mar 2026 |
 | CI push-to-main noise reduction (35→6 workflows) | Mar 2026 |
 | Self-hosted runner fleet (12 runners: 3 Hetzner + 6 EC2 + 3 Mac) | Mar 2026 |
