@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -64,6 +65,29 @@ def _repo_root_from(path: Path) -> Path:
     if proc.returncode != 0:
         raise RuntimeError(f"Not a git repo: {path}")
     return Path(proc.stdout.strip()).resolve()
+
+
+def _git_common_dir(repo_root: Path) -> Path:
+    proc = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-common-dir",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return repo_root / ".git"
+    return Path(proc.stdout.strip()).resolve()
+
+
+def _dev_coordination_db_path(repo_root: Path) -> Path:
+    return _git_common_dir(repo_root) / "aragora-agent-state" / "dev_coordination.db"
 
 
 def _parse_worktree_porcelain(text: str) -> list[WorktreeEntry]:
@@ -566,6 +590,35 @@ def _has_active_session(worktree_path: Path) -> bool:
     return False
 
 
+def _has_active_lease(repo_root: Path, worktree_path: Path) -> bool:
+    """Return True when coordination state shows a live lease for this worktree."""
+    db_path = _dev_coordination_db_path(repo_root)
+    if not db_path.exists():
+        return False
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            rows = conn.execute(
+                "SELECT status, expires_at FROM leases WHERE worktree_path = ?",
+                (str(worktree_path.resolve()),),
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return False
+
+    now = _utc_now()
+    for status, expires_at in rows:
+        if status != "active":
+            continue
+        try:
+            if datetime.fromisoformat(expires_at) > now:
+                return True
+        except ValueError:
+            return True
+    return False
+
+
 def _remove_worktree(repo_root: Path, path: Path) -> bool:
     proc = _run_git(repo_root, "worktree", "remove", "--force", str(path))
     return proc.returncode == 0
@@ -596,6 +649,7 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
     failed_branch_deletions = 0
 
     skipped_active_session = 0
+    skipped_active_lease = 0
 
     for session in state.get("sessions", []):
         path = Path(str(session.get("path", ""))).resolve()
@@ -615,6 +669,10 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
         if path.exists() and _has_active_session(path):
             kept.append(session)
             skipped_active_session += 1
+            continue
+        if path.exists() and _has_active_lease(repo_root, path):
+            kept.append(session)
+            skipped_active_lease += 1
             continue
 
         if active and branch:
@@ -647,6 +705,7 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
         "kept": len(kept),
         "skipped_unmerged": skipped_unmerged,
         "skipped_active_session": skipped_active_session,
+        "skipped_active_lease": skipped_active_lease,
         "failed_worktree_removals": failed_worktree_removals,
         "failed_branch_deletions": failed_branch_deletions,
     }
@@ -657,6 +716,7 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
             f"cleanup complete: removed={removed} kept={len(kept)} "
             f"skipped_unmerged={skipped_unmerged} "
             f"skipped_active_session={skipped_active_session} "
+            f"skipped_active_lease={skipped_active_lease} "
             f"failed_worktree_removals={failed_worktree_removals} "
             f"failed_branch_deletions={failed_branch_deletions}"
         )
@@ -680,6 +740,7 @@ def cmd_status(args: argparse.Namespace) -> int:
                 "branch": session.get("branch"),
                 "path": path,
                 "active": path in active_paths,
+                "lease_active": _has_active_lease(repo_root, Path(path)) if path else False,
                 "created_at": session.get("created_at"),
                 "last_seen_at": session.get("last_seen_at"),
                 "reconcile_status": session.get("reconcile_status"),
@@ -695,7 +756,8 @@ def cmd_status(args: argparse.Namespace) -> int:
             print("no managed sessions")
         for row in rows:
             marker = "active" if row["active"] else "stale"
-            print(f"[{marker}] {row['branch']} :: {row['path']}")
+            lease = " lease" if row["lease_active"] else ""
+            print(f"[{marker}{lease}] {row['branch']} :: {row['path']}")
     return 0
 
 

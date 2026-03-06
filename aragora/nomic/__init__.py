@@ -164,6 +164,19 @@ from aragora.nomic.event_bus import (
     WorktreeEvent,
 )
 
+# Development coordination control plane
+from aragora.nomic.dev_coordination import (
+    CompletionReceipt,
+    DevCoordinationStore,
+    IntegrationDecision,
+    IntegrationDecisionType,
+    LeaseConflictError,
+    LeaseStatus,
+    SalvageCandidate,
+    SalvageStatus,
+    WorkLease,
+)
+
 # Legacy NomicLoop API (compatibility)
 from aragora.nomic.loop import NomicLoop
 
@@ -665,6 +678,16 @@ __all__ = [
     "EventBus",
     "WorktreeEvent",
     "VALID_EVENT_TYPES",
+    # Development coordination
+    "WorkLease",
+    "LeaseStatus",
+    "LeaseConflictError",
+    "CompletionReceipt",
+    "IntegrationDecision",
+    "IntegrationDecisionType",
+    "SalvageCandidate",
+    "SalvageStatus",
+    "DevCoordinationStore",
     # Outcome tracking
     "NomicOutcomeTracker",
     "DebateMetrics",
