@@ -341,31 +341,13 @@ async def handle_list_routing_rules(
                     "offset": offset,
                 }
             except (OSError, RuntimeError, ValueError, KeyError) as e:
-                logger.warning("[SharedInbox] Failed to load rules from RulesStore: %s", e)
+                logger.error("[SharedInbox] Failed to load rules from RulesStore: %s", e)
+                return {
+                    "success": False,
+                    "error": "Storage operation failed",
+                }
 
-        # Try email store as fallback
-        email_store = _get_store()
-        if email_store:
-            try:
-                rules = email_store.list_routing_rules(
-                    workspace_id=workspace_id,
-                    inbox_id=inbox_id,
-                    enabled_only=enabled_only,
-                )
-                if rules is not None:
-                    total = len(rules)
-                    rules = rules[offset : offset + limit]
-                    return {
-                        "success": True,
-                        "rules": rules,
-                        "total": total,
-                        "limit": limit,
-                        "offset": offset,
-                    }
-            except (OSError, RuntimeError, ValueError, KeyError) as e:
-                logger.warning("[SharedInbox] Failed to load rules from email store: %s", e)
-
-        # Fallback to in-memory
+        # No persistent store available -- use in-memory
         with _storage_lock:
             all_rules = [
                 rule.to_dict()
@@ -732,17 +714,6 @@ async def handle_test_routing_rule(
                     rule = RoutingRule.from_dict(rule_data)
             except (OSError, RuntimeError, ValueError, KeyError) as e:
                 logger.warning("[SharedInbox] Failed to load rule from RulesStore: %s", e)
-
-        # Try email store as fallback
-        if not rule:
-            email_store = _get_store()
-            if email_store:
-                try:
-                    rule_data = email_store.get_routing_rule(rule_id)
-                    if rule_data:
-                        rule = RoutingRule.from_dict(rule_data)
-                except (OSError, RuntimeError, ValueError, KeyError) as e:
-                    logger.warning("[SharedInbox] Failed to load rule from email store: %s", e)
 
         # Fallback to in-memory
         if not rule:

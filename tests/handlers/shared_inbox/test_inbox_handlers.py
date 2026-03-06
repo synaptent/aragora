@@ -378,7 +378,7 @@ class TestListSharedInboxes:
         assert result["inboxes"][0]["id"] == "si1"
 
     @pytest.mark.asyncio
-    async def test_list_store_error_falls_back_to_memory(self, patch_store):
+    async def test_list_store_error_returns_failure(self, patch_store):
         store = patch_store
         store.list_shared_inboxes.side_effect = OSError("store down")
         inbox = _make_inbox(inbox_id="i1", workspace_id="ws_1")
@@ -386,8 +386,8 @@ class TestListSharedInboxes:
             _shared_inboxes["i1"] = inbox
 
         result = await handle_list_shared_inboxes(workspace_id="ws_1")
-        assert result["success"] is True
-        assert result["total"] == 1
+        assert result["success"] is False
+        assert "storage" in result["error"].lower() or "failed" in result["error"].lower()
 
     @pytest.mark.asyncio
     async def test_list_store_empty_falls_back_to_memory(self, patch_store):
@@ -613,7 +613,7 @@ class TestGetInboxMessages:
         assert result["messages"][0]["id"] == "m1"
 
     @pytest.mark.asyncio
-    async def test_get_messages_store_error_falls_back(self, patch_store):
+    async def test_get_messages_store_error_returns_failure(self, patch_store):
         store = patch_store
         store.get_inbox_messages.side_effect = RuntimeError("db down")
         m1 = _make_message(message_id="m1", inbox_id="i1")
@@ -621,8 +621,8 @@ class TestGetInboxMessages:
             _inbox_messages["i1"] = {"m1": m1}
 
         result = await handle_get_inbox_messages(inbox_id="i1")
-        assert result["success"] is True
-        assert result["total"] == 1
+        assert result["success"] is False
+        assert "storage" in result["error"].lower() or "failed" in result["error"].lower()
 
     @pytest.mark.asyncio
     async def test_get_messages_store_uses_list_inbox_messages_fallback(self, mock_store):

@@ -710,8 +710,8 @@ class TestListRoutingRules:
         assert result["total"] == 1
 
     @pytest.mark.asyncio
-    async def test_list_rules_store_failure_falls_back(self):
-        """Falls back to in-memory when rules_store fails."""
+    async def test_list_rules_store_failure_returns_error(self):
+        """Returns error when rules_store fails instead of silently falling back."""
         rules_store = MagicMock()
         rules_store.list_rules.side_effect = RuntimeError("nope")
         rule = _make_routing_rule(workspace_id="ws_fb")
@@ -722,50 +722,8 @@ class TestListRoutingRules:
             patch(f"{MODULE}._get_store", return_value=None),
         ):
             result = await handle_list_routing_rules(workspace_id="ws_fb")
-        assert result["success"] is True
-        assert result["total"] == 1
-
-    @pytest.mark.asyncio
-    async def test_list_email_store_fallback(self):
-        """Falls back to email store when rules_store returns None."""
-        email_store = MagicMock()
-        email_store.list_routing_rules.return_value = [
-            {"id": "es_1", "name": "Email Store Rule"},
-        ]
-        with (
-            patch(f"{MODULE}._get_rules_store", return_value=None),
-            patch(f"{MODULE}._get_store", return_value=email_store),
-        ):
-            result = await handle_list_routing_rules(workspace_id="ws_1")
-        assert result["success"] is True
-        assert result["rules"][0]["id"] == "es_1"
-        assert result["total"] == 1
-
-    @pytest.mark.asyncio
-    async def test_list_email_store_returns_none_falls_to_memory(self):
-        """Falls through to in-memory when email store returns None."""
-        email_store = MagicMock()
-        email_store.list_routing_rules.return_value = None
-        with (
-            patch(f"{MODULE}._get_rules_store", return_value=None),
-            patch(f"{MODULE}._get_store", return_value=email_store),
-        ):
-            result = await handle_list_routing_rules(workspace_id="ws_1")
-        assert result["success"] is True
-        assert result["rules"] == []
-
-    @pytest.mark.asyncio
-    async def test_list_email_store_failure_falls_to_memory(self):
-        """Falls through to in-memory when email store raises."""
-        email_store = MagicMock()
-        email_store.list_routing_rules.side_effect = OSError("fail")
-        with (
-            patch(f"{MODULE}._get_rules_store", return_value=None),
-            patch(f"{MODULE}._get_store", return_value=email_store),
-        ):
-            result = await handle_list_routing_rules(workspace_id="ws_1")
-        assert result["success"] is True
-        assert result["rules"] == []
+        assert result["success"] is False
+        assert "storage" in result["error"].lower() or "failed" in result["error"].lower()
 
     @pytest.mark.asyncio
     async def test_list_inbox_id_filter(self, mock_stores):
@@ -1441,14 +1399,13 @@ class TestTestRoutingRule:
         assert result["match_count"] == 3
 
     @pytest.mark.asyncio
-    async def test_test_rule_from_email_store(self):
-        """Falls back to email_store when rules_store returns None."""
-        rule_data = _make_routing_rule().to_dict()
-        email_store = MagicMock()
-        email_store.get_routing_rule.return_value = rule_data
+    async def test_test_rule_no_stores_falls_to_memory(self):
+        """Falls back to in-memory when no persistent stores available."""
+        rule = _make_routing_rule()
+        with _storage_lock:
+            _routing_rules["rule_abc123"] = rule
         with (
             patch(f"{MODULE}._get_rules_store", return_value=None),
-            patch(f"{MODULE}._get_store", return_value=email_store),
             patch(f"{MODULE}.evaluate_rule_for_test", return_value=0),
         ):
             result = await handle_test_routing_rule(
@@ -1459,16 +1416,15 @@ class TestTestRoutingRule:
         assert result["match_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_test_rule_rules_store_failure_falls_back(self):
-        """Falls back to email_store when rules_store raises."""
-        rule_data = _make_routing_rule().to_dict()
+    async def test_test_rule_rules_store_failure_falls_to_memory(self):
+        """Falls back to in-memory when rules_store raises (email store fallback removed)."""
         rules_store = MagicMock()
         rules_store.get_rule.side_effect = RuntimeError("fail")
-        email_store = MagicMock()
-        email_store.get_routing_rule.return_value = rule_data
+        rule = _make_routing_rule()
+        with _storage_lock:
+            _routing_rules["rule_abc123"] = rule
         with (
             patch(f"{MODULE}._get_rules_store", return_value=rules_store),
-            patch(f"{MODULE}._get_store", return_value=email_store),
             patch(f"{MODULE}.evaluate_rule_for_test", return_value=2),
         ):
             result = await handle_test_routing_rule(
@@ -1479,26 +1435,19 @@ class TestTestRoutingRule:
         assert result["match_count"] == 2
 
     @pytest.mark.asyncio
-    async def test_test_rule_email_store_failure_falls_to_memory(self):
-        """Falls back to memory when email_store raises."""
+    async def test_test_rule_not_in_any_store_returns_not_found(self):
+        """Returns not found when rule is not in any store."""
         rules_store = MagicMock()
-        rules_store.get_rule.return_value = None  # not in rules_store
-        email_store = MagicMock()
-        email_store.get_routing_rule.side_effect = OSError("fail")
-        rule = _make_routing_rule()
-        with _storage_lock:
-            _routing_rules["rule_abc123"] = rule
+        rules_store.get_rule.return_value = None
         with (
             patch(f"{MODULE}._get_rules_store", return_value=rules_store),
-            patch(f"{MODULE}._get_store", return_value=email_store),
-            patch(f"{MODULE}.evaluate_rule_for_test", return_value=1),
         ):
             result = await handle_test_routing_rule(
-                rule_id="rule_abc123",
+                rule_id="rule_nonexistent",
                 workspace_id="ws_test",
             )
-        assert result["success"] is True
-        assert result["match_count"] == 1
+        assert result["success"] is False
+        assert "not found" in result["error"].lower()
 
     @pytest.mark.asyncio
     async def test_test_rule_zero_matches(self, mock_stores):

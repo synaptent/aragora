@@ -576,58 +576,29 @@ class ConnectorsHandler(SecureHandler):
         )
 
     async def _run_sync(self, sync_id: str, connector_id: str) -> None:
-        """Background task to run sync operation."""
+        """Background task to run sync operation.
+
+        Real connector sync required -- use the Gmail connector directly.
+        This stub marks the sync as failed since simulated sync has been removed.
+        """
         sync_job = _sync_jobs.get(sync_id)
         connector = _connectors.get(connector_id)
 
         if not sync_job or not connector:
             return
 
-        try:
-            # Simulate sync progress
-            total_items = 100 + int(uuid4().int % 1000)
-            sync_job["items_total"] = total_items
+        sync_job["status"] = "failed"
+        sync_job["error_message"] = "Real connector sync required -- use Gmail connector directly"
+        sync_job["completed_at"] = datetime.now(timezone.utc).isoformat()
+        connector["status"] = "error"
+        connector["error_message"] = "Real connector sync required -- use Gmail connector directly"
+        _sync_history.append(dict(sync_job))
 
-            for i in range(total_items):
-                # Check if cancelled
-                if sync_job["status"] == "cancelled":
-                    break
-
-                # Simulate processing
-                await asyncio.sleep(0.05)
-                sync_job["items_processed"] = i + 1
-                sync_job["progress"] = (i + 1) / total_items
-
-            # Mark as complete
-            if sync_job["status"] != "cancelled":
-                sync_job["status"] = "completed"
-                connector["status"] = "connected"
-                connector["last_sync"] = datetime.now(timezone.utc).isoformat()
-                connector["items_synced"] = (
-                    connector.get("items_synced", 0) + sync_job["items_processed"]
-                )
-
-            sync_job["completed_at"] = datetime.now(timezone.utc).isoformat()
-            duration = (
-                datetime.fromisoformat(sync_job["completed_at"].replace("Z", "+00:00"))
-                - datetime.fromisoformat(sync_job["started_at"].replace("Z", "+00:00"))
-            ).total_seconds()
-            sync_job["duration_seconds"] = int(duration)
-
-            # Add to history
-            _sync_history.append(dict(sync_job))
-
-            logger.info("Completed sync %s for connector %s", sync_id, connector_id)
-
-        except (ConnectionError, TimeoutError, OSError, ValueError, KeyError, TypeError) as e:
-            sync_job["status"] = "failed"
-            sync_job["error_message"] = "Sync operation failed"
-            sync_job["completed_at"] = datetime.now(timezone.utc).isoformat()
-            connector["status"] = "error"
-            connector["error_message"] = "Sync operation failed"
-            _sync_history.append(dict(sync_job))
-
-            logger.error("Sync %s failed: %s", sync_id, e)
+        logger.error(
+            "Sync %s for connector %s failed: simulated sync removed, real connector required",
+            sync_id,
+            connector_id,
+        )
 
     async def _cancel_sync(self, request: Any, sync_id: str) -> dict[str, Any]:
         """Cancel a running sync operation."""
@@ -658,21 +629,12 @@ class ConnectorsHandler(SecureHandler):
             return self._error_response(400, "Invalid request body")
 
         connector_id = body.get("connector_id")
-        config = body.get("config", {})
-
-        # In production, this would actually test the connection
-        # For now, simulate a test
-        await asyncio.sleep(1)
-
-        # Simulate success/failure based on config
-        has_required_fields = bool(config)
-        success = has_required_fields
 
         return self._json_response(
-            200,
+            501,
             {
-                "success": success,
-                "message": "Connection successful" if success else "Missing required configuration",
+                "success": False,
+                "error": "Real connector test required -- use Gmail connector directly",
                 "connector_id": connector_id,
             },
         )

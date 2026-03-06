@@ -233,9 +233,13 @@ async def handle_list_shared_inboxes(
                         "total": len(stored_inboxes),
                     }
             except (OSError, RuntimeError, ValueError, KeyError) as e:
-                logger.warning("[SharedInbox] Failed to load from store, using cache: %s", e)
+                logger.error("[SharedInbox] Failed to load from store: %s", e)
+                return {
+                    "success": False,
+                    "error": "Storage operation failed",
+                }
 
-        # Fallback to in-memory
+        # No persistent store available -- use in-memory
         with _storage_lock:
             inboxes = [
                 inbox.to_dict()
@@ -370,9 +374,11 @@ async def handle_get_inbox_messages(
                                     ]
                                 total_count = len(all_messages)
                         except (OSError, RuntimeError, ValueError, KeyError) as e:
-                            # Fall back to page count + offset
-                            logger.debug("Error counting messages, using fallback: %s", e)
-                            total_count = offset + len(messages_data)
+                            logger.error("Error counting messages: %s", e)
+                            return {
+                                "success": False,
+                                "error": "Storage operation failed",
+                            }
 
                     return {
                         "success": True,
@@ -382,9 +388,13 @@ async def handle_get_inbox_messages(
                         "offset": offset,
                     }
             except (OSError, RuntimeError, ValueError, KeyError) as e:
-                logger.warning("[SharedInbox] Failed to load messages from store: %s", e)
+                logger.error("[SharedInbox] Failed to load messages from store: %s", e)
+                return {
+                    "success": False,
+                    "error": "Storage operation failed",
+                }
 
-        # Fallback to in-memory
+        # No persistent store available -- use in-memory
         with _storage_lock:
             if inbox_id not in _inbox_messages:
                 return {"success": False, "error": "Inbox not found"}
