@@ -260,13 +260,19 @@ jobs:
 
       - name: Fix AWS CLI path
         run: |
-          # AWS CLI v2 standalone binary lives at /usr/local/bin/aws on AL2023.
-          # actions/setup-python can shadow /usr/bin/aws (Python wrapper) by
-          # changing sys.executable, breaking the awscli import. Prefer v2.
+          # Find AWS CLI v2 in common locations, or install via pip3 and add its
+          # scripts directory to PATH. pip3 install alone does not update PATH.
           if /usr/local/bin/aws --version 2>/dev/null; then
             echo "/usr/local/bin" >> "$GITHUB_PATH"
+          elif /opt/homebrew/bin/aws --version 2>/dev/null; then
+            echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+          elif command -v aws 2>/dev/null; then
+            echo "aws already in PATH: $(which aws)"
           else
             pip3 install awscli --quiet
+            SCRIPTS=$(python3 -c "import sysconfig; print(sysconfig.get_path('scripts'))")
+            echo "$SCRIPTS" >> "$GITHUB_PATH"
+            echo "Installed awscli via pip3, scripts at: $SCRIPTS"
           fi
 
       - name: Get staging instance IDs
@@ -688,13 +694,19 @@ jobs:
 
       - name: Fix AWS CLI path
         run: |
-          # AWS CLI v2 standalone binary lives at /usr/local/bin/aws on AL2023.
-          # actions/setup-python can shadow /usr/bin/aws (Python wrapper) by
-          # changing sys.executable, breaking the awscli import. Prefer v2.
+          # Find AWS CLI v2 in common locations, or install via pip3 and add its
+          # scripts directory to PATH. pip3 install alone does not update PATH.
           if /usr/local/bin/aws --version 2>/dev/null; then
             echo "/usr/local/bin" >> "$GITHUB_PATH"
+          elif /opt/homebrew/bin/aws --version 2>/dev/null; then
+            echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+          elif command -v aws 2>/dev/null; then
+            echo "aws already in PATH: $(which aws)"
           else
             pip3 install awscli --quiet
+            SCRIPTS=$(python3 -c "import sysconfig; print(sysconfig.get_path('scripts'))")
+            echo "$SCRIPTS" >> "$GITHUB_PATH"
+            echo "Installed awscli via pip3, scripts at: $SCRIPTS"
           fi
 
       - name: Get production instance IDs
@@ -1121,13 +1133,19 @@ jobs:
 
       - name: Fix AWS CLI path
         run: |
-          # AWS CLI v2 standalone binary lives at /usr/local/bin/aws on AL2023.
-          # actions/setup-python can shadow /usr/bin/aws (Python wrapper) by
-          # changing sys.executable, breaking the awscli import. Prefer v2.
+          # Find AWS CLI v2 in common locations, or install via pip3 and add its
+          # scripts directory to PATH. pip3 install alone does not update PATH.
           if /usr/local/bin/aws --version 2>/dev/null; then
             echo "/usr/local/bin" >> "$GITHUB_PATH"
+          elif /opt/homebrew/bin/aws --version 2>/dev/null; then
+            echo "/opt/homebrew/bin" >> "$GITHUB_PATH"
+          elif command -v aws 2>/dev/null; then
+            echo "aws already in PATH: $(which aws)"
           else
             pip3 install awscli --quiet
+            SCRIPTS=$(python3 -c "import sysconfig; print(sysconfig.get_path('scripts'))")
+            echo "$SCRIPTS" >> "$GITHUB_PATH"
+            echo "Installed awscli via pip3, scripts at: $SCRIPTS"
           fi
 
       - name: Get DR instance IDs
