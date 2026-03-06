@@ -44,6 +44,7 @@ from aragora.workflow.nodes.implementation import ImplementationStep, Verificati
 from aragora.workflow.nodes.computer_use import ComputerUseTaskStep
 from aragora.workflow.nodes.content_extraction import ContentExtractionStep
 from aragora.workflow.nodes.harness import HarnessStep
+from aragora.workflow.nodes.code_implementation import CodeImplementationTask
 from aragora.workflow.nodes.action_fulfillment import CreateTicketStep, SendSummaryStep
 
 from aragora.workflow.step import WorkflowStep
@@ -91,6 +92,7 @@ __all__ = [
     "ImplementationStep",
     "VerificationStep",
     "HarnessStep",
+    "CodeImplementationTask",
     "CreateTicketStep",
     "SendSummaryStep",
     "register_step_type",
