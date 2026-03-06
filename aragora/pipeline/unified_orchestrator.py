@@ -300,11 +300,14 @@ class UnifiedOrchestrator:
                 logger.warning("Execution failed")
                 result.stages_skipped.append("execute")
 
-        # --- Stage 6b: Bug-Fix Loop ---
+        # --- Stage 6b: Bug-Fix Loop (CLB-008) ---
+        # Auto-trigger when tests fail, even without explicit enable_bug_fix_loop.
+        # This makes self-repair first-class after verification failure.
+        _has_test_failures = int(getattr(result.plan_outcome, "tests_failed", 0) or 0) > 0
         if (
-            cfg.enable_bug_fix_loop
-            and result.plan_outcome is not None
+            result.plan_outcome is not None
             and self._bug_fixer is not None
+            and (cfg.enable_bug_fix_loop or _has_test_failures)
         ):
             try:
                 result.bug_fix_result = await self._do_bug_fix_loop(result.plan_outcome, cfg)

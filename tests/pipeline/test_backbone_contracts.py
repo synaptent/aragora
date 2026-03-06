@@ -322,6 +322,77 @@ def test_execution_attempt_record_from_plan_outcome_failed_sets_status_failed() 
     assert record.tests_failed == 5
 
 
+def test_generate_receipt_envelope_normalizes_successful_outcome() -> None:
+    """CLB-009: Successful outcome produces ReceiptEnvelope with consistent shape."""
+    from aragora.pipeline.receipt_generator import generate_receipt_envelope
+
+    receipt = {
+        "receipt_id": "r-success-001",
+        "pipeline_id": "pipe-abc",
+        "content_hash": "sha256abc",
+        "provenance": {
+            "ideas": [{"id": "i1", "label": "Idea"}],
+            "goals": [{"id": "g1", "label": "Goal"}],
+        },
+        "execution": {"status": "completed"},
+    }
+
+    envelope = generate_receipt_envelope(
+        receipt,
+        policy_gate_result={"allowed": True},
+        taint_summary={"tainted": False},
+    )
+
+    assert envelope.receipt_id == "r-success-001"
+    assert envelope.verdict == "pass"
+    assert envelope.policy_gate_result == {"allowed": True}
+    assert envelope.taint_summary == {"tainted": False}
+    assert len(envelope.provenance_chain) == 2
+
+
+def test_generate_receipt_envelope_normalizes_blocked_outcome() -> None:
+    """CLB-009: Blocked outcome shares the same ReceiptEnvelope shape with verdict=blocked."""
+    from aragora.pipeline.receipt_generator import generate_receipt_envelope
+
+    receipt = {
+        "receipt_id": "r-blocked-001",
+        "pipeline_id": "pipe-xyz",
+        "content_hash": "sha256xyz",
+        "provenance": {},
+        "execution": {"status": "blocked"},
+    }
+
+    envelope = generate_receipt_envelope(
+        receipt,
+        policy_gate_result={"allowed": False, "reason": "budget_exceeded"},
+        taint_summary={"tainted": True, "flags": ["external_unverified"]},
+        blocked=True,
+    )
+
+    assert envelope.verdict == "blocked"
+    assert envelope.policy_gate_result["allowed"] is False
+    assert envelope.taint_summary["tainted"] is True
+
+
+def test_generate_receipt_envelope_defaults_empty_dicts_when_missing() -> None:
+    """CLB-009: Envelope always has policy_gate_result and taint_summary even if omitted."""
+    from aragora.pipeline.receipt_generator import generate_receipt_envelope
+
+    receipt = {
+        "receipt_id": "r-min",
+        "pipeline_id": "pipe-min",
+        "content_hash": "",
+        "provenance": {},
+        "execution": {"status": "completed"},
+    }
+
+    envelope = generate_receipt_envelope(receipt)
+
+    assert envelope.policy_gate_result == {}
+    assert envelope.taint_summary == {}
+    assert envelope.verdict == "pass"
+
+
 def test_execution_attempt_record_to_dict_is_serializable() -> None:
     outcome = PipelineOutcome(
         pipeline_id="pipe-004",

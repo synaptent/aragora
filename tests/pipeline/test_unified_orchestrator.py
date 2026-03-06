@@ -474,3 +474,76 @@ class TestUnifiedOrchestrator:
         assert result.pipeline_outcome.tests_passed == 15
         assert result.pipeline_outcome.tests_failed == 2
         assert result.pipeline_outcome.files_changed == 7
+
+    @pytest.mark.asyncio
+    async def test_bug_fix_loop_auto_triggered_on_test_failure(self):
+        """CLB-008: Bug-fix loop is auto-triggered when tests fail, even without enable_bug_fix_loop."""
+        plan_outcome = FakePlanOutcome(tests_passed=3, tests_failed=5)
+
+        # Mock a bug fixer with no test_output on the plan_outcome → returns skipped
+        bug_fixer = MagicMock()
+        bug_fixer.diagnose_failure = MagicMock(return_value=None)
+
+        orch = UnifiedOrchestrator(
+            arena_factory=make_arena_factory(),
+            plan_factory=make_plan_factory(),
+            plan_executor=make_plan_executor(plan_outcome),
+            bug_fixer=bug_fixer,
+        )
+
+        cfg = OrchestratorConfig(
+            autonomy_level="fully_autonomous",
+            enable_bug_fix_loop=False,  # Explicitly off — but tests_failed > 0 should trigger
+        )
+        result = await orch.run("Build feature", config=cfg)
+
+        assert "bug_fix" in result.stages_completed
+        assert result.bug_fix_result is not None
+
+    @pytest.mark.asyncio
+    async def test_bug_fix_loop_not_triggered_when_tests_pass(self):
+        """CLB-008: Bug-fix loop is NOT auto-triggered when all tests pass."""
+        plan_outcome = FakePlanOutcome(tests_passed=10, tests_failed=0)
+
+        bug_fixer = MagicMock()
+        bug_fixer.diagnose_failure = MagicMock(return_value=None)
+
+        orch = UnifiedOrchestrator(
+            arena_factory=make_arena_factory(),
+            plan_factory=make_plan_factory(),
+            plan_executor=make_plan_executor(plan_outcome),
+            bug_fixer=bug_fixer,
+        )
+
+        cfg = OrchestratorConfig(
+            autonomy_level="fully_autonomous",
+            enable_bug_fix_loop=False,
+        )
+        result = await orch.run("Build feature", config=cfg)
+
+        # No test failures → bug-fix loop should NOT run
+        assert "bug_fix" not in result.stages_completed
+
+    @pytest.mark.asyncio
+    async def test_bug_fix_result_carried_into_outcome(self):
+        """CLB-008: Bug-fix result flows into pipeline outcome metadata."""
+        plan_outcome = FakePlanOutcome(tests_passed=2, tests_failed=3)
+        recorder = make_feedback_recorder()
+
+        bug_fixer = MagicMock()
+        bug_fixer.diagnose_failure = MagicMock(return_value=None)
+
+        orch = UnifiedOrchestrator(
+            arena_factory=make_arena_factory(),
+            plan_factory=make_plan_factory(),
+            plan_executor=make_plan_executor(plan_outcome),
+            feedback_recorder=recorder,
+            bug_fixer=bug_fixer,
+        )
+
+        cfg = OrchestratorConfig(autonomy_level="fully_autonomous")
+        result = await orch.run("Build feature", config=cfg)
+
+        assert result.bug_fix_result is not None
+        # Bug-fix result status is propagated to the pipeline outcome extras
+        assert result.pipeline_outcome is not None

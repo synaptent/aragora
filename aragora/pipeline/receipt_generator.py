@@ -10,7 +10,10 @@ import hashlib
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from aragora.pipeline.backbone_contracts import ReceiptEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +112,39 @@ async def generate_pipeline_receipt(
         logger.debug("Receipt KM persistence skipped: %s", type(e).__name__)
 
     return receipt
+
+
+def generate_receipt_envelope(
+    receipt: dict[str, Any],
+    *,
+    policy_gate_result: dict[str, Any] | None = None,
+    taint_summary: dict[str, Any] | None = None,
+    blocked: bool = False,
+) -> "ReceiptEnvelope":
+    """Normalize a pipeline receipt into a stable ReceiptEnvelope (CLB-009).
+
+    Both successful and blocked outcomes share the same shape so downstream
+    stages (outcome feedback, audit, settlement) never need to branch on
+    the receipt format.
+
+    Args:
+        receipt: Raw receipt dict from generate_pipeline_receipt().
+        policy_gate_result: Policy evaluation result (allowed/blocked/reason).
+        taint_summary: Taint flags accumulated across the pipeline.
+        blocked: When True, overrides the verdict to "blocked" regardless of
+            the execution status in the receipt.
+
+    Returns:
+        ReceiptEnvelope with normalized fields, provenance chain, and
+        policy/taint data always present (defaulting to empty dicts).
+    """
+    from aragora.pipeline.backbone_contracts import ReceiptEnvelope
+
+    envelope = ReceiptEnvelope.from_pipeline_receipt(
+        receipt,
+        policy_gate_result=policy_gate_result,
+        taint_summary=taint_summary,
+    )
+    if blocked:
+        envelope.verdict = "blocked"
+    return envelope
