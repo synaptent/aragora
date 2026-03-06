@@ -502,7 +502,6 @@ class DevCoordinationStore:
         }
 
     def list_active_leases(self) -> list[WorkLease]:
-        self.reap_expired_leases()
         now = _utcnow()
         conn = self._connect()
         try:
@@ -681,44 +680,37 @@ class DevCoordinationStore:
         normalized_paths = [
             _normalize_claim(item) for item in claimed_paths or [] if str(item).strip()
         ]
-        conflicts = self.find_conflicting_leases(
-            allowed_globs=normalized_globs,
-            claimed_paths=normalized_paths,
-            owner_session_id=owner_session_id,
-        )
-        if conflicts and not allow_overlap:
-            self._publish(
-                "conflict_detected",
-                track=branch,
-                data={
-                    "task_id": task_id,
-                    "worktree_path": worktree_path,
-                    "conflicts": conflicts,
-                },
-            )
-            raise LeaseConflictError(conflicts)
-
+        self.reap_expired_leases()
         now = _utcnow()
-        lease = WorkLease(
-            lease_id=str(uuid.uuid4())[:12],
-            task_id=task_id,
-            title=title or task_id,
-            owner_agent=owner_agent,
-            owner_session_id=owner_session_id,
-            branch=branch,
-            worktree_path=str(Path(worktree_path).resolve()),
-            allowed_globs=normalized_globs,
-            claimed_paths=normalized_paths,
-            expected_tests=list(expected_tests or []),
-            status=LeaseStatus.ACTIVE.value,
-            created_at=now.isoformat(),
-            updated_at=now.isoformat(),
-            expires_at=(now + timedelta(hours=ttl_hours)).isoformat(),
-            metadata=dict(metadata or {}),
-        )
-
         conn = self._connect()
         try:
+            conn.execute("BEGIN IMMEDIATE")
+            conflicts = self._find_conflicting_leases_locked(
+                conn,
+                allowed_globs=normalized_globs,
+                claimed_paths=normalized_paths,
+                owner_session_id=owner_session_id,
+            )
+            if conflicts and not allow_overlap:
+                raise LeaseConflictError(conflicts)
+
+            lease = WorkLease(
+                lease_id=str(uuid.uuid4())[:12],
+                task_id=task_id,
+                title=title or task_id,
+                owner_agent=owner_agent,
+                owner_session_id=owner_session_id,
+                branch=branch,
+                worktree_path=str(Path(worktree_path).resolve()),
+                allowed_globs=normalized_globs,
+                claimed_paths=normalized_paths,
+                expected_tests=list(expected_tests or []),
+                status=LeaseStatus.ACTIVE.value,
+                created_at=now.isoformat(),
+                updated_at=now.isoformat(),
+                expires_at=(now + timedelta(hours=ttl_hours)).isoformat(),
+                metadata=dict(metadata or {}),
+            )
             conn.execute(
                 "INSERT INTO leases VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -740,6 +732,18 @@ class DevCoordinationStore:
                 ),
             )
             conn.commit()
+        except LeaseConflictError:
+            conn.rollback()
+            self._publish(
+                "conflict_detected",
+                track=branch,
+                data={
+                    "task_id": task_id,
+                    "worktree_path": worktree_path,
+                    "conflicts": conflicts,
+                },
+            )
+            raise
         finally:
             conn.close()
 
@@ -764,6 +768,66 @@ class DevCoordinationStore:
                 mode="exclusive",
             )
         return lease
+
+    def _find_conflicting_leases_locked(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        allowed_globs: list[str],
+        claimed_paths: list[str],
+        owner_session_id: str | None = None,
+        exclude_lease_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        normalized_globs = [_normalize_claim(item) for item in allowed_globs if str(item).strip()]
+        normalized_paths = [_normalize_claim(item) for item in claimed_paths if str(item).strip()]
+        conflicts: list[dict[str, Any]] = []
+        now = _utcnow()
+        rows = conn.execute("SELECT * FROM leases ORDER BY created_at ASC").fetchall()
+        active_leases = [
+            lease
+            for lease in (WorkLease.from_row(row) for row in rows)
+            if lease.status == LeaseStatus.ACTIVE.value and _parse_dt(lease.expires_at) > now
+        ]
+        tracked_sessions = {lease.owner_session_id for lease in active_leases}
+        for lease in active_leases:
+            if exclude_lease_id and lease.lease_id == exclude_lease_id:
+                continue
+            if lease.overlaps(normalized_globs, normalized_paths):
+                conflicts.append(
+                    {
+                        "lease_id": lease.lease_id,
+                        "task_id": lease.task_id,
+                        "title": lease.title,
+                        "owner_agent": lease.owner_agent,
+                        "owner_session_id": lease.owner_session_id,
+                        "branch": lease.branch,
+                        "worktree_path": lease.worktree_path,
+                        "allowed_globs": lease.allowed_globs,
+                        "claimed_paths": lease.claimed_paths,
+                        "expires_at": lease.expires_at,
+                    }
+                )
+        for claim in self.fleet_store.list_claims():
+            session_id = str(claim.get("session_id", "")).strip()
+            if owner_session_id and session_id == owner_session_id:
+                continue
+            if session_id in tracked_sessions:
+                continue
+            path = _normalize_claim(str(claim.get("path", "")))
+            if not path:
+                continue
+            if not _claims_overlap([path], normalized_globs, normalized_paths):
+                continue
+            conflicts.append(
+                {
+                    "source": "fleet_claim",
+                    "session_id": session_id,
+                    "branch": str(claim.get("branch", "")),
+                    "path": path,
+                    "mode": str(claim.get("mode", "exclusive")),
+                }
+            )
+        return conflicts
 
     def heartbeat_lease(self, lease_id: str, ttl_hours: float | None = None) -> WorkLease:
         conn = self._connect()

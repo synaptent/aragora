@@ -255,6 +255,85 @@ def test_reap_expired_leases_releases_fleet_claims(store: DevCoordinationStore) 
     assert store.fleet_store.list_claims() == []
 
 
+def test_status_summary_does_not_reap_expired_leases(store: DevCoordinationStore) -> None:
+    lease = store.claim_lease(
+        task_id="clb-status-read",
+        title="Status read should be side-effect free",
+        owner_agent="codex",
+        owner_session_id="sess-status",
+        branch="codex/status",
+        worktree_path="/tmp/wt-status",
+        claimed_paths=["aragora/server/auth_checks.py"],
+        ttl_hours=2.0,
+    )
+
+    conn = store._connect()
+    try:
+        conn.execute(
+            "UPDATE leases SET expires_at = ?, updated_at = ? WHERE lease_id = ?",
+            (
+                "2000-01-01T00:00:00+00:00",
+                "2000-01-01T00:00:00+00:00",
+                lease.lease_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    summary = store.status_summary()
+
+    assert summary["counts"]["active_leases"] == 0
+    assert summary["counts"]["fleet_claims"] == 1
+    claims = store.fleet_store.list_claims()
+    assert len(claims) == 1
+    assert claims[0]["session_id"] == "sess-status"
+
+
+def test_claim_lease_reaps_expired_claims_before_conflict_check(
+    store: DevCoordinationStore,
+) -> None:
+    lease = store.claim_lease(
+        task_id="clb-reclaim",
+        title="Original lease",
+        owner_agent="codex",
+        owner_session_id="sess-old",
+        branch="codex/old",
+        worktree_path="/tmp/wt-old",
+        claimed_paths=["aragora/server/auth_checks.py"],
+        ttl_hours=2.0,
+    )
+
+    conn = store._connect()
+    try:
+        conn.execute(
+            "UPDATE leases SET expires_at = ?, updated_at = ? WHERE lease_id = ?",
+            (
+                "2000-01-01T00:00:00+00:00",
+                "2000-01-01T00:00:00+00:00",
+                lease.lease_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    replacement = store.claim_lease(
+        task_id="clb-reclaim-2",
+        title="Replacement lease",
+        owner_agent="claude",
+        owner_session_id="sess-new",
+        branch="codex/new",
+        worktree_path="/tmp/wt-new",
+        claimed_paths=["aragora/server/auth_checks.py"],
+    )
+
+    claims = store.fleet_store.list_claims()
+    assert replacement.is_active is True
+    assert len(claims) == 1
+    assert claims[0]["session_id"] == "sess-new"
+
+
 def test_scan_salvage_sources_finds_worktree_and_stash(
     repo: Path, store: DevCoordinationStore
 ) -> None:

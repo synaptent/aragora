@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from aragora.worktree.fleet import (
     FleetCoordinationStore,
     infer_orchestration_pattern,
@@ -85,3 +87,24 @@ def test_update_merge_queue_item_persists_status_and_metadata(tmp_path: Path) ->
     assert updated["metadata"]["receipt_id"] == "rcpt-1"
     listed = store.list_merge_queue()
     assert listed[0]["status"] == "integrating"
+
+
+def test_update_merge_queue_item_enforces_expected_status(tmp_path: Path) -> None:
+    store = FleetCoordinationStore(tmp_path)
+    queued = store.enqueue_merge(session_id="session-a", branch="codex/session-a", priority=50)
+    item_id = queued["item"]["id"]
+
+    store.update_merge_queue_item(
+        item_id=item_id,
+        status="validating",
+        expected_status="queued",
+        metadata={"worker_session_id": "integrator-1"},
+    )
+
+    with pytest.raises(KeyError):
+        store.update_merge_queue_item(
+            item_id=item_id,
+            status="integrating",
+            expected_status="queued",
+            metadata={"worker_session_id": "integrator-2"},
+        )

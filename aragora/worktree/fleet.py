@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import subprocess
@@ -273,6 +274,7 @@ class FleetCoordinationStore:
     def __init__(self, repo_root: Path):
         self.repo_root = resolve_repo_root(repo_root)
         self.path = self.repo_root / ".aragora" / "fleet_coordination.json"
+        self.lock_path = self.repo_root / ".aragora" / "fleet_coordination.lock"
 
     @staticmethod
     def _default_state() -> dict[str, Any]:
@@ -298,6 +300,18 @@ class FleetCoordinationStore:
         tmp_path = self.path.with_suffix(".tmp")
         tmp_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
         tmp_path.replace(self.path)
+
+    def _mutate_state(self, mutator: Any) -> Any:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.lock_path.open("a+", encoding="utf-8") as lock_handle:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+            try:
+                state = self._load()
+                result = mutator(state)
+                self._save(state)
+                return result
+            finally:
+                fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
 
     def _normalize_claim_path(self, path_text: str) -> str:
         raw = path_text.strip()
@@ -333,85 +347,95 @@ class FleetCoordinationStore:
         if mode not in {"exclusive", "shared"}:
             raise ValueError("mode must be one of: exclusive, shared")
 
-        state = self._load()
-        claims = [c for c in state["claims"] if isinstance(c, dict)]
-        now = datetime.now(timezone.utc).isoformat()
-        normalized = [self._normalize_claim_path(path) for path in paths]
-        normalized = sorted({item for item in normalized if item})
+        def mutate(state: dict[str, Any]) -> dict[str, Any]:
+            claims = [c for c in state["claims"] if isinstance(c, dict)]
+            now = datetime.now(timezone.utc).isoformat()
+            normalized = [self._normalize_claim_path(path) for path in paths]
+            normalized = sorted({item for item in normalized if item})
 
-        conflicts: list[dict[str, str]] = []
-        claimed: list[str] = []
-        for path in normalized:
-            conflict_rows = [
-                c
-                for c in claims
-                if str(c.get("path", "")) == path
-                and str(c.get("session_id", "")) != session_id
-                and ("exclusive" in {str(c.get("mode", "exclusive")), mode})
-            ]
-            if conflict_rows:
-                for row in conflict_rows:
-                    conflicts.append(
-                        {
-                            "path": path,
-                            "session_id": str(row.get("session_id", "")),
-                            "branch": str(row.get("branch", "")),
-                        }
-                    )
-                continue
-
-            existing = next(
-                (
+            conflicts: list[dict[str, str]] = []
+            claimed: list[str] = []
+            for path in normalized:
+                conflict_rows = [
                     c
                     for c in claims
-                    if str(c.get("path", "")) == path and str(c.get("session_id", "")) == session_id
-                ),
-                None,
-            )
-            if existing is not None:
-                existing["updated_at"] = now
-                existing["mode"] = mode
-                if branch:
-                    existing["branch"] = branch
-            else:
-                claims.append(
-                    {
-                        "session_id": session_id,
-                        "path": path,
-                        "branch": branch or "",
-                        "mode": mode,
-                        "claimed_at": now,
-                        "updated_at": now,
-                    }
-                )
-            claimed.append(path)
+                    if str(c.get("path", "")) == path
+                    and str(c.get("session_id", "")) != session_id
+                    and ("exclusive" in {str(c.get("mode", "exclusive")), mode})
+                ]
+                if conflict_rows:
+                    for row in conflict_rows:
+                        conflicts.append(
+                            {
+                                "path": path,
+                                "session_id": str(row.get("session_id", "")),
+                                "branch": str(row.get("branch", "")),
+                            }
+                        )
+                    continue
 
-        state["claims"] = claims
-        self._save(state)
-        return {"session_id": session_id, "mode": mode, "claimed": claimed, "conflicts": conflicts}
+                existing = next(
+                    (
+                        c
+                        for c in claims
+                        if str(c.get("path", "")) == path
+                        and str(c.get("session_id", "")) == session_id
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    existing["updated_at"] = now
+                    existing["mode"] = mode
+                    if branch:
+                        existing["branch"] = branch
+                else:
+                    claims.append(
+                        {
+                            "session_id": session_id,
+                            "path": path,
+                            "branch": branch or "",
+                            "mode": mode,
+                            "claimed_at": now,
+                            "updated_at": now,
+                        }
+                    )
+                claimed.append(path)
+
+            state["claims"] = claims
+            return {
+                "session_id": session_id,
+                "mode": mode,
+                "claimed": claimed,
+                "conflicts": conflicts,
+            }
+
+        return self._mutate_state(mutate)
 
     def release_paths(self, *, session_id: str, paths: list[str] | None = None) -> dict[str, Any]:
-        state = self._load()
-        claims = [c for c in state["claims"] if isinstance(c, dict)]
-        path_filter: set[str] | None = None
-        if paths:
-            normalized = [self._normalize_claim_path(path) for path in paths]
-            path_filter = {item for item in normalized if item}
+        def mutate(state: dict[str, Any]) -> dict[str, Any]:
+            claims = [c for c in state["claims"] if isinstance(c, dict)]
+            path_filter: set[str] | None = None
+            if paths:
+                normalized = [self._normalize_claim_path(path) for path in paths]
+                path_filter = {item for item in normalized if item}
 
-        kept: list[dict[str, Any]] = []
-        released = 0
-        for claim in claims:
-            owner = str(claim.get("session_id", ""))
-            path = str(claim.get("path", ""))
-            should_release = owner == session_id and (path_filter is None or path in path_filter)
-            if should_release:
-                released += 1
-                continue
-            kept.append(claim)
+            kept: list[dict[str, Any]] = []
+            released = 0
+            for claim in claims:
+                owner = str(claim.get("session_id", ""))
+                path = str(claim.get("path", ""))
+                should_release = owner == session_id and (
+                    path_filter is None or path in path_filter
+                )
+                if should_release:
+                    released += 1
+                    continue
+                kept.append(claim)
 
-        state["claims"] = kept
-        self._save(state)
-        return {"session_id": session_id, "released": released}
+            state["claims"] = kept
+            return {"session_id": session_id, "released": released}
+
+        return self._mutate_state(mutate)
 
     def enqueue_merge(
         self,
@@ -424,33 +448,35 @@ class FleetCoordinationStore:
     ) -> dict[str, Any]:
         if not branch.strip():
             raise ValueError("branch is required")
-        state = self._load()
-        queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
-        normalized_branch = branch.strip()
 
-        for item in queue:
-            if (
-                str(item.get("branch", "")) == normalized_branch
-                and str(item.get("status", "queued")) in ACTIVE_QUEUE_STATUSES
-            ):
-                return {"queued": False, "item": item, "duplicate": True}
+        def mutate(state: dict[str, Any]) -> dict[str, Any]:
+            queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
+            normalized_branch = branch.strip()
 
-        now = datetime.now(timezone.utc).isoformat()
-        row = {
-            "id": f"mq-{uuid.uuid4().hex[:12]}",
-            "session_id": session_id,
-            "branch": normalized_branch,
-            "priority": max(0, min(int(priority), 100)),
-            "title": title.strip(),
-            "status": "queued",
-            "created_at": now,
-            "updated_at": now,
-            "metadata": metadata or {},
-        }
-        queue.append(row)
-        state["merge_queue"] = queue
-        self._save(state)
-        return {"queued": True, "item": row, "duplicate": False}
+            for item in queue:
+                if (
+                    str(item.get("branch", "")) == normalized_branch
+                    and str(item.get("status", "queued")) in ACTIVE_QUEUE_STATUSES
+                ):
+                    return {"queued": False, "item": item, "duplicate": True}
+
+            now = datetime.now(timezone.utc).isoformat()
+            row = {
+                "id": f"mq-{uuid.uuid4().hex[:12]}",
+                "session_id": session_id,
+                "branch": normalized_branch,
+                "priority": max(0, min(int(priority), 100)),
+                "title": title.strip(),
+                "status": "queued",
+                "created_at": now,
+                "updated_at": now,
+                "metadata": metadata or {},
+            }
+            queue.append(row)
+            state["merge_queue"] = queue
+            return {"queued": True, "item": row, "duplicate": False}
+
+        return self._mutate_state(mutate)
 
     def claim_next_merge(
         self,
@@ -464,26 +490,36 @@ class FleetCoordinationStore:
         if to_status not in MERGE_QUEUE_ALLOWED_STATUSES:
             raise ValueError(f"unknown merge queue status: {to_status}")
 
-        state = self._load()
-        queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
-        candidates = [q for q in queue if str(q.get("status", "")) == from_status]
-        if not candidates:
-            return None
-        candidates.sort(
-            key=lambda row: (
-                -int(row.get("priority", 0)),
-                str(row.get("created_at", "")),
+        def mutate(state: dict[str, Any]) -> dict[str, Any] | None:
+            queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
+            candidates = [q for q in queue if str(q.get("status", "")) == from_status]
+            if not candidates:
+                return None
+            candidates.sort(
+                key=lambda row: (
+                    -int(row.get("priority", 0)),
+                    str(row.get("created_at", "")),
+                )
             )
-        )
-        chosen_id = str(candidates[0].get("id", ""))
-        if not chosen_id:
+            chosen_id = str(candidates[0].get("id", ""))
+            if not chosen_id:
+                return None
+            now = datetime.now(timezone.utc).isoformat()
+            for item in queue:
+                if str(item.get("id", "")) != chosen_id:
+                    continue
+                item["status"] = to_status
+                metadata_obj = item.get("metadata")
+                if not isinstance(metadata_obj, dict):
+                    metadata_obj = {}
+                metadata_obj["worker_session_id"] = worker_session_id
+                item["metadata"] = metadata_obj
+                item["updated_at"] = now
+                state["merge_queue"] = queue
+                return item
             return None
-        updated = self.update_merge_queue_item(
-            item_id=chosen_id,
-            status=to_status,
-            metadata={"worker_session_id": worker_session_id},
-        )
-        return updated
+
+        return self._mutate_state(mutate)
 
     def update_merge_queue_item(
         self,
@@ -492,31 +528,39 @@ class FleetCoordinationStore:
         status: str | None = None,
         metadata: dict[str, Any] | None = None,
         title: str | None = None,
+        expected_status: str | None = None,
     ) -> dict[str, Any]:
         if status is not None and status not in MERGE_QUEUE_ALLOWED_STATUSES:
             raise ValueError(f"unknown merge queue status: {status}")
+        if expected_status is not None and expected_status not in MERGE_QUEUE_ALLOWED_STATUSES:
+            raise ValueError(f"unknown merge queue status: {expected_status}")
 
-        state = self._load()
-        queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
-        now = datetime.now(timezone.utc).isoformat()
-        for item in queue:
-            if str(item.get("id", "")) != item_id:
-                continue
-            if status is not None:
-                item["status"] = status
-            if title is not None:
-                item["title"] = title.strip()
-            if metadata:
-                existing_metadata = item.get("metadata")
-                if not isinstance(existing_metadata, dict):
-                    existing_metadata = {}
-                existing_metadata.update(metadata)
-                item["metadata"] = existing_metadata
-            item["updated_at"] = now
-            state["merge_queue"] = queue
-            self._save(state)
-            return item
-        raise KeyError(f"Unknown merge queue item: {item_id}")
+        def mutate(state: dict[str, Any]) -> dict[str, Any]:
+            queue = [q for q in state["merge_queue"] if isinstance(q, dict)]
+            now = datetime.now(timezone.utc).isoformat()
+            for item in queue:
+                if str(item.get("id", "")) != item_id:
+                    continue
+                if expected_status is not None and str(item.get("status", "")) != expected_status:
+                    raise KeyError(
+                        f"Merge queue item {item_id} is no longer in status {expected_status}"
+                    )
+                if status is not None:
+                    item["status"] = status
+                if title is not None:
+                    item["title"] = title.strip()
+                if metadata:
+                    existing_metadata = item.get("metadata")
+                    if not isinstance(existing_metadata, dict):
+                        existing_metadata = {}
+                    existing_metadata.update(metadata)
+                    item["metadata"] = existing_metadata
+                item["updated_at"] = now
+                state["merge_queue"] = queue
+                return item
+            raise KeyError(f"Unknown merge queue item: {item_id}")
+
+        return self._mutate_state(mutate)
 
     def list_merge_queue(self, status: str | None = None) -> list[dict[str, Any]]:
         state = self._load()

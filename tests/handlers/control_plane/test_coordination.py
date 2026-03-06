@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -399,6 +400,35 @@ class TestFleetStatus:
         assert data["total"] == 1
         assert data["worktrees"][0]["session_id"] == "session-a"
         assert data["worktrees"][0]["claimed_paths"] == ["aragora/x.py"]
+
+    @patch(
+        "aragora.nomic.dev_coordination.DevCoordinationStore.status_summary",
+        side_effect=sqlite3.OperationalError("database is locked"),
+    )
+    @patch("aragora.server.handlers.control_plane.coordination.FleetCoordinationStore")
+    @patch("aragora.server.handlers.control_plane.coordination.build_fleet_rows")
+    @patch("aragora.server.handlers.control_plane.coordination.resolve_repo_root")
+    def test_fleet_status_handles_sqlite_coordination_error(
+        self,
+        mock_resolve,
+        mock_build,
+        mock_store_cls,
+        _mock_status_summary,
+        handler: ControlPlaneHandler,
+    ):
+        mock_resolve.return_value = Path(__file__).resolve().parents[3]
+        mock_build.return_value = []
+        store = MagicMock()
+        store.list_claims.return_value = []
+        store.list_merge_queue.return_value = []
+        mock_store_cls.return_value = store
+
+        result = handler._handle_fleet_status({})
+
+        assert result.status_code == 200
+        data = json.loads(result.body)
+        assert data["coordination"]["counts"] == {}
+        assert "database is locked" in data["coordination"]["error"]
 
     @patch("aragora.server.handlers.control_plane.coordination.build_fleet_rows")
     @patch("aragora.server.handlers.control_plane.coordination.resolve_repo_root")

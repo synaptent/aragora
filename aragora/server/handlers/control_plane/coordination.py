@@ -12,6 +12,7 @@ Provides REST API endpoints for:
 from __future__ import annotations
 
 import logging
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -570,7 +571,7 @@ class CoordinationHandlerMixin:
             from aragora.nomic.dev_coordination import DevCoordinationStore
 
             coordination_summary = DevCoordinationStore(repo_root=repo_root).status_summary()
-        except (ImportError, RuntimeError, OSError, ValueError) as exc:
+        except (ImportError, RuntimeError, OSError, ValueError, sqlite3.Error) as exc:
             coordination_summary = {"error": str(exc), "counts": {}}
         claims_by_session: dict[str, list[str]] = {}
         for claim in claims:
