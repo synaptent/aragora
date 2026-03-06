@@ -6,7 +6,7 @@
 
 ## Current Status (March 2026)
 
-Aragora is **98% GA-ready**. The platform has shipped all core infrastructure and is pending only external vendor-dependent milestones before public launch.
+Aragora is **98% GA-ready**. The closed-loop backbone (CLB) sprint is now complete (14/14 issues closed). The platform has shipped all core infrastructure and is pending only an external vendor-dependent milestone before public launch.
 
 **By the numbers:**
 - 208,000+ tests across 4,000+ test files (0 failures on main)
@@ -25,11 +25,12 @@ Aragora is **98% GA-ready**. The platform has shipped all core infrastructure an
 - Voice/TTS integration wired end-to-end (STT + TTS)
 - Multi-tenancy isolation, resource quotas, and usage metering
 - RBAC v2 fully integrated across all KM adapters
+- Closed-loop backbone sprint (14 CLB issues: canonical contracts, spec gates, deliberation handoff, execution bundles, verification bundles, receipt normalization, outcome feedback, trust-tier propagation, external verifier, golden-path test, dogfood profile)
+- PR watch daemon fleet (3 Mac machines, 30 autonomous reviews/hour)
+- Dev swarm coordination layer
 
 **Remaining blockers before GA:**
 - External penetration test (vendor-dependent; kickoff target Mar 3, 2026)
-- Agent-first beta: OpenClaw instances running reviews via REST API on real PRs
-- Public demo at aragora.ai/demo
 
 **EU AI Act enforcement date: August 2, 2026** — the compliance CLI and audit trail infrastructure
 position Aragora as a natural adoption path for enterprises facing this deadline.
@@ -99,7 +100,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 - [x] Helm chart for Kubernetes
 
 ### Enterprise Readiness (Ongoing)
-- [ ] Complete third-party penetration testing (kickoff Mar 3, 2026 — vendor-dependent)
+- [ ] Complete third-party penetration testing (kickoff target: Mar 3, 2026 — vendor-dependent, only remaining GA blocker)
 - [ ] Deploy public status page at status.aragora.ai
 - [x] Implement quarterly disaster recovery drills (BackupScheduler with DR integration)
 - [x] Finalize data classification policy (runtime enforcement, CI PII gate, evidence bundles)
@@ -195,9 +196,9 @@ Enterprise teams evaluating AI governance solutions will be making decisions in 
 for capturing this cohort is now.
 
 ### Q2 2026 Priorities
-- [ ] Agent-first beta: OpenClaw instances running `aragora review` on real PRs via REST API
+- [x] Agent-first beta: OpenClaw fleet deployed on 3 machines, running `aragora review` on real PRs via REST API
 - [x] GitHub Actions pre-merge gate (`aragora-review-gate.yml` shipped)
-- [ ] Public demo at aragora.ai/demo
+- [x] Public demo at aragora.ai/demo — standalone demo page live
 - [ ] EU AI Act compliance package — full audit bundle documentation and customer playbook
 - [ ] SOC 2 Type II audit engagement kickoff (controls are ready; external auditor engagement pending)
 
