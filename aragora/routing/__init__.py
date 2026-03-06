@@ -46,6 +46,18 @@ from aragora.routing.lara_router import (
     create_lara_router,
     quick_route,
 )
+from aragora.routing.provider_metrics import ProviderMetrics, ProviderMetricsStore
+from aragora.routing.cost_quality_optimizer import (
+    CostQualityOptimizer,
+    SelectionStrategy,
+    pareto_frontier,
+)
+from aragora.routing.provider_config import (
+    ProviderPricing,
+    PROVIDER_PRICING as PROVIDER_ROUTING_PRICING,
+    get_estimated_cost,
+)
+from aragora.routing.provider_router import ProviderRouter, get_provider_router
 
 __all__ = [
     # Agent selection
@@ -74,4 +86,15 @@ __all__ = [
     "RoutingDecision",
     "create_lara_router",
     "quick_route",
+    # Provider routing (Phase 1)
+    "ProviderMetrics",
+    "ProviderMetricsStore",
+    "CostQualityOptimizer",
+    "SelectionStrategy",
+    "pareto_frontier",
+    "ProviderPricing",
+    "PROVIDER_ROUTING_PRICING",
+    "get_estimated_cost",
+    "ProviderRouter",
+    "get_provider_router",
 ]
