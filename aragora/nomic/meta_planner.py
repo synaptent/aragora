@@ -22,6 +22,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
 
@@ -121,6 +122,9 @@ class MetaPlannerConfig:
     explain_decisions: bool = True
     # Use business context to re-rank goals by impact
     use_business_context: bool = True
+    # Objective fidelity recovery
+    enforce_objective_fidelity: bool = True
+    objective_fidelity_threshold: float = 0.2
 
 
 class MetaPlanner:
@@ -194,12 +198,14 @@ class MetaPlanner:
         # Quick mode: skip debate entirely, use heuristic
         if self.config.quick_mode:
             logger.info("meta_planner_quick_mode using heuristic prioritization")
-            return self._heuristic_prioritize(objective, available_tracks)
+            goals = self._heuristic_prioritize(objective, available_tracks)
+            return self._enforce_objective_fidelity(objective, available_tracks, goals)
 
         # Scan mode: prioritize from codebase signals without LLM calls
         if self.config.scan_mode:
             logger.info("meta_planner_scan_mode using codebase signals")
-            return await self._scan_prioritize(objective, available_tracks)
+            goals = await self._scan_prioritize(objective, available_tracks)
+            return self._enforce_objective_fidelity(objective, available_tracks, goals)
 
         # Inject codebase metrics for data-driven planning
         if self.config.enable_metrics_collection:
@@ -289,7 +295,8 @@ class MetaPlanner:
 
             if not agents:
                 logger.warning("No agents available, using heuristic prioritization")
-                return self._heuristic_prioritize(objective, available_tracks)
+                goals = self._heuristic_prioritize(objective, available_tracks)
+                return self._enforce_objective_fidelity(objective, available_tracks, goals)
 
             # Run debate with Trickster and convergence detection
             env = Environment(task=topic)
@@ -323,14 +330,125 @@ class MetaPlanner:
                 [g.description[:50] for g in goals],
             )
 
-            return goals
+            return self._enforce_objective_fidelity(objective, available_tracks, goals)
 
         except ImportError as e:
             logger.warning("Debate infrastructure not available: %s", e)
-            return self._heuristic_prioritize(objective, available_tracks)
+            goals = self._heuristic_prioritize(objective, available_tracks)
+            return self._enforce_objective_fidelity(objective, available_tracks, goals)
         except (RuntimeError, OSError, ValueError) as e:
             logger.exception("Meta-planning failed: %s", e)
-            return self._heuristic_prioritize(objective, available_tracks)
+            goals = self._heuristic_prioritize(objective, available_tracks)
+            return self._enforce_objective_fidelity(objective, available_tracks, goals)
+
+    @staticmethod
+    def _significant_tokens(text: str) -> set[str]:
+        stop_words = {
+            "the",
+            "and",
+            "for",
+            "with",
+            "from",
+            "this",
+            "that",
+            "into",
+            "through",
+            "make",
+            "more",
+            "less",
+            "very",
+            "goal",
+            "task",
+            "plan",
+            "improve",
+        }
+        words = set(re.findall(r"[a-z][a-z0-9_/-]+", text.lower()))
+        return {word for word in words if word not in stop_words and len(word) > 2}
+
+    def _goal_fidelity_score(self, objective: str, description: str) -> float:
+        objective_tokens = self._significant_tokens(objective)
+        desc_tokens = self._significant_tokens(description)
+        if not objective_tokens:
+            return 1.0
+        if not desc_tokens:
+            return 0.0
+        overlap = len(objective_tokens & desc_tokens)
+        union = len(objective_tokens | desc_tokens)
+        return overlap / union if union else 0.0
+
+    def _semantic_goal_key(self, goal: PrioritizedGoal) -> str:
+        tokens = sorted(self._significant_tokens(goal.description))
+        if tokens:
+            return f"{goal.track.value}:{' '.join(tokens[:10])}"
+        collapsed = re.sub(r"\s+", " ", goal.description.lower()).strip()
+        return f"{goal.track.value}:{collapsed[:120]}"
+
+    def _dedupe_goals_by_semantic_key(
+        self,
+        goals: list[PrioritizedGoal],
+    ) -> list[PrioritizedGoal]:
+        seen: set[str] = set()
+        unique: list[PrioritizedGoal] = []
+        for goal in goals:
+            key = self._semantic_goal_key(goal)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(goal)
+        return unique
+
+    def _enforce_objective_fidelity(
+        self,
+        objective: str,
+        available_tracks: list[Track],
+        goals: list[PrioritizedGoal],
+    ) -> list[PrioritizedGoal]:
+        if not objective or not goals or not self.config.enforce_objective_fidelity:
+            return goals[: self.config.max_goals]
+
+        threshold = max(0.0, min(1.0, float(self.config.objective_fidelity_threshold)))
+        scored = [(self._goal_fidelity_score(objective, goal.description), goal) for goal in goals]
+        top_score = max(score for score, _goal in scored)
+        if top_score >= threshold:
+            return goals[: self.config.max_goals]
+
+        constrained_objective = (
+            "Maintain strict objective fidelity. "
+            f"Objective: {objective}. "
+            "Produce goals that directly implement this objective."
+        )
+        recovered = self._heuristic_prioritize(constrained_objective, available_tracks)
+        recovered_scored = [
+            (self._goal_fidelity_score(objective, goal.description), goal) for goal in recovered
+        ]
+        recovered_top = max((score for score, _goal in recovered_scored), default=0.0)
+        if recovered and recovered_top > top_score:
+            logger.info(
+                "meta_planner_objective_fidelity_recovered from=%.2f to=%.2f",
+                top_score,
+                recovered_top,
+            )
+            return recovered[: self.config.max_goals]
+
+        best_track = self._infer_track(objective, available_tracks)
+        fallback_goal = PrioritizedGoal(
+            id="goal_0",
+            track=best_track,
+            description=f"[{best_track.value}] {objective}",
+            rationale=(
+                f"Objective-fidelity recovery: top score {top_score:.2f} below threshold "
+                f"{threshold:.2f}"
+            ),
+            estimated_impact="high",
+            priority=1,
+        )
+        logger.warning(
+            "meta_planner_objective_fidelity_low score=%.2f threshold=%.2f objective=%s",
+            top_score,
+            threshold,
+            objective[:80],
+        )
+        return [fallback_goal]
 
     async def propose_goals(
         self,
@@ -431,14 +549,8 @@ class MetaPlanner:
                 "self-directed codebase improvement", available_tracks
             )
 
-        # Deduplicate by description similarity (exact prefix match)
-        seen_prefixes: set[str] = set()
-        unique_goals: list[PrioritizedGoal] = []
-        for goal in all_goals:
-            prefix = goal.description[:80].lower().strip()
-            if prefix not in seen_prefixes:
-                seen_prefixes.add(prefix)
-                unique_goals.append(goal)
+        # Deduplicate by semantic key (track + normalized token signature)
+        unique_goals = self._dedupe_goals_by_semantic_key(all_goals)
 
         # Re-rank by business context
         if self.config.use_business_context:
@@ -1733,6 +1845,8 @@ class MetaPlanner:
             track_hints = file_hints.get(goal.track, [])
             if track_hints:
                 goal.file_hints = track_hints[:10]  # Cap at 10 files per goal
+
+        goals = self._dedupe_goals_by_semantic_key(goals)
 
         # Re-rank goals using business context
         if self.config.use_business_context:

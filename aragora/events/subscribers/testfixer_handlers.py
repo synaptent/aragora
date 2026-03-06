@@ -199,47 +199,52 @@ class TestFixerHandlersMixin:
                 self.stats["testfixer_loop_complete"]["errors"] += 1
 
     def _flush_failures_to_planner(self) -> None:
-        """Flush accumulated failures to MetaPlanner.
+        """Flush accumulated failures to the improvement queue.
 
-        Creates a PlanningContext with test failures and submits
-        to MetaPlanner for prioritization debate.
+        Creates ImprovementSuggestion entries from test failures and
+        enqueues them for the MetaPlanner to consume in the next
+        planning cycle.
         """
         accumulator = self._get_testfixer_accumulator()
         if not accumulator.failures:
             return
 
         try:
-            from aragora.nomic.meta_planner import PlanningContext
+            from aragora.nomic.improvement_queue import (
+                ImprovementSuggestion,
+                get_improvement_queue,
+            )
 
-            # Format failures for MetaPlanner
-            failure_descriptions = []
+            queue = get_improvement_queue()
+            enqueued = 0
+
             for f in accumulator.failures:
                 desc = f"{f['test_file']}::{f['test_name']}"
                 if f.get("error_type"):
                     desc += f" ({f['error_type']})"
                 if f.get("error_message"):
-                    # Truncate long messages
                     msg = f["error_message"][:200]
                     desc += f": {msg}"
-                failure_descriptions.append(desc)
 
-            # Create planning context with failures
-            _context = PlanningContext(
-                test_failures=failure_descriptions,
-            )
+                suggestion = ImprovementSuggestion(
+                    debate_id="",
+                    task=f"Fix test failure: {f['test_file']}::{f['test_name']}",
+                    suggestion=desc,
+                    category="reliability",
+                    confidence=0.8,
+                    source_system="testfixer",
+                    source_id=f.get("run_id", ""),
+                    files=[f["test_file"]] + f.get("source_files", []),
+                )
+                queue.enqueue(suggestion)
+                enqueued += 1
 
-            # Submit to MetaPlanner (non-blocking)
-            logger.info("Submitting %s test failures to MetaPlanner", len(failure_descriptions))
-
-            # Note: MetaPlanner.plan_next is async, so we queue it
-            # In production, this would go through the event dispatcher
-            # For now, we emit a TESTFIXER_PATTERN_LEARNED event
-            # that can be picked up by the Nomic Loop orchestrator
+            logger.info("Enqueued %d test failure suggestions to improvement queue", enqueued)
 
         except ImportError:
-            logger.debug("MetaPlanner not available for test failure submission")
+            logger.debug("Improvement queue not available for test failure submission")
         except (RuntimeError, TypeError, AttributeError, ValueError) as e:
-            logger.warning("Failed to submit failures to MetaPlanner: %s", e)
+            logger.warning("Failed to enqueue test failures: %s", e)
         finally:
             # Clear accumulator after flush attempt
             accumulator.failures = []

@@ -186,6 +186,13 @@ def _infer_track_keywords(description: str, available_tracks: list[Track]) -> Tr
             "instance",
             "region",
             "load balancer",
+            "fleet",
+            "node",
+            "cluster",
+            "autoscaling",
+            "workload",
+            "runner",
+            "self hosted",
         ],
         Track.QA: [
             "test",
@@ -226,6 +233,12 @@ def _infer_track_keywords(description: str, available_tracks: list[Track]) -> Tr
             "module",
             "refactor",
             "architecture",
+            "workitem",
+            "testfixer",
+            "quality gate",
+            "handoff",
+            "control plane",
+            "closed loop",
         ],
         Track.SECURITY: [
             "security",
@@ -244,6 +257,11 @@ def _infer_track_keywords(description: str, available_tracks: list[Track]) -> Tr
             "mfa",
             "token",
             "anomaly",
+            "receipt",
+            "signature",
+            "sandbox",
+            "trust",
+            "adversarial",
         ],
     }
 

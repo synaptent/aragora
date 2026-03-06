@@ -128,6 +128,11 @@ class PipelineConfig:
     enable_fractal: bool = False  # Use FractalOrchestrator for recursive ideation
     enable_meta_tuning: bool = False  # MetaLearner self-tuning
     enable_workspace_context: bool = True  # Check workspace for existing work
+    # Plan quality gate (applies to stage-3/4 handoff artifacts)
+    plan_quality_contract_file: str | None = None
+    plan_quality_fail_closed: bool = False
+    plan_quality_min_score: float = 0.0
+    plan_quality_min_practicality: float = 0.0
     # Mode map: pipeline stage → operational mode name
     mode_map: dict[str, str] = field(
         default_factory=lambda: {
@@ -190,6 +195,8 @@ class PipelineResult:
     final_workflow: dict[str, Any] | None = None
     orchestration_result: dict[str, Any] | None = None
     receipt: dict[str, Any] | None = None
+    plan_quality_report: dict[str, Any] | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     duration: float = 0.0
     # Universal graph (populated when use_universal=True)
     universal_graph: Any | None = None  # UniversalGraph
@@ -222,6 +229,10 @@ class PipelineResult:
             result["orchestration_result"] = self.orchestration_result
         if self.receipt is not None:
             result["receipt"] = self.receipt
+        if self.plan_quality_report is not None:
+            result["plan_quality_report"] = self.plan_quality_report
+        if self.metadata:
+            result["metadata"] = dict(self.metadata)
         if self.duration > 0:
             result["duration"] = self.duration
         if self.universal_graph is not None and hasattr(self.universal_graph, "to_dict"):
@@ -979,6 +990,7 @@ class IdeaToExecutionPipeline:
         self._emit(cfg, "started", {"pipeline_id": pipeline_id, "stages": cfg.stages_to_run})
 
         try:
+            quality_gate_blocked = False
             # Stage 1: Ideation
             if "ideation" in cfg.stages_to_run:
                 sr = await self._run_ideation(pipeline_id, enriched_input, cfg)
@@ -1125,12 +1137,66 @@ class IdeaToExecutionPipeline:
                                     "label": getattr(node, "label", ""),
                                 },
                             )
+
+                    gate_passed, gate_summary = self._evaluate_plan_quality_gate(
+                        result=result,
+                        objective=input_text,
+                        cfg=cfg,
+                    )
+                    if gate_summary is not None:
+                        result.plan_quality_report = gate_summary
+                        result.metadata["plan_quality"] = gate_summary
+                        gate_stage_status = "completed" if gate_passed else "failed"
+                        result.stage_results.append(
+                            StageResult(
+                                stage_name="plan_quality",
+                                status=gate_stage_status,
+                                output=gate_summary,
+                                error=None
+                                if gate_passed
+                                else "Plan quality gate did not meet thresholds",
+                            )
+                        )
+                        if not gate_passed and cfg.plan_quality_fail_closed:
+                            quality_gate_blocked = True
+                            result.stage_status["plan_quality"] = "failed"
+                            self._emit(
+                                cfg,
+                                "quality_gate_failed",
+                                {
+                                    "pipeline_id": pipeline_id,
+                                    "quality_score_10": gate_summary.get("quality_score_10", 0.0),
+                                    "practicality_score_10": gate_summary.get(
+                                        "practicality_score_10", 0.0
+                                    ),
+                                },
+                            )
+                            logger.warning(
+                                "Pipeline %s blocked by plan quality gate (score=%.2f, practicality=%.2f)",
+                                pipeline_id,
+                                float(gate_summary.get("quality_score_10", 0.0)),
+                                float(gate_summary.get("practicality_score_10", 0.0)),
+                            )
+                        elif not gate_passed:
+                            logger.warning(
+                                "Pipeline %s plan quality below thresholds; continuing in fail-open mode",
+                                pipeline_id,
+                            )
                 elif sr.status == "failed":
                     result.stage_status[PipelineStage.ACTIONS.value] = "failed"
 
             # Stage 4: Orchestration
             if "orchestration" in cfg.stages_to_run:
-                if cfg.dry_run:
+                if quality_gate_blocked:
+                    result.stage_results.append(
+                        StageResult(
+                            stage_name="orchestration",
+                            status="skipped",
+                            error="Blocked by plan quality gate (fail-closed)",
+                        )
+                    )
+                    result.stage_status[PipelineStage.ORCHESTRATION.value] = "failed"
+                elif cfg.dry_run:
                     sr = StageResult(stage_name="orchestration", status="skipped")
                     result.stage_results.append(sr)
                 else:
@@ -2183,6 +2249,163 @@ class IdeaToExecutionPipeline:
                 callback(event_type, data)
             except (TypeError, ValueError, RuntimeError, OSError):
                 pass  # Event callbacks must not crash the pipeline
+
+    @staticmethod
+    def _build_plan_quality_markdown(result: PipelineResult, objective: str) -> str:
+        """Render a deterministic markdown artifact for plan-quality validation."""
+        lines: list[str] = [
+            "# Pipeline Plan",
+            "",
+            "## Objective",
+            objective.strip() or "n/a",
+            "",
+            "## Ranked High-Level Tasks",
+        ]
+
+        goals = []
+        if result.goal_graph is not None and getattr(result.goal_graph, "goals", None):
+            goals = list(result.goal_graph.goals)[:10]
+        if goals:
+            for idx, goal in enumerate(goals, start=1):
+                title = getattr(goal, "title", "") or getattr(goal, "description", "")
+                if not title:
+                    continue
+                lines.append(f"{idx}. {str(title).strip()}")
+        else:
+            lines.append("- [missing] No goals extracted.")
+
+        lines.extend(["", "## Suggested Subtasks"])
+        action_nodes: list[Any] = []
+        if result.actions_canvas is not None and hasattr(result.actions_canvas, "nodes"):
+            nodes = result.actions_canvas.nodes
+            if isinstance(nodes, dict):
+                action_nodes = list(nodes.values())
+            elif isinstance(nodes, list):
+                action_nodes = nodes
+        if action_nodes:
+            for node in action_nodes[:12]:
+                label = getattr(node, "label", "")
+                if label:
+                    lines.append(f"- {str(label).strip()}")
+        else:
+            lines.append("- [missing] No action steps generated.")
+
+        lines.extend(["", "## Owner module / file paths"])
+        file_paths: list[str] = []
+        for goal in goals:
+            goal_hints = getattr(goal, "file_hints", None)
+            if isinstance(goal_hints, list):
+                for hint in goal_hints:
+                    if isinstance(hint, str) and hint:
+                        file_paths.append(hint)
+        for link in result.provenance[:20]:
+            source_id = getattr(link, "source_id", "")
+            if isinstance(source_id, str) and "/" in source_id:
+                file_paths.append(source_id)
+        deduped_paths: list[str] = []
+        seen: set[str] = set()
+        for path in file_paths:
+            key = path.strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped_paths.append(key)
+        if deduped_paths:
+            for path in deduped_paths[:10]:
+                lines.append(f"- {path}")
+        else:
+            lines.append("- [missing] No concrete file ownership hints produced.")
+
+        lines.extend(
+            [
+                "",
+                "## Test Plan",
+                "- Run targeted unit tests for changed modules.",
+                "- Run integration tests for pipeline handoff behavior.",
+                "",
+                "## Rollback Plan",
+                "- Trigger: quality gate regressions or execution errors exceed threshold.",
+                "- Action: revert staged changes and replay previous approved plan.",
+                "",
+                "## Gate Criteria",
+                "- quality_score_10 >= 6.0",
+                "- practicality_score_10 >= 5.0",
+                "- no unresolved critical defects",
+            ]
+        )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _evaluate_plan_quality_gate(
+        *,
+        result: PipelineResult,
+        objective: str,
+        cfg: PipelineConfig,
+    ) -> tuple[bool, dict[str, Any] | None]:
+        """Evaluate deterministic plan-quality gates.
+
+        Returns (gate_passed, summary_dict). Summary is None when quality tooling
+        is unavailable.
+        """
+        if (
+            not cfg.plan_quality_contract_file
+            and cfg.plan_quality_min_score <= 0
+            and cfg.plan_quality_min_practicality <= 0
+        ):
+            return True, None
+
+        try:
+            from aragora.debate.output_quality import (
+                OutputContract,
+                load_output_contract_from_file,
+                validate_output_against_contract,
+            )
+        except ImportError:
+            logger.debug("plan_quality_gate skipped: output quality module unavailable")
+            return True, None
+
+        if cfg.plan_quality_contract_file:
+            contract = load_output_contract_from_file(cfg.plan_quality_contract_file)
+        else:
+            contract = OutputContract(
+                required_sections=[
+                    "Ranked High-Level Tasks",
+                    "Suggested Subtasks",
+                    "Owner module / file paths",
+                    "Test Plan",
+                    "Rollback Plan",
+                    "Gate Criteria",
+                ],
+                require_json_payload=False,
+                require_gate_thresholds=True,
+                require_rollback_triggers=True,
+                require_owner_paths=False,
+                require_repo_path_existence=False,
+                require_practicality_checks=True,
+            )
+
+        markdown = IdeaToExecutionPipeline._build_plan_quality_markdown(result, objective)
+        quality_report = validate_output_against_contract(markdown, contract)
+        score = float(getattr(quality_report, "quality_score_10", 0.0) or 0.0)
+        practicality = float(getattr(quality_report, "practicality_score_10", 0.0) or 0.0)
+        defects = list(getattr(quality_report, "defects", []) or [])
+
+        min_score = max(0.0, float(cfg.plan_quality_min_score or 0.0))
+        min_practicality = max(0.0, float(cfg.plan_quality_min_practicality or 0.0))
+        meets_numeric_thresholds = score >= min_score and practicality >= min_practicality
+        gate_passed = meets_numeric_thresholds and quality_report.verdict == "good"
+        summary = {
+            "verdict": quality_report.verdict,
+            "quality_score_10": score,
+            "practicality_score_10": practicality,
+            "gate_passed": gate_passed,
+            "min_quality_score_10": min_score,
+            "min_practicality_score_10": min_practicality,
+            "fail_closed": bool(cfg.plan_quality_fail_closed),
+            "contract_file": cfg.plan_quality_contract_file,
+            "defects": defects,
+        }
+        return gate_passed, summary
 
     def _generate_receipt(self, result: PipelineResult) -> dict[str, Any] | None:
         """Generate a decision receipt for the completed pipeline.

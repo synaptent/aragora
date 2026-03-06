@@ -20,6 +20,7 @@ import asyncio
 from difflib import SequenceMatcher
 import json
 import logging
+import os
 import re
 from typing import Any
 
@@ -198,6 +199,31 @@ def _extract_pipeline_objectives(
             objectives.append(title)
 
     return objectives
+
+
+def _count_live_stages_completed(pipeline_result: Any) -> int:
+    """Count completed stages from a live pipeline result."""
+    stage_results = getattr(pipeline_result, "stage_results", None) or []
+    return sum(1 for sr in stage_results if getattr(sr, "status", "") == "completed")
+
+
+def _detect_provider_calls(pipeline_result: Any) -> bool:
+    """Best-effort marker indicating whether live providers were likely used."""
+    stage_results = getattr(pipeline_result, "stage_results", None) or []
+    if not stage_results:
+        return False
+
+    for sr in stage_results:
+        duration = float(getattr(sr, "duration", 0.0) or 0.0)
+        if duration > 0.0:
+            output = getattr(sr, "output", None)
+            if isinstance(output, dict) and (
+                "debate_result" in output or "workflow" in output or "orchestration" in output
+            ):
+                return True
+            if getattr(sr, "stage_name", "") in {"ideation", "workflow", "orchestration"}:
+                return True
+    return False
 
 
 def _run_self_improve_handoff(
@@ -429,11 +455,29 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
     max_goals = max(1, int(getattr(args, "max_goals", 1)))
     quick_mode = bool(getattr(args, "quick_mode", False))
     max_parallel = max(1, int(getattr(args, "max_parallel", 4)))
+    pipeline_mode = getattr(args, "pipeline_mode", "live")
+    plan_quality_contract_file = getattr(args, "plan_quality_contract_file", None)
+    plan_quality_min_score = max(
+        0.0,
+        float(getattr(args, "plan_quality_min_score", 6.0)),
+    )
+    plan_quality_min_practicality = max(
+        0.0,
+        float(getattr(args, "plan_quality_min_practicality", 5.0)),
+    )
+    fail_closed_requested = bool(getattr(args, "plan_quality_fail_closed", False))
+    ci_or_dogfood = bool(os.environ.get("CI") or os.environ.get("ARAGORA_DOGFOOD_CI"))
+    plan_quality_fail_closed = fail_closed_requested or ci_or_dogfood
 
     print("\n" + "=" * 60)
     print("PIPELINE SELF-IMPROVEMENT")
     print("=" * 60)
     print(f"\nGoal: {goal}")
+    print(f"Pipeline mode: {pipeline_mode}")
+    print(
+        f"Plan quality gate: min_score={plan_quality_min_score:.1f} min_practicality={plan_quality_min_practicality:.1f}"
+    )
+    print(f"Plan quality policy: {'fail-closed' if plan_quality_fail_closed else 'warn-only'}")
     if dry_run:
         print("Mode: DRY RUN (preview only)")
     if budget_limit:
@@ -488,7 +532,7 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
     try:
         from aragora.nomic.meta_planner import MetaPlanner, MetaPlannerConfig
 
-        planner = MetaPlanner(MetaPlannerConfig(quick_mode=True))
+        planner = MetaPlanner(MetaPlannerConfig(quick_mode=quick_mode))
         prioritized_goals = asyncio.run(planner.prioritize_work(objective=goal))
 
         print(f"\nPrioritized goals ({len(prioritized_goals)}):")
@@ -520,18 +564,82 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
         ideas = [goal]
 
     pipeline_result = None
+    execution_path = "unknown"
+    live_stages_completed = 0
+    provider_calls_detected = False
     try:
         from aragora.pipeline.idea_to_execution import (
             IdeaToExecutionPipeline,
             PipelineConfig,
         )
 
-        _config = PipelineConfig(dry_run=dry_run, enable_receipts=not dry_run)  # noqa: F841
+        config = PipelineConfig(
+            dry_run=dry_run,
+            enable_receipts=not dry_run,
+            plan_quality_contract_file=plan_quality_contract_file,
+            plan_quality_fail_closed=plan_quality_fail_closed,
+            plan_quality_min_score=plan_quality_min_score,
+            plan_quality_min_practicality=plan_quality_min_practicality,
+        )
         pipeline = IdeaToExecutionPipeline()
-        result = pipeline.from_ideas(ideas)
+        ideas_text = "\n".join(ideas)
+
+        result = None
+
+        if pipeline_mode == "live":
+            # Live mode: async pipeline with debate/API stages
+            try:
+                result = asyncio.run(pipeline.run(ideas_text, config=config))
+                stage_results = getattr(result, "stage_results", None) or []
+                if not stage_results:
+                    raise RuntimeError("Live pipeline returned no stage results.")
+                if all(float(getattr(sr, "duration", 0.0) or 0.0) == 0.0 for sr in stage_results):
+                    raise RuntimeError("Live pipeline returned only 0.0s stages.")
+                execution_path = "live"
+            except (RuntimeError, OSError, ConnectionError) as exc:
+                print(f"\n[WARN] Live pipeline failed ({exc}), no fallback in strict mode.")
+                raise
+        elif pipeline_mode == "hybrid":
+            # Hybrid: try live, fall back to heuristic on failure
+            try:
+                result = asyncio.run(pipeline.run(ideas_text, config=config))
+                stage_results = getattr(result, "stage_results", None) or []
+                if not stage_results:
+                    raise RuntimeError("Live pipeline returned no stage results.")
+                if all(float(getattr(sr, "duration", 0.0) or 0.0) == 0.0 for sr in stage_results):
+                    raise RuntimeError("Live pipeline returned only 0.0s stages.")
+                execution_path = "live"
+            except (RuntimeError, OSError, ConnectionError) as exc:
+                logger.warning("Live pipeline unavailable (%s), falling back to heuristic", exc)
+                print("\n[INFO] Live pipeline unavailable, using heuristic fallback.")
+                result = pipeline.from_ideas(ideas)
+                execution_path = "heuristic-fallback"
+        else:
+            # Heuristic mode: fast sync path (from_ideas)
+            result = pipeline.from_ideas(ideas)
+            execution_path = "heuristic"
+
         pipeline_result = result
+        live_stages_completed = (
+            _count_live_stages_completed(result)
+            if execution_path in {"live", "heuristic-fallback"}
+            else 0
+        )
+        provider_calls_detected = (
+            _detect_provider_calls(result)
+            if execution_path in {"live", "heuristic-fallback"}
+            else False
+        )
+        if not hasattr(result, "metadata") or getattr(result, "metadata", None) is None:
+            setattr(result, "metadata", {})
+        result.metadata["execution_path"] = execution_path
+        result.metadata["live_stages_completed"] = live_stages_completed
+        result.metadata["provider_calls_detected"] = provider_calls_detected
 
         print(f"\nPipeline ID: {result.pipeline_id}")
+        print(f"Execution path: {execution_path}")
+        print(f"Live stages completed: {live_stages_completed}")
+        print(f"Provider calls detected: {provider_calls_detected}")
 
         if result.goal_graph and hasattr(result.goal_graph, "goals"):
             print(f"Goals extracted: {len(result.goal_graph.goals)}")
@@ -544,6 +652,11 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
             for sr in result.stage_results:
                 status_icon = "OK" if sr.status == "completed" else sr.status.upper()
                 print(f"  [{status_icon}] {sr.stage_name} ({sr.duration:.2f}s)")
+                # Flag 0.0s durations as suspicious (heuristic path indicator)
+                if sr.duration == 0.0 and execution_path == "live":
+                    print(
+                        "         [WARN] 0.0s duration on live path — stage may not have executed"
+                    )
 
         print(f"\nProvenance chain: {len(result.provenance)} links")
         print(f"Duration: {result.duration:.1f}s")
@@ -586,6 +699,159 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
         )
         print()
 
+    # Step 3c: Plan quality gate — validate pipeline output meets minimum quality
+    quality_verdict = "skip"
+    quality_score_10 = -1.0
+    practicality_score_10 = -1.0
+    quality_gate_failed = False
+    if pipeline_result is not None:
+        quality_meta = None
+        result_metadata = getattr(pipeline_result, "metadata", None)
+        if isinstance(result_metadata, dict):
+            quality_meta = result_metadata.get("plan_quality")
+        if quality_meta is None:
+            quality_meta = getattr(pipeline_result, "plan_quality_report", None)
+
+        if isinstance(quality_meta, dict):
+            quality_score_10 = float(quality_meta.get("quality_score_10", -1.0) or -1.0)
+            practicality_score_10 = float(quality_meta.get("practicality_score_10", -1.0) or -1.0)
+            gate_passed = bool(quality_meta.get("gate_passed", False))
+            quality_verdict = "pass" if gate_passed else "fail"
+            quality_gate_failed = not gate_passed
+            verdict_label = "PASS" if gate_passed else "FAIL"
+            print(
+                "[QUALITY GATE] {label} — quality={quality:.2f} practicality={practicality:.2f} "
+                "thresholds=({min_q:.2f}, {min_p:.2f})".format(
+                    label=verdict_label,
+                    quality=quality_score_10,
+                    practicality=practicality_score_10,
+                    min_q=float(quality_meta.get("min_quality_score_10", plan_quality_min_score)),
+                    min_p=float(
+                        quality_meta.get(
+                            "min_practicality_score_10",
+                            plan_quality_min_practicality,
+                        )
+                    ),
+                )
+            )
+        else:
+            try:
+                from aragora.debate.output_quality import (
+                    OutputContract,
+                    load_output_contract_from_file,
+                    validate_output_against_contract,
+                )
+
+                plan_text_parts = [
+                    "## Ranked High-Level Tasks",
+                    *[f"- {obj}" for obj in objectives],
+                    "",
+                    "## Gate Criteria",
+                    f"- quality_score_10 >= {plan_quality_min_score:.1f}",
+                    f"- practicality_score_10 >= {plan_quality_min_practicality:.1f}",
+                ]
+                if pipeline_result.goal_graph and hasattr(pipeline_result.goal_graph, "goals"):
+                    plan_text_parts.extend(["", "## Suggested Subtasks"])
+                    for g in pipeline_result.goal_graph.goals[:10]:
+                        title = getattr(g, "title", getattr(g, "description", str(g)))
+                        plan_text_parts.append(f"- {title}")
+                plan_text = "\n".join(plan_text_parts)
+
+                if plan_quality_contract_file:
+                    contract = load_output_contract_from_file(plan_quality_contract_file)
+                else:
+                    contract = OutputContract(
+                        required_sections=[
+                            "Ranked High-Level Tasks",
+                            "Suggested Subtasks",
+                            "Gate Criteria",
+                        ],
+                        require_json_payload=False,
+                        require_gate_thresholds=True,
+                        require_rollback_triggers=False,
+                        require_owner_paths=False,
+                        require_repo_path_existence=False,
+                        require_practicality_checks=True,
+                    )
+
+                report = validate_output_against_contract(plan_text, contract)
+                quality_score_10 = float(getattr(report, "quality_score_10", 0.0) or 0.0)
+                practicality_score_10 = float(getattr(report, "practicality_score_10", 0.0) or 0.0)
+                quality_gate_failed = (
+                    getattr(report, "verdict", "needs_work") != "good"
+                    or quality_score_10 < plan_quality_min_score
+                    or practicality_score_10 < plan_quality_min_practicality
+                )
+                quality_verdict = "fail" if quality_gate_failed else "pass"
+                print(
+                    "[QUALITY GATE] {label} — quality={quality:.2f} practicality={practicality:.2f} "
+                    "thresholds=({min_q:.2f}, {min_p:.2f})".format(
+                        label="FAIL" if quality_gate_failed else "PASS",
+                        quality=quality_score_10,
+                        practicality=practicality_score_10,
+                        min_q=plan_quality_min_score,
+                        min_p=plan_quality_min_practicality,
+                    )
+                )
+            except ImportError:
+                logger.debug("Output quality module unavailable, skipping quality gate")
+            except (RuntimeError, ValueError, TypeError, AttributeError) as e:
+                logger.debug("Quality gate check failed: %s", e)
+
+    if quality_gate_failed and plan_quality_fail_closed:
+        print("[QUALITY GATE] Blocking handoff because fail-closed policy is active.")
+        return
+    if quality_gate_failed and not plan_quality_fail_closed:
+        print("[QUALITY GATE] Continuing in warn-only mode.")
+
+    avg_fidelity = sum(fidelity_scores) / len(fidelity_scores) if fidelity_scores else -1.0
+    print(
+        "[self-improve-metrics] "
+        f"execution_path={execution_path} "
+        f"live_stages_completed={live_stages_completed} "
+        f"provider_calls_detected={provider_calls_detected} "
+        f"quality_verdict={quality_verdict} "
+        f"quality_score_10={quality_score_10:.2f} "
+        f"practicality_score_10={practicality_score_10:.2f} "
+        f"avg_objective_fidelity={avg_fidelity:.2f}"
+    )
+
+    # Enqueue pipeline results to improvement queue for bidirectional handoff
+    if pipeline_result is not None:
+        try:
+            from aragora.nomic.improvement_queue import (
+                ImprovementSuggestion,
+                get_improvement_queue,
+            )
+
+            queue = get_improvement_queue()
+            file_hints: list[str] = []
+            goal_graph = getattr(pipeline_result, "goal_graph", None)
+            if goal_graph is not None and hasattr(goal_graph, "goals"):
+                for g in goal_graph.goals[:20]:
+                    hints = getattr(g, "file_hints", None)
+                    if isinstance(hints, list):
+                        for hint in hints:
+                            if isinstance(hint, str) and hint:
+                                file_hints.append(hint)
+
+            for obj in objectives:
+                suggestion = ImprovementSuggestion(
+                    debate_id="",
+                    task=obj,
+                    suggestion=f"Pipeline-derived objective from goal: {goal}",
+                    category="code_quality",
+                    confidence=0.7,
+                    source_system="pipeline",
+                    source_id=getattr(pipeline_result, "pipeline_id", ""),
+                    files=file_hints[:10],
+                    gate_verdict=quality_verdict,
+                    fidelity_score=avg_fidelity,
+                )
+                queue.enqueue(suggestion)
+        except ImportError:
+            pass
+
     print("-" * 60)
     print("STEP 4: HANDOFF TO SELF-IMPROVEMENT ENGINE")
     print("-" * 60)
@@ -606,6 +872,13 @@ def _cmd_pipeline_self_improve(args: argparse.Namespace) -> None:
         if quick_mode:
             cmd += " --quick-mode"
         cmd += f" --max-parallel {max_parallel}"
+        cmd += f" --pipeline-mode {pipeline_mode}"
+        cmd += f" --plan-quality-min-score {plan_quality_min_score}"
+        cmd += f" --plan-quality-min-practicality {plan_quality_min_practicality}"
+        if plan_quality_contract_file:
+            cmd += f" --plan-quality-contract-file {plan_quality_contract_file}"
+        if plan_quality_fail_closed:
+            cmd += " --plan-quality-fail-closed"
         print(f"  {cmd}")
         print("\nTo preview the plan first:")
         print(f"  {cmd} --dry-run")
@@ -749,6 +1022,39 @@ Examples:
         type=int,
         default=4,
         help="Maximum parallel subtasks during self-improvement handoff (default: 4)",
+    )
+    si_parser.add_argument(
+        "--pipeline-mode",
+        choices=["live", "hybrid", "heuristic"],
+        default="live",
+        help=(
+            "Pipeline execution mode: "
+            "'live' runs async pipeline with debate/API stages (default), "
+            "'hybrid' tries live then falls back to heuristic, "
+            "'heuristic' uses fast sync from_ideas() path"
+        ),
+    )
+    si_parser.add_argument(
+        "--plan-quality-contract-file",
+        default=None,
+        help="Optional JSON OutputContract for plan quality validation.",
+    )
+    si_parser.add_argument(
+        "--plan-quality-fail-closed",
+        action="store_true",
+        help="Block handoff when the plan quality gate fails (default: warn-only except CI).",
+    )
+    si_parser.add_argument(
+        "--plan-quality-min-score",
+        type=float,
+        default=6.0,
+        help="Minimum deterministic quality score (0-10) required for handoff (default: 6.0).",
+    )
+    si_parser.add_argument(
+        "--plan-quality-min-practicality",
+        type=float,
+        default=5.0,
+        help="Minimum practicality score (0-10) required for handoff (default: 5.0).",
     )
 
     # pipeline status

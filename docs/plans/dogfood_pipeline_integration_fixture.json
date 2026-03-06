@@ -1,0 +1,12 @@
+{
+  "name": "pipeline_integration_vague_prompt",
+  "description": "Canonical vague prompt fixture for closed-loop planning dogfood runs.",
+  "prompt": "Please describe the relationship between the completed dogfood stress test, the ideas-to-execution pipeline, the self-improvement pipeline, the heterogeneous agent codebase assessment/coding-change pipeline, and the self bug-fixing pipeline. Can all of these be more tightly integrated? This is intentionally vague and poorly specified; treat it as a dogfooding prompt and produce an execution-ready integration plan.",
+  "expected_hard_checks": {
+    "execution_path_live": true,
+    "quality_gate_pass": true,
+    "top_track_is_infra_or_security": true,
+    "no_cross_track_clones": true
+  },
+  "recommended_top_tracks": ["core", "security", "self_hosted"]
+}
