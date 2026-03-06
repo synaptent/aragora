@@ -50,6 +50,7 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
   const [error, setError] = useState<string | null>(null);
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [shareCopied, setShareCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const startTimeRef = useRef<number>(0);
 
@@ -513,17 +514,24 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
               Try Another
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
                 const shareUrl = result.id
                   ? `${window.location.origin}/debate/${result.id}`
                   : window.location.href;
-                if (typeof navigator.share === 'function') {
-                  navigator.share({ title: 'Aragora Debate', url: shareUrl }).catch(() => {
-                    navigator.clipboard.writeText(shareUrl).catch(() => {});
-                  });
-                } else {
-                  navigator.clipboard.writeText(shareUrl).catch(() => {});
+                try {
+                  await navigator.clipboard.writeText(shareUrl);
+                } catch {
+                  const ta = document.createElement('textarea');
+                  ta.value = shareUrl;
+                  ta.style.position = 'fixed';
+                  ta.style.opacity = '0';
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(ta);
                 }
+                setShareCopied(true);
+                setTimeout(() => setShareCopied(false), 2000);
               }}
               className="flex-1 text-sm font-bold font-mono py-3 transition-all hover:opacity-80 cursor-pointer"
               style={{
@@ -531,9 +539,10 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
                 color: 'var(--accent)',
                 border: '1px solid var(--accent)',
                 borderRadius: 'var(--radius-button)',
+                opacity: shareCopied ? 0.7 : 1,
               }}
             >
-              Share
+              {shareCopied ? 'Copied!' : 'Share'}
             </button>
           </div>
         )}
