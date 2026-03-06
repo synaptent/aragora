@@ -198,7 +198,7 @@ for capturing this cohort is now.
 ### Q2 2026 Priorities
 - [x] Agent-first beta: OpenClaw fleet deployed on 3 machines, running `aragora review` on real PRs via REST API
 - [x] GitHub Actions pre-merge gate (`aragora-review-gate.yml` shipped)
-- [x] Public demo at aragora.ai/demo — standalone demo page live
+- [x] Public demo at aragora.ai/demo (PR #705; standalone demo page live)
 - [ ] EU AI Act compliance package — full audit bundle documentation and customer playbook
 - [ ] SOC 2 Type II audit engagement kickoff (controls are ready; external auditor engagement pending)
 
