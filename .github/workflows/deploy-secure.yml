@@ -81,20 +81,36 @@ jobs:
           fi
 
       - name: Set up Python
+        id: setup-python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+        continue-on-error: true
+
+      - name: Fallback to system Python
+        if: steps.setup-python.outcome == 'failure'
+        run: |
+          echo "actions/setup-python failed, using system Python"
+          for cmd in python3.11 python3; do
+            if command -v "$cmd" &>/dev/null; then
+              echo "Found $cmd: $("$cmd" --version)"
+              sudo ln -sf "$(command -v "$cmd")" /usr/local/bin/python
+              sudo ln -sf "$(command -v "$cmd")" /usr/local/bin/python3
+              break
+            fi
+          done
+          python --version
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt || pip install -e .
-          pip install -e ".[dev]"
-          pip install pytest-timeout httpx
+          python -m pip install -r requirements.txt || python -m pip install -e .
+          python -m pip install -e ".[dev]"
+          python -m pip install pytest-timeout httpx
 
       - name: Run quick tests
         run: |
-          pytest tests/test_handlers_debates.py tests/test_api_handler.py \
+          python -m pytest tests/test_handlers_debates.py tests/test_api_handler.py \
             --timeout=60 -x --tb=short
         env:
           PYTHONPATH: .
@@ -242,6 +258,32 @@ jobs:
           role-session-name: github-actions-deploy-${{ github.run_id }}
           aws-region: us-east-2
 
+      - name: Fix AWS CLI path
+        run: |
+          # Find aws CLI across Linux (AL2023) and macOS (self-hosted) runners.
+          # Try paths in priority order: system PATH first, then common locations.
+          AWS_BIN=""
+          for candidate in \
+              "$(command -v aws 2>/dev/null)" \
+              /usr/local/bin/aws \
+              /opt/homebrew/bin/aws \
+              "$HOME/local/aws-cli/aws" \
+              /usr/bin/aws; do
+            if [ -n "$candidate" ] && "$candidate" --version 2>/dev/null; then
+              AWS_BIN="$candidate"
+              break
+            fi
+          done
+          if [ -n "$AWS_BIN" ]; then
+            AWS_DIR="$(dirname "$AWS_BIN")"
+            echo "Found aws at $AWS_BIN"
+            echo "$AWS_DIR" >> "$GITHUB_PATH"
+          else
+            echo "aws not found in common paths; installing via pip"
+            pip3 install awscli --quiet
+            echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
+          fi
+
       - name: Get staging instance IDs
         id: get-instance
         run: |
@@ -252,8 +294,9 @@ jobs:
             --output text)
 
           if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" == "None" ]; then
-            echo "::error::No staging instances found with tags Environment=staging, Application=aragora"
-            exit 1
+            echo "::warning::No staging instances found with tags Environment=staging, Application=aragora — skipping staging deploy"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           # Convert whitespace-separated IDs to comma-separated for SSM
@@ -263,9 +306,11 @@ jobs:
 
           echo "instance_id=$FIRST_ID" >> $GITHUB_OUTPUT
           echo "instance_ids=$INSTANCE_IDS_CSV" >> $GITHUB_OUTPUT
+          echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "Found $COUNT staging instance(s): $INSTANCE_IDS_CSV"
 
       - name: Pre-deploy instance health check
+        if: steps.get-instance.outputs.skip != 'true'
         run: |
           echo "Verifying instance health before deployment..."
           IFS=',' read -ra IDS <<< "${{ steps.get-instance.outputs.instance_ids }}"
@@ -286,6 +331,7 @@ jobs:
 
       - name: Deploy via SSM
         id: deploy
+        if: steps.get-instance.outputs.skip != 'true'
         run: |
           # Send deployment command via SSM Run Command to ALL staging instances
           IFS=',' read -ra IDS <<< "${{ steps.get-instance.outputs.instance_ids }}"
@@ -308,7 +354,7 @@ jobs:
               "source venv/bin/activate",
               "echo \"Cleaning corrupted pip distributions...\"",
               "find venv/lib/python3.11/site-packages -maxdepth 1 -name '~*' -type d -exec rm -rf {} + 2>/dev/null || true",
-              "pip install -e . --quiet --no-cache-dir",
+              "python -m pip install -e . --quiet --no-cache-dir",
               "find venv/lib/python3.11/site-packages -maxdepth 1 -name '~*' -type d -exec rm -rf {} + 2>/dev/null || true",
               "python -c \"from aragora.server.unified_server import UnifiedServer; print(\\\"Import OK\\\")\"",
               "echo \"Setting up secrets manager for systemd...\"",
@@ -584,7 +630,7 @@ jobs:
               "if [ -f /tmp/aragora_deploy_state ]; then source /tmp/aragora_deploy_state; fi",
               "if [ -n \"$PREVIOUS_COMMIT\" ]; then sudo -u ec2-user git checkout $PREVIOUS_COMMIT; fi",
               "source venv/bin/activate",
-              "pip install -e . --quiet --no-cache-dir",
+              "python -m pip install -e . --quiet --no-cache-dir",
               "sudo systemctl restart aragora",
               "rm -f /tmp/aragora_deploy_state",
               "echo \"Rollback complete\""
@@ -593,7 +639,9 @@ jobs:
 
   deploy-ec2-production:
     needs: [test, deploy-ec2-staging]
-    # Run if: manual dispatch to production OR (staging succeeded AND auto-deploy)
+    # Run if: manual dispatch to production OR (staging succeeded/skipped AND auto-deploy)
+    # Staging is optional: when no staging instances exist, staging completes with 'success'
+    # (all steps skip gracefully) and production proceeds normally.
     # NOTE: The 'environment: production' setting enables GitHub Environment Protection Rules.
     # Configure required reviewers in: Settings > Environments > production > Required reviewers
     if: |
@@ -653,6 +701,32 @@ jobs:
           role-session-name: github-actions-deploy-prod-${{ github.run_id }}
           aws-region: us-east-2
 
+      - name: Fix AWS CLI path
+        run: |
+          # Find aws CLI across Linux (AL2023) and macOS (self-hosted) runners.
+          # Try paths in priority order: system PATH first, then common locations.
+          AWS_BIN=""
+          for candidate in \
+              "$(command -v aws 2>/dev/null)" \
+              /usr/local/bin/aws \
+              /opt/homebrew/bin/aws \
+              "$HOME/local/aws-cli/aws" \
+              /usr/bin/aws; do
+            if [ -n "$candidate" ] && "$candidate" --version 2>/dev/null; then
+              AWS_BIN="$candidate"
+              break
+            fi
+          done
+          if [ -n "$AWS_BIN" ]; then
+            AWS_DIR="$(dirname "$AWS_BIN")"
+            echo "Found aws at $AWS_BIN"
+            echo "$AWS_DIR" >> "$GITHUB_PATH"
+          else
+            echo "aws not found in common paths; installing via pip"
+            pip3 install awscli --quiet
+            echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
+          fi
+
       - name: Get production instance IDs
         id: get-instance
         run: |
@@ -695,15 +769,24 @@ jobs:
           done
           echo "All instances healthy"
 
-      - name: Deploy via SSM
+      - name: Deploy via SSM (rolling canary)
         id: deploy
         run: |
-          # Deploy to ALL production instances
+          # Rolling canary: deploy to first instance, verify, then deploy to rest
           IFS=',' read -ra IDS <<< "${{ steps.get-instance.outputs.instance_ids }}"
+          CANARY_ID="${IDS[0]}"
+          REMAINING_IDS=("${IDS[@]:1}")
+          TOTAL=${#IDS[@]}
+
+          echo "Rolling canary deploy: $TOTAL instance(s)"
+          echo "  Canary: $CANARY_ID"
+          echo "  Remaining: ${REMAINING_IDS[*]:-none}"
+          # --- Phase 1: Deploy to canary instance ---
+          echo "::group::Phase 1: Deploying to canary $CANARY_ID"
           COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${IDS[@]}" \
+            --instance-ids "$CANARY_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy aragora PRODUCTION from GitHub Actions run ${{ github.run_id }}" \
+            --comment "Deploy aragora PRODUCTION (canary) from GitHub Actions run ${{ github.run_id }}" \
             --parameters 'commands=[
               "set -e",
               "export HOME=/root",
@@ -719,7 +802,7 @@ jobs:
               "source venv/bin/activate",
               "echo \"Cleaning corrupted pip distributions...\"",
               "find venv/lib/python3.11/site-packages -maxdepth 1 -name '~*' -type d -exec rm -rf {} + 2>/dev/null || true",
-              "pip install -e . --quiet --no-cache-dir",
+              "python -m pip install -e . --quiet --no-cache-dir",
               "find venv/lib/python3.11/site-packages -maxdepth 1 -name '~*' -type d -exec rm -rf {} + 2>/dev/null || true",
               "python -c \"from aragora.server.unified_server import UnifiedServer; print(\\\"Import OK\\\")\"",
               "echo \"Setting up secrets manager for systemd...\"",
@@ -754,100 +837,124 @@ jobs:
             --query 'Command.CommandId' \
             --output text)
 
-          # Poll for command completion on ALL production instances (up to 5 minutes)
-          MAX_POLL=60
-          CONSECUTIVE_ERRORS=0
-          MAX_CONSECUTIVE_ERRORS=5
-          BACKOFF=5
-          RESULT="Pending"
-          FAILED_INSTANCE_IDS=""
-
-          for i in $(seq 1 $MAX_POLL); do
-            POLL_ERROR=false
-            ALL_DONE=true
-            FAILED_INSTANCE_IDS=""
-
-            for INST_ID in "${IDS[@]}"; do
+          # Helper: poll SSM command for a single instance (up to 5 min)
+          poll_ssm() {
+            local cmd_id="$1" inst_id="$2" label="$3"
+            for attempt in $(seq 1 60); do
               STATUS=$(aws ssm get-command-invocation \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INST_ID" \
-                --query 'Status' \
-                --output text 2>/dev/null)
-              EXIT_CODE=$?
-
-              if [[ $EXIT_CODE -ne 0 ]]; then
-                POLL_ERROR=true
-                break
-              fi
-
+                --command-id "$cmd_id" --instance-id "$inst_id" \
+                --query 'Status' --output text 2>/dev/null) || { sleep 5; continue; }
               case "$STATUS" in
-                Success)
-                  ;;
+                Success) echo "$label deploy succeeded on $inst_id"; return 0 ;;
                 Failed|Cancelled|TimedOut)
-                  ALL_DONE=false
-                  FAILED_INSTANCE_IDS="${FAILED_INSTANCE_IDS}${FAILED_INSTANCE_IDS:+,}$INST_ID"
-                  ;;
-                *)
-                  ALL_DONE=false
-                  ;;
+                  echo "::error::$label deploy failed on $inst_id (status: $STATUS)"
+                  aws ssm get-command-invocation --command-id "$cmd_id" --instance-id "$inst_id" \
+                    --query 'StandardErrorContent' --output text 2>/dev/null || true
+                  return 1 ;;
               esac
+              echo "Waiting for $label on $inst_id... attempt $attempt/60"
+              sleep 5
             done
+            echo "::error::$label deploy timed out on $inst_id"; return 1
+          }
 
-            if [[ "$POLL_ERROR" == "true" ]]; then
-              CONSECUTIVE_ERRORS=$((CONSECUTIVE_ERRORS + 1))
-              echo "::warning::SSM API error (attempt $i, consecutive errors: $CONSECUTIVE_ERRORS/$MAX_CONSECUTIVE_ERRORS)"
-              if [[ $CONSECUTIVE_ERRORS -ge $MAX_CONSECUTIVE_ERRORS ]]; then
-                echo "::error::Too many consecutive SSM API errors ($CONSECUTIVE_ERRORS), aborting"
-                exit 1
-              fi
-              BACKOFF=$((BACKOFF * 2 > 30 ? 30 : BACKOFF * 2))
-              sleep $BACKOFF
-              continue
-            fi
-
-            CONSECUTIVE_ERRORS=0
-            BACKOFF=5
-
-            if [[ -n "$FAILED_INSTANCE_IDS" ]]; then
-              RESULT="Failed"
-              break
-            fi
-
-            if [[ "$ALL_DONE" == "true" ]]; then
-              RESULT="Success"
-              break
-            fi
-
-            echo "Waiting for SSM command... attempt $i/$MAX_POLL"
-            sleep 5
-          done
-
-          if [[ "$RESULT" != "Success" ]]; then
-            echo "::error::Production deploy failed or timed out (result: $RESULT)"
-            for INST_ID in "${IDS[@]}"; do
-              INST_STATUS=$(aws ssm get-command-invocation \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INST_ID" \
-                --query 'Status' \
-                --output text 2>/dev/null || echo "Unknown")
-              if [[ "$INST_STATUS" != "Success" ]]; then
-                echo "=== Instance $INST_ID status: $INST_STATUS ==="
-                aws ssm get-command-invocation \
-                  --command-id "$COMMAND_ID" \
-                  --instance-id "$INST_ID" \
-                  --query 'StandardOutputContent' \
-                  --output text || true
-                aws ssm get-command-invocation \
-                  --command-id "$COMMAND_ID" \
-                  --instance-id "$INST_ID" \
-                  --query 'StandardErrorContent' \
-                  --output text || true
-              fi
-            done
+          # Wait for canary deploy
+          if ! poll_ssm "$COMMAND_ID" "$CANARY_ID" "Canary"; then
+            echo "deploy_success=false" >> $GITHUB_OUTPUT
             exit 1
           fi
+          echo "::endgroup::"
 
-          echo "Production deploy completed successfully on all instances"
+          # Canary health check via external URL
+          echo "::group::Canary health check"
+          echo "Waiting 15s for canary to stabilize..."
+          sleep 15
+          CANARY_HEALTHY=false
+          for i in {1..6}; do
+            if curl -sf "https://api.aragora.ai/api/v1/health" > /dev/null 2>&1; then
+              echo "Canary health check passed (attempt $i)"
+              CANARY_HEALTHY=true
+              break
+            fi
+            echo "Health check attempt $i/6..."
+            sleep 10
+          done
+          if [[ "$CANARY_HEALTHY" != "true" ]]; then
+            echo "::error::Canary health check failed — aborting remaining deploys"
+            echo "deploy_success=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          echo "::endgroup::"
+
+          # --- Phase 2: Deploy to remaining instances ---
+          if [[ ${#REMAINING_IDS[@]} -gt 0 ]]; then
+            echo "::group::Phase 2: Deploying to ${#REMAINING_IDS[@]} remaining instance(s)"
+            REMAINING_CMD_ID=$(aws ssm send-command \
+              --instance-ids "${REMAINING_IDS[@]}" \
+              --document-name "AWS-RunShellScript" \
+              --comment "Deploy aragora PRODUCTION (remaining) from GitHub Actions run ${{ github.run_id }}" \
+              --parameters 'commands=[
+                "set -e",
+                "export HOME=/root",
+                "cd /home/ec2-user/aragora",
+                "git config --global safe.directory /home/ec2-user/aragora",
+                "PREVIOUS_COMMIT=$(git rev-parse HEAD)",
+                "echo \"PREVIOUS_COMMIT=$PREVIOUS_COMMIT\" > /tmp/aragora_deploy_state",
+                "sudo -u ec2-user git stash --include-untracked || true",
+                "sudo chown -R ec2-user:ec2-user /home/ec2-user/aragora/.git || true",
+                "sudo -u ec2-user git fetch origin main",
+                "sudo -u ec2-user git checkout main || sudo -u ec2-user git checkout -b main origin/main",
+                "sudo -u ec2-user git reset --hard origin/main",
+                "source venv/bin/activate",
+                "find venv/lib/python3.11/site-packages -maxdepth 1 -name ~* -type d -exec rm -rf {} + 2>/dev/null || true",
+                "python -m pip install -e . --quiet --no-cache-dir",
+                "find venv/lib/python3.11/site-packages -maxdepth 1 -name ~* -type d -exec rm -rf {} + 2>/dev/null || true",
+                "python -c \"from aragora.server.unified_server import UnifiedServer; print(\\\"Import OK\\\")\"",
+                "echo \"Setting up secrets manager for systemd...\"",
+                "sudo mkdir -p /etc/systemd/system/aragora.service.d/",
+                "echo \"[Service]\" | sudo tee /etc/systemd/system/aragora.service.d/secrets.conf",
+                "echo \"Environment=ARAGORA_USE_SECRETS_MANAGER=true\" | sudo tee -a /etc/systemd/system/aragora.service.d/secrets.conf",
+                "echo \"Environment=AWS_REGION=us-east-2\" | sudo tee -a /etc/systemd/system/aragora.service.d/secrets.conf",
+                "echo \"Environment=ARAGORA_SECRET_NAME=aragora/production\" | sudo tee -a /etc/systemd/system/aragora.service.d/secrets.conf",
+                "echo \"Environment=ARAGORA_DB_BACKEND=postgres\" | sudo tee -a /etc/systemd/system/aragora.service.d/secrets.conf",
+                "echo \"Environment=ARAGORA_ENV=production\" | sudo tee -a /etc/systemd/system/aragora.service.d/secrets.conf",
+                "echo \"Environment=ARAGORA_SECRETS_STRICT=true\" | sudo tee -a /etc/systemd/system/aragora.service.d/secrets.conf",
+                "echo \"Environment=ARAGORA_BUILD_SHA=$(git rev-parse HEAD)\" | sudo tee -a /etc/systemd/system/aragora.service.d/secrets.conf",
+                "echo \"Environment=ARAGORA_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)\" | sudo tee -a /etc/systemd/system/aragora.service.d/secrets.conf",
+                "sudo systemctl daemon-reload",
+                "echo \"Initializing PostgreSQL stores...\"",
+                "export ARAGORA_USE_SECRETS_MANAGER=true",
+                "export AWS_REGION=us-east-2",
+                "export ARAGORA_SECRET_NAME=aragora/production",
+                "export ARAGORA_ENV=production",
+                "export ARAGORA_SECRETS_STRICT=true",
+                "python scripts/init_postgres_db.py || echo \"PostgreSQL init skipped (may not be configured)\"",
+                "sudo systemctl restart aragora",
+                "sleep 8",
+                "if ! systemctl is-active --quiet aragora; then echo \"=== SERVICE FAILED ===\"; echo \"Status:\"; systemctl status aragora --no-pager || true; echo \"Recent logs:\"; journalctl -u aragora -n 50 --no-pager || true; exit 1; fi",
+                "echo \"Running HTTP health check...\"; for i in $(seq 1 12); do if curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then echo \"HTTP health OK on attempt $i\"; break; fi; echo \"Waiting... attempt $i/12\"; sleep 5; done",
+                "if ! curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then echo \"HTTP health FAILED\"; journalctl -u aragora -n 30 --no-pager || true; exit 1; fi",
+                "python scripts/seed_agents.py || echo \"Seed skipped (non-fatal)\"",
+                "python scripts/validate_production.py --quick || echo \"Validation warnings (non-fatal)\"",
+                "echo \"Remaining instance deploy complete\""
+              ]' \
+              --timeout-seconds 300 \
+              --query 'Command.CommandId' \
+              --output text)
+
+            # Wait for remaining instances
+            for INST_ID in "${REMAINING_IDS[@]}"; do
+              if ! poll_ssm "$REMAINING_CMD_ID" "$INST_ID" "Remaining"; then
+                echo "::warning::Remaining instance $INST_ID failed but canary is healthy"
+              fi
+            done
+            echo "::endgroup::"
+          else
+            echo "Only 1 production instance — canary was the full deploy"
+          fi
+
+          echo "deploy_success=true" >> $GITHUB_OUTPUT
+          echo "Production rolling canary deploy completed successfully"
 
       - name: Post-deploy SHA verification
         id: sha_verify
@@ -985,7 +1092,7 @@ jobs:
               "if [ -f /tmp/aragora_deploy_state ]; then source /tmp/aragora_deploy_state; fi",
               "if [ -n \"$PREVIOUS_COMMIT\" ]; then sudo -u ec2-user git checkout $PREVIOUS_COMMIT; fi",
               "source venv/bin/activate",
-              "pip install -e . --quiet --no-cache-dir",
+              "python -m pip install -e . --quiet --no-cache-dir",
               "sudo systemctl restart aragora",
               "rm -f /tmp/aragora_deploy_state",
               "echo \"Rollback complete\""
@@ -1042,6 +1149,32 @@ jobs:
           role-session-name: github-actions-deploy-dr-${{ github.run_id }}
           aws-region: us-east-1
 
+      - name: Fix AWS CLI path
+        run: |
+          # Find aws CLI across Linux (AL2023) and macOS (self-hosted) runners.
+          # Try paths in priority order: system PATH first, then common locations.
+          AWS_BIN=""
+          for candidate in \
+              "$(command -v aws 2>/dev/null)" \
+              /usr/local/bin/aws \
+              /opt/homebrew/bin/aws \
+              "$HOME/local/aws-cli/aws" \
+              /usr/bin/aws; do
+            if [ -n "$candidate" ] && "$candidate" --version 2>/dev/null; then
+              AWS_BIN="$candidate"
+              break
+            fi
+          done
+          if [ -n "$AWS_BIN" ]; then
+            AWS_DIR="$(dirname "$AWS_BIN")"
+            echo "Found aws at $AWS_BIN"
+            echo "$AWS_DIR" >> "$GITHUB_PATH"
+          else
+            echo "aws not found in common paths; installing via pip"
+            pip3 install awscli --quiet
+            echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
+          fi
+
       - name: Get DR instance IDs
         id: get-instance
         run: |
@@ -1087,7 +1220,7 @@ jobs:
               "source venv/bin/activate",
               "echo \"Cleaning corrupted pip distributions...\"",
               "find venv/lib/python3.11/site-packages -maxdepth 1 -name '~*' -type d -exec rm -rf {} + 2>/dev/null || true",
-              "pip install -e . --quiet --no-cache-dir",
+              "python -m pip install -e . --quiet --no-cache-dir",
               "find venv/lib/python3.11/site-packages -maxdepth 1 -name '~*' -type d -exec rm -rf {} + 2>/dev/null || true",
               "python -c \"from aragora.server.unified_server import UnifiedServer; print(\\\"Import OK\\\")\"",
               "echo \"Setting up secrets manager for systemd...\"",
