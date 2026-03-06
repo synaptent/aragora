@@ -46,6 +46,7 @@ jobs:
 
       - name: Verify checkout integrity
         shell: bash
+        working-directory: .
         run: |
           if [[ ! -f pyproject.toml ]]; then
             echo "::warning::pyproject.toml missing after checkout; attempting recovery"
@@ -69,7 +70,7 @@ jobs:
       - name: Setup Python ${{ matrix.python-version }}
         uses: ./.github/actions/setup-python-safe
         with:
-          python-version: "${{"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -101,6 +102,7 @@ jobs:
 
       - name: Verify checkout integrity
         shell: bash
+        working-directory: .
         run: |
           if [[ ! -f pyproject.toml ]]; then
             echo "::warning::pyproject.toml missing after checkout; attempting recovery"
