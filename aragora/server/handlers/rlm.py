@@ -813,6 +813,7 @@ class RLMContextHandler(BaseHandler):
         return json_response(response)
 
     @require_auth
+    @require_permission("rlm:delete")
     def _delete_context(
         self,
         context_id: str,

@@ -646,6 +646,133 @@ class GauntletReceiptsMixin:
         except (OSError, RuntimeError, ValueError, TypeError, KeyError) as e:
             logger.warning("Failed to auto-persist receipt for %s: %s", gauntlet_id, e)
 
+    @api_endpoint(
+        method="GET",
+        path="/api/v1/receipts/{receipt_id}/anchor-status",
+        summary="Get receipt anchor verification status",
+        description="Verify the blockchain anchoring status of a decision receipt.",
+        tags=["Receipts", "Blockchain"],
+        operation_id="get_receipt_anchor_status",
+        parameters=[
+            {"name": "receipt_id", "in": "path", "required": True, "schema": {"type": "string"}},
+        ],
+        responses={
+            "200": {"description": "Anchor verification status"},
+            "401": {"description": "Authentication required"},
+            "404": {"description": "Receipt not found"},
+        },
+    )
+    @require_permission("gauntlet:read")
+    def _get_receipt_anchor_status(self, receipt_id: str, query_params: dict) -> HandlerResult:
+        """Get blockchain anchor verification status for a receipt.
+
+        Looks up the receipt by ID, computes its hash, then checks
+        whether it has been anchored (on-chain or locally).
+        """
+        try:
+            from aragora.storage.receipt_store import get_receipt_store
+
+            store = get_receipt_store()
+            receipt = store.get(receipt_id)
+
+            if receipt is None:
+                return error_response("Receipt not found", 404)
+
+            # Use the receipt checksum as the anchor hash
+            receipt_hash = receipt.checksum or ""
+            if not receipt_hash:
+                return json_response(
+                    {
+                        "receipt_id": receipt_id,
+                        "anchored": False,
+                        "anchors": [],
+                        "error": "Receipt has no checksum for anchor lookup",
+                    }
+                )
+
+            # Look up anchors via the global/shared ReceiptAnchor instance
+            anchor = self._get_receipt_anchor()
+            result = anchor.verify_anchor(receipt_hash)
+            result["receipt_id"] = receipt_id
+
+            return json_response(result)
+
+        except ImportError:
+            logger.debug("Receipt store or blockchain module not available")
+            return error_response("Anchor verification not available", 501)
+        except (OSError, RuntimeError, ValueError, TypeError) as e:
+            logger.error("Failed to verify anchor status for %s: %s", receipt_id, e)
+            return error_response("Anchor verification failed", 500)
+
+    @api_endpoint(
+        method="GET",
+        path="/api/v1/receipts/recent-anchors",
+        summary="List recently anchored receipts",
+        description="List recently anchored receipts with their verification status.",
+        tags=["Receipts", "Blockchain"],
+        operation_id="list_recent_anchors",
+        parameters=[
+            {
+                "name": "limit",
+                "in": "query",
+                "schema": {"type": "integer", "default": 10, "maximum": 100},
+            },
+        ],
+        responses={
+            "200": {"description": "List of recently anchored receipts"},
+            "401": {"description": "Authentication required"},
+        },
+    )
+    @require_permission("gauntlet:read")
+    def _get_recent_anchors(self, query_params: dict) -> HandlerResult:
+        """List recently anchored receipts with their verification status.
+
+        Returns the last N anchor records with receipt metadata.
+        """
+        try:
+            limit = get_int_param(query_params, "limit", 10)
+            limit = min(max(limit, 1), 100)
+
+            anchor = self._get_receipt_anchor()
+            all_anchors = anchor.get_anchors()
+
+            # Sort by timestamp descending and limit
+            sorted_anchors = sorted(all_anchors, key=lambda a: a.timestamp, reverse=True)
+            recent = sorted_anchors[:limit]
+
+            items = []
+            for record in recent:
+                item: dict[str, Any] = {
+                    "receipt_hash": record.receipt_hash,
+                    "timestamp": record.timestamp,
+                    "local_only": record.local_only,
+                    "metadata": record.metadata,
+                }
+                if not record.local_only:
+                    item["tx_hash"] = record.tx_hash
+                    item["chain_id"] = record.chain_id
+                items.append(item)
+
+            return json_response(
+                {
+                    "anchors": items,
+                    "total": len(all_anchors),
+                    "limit": limit,
+                }
+            )
+
+        except (OSError, RuntimeError, ValueError, TypeError) as e:
+            logger.error("Failed to list recent anchors: %s", e)
+            return json_response({"anchors": [], "total": 0, "limit": 10})
+
+    def _get_receipt_anchor(self):
+        """Get or create the shared ReceiptAnchor instance."""
+        if not hasattr(self, "_receipt_anchor"):
+            from aragora.blockchain.receipt_anchor import ReceiptAnchor
+
+            self._receipt_anchor = ReceiptAnchor()
+        return self._receipt_anchor
+
     def _risk_level_from_score(self, robustness_score: float) -> str:
         """Determine risk level from robustness score."""
         if robustness_score >= 0.8:

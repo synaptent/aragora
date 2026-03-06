@@ -37,6 +37,8 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from aragora.rbac.decorators import require_permission
+
 
 from aragora.audit.unified import audit_data
 from aragora.server.handlers.secure import (
@@ -717,6 +719,7 @@ class RoutingRulesHandler(SecureHandler):
                 "code": 500,
             }
 
+    @require_permission("routing:delete")
     async def _delete_rule(self, request: Any, rule_id: str) -> dict[str, Any]:
         """Delete a routing rule."""
         try:

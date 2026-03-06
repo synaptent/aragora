@@ -48,6 +48,40 @@ class LearningItem:
         }
 
 
+# ---------------------------------------------------------------------------
+# Error classification
+# ---------------------------------------------------------------------------
+
+_ERROR_PATTERNS: list[tuple[str, list[str]]] = [
+    ("test_failure", ["assert", "test fail", "pytest", "unittest", "test_failure"]),
+    (
+        "syntax_error",
+        ["syntaxerror", "syntax error", "invalid syntax", "unexpected token", "unexpected eof"],
+    ),
+    ("import_error", ["importerror", "import error", "modulenotfounderror", "no module named"]),
+    ("timeout", ["timeout", "timed out", "deadline exceeded", "asyncio.timeout"]),
+    ("budget_exceeded", ["budget", "cost limit", "rate limit", "quota", "429"]),
+    ("merge_conflict", ["merge conflict", "conflict marker", "<<<<<<", ">>>>>>", "cannot merge"]),
+    ("gauntlet_fail", ["gauntlet", "receipt verification", "gauntlet fail", "receipt invalid"]),
+]
+
+
+def classify_error(error_str: str) -> str:
+    """Classify an error string into a known category.
+
+    Returns one of: ``"test_failure"``, ``"syntax_error"``, ``"import_error"``,
+    ``"timeout"``, ``"budget_exceeded"``, ``"merge_conflict"``,
+    ``"gauntlet_fail"``, ``"unknown"``.
+    """
+    if not error_str:
+        return "unknown"
+    lower = error_str.lower()
+    for category, keywords in _ERROR_PATTERNS:
+        if any(kw in lower for kw in keywords):
+            return category
+    return "unknown"
+
+
 class KMFeedbackBridge:
     """Bridge between the Nomic Loop and the Knowledge Mound.
 
@@ -364,6 +398,185 @@ class KMFeedbackBridge:
             success,
         )
 
+    # ------------------------------------------------------------------
+    # Structured outcomes (cross-cycle learning)
+    # ------------------------------------------------------------------
+
+    def persist_structured_outcome(
+        self,
+        *,
+        cycle_id: str,
+        goal: str,
+        goal_type: str = "",
+        track: str = "",
+        agent: str = "",
+        success: bool = False,
+        files_changed: int = 0,
+        quality_delta: float = 0.0,
+        cost_usd: float = 0.0,
+        error_pattern: str = "",
+        duration_seconds: float = 0.0,
+    ) -> dict[str, Any]:
+        """Persist a structured outcome dict with typed tags for KM storage.
+
+        This method provides a richer schema than ``record_pipeline_outcome``
+        and is designed for cross-cycle pattern queries.
+
+        Returns:
+            The structured outcome dict that was stored.
+        """
+        classified_error = classify_error(error_pattern) if error_pattern else ""
+
+        outcome: dict[str, Any] = {
+            "cycle_id": cycle_id,
+            "goal": goal,
+            "goal_type": goal_type,
+            "track": track,
+            "agent": agent,
+            "success": success,
+            "files_changed": files_changed,
+            "quality_delta": quality_delta,
+            "cost_usd": cost_usd,
+            "error_pattern": error_pattern,
+            "error_class": classified_error,
+            "duration_seconds": duration_seconds,
+            "timestamp": time.time(),
+        }
+
+        tags = [
+            "nomic_learned:true",
+            "structured_outcome:true",
+            f"cycle_id:{cycle_id}",
+            f"success:{'true' if success else 'false'}",
+        ]
+        if goal_type:
+            tags.append(f"goal_type:{goal_type}")
+        if track:
+            tags.append(f"track:{track}")
+        if agent:
+            tags.append(f"agent:{agent}")
+        if classified_error:
+            tags.append(f"error_class:{classified_error}")
+
+        import json
+
+        item = LearningItem(
+            content=json.dumps(outcome, default=str),
+            tags=tags,
+            source="nomic_structured_outcome",
+        )
+
+        self._in_memory_store.append(item)
+
+        km = self._get_km()
+        if km is not None:
+            try:
+                self._ingest_to_km(km, item)
+            except (RuntimeError, OSError, ValueError, TypeError, AttributeError) as e:
+                logger.debug("km_feedback_structured_outcome_persist_failed: %s", e)
+
+        logger.info(
+            "km_feedback_structured_outcome cycle=%s track=%s success=%s",
+            cycle_id,
+            track,
+            success,
+        )
+        return outcome
+
+    def retrieve_success_patterns(
+        self,
+        goal_type: str | None = None,
+        track: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Query stored structured outcomes that were successful.
+
+        Optionally filter by ``goal_type`` and/or ``track``.
+
+        Returns:
+            List of structured outcome dicts (most recent first).
+        """
+        import json
+
+        results: list[dict[str, Any]] = []
+
+        for item in reversed(self._in_memory_store):
+            if item.source != "nomic_structured_outcome":
+                continue
+            if "success:true" not in item.tags:
+                continue
+            if goal_type and f"goal_type:{goal_type}" not in item.tags:
+                continue
+            if track and f"track:{track}" not in item.tags:
+                continue
+            try:
+                parsed = json.loads(item.content)
+                results.append(parsed)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if len(results) >= limit:
+                break
+
+        return results
+
+    def get_track_agent_effectiveness(self, track: str) -> dict[str, float]:
+        """Compute per-agent success rate for a given track.
+
+        Returns:
+            Dict mapping agent name to success rate (0.0 -- 1.0).
+            Agents without structured outcomes are omitted.
+        """
+        import json
+
+        agent_attempts: dict[str, int] = {}
+        agent_successes: dict[str, int] = {}
+
+        for item in self._in_memory_store:
+            if item.source != "nomic_structured_outcome":
+                continue
+            if f"track:{track}" not in item.tags:
+                continue
+            try:
+                parsed = json.loads(item.content)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            agent = parsed.get("agent", "")
+            if not agent:
+                continue
+            agent_attempts[agent] = agent_attempts.get(agent, 0) + 1
+            if parsed.get("success"):
+                agent_successes[agent] = agent_successes.get(agent, 0) + 1
+
+        return {
+            agent: agent_successes.get(agent, 0) / count
+            for agent, count in agent_attempts.items()
+            if count > 0
+        }
+
+    def get_error_pattern_frequency(self, limit: int = 10) -> list[tuple[str, int]]:
+        """Return the most common error classes across structured outcomes.
+
+        Returns:
+            List of ``(error_class, count)`` tuples sorted descending by count.
+        """
+        import json
+
+        counts: dict[str, int] = {}
+
+        for item in self._in_memory_store:
+            if item.source != "nomic_structured_outcome":
+                continue
+            try:
+                parsed = json.loads(item.content)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            error_class = parsed.get("error_class", "")
+            if error_class:
+                counts[error_class] = counts.get(error_class, 0) + 1
+
+        sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+        return sorted_counts[:limit]
+
     def _search_in_memory(
         self,
         query: str,
@@ -391,4 +604,5 @@ class KMFeedbackBridge:
 __all__ = [
     "KMFeedbackBridge",
     "LearningItem",
+    "classify_error",
 ]

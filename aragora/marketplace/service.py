@@ -33,6 +33,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+import uuid
+
 from .catalog import MarketplaceCatalog, MarketplaceItem
 from .installer import InstallBridgeResult, MarketplaceInstaller
 
@@ -292,6 +294,89 @@ class MarketplaceService:
             "types": type_counts,
             "total_ratings": sum(len(rs) for rs in self._ratings.values()),
             "total_installs": sum(len(ids) for ids in self._user_installs.values()),
+        }
+
+    # ----- Debate launch ------------------------------------------------------
+
+    def launch_debate_from_listing(
+        self,
+        item_id: str,
+        question: str,
+        user_id: str = "anonymous",
+        *,
+        rounds_override: int | None = None,
+    ) -> dict[str, Any]:
+        """Build a debate configuration from a marketplace listing.
+
+        Looks up the catalog item, extracts template configuration (rounds,
+        consensus_mode, agent_roles), and returns a debate configuration dict
+        suitable for passing to the Arena.  The caller (handler) is responsible
+        for actually executing the debate.
+
+        Args:
+            item_id: Marketplace catalog item ID.
+            question: The debate question / topic.
+            user_id: ID of the user launching the debate.
+            rounds_override: If provided, overrides the template's default rounds.
+
+        Returns:
+            Dict with ``debate_id``, ``template_used``, ``config`` keys.
+
+        Raises:
+            KeyError: If *item_id* is not found in the catalog.
+        """
+        item = self._catalog.get_item(item_id)
+        if item is None:
+            raise KeyError(f"Listing not found: {item_id}")
+
+        # Try to load the matching DebateTemplate from the models registry
+        template_config: dict[str, Any] = {}
+        agent_roles: list[dict[str, Any]] = []
+        default_rounds = 3
+        consensus_mode = "majority"
+
+        try:
+            from .models import BUILTIN_DEBATE_TEMPLATES
+
+            for tpl in BUILTIN_DEBATE_TEMPLATES:
+                if tpl.metadata.id == item_id or tpl.metadata.name == item.name:
+                    agent_roles = list(tpl.agent_roles)
+                    default_rounds = tpl.protocol.get("rounds", 3)
+                    consensus_mode = tpl.protocol.get("consensus_mode", "majority")
+                    template_config = {
+                        "task_template": tpl.task_template,
+                        "evaluation_criteria": list(tpl.evaluation_criteria),
+                        "protocol": dict(tpl.protocol),
+                    }
+                    break
+        except (ImportError, AttributeError, TypeError) as exc:
+            logger.warning("Could not load debate templates: %s", exc)
+
+        rounds = rounds_override if rounds_override is not None else default_rounds
+        debate_id = f"mkt-{uuid.uuid4().hex[:12]}"
+
+        config: dict[str, Any] = {
+            "debate_id": debate_id,
+            "question": question,
+            "rounds": rounds,
+            "consensus_mode": consensus_mode,
+            "agent_roles": agent_roles,
+            "user_id": user_id,
+            "source_listing": item_id,
+            **template_config,
+        }
+
+        logger.info(
+            "Prepared debate config from listing %s for user %s (debate_id=%s)",
+            item_id,
+            user_id,
+            debate_id,
+        )
+
+        return {
+            "debate_id": debate_id,
+            "template_used": item_id,
+            "config": config,
         }
 
     # ----- Internal ---------------------------------------------------------

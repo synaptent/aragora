@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from aragora.rbac.decorators import require_permission
+
 from .validation import (
     MAX_JOB_TITLE_LENGTH,
     MAX_NAME_LENGTH,
@@ -224,6 +226,7 @@ class ContactOperationsMixin:
 
         return self._json_response(200, {"success": True})
 
+    @require_permission("crm:delete")
     async def _delete_contact(self: Any, request: Any, platform: str, contact_id: str) -> Any:
         """Delete a contact on a platform."""
         if self._contacts_stub_enabled():

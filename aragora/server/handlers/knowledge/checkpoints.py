@@ -400,6 +400,7 @@ class KMCheckpointHandler(BaseHandler):
             return error_response("Checkpoint service unavailable", status=503)
 
     @rate_limit(requests_per_minute=5, limiter_name="km_checkpoint_write")
+    @require_permission("knowledge:delete")
     async def _delete_checkpoint(self, handler: Any, name: str) -> HandlerResult:
         """Delete a checkpoint.
 

@@ -70,6 +70,8 @@ class GauntletHandler(
         "/api/v1/gauntlet/heatmaps",
         "/api/v1/gauntlet/receipts",
         "/api/v1/gauntlet/receipts/export/bundle",
+        "/api/v1/receipts/recent-anchors",
+        "/api/v1/receipts/*/anchor-status",
     ]
 
     # All gauntlet endpoints require authentication
@@ -91,6 +93,7 @@ class GauntletHandler(
             ("/api/gauntlet/personas", "GET"): "_list_personas",
             ("/api/gauntlet/results", "GET"): "_list_results",
             ("/api/gauntlet/receipts", "GET"): "_list_receipts",
+            ("/api/receipts/recent-anchors", "GET"): "_get_recent_anchors",
         }
 
     def _extract_and_validate_id(
@@ -126,6 +129,18 @@ class GauntletHandler(
 
         This method handles routes that include dynamic segments like {gauntlet_id}.
         """
+        # GET /api/receipts/{receipt_id}/anchor-status
+        if (
+            path.endswith("/anchor-status")
+            and path.startswith("/api/receipts/")
+            and method == "GET"
+        ):
+            parts = path.rstrip("/").split("/")
+            # /api/receipts/{receipt_id}/anchor-status => ['', 'api', 'receipts', '{id}', 'anchor-status']
+            if len(parts) >= 5:
+                receipt_id = parts[3]
+                return self._get_receipt_anchor_status(receipt_id, query_params)
+
         # POST /api/gauntlet/{id}/receipt/verify
         if path.endswith("/receipt/verify") and method == "POST":
             gauntlet_id, err = self._extract_and_validate_id(path, -3)
@@ -202,9 +217,14 @@ class GauntletHandler(
         """Check if this handler can handle the request.
 
         Supports both versioned (/api/v1/gauntlet/*) and legacy (/api/gauntlet/*) routes.
+        Also handles /api/v1/receipts/* anchor-related routes.
         """
         # Normalize path for matching
         normalized = self._normalize_path(path)
+
+        # Receipt anchor routes (normalized: /api/receipts/...)
+        if normalized.startswith("/api/receipts/") and method == "GET":
+            return True
 
         # When called without method (e.g., from route index), just check path prefix
         if method == "GET" and normalized.startswith("/api/gauntlet/"):
@@ -290,7 +310,7 @@ class GauntletHandler(
             handler_method = getattr(self, handler_name)
             if handler_name == "_start_gauntlet":
                 result = await handler_method(handler)
-            elif handler_name in ("_list_results", "_list_receipts"):
+            elif handler_name in ("_list_results", "_list_receipts", "_get_recent_anchors"):
                 result = handler_method(query_params)
             else:
                 result = handler_method()

@@ -10,8 +10,9 @@ Endpoints:
     GET  /api/v1/marketplace/listings/featured  - Featured listings
     GET  /api/v1/marketplace/listings/stats     - Marketplace statistics
     GET  /api/v1/marketplace/listings/{id}      - Get listing details
-    POST /api/v1/marketplace/listings/{id}/install - Install a listing
-    POST /api/v1/marketplace/listings/{id}/rate    - Rate a listing
+    POST /api/v1/marketplace/listings/{id}/install       - Install a listing
+    POST /api/v1/marketplace/listings/{id}/rate           - Rate a listing
+    POST /api/v1/marketplace/listings/{id}/launch-debate - Launch debate from listing
 
 All GET endpoints return ``{"data": {...}}`` envelope.
 Write endpoints use ``@handle_errors`` as outermost decorator.
@@ -45,6 +46,9 @@ logger = logging.getLogger(__name__)
 SAFE_ITEM_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$")
 MAX_SEARCH_LENGTH = 500
 MAX_REVIEW_LENGTH = 2000
+MAX_QUESTION_LENGTH = 5000
+MIN_ROUNDS = 1
+MAX_ROUNDS = 20
 MIN_RATING = 1
 MAX_RATING = 5
 
@@ -167,6 +171,9 @@ class MarketplacePilotHandler(BaseHandler):
 
         if action == "rate":
             return self._handle_rate(item_id, handler)
+
+        if action == "launch-debate":
+            return self._handle_launch_debate(item_id, handler)
 
         return None
 
@@ -317,6 +324,59 @@ class MarketplacePilotHandler(BaseHandler):
         except ValueError as e:
             logger.warning("Invalid rating: %s", e)
             return error_response("Invalid rating data", 400)
+
+        return json_response({"data": result})
+
+    def _handle_launch_debate(self, item_id: str, handler: Any) -> HandlerResult:
+        """POST /api/v1/marketplace/listings/{id}/launch-debate.
+
+        Launch a debate using the template configuration from a marketplace
+        listing.  The handler builds the debate config via
+        ``MarketplaceService.launch_debate_from_listing`` and returns it to
+        the caller.  Actual Arena execution is the caller's responsibility.
+        """
+        user, err = self.require_auth_or_error(handler)
+        if err:
+            return err
+
+        user_id = getattr(user, "user_id", None) or getattr(user, "id", None) or str(user)
+
+        body = self.read_json_body(handler)
+        if body is None:
+            return error_response("Invalid JSON body", 400)
+
+        # Validate question
+        question = body.get("question")
+        if not question or not isinstance(question, str):
+            return error_response("A non-empty 'question' string is required", 400)
+        if len(question) > MAX_QUESTION_LENGTH:
+            return error_response(
+                f"Question must be at most {MAX_QUESTION_LENGTH} characters",
+                400,
+            )
+        question = sanitize_string(question, MAX_QUESTION_LENGTH)
+
+        # Optional rounds override
+        rounds_override: int | None = None
+        raw_rounds = body.get("rounds")
+        if raw_rounds is not None:
+            if not isinstance(raw_rounds, int) or not (MIN_ROUNDS <= raw_rounds <= MAX_ROUNDS):
+                return error_response(
+                    f"Rounds must be an integer between {MIN_ROUNDS} and {MAX_ROUNDS}",
+                    400,
+                )
+            rounds_override = raw_rounds
+
+        svc = self._get_svc()
+        try:
+            result = svc.launch_debate_from_listing(
+                item_id,
+                question=question,
+                user_id=str(user_id),
+                rounds_override=rounds_override,
+            )
+        except KeyError:
+            return error_response(f"Listing not found: {item_id}", 404)
 
         return json_response({"data": result})
 

@@ -12,6 +12,8 @@ import logging
 import threading
 from typing import Any
 
+from aragora.rbac.decorators import require_permission
+
 from .config import (
     HandlerResult,
     SLACK_BOT_TOKEN,
@@ -81,6 +83,8 @@ class MessagingMixin:
             }
         )
 
+    # Auth context flows from the parent event/command handler that invokes this method.
+    @require_permission("slack:write")
     async def _post_to_response_url(self, url: str, payload: dict[str, Any]) -> None:
         """POST a message to Slack's response_url.
 
@@ -127,6 +131,8 @@ class MessagingMixin:
             logger.exception("Unexpected error posting to Slack response_url: %s", e)
             circuit_breaker.record_failure()
 
+    # Auth context flows from the parent event/command handler that invokes this method.
+    @require_permission("slack:write")
     async def _post_message_async(
         self,
         channel: str,

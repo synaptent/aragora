@@ -36,6 +36,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
@@ -109,6 +110,7 @@ class WorktreeWatchdog:
         self,
         repo_path: Path | None = None,
         config: WatchdogConfig | None = None,
+        persist_path: Path | str | None = None,
     ):
         self.repo_path = repo_path or Path.cwd()
         self.config = config or WatchdogConfig()
@@ -116,6 +118,125 @@ class WorktreeWatchdog:
         self._lock = threading.Lock()
         self._session_counter = 0
         self._event_bus: Any | None = None
+
+        # Persistence
+        if persist_path is not None:
+            self._persist_path: Path | None = Path(persist_path)
+        else:
+            self._persist_path = self.repo_path / ".aragora_beads" / "watchdog_sessions.json"
+
+        self._load_persisted_sessions()
+
+    def _persist_sessions(self) -> None:
+        """Write all sessions to JSON for crash recovery.
+
+        Called after every state change (register/heartbeat/complete/abandon).
+        The caller must NOT hold ``self._lock`` when calling this method.
+        """
+        if self._persist_path is None:
+            return
+
+        with self._lock:
+            payload: list[dict[str, Any]] = []
+            for session in self._sessions.values():
+                payload.append(
+                    {
+                        "session_id": session.session_id,
+                        "branch_name": session.branch_name,
+                        "worktree_path": str(session.worktree_path),
+                        "track": session.track,
+                        "pid": session.pid,
+                        "registered_at": session.registered_at,
+                        "last_heartbeat": session.last_heartbeat,
+                        "heartbeat_count": session.heartbeat_count,
+                        "status": session.status,
+                    }
+                )
+            counter = self._session_counter
+
+        data = {
+            "version": 1,
+            "session_counter": counter,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "sessions": payload,
+        }
+
+        try:
+            self._persist_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = self._persist_path.with_suffix(".tmp")
+            tmp_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            tmp_path.replace(self._persist_path)
+        except OSError as exc:
+            logger.warning("watchdog_persist_failed: %s", exc)
+
+    def _load_persisted_sessions(self) -> None:
+        """Reload sessions from disk and reconcile PID liveness.
+
+        For each persisted session:
+        - If the PID is alive: mark active, refresh last_heartbeat to now.
+        - If the PID is dead: mark abandoned.
+        - Completed/recovered sessions are preserved as-is.
+        """
+        if self._persist_path is None or not self._persist_path.exists():
+            return
+
+        try:
+            raw = self._persist_path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            logger.warning("watchdog_load_failed: %s", exc)
+            return
+
+        if not isinstance(data, dict):
+            return
+
+        sessions_data = data.get("sessions", [])
+        if not isinstance(sessions_data, list):
+            return
+
+        now = time.monotonic()
+        counter = data.get("session_counter", 0)
+
+        with self._lock:
+            for entry in sessions_data:
+                if not isinstance(entry, dict):
+                    continue
+                session_id = entry.get("session_id", "")
+                if not session_id:
+                    continue
+
+                pid = entry.get("pid")
+                status = entry.get("status", "active")
+
+                # For terminal states, preserve as-is
+                if status in ("completed", "recovered"):
+                    pass
+                elif pid is not None and self._is_process_alive(pid):
+                    status = "active"
+                else:
+                    status = "abandoned"
+
+                session = WorktreeSession(
+                    session_id=session_id,
+                    branch_name=entry.get("branch_name", ""),
+                    worktree_path=Path(entry.get("worktree_path", "")),
+                    track=entry.get("track", "unknown"),
+                    pid=pid,
+                    registered_at=entry.get("registered_at", now),
+                    last_heartbeat=now if status == "active" else entry.get("last_heartbeat", now),
+                    heartbeat_count=entry.get("heartbeat_count", 0),
+                    status=status,
+                )
+                self._sessions[session_id] = session
+
+            if counter > self._session_counter:
+                self._session_counter = counter
+
+        logger.info(
+            "watchdog_sessions_loaded count=%d from=%s",
+            len(sessions_data),
+            self._persist_path,
+        )
 
     def _get_event_bus(self) -> Any | None:
         """Lazily create EventBus for cross-worktree events."""
@@ -187,6 +308,8 @@ class WorktreeWatchdog:
             branch_name=branch_name,
         )
 
+        self._persist_sessions()
+
         return session_id
 
     def heartbeat(self, session_id: str) -> bool:
@@ -214,6 +337,8 @@ class WorktreeWatchdog:
                     session_id,
                     session.branch_name,
                 )
+
+        self._persist_sessions()
 
         return True
 
@@ -246,6 +371,34 @@ class WorktreeWatchdog:
             session_id=session_id,
             branch_name=session.branch_name,
         )
+
+        self._persist_sessions()
+
+        return True
+
+    def abandon_session(self, session_id: str) -> bool:
+        """Mark a session as abandoned explicitly.
+
+        Args:
+            session_id: The session ID to mark as abandoned.
+
+        Returns:
+            True if the session was found and marked abandoned.
+        """
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                return False
+
+            session.status = "abandoned"
+
+        logger.info(
+            "watchdog_session_abandoned id=%s branch=%s",
+            session_id,
+            session.branch_name,
+        )
+
+        self._persist_sessions()
 
         return True
 
@@ -321,6 +474,8 @@ class WorktreeWatchdog:
                         "registered_ago_seconds": round(now - session.registered_at, 1),
                     }
                 )
+
+        self._persist_sessions()
 
         return HealthReport(
             timestamp=datetime.now(timezone.utc).isoformat(),

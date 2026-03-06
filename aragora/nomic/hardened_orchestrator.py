@@ -126,7 +126,7 @@ class HardenedConfig:
     gauntlet_retry_enabled: bool = True
     gauntlet_max_retries: int = 1
     # Worktree watchdog: monitor sessions for stalls and abandoned worktrees
-    enable_watchdog: bool = False
+    enable_watchdog: bool = True
     watchdog_stall_timeout: float = 600.0  # 10 minutes
     watchdog_abandon_timeout: float = 3600.0  # 1 hour
 
@@ -174,7 +174,7 @@ class HardenedOrchestrator(BudgetMixin, GauntletMixin, AuditMixin, AutonomousOrc
         enable_sandbox_validation: bool = True,
         sandbox_timeout: int = 60,
         sandbox_memory_mb: int = 512,
-        enable_watchdog: bool = False,
+        enable_watchdog: bool = True,
         watchdog_stall_timeout: float = 600.0,
         watchdog_abandon_timeout: float = 3600.0,
         **kwargs: Any,

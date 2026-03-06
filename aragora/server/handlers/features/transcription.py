@@ -273,6 +273,7 @@ class TranscriptionHandler(BaseHandler):
             }
         )
 
+    @require_permission("transcription:delete")
     def _delete_job(self, job_id: str) -> HandlerResult:
         """Delete a transcription job."""
         with TranscriptionHandler._jobs_lock:

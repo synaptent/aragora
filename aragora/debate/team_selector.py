@@ -2111,3 +2111,70 @@ class TeamSelector:
                 exc,
             )
             return []
+
+    def resolve_agents_from_template(
+        self,
+        template_name: str,
+        available_agents: list[str] | None = None,
+    ) -> list[dict[str, str]]:
+        """Resolve agent assignments for a marketplace template.
+
+        Calls :meth:`select_from_template` to obtain the role names prescribed
+        by the template, then maps each role to a suggested agent provider
+        using :data:`DOMAIN_CAPABILITY_MAP` when a matching domain keyword is
+        found in the role name.
+
+        Args:
+            template_name: The ``metadata.id`` of the marketplace template
+                           (e.g. ``"oxford-style"``).
+            available_agents: Optional whitelist of agent names.  When provided,
+                              the returned ``agent`` value is constrained to
+                              entries in this list.
+
+        Returns:
+            A list of dicts, each with ``"role"`` and ``"agent"`` keys.  If no
+            suitable agent can be determined, ``"agent"`` defaults to
+            ``"claude"``.
+        """
+        roles = self.select_from_template(template_name)
+        if not roles:
+            return []
+
+        result: list[dict[str, str]] = []
+        for role in roles:
+            agent = self._match_agent_for_role(role, available_agents)
+            result.append({"role": role, "agent": agent})
+        return result
+
+    # ------------------------------------------------------------------
+    # Internal helper for resolve_agents_from_template
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _match_agent_for_role(
+        role: str,
+        available_agents: list[str] | None = None,
+    ) -> str:
+        """Return the best agent name for a given role string.
+
+        Scans the role name for keywords present in
+        :data:`DOMAIN_CAPABILITY_MAP` and returns the first matching agent
+        that is also in *available_agents* (if provided).  Falls back to
+        ``"claude"`` when no match is found.
+        """
+        role_lower = role.lower()
+        default = "claude"
+
+        for domain, preferred in DOMAIN_CAPABILITY_MAP.items():
+            if domain in role_lower and preferred:
+                if available_agents is not None:
+                    for agent in preferred:
+                        if agent in available_agents:
+                            return agent
+                else:
+                    return preferred[0]
+
+        # Fallback: pick first available or default
+        if available_agents:
+            return available_agents[0]
+        return default
