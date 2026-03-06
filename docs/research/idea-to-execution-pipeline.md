@@ -263,9 +263,9 @@ Aragora's architecture maps remarkably well to all four stages (~70% of backend 
 ### Aragora's Unique Advantages
 
 No competitor has:
-- Multi-agent adversarial debate for idea vetting (Arena with 42 agent types)
+- Multi-agent adversarial debate for idea vetting (Arena with 43 agent types)
 - Cryptographic decision receipts linking ideas to executed outcomes (Gauntlet)
-- 34-adapter knowledge management for cross-session learning
+- 41-adapter knowledge management for cross-session learning
 - Built-in heterogeneous model consensus (not just one AI provider)
 - Production-ready workflow engine with visual builder already using React Flow
 

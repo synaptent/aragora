@@ -20,7 +20,7 @@ to adversarially vet decisions, then delivers audit-ready **decision receipts**
 to any channel.
 
 ```
-Your question → 42 agents debate → Consensus + receipt → Slack / GitHub / API
+Your question → 43 agents debate → Consensus + receipt → Slack / GitHub / API
 ```
 
 **Three things that make it different:**
@@ -38,7 +38,7 @@ Your question → 42 agents debate → Consensus + receipt → Slack / GitHub / 
 
 | Capability | Status |
 |------------|--------|
-| Multi-agent debate engine (42 agent types) | Production |
+| Multi-agent debate engine (43 agent types) | Production |
 | PR code review (`aragora openclaw review --pr <url>`) | Production |
 | Next-steps scanner (`aragora openclaw next-steps`) | Production |
 | Decision receipts with SHA-256 audit trail | Production |
@@ -93,7 +93,7 @@ regulated industry where decision provenance matters.
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
 │  Your Repo  │────▶│  Aragora CLI │────▶│  Debate Engine   │
-│  or PR URL  │     │  / SDK / API │     │  (42 agent types)│
+│  or PR URL  │     │  / SDK / API │     │  (43 agent types)│
 └─────────────┘     └──────────────┘     └────────┬────────┘
                                                    │
                           ┌────────────────────────┼────────────────────┐

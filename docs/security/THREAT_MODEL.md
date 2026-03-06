@@ -70,7 +70,7 @@
                     TRUST BOUNDARY 3: Application Core
  ┌──────────────────────────────────────────────────────────────────┐
  │  Unified Server + Handler Modules                                │
- │  - 580+ handler modules (aragora/server/handlers/)               │
+ │  - 700+ handler modules (aragora/server/handlers/)               │
  │  - Debate orchestrator (aragora/debate/orchestrator.py)          │
  │  - WebSocket stream servers (aragora/server/stream/)             │
  │  - Knowledge Mound (aragora/knowledge/mound/)                    │
@@ -152,7 +152,7 @@ resource ownership, delegation chains, emergency access.
 
 | Threat | Category | Likelihood | Impact | Existing Controls | Gaps |
 |--------|----------|------------|--------|-------------------|------|
-| IDOR: accessing another user's debate/decision data | Information Disclosure | High | High | Ownership verification, tenant isolation middleware | Verify ownership checks on all 580+ handlers |
+| IDOR: accessing another user's debate/decision data | Information Disclosure | High | High | Ownership verification, tenant isolation middleware | Verify ownership checks on all 700+ handlers |
 | Cross-tenant data access via tenant ID injection | Information Disclosure | Medium | Critical | Fail-closed tenant isolation middleware | Verify tenant context cannot be overridden in request body |
 | Vertical privilege escalation via role hierarchy | Elevation of Privilege | Medium | Critical | Role priority system, hierarchy checks | Verify role inheritance cannot create circular elevation |
 | Permission cache poisoning (stale decisions) | Elevation of Privilege | Low | High | `aragora/rbac/cache.py` with TTL | Verify cache invalidation on role/permission changes |
@@ -197,7 +197,7 @@ messages, debate prompts, webhook URLs.
 
 | Threat | Category | Likelihood | Impact | Existing Controls | Gaps |
 |--------|----------|------------|--------|-------------------|------|
-| SQL injection via non-parameterized query | Tampering | Low | Critical | Parameterized queries standard throughout codebase | Verify 100% coverage across 580+ handlers |
+| SQL injection via non-parameterized query | Tampering | Low | Critical | Parameterized queries standard throughout codebase | Verify 100% coverage across 700+ handlers |
 | Stored XSS in debate transcripts or decision data | Tampering | Medium | Medium | XSS protection middleware | Verify output encoding on all data rendered in responses |
 | Path traversal in file upload filenames | Tampering | Medium | High | Path traversal prevention in `file_validation.py`, null byte detection | Verify double-encoding bypass (e.g., `..%2f..%2f`) |
 | SSRF via webhook URL registration | Information Disclosure | Medium | High | `ssrf_protection.py`: private IP blocking, DNS rebinding checks, cloud metadata blocking | Verify all outbound URL fetch points use `validate_url()` |
@@ -308,7 +308,7 @@ Client                  Aragora Server           Agent Proxy            AI Provi
 | Attack Surface | Highest Threat Severity | Residual Risk | Priority |
 |----------------|------------------------|---------------|----------|
 | Authentication / Tokens | Critical | Medium (controls strong, but JWT algorithm confusion and auth-exempt path bypass need verification) | P0 |
-| Authorization / RBAC | Critical | Medium (comprehensive RBAC, but 580+ handlers need IDOR verification) | P0 |
+| Authorization / RBAC | Critical | Medium (comprehensive RBAC, but 700+ handlers need IDOR verification) | P0 |
 | OpenClaw Gateway | Critical | High (standalone server has no enforced auth by default) | P0 |
 | Data Input / Injection | Critical | Medium (parameterized queries standard, but SSRF, prompt injection, and context poisoning gaps exist) | P1 |
 | Model & Consensus Integrity | Critical | Medium-High (debate helps, but collusion/correlated failure, context poisoning, and execution gating remain; no G1-G4 implemented) | P0 |

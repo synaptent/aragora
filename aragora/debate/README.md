@@ -4,7 +4,7 @@ Core debate orchestration engine for Aragora's multi-agent deliberation system.
 
 ## Overview
 
-The debate module implements a propose-critique-revise consensus loop where 15+ AI models collaborate to reach defensible decisions. It supports configurable rounds, convergence detection, multiple consensus mechanisms, and checkpointing for pause/resume workflows.
+The debate module implements a propose-critique-revise consensus loop where 43 agent types across 10+ AI providers collaborate to reach defensible decisions. It supports configurable rounds, convergence detection, multiple consensus mechanisms, and checkpointing for pause/resume workflows.
 
 ## Quick Start
 

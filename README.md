@@ -232,9 +232,9 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for full deployment options (Docker
 
 | Package | Install | Purpose | PyPI |
 |---|---|---|---|
-| `aragora` | `pip install aragora` | Full platform (server, CLI, debate engine) | [v2.7.4](https://pypi.org/project/aragora/) |
+| `aragora` | `pip install aragora` | Full platform (server, CLI, debate engine) | [v2.8.0](https://pypi.org/project/aragora/) |
 | `aragora-debate` | `pip install aragora-debate` | Standalone debate engine (no server needed) | [v0.2.0](https://pypi.org/project/aragora-debate/) |
-| `aragora-sdk` | `pip install aragora-sdk` | Python client SDK for connecting to aragora | [v2.7.4](https://pypi.org/project/aragora-sdk/) |
+| `aragora-sdk` | `pip install aragora-sdk` | Python client SDK for connecting to aragora | [v2.8.0](https://pypi.org/project/aragora-sdk/) |
 | `@aragora/sdk` | `npm install @aragora/sdk` | TypeScript/Node.js client SDK | — |
 
 ---
@@ -339,7 +339,7 @@ Costs vary by model mix. Use `aragora decide --dry-run` to preview costs before 
 | Adversarial debate protocol | Built-in (propose/critique/revise) | Manual | No | No |
 | Decision receipts with audit trail | Cryptographic, SHA-256 | No | No | No |
 | Agent calibration (ELO + Brier) | Built-in | No | No | No |
-| Multi-model consensus | 42 agent types, 10+ providers | Single-provider | Single-provider | Multi-provider |
+| Multi-model consensus | 43 agent types, 10+ providers | Single-provider | Single-provider | Multi-provider |
 | Gauntlet stress testing | Built-in CLI | No | No | No |
 | Enterprise security (SSO, RBAC, encryption) | Production-ready | No | No | No |
 | Self-improvement (Nomic Loop) | Autonomous with safety gates | No | No | No |

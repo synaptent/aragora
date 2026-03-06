@@ -27,7 +27,7 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Agent-first beta via PR watch daemon | **Fleet deployed (3 machines)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. Fleet: mac-studio + m1-pro + intel-mac running launchd daemons. 30 reviews/hour capacity. |
+| Agent-first beta via REST API | **Fleet deployed (12 runners)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. 3 Hetzner + 6 EC2 + 3 local Macs. PR watch daemon on Mac Studio via launchd. |
 | GitHub Actions pre-merge gate | **Workflow created** | `aragora-review-gate.yml` manual-only (workflow_dispatch). Re-enable pull_request trigger when ready. |
 | Public demo at aragora.ai/demo | **Live and verified** | `/demo` (standalone debate), `/demo/pipeline` (pipeline demo), `/demo/instant` (debate replay). All return 200. Landing page CTA wired. |
 | EU AI Act compliance package | **Substantially complete (85/100)** | Art. 9/12/13/14/15 dedicated bundles + CLI export + 7,524 lines compliance code + 300+ tests. Customer playbook needs Art. 10/11/43/49 appendix. **Deadline: Aug 2, 2026.** |
@@ -40,13 +40,13 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Semantic convergence (full embedding) | Partial | Sentence-transformers + TF-IDF + Jaccard wired; difflib still used in some paths. Target: 100% embedding-based. |
+| Semantic convergence (full embedding) | **VALIDATED — moved to Completed** | PR #723 migrated 5 similarity modules from difflib to embedding-based. Remaining difflib usage is exclusively for text diff display, not similarity. |
 | ERC-8004 on-chain deployment | Contracts written | Solidity contracts exist; not deployed to any mainnet. Needs chain endpoint config + gas management. |
-| OpenClaw end-to-end demo | Partial | Debate → decision works; execution → receipt integration incomplete. |
+| OpenClaw end-to-end demo | **Core loop shipped** | PR #727: CodeImplementationTask, SpecExtractor, ComputerUseActionBundle, receipt linkage. Production validation with live agents remaining. |
 | Decision-Integrity UI Workbench | **~90% done** | `(app)/decision-integrity/page.tsx` (910 lines), `(app)/leaderboard/page.tsx`, `(app)/knowledge/page.tsx` (1042 lines) all ship. Remaining: Canvas GUI 8-stage visual DAG (moved to P4). |
 | SOC 2 Type II audit engagement | Scope doc ready | 60+ controls implemented (98%); pentest scope doc v3.1.0 finalized; vendor shortlisted (NCC, Bishop Fox, Trail of Bits, Cure53). Blocker: vendor selection + engagement. |
-| Smart provider routing | Not started | Cost/quality-optimized routing across Claude/GPT/Mistral/DeepSeek. |
-| Enterprise Communication Hub (#293) | **~90%** | Delivery log, retry queue, circuit breakers, event telemetry, user preference UI (NotificationsTab), Active Triage dashboard (CommandCenter), TriageRulesPanel all shipped. Notification template editor in PR #717 (auto-merge). Remaining: inbox→debate trigger wiring end-to-end validation. |
+| Smart provider routing | **Phase 1 shipped** | PR #724: Pareto optimizer, 8-model pricing database, ProviderRouter. Runtime integration with Arena agent selection remaining. |
+| Enterprise Communication Hub (#293) | **Epic closed** | PR #726: template persistence, router event wiring, E2E tests. Delivery log, retry queue, circuit breakers, event telemetry, user preference UI, Active Triage dashboard, TriageRulesPanel all shipped. Remaining: inbox→debate trigger wiring end-to-end validation. |
 
 ---
 

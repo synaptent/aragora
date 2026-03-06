@@ -200,7 +200,7 @@ The codebase exploration revealed that **Aragora already has ~80% of the backend
 
 | Component | Location | Status |
 |-----------|----------|--------|
-| `Arena` class (42 agent types, consensus, convergence) | `aragora/debate/orchestrator.py` | Production-ready |
+| `Arena` class (43 agent types, consensus, convergence) | `aragora/debate/orchestrator.py` | Production-ready |
 | `OrchestrationNodeType` enum (agent_task, debate, human_gate, parallel_fan, merge, verification) | `aragora/canvas/stages.py` | Production-ready |
 | Heterogeneous agent pool (Anthropic, OpenAI, Codex, Gemini, Mistral) | `aragora/pipeline/idea_to_execution.py` | Production-ready |
 | Control Plane (agent registry, task scheduler, health monitoring) | `aragora/control_plane/` (20+ modules) | Production-ready |
@@ -278,7 +278,7 @@ The codebase exploration revealed that **Aragora already has ~80% of the backend
 
 Aragora's unique advantages that no competitor has:
 
-1. **Multi-agent adversarial debate for idea vetting** (Arena with 42 agent types) — ideas aren't just organized, they're stress-tested
+1. **Multi-agent adversarial debate for idea vetting** (Arena with 43 agent types) — ideas aren't just organized, they're stress-tested
 2. **Argument-weighted goal synthesis** — goals derived from consensus strength, not just theme clustering
 3. **Cryptographic decision receipts** linking ideas to executed outcomes (Gauntlet) — full provenance chain
 4. **34-adapter knowledge management** for cross-session learning — the system gets smarter over time

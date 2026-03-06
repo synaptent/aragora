@@ -297,7 +297,7 @@ Useful for local development, demos, and environments without network access.
         |
         v
     +------------------------------------------------------+
-    |              Handler Registry (~300 handlers)          |
+    |              Handler Registry (~700 handlers)          |
     |                                                       |
     |  ADMIN  | DEBATE | AGENT | ANALYTICS | MEMORY | SOCIAL|
     |  -------+--------+-------+-----------+--------+-------|

@@ -246,7 +246,7 @@ Create Knowledge Mound adapter for storing decision receipts with:
 **Labels:** `feature`, `api`, `docs`, `priority:critical`
 
 **Description:**
-Generate comprehensive OpenAPI 3.1 spec covering all 275+ endpoints:
+Generate comprehensive OpenAPI 3.1 spec covering all 3,000+ API operations:
 - Request/response schemas
 - Authentication schemes
 - Example payloads

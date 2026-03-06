@@ -378,9 +378,9 @@ git push -u origin reconcile/2026-02-12
 | ADRs | 16 (high quality, consistent format) |
 | Code-to-docs ratio | 1:0.13 |
 
-**Key finding**: Documentation is **honest but stale** -- claims consistently *understate* the actual implementation rather than overstate it. Examples: "3,001 files" (actual: 3,297), "41 adapters" (actual: 36), "50+ permissions" (actual: 361). This is a credibility asset -- the codebase exceeds its own documentation claims.
+**Key finding**: Documentation is **honest but stale** — claims consistently *understate* the actual implementation rather than overstate it. As of March 2026: 3,790 Python modules, 41 KM adapters, 43 agent types, 360+ RBAC permissions, 5,000+ test files, 208,000+ tests. Stale counts have been systematically updated across all docs.
 
-**Action needed**: Update stale counts in CLAUDE.md, STATUS.md, and CAPABILITY_MATRIX.md to reflect current reality.
+**Status**: Stale counts in CLAUDE.md, STATUS.md, and CAPABILITY_MATRIX.md have been updated to reflect current reality.
 
 ---
 

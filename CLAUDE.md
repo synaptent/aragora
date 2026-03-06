@@ -91,6 +91,12 @@ repo — editing files in the main directory causes concurrent overwrites.
 | Sandbox | `aragora/sandbox/` | Docker-based safe code execution |
 | Spectate | `aragora/spectate/` | Real-time debate observation |
 | Visualization | `aragora/visualization/` | Argument cartography and logic mapping |
+| Canvas | `aragora/canvas/` | Orchestration canvas stages and visual DAG |
+| Compat | `aragora/compat/` | OpenClaw compatibility layer and PR watch daemon |
+| Computer Use | `aragora/computer_use/` | Computer use detection, bridge, and action bundles |
+| IdeaCloud | `aragora/ideacloud/` | Idea cloud workspace and KM adapter |
+| Inbox | `aragora/inbox/` | Inbox trust wedge — triage, review loop, auto-approval |
+| Routing | `aragora/routing/` | Smart provider routing with Pareto optimizer |
 
 ## Canonical Storage Paths
 
@@ -108,7 +114,7 @@ Aragora is the **Decision Integrity Platform** -- orchestrating 43 agent types t
 
 **Five Pillars:** (1) SMB-ready with enterprise-grade security, (2) leading-edge memory and context processing, (3) extensible/modular with broad connectors and SDKs, (4) multi-agent robustness via heterogeneous model consensus, (5) self-healing and self-extending via the Nomic Loop.
 
-**Codebase Scale:** 3,000+ Python modules | 208,000+ tests | 4,000+ test files | 210+ debate modules | 3,000+ API operations across 2,900+ paths | 41 registered KM adapters | 185 Python / 183 TypeScript SDK namespaces
+**Codebase Scale:** 3,700+ Python modules | 208,000+ tests | 5,000+ test files | 210+ debate modules | 3,000+ API operations across 2,900+ paths | 41 registered KM adapters | 185 Python / 183 TypeScript SDK namespaces
 
 ## Architecture
 
@@ -152,7 +158,7 @@ aragora/
 │   ├── unified_server.py   # Main server (3,000+ API operations)
 │   ├── startup.py          # Server startup sequence
 │   ├── debate_origin.py    # Bidirectional chat result routing
-│   ├── handlers/           # HTTP endpoint handlers (580+ modules)
+│   ├── handlers/           # HTTP endpoint handlers (700+ modules)
 │   │   └── social/         # Chat platform handlers (Telegram, WhatsApp)
 │   └── stream/             # WebSocket streaming (190+ event types)
 │       ├── tts_integration.py  # TTS for voice/chat
@@ -356,7 +362,7 @@ See `docs/reference/ENVIRONMENT.md` for full reference.
 
 ## Feature Status
 
-**Test Suite:** 208,000+ tests across 4,000+ test files
+**Test Suite:** 208,000+ tests across 5,000+ test files
 
 **Core (stable):**
 - Debate orchestration (Arena, consensus, convergence)

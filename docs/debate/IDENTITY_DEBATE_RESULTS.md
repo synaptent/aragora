@@ -28,7 +28,7 @@
 Aragora: Multi-agent debate AI; evolving knowledge, synthesizing truth.
 
 **Description (47 words):**  
-Aragora's 15+ model ensemble debates multimodal data (25+ formats, 24 connectors) within a Hegelian framework, building self-improving institutional memory for defensible decisions via multi-platform communication (Slack/Teams).
+Aragora's 43-agent ensemble debates multimodal data (25+ formats, 24 connectors) within a Hegelian framework, building self-improving institutional memory for defensible decisions via multi-platform communication (Slack/Teams).
 
 ### Adopted Positioning
 
@@ -36,7 +36,7 @@ Aragora's 15+ model ensemble debates multimodal data (25+ formats, 24 connectors
 Control plane for multi-agent vetted decisionmaking across org knowledge and channels.
 
 **Short Description:**  
-Orchestrate 15+ AI models to debate organizational knowledge, deliver defensible decisions to any channel, and retain institutional memory with audit trails.
+Orchestrate 43 agent types across 10+ AI providers to debate organizational knowledge, deliver defensible decisions to any channel, and retain institutional memory with audit trails.
 
 ---
 
@@ -63,7 +63,7 @@ Your task is to improve upon it.
 ## What Makes Aragora Unique (vs ChatGPT/Copilot)
 - NOT a chatbot: Structured debate protocol with phases, roles, and evidence chains
 - NOT a copilot: Institutional learning that ACCUMULATES organizational knowledge
-- NOT single-model: Heterogeneous 15+ provider ensemble that argues toward truth
+- NOT single-model: Heterogeneous 43-agent, 10+ provider ensemble that argues toward truth
 - NOT stateless: Remembers outcomes, builds knowledge graphs, improves itself
 - NOT text-only: Multimodal ingestion + multi-channel bidirectional output
 

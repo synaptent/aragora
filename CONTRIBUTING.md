@@ -212,7 +212,7 @@ Aragora is a **control plane for multi-agent robust decisionmaking**. Here's how
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         Server Layer (unified_server.py)                 │
-│  • 275+ HTTP endpoints  • WebSocket streaming  • Handler registry        │
+│  • 3,000+ API operations  • WebSocket streaming  • Handler registry       │
 └──────────────────────────────────┬──────────────────────────────────────┘
                                    │
                     ┌──────────────┼──────────────┐
@@ -226,7 +226,7 @@ Aragora is a **control plane for multi-agent robust decisionmaking**. Here's how
     ▼             ▼             ▼▼              ▼
 ┌───────┐   ┌─────────┐   ┌──────────┐   ┌──────────┐
 │Agents │   │ Memory  │   │ Evidence │   │  RBAC    │
-│(15+)  │   │Continuum│   │ & Pulse  │   │ & Audit  │
+│(43)   │   │Continuum│   │ & Pulse  │   │ & Audit  │
 └───────┘   └─────────┘   └──────────┘   └──────────┘
 ```
 
@@ -235,17 +235,17 @@ Aragora is a **control plane for multi-agent robust decisionmaking**. Here's how
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | **Arena** | `aragora/debate/orchestrator.py` | Multi-agent debate orchestration with phases, consensus, and convergence |
-| **Agents** | `aragora/agents/` | 15+ AI model integrations (Claude, GPT, Gemini, Mistral, etc.) |
+| **Agents** | `aragora/agents/` | 43 agent types across 10+ providers (Claude, GPT, Gemini, Mistral, etc.) |
 | **Memory** | `aragora/memory/continuum/core.py` | 4-tier memory system (fast/medium/slow/glacial) |
 | **Knowledge Mound** | `aragora/knowledge/mound/` | Organizational knowledge with semantic search |
-| **Server** | `aragora/server/` | HTTP/WebSocket API with 70+ handlers |
+| **Server** | `aragora/server/` | HTTP/WebSocket API with 700+ handlers |
 | **Control Plane** | `aragora/control_plane/` | Agent registry, scheduling, policy governance |
 
 ### Key Patterns
 
 - **Protocol-based composition**: Features like calibration, rhetorical analysis, and trickster detection are enabled via `DebateProtocol` flags
 - **Circuit breaker resilience**: All external calls use `aragora/resilience.py` for fault tolerance
-- **Adapter pattern**: Knowledge Mound uses 14 adapters to integrate with subsystems
+- **Adapter pattern**: Knowledge Mound uses 41 adapters to integrate with subsystems
 - **Event-driven streaming**: WebSocket events for real-time debate updates
 
 ## Project Structure

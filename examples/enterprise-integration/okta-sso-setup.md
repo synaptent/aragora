@@ -5,7 +5,7 @@ This guide walks through configuring Okta as an SSO provider for Aragora, enabli
 ## Prerequisites
 
 - Okta organization with admin access
-- Aragora server v2.6.3+ with SSO enabled
+- Aragora server v2.8.0+ with SSO enabled
 - HTTPS endpoint for your Aragora deployment
 - Network connectivity between Aragora and Okta
 

@@ -43,7 +43,7 @@ Before deploying to production, configure:
 
 1. **Image Tag**: Set a specific version (not "latest")
    ```bash
-   --set image.tag=v2.6.3
+   --set image.tag=v2.8.0
    ```
 
 2. **API Keys**: Set your provider API keys

@@ -56,8 +56,8 @@ The architectural analysis was thorough and identified real opportunities, but s
 | SDK | Purpose | Status |
 |-----|---------|--------|
 | `aragora/client/` | Internal server-side type-safe client | Active |
-| `sdk/python/` (aragora-sdk) | Full-featured public SDK (135 namespaces) | Active v2.6.3 |
-| `sdk/typescript/` (@aragora/sdk) | TypeScript public SDK | Active v2.6.3 |
+| `sdk/python/` (aragora-sdk) | Full-featured public SDK (185 namespaces) | Active v2.8.0 |
+| `sdk/typescript/` (@aragora/sdk) | TypeScript public SDK (183 namespaces) | Active v2.8.0 |
 
 Note: `aragora-py/` (aragora-client) was removed in February 2026. Use `aragora-sdk` in `sdk/python/`.
 

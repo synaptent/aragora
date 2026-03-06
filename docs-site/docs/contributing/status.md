@@ -2611,7 +2611,7 @@ All stabilization items addressed:
 | MemoryGateway | Active | `aragora/memory/gateway.py` (unified fan-out query across all 5 memory systems) |
 | RetentionGate | Active | `aragora/memory/retention_gate.py` (Titans/MIRAS surprise-driven retention) |
 | CrossSystemDedupEngine | Active | `aragora/memory/dedup.py` (SHA-256 + Jaccard near-duplicate detection) |
-| ClaudeMemAdapter | Active | `aragora/knowledge/mound/adapters/claude_mem_adapter.py` (34th KM adapter) |
+| ClaudeMemAdapter | Active | `aragora/knowledge/mound/adapters/claude_mem_adapter.py` (KM adapter for claude-mem) |
 | RLMMemoryNavigator | Active | `aragora/rlm/memory_navigator.py` (REPL helpers for cross-system memory) |
 
 ### Recently Surfaced (6)
@@ -2770,7 +2770,7 @@ The nomic loop (`scripts/nomic_loop.py`) implements a 6-phase self-improvement c
 - `on_meta_analyzed`, `on_elo_recorded`, `on_claims_extracted`, `on_belief_network_built`
 
 The codebase is **feature-rich with improving exposure**:
-- 3,000+ API operations across 2,900+ paths, 580+ HTTP handler modules
+- 3,000+ API operations across 2,900+ paths, 700+ HTTP handler modules
 - Many sophisticated features now surfaced via new APIs
 - WebSocket-first architecture for real-time, REST for data access
 
