@@ -280,7 +280,38 @@ class TestSwarmCommand:
 
         mock_commander.run_supervised_from_spec.assert_awaited_once()
 
-    def test_cmd_swarm_status_uses_supervisor(self, capsys):
+    @patch("aragora.worktree.fleet.FleetCoordinationStore")
+    @patch("aragora.worktree.fleet.build_fleet_rows")
+    @patch("aragora.worktree.fleet.resolve_repo_root")
+    def test_cmd_swarm_status_uses_supervisor(
+        self, mock_resolve_root, mock_build_rows, mock_store_cls, capsys
+    ):
+        mock_resolve_root.return_value = Path("/tmp/repo")
+        mock_build_rows.return_value = [
+            {
+                "session_id": "sess-a",
+                "path": "/tmp/repo/.worktrees/a",
+                "branch": "codex/docs-lane",
+                "has_lock": True,
+                "pid_alive": True,
+                "agent": "codex",
+                "last_activity": "2026-03-07T00:00:00+00:00",
+            }
+        ]
+        store = MagicMock()
+        store.list_claims.return_value = [
+            {"session_id": "sess-a", "path": "aragora/swarm/reporter.py"}
+        ]
+        store.list_merge_queue.return_value = [
+            {
+                "id": "mq-1",
+                "branch": "codex/docs-lane",
+                "session_id": "sess-a",
+                "status": "needs_human",
+                "metadata": {"receipt_id": "rcpt-123"},
+            }
+        ]
+        mock_store_cls.return_value = store
         args = argparse.Namespace(
             swarm_action_or_goal="status",
             swarm_goal=None,
@@ -308,18 +339,42 @@ class TestSwarmCommand:
 
         with patch("aragora.swarm.SwarmSupervisor") as supervisor_cls:
             supervisor_cls.return_value.status_summary.return_value = {
-                "runs": [],
+                "runs": [
+                    {
+                        "run_id": "run-1",
+                        "status": "active",
+                        "target_branch": "main",
+                        "goal": "dogfood",
+                        "work_orders": [
+                            {
+                                "work_order_id": "docs-lane",
+                                "title": "Write operator guide",
+                                "status": "completed",
+                                "branch": "codex/docs-lane",
+                                "worktree_path": "/tmp/repo/.worktrees/a",
+                                "target_agent": "codex",
+                                "last_progress_at": "2026-03-07T00:00:00+00:00",
+                            }
+                        ],
+                    }
+                ],
                 "counts": {
                     "runs": 1,
-                    "queued_work_orders": 2,
-                    "leased_work_orders": 1,
-                    "completed_work_orders": 0,
+                    "queued_work_orders": 0,
+                    "leased_work_orders": 0,
+                    "completed_work_orders": 1,
                 },
+                "coordination": {"counts": {"active_leases": 1}},
             }
             cmd_swarm(args)
 
         out = capsys.readouterr().out
-        assert "runs=1 queued=2 leased=1 completed=0" in out
+        assert "runs=1 queued=0 leased=0 completed=1" in out
+        assert "integrator ready=0 review=1 blocked=0" in out
+        assert (
+            "next: Write operator guide: Review the validated lane and decide whether it should merge."
+            in out
+        )
 
     def test_cmd_swarm_reconcile_uses_reconciler(self, capsys):
         args = _swarm_args(

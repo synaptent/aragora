@@ -63,6 +63,12 @@ def cmd_swarm(args: argparse.Namespace) -> None:
         InterrogatorConfig,
         UserProfile,
     )
+    from aragora.swarm.reporter import build_integrator_view
+    from aragora.worktree.fleet import (
+        FleetCoordinationStore,
+        build_fleet_rows,
+        resolve_repo_root,
+    )
 
     action, goal = _resolve_swarm_action_goal(args)
     spec_file = getattr(args, "spec", None)
@@ -115,11 +121,24 @@ def cmd_swarm(args: argparse.Namespace) -> None:
     autonomy_level = autonomy_map.get(autonomy_str, AutonomyLevel.PROPOSE_APPROVE)
 
     if action == "status":
-        supervisor = SwarmSupervisor(repo_root=Path.cwd())
+        repo_root = resolve_repo_root(Path.cwd())
+        supervisor = SwarmSupervisor(repo_root=repo_root)
         payload = supervisor.status_summary(
             run_id=run_id,
             limit=int(getattr(args, "status_limit", 20)),
             refresh_scaling=refresh_scaling,
+        )
+        base_branch = str(getattr(args, "target_branch", "main") or "main")
+        worktrees = build_fleet_rows(repo_root, base_branch=base_branch, tail=0)
+        store = FleetCoordinationStore(repo_root)
+        claims = store.list_claims()
+        merge_queue = store.list_merge_queue()
+        payload["integrator_view"] = build_integrator_view(
+            runs=payload.get("runs", []),
+            worktrees=worktrees,
+            claims=claims,
+            merge_queue=merge_queue,
+            coordination=payload.get("coordination", {}),
         )
         if as_json:
             print(json.dumps(payload, indent=2))
@@ -132,6 +151,21 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                     completed=payload["counts"].get("completed_work_orders", 0),
                 )
             )
+            integrator_summary = payload["integrator_view"].get("summary", {})
+            print(
+                "integrator ready={ready} review={review} blocked={blocked} stale={stale} "
+                "collisions={collisions} missing_receipts={missing} superseded={superseded}".format(
+                    ready=integrator_summary.get("ready_lanes", 0),
+                    review=integrator_summary.get("review_lanes", 0),
+                    blocked=integrator_summary.get("blocked_lanes", 0),
+                    stale=integrator_summary.get("stale_heartbeat_lanes", 0),
+                    collisions=integrator_summary.get("collision_lanes", 0),
+                    missing=integrator_summary.get("missing_receipt_lanes", 0),
+                    superseded=integrator_summary.get("superseded_lanes", 0),
+                )
+            )
+            for action_text in payload["integrator_view"].get("next_actions", [])[:3]:
+                print(f"next: {action_text}")
             for run in payload.get("runs", []):
                 if isinstance(run, dict):
                     print("---")

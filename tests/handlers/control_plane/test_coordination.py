@@ -668,23 +668,81 @@ class TestRouteDispatch:
         result = handler.handle("/api/v1/coordination/fleet/status", {}, mock_http_handler)
         assert result is not None
         assert result.status_code == 200
+        data = json.loads(result.body)
+        assert data["integrator_view"]["summary"]["total_lanes"] == 0
 
+    @patch("aragora.server.handlers.control_plane.coordination.FleetCoordinationStore")
+    @patch("aragora.server.handlers.control_plane.coordination.build_fleet_rows")
     @patch("aragora.swarm.SwarmSupervisor")
     @patch("aragora.server.handlers.control_plane.coordination.resolve_repo_root")
     def test_get_coordination_swarm_status(
         self,
         mock_resolve,
         mock_supervisor_cls,
+        mock_build_rows,
+        mock_store_cls,
         handler: ControlPlaneHandler,
     ):
         mock_resolve.return_value = Path("/tmp/repo")
+        mock_build_rows.return_value = [
+            {
+                "session_id": "sess-a",
+                "path": "/tmp/repo/.worktrees/docs",
+                "branch": "codex/docs-lane",
+                "has_lock": True,
+                "pid_alive": False,
+                "agent": "codex",
+                "last_activity": "2026-03-06T00:00:00+00:00",
+            }
+        ]
+        store = MagicMock()
+        store.list_claims.return_value = [
+            {"session_id": "sess-a", "path": "aragora/swarm/reporter.py"},
+            {"session_id": "sess-b", "path": "aragora/swarm/reporter.py"},
+        ]
+        store.list_merge_queue.return_value = [
+            {
+                "id": "mq-1",
+                "branch": "codex/docs-lane",
+                "session_id": "sess-a",
+                "status": "needs_human",
+                "metadata": {},
+            }
+        ]
+        mock_store_cls.return_value = store
         mock_supervisor_cls.return_value.status_summary.return_value = {
-            "runs": [],
+            "runs": [
+                {
+                    "run_id": "run-1",
+                    "status": "active",
+                    "goal": "dogfood",
+                    "work_orders": [
+                        {
+                            "work_order_id": "docs-lane",
+                            "title": "Write operator guide",
+                            "status": "needs_human",
+                            "branch": "codex/docs-lane",
+                            "worktree_path": "/tmp/repo/.worktrees/docs",
+                            "target_agent": "codex",
+                            "last_progress_at": "2026-03-06T00:00:00+00:00",
+                            "dispatch_error": "worker exited without receipt or exit marker",
+                        }
+                    ],
+                }
+            ],
             "counts": {"runs": 0},
             "coordination": {},
         }
         result = handler._handle_swarm_status({})
         assert result.status_code == 200
+        data = json.loads(result.body)
+        summary = data["integrator_view"]["summary"]
+        assert summary["blocked_lanes"] == 1
+        assert summary["stale_heartbeat_lanes"] == 1
+        assert summary["missing_receipt_lanes"] == 1
+        assert data["integrator_view"]["alerts"]["collisions"][0]["reasons"] == [
+            "path:aragora/swarm/reporter.py"
+        ]
 
     @patch("aragora.server.handlers.control_plane.coordination.FleetCoordinationStore")
     @patch("aragora.server.handlers.control_plane.coordination.resolve_repo_root")

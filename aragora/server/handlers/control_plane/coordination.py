@@ -28,6 +28,7 @@ from aragora.server.handlers.utils.decorators import (
     handle_errors,
     require_permission,
 )
+from aragora.swarm.reporter import build_integrator_view
 from aragora.worktree.fleet import (
     FleetCoordinationStore,
     build_fleet_rows,
@@ -687,6 +688,18 @@ class CoordinationHandlerMixin:
             limit=max(1, min(limit, 100)),
             refresh_scaling=bool(query_params.get("refresh", False)),
         )
+        base_branch = str(query_params.get("base", "main"))
+        rows = build_fleet_rows(repo_root, base_branch=base_branch, tail=0)
+        store = self._fleet_store(repo_root)
+        claims = store.list_claims()
+        queue = store.list_merge_queue()
+        payload["integrator_view"] = build_integrator_view(
+            runs=payload.get("runs", []),
+            worktrees=rows,
+            claims=claims,
+            merge_queue=queue,
+            coordination=payload.get("coordination", {}),
+        )
         return json_response(payload)
 
     @api_endpoint(
@@ -732,6 +745,12 @@ class CoordinationHandlerMixin:
             session_id = str(row.get("session_id", ""))
             row["claimed_paths"] = sorted(claims_by_session.get(session_id, []))
             row["queued_branches"] = sorted(queue_by_session.get(session_id, []))
+        integrator_view = build_integrator_view(
+            worktrees=rows,
+            claims=claims,
+            merge_queue=queue,
+            coordination=coordination_summary,
+        )
         return json_response(
             {
                 "repo_root": str(repo_root),
@@ -741,6 +760,7 @@ class CoordinationHandlerMixin:
                 "claims": claims,
                 "merge_queue": queue,
                 "coordination": coordination_summary,
+                "integrator_view": integrator_view,
                 "total": len(rows),
             }
         )

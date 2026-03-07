@@ -262,9 +262,11 @@ class TestWorktreeAutopilot:
 class TestWorktreeFleetStatus:
     @patch("aragora.cli.commands.worktree.FleetCoordinationStore")
     @patch("aragora.cli.commands.worktree.build_fleet_rows")
+    @patch("aragora.nomic.dev_coordination.DevCoordinationStore.status_summary")
     def test_fleet_status_prints_tail_and_metadata(
-        self, mock_rows, mock_store_cls, capsys, tmp_path: Path
+        self, mock_status_summary, mock_rows, mock_store_cls, capsys, tmp_path: Path
     ):
+        mock_status_summary.return_value = {"counts": {"active_leases": 1}}
         mock_rows.return_value = [
             {
                 "session_id": "session-a",
@@ -300,8 +302,13 @@ class TestWorktreeFleetStatus:
 
         out = capsys.readouterr().out
         assert "[active] codex/test-session" in out
+        assert (
+            "Integrator: ready=0 review=0 blocked=0 stale=0 collisions=0 missing_receipts=0 superseded=0"
+            in out
+        )
         assert "dirty_files: 2 ahead/behind(main): +1/-0" in out
         assert "orchestrator: crewai" in out
+        assert "lease_health: healthy merge_readiness: in_progress" in out
         assert "claimed_paths(1): aragora/a.py" in out
         assert "log_tail(last 2 lines):" in out
         assert "line-2" in out
@@ -309,7 +316,11 @@ class TestWorktreeFleetStatus:
 
     @patch("aragora.cli.commands.worktree.FleetCoordinationStore")
     @patch("aragora.cli.commands.worktree.build_fleet_rows")
-    def test_fleet_status_json_output(self, mock_rows, mock_store_cls, capsys, tmp_path: Path):
+    @patch("aragora.nomic.dev_coordination.DevCoordinationStore.status_summary")
+    def test_fleet_status_json_output(
+        self, mock_status_summary, mock_rows, mock_store_cls, capsys, tmp_path: Path
+    ):
+        mock_status_summary.return_value = {"counts": {"active_leases": 0}}
         mock_rows.return_value = [
             {
                 "session_id": "session-z",
@@ -347,6 +358,7 @@ class TestWorktreeFleetStatus:
         assert payload["worktrees"][0]["session_id"] == "session-z"
         assert payload["claims"] == []
         assert payload["merge_queue"] == []
+        assert payload["integrator_view"]["summary"]["total_lanes"] == 1
 
 
 class TestWorktreeFleetOwnership:

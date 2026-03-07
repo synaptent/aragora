@@ -21,6 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from aragora.swarm.reporter import build_integrator_view
 from aragora.worktree import (
     AutopilotRequest,
     FleetIntegrationWorker,
@@ -459,6 +460,12 @@ def _cmd_worktree_fleet_status(
         session_id = str(row.get("session_id", ""))
         row["claimed_paths"] = sorted(claims_by_session.get(session_id, []))
         row["queued_branches"] = sorted(queue_by_session.get(session_id, []))
+    integrator_view = build_integrator_view(
+        worktrees=rows,
+        claims=claims,
+        merge_queue=queue,
+        coordination=coordination_summary,
+    )
 
     if getattr(args, "json", False):
         payload = {
@@ -469,6 +476,7 @@ def _cmd_worktree_fleet_status(
             "claims": claims,
             "merge_queue": queue,
             "coordination": coordination_summary,
+            "integrator_view": integrator_view,
         }
         print(json.dumps(payload, indent=2))
         return
@@ -484,6 +492,19 @@ def _cmd_worktree_fleet_status(
             f"fleet_claims={counts.get('fleet_claims', 0)} "
             f"fleet_queue={counts.get('fleet_merge_queue', 0)}"
         )
+    integrator_summary = integrator_view.get("summary", {})
+    print(
+        "Integrator: "
+        f"ready={integrator_summary.get('ready_lanes', 0)} "
+        f"review={integrator_summary.get('review_lanes', 0)} "
+        f"blocked={integrator_summary.get('blocked_lanes', 0)} "
+        f"stale={integrator_summary.get('stale_heartbeat_lanes', 0)} "
+        f"collisions={integrator_summary.get('collision_lanes', 0)} "
+        f"missing_receipts={integrator_summary.get('missing_receipt_lanes', 0)} "
+        f"superseded={integrator_summary.get('superseded_lanes', 0)}"
+    )
+    for action in integrator_view.get("next_actions", [])[:3]:
+        print(f"  next: {action}")
     if not rows:
         return
 
@@ -505,6 +526,26 @@ def _cmd_worktree_fleet_status(
         print(f"  dirty_files: {row['dirty_files']} ahead/behind({base_branch}): {ahead_behind}")
         print(f"  orchestrator: {row.get('orchestration_pattern') or 'generic'}")
         print(f"  last_activity: {row.get('last_activity') or 'n/a'}")
+        lane = next(
+            (
+                item
+                for item in integrator_view.get("lanes", [])
+                if item.get("owner_session_id") == row.get("session_id")
+                and item.get("worktree_path") == row.get("path")
+            ),
+            None,
+        )
+        if isinstance(lane, dict):
+            print(
+                f"  lease_health: {lane.get('lease_health', 'idle')} "
+                f"merge_readiness: {lane.get('merge_readiness', 'unknown')}"
+            )
+            if lane.get("collisions"):
+                print(f"  collisions: {', '.join(lane['collisions'])}")
+            if lane.get("missing_receipt"):
+                print("  receipt: missing")
+            elif lane.get("receipt_id"):
+                print(f"  receipt: {lane['receipt_id']}")
         claimed_paths = row.get("claimed_paths")
         if isinstance(claimed_paths, list) and claimed_paths:
             print(f"  claimed_paths({len(claimed_paths)}): {', '.join(claimed_paths[:8])}")
