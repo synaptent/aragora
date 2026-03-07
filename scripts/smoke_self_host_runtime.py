@@ -90,28 +90,45 @@ def _fetch(
         return -1, None, str(exc)
 
 
+def _status_value(data: dict[str, Any] | None) -> str:
+    if not isinstance(data, dict):
+        return ""
+    status = data.get("status", "")
+    if not isinstance(status, str):
+        return ""
+    return status.strip().lower()
+
+
+def _body_value(raw: str) -> str:
+    return raw.strip().lower()
+
+
 # ---------------------------------------------------------------------------
 # Individual checks
 # ---------------------------------------------------------------------------
 
 
-def check_liveness(base_url: str, token: str | None) -> bool:
+def check_liveness(base_url: str, token: str | None, timeout: int) -> bool:
     """GET /healthz -> expect 200 with status 'ok'."""
     url = f"{base_url}/healthz"
-    status, data, raw = _fetch(url, token)
+    status, data, raw = _fetch(url, token, timeout)
     if status == -1:
         return _check("/healthz (liveness)", False, f"connection failed: {raw}")
     if status != 200:
         return _check("/healthz (liveness)", False, f"HTTP {status}")
-    if data and data.get("status") == "ok":
-        return _check("/healthz (liveness)", True, "status=ok")
-    return _check("/healthz (liveness)", True, f"HTTP 200 (body: {raw[:80]})")
+    normalized_status = _status_value(data)
+    if normalized_status in {"ok", "healthy"}:
+        return _check("/healthz (liveness)", True, f"status={normalized_status}")
+    normalized_body = _body_value(raw)
+    if normalized_body in {"ok", "healthy"}:
+        return _check("/healthz (liveness)", True, f"body={normalized_body}")
+    return _check("/healthz (liveness)", False, f"unexpected body: {raw[:80]}")
 
 
-def check_readiness(base_url: str, token: str | None) -> bool:
+def check_readiness(base_url: str, token: str | None, timeout: int) -> bool:
     """GET /readyz -> expect 200 with status 'ready'."""
     url = f"{base_url}/readyz"
-    status, data, raw = _fetch(url, token)
+    status, data, raw = _fetch(url, token, timeout)
     if status == -1:
         return _check("/readyz (readiness)", False, f"connection failed: {raw}")
     if status == 503 and data:
@@ -119,43 +136,56 @@ def check_readiness(base_url: str, token: str | None) -> bool:
         return _check("/readyz (readiness)", False, f"HTTP 503: {reason}")
     if status != 200:
         return _check("/readyz (readiness)", False, f"HTTP {status}")
-    ready_status = data.get("status", "") if data else ""
-    return _check("/readyz (readiness)", True, f"status={ready_status}")
+    normalized_status = _status_value(data)
+    if normalized_status in {"ready", "ok"}:
+        return _check("/readyz (readiness)", True, f"status={normalized_status}")
+    normalized_body = _body_value(raw)
+    if normalized_body in {"ready", "ok"}:
+        return _check("/readyz (readiness)", True, f"body={normalized_body}")
+    return _check("/readyz (readiness)", False, f"unexpected body: {raw[:80]}")
 
 
-def check_health_api(base_url: str, token: str | None) -> bool:
+def check_health_api(base_url: str, token: str | None, timeout: int) -> bool:
     """GET /api/v1/health -> expect 200 with JSON body."""
     url = f"{base_url}/api/v1/health"
-    status, data, raw = _fetch(url, token)
+    status, data, raw = _fetch(url, token, timeout)
     if status == -1:
         return _check("/api/v1/health", False, f"connection failed: {raw}")
     if status != 200:
         return _check("/api/v1/health", False, f"HTTP {status}")
     if data is None:
         return _check("/api/v1/health", False, "response is not valid JSON")
-    health_status = data.get("status", "unknown")
+    health_status = _status_value(data)
+    if not health_status:
+        return _check("/api/v1/health", False, "missing status field")
     return _check("/api/v1/health", True, f"status={health_status}")
 
 
-def check_openapi(base_url: str, token: str | None) -> bool:
+def check_openapi(base_url: str, token: str | None, timeout: int) -> bool:
     """GET /api/v1/openapi.json -> expect 200 with valid JSON."""
     url = f"{base_url}/api/v1/openapi.json"
-    status, data, raw = _fetch(url, token)
+    status, data, raw = _fetch(url, token, timeout)
     if status == -1:
         return _check("/api/v1/openapi.json", False, f"connection failed: {raw}")
     if status != 200:
         return _check("/api/v1/openapi.json", False, f"HTTP {status}")
     if data is None:
         return _check("/api/v1/openapi.json", False, "response is not valid JSON")
-    # Verify it looks like an OpenAPI spec
-    has_openapi_field = "openapi" in data or "swagger" in data or "paths" in data
-    return _check("/api/v1/openapi.json", has_openapi_field or True, "valid JSON returned")
+    if not isinstance(data, dict):
+        return _check("/api/v1/openapi.json", False, "response is not a JSON object")
+    spec_version = data.get("openapi") or data.get("swagger")
+    paths = data.get("paths")
+    if not isinstance(spec_version, str):
+        return _check("/api/v1/openapi.json", False, "missing openapi/swagger version field")
+    if not isinstance(paths, dict) or not paths:
+        return _check("/api/v1/openapi.json", False, "missing or empty paths object")
+    return _check("/api/v1/openapi.json", True, f"openapi={spec_version}")
 
 
-def check_build_info(base_url: str, token: str | None) -> bool:
+def check_build_info(base_url: str, token: str | None, timeout: int) -> bool:
     """GET /health/build -> expect 200 with JSON body."""
     url = f"{base_url}/health/build"
-    status, data, raw = _fetch(url, token)
+    status, data, raw = _fetch(url, token, timeout)
     if status == -1:
         return _check("/health/build", False, f"connection failed: {raw}")
     if status != 200:
@@ -209,11 +239,11 @@ def main() -> int:
     _log("")
 
     # Run checks
-    check_liveness(base, token)
-    check_readiness(base, token)
-    check_health_api(base, token)
-    check_openapi(base, token)
-    check_build_info(base, token)
+    check_liveness(base, token, args.timeout)
+    check_readiness(base, token, args.timeout)
+    check_health_api(base, token, args.timeout)
+    check_openapi(base, token, args.timeout)
+    check_build_info(base, token, args.timeout)
 
     # Summary
     passed = sum(1 for _, ok, _ in _results if ok)

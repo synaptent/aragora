@@ -1,0 +1,91 @@
+name: Self-Host Readiness
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: self-host-readiness-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  self-host-compose-smoke:
+    name: Self-Host Compose Smoke
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+            echo "PWD=$(pwd)"
+            ls -la
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pyyaml
+
+      - name: Validate production compose + env example
+        run: python scripts/check_self_host_compose.py
+
+      - name: Prepare CI production env file
+        run: |
+          cp .env.production.example .env.production.ci
+          cat >> .env.production.ci <<'EOF'
+          DOMAIN=localhost
+          ACME_EMAIL=ci@example.com
+          ANTHROPIC_API_KEY=ci-anthropic-key
+          OPENAI_API_KEY=ci-openai-key
+          POSTGRES_PASSWORD=aragora-ci-postgres-password-0123456789
+          ARAGORA_API_TOKEN=aragora-ci-api-token-0123456789abcdef
+          ARAGORA_JWT_SECRET=aragora-ci-jwt-secret-0123456789abcdef
+          ARAGORA_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          GRAFANA_ADMIN_PASSWORD=aragora-ci-grafana-password
+          ARAGORA_ALLOWED_ORIGINS=http://localhost
+          ARAGORA_RATE_LIMIT_BACKEND=redis
+          ARAGORA_REDIS_MODE=sentinel
+          ARAGORA_REDIS_SENTINEL_HOSTS=sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+          ARAGORA_REDIS_SENTINEL_MASTER=mymaster
+          ARAGORA_STRICT_DEPLOYMENT=true
+          ARAGORA_SECRETS_STRICT=false
+          ARAGORA_REPLICAS=1
+          ARAGORA_MAX_CONCURRENT_DEBATES=2
+          TRAEFIK_DASHBOARD_USERS=admin:ci
+          EOF
+
+      - name: Runtime compose smoke validation
+        run: |
+          python scripts/check_self_host_runtime.py \
+            --env-file .env.production.ci \
+            --service-timeout 360 \
+            --api-timeout 240

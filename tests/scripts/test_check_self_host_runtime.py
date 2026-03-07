@@ -116,11 +116,11 @@ def test_validate_runtime_env_file_accepts_valid_values(tmp_path: Path) -> None:
     assert warnings == []
 
 
-def test_readiness_candidates_include_healthz_fallback() -> None:
+def test_readiness_candidates_require_readyz() -> None:
     module = _load_script_module()
 
-    assert module.READINESS_PATH_CANDIDATES[-1] == "/healthz"
-    assert "/readyz" in module.READINESS_PATH_CANDIDATES
+    assert module.READINESS_PATH_CANDIDATES == ["/readyz"]
+    assert module.LIVENESS_PATH_CANDIDATES == ["/healthz"]
 
 
 def test_resolve_runtime_base_url_uses_container_ip_when_no_host_port() -> None:

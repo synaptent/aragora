@@ -31,7 +31,17 @@ The server is now available at `http://localhost:8080`.
 | **Simple** | `docker-compose.simple.yml` | SQLite | Evaluation, small teams |
 | **Standard** | `docker-compose.yml` | PostgreSQL + Redis | Production use |
 | **SME** | `docker-compose.sme.yml` | PostgreSQL + Redis + Grafana | SMBs with monitoring |
-| **Production** | `docker-compose.production.yml` | PostgreSQL + Redis Sentinel + Traefik | Enterprise HA |
+| **Production** | `docker-compose.production.yml` | PostgreSQL + Redis Sentinel + Traefik | Single-host production-style stack |
+
+## Production Compose Semantics
+
+`docker compose -f docker-compose.production.yml` is the documented single-host production path. It gives you Traefik ingress, PostgreSQL, Redis Sentinel, workers, and observability on one machine.
+
+Important differences from real orchestrators:
+
+- The production compose file exposes Aragora through Traefik on ports `80/443`. It does not publish the app container's `8080` port directly to the host.
+- `deploy.replicas`, rolling-update, and rollback directives in the compose file are swarm-oriented metadata. Plain `docker compose` ignores those replica/orchestration settings.
+- For actual multi-node replicas, rolling updates, or orchestrated HA, use Kubernetes or Docker Swarm. Treat the compose production file as a single-host production-style stack, not a cluster manager.
 
 ## Standard Deployment (PostgreSQL + Redis)
 
@@ -69,6 +79,17 @@ This starts three containers: `aragora` (API server), `db` (PostgreSQL 15), and 
 | `GEMINI_API_KEY` | Google Gemini |
 | `XAI_API_KEY` | xAI Grok |
 
+### Production Ingress & Monitoring
+
+These variables are required by `docker-compose.production.yml`:
+
+| Variable | Description |
+|----------|-------------|
+| `DOMAIN` | Public hostname Traefik routes for Aragora |
+| `ACME_EMAIL` | Let's Encrypt contact email for certificate issuance |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana admin password for the bundled monitoring stack |
+| `TRAEFIK_DASHBOARD_USERS` | Optional htpasswd entry for the Traefik dashboard |
+
 ### Server Configuration
 
 | Variable | Default | Description |
@@ -99,14 +120,18 @@ This starts three containers: `aragora` (API server), `db` (PostgreSQL 15), and 
 
 ## Persistent Data
 
-All compose files mount a named volume for persistent data:
+All compose files mount named volumes for persistent data:
 
 | Volume | Container Path | Contents |
 |--------|---------------|----------|
 | `aragora-data` | `/app/data` | SQLite databases, ELO ratings, debate history |
 | `aragora-data/.aragora_beads` | `/app/data/.aragora_beads` | Bead and convoy store |
-| `postgres-data` | `/var/lib/postgresql/data` | PostgreSQL data (Standard+ tiers) |
-| `redis-data` | `/data` | Redis append-only file (Standard+ tiers) |
+| `postgres-data` | `/var/lib/postgresql/data` | PostgreSQL data |
+| `redis-data` | `/data` | Standalone Redis data (`docker-compose.yml` / `docker-compose.sme.yml`) |
+| `redis-master-data` | `/data` | Production compose Redis master data |
+| `redis-replica-1-data` | `/data` | Production compose Redis replica 1 data |
+| `redis-replica-2-data` | `/data` | Production compose Redis replica 2 data |
+| `sentinel-1-data` / `sentinel-2-data` / `sentinel-3-data` | `/data` | Production compose Redis Sentinel state |
 
 To back up your data:
 
@@ -114,9 +139,15 @@ To back up your data:
 # SQLite tier
 docker cp aragora:/app/data ./backup-data
 
-# PostgreSQL tier
-docker exec aragora-db pg_dump -U aragora aragora > backup.sql
+# Standard / SME PostgreSQL tiers
+docker compose exec db pg_dump -U aragora aragora > backup.sql
+
+# Production compose PostgreSQL tier
+docker compose -f docker-compose.production.yml --env-file .env.production \
+  exec postgres pg_dump -U aragora aragora > backup.sql
 ```
+
+For the production compose stack, back up the Redis master/replica/sentinel volumes separately if you need Redis state preservation in addition to PostgreSQL.
 
 ## Health Checks
 
@@ -140,15 +171,30 @@ python scripts/check_self_host_compose.py
 # 2) Start the production stack
 docker compose -f docker-compose.production.yml --env-file .env.production up -d
 
-# 3) Verify service health
+# 3) Verify app container health
 docker compose -f docker-compose.production.yml --env-file .env.production ps
-curl -fsS http://localhost:8080/healthz
-curl -fsS http://localhost:8080/readyz
+docker compose -f docker-compose.production.yml --env-file .env.production exec aragora curl -fsS http://localhost:8080/healthz
+docker compose -f docker-compose.production.yml --env-file .env.production exec aragora curl -fsS http://localhost:8080/readyz
 
-# 4) Verify authenticated API access
-curl -fsS \
+# 4) Verify ingress routing on the host
+curl -k --resolve "${DOMAIN}:443:127.0.0.1" \
+  https://${DOMAIN}/healthz
+```
+
+## Production Ingress Verification
+
+Use ingress URLs for host-level checks. The production compose stack is fronted by Traefik, so `localhost:8080` is only valid from inside the app container.
+
+```bash
+# Lightweight smoke check for an already-running deployment
+python scripts/smoke_self_host_runtime.py \
+  --base-url "https://${DOMAIN}" \
+  --api-token "${ARAGORA_API_TOKEN}"
+
+# Authenticated API access through ingress on the deployment host
+curl -k --resolve "${DOMAIN}:443:127.0.0.1" \
   -H "Authorization: Bearer ${ARAGORA_API_TOKEN}" \
-  http://localhost:8080/api/v1/debates
+  https://${DOMAIN}/api/v1/debates
 ```
 
 For CI and clean-machine validation, run:
@@ -170,7 +216,7 @@ docker compose -f docker-compose.production.yml --env-file .env.production logs 
 ```bash
 # Restart only the API layer (safe first action)
 docker compose -f docker-compose.production.yml --env-file .env.production restart aragora
-curl -fsS http://localhost:8080/readyz
+docker compose -f docker-compose.production.yml --env-file .env.production exec aragora curl -fsS http://localhost:8080/readyz
 ```
 
 ```bash
@@ -183,7 +229,7 @@ docker compose -f docker-compose.production.yml --env-file .env.production logs 
 # Database connection incident recovery
 docker compose -f docker-compose.production.yml --env-file .env.production restart postgres
 docker compose -f docker-compose.production.yml --env-file .env.production logs --tail=120 postgres
-curl -fsS http://localhost:8080/readyz
+docker compose -f docker-compose.production.yml --env-file .env.production exec aragora curl -fsS http://localhost:8080/readyz
 ```
 
 If recovery fails, capture diagnostics before teardown:
@@ -260,7 +306,7 @@ sudo chown -R 1000:1000 ./data
               +--------------+--------------+
               |                             |
      +--------v---------+        +---------v--------+
-     |  Aragora Server  |        |  Aragora Server  |  (replicas in production)
+     |  Aragora Server  |        |  Aragora Server  |  (Swarm/Kubernetes only)
      |  :8080 (HTTP)    |        |  :8080 (HTTP)    |
      |  :8765 (WS)      |        |  :8765 (WS)      |
      +--------+---------+        +---------+--------+

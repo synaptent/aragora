@@ -62,6 +62,12 @@ SENTINEL_REQUIRED_ARAGORA_ENV_KEYS = {
 }
 
 RUNBOOK_MARKER_ALIASES = {
+    "Production Compose Semantics": ("Production Compose Semantics",),
+    "Production Ingress Verification": (
+        "Production Ingress Verification",
+        "Startup and Readiness Verification",
+        "Verify Installation",
+    ),
     "Startup and Readiness Verification": (
         "Startup and Readiness Verification",
         "Verify Installation",

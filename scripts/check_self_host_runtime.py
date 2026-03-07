@@ -3,8 +3,8 @@
 Runtime validation for self-host production compose stack.
 
 This script boots the production compose core services, waits for healthy state,
-checks HTTP health/readiness probes, and verifies basic authenticated debate API
-reachability.
+checks explicit liveness/readiness probes, and verifies debate endpoint
+reachability plus auth-gate behavior.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ DEFAULT_CORE_SERVICES = [
     "aragora",
 ]
 
-LIVENESS_PATH_CANDIDATES = ["/healthz", "/api/v1/health", "/api/health", "/health"]
-READINESS_PATH_CANDIDATES = ["/readyz", "/api/v1/health", "/api/health", "/healthz"]
+LIVENESS_PATH_CANDIDATES = ["/healthz"]
+READINESS_PATH_CANDIDATES = ["/readyz"]
 
 
 class RuntimeCheckError(RuntimeError):
@@ -396,15 +396,17 @@ def _wait_for_any_http_200(base_url: str, paths: list[str], timeout_seconds: int
 
 
 def _check_api_flow(base_url: str, api_token: str) -> None:
+    """Verify debate endpoints are reachable and auth is behaving coherently."""
     list_url = urllib.parse.urljoin(base_url, "/api/v1/debates?limit=1&offset=0")
     status, body = _http_request(list_url, token=api_token)
     if status == 200:
-        print("[ok] authenticated GET /api/v1/debates returned 200")
+        print("[ok] GET /api/v1/debates returned 200")
     elif status in {401, 403}:
         # In hardened deployments ARAGORA_API_TOKEN may be a server secret rather
         # than a user credential (JWT/API key). Treat auth-gated responses as a
-        # valid runtime signal and continue.
-        print(f"[warn] GET /api/v1/debates returned {status}; auth gate is enforced")
+        # valid route-protection signal and stop here rather than overstating the
+        # check as authenticated end-user success.
+        print(f"[ok] GET /api/v1/debates returned {status}; auth gate is enforced")
         return
     else:
         raise RuntimeCheckError(
@@ -491,7 +493,7 @@ def main() -> int:
 
         runtime_base_url = _resolve_runtime_base_url(base_cmd, args.base_url)
 
-        print("[step] waiting for HTTP health endpoints")
+        print("[step] waiting for explicit HTTP liveness/readiness endpoints")
         health_path = _wait_for_any_http_200(
             runtime_base_url,
             LIVENESS_PATH_CANDIDATES,
@@ -505,7 +507,7 @@ def main() -> int:
         )
         print(f"[ok] readiness endpoint: {readiness_path}")
 
-        print("[step] validating authenticated API flow")
+        print("[step] validating debate endpoint reachability")
         _check_api_flow(runtime_base_url, api_token=api_token)
 
         print("Self-host runtime validation passed")

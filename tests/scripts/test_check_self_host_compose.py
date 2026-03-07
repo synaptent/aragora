@@ -91,7 +91,9 @@ services:
         "\n".join(
             [
                 "# Self Hosting",
+                "## Production Compose Semantics",
                 "## Startup and Readiness Verification",
+                "## Production Ingress Verification",
                 "## Health Checks",
                 "## Failure Recovery Playbook",
             ]
@@ -152,6 +154,7 @@ services:
         "\n".join(
             [
                 "# Self Hosting",
+                "## Production Compose Semantics",
                 "## Verify Installation",
                 "## Troubleshooting",
             ]
@@ -200,7 +203,7 @@ services:
 
 def test_fails_when_runbook_markers_missing(tmp_path: Path):
     compose, env, runbook = _write_valid_fixture(tmp_path)
-    runbook.write_text("# Self Hosting\n## Health Checks\n")
+    runbook.write_text("# Self Hosting\n## Production Compose Semantics\n## Health Checks\n")
 
     result = _run("--compose", str(compose), "--env-example", str(env), "--runbook", str(runbook))
     assert result.returncode == 1

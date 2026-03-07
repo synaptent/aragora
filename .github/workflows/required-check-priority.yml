@@ -43,6 +43,7 @@ jobs:
               '.github/workflows/sdk-parity.yml',
               '.github/workflows/sdk-test.yml',
               '.github/workflows/openapi.yml',
+              '.github/workflows/self-host-readiness.yml',
               '.github/workflows/required-check-priority.yml',
             ]);
             const alwaysKeepWorkflowNames = new Set([
@@ -51,6 +52,7 @@ jobs:
               'SDK Parity Check',
               'SDK Tests',
               'OpenAPI Spec',
+              'Self-Host Readiness',
             ]);
 
             const requiredContexts = new Set();
