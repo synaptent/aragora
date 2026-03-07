@@ -130,7 +130,8 @@ class WorktreeLifecycleService:
         abs_dir = (self.repo_root / managed_dir).resolve()
         if not abs_dir.exists():
             return False
-        return any(abs_dir.glob("**/.codex_session_active"))
+        lock_names = (".claude-session-active", ".codex_session_active", ".nomic-session-active")
+        return any(match for name in lock_names for match in abs_dir.glob(f"**/{name}"))
 
     @staticmethod
     def _parse_payload(stdout: str) -> dict[str, Any]:

@@ -27,12 +27,16 @@ def test_discover_managed_dirs_defaults(tmp_path: Path) -> None:
     assert ".worktrees/codex-auto-debate" in found
 
 
-def test_maintain_managed_dirs_skips_active_and_missing(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "lock_name",
+    [".claude-session-active", ".codex_session_active", ".nomic-session-active"],
+)
+def test_maintain_managed_dirs_skips_active_and_missing(tmp_path: Path, lock_name: str) -> None:
     active_dir = tmp_path / ".worktrees" / "codex-auto-active"
     ok_dir = tmp_path / ".worktrees" / "codex-auto-ok"
     active_dir.mkdir(parents=True)
     ok_dir.mkdir(parents=True)
-    (active_dir / ".codex_session_active").write_text("1\n", encoding="utf-8")
+    (active_dir / lock_name).write_text("1\n", encoding="utf-8")
 
     service = WorktreeLifecycleService(repo_root=tmp_path)
     service.run_autopilot_action = MagicMock(
