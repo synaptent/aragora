@@ -7,8 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from aragora.core import DebateResult
 from aragora.inbox.triage_runner import InboxTriageRunner
-from aragora.inbox.trust_wedge import ReceiptState, TriageDecision
+from aragora.inbox.trust_wedge import InboxWedgeAction, ReceiptState, TriageDecision
 
 
 class _DummyGmail:
@@ -90,6 +91,41 @@ async def test_run_triage_creates_persisted_receipt():
 
 
 @pytest.mark.asyncio
+async def test_run_triage_preserves_real_debate_result_confidence_and_id():
+    gmail = _DummyGmail()
+    wedge_service = SimpleNamespace()
+    wedge_service.execute_receipt = AsyncMock()
+    wedge_service.create_receipt = MagicMock(
+        side_effect=lambda intent, decision, auto_approve=False: _make_envelope(
+            decision,
+            receipt_id="receipt-real",
+            state=ReceiptState.APPROVED if auto_approve else ReceiptState.CREATED,
+        )
+    )
+
+    runner = InboxTriageRunner(gmail_connector=gmail, wedge_service=wedge_service)
+    runner._run_debate = AsyncMock(
+        return_value=DebateResult(
+            debate_id="debate-real",
+            final_answer="archive",
+            confidence=0.73,
+            consensus_reached=True,
+        )
+    )
+
+    decisions = await runner.run_triage(batch_size=1, auto_approve=False)
+
+    assert len(decisions) == 1
+    decision = decisions[0]
+    assert decision.receipt_id == "receipt-real"
+    assert decision.confidence == pytest.approx(0.73)
+    assert decision.final_action == InboxWedgeAction.ARCHIVE
+    assert decision.intent is not None
+    assert decision.intent.debate_id == "debate-real"
+    assert decision.intent.confidence == pytest.approx(0.73)
+
+
+@pytest.mark.asyncio
 async def test_run_triage_executes_auto_approved_receipts():
     gmail = _DummyGmail()
     wedge_service = SimpleNamespace()
@@ -145,3 +181,107 @@ async def test_dissent_blocks_auto_approval_before_receipt_execution():
     assert wedge_service.create_receipt.call_args.kwargs["auto_approve"] is False
     assert decisions[0].receipt_state == ReceiptState.CREATED.value
     wedge_service.execute_receipt.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_no_consensus_forces_manual_review_and_preserves_reason():
+    gmail = _DummyGmail()
+    wedge_service = SimpleNamespace()
+    wedge_service.execute_receipt = AsyncMock()
+    wedge_service.create_receipt = MagicMock(
+        side_effect=lambda intent, decision, auto_approve=False: _make_envelope(
+            decision,
+            receipt_id="receipt-no-consensus",
+            state=ReceiptState.APPROVED if auto_approve else ReceiptState.CREATED,
+        )
+    )
+
+    runner = InboxTriageRunner(gmail_connector=gmail, wedge_service=wedge_service)
+    runner._run_debate = AsyncMock(
+        return_value=DebateResult(
+            debate_id="debate-no-consensus",
+            final_answer="archive",
+            confidence=0.0,
+            consensus_reached=False,
+            dissenting_views=["critic preferred star"],
+        )
+    )
+
+    decisions = await runner.run_triage(batch_size=1, auto_approve=True)
+
+    decision = decisions[0]
+    assert wedge_service.create_receipt.call_args.kwargs["auto_approve"] is False
+    assert decision.receipt_state == ReceiptState.CREATED.value
+    assert decision.final_action == InboxWedgeAction.ARCHIVE
+    assert decision.blocked_by_policy is True
+    assert "No consensus reached" in decision.dissent_summary
+    assert "critic preferred star" in decision.dissent_summary
+    wedge_service.execute_receipt.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_unparseable_final_answer_falls_back_to_ignore_and_blocks_auto_approval():
+    gmail = _DummyGmail()
+    wedge_service = SimpleNamespace()
+    wedge_service.execute_receipt = AsyncMock()
+    wedge_service.create_receipt = MagicMock(
+        side_effect=lambda intent, decision, auto_approve=False: _make_envelope(
+            decision,
+            receipt_id="receipt-parse",
+            state=ReceiptState.APPROVED if auto_approve else ReceiptState.CREATED,
+        )
+    )
+
+    runner = InboxTriageRunner(gmail_connector=gmail, wedge_service=wedge_service)
+    runner._run_debate = AsyncMock(
+        return_value=DebateResult(
+            debate_id="debate-parse",
+            final_answer="Archive or ignore this email depending on urgency.",
+            confidence=0.96,
+            consensus_reached=True,
+        )
+    )
+
+    decisions = await runner.run_triage(batch_size=1, auto_approve=True)
+
+    decision = decisions[0]
+    assert wedge_service.create_receipt.call_args.kwargs["auto_approve"] is False
+    assert decision.receipt_state == ReceiptState.CREATED.value
+    assert decision.final_action == InboxWedgeAction.IGNORE
+    assert decision.blocked_by_policy is True
+    assert "fell back to ignore" in decision.dissent_summary
+    wedge_service.execute_receipt.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_structured_proposal_header_takes_priority_over_other_action_mentions():
+    gmail = _DummyGmail()
+    wedge_service = SimpleNamespace()
+    wedge_service.execute_receipt = AsyncMock()
+    wedge_service.create_receipt = MagicMock(
+        side_effect=lambda intent, decision, auto_approve=False: _make_envelope(
+            decision,
+            receipt_id="receipt-structured",
+            state=ReceiptState.APPROVED if auto_approve else ReceiptState.CREATED,
+        )
+    )
+
+    runner = InboxTriageRunner(gmail_connector=gmail, wedge_service=wedge_service)
+    runner._run_debate = AsyncMock(
+        return_value=DebateResult(
+            debate_id="debate-structured",
+            final_answer=(
+                "## Proposal: ARCHIVE this email\n\n"
+                "Alternatives considered: ignore or star if the user wants to keep a trace."
+            ),
+            confidence=0.82,
+            consensus_reached=True,
+        )
+    )
+
+    decisions = await runner.run_triage(batch_size=1, auto_approve=False)
+
+    decision = decisions[0]
+    assert decision.final_action == InboxWedgeAction.ARCHIVE
+    assert decision.blocked_by_policy is False
+    assert decision.dissent_summary == ""
