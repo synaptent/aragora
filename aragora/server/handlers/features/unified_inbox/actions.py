@@ -11,6 +11,31 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 VALID_ACTIONS = ["archive", "mark_read", "mark_unread", "star", "delete"]
+RECEIPT_REQUIRED_ACTIONS = frozenset({"archive", "star", "delete"})
+RECEIPT_EXEMPT_ACTIONS = {
+    "mark_read": "read-state sync is explicitly exempt until unified inbox bulk receipts exist",
+    "mark_unread": "read-state sync is explicitly exempt until unified inbox bulk receipts exist",
+}
+
+
+def _receipt_required_result(action: str, message_ids: list[str]) -> dict[str, Any]:
+    """Fail closed when the bulk path lacks receipt verification for a write action."""
+    errors = [
+        {
+            "id": msg_id,
+            "error": (
+                "This action requires a cryptographic decision receipt. "
+                "Unified inbox bulk execution is not receipt-backed for this action."
+            ),
+        }
+        for msg_id in message_ids
+    ]
+    return {
+        "action": action,
+        "success_count": 0,
+        "error_count": len(errors),
+        "errors": errors if errors else None,
+    }
 
 
 async def execute_bulk_action(
@@ -23,6 +48,22 @@ async def execute_bulk_action(
 
     Returns a dict with success_count, error_count, and errors list.
     """
+    if action in RECEIPT_REQUIRED_ACTIONS:
+        logger.info(
+            "Blocking unified inbox bulk action without receipt backing: tenant=%s action=%s count=%s",
+            tenant_id,
+            action,
+            len(message_ids),
+        )
+        return _receipt_required_result(action, message_ids)
+    if action in RECEIPT_EXEMPT_ACTIONS:
+        logger.debug(
+            "Unified inbox bulk action using explicit receipt exemption: tenant=%s action=%s reason=%s",
+            tenant_id,
+            action,
+            RECEIPT_EXEMPT_ACTIONS[action],
+        )
+
     success_count = 0
     errors: list[dict[str, str]] = []
 

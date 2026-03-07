@@ -48,6 +48,15 @@ def _make_store(
     return store
 
 
+def _assert_receipt_required(result: dict[str, Any], action: str, message_ids: list[str]) -> None:
+    assert result["action"] == action
+    assert result["success_count"] == 0
+    assert result["error_count"] == len(message_ids)
+    assert result["errors"] is not None
+    assert [entry["id"] for entry in result["errors"]] == message_ids
+    assert all("cryptographic decision receipt" in entry["error"] for entry in result["errors"])
+
+
 # ---------------------------------------------------------------------------
 # VALID_ACTIONS constant
 # ---------------------------------------------------------------------------
@@ -164,35 +173,31 @@ class TestStar:
     async def test_star_single_message(self):
         store = _make_store()
         result = await execute_bulk_action("t1", ["msg-1"], "star", store)
-        assert result["action"] == "star"
-        assert result["success_count"] == 1
-        assert result["error_count"] == 0
-        store.update_message_flags.assert_awaited_once_with("t1", "msg-1", is_starred=True)
+        _assert_receipt_required(result, "star", ["msg-1"])
+        store.update_message_flags.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_star_multiple_messages(self):
         store = _make_store()
         ids = ["a", "b"]
         result = await execute_bulk_action("t1", ids, "star", store)
-        assert result["success_count"] == 2
-        assert result["error_count"] == 0
+        _assert_receipt_required(result, "star", ids)
+        store.update_message_flags.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_star_not_found(self):
         store = _make_store(update_return=False)
         result = await execute_bulk_action("t1", ["msg-1"], "star", store)
-        assert result["success_count"] == 0
-        assert result["error_count"] == 1
-        assert result["errors"][0]["error"] == "Message not found"
+        _assert_receipt_required(result, "star", ["msg-1"])
+        store.update_message_flags.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_star_store_raises_type_error(self):
         store = _make_store()
         store.update_message_flags.side_effect = TypeError("nope")
         result = await execute_bulk_action("t1", ["msg-1"], "star", store)
-        assert result["success_count"] == 0
-        assert result["error_count"] == 1
-        assert result["errors"][0]["error"] == "Action failed"
+        _assert_receipt_required(result, "star", ["msg-1"])
+        store.update_message_flags.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -207,27 +212,23 @@ class TestArchive:
     async def test_archive_single_message(self):
         store = _make_store()
         result = await execute_bulk_action("t1", ["msg-1"], "archive", store)
-        assert result["action"] == "archive"
-        assert result["success_count"] == 1
-        assert result["error_count"] == 0
-        store.delete_message.assert_awaited_once_with("t1", "msg-1")
+        _assert_receipt_required(result, "archive", ["msg-1"])
+        store.delete_message.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_archive_not_found(self):
         store = _make_store(delete_return=False)
         result = await execute_bulk_action("t1", ["msg-1"], "archive", store)
-        assert result["success_count"] == 0
-        assert result["error_count"] == 1
-        assert result["errors"][0]["error"] == "Message not found"
+        _assert_receipt_required(result, "archive", ["msg-1"])
+        store.delete_message.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_archive_store_raises_key_error(self):
         store = _make_store()
         store.delete_message.side_effect = KeyError("missing")
         result = await execute_bulk_action("t1", ["msg-1"], "archive", store)
-        assert result["success_count"] == 0
-        assert result["error_count"] == 1
-        assert result["errors"][0]["error"] == "Action failed"
+        _assert_receipt_required(result, "archive", ["msg-1"])
+        store.delete_message.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -242,27 +243,23 @@ class TestDelete:
     async def test_delete_single_message(self):
         store = _make_store()
         result = await execute_bulk_action("t1", ["msg-1"], "delete", store)
-        assert result["action"] == "delete"
-        assert result["success_count"] == 1
-        assert result["error_count"] == 0
-        store.delete_message.assert_awaited_once_with("t1", "msg-1")
+        _assert_receipt_required(result, "delete", ["msg-1"])
+        store.delete_message.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_delete_not_found(self):
         store = _make_store(delete_return=False)
         result = await execute_bulk_action("t1", ["msg-1"], "delete", store)
-        assert result["success_count"] == 0
-        assert result["error_count"] == 1
-        assert result["errors"][0]["error"] == "Message not found"
+        _assert_receipt_required(result, "delete", ["msg-1"])
+        store.delete_message.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_delete_store_raises_os_error(self):
         store = _make_store()
         store.delete_message.side_effect = OSError("disk full")
         result = await execute_bulk_action("t1", ["msg-1"], "delete", store)
-        assert result["success_count"] == 0
-        assert result["error_count"] == 1
-        assert result["errors"][0]["error"] == "Action failed"
+        _assert_receipt_required(result, "delete", ["msg-1"])
+        store.delete_message.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -298,11 +295,8 @@ class TestMixedAndEdgeCases:
         store = _make_store()
         store.update_message_flags = AsyncMock(side_effect=[True, RuntimeError("boom")])
         result = await execute_bulk_action("t1", ["ok", "fail"], "star", store)
-        # "star" uses update_message_flags
-        assert result["success_count"] == 1
-        assert result["error_count"] == 1
-        assert result["errors"][0]["id"] == "fail"
-        assert result["errors"][0]["error"] == "Action failed"
+        _assert_receipt_required(result, "star", ["ok", "fail"])
+        store.update_message_flags.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_unrecognised_action_counts_as_success(self):
@@ -317,7 +311,8 @@ class TestMixedAndEdgeCases:
     async def test_errors_is_none_when_all_succeed(self):
         store = _make_store()
         result = await execute_bulk_action("t1", ["a", "b", "c"], "delete", store)
-        assert result["errors"] is None
+        assert isinstance(result["errors"], list)
+        assert len(result["errors"]) == 3
 
     @pytest.mark.asyncio
     async def test_errors_is_list_when_failures_exist(self):
@@ -345,7 +340,7 @@ class TestMixedAndEdgeCases:
     async def test_tenant_id_is_forwarded_to_delete(self):
         store = _make_store()
         await execute_bulk_action("tenant-xyz", ["m1"], "archive", store)
-        store.delete_message.assert_awaited_once_with("tenant-xyz", "m1")
+        store.delete_message.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_return_dict_keys(self):
@@ -376,9 +371,9 @@ class TestMixedAndEdgeCases:
 
     @pytest.mark.asyncio
     async def test_delete_and_archive_share_code_path(self):
-        """Both archive and delete call store.delete_message."""
+        """Both archive and delete are blocked pending receipt backing."""
         for action in ("archive", "delete"):
             store = _make_store()
             result = await execute_bulk_action("t1", ["m1"], action, store)
-            assert result["success_count"] == 1
-            store.delete_message.assert_awaited_once_with("t1", "m1")
+            _assert_receipt_required(result, action, ["m1"])
+            store.delete_message.assert_not_awaited()
