@@ -85,9 +85,10 @@ jobs:
 
       - name: Verify checkout integrity
         shell: bash
+        working-directory: .
         run: |
-          if [[ ! -f pyproject.toml ]]; then
-            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+          if [[ ! -f pyproject.toml ]] || [[ ! -f aragora/live/package.json ]]; then
+            echo "::warning::Frontend checkout incomplete after checkout; attempting recovery"
             git reset --hard || true
             git clean -ffdx || true
             git sparse-checkout disable || true
@@ -100,17 +101,18 @@ jobs:
             fi
             git clean -ffdx || true
           fi
-          if [[ ! -f pyproject.toml ]]; then
+          if [[ ! -f pyproject.toml ]] || [[ ! -f aragora/live/package.json ]]; then
             echo "::warning::Sparse-checkout recovery incomplete; attempting archive restore"
             find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
             if ! git archive "${GITHUB_SHA:-HEAD}" | tar -x; then
               git archive HEAD | tar -x
             fi
           fi
-          if [[ ! -f pyproject.toml ]]; then
-            echo "::error::Repository checkout is incomplete (pyproject.toml missing)"
+          if [[ ! -f pyproject.toml ]] || [[ ! -f aragora/live/package.json ]]; then
+            echo "::error::Repository checkout is incomplete (missing pyproject.toml or aragora/live/package.json)"
             echo "PWD=$(pwd)"
             ls -la
+            ls -la aragora/live || true
             exit 1
           fi
 
@@ -859,23 +861,7 @@ jobs:
 
       - name: Count TODOs and enforce baseline
         run: |
-          CURRENT=$(python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          root = Path("aragora")
-          pattern = re.compile(r"^\s*#\s*(TODO|FIXME|HACK|XXX)\b", re.IGNORECASE)
-          count = 0
-          for path in root.rglob("*.py"):
-              try:
-                  for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-                      if pattern.search(line):
-                          count += 1
-              except OSError:
-                  pass
-          print(count)
-          PY
-          )
+          CURRENT=$(python3 scripts/todo_audit.py --mode count --root aragora)
           BASELINE=$(cat aragora/.todo_baseline 2>/dev/null || echo 50)
           THRESHOLD=1  # Allow only 1 new TODO (tightened Feb 2026)
 
@@ -888,24 +874,7 @@ jobs:
             echo "::error::Exceeds threshold of $THRESHOLD new TODOs"
             echo ""
             echo "New TODOs found:"
-            python3 - <<'PY'
-            from pathlib import Path
-            import re
-
-            root = Path("aragora")
-            pattern = re.compile(r"^\s*#\s*(TODO|FIXME|HACK|XXX)\b", re.IGNORECASE)
-            shown = 0
-            for path in sorted(root.rglob("*.py")):
-                try:
-                    for idx, line in enumerate(path.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
-                        if pattern.search(line):
-                            print(f"{path}:{idx}:{line.strip()}")
-                            shown += 1
-                            if shown >= 20:
-                                raise SystemExit
-                except OSError:
-                    continue
-            PY
+            python3 scripts/todo_audit.py --mode list --root aragora --limit 20
             echo ""
             echo "Please resolve existing TODOs before adding new ones,"
             echo "or update aragora/.todo_baseline if increase is intentional."
