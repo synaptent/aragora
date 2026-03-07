@@ -1,91 +1,90 @@
 # Next Steps (Canonical)
 
-Last updated: 2026-02-13
+Last updated: 2026-03-07
 
-This is the single source of truth for project-wide execution priorities.
-Legacy planning documents should link here.
+This is the single source of truth for short-horizon execution priorities.
+`docs/CANONICAL_GOALS.md` defines what Aragora is and why.
+`docs/plans/ARAGORA_EVOLUTION_ROADMAP.md` defines the long-range architecture and moat.
+`docs/FEATURE_GAP_LIST.md` is the current delivery/backlog truth.
+This file defines execution order.
 
-Current short-horizon execution window: `/docs/status/EXECUTION_NEXT_6_WEEKS_2026-02-25.md`
-(implementation detail layer; does not supersede priorities below).
+## Current Reality
+
+- The product thesis is intact: Aragora is building a decision-integrity platform, not just a debate engine.
+- The repo has shipped major backbone, compliance, swarm, and OpenClaw milestones, but `main` still has operational truthfulness gaps in CI/CD and deployment.
+- Short-horizon work should optimize for launch credibility: what is claimed in roadmap/status docs must match what actually works on `main`.
 
 ## Execution Order
 
-### 1) Test Isolation and Pollution Hardening
-- Owner: Platform + QA
-- Goal: deterministic green runs across randomized order and parallel execution
+### 1) Mainline CI/CD and Release Truthfulness
+- Owner: Platform + DevOps
+- Goal: `main` should be a trustworthy signal of ship readiness, not a mixture of real regressions and policy/tooling false positives.
 - Acceptance:
-  - Randomized test gate passes for 3 fixed seeds
-  - No cross-test state leaks in global fixtures/singletons/event loops
-  - Full PR test suite remains green
-  - Skip marker debt tracked and burned down from audited baseline (`docs/status/TEST_SKIP_BURNDOWN.md`)
-- CI gates:
-  - `.github/workflows/test.yml` `test-pollution-randomized`
+  - `Branch Discipline` no longer flags merged-PR commits on `main` as direct pushes.
+  - `Deploy Documentation` succeeds on the current runner image or uses a portable archive path that does not require missing host tools.
+  - `Deploy to EC2` handles unhealthy or invalid canary instance state explicitly and does not fail rollback because the target instance is unusable.
+  - `Main Required Checks Auto Revert` stops flapping on the same underlying failures.
+- Evidence today:
+  - `Branch Discipline` failed on `739ab5e`, `b441b2d`, and `ea402d2` even though they are merged-history commits.
+  - `Deploy Documentation` failed because `gtar` is not present on the runner.
+  - `Deploy to EC2` failed because canary instance `i-0dbd51f74a9a11fcc` was not in a valid state.
 
-### 2) Connector Exception Handling Hygiene
-- Owner: Backend (Connectors)
-- Goal: no silent broad exception swallowing in connector implementations
+### 2) GTM Proof Closeout
+- Owner: Product + Compliance + GTM
+- Goal: convert the "98% GA-ready" narrative into evidence-backed launch readiness.
 - Acceptance:
-  - Zero `except Exception: pass` / equivalent silent handlers in `aragora/connectors/**`
-  - Exceptions are either typed + handled or logged with enough context
-- CI gates:
-  - `.github/workflows/lint.yml` `connector-exception-hygiene`
-  - Script: `scripts/check_connector_exception_handling.py`
+  - EU AI Act customer playbook and appendix are complete and externally usable.
+  - External pentest engagement is underway with tracked remediation ownership.
+  - SOC 2 Type II audit engagement is initiated.
+  - At least two real pilot lanes are actively being converted, not just named in docs.
+- Source of truth:
+  - `docs/FEATURE_GAP_LIST.md` P0-P2
+  - `ROADMAP.md` Q2 2026 priorities
 
-### 3) Offline and Demo Golden Path Enforcement
-- Owner: CLI + Runtime
-- Goal: `--demo` and offline/local execution remain network-free and quiet
+### 3) Agent-First Beta and Public Demo Productization
+- Owner: Product + Runtime
+- Goal: make the shipped beta and demo surfaces reliable enough for external users, not just internal dogfood.
 - Acceptance:
-  - Offline tests validate no audience/network probes and no network-backed subsystems
-  - Demo CLI smoke run passes with `ARAGORA_OFFLINE=1`
-  - Local reproducibility script passes: `scripts/run_offline_golden_path.sh`
-- CI gates:
-  - `.github/workflows/smoke.yml` `offline-golden-path`
-  - Tests: `tests/cli/test_offline_golden_path.py`
+  - Public demo paths remain stable and are verified from the external surface.
+  - Agent-first beta workflows (`aragora review`, REST/API, fleet runner path) have a documented and validated customer/operator path.
+  - Inbox/comms surfaces are validated end-to-end from intake to debate to action/receipt where claimed.
+  - GitHub review gate strategy is explicit: either intentionally manual-only or re-enabled for pre-merge use.
 
-### 4) Documentation and Registry Drift Control
-- Owner: Docs + Platform
-- Goal: docs reflect runtime agent registry + allowlist exactly
+### 4) Prompt-to-Execution Golden Path
+- Owner: Pipeline + Decision Integrity
+- Goal: deliver the differentiated core loop from vague intent to executable, verified outcome.
 - Acceptance:
-  - AGENTS.md counts match runtime registry and allowlist
-  - AGENTS table exactly matches `list_available_agents()`
-- CI gates:
-  - `.github/workflows/lint.yml` `agent-registry-sync`
-  - Script: `scripts/check_agent_registry_sync.py`
+  - Duplicate-create planning defects are handled deterministically rather than by prompt wording alone.
+  - Prompt/spec/debate/execution handoff is reliable enough for a founder or operator to use without manual archaeology.
+  - The highest-value path is coherent across CLI, API, and UI surfaces.
+  - Receipt/provenance output remains clear when the system executes, fails, or blocks.
+- Why this is core:
+  - This is the wedge described in `docs/CANONICAL_GOALS.md` Pillar 3 and in `docs/plans/ARAGORA_EVOLUTION_ROADMAP.md`.
 
-### 5) SDK and Version Alignment
-- Owner: SDK
-- Goal: prevent SDK/server/doc version drift and keep parity checks blocking
+### 5) Swarm and Worktree Operating Discipline
+- Owner: Platform + Runtime
+- Goal: keep multi-agent velocity without reintroducing integration churn.
 - Acceptance:
-  - `check_version_alignment` passes on SDK parity changes
-  - SDK parity report remains clean for handler changes
-  - SDK parity debt follows weekly budget reduction (`scripts/baselines/check_sdk_parity_budget.json`)
-  - Weekly execution tracked in `docs/status/SDK_PARITY_BURNDOWN.md`
-- CI gates:
-  - `.github/workflows/sdk-parity.yml` (version alignment + parity)
+  - Managed worktree maintenance respects all supported session lock types.
+  - One merge lane exists for merge-eligible work; cleanup/reconciliation does not race live sessions.
+  - Valuable work is preserved before cleanup of stale worktrees, branches, or stashes.
+  - Session/worktree state is observable enough that humans can tell what is active, stale, merged, or abandoned.
+- Recent progress:
+  - PR #751 fixed maintainer detection of Claude and Nomic session locks.
 
-### 6) Self-Hosted Production Readiness Validation
-- Owner: DevOps + SRE
-- Goal: production compose + required env wiring stay valid
+### 6) Strategic Moat Hardening
+- Owner: Research + Platform
+- Goal: close the gap between shipped scaffolding and the long-term differentiated moat.
 - Acceptance:
-  - Required services/dependencies/env keys validated in CI
-  - Redis Sentinel and DB dependencies remain correctly wired
-- CI gates:
-  - `.github/workflows/integration.yml` `self-host-readiness`
-  - Script: `scripts/check_self_host_compose.py`
-
-### 7) External Pentest Closure Gate
-- Owner: Security
-- Goal: unresolved HIGH/CRITICAL pentest findings cannot drift unnoticed
-- Acceptance:
-  - Findings tracked in `security/pentest/findings.json`
-  - Execution plan maintained in `security/pentest/EXECUTION_PLAN.md`
-  - Vendor outreach status tracked in `security/pentest/VENDOR_OUTREACH_LOG.md`
-  - CI fails if unresolved HIGH/CRITICAL findings exist
-- CI gates:
-  - `.github/workflows/security.yml` `pentest-findings`
-  - Script: `scripts/check_pentest_findings.py`
+  - Arena/provider routing is integrated, not just shipped as standalone optimization logic.
+  - OpenClaw execution is validated in real production-like loops.
+  - Security roadmap items with highest leverage stay visible: trust-tier taint propagation, signed context manifests, and external verification gates.
+  - The repo continues converging on the full decision-integrity platform rather than fragmenting into unrelated surfaces.
 
 ## Operating Rules
-- Any new roadmap or status doc must link this file instead of redefining priorities.
+- `docs/FEATURE_GAP_LIST.md` is the delivery truth; `ROADMAP.md` and other summaries must reconcile to it.
+- No document should claim "only one blocker remains" unless `main` CI/CD and deployment signals support that claim.
+- One merge lane for operational fixes; avoid parallel merge-eligible churn.
+- Preserve value before deletion: every stash/worktree/branch should map to a destination commit, PR, or explicit discard decision.
+- Required checks must always emit a terminal status.
 - If priorities change, update this file first, then update linked summaries.
-- Legacy planning docs should be compatibility pointers, not alternate priority sources.
