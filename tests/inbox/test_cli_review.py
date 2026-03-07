@@ -93,3 +93,24 @@ def test_review_batch_uses_receipt_review_for_edit():
     assert results[0]["action_taken"] == "edit"
     assert decision.final_action == InboxWedgeAction.ARCHIVE
     assert decision.receipt_state == ReceiptState.CREATED.value
+
+
+def test_review_batch_displays_manual_review_reason():
+    decision = TriageDecision.create(
+        final_action="ignore",
+        confidence=0.0,
+        dissent_summary="No consensus reached; manual review required.",
+        receipt_id="receipt-2",
+        blocked_by_policy=True,
+    )
+    printed: list[str] = []
+
+    loop = CLIReviewLoop(
+        input_fn=lambda _prompt: "s",
+        print_fn=lambda *args, **_kwargs: printed.append(" ".join(str(arg) for arg in args)),
+    )
+
+    loop.review_batch([decision])
+
+    output = "\n".join(printed)
+    assert "No consensus reached; manual review required." in output
