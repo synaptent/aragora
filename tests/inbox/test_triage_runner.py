@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from aragora.core import DebateResult
-from aragora.inbox.triage_runner import InboxTriageRunner
+from aragora.inbox.triage_runner import InboxTriageRunner, _create_triage_agents
 from aragora.inbox.trust_wedge import (
     InboxWedgeAction,
     ReceiptState,
@@ -383,7 +383,7 @@ async def test_triage_message_falls_back_to_body_when_body_text_missing():
 
 
 @pytest.mark.asyncio
-async def test_run_debate_uses_agent_registry_and_explicit_action_prompt(monkeypatch):
+async def test_run_debate_uses_fast_agent_subset_and_explicit_action_prompt(monkeypatch):
     created_agents: list[object] = []
     captured_tasks: list[str] = []
 
@@ -395,18 +395,20 @@ async def test_run_debate_uses_agent_registry_and_explicit_action_prompt(monkeyp
         async def run(self):
             return {"final_answer": "archive", "confidence": 0.9}
 
-    def _create_agent(model_type, name="", role="proposer"):
-        return SimpleNamespace(name=name, role=role, model_type=model_type)
-
     def _environment(*, task):
         return SimpleNamespace(task=task)
 
-    import aragora.agents.registry as reg_mod
     import aragora.core as core_mod
     import aragora.debate.orchestrator as orch_mod
     import aragora.debate.protocol as proto_mod
 
-    monkeypatch.setattr(reg_mod.AgentRegistry, "create", staticmethod(_create_agent))
+    monkeypatch.setattr(
+        "aragora.inbox.triage_runner._create_triage_agents",
+        lambda: [
+            SimpleNamespace(name="triage-proposer", role="proposer", model_type="anthropic-api"),
+            SimpleNamespace(name="triage-critic", role="critic", model_type="openrouter"),
+        ],
+    )
     monkeypatch.setattr(core_mod, "Environment", _environment)
     monkeypatch.setattr(proto_mod, "DebateProtocol", lambda **kwargs: SimpleNamespace(**kwargs))
     monkeypatch.setattr(orch_mod, "Arena", _Arena)
@@ -422,7 +424,7 @@ async def test_run_debate_uses_agent_registry_and_explicit_action_prompt(monkeyp
     )
 
     assert result["final_answer"] == "archive"
-    assert len(created_agents) == 3
+    assert len(created_agents) == 2
     assert len(captured_tasks) == 1
     assert "From: sender@example.com" in captured_tasks[0]
     assert "MUST begin with the action word" in captured_tasks[0]
@@ -430,21 +432,16 @@ async def test_run_debate_uses_agent_registry_and_explicit_action_prompt(monkeyp
 
 @pytest.mark.asyncio
 async def test_run_debate_falls_back_to_stub_when_fewer_than_two_agents(monkeypatch):
-    created = 0
-
-    def _create_agent(model_type, name="", role="proposer"):
-        nonlocal created
-        created += 1
-        if created == 1:
-            return SimpleNamespace(name=name, role=role, model_type=model_type)
-        raise RuntimeError("missing credentials")
-
-    import aragora.agents.registry as reg_mod
     import aragora.core as core_mod
     import aragora.debate.orchestrator as orch_mod
     import aragora.debate.protocol as proto_mod
 
-    monkeypatch.setattr(reg_mod.AgentRegistry, "create", staticmethod(_create_agent))
+    monkeypatch.setattr(
+        "aragora.inbox.triage_runner._create_triage_agents",
+        lambda: [
+            SimpleNamespace(name="triage-proposer", role="proposer", model_type="anthropic-api")
+        ],
+    )
     monkeypatch.setattr(core_mod, "Environment", lambda **kwargs: SimpleNamespace(**kwargs))
     monkeypatch.setattr(proto_mod, "DebateProtocol", lambda **kwargs: SimpleNamespace(**kwargs))
     monkeypatch.setattr(orch_mod, "Arena", MagicMock())
@@ -461,3 +458,57 @@ async def test_run_debate_falls_back_to_stub_when_fewer_than_two_agents(monkeypa
 
     assert result["final_answer"] == "ignore"
     assert result["confidence"] == 0.0
+
+
+def test_create_triage_agents_prefers_fast_pair(monkeypatch):
+    calls: list[tuple[str, str, str | None]] = []
+
+    def fake_create_agent(
+        model_type: str,
+        name: str | None = None,
+        role: str = "proposer",
+        model: str | None = None,
+        **_: object,
+    ):
+        calls.append((model_type, role, model))
+        return {"model_type": model_type, "name": name, "role": role, "model": model}
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setattr("aragora.agents.base.create_agent", fake_create_agent)
+
+    agents = _create_triage_agents()
+
+    assert len(agents) == 2
+    assert calls == [
+        ("anthropic-api", "proposer", "claude-haiku-4-5-20251001"),
+        ("openrouter", "critic", "deepseek/deepseek-chat"),
+    ]
+
+
+def test_create_triage_agents_falls_back_to_openai_when_needed(monkeypatch):
+    calls: list[tuple[str, str, str | None]] = []
+
+    def fake_create_agent(
+        model_type: str,
+        name: str | None = None,
+        role: str = "proposer",
+        model: str | None = None,
+        **_: object,
+    ):
+        calls.append((model_type, role, model))
+        return {"model_type": model_type, "name": name, "role": role, "model": model}
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setattr("aragora.agents.base.create_agent", fake_create_agent)
+
+    agents = _create_triage_agents()
+
+    assert len(agents) == 2
+    assert calls == [
+        ("anthropic-api", "proposer", "claude-haiku-4-5-20251001"),
+        ("openai-api", "critic", None),
+    ]

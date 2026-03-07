@@ -207,6 +207,24 @@ def test_auto_approval_stays_narrow(wedge):
     assert blocked_archive.receipt.state == ReceiptState.CREATED
 
 
+def test_action_intent_to_dict_tolerates_string_action():
+    intent = ActionIntent(
+        provider="gmail",
+        user_id="user-1",
+        message_id="msg-1",
+        action="archive",
+        content_hash=ActionIntent.compute_content_hash("subject", "body"),
+        synthesized_rationale="Debated rationale",
+        confidence=0.91,
+        provider_route="openrouter-fallback",
+        debate_id="debate-123",
+    )
+
+    payload = intent.to_dict()
+
+    assert payload["action"] == "archive"
+
+
 @pytest.mark.asyncio
 async def test_label_action_uses_real_label_path(wedge):
     _, service, connector = wedge

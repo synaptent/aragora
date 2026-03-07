@@ -174,10 +174,12 @@ class ActionIntent:
         return _sha256_text("\n".join(part for part in parts if part))
 
     def to_dict(self) -> dict[str, Any]:
+        action = self.action
+        action_str = action.value if isinstance(action, Enum) else str(action)
         return {
             "provider": self.provider,
             "message_id": self.message_id,
-            "action": self.action.value,
+            "action": action_str,
             "content_hash": self.content_hash,
             "synthesized_rationale": self.synthesized_rationale,
             "confidence": self.confidence,

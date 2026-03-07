@@ -166,6 +166,50 @@ def _normalize_debate_outcome(debate_result: Any) -> _NormalizedDebateOutcome:
     )
 
 
+def _create_triage_agents() -> list[Any]:
+    """Create the smallest useful remote debate for inbox triage."""
+    import os
+
+    from aragora.agents.base import create_agent
+
+    agents: list[Any] = []
+
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            agents.append(
+                create_agent(
+                    "anthropic-api",
+                    name="triage-proposer",
+                    role="proposer",
+                    model="claude-haiku-4-5-20251001",
+                )
+            )
+        except (ImportError, RuntimeError, ValueError, OSError):
+            logger.debug("Anthropic triage proposer unavailable", exc_info=True)
+
+    if os.environ.get("OPENROUTER_API_KEY"):
+        try:
+            agents.append(
+                create_agent(
+                    "openrouter",
+                    name="triage-critic",
+                    role="critic",
+                    model="deepseek/deepseek-chat",
+                )
+            )
+        except (ImportError, RuntimeError, ValueError, OSError):
+            logger.debug("OpenRouter triage critic unavailable", exc_info=True)
+
+    if len(agents) < 2 and os.environ.get("OPENAI_API_KEY"):
+        role = "critic" if agents else "proposer"
+        try:
+            agents.append(create_agent("openai-api", name=f"triage-{role}", role=role))
+        except (ImportError, RuntimeError, ValueError, OSError):
+            logger.debug("OpenAI triage fallback unavailable", exc_info=True)
+
+    return agents
+
+
 class InboxTriageRunner:
     """Orchestrates the full inbox triage flow.
 
@@ -361,7 +405,6 @@ class InboxTriageRunner:
         )
 
         try:
-            from aragora.agents.registry import AgentRegistry
             from aragora.core import Environment
             from aragora.debate.orchestrator import Arena
             from aragora.debate.protocol import DebateProtocol
@@ -369,21 +412,12 @@ class InboxTriageRunner:
             env = Environment(task=question)
             protocol = DebateProtocol(rounds=2, consensus="majority")
 
-            agent_configs = [
-                ("anthropic-api", "proposer"),
-                ("openai-api", "critic"),
-                ("grok", "synthesizer"),
-            ]
-            agents = []
-            for model_type, role in agent_configs:
-                try:
-                    agent = AgentRegistry.create(model_type, name=f"triage-{role}", role=role)
-                    agents.append(agent)
-                except (ImportError, KeyError, RuntimeError, ValueError, OSError) as exc:
-                    logger.debug("Skipping agent %s: %s", model_type, exc)
+            agents = _create_triage_agents()
 
             if len(agents) < 2:
-                logger.warning("%d/3 agents available (need 2); using stub debate", len(agents))
+                logger.warning(
+                    "%d triage agents available (need 2); using stub debate", len(agents)
+                )
                 return {
                     "final_answer": "ignore",
                     "confidence": 0.0,
