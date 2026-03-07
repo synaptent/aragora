@@ -55,6 +55,22 @@ def gmail_connector():
     )
 
 
+@pytest.fixture(autouse=True)
+def reset_refresh_token_fallback():
+    """Prevent live saved Gmail tokens from leaking into connector tests."""
+    with (
+        patch(
+            "aragora.connectors.enterprise.communication.gmail._load_refresh_token_fallback",
+            return_value=None,
+        ),
+        patch(
+            "aragora.connectors.enterprise.communication.gmail.client._load_refresh_token_fallback",
+            return_value=None,
+        ),
+    ):
+        yield
+
+
 @pytest.fixture
 def authenticated_connector():
     """Create an authenticated Gmail connector."""
@@ -153,7 +169,11 @@ class TestGmailConnectorInitialization:
 
     def test_default_initialization(self):
         """Test default connector initialization."""
-        connector = GmailConnector()
+        with patch(
+            "aragora.connectors.enterprise.communication.gmail._load_refresh_token_fallback",
+            return_value=None,
+        ):
+            connector = GmailConnector()
 
         assert connector.connector_id == "gmail"
         assert connector.labels is None
@@ -163,6 +183,16 @@ class TestGmailConnectorInitialization:
         assert connector.user_id == "me"
         assert connector._access_token is None
         assert connector._refresh_token is None
+
+    def test_initialization_loads_saved_refresh_token(self):
+        """Test connector initialization loads the saved refresh token fallback."""
+        with patch(
+            "aragora.connectors.enterprise.communication.gmail._load_refresh_token_fallback",
+            return_value="saved-refresh-token",
+        ):
+            connector = GmailConnector()
+
+        assert connector._refresh_token == "saved-refresh-token"
 
     def test_custom_initialization(self, gmail_connector):
         """Test connector with custom parameters."""

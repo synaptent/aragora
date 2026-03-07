@@ -11,6 +11,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Protocol
 
 from aragora.reasoning.provenance import SourceType
@@ -44,6 +45,7 @@ GMAIL_SCOPES_FULL = [
 
 # Default to read-only for backward compatibility
 GMAIL_SCOPES = GMAIL_SCOPES_READONLY
+DEFAULT_REFRESH_TOKEN_PATH = Path.home() / ".aragora" / "gmail_refresh_token"
 
 
 def _get_client_credentials() -> tuple[str, str]:
@@ -59,6 +61,25 @@ def _get_client_credentials() -> tuple[str, str]:
         or os.environ.get("GOOGLE_CLIENT_SECRET", "")
     )
     return client_id, client_secret
+
+
+def _load_refresh_token_fallback() -> str | None:
+    """Load a Gmail refresh token from env or the local Aragora token file."""
+    env_token = os.environ.get("GMAIL_REFRESH_TOKEN")
+    if env_token:
+        env_token = env_token.strip()
+        if env_token:
+            return env_token
+
+    try:
+        if DEFAULT_REFRESH_TOKEN_PATH.exists():
+            token = DEFAULT_REFRESH_TOKEN_PATH.read_text(encoding="utf-8").strip()
+            if token:
+                return token
+    except OSError:
+        logger.debug("Failed reading Gmail refresh token fallback", exc_info=True)
+
+    return None
 
 
 class GmailClientMixin(EnterpriseConnectorMethods):
@@ -78,7 +99,9 @@ class GmailClientMixin(EnterpriseConnectorMethods):
         if not hasattr(self, "_access_token"):
             self._access_token = None
         if not hasattr(self, "_refresh_token"):
-            self._refresh_token = None
+            self._refresh_token = _load_refresh_token_fallback()
+        elif self._refresh_token is None:
+            self._refresh_token = _load_refresh_token_fallback()
         if not hasattr(self, "_token_expiry"):
             self._token_expiry = None
         if not hasattr(self, "_token_lock"):
@@ -326,6 +349,9 @@ class GmailClientMixin(EnterpriseConnectorMethods):
 
             if self._access_token and self._token_expiry and now < self._token_expiry:
                 return self._access_token
+
+            if not self._refresh_token:
+                self._refresh_token = _load_refresh_token_fallback()
 
             if self._refresh_token:
                 return await self._refresh_access_token()

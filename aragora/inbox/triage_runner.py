@@ -27,6 +27,7 @@ from aragora.inbox.trust_wedge import (
     ReceiptState,
     TriageDecision,
     compute_content_hash,
+    get_inbox_trust_wedge_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,9 +98,11 @@ class InboxTriageRunner:
         self,
         gmail_connector: Any | None = None,
         auto_approval_policy: AutoApprovalPolicy | None = None,
+        wedge_service: Any | None = None,
     ) -> None:
         self._gmail = gmail_connector
         self._policy = auto_approval_policy or AutoApprovalPolicy()
+        self._wedge_service = wedge_service or get_inbox_trust_wedge_service()
         self._triaged: list[TriageDecision] = []
 
     @property
@@ -131,8 +134,11 @@ class InboxTriageRunner:
 
         for msg in messages:
             try:
-                decision = await self._triage_message(msg)
-                if auto_approve and self._policy.auto_approve(decision):
+                decision = await self._triage_message(
+                    msg,
+                    auto_approve=auto_approve,
+                )
+                if auto_approve and decision.receipt_state == ReceiptState.APPROVED.value:
                     await self._execute_action(decision)
                 decisions.append(decision)
             except (RuntimeError, OSError, ValueError, TypeError) as exc:
@@ -190,7 +196,12 @@ class InboxTriageRunner:
 
         return messages
 
-    async def _triage_message(self, msg: dict[str, Any]) -> TriageDecision:
+    async def _triage_message(
+        self,
+        msg: dict[str, Any],
+        *,
+        auto_approve: bool = False,
+    ) -> TriageDecision:
         """Run debate and build a TriageDecision for a single message."""
         message_id = msg.get("id", str(uuid.uuid4()))
         body = msg.get("body", msg.get("snippet", ""))
@@ -213,9 +224,13 @@ class InboxTriageRunner:
             rationale = str(debate_result.get("final_answer", ""))
 
         parsed_action = InboxWedgeAction.parse(action)
+        provider = (
+            getattr(self._gmail, "connector_id", "gmail") if self._gmail is not None else "gmail"
+        )
+        user_id = getattr(self._gmail, "user_id", "me") if self._gmail is not None else "me"
 
         intent = ActionIntent(
-            provider="arena-consensus",
+            provider=provider,
             message_id=message_id,
             action=parsed_action,
             content_hash=content_hash,
@@ -223,6 +238,7 @@ class InboxTriageRunner:
             confidence=confidence,
             provider_route="direct",
             debate_id=debate_id,
+            user_id=user_id,
         )
         # Attach email metadata for CLI display (private attrs)
         intent._subject = msg.get("subject", "(no subject)")  # type: ignore[attr-defined]
@@ -236,7 +252,21 @@ class InboxTriageRunner:
             auto_approval_eligible=False,
             provider_route="direct",
             intent=intent,
+            blocked_by_policy=bool(dissent),
         )
+
+        should_auto_approve = auto_approve and self._policy.can_auto_approve(decision)
+        envelope = self._wedge_service.create_receipt(
+            intent,
+            decision,
+            auto_approve=should_auto_approve,
+        )
+        decision = envelope.decision
+        decision.intent = envelope.intent
+        decision.receipt_id = envelope.receipt.receipt_id
+        decision.receipt_state = envelope.receipt.state.value
+        decision.provider_route = envelope.provider_route
+        decision.label_id = envelope.intent.label_id or decision.label_id
 
         return decision
 
@@ -306,43 +336,22 @@ class InboxTriageRunner:
         Does NOT wire into the execution safety gate -- that integration
         is handled separately.
         """
-        if self._gmail is None:
-            logger.warning("No Gmail connector; skipping execution")
+        if not decision.receipt_id:
+            logger.warning("No persisted receipt on decision; skipping execution")
             return
-
-        intent = decision.intent
-        if intent is None:
-            logger.warning("No intent on decision %s", decision.receipt_id)
-            return
-
-        action = decision.final_action
-        message_id = intent.message_id
 
         try:
-            if action == AllowedAction.ARCHIVE.value:
-                await self._gmail.archive_message(message_id)
-            elif action == AllowedAction.STAR.value:
-                await self._gmail.star_message(message_id)
-            elif action == AllowedAction.LABEL.value:
-                # Label requires a label_id; skip if not provided
-                logger.info("LABEL action requires manual label selection; skipping")
-            elif action == AllowedAction.IGNORE.value:
-                logger.info("IGNORE action; no Gmail operation needed")
-            else:
-                logger.warning("Unknown action %s; skipping execution", action)
-                return
-
+            await self._wedge_service.execute_receipt(decision.receipt_id)
             decision.receipt_state = ReceiptState.EXECUTED.value
             logger.info(
-                "Executed triage action: %s on message %s",
-                action,
-                message_id,
+                "Executed triage action via receipt %s: %s",
+                decision.receipt_id,
+                decision.final_action,
             )
-        except (RuntimeError, OSError, ConnectionError) as exc:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as exc:
             logger.error(
-                "Failed to execute action %s on %s: %s",
-                action,
-                message_id,
+                "Failed to execute receipt %s: %s",
+                decision.receipt_id,
                 exc,
             )
 

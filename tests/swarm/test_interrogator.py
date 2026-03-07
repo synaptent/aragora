@@ -128,3 +128,24 @@ class TestFallbackQuestions:
     def test_all_questions_end_with_punctuation(self):
         for q in FALLBACK_QUESTIONS:
             assert q.endswith(".") or q.endswith("?"), f"Question missing punctuation: {q}"
+
+
+class TestInterrogatorInputSafety:
+    """Test non-interactive / EOF-safe interrogation behavior."""
+
+    @pytest.mark.asyncio
+    async def test_eof_input_is_handled_gracefully(self):
+        """EOF during questioning should still produce a usable spec."""
+        interrogator = SwarmInterrogator(
+            config=InterrogatorConfig(fallback_to_fixed_questions=True)
+        )
+
+        with patch.object(interrogator, "_get_harness", new=AsyncMock(return_value=None)):
+            spec = await interrogator.interrogate(
+                "Check dry-run plumbing",
+                input_fn=lambda _prompt: (_ for _ in ()).throw(EOFError()),
+                print_fn=lambda _msg: None,
+            )
+
+        assert spec.raw_goal == "Check dry-run plumbing"
+        assert spec.refined_goal == "Check dry-run plumbing"

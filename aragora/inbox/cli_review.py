@@ -17,6 +17,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+from enum import Enum
 from typing import Any, Callable
 
 from aragora.inbox.trust_wedge import (
@@ -27,6 +28,12 @@ from aragora.inbox.trust_wedge import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _action_value(action: Any) -> str:
+    if isinstance(action, Enum):
+        return str(action.value)
+    return str(action)
 
 
 class CLIReviewLoop:
@@ -52,11 +59,13 @@ class CLIReviewLoop:
         *,
         input_fn: Callable[..., str] | None = None,
         print_fn: Callable[..., Any] | None = None,
+        review_fn: Callable[..., Any] | None = None,
         on_approve: Callable[[TriageDecision], None] | None = None,
         on_reject: Callable[[TriageDecision], None] | None = None,
     ) -> None:
         self._input = input_fn or input
         self._print = print_fn or print
+        self._review_fn = review_fn
         self._on_approve = on_approve
         self._on_reject = on_reject
 
@@ -135,14 +144,14 @@ class CLIReviewLoop:
         self._print(f"  Sender  : {sender}")
         if snippet:
             self._print(f"  Snippet : {snippet[:120]}")
-        self._print(f"  Action  : {decision.final_action}")
+        self._print(f"  Action  : {_action_value(decision.final_action)}")
         self._print(f"  Conf.   : {decision.confidence:.0%}")
         if decision.dissent_summary:
             self._print(f"  Dissent : {decision.dissent_summary}")
         self._print(f"  Receipt : {decision.receipt_id}")
 
     def _handle_approve(self, decision: TriageDecision) -> dict[str, Any]:
-        decision.receipt_state = ReceiptState.APPROVED.value
+        self._apply_review(decision, choice="approve")
         self._print("  -> APPROVED")
         logger.info(
             "Triage approved: receipt=%s action=%s", decision.receipt_id, decision.final_action
@@ -156,7 +165,7 @@ class CLIReviewLoop:
         }
 
     def _handle_reject(self, decision: TriageDecision) -> dict[str, Any]:
-        decision.receipt_state = ReceiptState.EXPIRED.value
+        self._apply_review(decision, choice="reject")
         self._print("  -> REJECTED")
         logger.info("Triage rejected: receipt=%s", decision.receipt_id)
         if self._on_reject:
@@ -178,11 +187,7 @@ class CLIReviewLoop:
 
         old_action = decision.final_action
         parsed_action = InboxWedgeAction.parse(new_action)
-        decision.final_action = parsed_action
-        if decision.intent:
-            decision.intent.action = parsed_action
-        # Reset state to CREATED (re-sign needed)
-        decision.receipt_state = ReceiptState.CREATED.value
+        self._apply_review(decision, choice="edit", edited_action=parsed_action.value)
         self._print(f"  -> EDITED: {old_action} -> {new_action}")
         logger.info(
             "Triage edited: receipt=%s %s->%s",
@@ -197,7 +202,7 @@ class CLIReviewLoop:
         }
 
     def _handle_skip(self, decision: TriageDecision) -> dict[str, Any]:
-        # Leave receipt_state as CREATED
+        self._apply_review(decision, choice="skip")
         self._print("  -> SKIPPED")
         logger.info("Triage skipped: receipt=%s", decision.receipt_id)
         return {
@@ -205,6 +210,50 @@ class CLIReviewLoop:
             "action_taken": "skip",
             "final_action": decision.final_action,
         }
+
+    def _apply_review(
+        self,
+        decision: TriageDecision,
+        *,
+        choice: str,
+        edited_action: str | None = None,
+        edited_rationale: str | None = None,
+        label_id: str | None = None,
+    ) -> None:
+        if self._review_fn is None or not decision.receipt_id:
+            if choice == "approve":
+                decision.receipt_state = ReceiptState.APPROVED.value
+            elif choice == "reject":
+                decision.receipt_state = ReceiptState.EXPIRED.value
+            elif choice == "edit":
+                if edited_action is not None:
+                    parsed_action = InboxWedgeAction.parse(edited_action)
+                    decision.final_action = parsed_action
+                    if decision.intent:
+                        decision.intent.action = parsed_action
+                decision.receipt_state = ReceiptState.CREATED.value
+            return
+
+        envelope = self._review_fn(
+            decision.receipt_id,
+            choice=choice,
+            edited_action=edited_action,
+            edited_rationale=edited_rationale,
+            label_id=label_id,
+        )
+        receipt = envelope.receipt
+        updated = envelope.decision
+
+        decision.final_action = updated.final_action
+        decision.confidence = updated.confidence
+        decision.dissent_summary = updated.dissent_summary
+        decision.receipt_id = receipt.receipt_id
+        decision.auto_approval_eligible = updated.auto_approval_eligible
+        decision.receipt_state = receipt.state.value
+        decision.intent = envelope.intent
+        decision.provider_route = updated.provider_route
+        decision.label_id = updated.label_id
+        decision.blocked_by_policy = updated.blocked_by_policy
 
 
 __all__ = ["CLIReviewLoop"]
