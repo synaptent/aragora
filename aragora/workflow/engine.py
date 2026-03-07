@@ -107,7 +107,7 @@ class WorkflowEngine:
 
         # Timeout tracking for progressive warnings
         self._timeout_warning_thresholds = [0.5, 0.8, 0.9]  # Warn at 50%, 80%, 90%
-        self._timeout_warnings_issued: set = set()
+        self._timeout_warnings_issued: set[float] = set()
 
     def _register_default_step_types(self) -> None:
         """Register built-in step types."""
@@ -1023,7 +1023,7 @@ class WorkflowEngine:
         workflow_id: str,
         definition_id: str,
         current_step: str,
-        completed_steps: set,
+        completed_steps: set[str],
         context: WorkflowContext,
     ) -> WorkflowCheckpoint:
         """Create a checkpoint of current workflow state."""
