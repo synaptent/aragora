@@ -6,8 +6,10 @@ and supporting retrieval via GET /api/v1/playground/debate/{id}.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -16,6 +18,14 @@ from aragora.storage.base_store import SQLiteStore
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TTL_DAYS = 30
+
+
+def normalize_cache_key(topic: str, model_ids: list[str], rounds: int) -> str:
+    """Compute a content-addressed cache key for a debate configuration."""
+    normalized_topic = re.sub(r"\s+", " ", topic.strip().lower())
+    sorted_models = "|".join(sorted(model_ids))
+    raw = f"{normalized_topic}|{sorted_models}|{rounds}"
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 class DebateResultStore(SQLiteStore):
@@ -37,6 +47,17 @@ class DebateResultStore(SQLiteStore):
             ON debate_results(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_debate_results_expires
             ON debate_results(expires_at);
+        CREATE TABLE IF NOT EXISTS debate_cache_index (
+            cache_key TEXT PRIMARY KEY,
+            debate_id TEXT NOT NULL,
+            topic_normalized TEXT NOT NULL,
+            model_ids TEXT NOT NULL,
+            rounds INTEGER NOT NULL,
+            created_at REAL NOT NULL,
+            hit_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_cache_created
+            ON debate_cache_index(created_at);
     """
 
     def save(
@@ -107,6 +128,64 @@ class DebateResultStore(SQLiteStore):
             }
             for r in rows
         ]
+
+    def save_cache_index(
+        self,
+        cache_key: str,
+        debate_id: str,
+        topic_normalized: str,
+        model_ids: str,
+        rounds: int,
+    ) -> None:
+        """Save a cache index entry mapping a content hash to a debate ID."""
+        now = time.time()
+        with self.connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO debate_cache_index
+                    (cache_key, debate_id, topic_normalized, model_ids, rounds, created_at, hit_count)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
+                """,
+                (cache_key, debate_id, topic_normalized, model_ids, rounds, now),
+            )
+
+    def get_by_cache_key(self, cache_key: str) -> dict[str, Any] | None:
+        """Look up a cached debate result by content-addressed key.
+
+        Returns the debate result dict if the cache entry exists and the
+        underlying debate has not expired.  On a cache miss (no index row
+        or expired debate), returns None and cleans up any orphaned index row.
+        On a hit, increments hit_count.
+        """
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT debate_id FROM debate_cache_index WHERE cache_key = ?",
+                (cache_key,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        debate_id = row[0]
+        result = self.get(debate_id)
+
+        if result is None:
+            # Underlying debate expired or missing — clean up orphaned index row
+            with self.connection() as conn:
+                conn.execute(
+                    "DELETE FROM debate_cache_index WHERE cache_key = ?",
+                    (cache_key,),
+                )
+            return None
+
+        # Cache hit — increment counter
+        with self.connection() as conn:
+            conn.execute(
+                "UPDATE debate_cache_index SET hit_count = hit_count + 1 WHERE cache_key = ?",
+                (cache_key,),
+            )
+
+        return result
 
     def cleanup_expired(self) -> int:
         """Delete expired entries. Returns count of deleted rows."""
