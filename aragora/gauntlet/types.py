@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from typing import Any
 
 
 class InputType(Enum):
@@ -158,7 +159,7 @@ class BaseFinding:
         """Get numeric severity value (0-1)."""
         return self.severity.numeric_value
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "id": self.id,
@@ -209,7 +210,7 @@ class RiskSummary:
         else:
             self.info += 1
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "critical": self.critical,

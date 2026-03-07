@@ -270,6 +270,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _recent_revert_exists(repo_path: Path, minutes: int = 10) -> bool:
+    """Check if a revert commit was made in the last *minutes* minutes."""
+    result = _run(
+        ["git", "log", f"--since={minutes} minutes ago", "--grep=Revert", "--oneline"],
+        cwd=repo_path,
+    )
+    if result.returncode != 0:
+        return False
+    return bool(result.stdout.strip())
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if not args.repo:
@@ -333,8 +344,22 @@ def main(argv: list[str] | None = None) -> int:
         if args.dry_run:
             return 0
 
+        repo_path = Path(args.repo_path).resolve()
+        if _recent_revert_exists(repo_path):
+            print(
+                json.dumps(
+                    {
+                        "action": "skip",
+                        "reason": "rate_limited_recent_revert",
+                        "target_sha": target_sha,
+                        "detail": "A revert was performed in the last 10 minutes; skipping to prevent flap loop",
+                    }
+                )
+            )
+            return 0
+
         ok, message = perform_revert(
-            Path(args.repo_path).resolve(),
+            repo_path,
             target_sha=target_sha,
             base_branch=args.base,
         )
