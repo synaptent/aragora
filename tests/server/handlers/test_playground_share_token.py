@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,6 +17,38 @@ def _clean_rate_limits():
     _reset_rate_limits()
     yield
     _reset_rate_limits()
+
+
+@pytest.fixture(autouse=True)
+def _mock_live_debate():
+    """Patch _run_live_debate so tests don't need real API keys."""
+
+    def _side_effect(self, topic, rounds, agent_count):
+        participants = [f"agent-{i}" for i in range(agent_count)]
+        return json_response(
+            {
+                "id": f"playground_{uuid.uuid4().hex[:8]}",
+                "topic": topic,
+                "status": "completed",
+                "rounds_used": 1,
+                "consensus_reached": True,
+                "confidence": 0.82,
+                "verdict": "consensus",
+                "duration_seconds": 1.5,
+                "participants": participants,
+                "proposals": {p: f"Position from {p}" for p in participants},
+                "critiques": [],
+                "votes": [],
+                "dissenting_views": [],
+                "final_answer": "Consensus reached.",
+                "is_live": True,
+                "receipt_preview": {},
+                "upgrade_cta": {},
+            }
+        )
+
+    with patch.object(PlaygroundHandler, "_run_live_debate", _side_effect):
+        yield
 
 
 @pytest.fixture()

@@ -51,6 +51,16 @@ _PLAYGROUND_RATE_WINDOW = 60.0  # seconds
 _LIVE_RATE_LIMIT = 1  # 1 live debate per window per IP
 _LIVE_RATE_WINDOW = 600.0  # 10 minutes
 
+# OpenRouter model diversity for playground debates.
+# Each agent gets a different model architecture for genuine adversarial diversity.
+OPENROUTER_PLAYGROUND_MODELS: list[tuple[str, str]] = [
+    ("analyst", "anthropic/claude-sonnet-4"),
+    ("critic", "openai/gpt-4o"),
+    ("synthesizer", "google/gemini-2.0-flash-001"),
+    ("contrarian", "mistralai/mistral-large-latest"),
+    ("auditor", "deepseek/deepseek-chat"),
+]
+
 # IP -> list of timestamps
 _request_timestamps: dict[str, list[float]] = {}
 _live_request_timestamps: dict[str, list[float]] = {}
@@ -247,6 +257,43 @@ def _build_mock_critiques(
         "contrarian": ["Steel-man the opposing position before dismissing it"],
     }
     return {"issues": issues, "suggestions": suggestions}
+
+
+def _normalize_public_debate_payload(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize debate payloads to the public handler contract."""
+    critiques = data.get("critiques")
+    if not isinstance(critiques, list):
+        return data
+
+    normalized_critiques: list[dict[str, Any]] = []
+    for critique in critiques:
+        if not isinstance(critique, dict):
+            continue
+
+        target_agent = critique.get("target_agent") or critique.get("target") or ""
+        issues = critique.get("issues")
+        content = str(critique.get("content") or "").strip()
+        if not isinstance(issues, list):
+            issues = [content] if content else []
+
+        suggestions = critique.get("suggestions")
+        if not isinstance(suggestions, list):
+            suggestions = []
+
+        severity = critique.get("severity")
+        if not isinstance(severity, (int, float)):
+            severity = 0.5 if issues else 0.0
+
+        normalized = dict(critique)
+        normalized.pop("target", None)
+        normalized["target_agent"] = target_agent
+        normalized["issues"] = issues
+        normalized["suggestions"] = suggestions
+        normalized["severity"] = severity
+        normalized_critiques.append(normalized)
+
+    data["critiques"] = normalized_critiques
+    return data
 
 
 # Keep static versions for backward compat
@@ -1641,25 +1688,7 @@ class PlaygroundHandler(BaseHandler):
         if path != "/api/v1/playground/debate":
             return None
 
-        # Rate limiting
-        client_ip = "unknown"
-        if handler and hasattr(handler, "client_address"):
-            addr = handler.client_address
-            if isinstance(addr, (list, tuple)) and len(addr) >= 1:
-                client_ip = str(addr[0])
-
-        allowed, retry_after = _check_rate_limit(client_ip)
-        if not allowed:
-            return json_response(
-                {
-                    "error": "Rate limit exceeded. Please try again later.",
-                    "code": "rate_limit_exceeded",
-                    "retry_after": retry_after,
-                },
-                status=429,
-            )
-
-        # Parse body
+        # Parse body early so we can check cache before rate limiting
         body = self.read_json_body(handler) if handler else {}
         if body is None:
             body = {}
@@ -1680,14 +1709,11 @@ class PlaygroundHandler(BaseHandler):
         mode = str(body.get("mode", "") or "").strip() or "consult"
 
         # Source: "oracle" for Oracle page, "landing" for main site, etc.
+        # Controls prompt flavour — Oracle uses tentacle language, landing uses neutral.
         source = str(body.get("source", "") or "").strip() or "oracle"
 
         # Session ID for follow-up conversation memory
         session_id = str(body.get("session_id", "") or "").strip() or None
-
-        # Source: "oracle" for Oracle page, "landing" for main site, etc.
-        # Controls prompt flavour — Oracle uses tentacle language, landing uses neutral.
-        source = str(body.get("source", "") or "").strip() or "oracle"
 
         try:
             rounds = int(body.get("rounds", _DEFAULT_ROUNDS))
@@ -1701,6 +1727,50 @@ class PlaygroundHandler(BaseHandler):
             agent_count = _DEFAULT_AGENTS
         agent_count = max(_MIN_AGENTS, min(agent_count, _MAX_AGENTS))
 
+        # --- Content-addressed cache lookup (before rate limiting) ---
+        cache_key: str | None = None
+        model_ids: list[str] = []
+        try:
+            from aragora.storage.debate_store import get_debate_store, normalize_cache_key
+
+            agent_tags = _get_available_live_agents(agent_count)
+            model_ids = [
+                tag.split(":", 1)[1] if tag.startswith("openrouter:") else tag for tag in agent_tags
+            ]
+            effective_topic = question or topic
+            cache_key = normalize_cache_key(effective_topic, model_ids, rounds)
+
+            store = get_debate_store()
+            cached = store.get_by_cache_key(cache_key)
+            if cached is not None:
+                cached = _normalize_public_debate_payload(cached)
+                cached["cached"] = True
+                cached["cached_at"] = time.time()
+                logger.info("Cache hit for debate key %.12s…", cache_key)
+                return json_response(cached)
+        except (ImportError, RuntimeError, OSError, ValueError):
+            logger.debug("Cache lookup unavailable, proceeding to debate", exc_info=True)
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache lookup failed, proceeding to debate", exc_info=True)
+
+        # Rate limiting (skipped on cache hit above)
+        client_ip = "unknown"
+        if handler and hasattr(handler, "client_address"):
+            addr = handler.client_address
+            if isinstance(addr, (list, tuple)) and len(addr) >= 1:
+                client_ip = str(addr[0])
+
+        allowed, retry_after = _check_rate_limit(client_ip)
+        if not allowed:
+            return json_response(
+                {
+                    "error": "Rate limit exceeded. Please try again later.",
+                    "code": "rate_limit_exceeded",
+                    "retry_after": retry_after,
+                },
+                status=429,
+            )
+
         return self._run_debate(
             topic,
             rounds,
@@ -1709,6 +1779,8 @@ class PlaygroundHandler(BaseHandler):
             mode=mode,
             session_id=session_id,
             source=source,
+            cache_key=cache_key,
+            model_ids=model_ids,
         )
 
     def _run_debate(
@@ -1720,7 +1792,13 @@ class PlaygroundHandler(BaseHandler):
         mode: str = "consult",
         session_id: str | None = None,
         source: str = "oracle",
+        cache_key: str | None = None,
+        model_ids: list[str] | None = None,
     ) -> HandlerResult:
+        _cache_kw: dict[str, Any] = {}
+        if cache_key is not None:
+            _cache_kw = {"cache_key": cache_key, "model_ids": model_ids or [], "rounds": rounds}
+
         if question:
             if source == "oracle":
                 # Oracle mode: try single-agent Oracle response first
@@ -1732,6 +1810,7 @@ class PlaygroundHandler(BaseHandler):
                         json_response(oracle_result),
                         topic,
                         source,
+                        **_cache_kw,
                     )
                 logger.info(
                     "Oracle LLM call failed — returning placeholder instead of irrelevant mock"
@@ -1763,6 +1842,7 @@ class PlaygroundHandler(BaseHandler):
                     ),
                     topic,
                     source,
+                    **_cache_kw,
                 )
             else:
                 # Non-Oracle source (landing, playground, etc.): try multi-perspective tentacles
@@ -1776,40 +1856,38 @@ class PlaygroundHandler(BaseHandler):
                     summary_depth="none",  # no essay context for non-Oracle sources
                 )
                 if tentacle_result:
-                    return self._persist_and_respond(json_response(tentacle_result), topic, source)
-                logger.info("Multi-perspective call failed — falling through to mock debate")
-                # Fall through to mock debate below (no Oracle placeholder for landing)
-        else:
-            # Normal playground: try aragora-debate package
-            try:
-                result = self._run_debate_with_package(
-                    topic, rounds, agent_count, question=question
-                )
-                return self._persist_and_respond(result, topic, source)
-            except ImportError:
-                logger.info("aragora-debate not installed, using inline mock debate")
-            except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError):
-                logger.exception("aragora-debate failed, falling back to inline mock")
+                    return self._persist_and_respond(
+                        json_response(tentacle_result), topic, source, **_cache_kw
+                    )
+                logger.info("Multi-perspective call failed — trying live debate")
 
-        # Last resort: inline mock debate (question-aware when question provided)
+        # Run a real live debate (no mock fallback)
         try:
-            mock_result = _run_inline_mock_debate(topic, rounds, agent_count, question=question)
-            return self._persist_and_respond(
-                json_response(mock_result),
-                topic,
-                source,
+            live_result = self._run_live_debate(question or topic, rounds, agent_count)
+            return self._persist_and_respond(live_result, topic, source, **_cache_kw)
+        except (TimeoutError, ValueError, RuntimeError, OSError) as exc:
+            logger.warning("Live debate failed: %s", exc)
+            return error_response(
+                "Debate temporarily unavailable. Please try again in a moment.",
+                503,
             )
-        except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError):
-            logger.exception("Inline mock debate failed")
-            return error_response("Debate failed unexpectedly", 500)
 
     @staticmethod
     def _persist_and_respond(
         handler_result: HandlerResult,
         topic: str,
         source: str,
+        *,
+        cache_key: str | None = None,
+        model_ids: list[str] | None = None,
+        rounds: int | None = None,
     ) -> HandlerResult:
-        """Persist the debate result and inject share_url into the response."""
+        """Persist the debate result and inject share_url into the response.
+
+        When *cache_key*, *model_ids*, and *rounds* are provided the method
+        also writes a cache index entry so that future identical requests
+        can be served from cache.
+        """
         try:
             from aragora.storage.debate_store import get_debate_store
 
@@ -1818,7 +1896,7 @@ class PlaygroundHandler(BaseHandler):
             if not body_bytes:
                 return handler_result
 
-            data = json.loads(body_bytes.decode("utf-8"))
+            data = _normalize_public_debate_payload(json.loads(body_bytes.decode("utf-8")))
             debate_id = data.get("id", "")
             if debate_id:
                 # Inject share fields and source into data BEFORE persisting
@@ -1829,6 +1907,27 @@ class PlaygroundHandler(BaseHandler):
                 try:
                     store = get_debate_store()
                     store.save(debate_id, topic, data, source=source)
+
+                    # Save cache index so this debate can be found by content hash
+                    if cache_key and model_ids is not None and rounds is not None:
+                        try:
+                            normalized_topic = re.sub(
+                                r"\s+",
+                                " ",
+                                (data.get("topic", topic) or topic).strip().lower(),
+                            )
+                            store.save_cache_index(
+                                cache_key=cache_key,
+                                debate_id=debate_id,
+                                topic_normalized=normalized_topic,
+                                model_ids="|".join(sorted(model_ids)),
+                                rounds=rounds,
+                            )
+                            logger.debug("Saved cache index %.12s… → %s", cache_key, debate_id)
+                        except (RuntimeError, OSError):
+                            logger.debug("Cache index save failed", exc_info=True)
+                        except Exception:  # noqa: BLE001
+                            logger.debug("Cache index save failed unexpectedly", exc_info=True)
                 except (ImportError, RuntimeError, OSError):
                     logger.debug("Debate store unavailable, debate not persisted", exc_info=True)
                 except Exception:  # noqa: BLE001
@@ -2213,37 +2312,64 @@ _live_semaphore = asyncio.Semaphore(_LIVE_MAX_CONCURRENT)
 
 
 def _get_available_live_agents(count: int) -> list[str]:
-    """Pick agent providers that have API keys configured.
+    """Pick agent providers for playground debates.
 
-    With fallback enabled by default, agents whose primary key is
-    missing can still operate via OpenRouter.  We therefore include
-    providers that *either* have a primary key *or* can fall back.
+    Prefers primary API keys when available. Falls back to OpenRouter
+    with diverse models when primary keys are missing. Raises ValueError
+    if not even OPENROUTER_API_KEY is available.
     """
     has_openrouter = bool(_get_api_key("OPENROUTER_API_KEY"))
 
+    # Try primary providers first
     candidates: list[str] = []
     if _get_api_key("ANTHROPIC_API_KEY"):
         candidates.append("anthropic-api")
-    if _get_api_key("OPENAI_API_KEY") or has_openrouter:
+    if _get_api_key("OPENAI_API_KEY"):
         candidates.append("openai-api")
-    if has_openrouter:
-        candidates.append("openrouter")
-    if _get_api_key("MISTRAL_API_KEY") or has_openrouter:
+    if _get_api_key("MISTRAL_API_KEY"):
         candidates.append("mistral-api")
 
-    # De-duplicate while preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for c in candidates:
-        if c not in seen:
-            seen.add(c)
-            unique.append(c)
-    candidates = unique
+    # If we have enough primary agents, use them
+    if len(candidates) >= count:
+        return candidates[:count]
 
-    # Pad to requested count by repeating
+    # Fill remaining slots with OpenRouter models for diversity
+    if has_openrouter:
+        for _role, model in OPENROUTER_PLAYGROUND_MODELS:
+            if len(candidates) >= count:
+                break
+            tag = f"openrouter:{model}"
+            if tag not in candidates:
+                candidates.append(tag)
+        while len(candidates) < count and candidates:
+            candidates.append(candidates[0])
+        return candidates[:count]
+
+    if not candidates:
+        raise ValueError(
+            "No API keys configured. Set OPENROUTER_API_KEY for universal access "
+            "to multiple LLM providers, or set individual provider keys."
+        )
+
     while len(candidates) < count and candidates:
         candidates.append(candidates[0])
     return candidates[:count]
+
+
+def _resolve_playground_agents(agent_tags: list[str]) -> str:
+    """Convert playground agent tags to comma-separated string for DebateFactory.
+
+    Tags like 'openrouter:anthropic/claude-sonnet-4' become 'openrouter/anthropic/claude-sonnet-4'.
+    Tags like 'anthropic-api' pass through unchanged.
+    """
+    resolved = []
+    for tag in agent_tags:
+        if tag.startswith("openrouter:"):
+            model = tag.split(":", 1)[1]
+            resolved.append(f"openrouter/{model}")
+        else:
+            resolved.append(tag)
+    return ",".join(resolved)
 
 
 def start_playground_debate(
@@ -2277,7 +2403,7 @@ def start_playground_debate(
     if len(agents) < 2:
         raise ValueError("At least 2 agent providers with API keys are required")
 
-    agents_str = ",".join(agents)
+    agents_str = _resolve_playground_agents(agents)
 
     def _run() -> dict[str, Any]:
         try:

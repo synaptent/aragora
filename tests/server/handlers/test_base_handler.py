@@ -491,6 +491,7 @@ class TestBaseHandlerJsonParsing:
         handler = BaseHandler({})
         mock_http = MagicMock()
         mock_http.headers = {"Content-Length": "0"}
+        mock_http.rfile = BytesIO(b"")
 
         result = handler.read_json_body(mock_http)
         assert result == {}

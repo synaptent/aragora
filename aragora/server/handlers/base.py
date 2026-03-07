@@ -1100,6 +1100,9 @@ class BaseHandler:
     def read_json_body(self, handler: Any, max_size: int | None = None) -> dict[str, Any] | None:
         """Read and parse JSON body from request handler.
 
+        Handles missing Content-Length (e.g. Cloudflare HTTP/2 proxying)
+        and Transfer-Encoding: chunked.
+
         Args:
             handler: The HTTP request handler with headers and rfile
             max_size: Maximum body size to accept (default: MAX_BODY_SIZE)
@@ -1110,12 +1113,25 @@ class BaseHandler:
         max_size = max_size or self.MAX_BODY_SIZE
         try:
             content_length = int(handler.headers.get("Content-Length", 0))
-            if content_length <= 0:
-                return {}
+            is_chunked = "chunked" in (handler.headers.get("Transfer-Encoding", "") or "").lower()
+
             if content_length > max_size:
                 return None  # Body too large
-            body = handler.rfile.read(content_length)
-            return json.loads(body) if body else {}
+
+            if content_length > 0:
+                body = handler.rfile.read(content_length)
+            elif is_chunked or content_length == 0:
+                # Missing or zero Content-Length: read available data up to max_size.
+                # This handles Cloudflare HTTP/2 -> HTTP/1.1 proxy scenarios.
+                body = handler.rfile.read(max_size)
+            else:
+                return {}
+
+            if not body:
+                return {}
+            if len(body) > max_size:
+                return None  # Body too large after read
+            return json.loads(body)
         except (json.JSONDecodeError, ValueError, TypeError):
             return None
 

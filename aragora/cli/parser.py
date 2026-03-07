@@ -682,6 +682,11 @@ Examples:
         "-r",
         help="Save decision receipt to file (.json, .html, or .md)",
     )
+    demo_parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Force offline mode with mock agents (no API keys used)",
+    )
     demo_parser.set_defaults(func=_lazy("aragora.cli.commands.delegated", "cmd_demo"))
 
 
