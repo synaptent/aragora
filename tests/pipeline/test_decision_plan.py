@@ -31,7 +31,7 @@ from aragora.pipeline.decision_plan import (
 )
 from aragora.pipeline.risk_register import RiskLevel
 from aragora.prompt_engine.spec_validator import ValidationResult, ValidatorRole
-from aragora.prompt_engine.types import RiskItem, Specification, SpecFile
+from aragora.prompt_engine.types import RiskItem, SpecFile, SpecProvenance, Specification
 
 
 # ---------------------------------------------------------------------------
@@ -261,6 +261,68 @@ class TestDecisionPlanFactory:
 
         assert plan.metadata["spec_bundle"]["title"] == "Execution-grade spec"
         assert "spec_bundle_missing_fields" not in plan.metadata
+        assert plan.metadata["spec_bundle"]["is_execution_grade"] is True
+
+    def test_from_specification_creates_runnable_plan_and_preserves_provenance(self):
+        spec = Specification(
+            title="Execution-grade spec",
+            problem_statement="Problem",
+            proposed_solution="Ship the change",
+            success_criteria=["Criterion"],
+            file_changes=[
+                SpecFile(path="aragora/pipeline/example.py", action="modify", description="Change")
+            ],
+            risks=[
+                RiskItem(
+                    description="Regression risk",
+                    likelihood="medium",
+                    impact="medium",
+                    mitigation="Use staged rollback",
+                )
+            ],
+            provenance=SpecProvenance(
+                original_prompt="Build the execution bridge",
+                debate_id="prompt-debate-123",
+                prompt_hash="abc123def4567890",
+            ),
+            provenance_chain=[{"stage": "specify", "id": "stage-1"}],
+        )
+        spec.constraints = ["Keep existing API contract stable"]
+        validation = ValidationResult(
+            role_results={ValidatorRole.DEVILS_ADVOCATE: {"passed": True, "confidence": 0.9}},
+            overall_confidence=0.92,
+            passed=True,
+        )
+
+        plan = DecisionPlanFactory.from_specification(
+            spec,
+            approval_mode=ApprovalMode.NEVER,
+            validation_result=validation,
+        )
+
+        assert plan.debate_id == "prompt-debate-123"
+        assert plan.status == PlanStatus.APPROVED
+        assert plan.implement_plan is not None
+        assert len(plan.implement_plan.tasks) == 1
+        assert plan.verification_plan is not None
+        assert len(plan.verification_plan.test_cases) >= 3
+        assert plan.metadata["spec_bundle"]["provenance_refs"][0]["original_prompt"] == (
+            "Build the execution bridge"
+        )
+        assert plan.metadata["prompt_spec_artifacts"]["specification"]["file_changes"][0][
+            "path"
+        ] == ("aragora/pipeline/example.py")
+
+    def test_from_specification_fails_closed_on_missing_execution_fields(self):
+        spec = Specification(
+            title="Incomplete spec",
+            problem_statement="Problem",
+            proposed_solution="Solution",
+            success_criteria=["Criterion"],
+        )
+
+        with pytest.raises(ValueError, match="execution-grade"):
+            DecisionPlanFactory.from_specification(spec)
 
     def test_from_debate_result_stores_deliberation_bundle_in_metadata(self):
         result = _make_result(

@@ -110,6 +110,90 @@ class PromptEngineHandler(SecureHandler):
     # Endpoint handlers
     # ------------------------------------------------------------------
 
+    def _normalize_decision_plan_request(
+        self,
+        handler: Any,
+        data: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, HandlerResult | None]:
+        plan_data = data.get("decision_plan")
+        if plan_data is None:
+            return None, None
+        if not isinstance(plan_data, dict):
+            return None, error_response("decision_plan must be an object", 400)
+
+        create_requested = bool(plan_data.get("create"))
+        schedule_requested = bool(plan_data.get("schedule_execution"))
+        if schedule_requested and not create_requested:
+            return None, error_response(
+                "decision_plan.schedule_execution requires decision_plan.create", 400
+            )
+        if not create_requested:
+            return None, None
+
+        from aragora.pipeline.decision_plan import ApprovalMode
+        from aragora.pipeline.risk_register import RiskLevel
+
+        approval_mode_raw = str(plan_data.get("approval_mode", ApprovalMode.RISK_BASED.value))
+        try:
+            approval_mode = ApprovalMode(approval_mode_raw)
+        except ValueError:
+            return None, error_response(
+                f"Invalid decision_plan.approval_mode: {approval_mode_raw}",
+                400,
+            )
+
+        max_auto_risk_raw = str(plan_data.get("max_auto_risk", RiskLevel.LOW.value))
+        try:
+            max_auto_risk = RiskLevel(max_auto_risk_raw)
+        except ValueError:
+            return None, error_response(
+                f"Invalid decision_plan.max_auto_risk: {max_auto_risk_raw}",
+                400,
+            )
+
+        budget_limit_usd = plan_data.get("budget_limit_usd")
+        if budget_limit_usd is not None:
+            try:
+                budget_limit_usd = float(budget_limit_usd)
+            except (TypeError, ValueError):
+                return None, error_response("decision_plan.budget_limit_usd must be numeric", 400)
+
+        metadata = plan_data.get("metadata")
+        if metadata is not None and not isinstance(metadata, dict):
+            return None, error_response("decision_plan.metadata must be an object", 400)
+
+        implementation_profile = plan_data.get("implementation_profile") or plan_data.get(
+            "implementation"
+        )
+        if implementation_profile is not None and not isinstance(implementation_profile, dict):
+            return None, error_response(
+                "decision_plan.implementation_profile must be an object",
+                400,
+            )
+
+        _, perm_err = self.require_permission_or_error(handler, "plans:write")
+        if perm_err:
+            return None, perm_err
+        if schedule_requested:
+            _, perm_err = self.require_permission_or_error(handler, "plans:approve")
+            if perm_err:
+                return None, perm_err
+
+        return (
+            {
+                "create": True,
+                "schedule_execution": schedule_requested,
+                "approval_mode": approval_mode,
+                "max_auto_risk": max_auto_risk,
+                "budget_limit_usd": budget_limit_usd,
+                "debate_id": str(plan_data.get("debate_id", "") or "").strip() or None,
+                "task": str(plan_data.get("task", "") or "").strip() or None,
+                "metadata": metadata,
+                "implementation_profile": implementation_profile,
+            },
+            None,
+        )
+
     def _handle_run(self, handler: Any) -> HandlerResult:
         """Run the full prompt-to-specification pipeline."""
         import asyncio
@@ -121,6 +205,10 @@ class PromptEngineHandler(SecureHandler):
         prompt = data.get("prompt", "").strip()
         if not prompt:
             return error_response("prompt is required", 400)
+
+        plan_request, plan_error = self._normalize_decision_plan_request(handler, data)
+        if plan_error:
+            return plan_error
 
         conductor = self._make_conductor(data)
         context = data.get("context")
@@ -134,18 +222,76 @@ class PromptEngineHandler(SecureHandler):
         validation = validator.validate_heuristic(result.specification)
         spec_bundle = SpecBundle.from_prompt_spec(result.specification, validation=validation)
 
-        return json_response(
-            {
-                "specification": result.specification.to_dict(),
-                "spec_bundle": spec_bundle.to_dict(),
-                "intent": result.intent.to_dict(),
-                "questions": [q.to_dict() for q in result.questions],
-                "research": result.research.to_dict() if result.research else None,
-                "auto_approved": result.auto_approved,
-                "stages_completed": result.stages_completed,
-                "validation": validation.to_dict(),
+        payload = {
+            "specification": result.specification.to_dict(),
+            "spec_bundle": spec_bundle.to_dict(),
+            "intent": result.intent.to_dict(),
+            "questions": [q.to_dict() for q in result.questions],
+            "research": result.research.to_dict() if result.research else None,
+            "auto_approved": result.auto_approved,
+            "stages_completed": result.stages_completed,
+            "validation": validation.to_dict(),
+        }
+
+        if not plan_request:
+            return json_response(payload)
+
+        from aragora.pipeline.decision_plan import DecisionPlanFactory
+        from aragora.pipeline.executor import store_plan
+        from aragora.pipeline.execution_bridge import get_execution_bridge
+        from aragora.pipeline.plan_store import get_plan_store
+
+        try:
+            plan = DecisionPlanFactory.from_specification(
+                result.specification,
+                debate_id=plan_request["debate_id"],
+                task=plan_request["task"],
+                budget_limit_usd=plan_request["budget_limit_usd"],
+                approval_mode=plan_request["approval_mode"],
+                max_auto_risk=plan_request["max_auto_risk"],
+                metadata=plan_request["metadata"],
+                implementation_profile=plan_request["implementation_profile"],
+                validation_result=validation,
+                fail_closed_spec_validation=True,
+            )
+        except ValueError as exc:
+            payload["decision_plan_error"] = {
+                "message": str(exc),
+                "missing_required_fields": list(spec_bundle.missing_required_fields),
             }
-        )
+            return json_response(payload, status=422)
+
+        store = get_plan_store()
+        store.create(plan)
+        store_plan(plan)
+        payload["decision_plan"] = plan.to_dict()
+
+        if plan_request["schedule_execution"]:
+            if plan.requires_human_approval and not plan.is_approved:
+                payload["execution"] = {
+                    "status": "pending_approval",
+                    "plan_id": plan.id,
+                    "requires_human_approval": True,
+                }
+            else:
+                bridge = get_execution_bridge()
+                execution_mode = (
+                    plan.implementation_profile.execution_mode
+                    if plan.implementation_profile
+                    else None
+                )
+                bridge.schedule_execution(plan.id, execution_mode=execution_mode)
+                record = next(iter(bridge.list_execution_records(plan_id=plan.id, limit=1)), None)
+                execution_payload: dict[str, Any] = {
+                    "status": "scheduled",
+                    "plan_id": plan.id,
+                    "execution_mode": execution_mode or "default",
+                }
+                if record:
+                    execution_payload["record"] = record
+                payload["execution"] = execution_payload
+
+        return json_response(payload)
 
     def _handle_decompose(self, handler: Any) -> HandlerResult:
         """Decompose a vague prompt into structured intent."""

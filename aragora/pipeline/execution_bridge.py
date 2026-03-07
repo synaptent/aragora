@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 import uuid
@@ -284,18 +285,19 @@ class ExecutionBridge:
             loop.create_task(_run())
             logger.info("Scheduled background execution for plan %s", plan_id)
         except RuntimeError:
-            logger.warning(
-                "No running event loop; cannot schedule background execution for plan %s",
-                plan_id,
+
+            def _run_in_thread() -> None:
+                asyncio.run(_run())
+
+            worker = threading.Thread(
+                target=_run_in_thread,
+                name=f"plan-exec-{plan_id[:8]}",
+                daemon=True,
             )
-            self.plan_store.update_execution_record(
-                record_execution_id,
-                status="canceled",
-                error={
-                    "type": "RuntimeError",
-                    "message": "No running event loop available for background execution",
-                    "at": datetime.now(timezone.utc).isoformat(),
-                },
+            worker.start()
+            logger.info(
+                "Scheduled background execution for plan %s via dedicated thread",
+                plan_id,
             )
 
 

@@ -32,7 +32,9 @@ from aragora.pipeline.decision_plan.core import (
     ImplementationProfile,
     PlanStatus,
 )
-from aragora.pipeline.risk_register import RiskLevel
+from aragora.pipeline.risk_register import RiskLevel, RiskRegister
+from aragora.pipeline.verification_plan import VerificationPlan
+from aragora.implement.types import ImplementPlan
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,9 @@ class PlanStore:
                     budget_json TEXT,
                     approval_record_json TEXT,
                     implementation_profile_json TEXT,
+                    risk_register_json TEXT,
+                    verification_plan_json TEXT,
+                    implement_plan_json TEXT,
                     metadata_json TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -146,6 +151,12 @@ class PlanStore:
                 )
             if "implementation_profile_json" not in columns:
                 conn.execute("ALTER TABLE plans ADD COLUMN implementation_profile_json TEXT")
+            if "risk_register_json" not in columns:
+                conn.execute("ALTER TABLE plans ADD COLUMN risk_register_json TEXT")
+            if "verification_plan_json" not in columns:
+                conn.execute("ALTER TABLE plans ADD COLUMN verification_plan_json TEXT")
+            if "implement_plan_json" not in columns:
+                conn.execute("ALTER TABLE plans ADD COLUMN implement_plan_json TEXT")
             conn.commit()
         finally:
             conn.close()
@@ -164,6 +175,15 @@ class PlanStore:
             if plan.implementation_profile
             else None
         )
+        risk_register_json = (
+            json.dumps(plan.risk_register.to_dict()) if plan.risk_register else None
+        )
+        verification_plan_json = (
+            json.dumps(plan.verification_plan.to_dict()) if plan.verification_plan else None
+        )
+        implement_plan_json = (
+            json.dumps(plan.implement_plan.to_dict()) if plan.implement_plan else None
+        )
         metadata_json = json.dumps(plan.metadata) if plan.metadata else "{}"
 
         conn = self._connect()
@@ -175,8 +195,9 @@ class PlanStore:
                     max_auto_risk,
                     approved_by, rejection_reason, budget_json,
                     approval_record_json, implementation_profile_json,
+                    risk_register_json, verification_plan_json, implement_plan_json,
                     metadata_json, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     plan.id,
@@ -192,6 +213,9 @@ class PlanStore:
                     budget_json,
                     approval_json,
                     implementation_profile_json,
+                    risk_register_json,
+                    verification_plan_json,
+                    implement_plan_json,
                     metadata_json,
                     plan.created_at.isoformat(),
                     now,
@@ -652,6 +676,28 @@ class PlanStore:
                 )
 
         metadata = json.loads(row["metadata_json"] or "{}")
+        risk_register = None
+        if "risk_register_json" in row_keys and row["risk_register_json"]:
+            try:
+                risk_register = RiskRegister.from_dict(json.loads(row["risk_register_json"]))
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                logger.warning("invalid risk_register_json for plan %s: %s", row["id"], exc)
+
+        verification_plan = None
+        if "verification_plan_json" in row_keys and row["verification_plan_json"]:
+            try:
+                verification_plan = VerificationPlan.from_dict(
+                    json.loads(row["verification_plan_json"])
+                )
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                logger.warning("invalid verification_plan_json for plan %s: %s", row["id"], exc)
+
+        implement_plan = None
+        if "implement_plan_json" in row_keys and row["implement_plan_json"]:
+            try:
+                implement_plan = ImplementPlan.from_dict(json.loads(row["implement_plan_json"]))
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                logger.warning("invalid implement_plan_json for plan %s: %s", row["id"], exc)
 
         max_auto_risk_raw = (
             row["max_auto_risk"] if "max_auto_risk" in row_keys else RiskLevel.LOW.value
@@ -672,6 +718,9 @@ class PlanStore:
             max_auto_risk=max_auto_risk,
             budget=budget,
             approval_record=approval_record,
+            risk_register=risk_register,
+            verification_plan=verification_plan,
+            implement_plan=implement_plan,
             metadata=metadata,
             implementation_profile=implementation_profile,
             created_at=created_at,

@@ -9,6 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.pipeline.decision_plan import ApprovalMode, PlanStatus
+from aragora.prompt_engine.spec_validator import ValidationResult
+from aragora.prompt_engine.types import RiskItem, SpecFile, Specification
 from aragora.server.handlers.prompt_engine.handler import PromptEngineHandler
 
 
@@ -285,6 +288,147 @@ class TestRunPipeline:
         assert "spec_bundle" in parsed["data"]
         assert parsed["data"]["validation"]["passed"] is True
         assert "stages_completed" in parsed["data"]
+
+    @patch("aragora.pipeline.executor.store_plan")
+    @patch("aragora.pipeline.plan_store.get_plan_store")
+    @patch("aragora.pipeline.execution_bridge.get_execution_bridge")
+    @patch("aragora.prompt_engine.SpecValidator")
+    @patch("aragora.prompt_engine.PromptConductor")
+    @patch("aragora.prompt_engine.ConductorConfig")
+    def test_run_can_create_and_schedule_decision_plan(
+        self,
+        mock_config_cls: MagicMock,
+        mock_conductor_cls: MagicMock,
+        mock_validator_cls: MagicMock,
+        mock_get_execution_bridge: MagicMock,
+        mock_get_plan_store: MagicMock,
+        mock_store_plan: MagicMock,
+        handler: PromptEngineHandler,
+    ) -> None:
+        spec = Specification(
+            title="Runnable spec",
+            problem_statement="Problem",
+            proposed_solution="Ship the change",
+            success_criteria=["Criterion"],
+            file_changes=[
+                SpecFile(path="aragora/server/example.py", action="modify", description="Patch")
+            ],
+            risks=[
+                RiskItem(
+                    description="Regression risk",
+                    likelihood="medium",
+                    impact="medium",
+                    mitigation="Rollback quickly",
+                )
+            ],
+            confidence=0.95,
+        )
+        spec.constraints = ["Preserve API contract"]
+        mock_intent = MagicMock()
+        mock_intent.to_dict.return_value = {"raw_prompt": "test", "intent_type": "feature"}
+        mock_result = MagicMock(
+            specification=spec,
+            intent=mock_intent,
+            questions=[],
+            research=None,
+            auto_approved=False,
+            stages_completed=["decompose", "specify"],
+        )
+        mock_conductor_cls.return_value.run = AsyncMock(return_value=mock_result)
+
+        validation = ValidationResult(
+            role_results={},
+            passed=True,
+            overall_confidence=0.95,
+        )
+        mock_validator_cls.return_value.validate_heuristic.return_value = validation
+        mock_config_cls.return_value = MagicMock()
+        mock_config_cls.from_profile.return_value = MagicMock()
+        mock_get_execution_bridge.return_value.list_execution_records.return_value = [
+            {"execution_id": "exec-123", "status": "queued"}
+        ]
+        handler.require_permission_or_error = MagicMock(return_value=(MagicMock(), None))
+
+        req = _make_handler_request(
+            {
+                "prompt": "Build something",
+                "decision_plan": {
+                    "create": True,
+                    "schedule_execution": True,
+                    "approval_mode": ApprovalMode.NEVER.value,
+                    "implementation_profile": {"execution_mode": "workflow"},
+                },
+            }
+        )
+        req.path = "/api/prompt-engine/run"
+
+        result = handler.handle_POST(req)
+        parsed = _parse(result)
+
+        assert parsed["status"] == 200
+        assert parsed["data"]["decision_plan"]["status"] == PlanStatus.APPROVED.value
+        assert parsed["data"]["execution"]["status"] == "scheduled"
+        mock_get_plan_store.return_value.create.assert_called_once()
+        mock_store_plan.assert_called_once()
+        mock_get_execution_bridge.return_value.schedule_execution.assert_called_once()
+
+    @patch("aragora.pipeline.plan_store.get_plan_store")
+    @patch("aragora.prompt_engine.SpecValidator")
+    @patch("aragora.prompt_engine.PromptConductor")
+    @patch("aragora.prompt_engine.ConductorConfig")
+    def test_run_returns_422_when_decision_plan_spec_is_not_execution_grade(
+        self,
+        mock_config_cls: MagicMock,
+        mock_conductor_cls: MagicMock,
+        mock_validator_cls: MagicMock,
+        mock_get_plan_store: MagicMock,
+        handler: PromptEngineHandler,
+    ) -> None:
+        spec = Specification(
+            title="Incomplete spec",
+            problem_statement="Problem",
+            proposed_solution="Ship the change",
+            success_criteria=["Criterion"],
+        )
+        mock_intent = MagicMock()
+        mock_intent.to_dict.return_value = {"raw_prompt": "test", "intent_type": "feature"}
+        mock_result = MagicMock(
+            specification=spec,
+            intent=mock_intent,
+            questions=[],
+            research=None,
+            auto_approved=False,
+            stages_completed=["decompose", "specify"],
+        )
+        mock_conductor_cls.return_value.run = AsyncMock(return_value=mock_result)
+
+        validation = ValidationResult(
+            role_results={},
+            passed=False,
+            overall_confidence=0.2,
+        )
+        mock_validator_cls.return_value.validate_heuristic.return_value = validation
+        mock_config_cls.return_value = MagicMock()
+        mock_config_cls.from_profile.return_value = MagicMock()
+        handler.require_permission_or_error = MagicMock(return_value=(MagicMock(), None))
+
+        req = _make_handler_request(
+            {
+                "prompt": "Build something",
+                "decision_plan": {"create": True},
+            }
+        )
+        req.path = "/api/prompt-engine/run"
+
+        result = handler.handle_POST(req)
+        parsed = _parse(result)
+
+        assert parsed["status"] == 422
+        assert "decision_plan_error" in parsed["data"]
+        assert (
+            "owner_file_scopes" in parsed["data"]["decision_plan_error"]["missing_required_fields"]
+        )
+        mock_get_plan_store.return_value.create.assert_not_called()
 
     def test_unknown_endpoint_returns_404(self, handler: PromptEngineHandler) -> None:
         req = _make_handler_request({"prompt": "test"})

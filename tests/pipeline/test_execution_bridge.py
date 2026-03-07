@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from pathlib import Path
+import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -347,6 +348,31 @@ class TestExecutionBridgeSchedule:
         # Should not raise - errors are logged
         bridge.schedule_execution(approved_plan.id)
         await asyncio.sleep(0.1)
+
+    def test_schedule_execution_falls_back_to_thread_without_running_loop(
+        self, bridge: ExecutionBridge, store: PlanStore, approved_plan: DecisionPlan
+    ) -> None:
+        store.create(approved_plan)
+        started: dict[str, bool] = {}
+
+        class ImmediateThread:
+            def __init__(self, target, name=None, daemon=None):
+                self._target = target
+                started["daemon"] = bool(daemon)
+
+            def start(self):
+                started["started"] = True
+                self._target()
+
+        with patch.object(threading, "Thread", ImmediateThread):
+            bridge.schedule_execution(approved_plan.id)
+
+        assert started["started"] is True
+        assert started["daemon"] is True
+        bridge.executor.execute.assert_called_once()
+        records = bridge.list_execution_records(plan_id=approved_plan.id)
+        assert len(records) == 1
+        assert records[0]["status"] == "succeeded"
 
 
 class TestExecutionBridgeSingleton:

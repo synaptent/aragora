@@ -110,6 +110,36 @@ class Risk:
             result["related_plan_ids"] = self.related_plan_ids
         return result
 
+    @classmethod
+    def from_dict(cls, data: dict) -> Risk:
+        """Deserialize a Risk from a dictionary payload."""
+        try:
+            level = RiskLevel(data.get("level", RiskLevel.LOW.value))
+        except ValueError:
+            level = RiskLevel.LOW
+        try:
+            category = RiskCategory(data.get("category", RiskCategory.UNKNOWN.value))
+        except ValueError:
+            category = RiskCategory.UNKNOWN
+        return cls(
+            id=data.get("id", ""),
+            title=data.get("title", ""),
+            description=data.get("description", ""),
+            level=level,
+            category=category,
+            source=data.get("source", ""),
+            impact=float(data.get("impact", 0.5) or 0.5),
+            likelihood=float(data.get("likelihood", 0.5) or 0.5),
+            mitigation=data.get("mitigation", ""),
+            mitigation_status=data.get("mitigation_status", "proposed"),
+            related_critique_ids=list(data.get("related_critique_ids", []) or []),
+            related_claim_ids=list(data.get("related_claim_ids", []) or []),
+            historical_occurrences=int(data.get("historical_occurrences", 0) or 0),
+            historical_success_rate=data.get("historical_success_rate"),
+            related_plan_ids=list(data.get("related_plan_ids", []) or []),
+            created_at=data.get("created_at", datetime.now().isoformat()),
+        )
+
 
 @dataclass
 class RiskRegister:
@@ -235,6 +265,18 @@ class RiskRegister:
                 "critical_support": self.critical_support_threshold,
             },
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> RiskRegister:
+        """Deserialize a RiskRegister from a dictionary payload."""
+        thresholds = data.get("thresholds", {}) or {}
+        return cls(
+            debate_id=data.get("debate_id", ""),
+            risks=[Risk.from_dict(item) for item in data.get("risks", []) or []],
+            created_at=data.get("created_at", datetime.now().isoformat()),
+            low_support_threshold=float(thresholds.get("low_support", 0.5) or 0.5),
+            critical_support_threshold=float(thresholds.get("critical_support", 0.7) or 0.7),
+        )
 
 
 class RiskAnalyzer:

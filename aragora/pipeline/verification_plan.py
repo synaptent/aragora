@@ -109,6 +109,32 @@ class VerificationCase:
             "implemented": self.implemented,
         }
 
+    @classmethod
+    def from_dict(cls, data: dict) -> VerificationCase:
+        """Deserialize a VerificationCase from a dictionary payload."""
+        try:
+            test_type = VerificationType(data.get("test_type", VerificationType.UNIT.value))
+        except ValueError:
+            test_type = VerificationType.UNIT
+        try:
+            priority = CasePriority(data.get("priority", CasePriority.P2.value))
+        except ValueError:
+            priority = CasePriority.P2
+        return cls(
+            id=data.get("id", ""),
+            title=data.get("title", ""),
+            description=data.get("description", ""),
+            test_type=test_type,
+            priority=priority,
+            preconditions=list(data.get("preconditions", []) or []),
+            steps=list(data.get("steps", []) or []),
+            expected_result=data.get("expected_result", ""),
+            related_claim_ids=list(data.get("related_claim_ids", []) or []),
+            related_critique_ids=list(data.get("related_critique_ids", []) or []),
+            automated=bool(data.get("automated", False)),
+            implemented=bool(data.get("implemented", False)),
+        )
+
 
 @dataclass
 class VerificationPlan:
@@ -237,6 +263,21 @@ class VerificationPlan:
             "critical_paths": self.critical_paths,
             "created_at": self.created_at,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> VerificationPlan:
+        """Deserialize a VerificationPlan from a dictionary payload."""
+        return cls(
+            debate_id=data.get("debate_id", ""),
+            title=data.get("title", ""),
+            description=data.get("description", ""),
+            test_cases=[
+                VerificationCase.from_dict(item) for item in data.get("test_cases", []) or []
+            ],
+            created_at=data.get("created_at", datetime.now().isoformat()),
+            target_coverage=float(data.get("target_coverage", 0.8) or 0.8),
+            critical_paths=list(data.get("critical_paths", []) or []),
+        )
 
 
 class VerificationPlanGenerator:

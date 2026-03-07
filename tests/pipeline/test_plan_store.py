@@ -15,8 +15,15 @@ from aragora.pipeline.decision_plan.core import (
     ImplementationProfile,
     PlanStatus,
 )
-from aragora.pipeline.risk_register import RiskLevel
+from aragora.pipeline.risk_register import Risk, RiskCategory, RiskLevel, RiskRegister
 from aragora.pipeline.plan_store import PlanStore
+from aragora.pipeline.verification_plan import (
+    CasePriority,
+    VerificationCase,
+    VerificationPlan,
+    VerificationType,
+)
+from aragora.implement.types import ImplementPlan, ImplementTask
 
 
 @pytest.fixture
@@ -108,6 +115,61 @@ class TestPlanStoreCreate:
             "slack": "abc",
             "teams": "xyz",
         }
+
+    def test_create_preserves_plan_artifacts(self, store: PlanStore) -> None:
+        plan = DecisionPlan(
+            id="dp-artifacts-roundtrip",
+            debate_id="debate-artifacts",
+            task="Artifact persistence test",
+            risk_register=RiskRegister(
+                debate_id="debate-artifacts",
+                risks=[
+                    Risk(
+                        id="risk-1",
+                        title="Regression risk",
+                        description="Regression risk",
+                        level=RiskLevel.MEDIUM,
+                        category=RiskCategory.TECHNICAL,
+                        source="test",
+                    )
+                ],
+            ),
+            verification_plan=VerificationPlan(
+                debate_id="debate-artifacts",
+                title="Verify artifacts",
+                description="Artifact verification plan",
+                test_cases=[
+                    VerificationCase(
+                        id="case-1",
+                        title="Verify something",
+                        description="Confirm artifact persistence",
+                        test_type=VerificationType.INTEGRATION,
+                        priority=CasePriority.P1,
+                    )
+                ],
+            ),
+            implement_plan=ImplementPlan(
+                design_hash="abc123",
+                tasks=[
+                    ImplementTask(
+                        id="task-1",
+                        description="Modify file",
+                        files=["aragora/pipeline/example.py"],
+                        complexity="moderate",
+                    )
+                ],
+            ),
+        )
+        store.create(plan)
+        retrieved = store.get(plan.id)
+
+        assert retrieved is not None
+        assert retrieved.risk_register is not None
+        assert retrieved.risk_register.risks[0].title == "Regression risk"
+        assert retrieved.verification_plan is not None
+        assert retrieved.verification_plan.test_cases[0].title == "Verify something"
+        assert retrieved.implement_plan is not None
+        assert retrieved.implement_plan.tasks[0].files == ["aragora/pipeline/example.py"]
 
     def test_get_nonexistent_returns_none(self, store: PlanStore) -> None:
         assert store.get("does-not-exist") is None

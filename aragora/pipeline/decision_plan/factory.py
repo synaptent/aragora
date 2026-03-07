@@ -7,6 +7,7 @@ Stability: STABLE
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -171,24 +172,12 @@ class DecisionPlanFactory:
                     else fail_closed_spec_validation
                 ),
             )
-            merged_metadata["spec_bundle"] = {
-                "title": spec_bundle.title,
-                "problem_statement": spec_bundle.problem_statement,
-                "objectives": spec_bundle.objectives,
-                "constraints": spec_bundle.constraints,
-                "acceptance_criteria": spec_bundle.acceptance_criteria,
-                "verification_plan": spec_bundle.verification_plan,
-                "rollback_plan": spec_bundle.rollback_plan,
-                "owner_file_scopes": spec_bundle.owner_file_scopes,
-                "open_questions": spec_bundle.open_questions,
-                "confidence": spec_bundle.confidence,
-                "source_kind": spec_bundle.source_kind,
-                "taint_flags": spec_bundle.taint_flags,
-            }
-            if spec_bundle.missing_required_fields:
-                merged_metadata["spec_bundle_missing_fields"] = list(
-                    spec_bundle.missing_required_fields
-                )
+            DecisionPlanFactory._attach_spec_metadata(
+                merged_metadata,
+                spec_bundle=spec_bundle,
+                specification=specification,
+                validation_result=validation_result,
+            )
 
         plan = DecisionPlan(
             debate_id=result.debate_id,
@@ -228,6 +217,85 @@ class DecisionPlanFactory:
         return plan
 
     @staticmethod
+    def from_specification(
+        specification: Any,
+        *,
+        debate_id: str | None = None,
+        task: str | None = None,
+        budget_limit_usd: float | None = None,
+        approval_mode: ApprovalMode = ApprovalMode.RISK_BASED,
+        max_auto_risk: RiskLevel = RiskLevel.LOW,
+        metadata: dict[str, Any] | None = None,
+        implementation_profile: ImplementationProfile | dict[str, Any] | None = None,
+        validation_result: ValidationResult | Any | None = None,
+        fail_closed_spec_validation: bool = True,
+    ) -> DecisionPlan:
+        """Create a DecisionPlan directly from a prompt-engine specification."""
+        spec_bundle = DecisionPlanFactory.validate_execution_grade_specification(
+            specification,
+            validation_result=validation_result,
+            fail_closed=fail_closed_spec_validation,
+        )
+
+        merged_metadata: dict[str, Any] = {}
+        if isinstance(metadata, dict):
+            merged_metadata.update(metadata)
+        DecisionPlanFactory._attach_spec_metadata(
+            merged_metadata,
+            spec_bundle=spec_bundle,
+            specification=specification,
+            validation_result=validation_result,
+        )
+
+        profile = DecisionPlanFactory._resolve_implementation_profile(
+            implementation_profile=implementation_profile,
+            metadata=merged_metadata,
+        )
+        DecisionPlanFactory._attach_profile_metadata(merged_metadata, profile)
+
+        serialized_spec = DecisionPlanFactory._serialize_specification(specification)
+        resolved_debate_id = DecisionPlanFactory._resolve_spec_debate_id(
+            specification,
+            override=debate_id,
+            serialized_spec=serialized_spec,
+        )
+        resolved_task = (
+            str(task or "").strip()
+            or str(getattr(specification, "title", "")).strip()
+            or str(getattr(specification, "problem_statement", "")).strip()
+            or "Prompt-engine specification"
+        )
+
+        plan = DecisionPlan(
+            debate_id=resolved_debate_id,
+            task=resolved_task,
+            approval_mode=approval_mode,
+            max_auto_risk=max_auto_risk,
+            metadata=merged_metadata,
+            implementation_profile=profile,
+        )
+        plan.budget = BudgetAllocation(limit_usd=budget_limit_usd)
+        plan.risk_register = DecisionPlanFactory._build_risk_register_from_specification(
+            specification,
+            debate_id=resolved_debate_id,
+            spec_bundle=spec_bundle,
+            validation_result=validation_result,
+        )
+        plan.verification_plan = DecisionPlanFactory._build_verification_plan_from_specification(
+            specification,
+            debate_id=resolved_debate_id,
+            spec_bundle=spec_bundle,
+        )
+        plan.implement_plan = DecisionPlanFactory._build_implement_plan_from_specification(
+            specification,
+            spec_bundle=spec_bundle,
+        )
+        plan.status = (
+            PlanStatus.AWAITING_APPROVAL if plan.requires_human_approval else PlanStatus.APPROVED
+        )
+        return plan
+
+    @staticmethod
     def validate_execution_grade_specification(
         specification: Any,
         *,
@@ -244,6 +312,357 @@ class DecisionPlanFactory:
             missing = ", ".join(bundle.missing_required_fields)
             raise ValueError(f"Specification is not execution-grade: missing {missing}")
         return bundle
+
+    @staticmethod
+    def _attach_spec_metadata(
+        metadata: dict[str, Any],
+        *,
+        spec_bundle: SpecBundle,
+        specification: Any | None = None,
+        validation_result: ValidationResult | Any | None = None,
+    ) -> None:
+        metadata["spec_bundle"] = spec_bundle.to_dict()
+        if spec_bundle.missing_required_fields:
+            metadata["spec_bundle_missing_fields"] = list(spec_bundle.missing_required_fields)
+        else:
+            metadata.pop("spec_bundle_missing_fields", None)
+
+        artifact_payload: dict[str, Any] = {"spec_bundle": spec_bundle.to_dict()}
+        serialized_spec = DecisionPlanFactory._serialize_specification(specification)
+        if serialized_spec:
+            artifact_payload["specification"] = serialized_spec
+        serialized_validation = DecisionPlanFactory._serialize_validation_result(validation_result)
+        if serialized_validation is not None:
+            artifact_payload["validation"] = serialized_validation
+        if artifact_payload:
+            metadata["prompt_spec_artifacts"] = artifact_payload
+
+    @staticmethod
+    def _resolve_implementation_profile(
+        *,
+        implementation_profile: ImplementationProfile | dict[str, Any] | None,
+        metadata: dict[str, Any],
+    ) -> ImplementationProfile | None:
+        profile: ImplementationProfile | None = None
+        if isinstance(implementation_profile, ImplementationProfile):
+            profile = implementation_profile
+            profile.execution_mode = normalize_execution_mode(profile.execution_mode)
+        elif isinstance(implementation_profile, dict):
+            profile_payload = dict(implementation_profile)
+            profile_payload["execution_mode"] = normalize_execution_mode(
+                profile_payload.get("execution_mode")
+            )
+            profile = ImplementationProfile.from_dict(profile_payload)
+        else:
+            impl_payload = metadata.get("implementation_profile") or metadata.get("implementation")
+            if isinstance(impl_payload, dict):
+                impl_payload = dict(impl_payload)
+                impl_payload["execution_mode"] = normalize_execution_mode(
+                    impl_payload.get("execution_mode")
+                )
+                profile = ImplementationProfile.from_dict(impl_payload)
+        return profile
+
+    @staticmethod
+    def _attach_profile_metadata(
+        metadata: dict[str, Any],
+        profile: ImplementationProfile | None,
+    ) -> None:
+        if profile is None:
+            return
+        metadata.setdefault("implementation_profile", profile.to_dict())
+        if profile.channel_targets and "channel_targets" not in metadata:
+            metadata["channel_targets"] = profile.channel_targets
+        if profile.thread_id and "thread_id" not in metadata:
+            metadata["thread_id"] = profile.thread_id
+        if profile.thread_id_by_platform and "thread_id_by_platform" not in metadata:
+            metadata["thread_id_by_platform"] = profile.thread_id_by_platform
+
+    @staticmethod
+    def _serialize_specification(specification: Any | None) -> dict[str, Any]:
+        if specification is None:
+            return {}
+
+        payload: dict[str, Any] = {}
+        if hasattr(specification, "to_dict"):
+            raw = specification.to_dict()
+            if isinstance(raw, dict):
+                payload.update(raw)
+        elif isinstance(specification, dict):
+            payload.update(specification)
+
+        file_changes: list[dict[str, Any]] = []
+        for item in getattr(specification, "file_changes", []) or payload.get("file_changes", []):
+            if isinstance(item, dict):
+                file_changes.append(dict(item))
+                continue
+            file_changes.append(
+                {
+                    "path": getattr(item, "path", ""),
+                    "action": getattr(item, "action", ""),
+                    "description": getattr(item, "description", ""),
+                    "estimated_lines": getattr(item, "estimated_lines", 0),
+                }
+            )
+        if file_changes:
+            payload["file_changes"] = file_changes
+
+        risks: list[dict[str, Any]] = []
+        for item in getattr(specification, "risks", []) or payload.get("risks", []):
+            if isinstance(item, dict):
+                risks.append(dict(item))
+                continue
+            if hasattr(item, "to_dict"):
+                risks.append(item.to_dict())
+        if risks:
+            payload["risks"] = risks
+
+        dependencies = getattr(specification, "dependencies", None)
+        if dependencies:
+            payload["dependencies"] = list(dependencies)
+        return payload
+
+    @staticmethod
+    def _serialize_validation_result(
+        validation_result: ValidationResult | Any | None,
+    ) -> dict[str, Any] | None:
+        if validation_result is None:
+            return None
+        if hasattr(validation_result, "to_dict"):
+            raw = validation_result.to_dict()
+            if isinstance(raw, dict):
+                return raw
+        if isinstance(validation_result, dict):
+            return dict(validation_result)
+        return {
+            "passed": getattr(validation_result, "passed", None),
+            "overall_confidence": getattr(validation_result, "overall_confidence", None),
+        }
+
+    @staticmethod
+    def _resolve_spec_debate_id(
+        specification: Any,
+        *,
+        override: str | None,
+        serialized_spec: dict[str, Any] | None = None,
+    ) -> str:
+        explicit = str(override or "").strip()
+        if explicit:
+            return explicit
+        provenance = getattr(specification, "provenance", None)
+        provenance_debate_id = str(getattr(provenance, "debate_id", "") or "").strip()
+        if provenance_debate_id:
+            return provenance_debate_id
+        prompt_hash = str(getattr(provenance, "prompt_hash", "") or "").strip()
+        if prompt_hash:
+            return f"prompt-spec-{prompt_hash[:12]}"
+        serialized = serialized_spec or DecisionPlanFactory._serialize_specification(specification)
+        digest = hashlib.sha256(
+            json.dumps(
+                serialized or {"title": getattr(specification, "title", "")}, sort_keys=True
+            ).encode()
+        ).hexdigest()
+        return f"prompt-spec-{digest[:12]}"
+
+    @staticmethod
+    def _build_risk_register_from_specification(
+        specification: Any,
+        *,
+        debate_id: str,
+        spec_bundle: SpecBundle,
+        validation_result: ValidationResult | Any | None = None,
+    ) -> RiskRegister:
+        register = RiskRegister(debate_id=debate_id)
+        confidence = float(
+            getattr(
+                validation_result, "overall_confidence", getattr(specification, "confidence", 0.0)
+            )
+            or spec_bundle.confidence
+            or 0.0
+        )
+        if confidence < 0.7:
+            register.add_risk(
+                Risk(
+                    id=f"risk-confidence-{debate_id[:8]}",
+                    title="Low specification confidence",
+                    description=(
+                        f"Specification confidence is {confidence:.0%}; execution may require "
+                        "manual review or refinement."
+                    ),
+                    level=RiskLevel.MEDIUM if confidence >= 0.5 else RiskLevel.HIGH,
+                    category=RiskCategory.UNKNOWN,
+                    source="specification_confidence",
+                    impact=0.6,
+                    likelihood=max(0.1, 1.0 - confidence),
+                )
+            )
+
+        if getattr(validation_result, "passed", None) is False:
+            register.add_risk(
+                Risk(
+                    id=f"risk-validation-{debate_id[:8]}",
+                    title="Specification validation failed",
+                    description="Execution-grade validation did not pass for this specification.",
+                    level=RiskLevel.HIGH,
+                    category=RiskCategory.TECHNICAL,
+                    source="spec_validation",
+                    impact=0.8,
+                    likelihood=0.7,
+                )
+            )
+
+        for idx, item in enumerate(getattr(specification, "risks", []) or [], start=1):
+            if isinstance(item, dict):
+                description = str(item.get("description", "")).strip()
+                mitigation = str(item.get("mitigation", "")).strip()
+                likelihood_raw = item.get("likelihood")
+                impact_raw = item.get("impact")
+            else:
+                description = str(getattr(item, "description", "")).strip()
+                mitigation = str(getattr(item, "mitigation", "")).strip()
+                likelihood_raw = getattr(item, "likelihood", None)
+                impact_raw = getattr(item, "impact", None)
+
+            likelihood = _coerce_probability(likelihood_raw)
+            impact = _coerce_probability(impact_raw)
+            level = _coerce_risk_level(max(likelihood, impact))
+            register.add_risk(
+                Risk(
+                    id=f"risk-spec-{idx}",
+                    title=description[:80] or f"Specification risk {idx}",
+                    description=description or f"Risk {idx} from specification",
+                    level=level,
+                    category=_categorize_issue(description or mitigation or "technical risk"),
+                    source="prompt_specification",
+                    impact=impact,
+                    likelihood=likelihood,
+                    mitigation=mitigation,
+                )
+            )
+        return register
+
+    @staticmethod
+    def _build_verification_plan_from_specification(
+        specification: Any,
+        *,
+        debate_id: str,
+        spec_bundle: SpecBundle,
+    ) -> VerificationPlan:
+        plan = VerificationPlan(
+            debate_id=debate_id,
+            title=f"Verify: {spec_bundle.title}",
+            description=f"Verification plan generated from specification {spec_bundle.title}",
+            critical_paths=list(spec_bundle.owner_file_scopes),
+        )
+        for idx, criterion in enumerate(spec_bundle.acceptance_criteria, start=1):
+            plan.add_test(
+                VerificationCase(
+                    id=f"acceptance-{idx}",
+                    title=f"Acceptance: {criterion[:60]}",
+                    description=f"Confirm specification acceptance criterion: {criterion}",
+                    test_type=VerificationType.INTEGRATION,
+                    priority=CasePriority.P1,
+                    steps=[
+                        "Apply the implementation change",
+                        "Run the intended workflow or API path",
+                        f"Verify the outcome matches: {criterion}",
+                    ],
+                    expected_result=criterion,
+                    automated=True,
+                )
+            )
+
+        plan.add_test(
+            VerificationCase(
+                id="smoke-1",
+                title="Smoke test: Prompt-spec execution path",
+                description="Confirm the generated implementation is reachable and healthy.",
+                test_type=VerificationType.E2E,
+                priority=CasePriority.P0,
+                steps=["Execute the primary happy path", "Verify the service remains healthy"],
+                expected_result="Primary flow succeeds without regression",
+            )
+        )
+        plan.add_test(
+            VerificationCase(
+                id="regression-1",
+                title="Regression: Existing behavior still works",
+                description="Run the relevant regression checks for the touched file scopes.",
+                test_type=VerificationType.REGRESSION,
+                priority=CasePriority.P1,
+                steps=["Run targeted regression checks", "Verify existing workflows still pass"],
+                expected_result="No regression introduced",
+            )
+        )
+        return plan
+
+    @staticmethod
+    def _build_implement_plan_from_specification(
+        specification: Any,
+        *,
+        spec_bundle: SpecBundle,
+    ) -> ImplementPlan:
+        serialized_spec = DecisionPlanFactory._serialize_specification(specification)
+        design_hash = hashlib.sha256(
+            json.dumps(serialized_spec, sort_keys=True).encode()
+        ).hexdigest()
+        tasks: list[ImplementTask] = []
+        previous_task_id: str | None = None
+
+        for idx, item in enumerate(getattr(specification, "file_changes", []) or [], start=1):
+            if isinstance(item, dict):
+                path = str(item.get("path", "")).strip()
+                action = str(item.get("action", "")).strip()
+                description = str(item.get("description", "")).strip()
+                estimated_lines = int(item.get("estimated_lines", 0) or 0)
+            else:
+                path = str(getattr(item, "path", "") or "").strip()
+                action = str(getattr(item, "action", "") or "").strip()
+                description = str(getattr(item, "description", "") or "").strip()
+                estimated_lines = int(getattr(item, "estimated_lines", 0) or 0)
+            task_id = f"task-{idx}"
+            tasks.append(
+                ImplementTask(
+                    id=task_id,
+                    description=description or f"{action or 'modify'} {path or 'target file'}",
+                    files=[path] if path else [],
+                    complexity=_complexity_for_estimated_lines(estimated_lines),
+                    dependencies=[previous_task_id] if previous_task_id else [],
+                )
+            )
+            previous_task_id = task_id
+
+        if not tasks:
+            for idx, step in enumerate(
+                getattr(specification, "implementation_plan", []) or [], start=1
+            ):
+                text = str(step).strip()
+                if not text:
+                    continue
+                task_id = f"task-{idx}"
+                tasks.append(
+                    ImplementTask(
+                        id=task_id,
+                        description=text,
+                        files=list(spec_bundle.owner_file_scopes),
+                        complexity="moderate",
+                        dependencies=[previous_task_id] if previous_task_id else [],
+                    )
+                )
+                previous_task_id = task_id
+
+        if not tasks:
+            tasks.append(
+                ImplementTask(
+                    id="task-1",
+                    description=f"Implement specification: {spec_bundle.title}",
+                    files=list(spec_bundle.owner_file_scopes),
+                    complexity="moderate",
+                    dependencies=[],
+                )
+            )
+
+        return ImplementPlan(design_hash=design_hash, tasks=tasks)
 
     @staticmethod
     def from_implement_plan(
@@ -796,3 +1215,40 @@ def _categorize_issue(issue: str) -> RiskCategory:
     if any(k in lower for k in ["compat", "version", "depend", "integrat", "migrat"]):
         return RiskCategory.COMPATIBILITY
     return RiskCategory.TECHNICAL
+
+
+def _coerce_probability(value: Any) -> float:
+    if isinstance(value, (int, float)):
+        numeric = float(value)
+        if numeric > 1.0:
+            numeric = numeric / 10.0
+        return max(0.0, min(1.0, numeric))
+    text = str(value or "").strip().lower()
+    mapping = {
+        "low": 0.3,
+        "medium": 0.5,
+        "med": 0.5,
+        "moderate": 0.5,
+        "high": 0.75,
+        "critical": 0.95,
+    }
+    return mapping.get(text, 0.5)
+
+
+def _coerce_risk_level(value: Any) -> RiskLevel:
+    numeric = _coerce_probability(value)
+    if numeric >= 0.9:
+        return RiskLevel.CRITICAL
+    if numeric >= 0.7:
+        return RiskLevel.HIGH
+    if numeric >= 0.45:
+        return RiskLevel.MEDIUM
+    return RiskLevel.LOW
+
+
+def _complexity_for_estimated_lines(estimated_lines: int) -> str:
+    if estimated_lines >= 200:
+        return "complex"
+    if estimated_lines >= 50:
+        return "moderate"
+    return "simple"
