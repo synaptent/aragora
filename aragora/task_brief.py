@@ -42,7 +42,7 @@ class TaskBriefV1:
     assumptions: list[str] = field(default_factory=list)
     requires_user_confirmation: bool = False
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Perform validation after the object is initialized."""
         if not self.goal or not self.goal.strip():
             raise ValueError("The 'goal' field cannot be empty.")
