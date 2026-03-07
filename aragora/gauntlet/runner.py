@@ -18,9 +18,10 @@ __all__ = [
 import hashlib
 import logging
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
-from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Awaitable, Callable
 
 from .config import AttackCategory, GauntletConfig, ProbeCategory
 from .result import (
@@ -34,6 +35,9 @@ from .result import (
 
 # Type-only imports for optional sandbox support
 if TYPE_CHECKING:
+    from aragora.core import DebateResult
+    from aragora.modes.probes.models import ProbeResult
+    from aragora.modes.redteam import Attack
     from aragora.sandbox.executor import ExecutionMode, SandboxConfig, SandboxExecutor
 
 # Runtime imports for optional sandbox support
@@ -58,6 +62,21 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+ProgressReporter = Callable[[str, float], None]
+RunAgentFn = Callable[[Any, str], Awaitable[str]]
+
+
+@dataclass
+class _ScenarioDebateFallbackResult:
+    """Minimal debate result shape for scenario fallback paths."""
+
+    final_answer: str
+    confidence: float
+    consensus_reached: bool
+    key_claims: list[str] = field(default_factory=list)
+    dissenting_views: list[str] = field(default_factory=list)
+    rounds: int = 0
+
 
 class GauntletRunner:
     """
@@ -71,7 +90,7 @@ class GauntletRunner:
         self,
         config: GauntletConfig | None = None,
         agent_factory: Callable[[str], Any] | None = None,
-        run_agent_fn: Callable | None = None,
+        run_agent_fn: RunAgentFn | None = None,
         enable_sandbox: bool = False,
         sandbox_config: SandboxConfig | None = None,
         auto_improve: bool = False,
@@ -119,7 +138,7 @@ class GauntletRunner:
         self,
         input_content: str,
         context: str = "",
-        on_progress: Callable[[str, float], None] | None = None,
+        on_progress: ProgressReporter | None = None,
     ) -> GauntletResult:
         """
         Run the full Gauntlet validation.
@@ -146,7 +165,7 @@ class GauntletRunner:
             agents_used=self.config.agents,
         )
 
-        def report_progress(phase: str, percent: float):
+        def report_progress(phase: str, percent: float) -> None:
             if on_progress:
                 on_progress(phase, percent)
             logger.info(f"[gauntlet] {phase}: {percent:.0%}")
@@ -242,7 +261,7 @@ class GauntletRunner:
         input_content: str,
         context: str,
         result: GauntletResult,
-        report_progress: Callable,
+        report_progress: ProgressReporter,
     ) -> AttackSummary:
         """Run red team attacks."""
         summary = AttackSummary()
@@ -367,7 +386,7 @@ class GauntletRunner:
         input_content: str,
         context: str,
         result: GauntletResult,
-        report_progress: Callable,
+        report_progress: ProgressReporter,
     ) -> ProbeSummary:
         """Run capability probes."""
         summary = ProbeSummary()
@@ -443,7 +462,7 @@ class GauntletRunner:
         input_content: str,
         context: str,
         result: GauntletResult,
-        report_progress: Callable,
+        report_progress: ProgressReporter,
     ) -> ScenarioSummary:
         """Run scenario matrix."""
         summary = ScenarioSummary()
@@ -466,7 +485,7 @@ class GauntletRunner:
             return summary
 
         # Create debate function using real Arena
-        async def debate_func(task: str, ctx: str):
+        async def debate_func(task: str, ctx: str) -> DebateResult | _ScenarioDebateFallbackResult:
             try:
                 from aragora import Arena, DebateProtocol, Environment
                 from aragora.debate.arena_config import ArenaConfig
@@ -497,18 +516,11 @@ class GauntletRunner:
                 if not agents:
                     # Return mock result if no agents available
                     logger.warning("[gauntlet] No agents available for scenario debate")
-                    return type(
-                        "Result",
-                        (),
-                        {
-                            "final_answer": f"Analysis of: {task[:50]}",
-                            "confidence": 0.5,
-                            "consensus_reached": False,
-                            "key_claims": [],
-                            "dissenting_views": [],
-                            "rounds_used": 0,
-                        },
-                    )()
+                    return _ScenarioDebateFallbackResult(
+                        final_answer=f"Analysis of: {task[:50]}",
+                        confidence=0.5,
+                        consensus_reached=False,
+                    )
 
                 # Configure protocol for short scenario debates
                 protocol = DebateProtocol(
@@ -527,38 +539,24 @@ class GauntletRunner:
 
                 # Run the debate
                 arena = Arena.from_config(env, agents, protocol, arena_config)
-                result = await arena.run()
+                result = cast(DebateResult, await arena.run())
 
                 return result
 
             except ImportError as e:
                 logger.warning("[gauntlet] Arena not available: %s", e)
-                return type(
-                    "Result",
-                    (),
-                    {
-                        "final_answer": f"Analysis of: {task[:50]}",
-                        "confidence": 0.5,
-                        "consensus_reached": False,
-                        "key_claims": [],
-                        "dissenting_views": [],
-                        "rounds_used": 0,
-                    },
-                )()
+                return _ScenarioDebateFallbackResult(
+                    final_answer=f"Analysis of: {task[:50]}",
+                    confidence=0.5,
+                    consensus_reached=False,
+                )
             except (RuntimeError, ValueError, TimeoutError, OSError) as e:
                 logger.error("[gauntlet] Arena debate error: %s", e)
-                return type(
-                    "Result",
-                    (),
-                    {
-                        "final_answer": f"Error during analysis: {str(e)[:100]}",
-                        "confidence": 0.3,
-                        "consensus_reached": False,
-                        "key_claims": [],
-                        "dissenting_views": [],
-                        "rounds_used": 0,
-                    },
-                )()
+                return _ScenarioDebateFallbackResult(
+                    final_answer=f"Error during analysis: {str(e)[:100]}",
+                    confidence=0.3,
+                    consensus_reached=False,
+                )
 
         runner = MatrixDebateRunner(
             debate_func=debate_func,
@@ -593,7 +591,7 @@ class GauntletRunner:
 
     def _add_attack_as_vulnerability(
         self,
-        attack,
+        attack: Attack,
         result: GauntletResult,
         sandbox_result: dict[str, Any] | None = None,
     ) -> None:
@@ -644,7 +642,7 @@ class GauntletRunner:
         result.add_vulnerability(vuln)
 
     def _add_probe_as_vulnerability(
-        self, probe_result, agent_name: str, result: GauntletResult
+        self, probe_result: ProbeResult, agent_name: str, result: GauntletResult
     ) -> None:
         """Convert probe result to vulnerability."""
         self._vulnerability_counter += 1
@@ -812,12 +810,14 @@ class GauntletRunner:
                 "executed": False,
             }
 
-    async def _default_run_agent(self, agent, prompt: str) -> str:
+    async def _default_run_agent(self, agent: Any, prompt: str) -> str:
         """Default agent runner (placeholder)."""
-        if hasattr(agent, "generate") and callable(agent.generate):
-            return await agent.generate(prompt, [])
-        if hasattr(agent, "run") and callable(agent.run):
-            return await agent.run(prompt)
+        generate = getattr(agent, "generate", None)
+        if callable(generate):
+            return cast(str, await generate(prompt, []))
+        run = getattr(agent, "run", None)
+        if callable(run):
+            return cast(str, await run(prompt))
         return f"[No response - agent {agent} not callable]"
 
 
