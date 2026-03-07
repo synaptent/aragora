@@ -22,10 +22,12 @@ jobs:
         with:
           script: |
             const commits = context.payload.commits || [];
+            const headCommit = context.payload.head_commit || null;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const bypassTag = "[allow-direct-main]";
             const violations = [];
+            const mergePayloadAllowlist = new Set();
             const titlePatterns = [
               /\(#(\d+)\)\s*$/,
               /^Merge pull request #(\d+)\b/,
@@ -56,6 +58,70 @@ jobs:
               }
             }
 
+            function pullNumberFromTitle(title) {
+              for (const pattern of titlePatterns) {
+                const match = title.match(pattern);
+                if (match) {
+                  return Number(match[1]);
+                }
+              }
+              return null;
+            }
+
+            async function getVerifiedMergedPull(prNumber, mergeCommitSha) {
+              try {
+                const { data: pr } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                });
+                if (
+                  pr &&
+                  pr.merged_at &&
+                  pr.base &&
+                  pr.base.ref === "main" &&
+                  (pr.merge_commit_sha || "").trim() === mergeCommitSha
+                ) {
+                  return pr;
+                }
+              } catch (error) {
+                core.warning(`PR lookup by number failed for #${prNumber}: ${String(error)}`);
+              }
+              return null;
+            }
+
+            async function primeMergePayloadAllowlist() {
+              if (!headCommit) {
+                return;
+              }
+              const headTitle = (headCommit.message || "").split("\n")[0];
+              const prNumber = pullNumberFromTitle(headTitle);
+              if (!prNumber) {
+                return;
+              }
+              const pr = await getVerifiedMergedPull(prNumber, headCommit.id);
+              if (!pr) {
+                return;
+              }
+              mergePayloadAllowlist.add((pr.merge_commit_sha || "").trim());
+              mergePayloadAllowlist.add((pr.head?.sha || "").trim());
+              const prCommits = await github.paginate(github.rest.pulls.listCommits, {
+                owner,
+                repo,
+                pull_number: pr.number,
+                per_page: 100,
+              });
+              for (const prCommit of prCommits) {
+                if (prCommit?.sha) {
+                  mergePayloadAllowlist.add(prCommit.sha.trim());
+                }
+              }
+              mergePayloadAllowlist.delete("");
+              core.info(
+                `Allowing ${mergePayloadAllowlist.size} commit(s) from verified merged PR #${pr.number} in push payload.`
+              );
+            }
+
             async function hasAssociatedMainPull(commitSha) {
               const resp = await github.request(
                 "GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls",
@@ -73,6 +139,8 @@ jobs:
               });
             }
 
+            await primeMergePayloadAllowlist();
+
             for (const commit of commits) {
               const title = (commit.message || "").split("\n")[0];
               if ((commit.message || "").includes(bypassTag)) {
@@ -80,16 +148,14 @@ jobs:
                 continue;
               }
 
+              if (mergePayloadAllowlist.has((commit.id || "").trim())) {
+                continue;
+              }
+
               let verifiedByTitle = false;
-              for (const pattern of titlePatterns) {
-                const match = title.match(pattern);
-                if (!match) {
-                  continue;
-                }
-                verifiedByTitle = await isVerifiedPullMerge(Number(match[1]), commit.id);
-                if (verifiedByTitle) {
-                  break;
-                }
+              const prNumber = pullNumberFromTitle(title);
+              if (prNumber) {
+                verifiedByTitle = await isVerifiedPullMerge(prNumber, commit.id);
               }
               if (verifiedByTitle) {
                 continue;
