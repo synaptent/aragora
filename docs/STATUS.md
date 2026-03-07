@@ -2,6 +2,7 @@
 
 *Last updated: March 6, 2026*
 
+> Compatibility mirror for older links. The canonical current-status document is [status/STATUS.md](status/STATUS.md).
 > See [README](../README.md) for the five pillars framework. See [Documentation Index](INDEX.md) for the curated technical reference map.
 
 ## March 2026 Sprint — Closed-Loop Backbone, Trust Wedge & Infrastructure
@@ -44,12 +45,12 @@
 
 ### Codebase Metrics (March 6, 2026)
 - **Python modules**: 3,700+
-- **Tests**: 208,000+ across 5,000+ test files
+- **Tests**: 210,000+ across 5,000+ test files
 - **HTTP handlers**: 700+
-- **KM adapters**: 45
+- **KM adapters**: 42 registered adapter specs
 - **Agent types**: 43
 - **API operations**: 3,000+ across 2,900+ paths
-- **RBAC permissions**: 360+
+- **RBAC permissions**: 420+
 - **Version**: v2.8.0
 
 ---
@@ -85,7 +86,7 @@ Massive production hardening sprint: 205,000+ tests (up from 129,000+), comprehe
 - **Type safety**: Fixed RepositoryCrawler API usage, resolve_db_path imports, float/dict type annotations
 - **CDC password**: Replaced example credential with placeholder
 
-### SDK Expansion (184 Python / 183 TypeScript namespaces)
+### SDK Expansion (186 Python / 185 TypeScript namespaces)
 - **13 new TypeScript namespaces**: agent_dashboard, playground, partner, selection, expenses, github, and more
 - **6 new Python namespaces**: control_plane, partner, selection, expenses, github SDK methods
 - **SDK types regenerated** from updated OpenAPI spec

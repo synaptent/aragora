@@ -2,6 +2,8 @@
 
 *Complete catalog of 230+ features for developers exploring Aragora capabilities*
 
+> Compatibility mirror for older links. The canonical current feature inventory is [status/FEATURE_DISCOVERY.md](status/FEATURE_DISCOVERY.md).
+
 This document provides a comprehensive inventory of Aragora's features organized by domain. Use this guide to discover what Aragora can do and find the relevant modules for your use case.
 
 > **Quick Links**: [STATUS.md](STATUS.md) for implementation status | [ENTERPRISE_FEATURES.md](ENTERPRISE_FEATURES.md) for enterprise details | [API_REFERENCE.md](./api/API_REFERENCE.md) for endpoints
@@ -22,7 +24,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 | [Developer Tools](#8-developer-tools) | 35+ | Stable |
 | [Self-Improvement](#9-self-improvement--nomic-loop) | 18+ | Stable |
 
-**Total**: 230+ features | 3,700+ Python modules | 208,000+ tests | 3,000+ API operations
+**Total**: 230+ features | 3,800+ Python modules | 210,000+ tests | 3,700+ API operations
 
 ---
 
@@ -62,7 +64,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 | **Voting** | Stable | User votes on debate positions | `aragora/debate/voting.py` |
 | **Suggestions** | Stable | User suggestions during debates | `aragora/audience/suggestions.py` |
 | **Audience System** | Stable | Audience engagement and spectator mode | `aragora/audience/` |
-| **Spectate** | Stable | Real-time debate spectating | `aragora/spectate/` |
+| **Spectate** | Partial | Debate spectating exists, but `/api/v1/spectate/stream` is currently served as an SSE snapshot/stub rather than full live streaming | `aragora/server/handlers/spectate_ws.py`, `aragora/spectate/` |
 
 ### Configuration
 
@@ -127,20 +129,20 @@ This document provides a comprehensive inventory of Aragora's features organized
 | **Memory Streams** | Stable | Event-based memory updates | `aragora/memory/streams.py` | |
 | **Embeddings** | Stable | Semantic embedding for retrieval (OpenAI, Gemini, Ollama) | `aragora/memory/embeddings.py` | |
 | **Critique Store** | Stable | Critique pattern storage | `aragora/memory/store.py` | |
-| **Progressive Memory Search** | Stable | Staged retrieval (index → timeline → entries) | `aragora/server/handlers/memory/memory.py` | |
+| **Progressive Memory Search** | Partial | Staged retrieval (index → timeline → entries); some timeline and batch flows remain backend-conditional and can return `501` | `aragora/server/handlers/memory/memory.py`, `aragora/server/handlers/memory/memory_progressive.py` | |
 | **Memory Viewer** | Stable | HTML viewer for memory inspection | `aragora/server/handlers/memory/memory.py` | |
 | **Tool Usage Capture** | Optional | Opt-in tool usage capture into FAST tier | `aragora/memory/capture.py` | |
-| **Unified Memory Gateway** | Integrated | Fan-out query across ContinuumMemory, KM, Supermemory, claude-mem via `enable_unified_memory` (150 tests) | `aragora/memory/gateway/` | |
-| **ClaudeMemAdapter** | Integrated | KM adapter wrapping claude-mem MCP connector (one of 45 adapters) | `aragora/knowledge/mound/adapters/claude_mem_adapter.py` | |
+| **Unified Memory Gateway** | Integrated | Fan-out query across ContinuumMemory, KM, Supermemory, claude-mem via `enable_unified_memory`; handler availability still depends on optional unified-memory backends | `aragora/memory/gateway.py`, `aragora/memory/retention_gate.py`, `aragora/memory/dedup.py` | |
+| **ClaudeMemAdapter** | Integrated | KM adapter wrapping claude-mem MCP connector (one of 42 registered adapter specs) | `aragora/knowledge/mound/adapters/claude_mem_adapter.py` | |
 
 ### Unified Memory Gateway Components
 
 | Component | Status | Description | Key Files |
 |-----------|--------|-------------|-----------|
-| **MemoryGateway** | Integrated | Unified fan-out query interface across all memory systems | `aragora/memory/gateway/core.py` |
-| **RetentionGate** | Integrated | Titans/MIRAS surprise-driven retain/demote/forget/consolidate decisions | `aragora/memory/gateway/retention.py` |
-| **CrossSystemDedupEngine** | Integrated | SHA-256 exact + Jaccard near-duplicate detection across memory systems | `aragora/memory/gateway/dedup.py` |
-| **RLMMemoryNavigator** | Integrated | REPL helpers for programmatic cross-system memory exploration | `aragora/memory/gateway/rlm_navigator.py` |
+| **MemoryGateway** | Integrated | Unified fan-out query interface across all memory systems | `aragora/memory/gateway.py` |
+| **RetentionGate** | Integrated | Titans/MIRAS surprise-driven retain/demote/forget/consolidate decisions | `aragora/memory/retention_gate.py` |
+| **CrossSystemDedupEngine** | Integrated | SHA-256 exact + Jaccard near-duplicate detection across memory systems | `aragora/memory/dedup.py` |
+| **RLMMemoryNavigator** | Integrated | REPL helpers for programmatic cross-system memory exploration | `aragora/rlm/memory_navigator.py` |
 
 ### Memory Tiers
 
@@ -170,7 +172,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 |---------|--------|-------------|-----------|------|
 | **RLM Factory** | Stable | RLM context management factory | `aragora/rlm/factory.py` | [RLM_GUIDE.md](./guides/RLM_GUIDE.md) |
 | **RLM Bridge** | Stable | Integration bridge for RLM | `aragora/rlm/bridge.py` | |
-| **RLM Handler** | Stable | Request handling | `aragora/rlm/handler.py` | |
+| **RLM Handler** | Partial | Request handling is available, but context storage is still in-memory by default and some streaming flows are backend-conditional | `aragora/server/handlers/rlm.py` | |
 | **Streaming RLM** | Stable | Progressive context loading (top-down, bottom-up, targeted) | `aragora/rlm/streaming.py` | |
 | **RLM Training** | Stable | Experience replay buffer and reward computation | `aragora/rlm/training/` | |
 | **Cognitive Limiter** | Stable | Context management via `use_rlm_limiter` | `aragora/debate/cognitive_limiter_rlm.py` | |
@@ -200,7 +202,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | **KM Resilience** | Stable | ResilientPostgresStore with retry, health, cache invalidation | `aragora/knowledge/mound/resilience.py` | |
 | **SLO Alerting** | Stable | Adapter performance monitoring with Prometheus | `aragora/config/performance_slos.py` | |
 
-### Knowledge Adapters (45 Total)
+### Knowledge Adapters (42 Registered Adapter Specs)
 
 | Adapter | Purpose | Key Files |
 |---------|---------|-----------|
@@ -322,7 +324,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 
 | Feature | Status | Description | Key Files |
 |---------|--------|-------------|-----------|
-| **Setup Wizard** | Stable | Guided onboarding with SSO/RBAC integration | `aragora/onboarding/wizard.py` |
+| **Setup Wizard** | Partial | Guided onboarding with SSO/RBAC integration; provider coverage in live connection tests and disconnect flows remains incomplete | `aragora/onboarding/wizard.py`, `aragora/server/handlers/oauth_wizard.py` |
 
 ### Coordination System
 
@@ -349,9 +351,9 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 
 | Platform | Status | Features | Key Files |
 |----------|--------|----------|-----------|
-| **Slack** | Stable | Bot, OAuth, webhooks, evidence collection | `aragora/connectors/chat/slack/` |
+| **Slack** | Partial | Core bot/OAuth/webhook support exists; SME workspace channel listing and SME OAuth helper endpoints are still placeholder-backed | `aragora/connectors/chat/slack/`, `aragora/server/handlers/sme/slack_workspace.py` |
 | **Discord** | Stable | Guilds, channels, DMs, reactions, Ed25519 verification | `aragora/connectors/chat/discord.py` |
-| **Teams** | Stable | Teams, channels, meetings, JWT verification | `aragora/connectors/chat/teams.py` |
+| **Teams** | Partial | Core Teams support exists; SME workspace channel listing and SME OAuth helper endpoints are still placeholder-backed | `aragora/connectors/chat/teams.py`, `aragora/server/handlers/sme/teams_workspace.py` |
 | **Google Chat** | Stable | Spaces, messages, JWT verification | `aragora/connectors/chat/google_chat.py` |
 | **Telegram** | Stable | Bot integration with TTS support | `aragora/connectors/chat/telegram.py` |
 | **WhatsApp** | Stable | Business API with voice notes | `aragora/connectors/chat/whatsapp.py` |
@@ -474,8 +476,8 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 
 | SDK | Status | Namespaces | Key Files |
 |-----|--------|------------|-----------|
-| **Python SDK** | Stable | 184 namespaces | `sdk/python/` |
-| **TypeScript SDK** | Stable | 183 namespaces | `sdk/typescript/` |
+| **Python SDK** | Stable | 186 namespaces | `sdk/python/` |
+| **TypeScript SDK** | Stable | 185 namespaces | `sdk/typescript/` |
 
 ### CLI
 
@@ -483,7 +485,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 |---------|--------|-------------|-----------|
 | **CLI Main** | Stable | Command-line interface | `aragora/cli/main.py` |
 | **REPL** | Stable | Interactive shell | `aragora/cli/repl.py` |
-| **Setup Wizard** | Stable | Guided `aragora setup` for self-hosted | `aragora/cli/setup.py` |
+| **Setup Wizard** | Partial | Guided `aragora setup` for self-hosted; some provider test/disconnect flows remain selectively implemented | `aragora/cli/setup.py`, `aragora/server/handlers/oauth_wizard.py` |
 | **Gauntlet CLI** | Stable | Compliance test runner | `aragora/cli/gt.py` |
 
 ### Workflow Engine
@@ -511,8 +513,8 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 
 | Feature | Status | Description | Key Files |
 |---------|--------|-------------|-----------|
-| **Trust Wedge Core** | Stable | Receipt-gated email actions: Gmail → debate → signed receipt → execute | `aragora/inbox/trust_wedge.py` |
-| **Triage Runner** | Stable | Batch email triage with adversarial debate decisions | `aragora/inbox/triage_runner.py` |
+| **Trust Wedge Core** | Integrated | Receipt-gated Gmail actions are shipped; surrounding channel/setup surfaces still have partial or placeholder-backed edges | `aragora/inbox/trust_wedge.py` |
+| **Triage Runner** | Partial | Batch email triage with adversarial debate decisions; can still fall back to stub debates when engine/agent wiring is unavailable | `aragora/inbox/triage_runner.py` |
 | **Receipt-Gated Executor** | Stable | Only executes actions with previously persisted approved receipts | `aragora/inbox/receipt_gated_executor.py` |
 | **CLI Review Loop** | Stable | Interactive CLI approval for triage decisions | `aragora/inbox/cli_review.py` |
 | **Auto-Approval Policy** | Stable | Narrow auto-approval rules (ARCHIVE/STAR/LABEL/IGNORE only) | `aragora/inbox/auto_approval.py` |
@@ -523,7 +525,7 @@ Based on [arXiv:2512.24601](https://arxiv.org/abs/2512.24601) - Context stored a
 | Feature | Status | Description | Key Files | Docs |
 |---------|--------|-------------|-----------|------|
 | **Gauntlet Runner** | Stable | Compliance test execution | `aragora/gauntlet/runner.py` | [GAUNTLET.md](./debate/GAUNTLET.md) |
-| **Decision Receipts** | Stable | SHA-256 cryptographic audit trails | `aragora/gauntlet/receipts.py` | |
+| **Decision Receipts** | Integrated | SHA-256 cryptographic audit trails; anchor verification and export coverage still vary across handler surfaces | `aragora/gauntlet/receipts.py`, `aragora/server/handlers/gauntlet/receipts.py` | |
 | **Findings** | Stable | Compliance findings management | `aragora/gauntlet/findings.py` | |
 | **Gauntlet Defense** | Stable | Attack/defend cycles via `proposer_agent` | `aragora/gauntlet/defense.py` | |
 | **Personas** | Stable | GDPR, SOC2, HIPAA, PCI-DSS, AI Act, NIST CSF | `aragora/gauntlet/personas/` | |

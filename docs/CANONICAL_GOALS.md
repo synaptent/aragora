@@ -13,15 +13,15 @@ All aragoradocs should cite these values. Update monthly.
 | Metric | Value | Source |
 |--------|-------|--------|
 | Version | 2.8.0 | pyproject.toml |
-| Python modules | 3,300+ | File count |
+| Python modules | 3,800+ | `aragora/` file count |
 | Lines of code | 1,490,000 | LOC count |
-| Automated tests | 213,000+ | pytest --collect-only |
-| Test files | 4,500+ | File count |
-| API operations | 3,000+ across 2,900+ paths | OpenAPI spec |
-| WebSocket event types | 190+ | Stream modules |
-| SDK namespaces | 184 Python / 183 TypeScript (99.3% parity) | SDK package |
-| Knowledge Mound adapters | 45 | adapter registry |
-| RBAC permissions | 390+ across 165+ resource types | rbac/types.py |
+| Automated tests | 210,000+ | repo-wide `def test_` count |
+| Test files | 5,000+ | `tests/` file count |
+| API operations | 3,700+ across 2,900+ paths | OpenAPI spec |
+| WebSocket event types | 270+ | stream event inventory |
+| SDK namespaces | 186 Python / 185 TypeScript | SDK package |
+| Knowledge Mound adapters | 42 registered adapter specs | adapter factory registry |
+| RBAC permissions | 420+ across 15 core resource types | `rbac/types.py` + permission inventory |
 | Agent types | 43 across 6+ LLM providers | agent registry |
 | Workflow templates | 50+ across 6 categories | template registry |
 | Debate modules | 210+ | debate/ directory |
@@ -57,7 +57,7 @@ Any given AI model can hallucinate, be sycophantic, be biased, or exhibit correl
 
 The system should be useful to small and medium enterprises and organizations, including those in regulated verticals: healthcare (HIPAA, FHIR), financial services (SOX, audit trails), legal (contract review, due diligence, litigation), government/defense (air-gapped deployment), and general compliance (SOC 2, GDPR, EU AI Act). The BYOK model (customers bring own API keys) makes this economically viable with 85%+ gross margins and near-zero inference cost to Aragora.
 
-**Serves:** Enterprise security stack (OIDC/SAML, SCIM, AES-256-GCM, 390+ RBAC permissions), compliance frameworks (9 supported), vertical packages, SME budget controls, per-debate cost estimation, channel delivery (Slack, Teams, email, Discord).
+**Serves:** Enterprise security stack (OIDC/SAML, SCIM, AES-256-GCM, 420+ named permissions across 15 core resource types), compliance frameworks (9 supported), vertical packages, SME budget controls, per-debate cost estimation, channel delivery (Slack, Teams, email, Discord).
 
 #### Pillar 3: Vague Intent to Autonomous Execution
 

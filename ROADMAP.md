@@ -10,9 +10,9 @@ Aragora is **98% GA-ready**. The closed-loop backbone (CLB) sprint is now comple
 
 **By the numbers:**
 - 208,000+ tests across 5,000+ test files (0 failures on main)
-- 45 Knowledge Mound adapters registered (up from 34 in Q4 2025)
+- 42 Knowledge Mound adapter specs registered (up from 34 in Q4 2025)
 - 3,000+ API operations across 2,900+ paths
-- 14 RBAC resource types, 8 actions, 360+ permissions
+- 15 RBAC resource types, 8 actions, 420+ named permissions
 - SOC 2 controls framework: 98% implemented
 
 **Completed since January 2026:**
@@ -30,7 +30,7 @@ Aragora is **98% GA-ready**. The closed-loop backbone (CLB) sprint is now comple
 - Dev swarm coordination layer
 
 **Remaining blockers before GA:**
-- External penetration test (vendor-dependent; kickoff target Mar 3, 2026)
+- External penetration test (vendor-dependent; scheduling still pending confirmation and remains the only named GA blocker)
 
 **EU AI Act enforcement date: August 2, 2026** — the compliance CLI and audit trail infrastructure
 position Aragora as a natural adoption path for enterprises facing this deadline.
@@ -100,7 +100,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 - [x] Helm chart for Kubernetes
 
 ### Enterprise Readiness (Ongoing)
-- [ ] Complete third-party penetration testing (kickoff target: Mar 3, 2026 — vendor-dependent, only remaining GA blocker)
+- [ ] Complete third-party penetration testing (vendor-dependent scheduling remains the only named GA blocker)
 - [ ] Deploy public status page at status.aragora.ai
 - [x] Implement quarterly disaster recovery drills (BackupScheduler with DR integration)
 - [x] Finalize data classification policy (runtime enforcement, CI PII gate, evidence bundles)
@@ -189,6 +189,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 ## Q2-Q4 2026 Forward Plan
 
 This section captures the prioritized forward roadmap as of March 2026, organized by quarter and theme.
+Execution priority source of truth: [docs/status/NEXT_STEPS_CANONICAL.md](docs/status/NEXT_STEPS_CANONICAL.md). This roadmap summarizes quarter-level themes and does not supersede canonical execution priorities.
 
 **EU AI Act enforcement: August 2, 2026.** This is a hard external forcing function. The compliance CLI
 (`aragora compliance export`) is already shipping artifact bundles for GPAI transparency requirements.
@@ -199,7 +200,7 @@ for capturing this cohort is now.
 - [x] Agent-first beta: OpenClaw fleet deployed on 3 machines, running `aragora review` on real PRs via REST API
 - [x] GitHub Actions pre-merge gate (`aragora-review-gate.yml` shipped)
 - [x] Public demo at aragora.ai/demo (PR #705; standalone demo page live)
-- [ ] EU AI Act compliance package — full audit bundle documentation and customer playbook
+- [ ] EU AI Act compliance package — final packaging polish, regulator-ready validation, and customer rollout hardening
 - [ ] SOC 2 Type II audit engagement kickoff (controls are ready; external auditor engagement pending)
 
 ### Q3 2026 Priorities
@@ -250,7 +251,7 @@ Submit feature requests: https://github.com/aragora/aragora/discussions
 
 ## Contributing
 
-Aragora is open to contributions. See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
+Aragora is open to contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 Priority contribution areas:
 - Evidence connectors for new sources

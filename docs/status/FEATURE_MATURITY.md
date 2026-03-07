@@ -1,7 +1,8 @@
 # Feature Maturity Matrix
 
-**Last Updated:** January 14, 2026
-**Version:** 1.5.0
+> **Last reviewed:** 2026-03-06
+> **Snapshot basis:** 2026-01-14 / v1.5.0
+> Historical maturity snapshot. It is not the current ship/no-ship source of truth. Use [STATUS](STATUS.md), [FEATURE_GAP_LIST](../FEATURE_GAP_LIST.md), [FEATURE_DISCOVERY](FEATURE_DISCOVERY.md), and [DOCUMENTATION_HYGIENE_AND_GAP_REGISTER](DOCUMENTATION_HYGIENE_AND_GAP_REGISTER.md) for current release posture.
 
 ---
 
