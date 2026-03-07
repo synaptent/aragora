@@ -4,7 +4,18 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from typing import Any
+from typing import Literal, TypedDict
+
+
+ApprovalLevel = Literal["none", "spec_and_merge", "all_stages", "metrics_gate"]
+
+
+class OrchestratorConfig(TypedDict):
+    require_human_approval: bool
+    auto_commit: bool
+    auto_merge: bool
+    skip_interrogation: bool
+    approval_level: ApprovalLevel
 
 
 class AutonomyLevel(enum.Enum):
@@ -13,8 +24,8 @@ class AutonomyLevel(enum.Enum):
     HUMAN_GUIDED = "human_guided"
     METRICS_DRIVEN = "metrics_driven"
 
-    def to_orchestrator_config(self) -> dict[str, Any]:
-        configs = {
+    def to_orchestrator_config(self) -> OrchestratorConfig:
+        configs: dict[AutonomyLevel, OrchestratorConfig] = {
             AutonomyLevel.FULLY_AUTONOMOUS: {
                 "require_human_approval": False,
                 "auto_commit": True,
@@ -46,7 +57,7 @@ class AutonomyLevel(enum.Enum):
         }
         return configs[self]
 
-    def to_approval_level(self) -> str:
+    def to_approval_level(self) -> ApprovalLevel:
         return self.to_orchestrator_config()["approval_level"]
 
     @property
