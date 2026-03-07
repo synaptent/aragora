@@ -40,6 +40,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify checkout integrity
+        shell: bash
+        run: |
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::pyproject.toml missing after checkout; attempting recovery"
+            git sparse-checkout disable || true
+            git fetch --no-tags origin "${GITHUB_SHA:-HEAD}"
+            git reset --hard FETCH_HEAD
+            git clean -ffd || true
+          fi
+          if [[ ! -f pyproject.toml ]]; then
+            echo "::warning::Standard recovery failed; attempting archive restore"
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            git archive "${GITHUB_SHA:-HEAD}" | tar -x || git archive HEAD | tar -x
+          fi
+          if [[ ! -f pyproject.toml ]] || [[ ! -f .github/actions/setup-python-safe/action.yml ]]; then
+            echo "::error::Repository checkout is incomplete (missing pyproject.toml or .github/actions/setup-python-safe/action.yml)"
+            echo "PWD=$(pwd)"
+            ls -la
+            ls -la .github/actions || true
+            exit 1
+          fi
+
       - name: Set up Python
         uses: ./.github/actions/setup-python-safe
         with:

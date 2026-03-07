@@ -27,18 +27,20 @@ jobs:
         env:
           API_URL: ${{ vars.PRODUCTION_API_URL || 'https://api.aragora.ai' }}
 
-      - name: Check playground endpoint
+      - name: Check playground status endpoint
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            --max-time 15 \
-            -X POST \
-            -H "Content-Type: application/json" \
-            -d '{"topic":"health check","rounds":1,"agents":2,"source":"ci"}' \
-            "${API_URL}/api/v1/playground/debate" || echo "000")
-          echo "Playground status: $STATUS"
-          # 200 or 429 (rate limited) are both "alive" signals
-          if [ "$STATUS" != "200" ] && [ "$STATUS" != "429" ]; then
-            echo "::error::Playground endpoint failed (status=$STATUS)"
+          STATUS=$(curl -sS -o /tmp/playground-status.json -w "%{http_code}" \
+            --max-time 10 \
+            "${API_URL}/api/v1/playground/status" || echo "000")
+          echo "Playground status endpoint: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Playground status endpoint failed (status=$STATUS)"
+            [ -f /tmp/playground-status.json ] && cat /tmp/playground-status.json
+            exit 1
+          fi
+          if ! grep -q '"status"[[:space:]]*:[[:space:]]*"ok"' /tmp/playground-status.json; then
+            echo "::error::Playground status payload missing expected ok marker"
+            cat /tmp/playground-status.json
             exit 1
           fi
         env:
