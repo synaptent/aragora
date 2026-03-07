@@ -128,6 +128,63 @@ _analytics_events: list[dict[str, Any]] = []
 _analytics_lock = threading.Lock()
 
 
+def _parse_event_timestamp(raw_timestamp: Any) -> datetime | None:
+    """Parse ISO timestamps from analytics events."""
+    if not isinstance(raw_timestamp, str) or not raw_timestamp:
+        return None
+    try:
+        return datetime.fromisoformat(raw_timestamp)
+    except ValueError:
+        return None
+
+
+def _percentile(sorted_values: list[float], percentile: float) -> float | None:
+    """Calculate a percentile using linear interpolation."""
+    if not sorted_values:
+        return None
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    rank = (percentile / 100.0) * (len(sorted_values) - 1)
+    lower = int(rank)
+    upper = min(lower + 1, len(sorted_values) - 1)
+    weight = rank - lower
+    return (sorted_values[lower] * (1 - weight)) + (sorted_values[upper] * weight)
+
+
+def _summarize_durations_seconds(values: list[float]) -> dict[str, Any]:
+    """Summarize duration distributions with standard percentiles."""
+    if not values:
+        return {
+            "count": 0,
+            "avg": None,
+            "p50": None,
+            "p95": None,
+            "min": None,
+            "max": None,
+        }
+
+    normalized = sorted(v for v in values if v >= 0.0)
+    if not normalized:
+        return {
+            "count": 0,
+            "avg": None,
+            "p50": None,
+            "p95": None,
+            "min": None,
+            "max": None,
+        }
+
+    avg = sum(normalized) / len(normalized)
+    return {
+        "count": len(normalized),
+        "avg": round(avg, 3),
+        "p50": round(_percentile(normalized, 50.0) or 0.0, 3),
+        "p95": round(_percentile(normalized, 95.0) or 0.0, 3),
+        "min": round(normalized[0], 3),
+        "max": round(normalized[-1], 3),
+    }
+
+
 def _sync_flow_to_repo(flow: OnboardingState) -> None:
     """Sync flow state to persistent repository."""
     try:
@@ -542,189 +599,6 @@ def _track_event(
         # Keep only last 10000 events
         if len(_analytics_events) > 10000:
             _analytics_events.pop(0)
-
-
-def _parse_event_timestamp(raw_timestamp: Any) -> datetime | None:
-    """Parse analytics event timestamps while tolerating legacy formatting."""
-    if not isinstance(raw_timestamp, str) or not raw_timestamp.strip():
-        return None
-    normalized = raw_timestamp.strip()
-    if normalized.endswith("Z"):
-        normalized = f"{normalized[:-1]}+00:00"
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed
-
-
-def _flow_id_from_event(event: dict[str, Any]) -> str:
-    """Resolve stable flow identity from event payload or actor fallback."""
-    data = event.get("data")
-    if isinstance(data, dict):
-        flow_id = data.get("flow_id")
-        if isinstance(flow_id, str) and flow_id.strip():
-            return flow_id.strip()
-    user_id = str(event.get("user_id") or "unknown")
-    org_id = str(event.get("organization_id") or "personal")
-    return f"{user_id}:{org_id}"
-
-
-def _average_seconds(samples: list[float]) -> float | None:
-    if not samples:
-        return None
-    return round(sum(samples) / len(samples), 3)
-
-
-def _build_onboarding_analytics(events: list[dict[str, Any]]) -> dict[str, Any]:
-    """Build funnel, timing, and drop-off analytics from event stream."""
-    step_order = [step.value for step in _get_step_order()]
-    flow_steps: dict[str, set[str]] = {}
-    started_at: dict[str, datetime] = {}
-    first_debate_at: dict[str, datetime] = {}
-    first_receipt_at: dict[str, datetime] = {}
-    started_flows: set[str] = set()
-    first_debate_flows: set[str] = set()
-    first_receipt_flows: set[str] = set()
-    completed_flows: set[str] = set()
-
-    sortable_events: list[tuple[datetime, dict[str, Any]]] = []
-    for event in events:
-        parsed = _parse_event_timestamp(event.get("timestamp"))
-        if parsed is None:
-            parsed = datetime.min.replace(tzinfo=timezone.utc)
-        sortable_events.append((parsed, event))
-    sortable_events.sort(key=lambda item: item[0])
-
-    for parsed_ts, event in sortable_events:
-        event_type = str(event.get("event_type") or "")
-        data = event.get("data")
-        payload = data if isinstance(data, dict) else {}
-        flow_id = _flow_id_from_event(event)
-        steps = flow_steps.setdefault(flow_id, set())
-
-        if event_type == "onboarding_started":
-            started_flows.add(flow_id)
-            steps.add(OnboardingStep.WELCOME.value)
-            previous = started_at.get(flow_id)
-            if previous is None or parsed_ts < previous:
-                started_at[flow_id] = parsed_ts
-
-        if event_type in {"first_debate_started", "quick_debate_started"}:
-            first_debate_flows.add(flow_id)
-            previous = first_debate_at.get(flow_id)
-            if previous is None or parsed_ts < previous:
-                first_debate_at[flow_id] = parsed_ts
-
-        if event_type == "first_receipt_generated":
-            first_receipt_flows.add(flow_id)
-            previous = first_receipt_at.get(flow_id)
-            if previous is None or parsed_ts < previous:
-                first_receipt_at[flow_id] = parsed_ts
-
-        if event_type == "step_updated":
-            completed_steps = payload.get("completed_steps")
-            if isinstance(completed_steps, list):
-                for step_name in completed_steps:
-                    if isinstance(step_name, str) and step_name in step_order:
-                        steps.add(step_name)
-            to_step = payload.get("to_step")
-            if isinstance(to_step, str) and to_step in step_order:
-                steps.add(to_step)
-            if (
-                payload.get("action") == "complete"
-                or OnboardingStep.COMPLETION.value in steps
-                or payload.get("to_step") == OnboardingStep.COMPLETION.value
-            ):
-                completed_flows.add(flow_id)
-
-    step_counts: dict[str, int] = {step_name: 0 for step_name in step_order}
-    for steps in flow_steps.values():
-        for step_name in step_order:
-            if step_name in steps:
-                step_counts[step_name] += 1
-
-    debate_timings: list[float] = []
-    receipt_timings: list[float] = []
-    for flow_id, started_ts in started_at.items():
-        debate_ts = first_debate_at.get(flow_id)
-        receipt_ts = first_receipt_at.get(flow_id)
-        if debate_ts and debate_ts >= started_ts:
-            debate_timings.append((debate_ts - started_ts).total_seconds())
-        if receipt_ts and receipt_ts >= started_ts:
-            receipt_timings.append((receipt_ts - started_ts).total_seconds())
-
-    step_drop_off: dict[str, dict[str, Any]] = {}
-    for index, step_name in enumerate(step_order[:-1]):
-        next_step = step_order[index + 1]
-        reached_current = step_counts.get(step_name, 0)
-        reached_next = step_counts.get(next_step, 0)
-        drop_count = max(0, reached_current - reached_next)
-        step_drop_off[step_name] = {
-            "next_step": next_step,
-            "reached": reached_current,
-            "advanced": reached_next,
-            "drop_off_count": drop_count,
-            "drop_off_rate_percent": round((drop_count / reached_current * 100), 2)
-            if reached_current
-            else 0.0,
-        }
-
-    completion_count = len(completed_flows)
-    started_count = len(started_flows)
-    first_debate_count = len(first_debate_flows)
-    first_receipt_count = len(first_receipt_flows)
-
-    valid_timestamps = [
-        (_parse_event_timestamp(event.get("timestamp")), event.get("timestamp")) for event in events
-    ]
-    valid_timestamps = [item for item in valid_timestamps if item[0] is not None]
-    if valid_timestamps:
-        earliest_timestamp = min(valid_timestamps, key=lambda item: item[0])[1]
-        latest_timestamp = max(valid_timestamps, key=lambda item: item[0])[1]
-    else:
-        earliest_timestamp = events[0]["timestamp"] if events else None
-        latest_timestamp = events[-1]["timestamp"] if events else None
-
-    return {
-        "funnel": {
-            "started": started_count,
-            "first_debate": first_debate_count,
-            "first_receipt": first_receipt_count,
-            "completed": completion_count,
-            "completion_rate": round((completion_count / started_count * 100), 2)
-            if started_count > 0
-            else 0.0,
-        },
-        "step_completion": step_counts,
-        "step_drop_off": step_drop_off,
-        "timing": {
-            "time_to_first_debate_seconds": _average_seconds(debate_timings),
-            "time_to_first_receipt_seconds": _average_seconds(receipt_timings),
-            "samples": {
-                "first_debate": len(debate_timings),
-                "first_receipt": len(receipt_timings),
-            },
-        },
-        "total_events": len(events),
-        "time_range": {
-            "earliest": earliest_timestamp,
-            "latest": latest_timestamp,
-        },
-    }
-
-
-def get_onboarding_analytics_snapshot(organization_id: str | None = None) -> dict[str, Any]:
-    """Return onboarding analytics snapshot for optional org scope."""
-    with _analytics_lock:
-        scoped_events = [
-            event
-            for event in _analytics_events
-            if not organization_id or event.get("organization_id") == organization_id
-        ]
-    return _build_onboarding_analytics(scoped_events)
 
 
 # =============================================================================
@@ -1204,19 +1078,6 @@ async def handle_quick_debate(
         template_id = data.get("template_id", "express_onboarding")
         topic = data.get("topic")
         profile = data.get("profile")
-        flow_key = f"{user_id}:{organization_id or 'personal'}"
-        flow_id: str | None = None
-        with _onboarding_lock:
-            existing_flow = _onboarding_flows.get(flow_key)
-            if existing_flow:
-                flow_id = existing_flow.id
-        if flow_id is None:
-            try:
-                repo_flow = get_onboarding_repository().get_flow(user_id, organization_id)
-                if repo_flow and isinstance(repo_flow.get("id"), str):
-                    flow_id = repo_flow["id"]
-            except (KeyError, TypeError, AttributeError, OSError):
-                flow_id = None
 
         # Find template
         template = next(
@@ -1227,6 +1088,21 @@ async def handle_quick_debate(
         # Determine topic
         if not topic:
             topic = template.example_prompt
+
+        flow_key = f"{user_id}:{organization_id or 'personal'}"
+        flow_id: str | None = None
+        with _onboarding_lock:
+            existing_flow = _onboarding_flows.get(flow_key)
+            if existing_flow:
+                flow_id = existing_flow.id
+
+        if flow_id is None:
+            try:
+                repo_flow = get_onboarding_repository().get_flow(user_id, organization_id)
+                if repo_flow and isinstance(repo_flow.get("id"), str):
+                    flow_id = repo_flow["id"]
+            except (KeyError, TypeError, AttributeError, OSError):
+                flow_id = None
 
         # Determine agents based on profile or template
         if profile and profile in QUICK_START_CONFIGS:
@@ -1251,8 +1127,8 @@ async def handle_quick_debate(
                 "is_onboarding": True,
                 "user_id": user_id,
                 "organization_id": organization_id,
-                "template_id": template_id,
                 "flow_id": flow_id,
+                "template_id": template_id,
             },
         )
 
@@ -1270,7 +1146,6 @@ async def handle_quick_debate(
             )
 
         # Update onboarding flow
-        flow: OnboardingState | None = None
         with _onboarding_lock:
             flow = _onboarding_flows.get(flow_key)
             if flow:
@@ -1280,14 +1155,14 @@ async def handle_quick_debate(
                 flow.updated_at = datetime.now(timezone.utc).isoformat()
 
         if flow:
-            _sync_flow_to_repo(flow)
+            flow_id = flow.id
 
         _track_event(
             "quick_debate_started",
             user_id,
             organization_id,
             {
-                "flow_id": flow.id if flow else flow_id,
+                "flow_id": flow_id,
                 "debate_id": response.debate_id,
                 "template_id": template_id,
                 "profile": profile,
@@ -1441,7 +1316,174 @@ async def handle_analytics(
     GET /api/v1/onboarding/analytics
     """
     try:
-        return success_response(get_onboarding_analytics_snapshot(organization_id=organization_id))
+        with _analytics_lock:
+            # Filter events for this organization if specified
+            events = [
+                e
+                for e in _analytics_events
+                if not organization_id or e.get("organization_id") == organization_id
+            ]
+
+        # Calculate funnel metrics
+        started = len([e for e in events if e["event_type"] == "onboarding_started"])
+        first_debate = len(
+            [
+                e
+                for e in events
+                if e["event_type"] in {"first_debate_started", "quick_debate_started"}
+            ]
+        )
+        completed = len(
+            [
+                e
+                for e in events
+                if e["event_type"] == "step_updated"
+                and e.get("data", {}).get("to_step") == "completion"
+            ]
+        )
+
+        started_by_flow: dict[str, datetime] = {}
+        reached_by_flow: dict[str, set[str]] = {}
+        completed_by_flow: dict[str, set[str]] = {}
+        first_debate_by_flow: dict[str, datetime] = {}
+        first_receipt_by_flow: dict[str, datetime] = {}
+        valid_steps = {step.value for step in _get_step_order()}
+
+        for event in events:
+            event_type = event.get("event_type")
+            payload = event.get("data", {})
+            flow_id = payload.get("flow_id") if isinstance(payload, dict) else None
+            event_time = _parse_event_timestamp(event.get("timestamp"))
+
+            if event_type == "onboarding_started" and isinstance(flow_id, str) and event_time:
+                previous = started_by_flow.get(flow_id)
+                started_by_flow[flow_id] = (
+                    event_time if previous is None or event_time < previous else previous
+                )
+                reached_by_flow.setdefault(flow_id, set()).add(OnboardingStep.WELCOME.value)
+                continue
+
+            if not isinstance(payload, dict) or not isinstance(flow_id, str):
+                continue
+
+            reached = reached_by_flow.setdefault(flow_id, set())
+
+            from_step = payload.get("from_step")
+            if isinstance(from_step, str) and from_step in valid_steps:
+                reached.add(from_step)
+
+            to_step = payload.get("to_step")
+            if isinstance(to_step, str) and to_step in valid_steps:
+                reached.add(to_step)
+
+            completed_steps = payload.get("completed_steps")
+            if isinstance(completed_steps, list):
+                completed_filtered = {
+                    step
+                    for step in completed_steps
+                    if isinstance(step, str) and step in valid_steps
+                }
+                if completed_filtered:
+                    reached.update(completed_filtered)
+                    existing_completed = completed_by_flow.get(flow_id, set())
+                    if len(completed_filtered) >= len(existing_completed):
+                        completed_by_flow[flow_id] = completed_filtered
+
+            if (
+                event_type in {"first_debate_started", "quick_debate_started"}
+                and event_time
+                and flow_id in started_by_flow
+            ):
+                reached.add(OnboardingStep.FIRST_DEBATE.value)
+                previous = first_debate_by_flow.get(flow_id)
+                first_debate_by_flow[flow_id] = (
+                    event_time if previous is None or event_time < previous else previous
+                )
+            elif (
+                event_type == "first_receipt_generated"
+                and event_time
+                and flow_id in started_by_flow
+            ):
+                reached.add(OnboardingStep.RECEIPT_REVIEW.value)
+                previous = first_receipt_by_flow.get(flow_id)
+                first_receipt_by_flow[flow_id] = (
+                    event_time if previous is None or event_time < previous else previous
+                )
+
+        debate_durations: list[float] = []
+        receipt_durations: list[float] = []
+        for flow_id, started_at in started_by_flow.items():
+            debate_at = first_debate_by_flow.get(flow_id)
+            if debate_at and debate_at >= started_at:
+                debate_durations.append((debate_at - started_at).total_seconds())
+
+            receipt_at = first_receipt_by_flow.get(flow_id)
+            if receipt_at and receipt_at >= started_at:
+                receipt_durations.append((receipt_at - started_at).total_seconds())
+
+        # Get step completion counts by flow progression snapshots
+        step_counts: dict[str, int] = {}
+        for step in _get_step_order():
+            step_counts[step.value] = sum(
+                1 for completed_steps in completed_by_flow.values() if step.value in completed_steps
+            )
+
+        step_drop_off: dict[str, dict[str, Any]] = {}
+        ordered_steps = _get_step_order()
+        for idx, step in enumerate(ordered_steps):
+            reached = sum(1 for seen in reached_by_flow.values() if step.value in seen)
+            if idx + 1 < len(ordered_steps):
+                next_step = ordered_steps[idx + 1]
+                advanced = sum(
+                    1
+                    for seen in reached_by_flow.values()
+                    if step.value in seen and next_step.value in seen
+                )
+                dropped = max(reached - advanced, 0)
+                drop_off_rate = (dropped / reached * 100.0) if reached > 0 else 0.0
+            else:
+                advanced = reached
+                dropped = 0
+                drop_off_rate = 0.0
+
+            step_drop_off[step.value] = {
+                "reached": reached,
+                "advanced": advanced,
+                "dropped": dropped,
+                "drop_off_rate_percent": round(drop_off_rate, 2),
+            }
+
+        parsed_times = [
+            parsed
+            for parsed in (_parse_event_timestamp(e.get("timestamp")) for e in events)
+            if parsed
+        ]
+        earliest = min(parsed_times).isoformat() if parsed_times else None
+        latest = max(parsed_times).isoformat() if parsed_times else None
+
+        return success_response(
+            {
+                "funnel": {
+                    "started": started,
+                    "first_debate": first_debate,
+                    "completed": completed,
+                    "completion_rate": (completed / started * 100) if started > 0 else 0,
+                },
+                "step_completion": step_counts,
+                "step_drop_off": step_drop_off,
+                "timing": {
+                    "time_to_first_debate_seconds": _summarize_durations_seconds(debate_durations),
+                    "time_to_first_receipt_seconds": _summarize_durations_seconds(
+                        receipt_durations
+                    ),
+                },
+                "total_events": len(events),
+                "time_range": {
+                    "earliest": earliest,
+                    "latest": latest,
+                },
+            }
+        )
 
     except (KeyError, ValueError, TypeError, ZeroDivisionError):
         logger.exception("Failed to get analytics")

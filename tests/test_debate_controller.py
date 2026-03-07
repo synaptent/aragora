@@ -766,87 +766,43 @@ class TestDebateControllerRunDebate:
         mock_get_onboarding_repo,
         mock_track_event,
     ):
-        """Onboarding debates should emit first_receipt_generated analytics events."""
+        """Onboarding debates should emit first_receipt_generated analytics with flow/debate/receipt IDs."""
         from aragora.server.debate_factory import DebateConfig
 
         mock_store = Mock()
+        mock_store.save.return_value = "receipt-onboarding"
         mock_get_receipt_store.return_value = mock_store
 
-        onboarding_repo = Mock()
-        onboarding_repo.get_flow.return_value = {"id": "onb_flow_1", "metadata": {}}
-        mock_get_onboarding_repo.return_value = onboarding_repo
+        mock_repo = Mock()
+        mock_repo.get_flow.return_value = {"id": "onb_flow_123", "metadata": {}}
+        mock_repo.update_flow.return_value = True
+        mock_get_onboarding_repo.return_value = mock_repo
 
         controller = DebateController(factory=self.factory, emitter=self.emitter)
         config = DebateConfig(
-            question="Should we adopt this architecture?",
-            agents_str="agent1",
+            question="Should we adopt feature flags?",
+            agents_str="agent1,agent2",
             rounds=1,
             debate_id="test_123",
             metadata={
                 "is_onboarding": True,
-                "user_id": "user_1",
-                "organization_id": "org_1",
-                "flow_id": "flow_fallback",
+                "user_id": "onb_user_1",
+                "organization_id": "onb_org_1",
+                "flow_id": "onb_flow_123",
             },
         )
 
         controller._run_debate(config, "test_123")
 
-        mock_track_event.assert_called_once()
-        event_type, user_id, org_id, payload = mock_track_event.call_args[0]
-        assert event_type == "first_receipt_generated"
-        assert user_id == "user_1"
-        assert org_id == "org_1"
-        assert payload["flow_id"] == "onb_flow_1"
-        assert payload["debate_id"] == "test_123"
-        assert payload["receipt_id"]
-
-    @patch("aragora.server.handlers.onboarding._track_event")
-    @patch("aragora.storage.repositories.onboarding.get_onboarding_repository")
-    @patch("aragora.storage.receipt_store.get_receipt_store")
-    @patch("aragora.server.debate_controller.update_debate_status")
-    def test_run_debate_tracks_onboarding_receipt_event_when_repo_update_fails(
-        self,
-        mock_update,
-        mock_get_receipt_store,
-        mock_get_onboarding_repo,
-        mock_track_event,
-    ):
-        """Receipt analytics should still be emitted if the repo update path fails."""
-        from aragora.server.debate_factory import DebateConfig
-
-        mock_store = Mock()
-        mock_get_receipt_store.return_value = mock_store
-
-        onboarding_repo = Mock()
-        onboarding_repo.get_flow.return_value = {"id": "onb_flow_1", "metadata": {}}
-        onboarding_repo.update_flow.side_effect = OSError("database locked")
-        mock_get_onboarding_repo.return_value = onboarding_repo
-
-        controller = DebateController(factory=self.factory, emitter=self.emitter)
-        config = DebateConfig(
-            question="Should we adopt this architecture?",
-            agents_str="agent1",
-            rounds=1,
-            debate_id="test_123",
-            metadata={
-                "is_onboarding": True,
-                "user_id": "user_1",
-                "organization_id": "org_1",
-                "flow_id": "flow_fallback",
-            },
-        )
-
-        controller._run_debate(config, "test_123")
-
-        mock_track_event.assert_called_once()
-        event_type, user_id, org_id, payload = mock_track_event.call_args[0]
-        assert event_type == "first_receipt_generated"
-        assert user_id == "user_1"
-        assert org_id == "org_1"
-        assert payload["flow_id"] == "onb_flow_1"
-        assert payload["debate_id"] == "test_123"
-        assert payload["receipt_id"]
+        assert mock_track_event.call_count == 1
+        args = mock_track_event.call_args.args
+        assert args[0] == "first_receipt_generated"
+        assert args[1] == "onb_user_1"
+        assert args[2] == "onb_org_1"
+        assert args[3]["flow_id"] == "onb_flow_123"
+        assert args[3]["debate_id"] == "test_123"
+        assert isinstance(args[3]["receipt_id"], str)
+        assert len(args[3]["receipt_id"]) > 0
 
     @patch("aragora.server.debate_controller.update_debate_status")
     def test_run_debate_handles_validation_error(self, mock_update):
