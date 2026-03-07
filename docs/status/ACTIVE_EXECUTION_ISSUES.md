@@ -19,25 +19,28 @@ This document links Aragora's current execution program to the live GitHub issue
 
 Epic: [#804](https://github.com/synaptent/aragora/issues/804)
 
-Current tranche: [#809](https://github.com/synaptent/aragora/issues/809)
+Tranche status: complete on `main` through [#809](https://github.com/synaptent/aragora/issues/809)
 
 Recently completed:
 - [#807](https://github.com/synaptent/aragora/issues/807) `CLOSED` - Make launch truthfulness blocking
 - [#808](https://github.com/synaptent/aragora/issues/808) `CLOSED` - Make self-host readiness truthful and PR-gated
+- [#809](https://github.com/synaptent/aragora/issues/809) `CLOSED` - Canonicalize the active backlog into GitHub issues
 
 | Issue | State | Priority | Owner | Milestone | Scope |
 |------|-------|----------|-------|-----------|-------|
 | [#807](https://github.com/synaptent/aragora/issues/807) | Closed | `priority:critical` | `owner:team-platform` | `2026-M1 Truthfulness + Decision Integrity Core` | Make launch truthfulness blocking |
 | [#808](https://github.com/synaptent/aragora/issues/808) | Closed | `priority:high` | `owner:team-platform` | `2026-M1 Truthfulness + Decision Integrity Core` | Make self-host readiness truthful and PR-gated |
-| [#809](https://github.com/synaptent/aragora/issues/809) | Open | `priority:high` | `owner:team-platform` | `2026-M1 Truthfulness + Decision Integrity Core` | Canonicalize the active backlog into GitHub issues |
+| [#809](https://github.com/synaptent/aragora/issues/809) | Closed | `priority:high` | `owner:team-platform` | `2026-M1 Truthfulness + Decision Integrity Core` | Canonicalize the active backlog into GitHub issues |
 
 ## Decision Integrity Kernel Unification
 
 Epic: [#805](https://github.com/synaptent/aragora/issues/805)
 
+Current tranche: [#811](https://github.com/synaptent/aragora/issues/811) and [#812](https://github.com/synaptent/aragora/issues/812) after [#810](https://github.com/synaptent/aragora/issues/810) landed on `main`
+
 | Issue | State | Priority | Owner | Milestone | Scope |
 |------|-------|----------|-------|-----------|-------|
-| [#810](https://github.com/synaptent/aragora/issues/810) | Open | `priority:high` | `owner:team-core` | `2026-M1 Truthfulness + Decision Integrity Core` | Add prompt -> specification -> DecisionPlan bridge |
+| [#810](https://github.com/synaptent/aragora/issues/810) | Closed | `priority:high` | `owner:team-core` | `2026-M1 Truthfulness + Decision Integrity Core` | Add prompt -> specification -> DecisionPlan bridge |
 | [#811](https://github.com/synaptent/aragora/issues/811) | Open | `priority:high` | `owner:team-core` | `2026-M1 Truthfulness + Decision Integrity Core` | Collapse prompt/canvas/pipeline to one canonical execution runtime |
 | [#812](https://github.com/synaptent/aragora/issues/812) | Open | `priority:high` | `owner:team-core` | `2026-M1 Truthfulness + Decision Integrity Core` | Require cryptographic decision receipts before all action-taking |
 | [#813](https://github.com/synaptent/aragora/issues/813) | Open | `priority:high` | `owner:team-core` | `2026-M3 Strategic Moat Scale-Out` | Integrate ProviderRouter into runtime agent selection |
@@ -65,6 +68,14 @@ These remain open and real, but they are not the primary product lane while the 
 | [#273](https://github.com/synaptent/aragora/issues/273) | Open | `priority:critical` | `owner:team-risk` | `2026-M2 Channel and FinOps` | Enterprise Assurance Closure epic |
 | [#274](https://github.com/synaptent/aragora/issues/274) | Open | `priority:critical` | `owner:team-risk` | `2026-M2 Channel and FinOps` | Execute external penetration test and remediate findings |
 | [#509](https://github.com/synaptent/aragora/issues/509) | Open | `priority:critical` | `owner:team-risk` | `none` | Pentest vendor selection and scope sign-off |
+
+## Operational Incidents
+
+Operational incidents are not part of the planned execution epics, but they can preempt them when `main` is degraded.
+
+| Issue | State | Priority | Scope |
+|------|-------|----------|-------|
+| [#829](https://github.com/synaptent/aragora/issues/829) | Open | `outage` | Service outage detected on 2026-03-07 |
 
 ## Operating Rule
 

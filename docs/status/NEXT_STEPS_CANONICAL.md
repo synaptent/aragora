@@ -14,7 +14,8 @@ This file defines execution order.
 - The full vision remains the goal; the near-term requirement is sequencing, not scope reduction.
 - The moat is the receipt-gated decision kernel: prompt/spec/debate/consensus/cryptographic receipt/policy-gated action.
 - GitHub issues now carry active execution status, owners, and acceptance criteria. Docs should summarize context and order, not act as the only operational backlog.
-- Truthfulness hardening is already underway on `main`: [#807](https://github.com/synaptent/aragora/issues/807) and [#808](https://github.com/synaptent/aragora/issues/808) are complete, and [#809](https://github.com/synaptent/aragora/issues/809) is the current backlog-canonicalization tranche.
+- Truthfulness and backlog canonicalization are complete on `main` through [#809](https://github.com/synaptent/aragora/issues/809), and the first Decision Integrity Kernel bridge tranche [#810](https://github.com/synaptent/aragora/issues/810) is also complete.
+- The current M1 kernel focus is [#811](https://github.com/synaptent/aragora/issues/811) followed by [#812](https://github.com/synaptent/aragora/issues/812).
 - Surface area should be productized sequentially, not hidden or allowed to drift.
 
 ## Execution Order
@@ -22,6 +23,7 @@ This file defines execution order.
 ### 1) Truthfulness And Backlog Canonicalization
 - Tracking: [#804](https://github.com/synaptent/aragora/issues/804), [#807](https://github.com/synaptent/aragora/issues/807), [#808](https://github.com/synaptent/aragora/issues/808), [#809](https://github.com/synaptent/aragora/issues/809)
 - Goal: `main` and current-source docs should stay truthful, and the active backlog should live in GitHub instead of only in Markdown.
+- Current status: complete on `main`; keep the gates blocking and maintain the issue map/doc linkage.
 - Acceptance:
   - Launch/readiness claims match what works on `main`.
   - Self-host/readiness docs and gates are evidence-backed.
@@ -31,6 +33,7 @@ This file defines execution order.
 ### 2) Decision Integrity Kernel Unification
 - Tracking: [#805](https://github.com/synaptent/aragora/issues/805), [#810](https://github.com/synaptent/aragora/issues/810), [#811](https://github.com/synaptent/aragora/issues/811), [#812](https://github.com/synaptent/aragora/issues/812), [#813](https://github.com/synaptent/aragora/issues/813), [#814](https://github.com/synaptent/aragora/issues/814), [#815](https://github.com/synaptent/aragora/issues/815), [#816](https://github.com/synaptent/aragora/issues/816)
 - Goal: unify `prompt -> specification -> adversarial debate -> consensus/dissent -> cryptographic decision receipt -> policy gate -> execution` as one canonical runtime.
+- Current tranche: [#811](https://github.com/synaptent/aragora/issues/811) and [#812](https://github.com/synaptent/aragora/issues/812) after [#810](https://github.com/synaptent/aragora/issues/810) landed on `main`.
 - Why now:
   - This is the architectural center of Aragora's differentiation.
   - Provider routing, OpenClaw, 10+ agent scale, and ERC-8004 only matter if they plug into the same receipt-gated kernel.
@@ -49,6 +52,10 @@ This file defines execution order.
 - Acceptance:
   - Open assurance work remains visible, owned, and sequenced.
   - Docs do not overclaim GA or launch readiness while these items remain open.
+
+### Operational Incidents (Interrupt-Driven)
+- Tracking: [#829](https://github.com/synaptent/aragora/issues/829) and any future incident tickets
+- Rule: incidents can preempt the planned order, but they do not replace the canonical program; once mitigated, execution returns to the issue order above.
 
 ## Operating Rules
 - GitHub issues are the live execution backlog; docs summarize context, order, and capability posture.

@@ -22,6 +22,8 @@ The live execution backlog now tracks in [ACTIVE_EXECUTION_ISSUES.md](ACTIVE_EXE
 - Added discoverability links for status, roadmap, gap, and hygiene docs from the main indexes.
 - Marked legacy snapshot docs as non-canonical where they were being presented as live status.
 - Canonicalized the current execution program into GitHub issues and added `docs/status/ACTIVE_EXECUTION_ISSUES.md` as the issue map for epics `#804`-`#806`, execution lanes `#807`-`#820`, and assurance issues `#273`, `#274`, `#509`.
+- Updated the issue map and canonical execution summary after `#809` and `#810` landed so current-source docs reflect the active `#811` / `#812` kernel tranche.
+- Corrected the root README's Knowledge Mound adapter count from `45` to the current verified `42`.
 
 ## Validation Snapshot
 
@@ -35,10 +37,10 @@ The live execution backlog now tracks in [ACTIVE_EXECUTION_ISSUES.md](ACTIVE_EXE
 
 - Version: `2.8.0`
 - Python modules under `aragora/`: `3,803`
-- Tests: `210,071`
-- Test files under `tests/`: `5,057`
-- OpenAPI paths: `2,981`
-- OpenAPI operations: `3,740`
+- Tests (`def test_` across repo): `210,215`
+- Test files under `tests/`: `5,069`
+- OpenAPI paths (generated spec): `2,666`
+- OpenAPI operations (generated spec): `3,155`
 - SDK namespaces: `186` Python / `185` TypeScript
 - Registered agent types: `43`
 - Allowlisted agent types: `34`
@@ -50,7 +52,7 @@ The live execution backlog now tracks in [ACTIVE_EXECUTION_ISSUES.md](ACTIVE_EXE
 ### Current Focus (March 2026)
 
 - Closed-loop backbone, inbox trust wedge, swarm supervision, provider routing phase 1, Comms Hub completion, and OpenClaw core-loop delivery are treated as shipped in `docs/status/STATUS.md`.
-- Canonical execution priorities are now linked directly to the GitHub backlog: truthfulness/backlog canonicalization (`#804`, `#807`-`#809`), Decision Integrity Kernel unification (`#805`, `#810`-`#816`), and sequential surface productization (`#806`, `#817`-`#820`) in `docs/status/NEXT_STEPS_CANONICAL.md` and `docs/status/ACTIVE_EXECUTION_ISSUES.md`.
+- Canonical execution priorities are now linked directly to the GitHub backlog: truthfulness/backlog canonicalization is complete on `main` through `#809`, the first kernel bridge tranche `#810` is complete, and the active M1 kernel work is now `#811` and `#812` in `docs/status/NEXT_STEPS_CANONICAL.md` and `docs/status/ACTIVE_EXECUTION_ISSUES.md`.
 - The active six-week plan is wedge/PMF-focused: first receipt quickly, parity hard-close, reliability cleanup, surface simplification, and status consolidation in `docs/status/EXECUTION_NEXT_6_WEEKS_2026-03-05.md`.
 
 ### Near-Term Goals (Q2 2026)
@@ -79,6 +81,7 @@ The live execution backlog now tracks in [ACTIVE_EXECUTION_ISSUES.md](ACTIVE_EXE
 - `aragora/server/handlers/features/documents_batch.py` returns placeholder chunk retrieval output pending vector-store integration.
 - `aragora/server/handlers/features/connectors.py` still carries `coming_soon` / stubbed connector flows (`gdrive` and related enterprise sync/test paths).
 - `aragora/server/handlers/computer_use_handler.py` does not implement the full action/policy detail surface advertised by the OpenAPI computer-use endpoints.
+- Self-host compose smoke can still fail because `/readyz` returns `503` when `system.health.read` is denied in the composed runtime, even while `/healthz` succeeds. The gating/docs work is landed, but the runtime permission model still needs follow-through.
 - FastAPI receipts currently expose `json`/`markdown`/`sarif`, while legacy handlers still own `html`/`pdf` exports.
 - Receipt delivery is only wired for `slack`, `teams`, `email`, and `discord`, not the broader connector/channel footprint implied elsewhere in the docs.
 - Unified and progressive memory handlers remain backend-conditional and still return `501` when optional backends or methods are unavailable.
