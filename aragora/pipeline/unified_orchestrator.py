@@ -83,6 +83,8 @@ class OrchestratorResult:
     plan_outcome: Any | None = None
     bug_fix_result: Any | None = None
     pipeline_outcome: Any | None = None
+    spec_bundle: Any | None = None
+    action_bundle: dict[str, Any] | None = None
     meta_loop_result: Any | None = None
 
     # Tracking
@@ -133,6 +135,9 @@ class UnifiedOrchestrator:
         plan_factory: Any | None = None,
         plan_executor: Any | None = None,
         knowledge_mound: Any | None = None,
+        # Wave 5: OpenClaw execution
+        spec_extractor: Any | None = None,
+        code_task_factory: Any | None = None,
     ) -> None:
         self._input_extension = input_extension
         self._researcher = researcher
@@ -147,6 +152,8 @@ class UnifiedOrchestrator:
         self._plan_factory = plan_factory
         self._plan_executor = plan_executor
         self._km = knowledge_mound
+        self._spec_extractor = spec_extractor
+        self._code_task_factory = code_task_factory
 
     async def run(
         self,
@@ -260,6 +267,19 @@ class UnifiedOrchestrator:
                 logger.warning("Quality gate failed, continuing without validation")
                 result.stages_skipped.append("quality_gate")
 
+        # --- Stage 3c: Spec Extraction (OpenClaw) ---
+        if (
+            cfg.execution_mode == "openclaw"
+            and self._spec_extractor is not None
+            and result.debate_result is not None
+        ):
+            try:
+                result.spec_bundle = self._spec_extractor(result.debate_result)
+                result.stages_completed.append("spec_extraction")
+            except Exception:
+                logger.warning("Spec extraction failed")
+                result.stages_skipped.append("spec_extraction")
+
         # --- Stage 4: Create Decision Plan ---
         if result.debate_result is not None and self._plan_factory is not None:
             try:
@@ -285,20 +305,43 @@ class UnifiedOrchestrator:
                     return result
 
         # --- Stage 6: Execute Plan ---
-        if (
-            result.decision_plan is not None
-            and self._plan_executor is not None
-            and not cfg.skip_execution
-        ):
-            try:
-                result.plan_outcome = await self._plan_executor.execute(
-                    result.decision_plan,
-                    execution_mode=cfg.execution_mode,
-                )
-                result.stages_completed.append("execute")
-            except Exception:
-                logger.warning("Execution failed")
-                result.stages_skipped.append("execute")
+        if not cfg.skip_execution:
+            if (
+                cfg.execution_mode == "openclaw"
+                and self._code_task_factory is not None
+                and result.spec_bundle is not None
+            ):
+                try:
+                    spec = result.spec_bundle
+                    exec_result = await self._code_task_factory(
+                        implementation_prompt=spec.implementation_prompt
+                        if hasattr(spec, "implementation_prompt")
+                        else str(spec),
+                        files_to_modify=getattr(spec, "files_to_modify", []),
+                    )
+                    result.plan_outcome = exec_result
+                    result.action_bundle = {
+                        "harness_name": "claude-code",
+                        "action_type": "implementation",
+                        "input_prompt": getattr(spec, "implementation_prompt", ""),
+                        "exit_code": exec_result.get("exit_code", 0)
+                        if isinstance(exec_result, dict)
+                        else 0,
+                    }
+                    result.stages_completed.append("execute")
+                except Exception:
+                    logger.warning("OpenClaw execution failed")
+                    result.stages_skipped.append("execute")
+            elif result.decision_plan is not None and self._plan_executor is not None:
+                try:
+                    result.plan_outcome = await self._plan_executor.execute(
+                        result.decision_plan,
+                        execution_mode=cfg.execution_mode,
+                    )
+                    result.stages_completed.append("execute")
+                except Exception:
+                    logger.warning("Execution failed")
+                    result.stages_skipped.append("execute")
 
         # --- Stage 6b: Bug-Fix Loop (CLB-008) ---
         # Auto-trigger when tests fail, even without explicit enable_bug_fix_loop.
