@@ -36,6 +36,7 @@ Usage:
 from __future__ import annotations
 
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -604,6 +605,43 @@ class DecisionPlan:
                 in parallel via a workflow parallel step.
         """
         from aragora.workflow.types import WorkflowCategory, WorkflowDefinition
+
+        if isinstance(self.metadata, dict):
+            workflow_payload = self.metadata.get("workflow_definition")
+            if isinstance(workflow_payload, dict) and isinstance(
+                workflow_payload.get("steps", []), list
+            ):
+                payload = deepcopy(workflow_payload)
+                payload["id"] = f"wf-{self.id}"
+                payload.setdefault("name", f"Decision Plan: {self.task[:60]}")
+                payload.setdefault(
+                    "description", f"Auto-generated workflow from debate {self.debate_id}"
+                )
+                payload.setdefault("category", WorkflowCategory.GENERAL.value)
+                payload.setdefault("tags", ["decision-plan", "canvas-runtime"])
+                workflow_metadata = payload.get("metadata")
+                if not isinstance(workflow_metadata, dict):
+                    workflow_metadata = {}
+                plan_metadata = dict(self.metadata)
+                plan_metadata.pop("workflow_definition", None)
+                workflow_metadata.update(
+                    {
+                        "decision_plan_id": self.id,
+                        "debate_id": self.debate_id,
+                        "debate_confidence": self.debate_result.confidence
+                        if self.debate_result
+                        else 0,
+                        "risk_count": len(self.risk_register.risks) if self.risk_register else 0,
+                        "plan_metadata": plan_metadata,
+                        "implementation_profile": self.implementation_profile.to_dict()
+                        if self.implementation_profile
+                        else None,
+                    }
+                )
+                payload["metadata"] = workflow_metadata
+                workflow = WorkflowDefinition.from_dict(payload)
+                self.workflow_id = workflow.id
+                return workflow
 
         ctx = _WorkflowBuildContext()
 

@@ -540,6 +540,14 @@ class PlanExecutor:
             engine = WorkflowEngine()
             definition = plan.to_workflow_definition()
 
+        workflow_task_step_ids = {
+            step.id
+            for step in definition.steps
+            if getattr(step.step_type, "value", step.step_type)
+            in {"task", "implementation", "computer_use_task"}
+            or step.name.startswith("Implement:")
+        }
+
         # Execute
         start_time = time.time()
         inputs = {
@@ -575,14 +583,19 @@ class PlanExecutor:
         duration = time.time() - start_time
 
         # Compute tasks/verification stats from workflow results
-        tasks_total = len(plan.implement_plan.tasks) if plan.implement_plan else 0
+        tasks_total = len(workflow_task_step_ids)
+        if tasks_total == 0 and plan.implement_plan:
+            tasks_total = len(plan.implement_plan.tasks)
         tasks_completed = 0
         verification_total = 0
         verification_passed = 0
 
         for step_result in getattr(result, "step_results", []):
             step_name = getattr(step_result, "step_name", "") or ""
-            if step_name.startswith("Implement:"):
+            step_id = getattr(step_result, "step_id", "") or ""
+            if step_id in workflow_task_step_ids or (
+                not workflow_task_step_ids and step_name.startswith("Implement:")
+            ):
                 if getattr(step_result, "success", False):
                     tasks_completed += 1
             elif step_name == "Run Verification":

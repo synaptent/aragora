@@ -7,11 +7,24 @@ reflected in the actual workflow that gets executed.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass
+from typing import Literal, cast
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_ORCH_TO_STEP = {
+    "agent_task": "task",
+    "debate": "debate",
+    "human_gate": "human_checkpoint",
+    "parallel_fan": "parallel",
+    "merge": "merge",
+    "verification": "verification",
+}
+_IMPLEMENT_STEP_TYPES = {"task", "implementation", "computer_use_task"}
 
 
 @dataclass
@@ -48,9 +61,6 @@ def sync_canvas_to_workflow(graph: Any) -> dict[str, Any]:
     except ImportError:
         pass
 
-    steps: list[dict[str, Any]] = []
-    transitions: list[dict[str, Any]] = []
-
     # Get orchestration nodes
     orch_nodes: dict[str, Any] = {}
     if hasattr(graph, "nodes"):
@@ -61,42 +71,58 @@ def sync_canvas_to_workflow(graph: Any) -> dict[str, Any]:
             elif pipeline_stage_orchestration is not None and stage == pipeline_stage_orchestration:
                 orch_nodes[node_id] = node
 
-    # Map orch_type to workflow step_type
-    _ORCH_TO_STEP = {
-        "agent_task": "task",
-        "debate": "debate",
-        "human_gate": "human_checkpoint",
-        "parallel_fan": "parallel",
-        "merge": "merge",
-        "verification": "verification",
-    }
+    return build_workflow_definition_from_orchestration(
+        name=getattr(graph, "name", "Canvas Workflow"),
+        workflow_id=f"wf-{getattr(graph, 'id', 'canvas')}",
+        nodes=orch_nodes,
+        edges=getattr(graph, "edges", {}),
+        metadata={
+            "source": "canvas_sync",
+            "graph_id": getattr(graph, "id", ""),
+            "node_count": len(orch_nodes),
+        },
+    )
 
-    for node_id, node in orch_nodes.items():
-        data = getattr(node, "data", {}) or {}
-        if isinstance(data, dict):
-            node_data = data
-        elif hasattr(data, "__dict__"):
-            node_data = data.__dict__
-        else:
-            node_data = {}
 
+def build_workflow_definition_from_orchestration(
+    *,
+    name: str,
+    nodes: Any,
+    edges: Any,
+    workflow_id: str,
+    description: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a WorkflowDefinition payload from orchestration nodes/edges."""
+    steps: list[dict[str, Any]] = []
+    transitions: list[dict[str, Any]] = []
+    orch_nodes: dict[str, Any] = {}
+
+    for fallback_id, node in _iter_items(nodes):
+        node_id = _node_attr(node, "id", fallback_id)
+        node_data = _node_data(node)
         orch_type = node_data.get("orchType", node_data.get("orch_type", "agent_task"))
-        step_type = _ORCH_TO_STEP.get(orch_type, "task")
-
+        step_type = _ORCH_TO_STEP.get(str(orch_type), "task")
         config: dict[str, Any] = {
             "assigned_agent": node_data.get("assignedAgent", node_data.get("assigned_agent", "")),
-            "capabilities": node_data.get("capabilities", []),
+            "capabilities": _string_list(node_data.get("capabilities")),
             "elo_score": node_data.get("eloScore", node_data.get("elo_score")),
         }
-
-        # Pass through agent_pool from TeamSelector assignment
         agent_pool = node_data.get("agent_pool")
         if agent_pool:
             config["agent_pool"] = agent_pool
+        files = node_data.get("files")
+        if isinstance(files, list):
+            config["files"] = [str(item) for item in files if str(item)]
+        complexity = node_data.get("complexity")
+        if complexity in {"simple", "moderate", "complex"}:
+            config["complexity"] = complexity
+        if node_data.get("requires_approval") is not None:
+            config["requires_approval"] = bool(node_data.get("requires_approval"))
 
         step = {
             "id": node_id,
-            "name": node_data.get("label", getattr(node, "label", f"Step {node_id}")),
+            "name": node_data.get("label", _node_attr(node, "label", f"Step {node_id}")),
             "description": node_data.get("description", ""),
             "step_type": step_type,
             "config": config,
@@ -105,52 +131,142 @@ def sync_canvas_to_workflow(graph: Any) -> dict[str, Any]:
             "optional": node_data.get("optional", False),
         }
         steps.append(step)
+        orch_nodes[node_id] = node
 
-    # Convert edges to transitions
-    if hasattr(graph, "edges"):
-        for edge_id, edge in (
-            graph.edges.items() if isinstance(graph.edges, dict) else enumerate(graph.edges)
-        ):
-            source = (
-                getattr(edge, "source_id", edge.get("source_id", ""))
-                if isinstance(edge, dict)
-                else getattr(edge, "source_id", "")
-            )
-            target = (
-                getattr(edge, "target_id", edge.get("target_id", ""))
-                if isinstance(edge, dict)
-                else getattr(edge, "target_id", "")
+    for fallback_id, edge in _iter_items(edges):
+        source = _edge_attr(edge, "source_id", _edge_attr(edge, "source", ""))
+        target = _edge_attr(edge, "target_id", _edge_attr(edge, "target", ""))
+        if source in orch_nodes and target in orch_nodes:
+            transitions.append(
+                {
+                    "id": _edge_attr(edge, "id", f"tr-{source}-{target}-{fallback_id}"),
+                    "from_step": source,
+                    "to_step": target,
+                    "condition": _edge_attr(edge, "condition", ""),
+                    "label": _edge_attr(edge, "label", ""),
+                    "priority": 0,
+                }
             )
 
-            # Only include edges between orchestration nodes
-            if source in orch_nodes and target in orch_nodes:
-                transitions.append(
-                    {
-                        "id": getattr(edge, "id", edge_id)
-                        if not isinstance(edge_id, int)
-                        else f"tr-{source}-{target}",
-                        "from_step": source,
-                        "to_step": target,
-                        "condition": getattr(edge, "condition", "")
-                        if not isinstance(edge, dict)
-                        else edge.get("condition", ""),
-                        "label": getattr(edge, "label", "")
-                        if not isinstance(edge, dict)
-                        else edge.get("label", ""),
-                        "priority": 0,
-                    }
-                )
+    workflow_metadata = {
+        "source": "canvas_sync",
+        "node_count": len(steps),
+    }
+    if isinstance(metadata, dict):
+        workflow_metadata.update(metadata)
 
     return {
-        "name": getattr(graph, "name", "Canvas Workflow"),
+        "id": workflow_id,
+        "name": name,
+        "description": description,
         "steps": steps,
         "transitions": transitions,
-        "metadata": {
-            "source": "canvas_sync",
-            "graph_id": getattr(graph, "id", ""),
-            "node_count": len(steps),
-        },
+        "metadata": workflow_metadata,
     }
+
+
+def workflow_definition_to_implement_plan(workflow_definition: dict[str, Any]) -> Any:
+    """Derive a minimal ImplementPlan from a workflow definition."""
+    from aragora.implement.types import ImplementPlan, ImplementTask
+
+    steps = workflow_definition.get("steps", [])
+    transitions = workflow_definition.get("transitions", [])
+    task_step_ids = {
+        str(step.get("id"))
+        for step in steps
+        if isinstance(step, dict) and step.get("step_type") in _IMPLEMENT_STEP_TYPES
+    }
+    deps: dict[str, list[str]] = {step_id: [] for step_id in task_step_ids}
+    for transition in transitions:
+        if not isinstance(transition, dict):
+            continue
+        source = str(transition.get("from_step", ""))
+        target = str(transition.get("to_step", ""))
+        if source in task_step_ids and target in deps and source not in deps[target]:
+            deps[target].append(source)
+
+    tasks: list[ImplementTask] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        step_id = str(step.get("id", ""))
+        if step_id not in task_step_ids:
+            continue
+        config = step.get("config", {})
+        if not isinstance(config, dict):
+            config = {}
+        files = config.get("files")
+        if not isinstance(files, list):
+            files = []
+        complexity_value = str(config.get("complexity", "moderate"))
+        if complexity_value not in {"simple", "moderate", "complex"}:
+            complexity_value = "moderate"
+        complexity = cast(Literal["simple", "moderate", "complex"], complexity_value)
+        tasks.append(
+            ImplementTask(
+                id=step_id,
+                description=str(step.get("description") or step.get("name") or step_id),
+                files=[str(item) for item in files if str(item)],
+                complexity=complexity,
+                dependencies=deps.get(step_id, []),
+                task_type=str(step.get("step_type", "task")),
+                capabilities=_string_list(config.get("capabilities")),
+                requires_approval=bool(config.get("requires_approval", False)),
+            )
+        )
+
+    design_hash = hashlib.sha256(
+        json.dumps(
+            {
+                "workflow_id": workflow_definition.get("id", ""),
+                "task_steps": [task.id for task in tasks],
+                "transitions": [
+                    transition
+                    for transition in transitions
+                    if isinstance(transition, dict)
+                    and transition.get("from_step") in task_step_ids
+                    and transition.get("to_step") in task_step_ids
+                ],
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    return ImplementPlan(design_hash=design_hash, tasks=tasks)
+
+
+def build_decision_plan_from_workflow_definition(
+    workflow_definition: dict[str, Any],
+    *,
+    debate_id: str,
+    task: str,
+    metadata: dict[str, Any] | None = None,
+) -> Any:
+    """Create a DecisionPlan that preserves a workflow definition in metadata."""
+    from copy import deepcopy
+
+    from aragora.pipeline.decision_plan import ApprovalMode, DecisionPlanFactory, PlanStatus
+
+    workflow_payload = deepcopy(workflow_definition)
+    workflow_metadata = workflow_payload.get("metadata")
+    if not isinstance(workflow_metadata, dict):
+        workflow_metadata = {}
+    workflow_payload["metadata"] = workflow_metadata
+
+    plan = DecisionPlanFactory.from_implement_plan(
+        workflow_definition_to_implement_plan(workflow_payload),
+        debate_id=debate_id,
+        task=task,
+        implementation_profile={"execution_mode": "workflow"},
+    )
+    plan.approval_mode = ApprovalMode.NEVER
+    plan.status = PlanStatus.CREATED
+    combined_metadata: dict[str, Any] = {}
+    if isinstance(metadata, dict):
+        combined_metadata.update(metadata)
+    combined_metadata["workflow_definition"] = workflow_payload
+    combined_metadata.setdefault("execution_mode", "workflow")
+    plan.metadata.update(combined_metadata)
+    return plan
 
 
 def diff_canvas_workflow(
@@ -210,3 +326,53 @@ def diff_canvas_workflow(
                     )
 
     return changes
+
+
+def _iter_items(values: Any) -> list[tuple[str, Any]]:
+    if isinstance(values, dict):
+        return [(str(key), value) for key, value in values.items()]
+    if isinstance(values, list):
+        items: list[tuple[str, Any]] = []
+        for index, value in enumerate(values):
+            if isinstance(value, dict) and value.get("id"):
+                items.append((str(value["id"]), value))
+            else:
+                items.append((str(index), value))
+        return items
+    return []
+
+
+def _node_data(node: Any) -> dict[str, Any]:
+    if isinstance(node, dict):
+        data = node.get("data", {})
+    else:
+        data = getattr(node, "data", {})
+    if isinstance(data, dict):
+        return data
+    if hasattr(data, "__dict__"):
+        return dict(data.__dict__)
+    return {}
+
+
+def _node_attr(node: Any, attr: str, default: str) -> str:
+    if isinstance(node, dict):
+        value = node.get(attr, default)
+    else:
+        value = getattr(node, attr, default)
+    return str(value or default)
+
+
+def _edge_attr(edge: Any, attr: str, default: str) -> str:
+    if isinstance(edge, dict):
+        value = edge.get(attr, default)
+    else:
+        value = getattr(edge, attr, default)
+    return str(value or default)
+
+
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    return []

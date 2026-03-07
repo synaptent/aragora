@@ -18,6 +18,8 @@ from __future__ import annotations
 import pytest
 
 from aragora.core_types import Critique, DebateResult, Vote
+from aragora.implement.types import ImplementPlan
+from aragora.pipeline.canvas_workflow_sync import build_decision_plan_from_workflow_definition
 from aragora.pipeline.decision_plan import (
     ApprovalMode,
     ApprovalRecord,
@@ -605,6 +607,69 @@ class TestWorkflowGeneration:
 
         is_valid, errors = workflow.validate()
         assert is_valid, f"Workflow validation failed: {errors}"
+
+    def test_metadata_workflow_definition_is_preferred(self):
+        plan = DecisionPlanFactory.from_implement_plan(
+            ImplementPlan(design_hash="hash-123", tasks=[]),
+            debate_id="debate-canvas-001",
+            task="Execute canvas runtime",
+            implementation_profile={"execution_mode": "workflow"},
+        )
+        plan.metadata["workflow_definition"] = {
+            "id": "wf-canvas-seed",
+            "name": "Canvas Runtime",
+            "steps": [
+                {
+                    "id": "node-1",
+                    "name": "Canvas Step",
+                    "step_type": "task",
+                    "config": {"assigned_agent": "claude"},
+                }
+            ],
+            "transitions": [],
+            "metadata": {"source": "canvas"},
+        }
+
+        workflow = plan.to_workflow_definition()
+
+        assert workflow.id == f"wf-{plan.id}"
+        assert workflow.name == "Canvas Runtime"
+        assert [step.name for step in workflow.steps] == ["Canvas Step"]
+        assert workflow.metadata["source"] == "canvas"
+        assert workflow.metadata["decision_plan_id"] == plan.id
+
+    def test_build_decision_plan_from_workflow_definition_preserves_metadata(self):
+        workflow_definition = {
+            "id": "wf-canvas-123",
+            "name": "Canvas Workflow",
+            "steps": [
+                {
+                    "id": "node-1",
+                    "name": "Implement Something",
+                    "description": "Do the work",
+                    "step_type": "task",
+                    "config": {
+                        "assigned_agent": "codex",
+                        "capabilities": ["implementation"],
+                        "files": ["aragora/example.py"],
+                    },
+                }
+            ],
+            "transitions": [],
+            "metadata": {"source": "canvas_sync"},
+        }
+
+        plan = build_decision_plan_from_workflow_definition(
+            workflow_definition,
+            debate_id="debate-canvas-bridge",
+            task="Run canvas workflow",
+            metadata={"pipeline_id": "pipe-123"},
+        )
+
+        assert plan.metadata["pipeline_id"] == "pipe-123"
+        assert plan.metadata["workflow_definition"]["id"] == "wf-canvas-123"
+        assert plan.implement_plan is not None
+        assert [task.id for task in plan.implement_plan.tasks] == ["node-1"]
 
 
 # ---------------------------------------------------------------------------
