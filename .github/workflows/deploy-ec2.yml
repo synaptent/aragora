@@ -87,6 +87,7 @@ jobs:
     outputs:
       validate_only: ${{ steps.mode.outputs.validate_only }}
       canary_instance: ${{ steps.discover.outputs.canary_instance }}
+      has_canary: ${{ steps.discover.outputs.has_canary }}
       worker_instances: ${{ steps.discover.outputs.worker_instances }}
       all_instances: ${{ steps.discover.outputs.all_instances }}
       canary_ok: ${{ steps.canary_health.outputs.canary_ok }}
@@ -126,8 +127,10 @@ jobs:
             CANARY_ID=''
           fi
           if [[ -z "$CANARY_ID" ]]; then
-            echo '::error::No running canary instance found (tags: Environment=production, Application=aragora, Role=canary)'
-            exit 1
+            echo '::warning::No running canary instance found; canary deployment will be skipped'
+            echo "has_canary=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_canary=true" >> "$GITHUB_OUTPUT"
           fi
 
           PROD_IDS_RAW=$(aws ec2 describe-instances \
@@ -147,16 +150,21 @@ jobs:
             exit 1
           fi
 
-          ALL_IDS="$CANARY_ID,$PROD_IDS"
+          if [[ -n "$CANARY_ID" ]]; then
+            ALL_IDS="$CANARY_ID,$PROD_IDS"
+          else
+            ALL_IDS="$PROD_IDS"
+          fi
 
           echo "canary_instance=$CANARY_ID" >> "$GITHUB_OUTPUT"
           echo "worker_instances=$PROD_IDS" >> "$GITHUB_OUTPUT"
           echo "all_instances=$ALL_IDS" >> "$GITHUB_OUTPUT"
-          echo "Canary: $CANARY_ID"
+          echo "Canary: ${CANARY_ID:-none}"
           echo "Primary instances: $PROD_IDS"
 
       - name: Pre-deploy canary health check
         id: canary_health
+        if: steps.discover.outputs.has_canary == 'true'
         shell: bash
         run: |
           CANARY_INSTANCE='${{ steps.discover.outputs.canary_instance }}'
@@ -191,7 +199,7 @@ jobs:
 
   deploy-canary:
     needs: pre-flight
-    if: needs.pre-flight.outputs.canary_ok == 'true' && needs.pre-flight.outputs.validate_only != 'true'
+    if: needs.pre-flight.outputs.has_canary == 'true' && needs.pre-flight.outputs.canary_ok == 'true' && needs.pre-flight.outputs.validate_only != 'true'
     runs-on: aragora
     timeout-minutes: 15
     outputs:
@@ -365,7 +373,7 @@ jobs:
           exit 1
 
       - name: Rollback canary on failure
-        if: failure() && needs.pre-flight.outputs.canary_instance != '' && steps.deploy.outputs.deploy_started == 'true'
+        if: failure() && needs.pre-flight.outputs.has_canary == 'true' && steps.deploy.outputs.deploy_started == 'true'
         shell: bash
         run: |
           CANARY_INSTANCE='${{ needs.pre-flight.outputs.canary_instance }}'
@@ -392,7 +400,12 @@ jobs:
 
   deploy-workers:
     needs: [pre-flight, deploy-canary]
-    if: needs.pre-flight.outputs.validate_only != 'true' && needs.pre-flight.outputs.worker_instances != '' && needs.deploy-canary.outputs.canary_ok == 'true'
+    if: |
+      always() &&
+      needs.pre-flight.result == 'success' &&
+      needs.pre-flight.outputs.validate_only != 'true' &&
+      needs.pre-flight.outputs.worker_instances != '' &&
+      (needs.deploy-canary.outputs.canary_ok == 'true' || needs.deploy-canary.result == 'skipped')
     runs-on: aragora
     timeout-minutes: 15
 
@@ -648,7 +661,12 @@ jobs:
 
   verify:
     needs: [pre-flight, deploy-canary, deploy-workers]
-    if: needs.pre-flight.outputs.validate_only != 'true' && needs.deploy-canary.outputs.canary_ok == 'true' && (needs.deploy-workers.result == 'success' || needs.deploy-workers.result == 'skipped')
+    if: |
+      always() &&
+      needs.pre-flight.result == 'success' &&
+      needs.pre-flight.outputs.validate_only != 'true' &&
+      (needs.deploy-canary.outputs.canary_ok == 'true' || needs.deploy-canary.result == 'skipped') &&
+      (needs.deploy-workers.result == 'success' || needs.deploy-workers.result == 'skipped')
     runs-on: aragora
     timeout-minutes: 5
 
