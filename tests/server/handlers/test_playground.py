@@ -16,6 +16,7 @@ from __future__ import annotations
 import io
 import json
 import time
+import uuid
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -34,12 +35,61 @@ from aragora.server.handlers.playground import (
 # ===========================================================================
 
 
+def _make_live_debate_response(topic: str = "test", agent_count: int = 3):
+    """Build a mock HandlerResult mimicking _run_live_debate output."""
+    from aragora.server.handlers.base import json_response as _jr
+
+    participants = [f"agent-{i}" for i in range(agent_count)]
+    return _jr(
+        {
+            "id": f"playground_{uuid.uuid4().hex[:8]}",
+            "topic": topic,
+            "status": "completed",
+            "rounds_used": 1,
+            "consensus_reached": True,
+            "confidence": 0.82,
+            "verdict": "consensus",
+            "duration_seconds": 1.5,
+            "participants": participants,
+            "proposals": {p: f"Position from {p}" for p in participants},
+            "critiques": [
+                {"agent": participants[0], "target": participants[1], "content": "Disagree"}
+            ],
+            "votes": [
+                {"agent": p, "choice": participants[0], "confidence": 0.8} for p in participants
+            ],
+            "dissenting_views": [],
+            "final_answer": "The group reached consensus.",
+            "is_live": True,
+            "receipt": {"id": "r1", "hash": "abc123"},
+            "receipt_hash": "abc123",
+            "receipt_preview": {},
+            "upgrade_cta": {},
+        }
+    )
+
+
 @pytest.fixture(autouse=True)
 def clean_rate_limits():
     """Reset rate limit state before each test."""
     _reset_rate_limits()
     yield
     _reset_rate_limits()
+
+
+@pytest.fixture(autouse=True)
+def mock_live_debate():
+    """Patch _run_live_debate so tests don't need real API keys.
+
+    Tests that need to verify live debate behavior can override this
+    by patching _run_live_debate explicitly in the test body.
+    """
+
+    def _side_effect(self, topic, rounds, agent_count):
+        return _make_live_debate_response(topic, agent_count)
+
+    with patch.object(PlaygroundHandler, "_run_live_debate", _side_effect):
+        yield
 
 
 @pytest.fixture
@@ -349,6 +399,7 @@ class TestRateLimiting:
 
         Cache is patched to always miss so that every request goes through
         the rate limiter (cached results intentionally bypass rate limiting).
+        Live debate is already mocked via the autouse mock_live_debate fixture.
         """
         client_ip = "10.99.99.99"
 
@@ -382,35 +433,14 @@ class TestRateLimiting:
 
 
 class TestGracefulDegradation:
-    def test_missing_aragora_debate_uses_inline_fallback(self, handler, mock_http_handler):
-        """When aragora-debate is not installed, falls back to inline mock."""
-        h = mock_http_handler({})
-
-        with patch.dict(
-            "sys.modules",
-            {
-                "aragora_debate.styled_mock": None,
-                "aragora_debate.arena": None,
-                "aragora_debate.types": None,
-            },
+    def test_no_live_debate_returns_503(self, handler, mock_http_handler):
+        """When live debate is unavailable, returns 503 instead of mock."""
+        with patch.object(
+            handler,
+            "_run_live_debate",
+            side_effect=RuntimeError("Live debate unavailable"),
         ):
-            # Force the import to fail by patching builtins.__import__
-            original_import = (
-                __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
-            )
-
-            def failing_import(name, *args, **kwargs):
-                if name.startswith("aragora_debate"):
-                    raise ImportError(f"No module named '{name}'")
-                return original_import(name, *args, **kwargs)
-
-            with patch("builtins.__import__", side_effect=failing_import):
-                result = handler._run_debate("test", 1, 2)
-                data, status = _parse_result(result)
-                # Falls back to inline mock instead of returning 503
-                assert status == 200
-                assert "proposals" in data
-                assert "critiques" in data
-                assert "votes" in data
-                assert "receipt" in data
-                assert data["topic"] == "test"
+            result = handler._run_debate("test", 1, 2)
+            data, status = _parse_result(result)
+            assert status == 503
+            assert "unavailable" in data.get("error", "").lower()

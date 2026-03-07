@@ -1715,32 +1715,18 @@ class PlaygroundHandler(BaseHandler):
                     return self._persist_and_respond(
                         json_response(tentacle_result), topic, source, **_cache_kw
                     )
-                logger.info("Multi-perspective call failed — falling through to mock debate")
-                # Fall through to mock debate below (no Oracle placeholder for landing)
-        else:
-            # Normal playground: try aragora-debate package
-            try:
-                result = self._run_debate_with_package(
-                    topic, rounds, agent_count, question=question
-                )
-                return self._persist_and_respond(result, topic, source, **_cache_kw)
-            except ImportError:
-                logger.info("aragora-debate not installed, using inline mock debate")
-            except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError):
-                logger.exception("aragora-debate failed, falling back to inline mock")
+                logger.info("Multi-perspective call failed — trying live debate")
 
-        # Last resort: inline mock debate (question-aware when question provided)
+        # Run a real live debate (no mock fallback)
         try:
-            mock_result = _run_inline_mock_debate(topic, rounds, agent_count, question=question)
-            return self._persist_and_respond(
-                json_response(mock_result),
-                topic,
-                source,
-                **_cache_kw,
+            live_result = self._run_live_debate(question or topic, rounds, agent_count)
+            return self._persist_and_respond(live_result, topic, source, **_cache_kw)
+        except (TimeoutError, ValueError, RuntimeError, OSError) as exc:
+            logger.warning("Live debate failed: %s", exc)
+            return error_response(
+                "Debate temporarily unavailable. Please try again in a moment.",
+                503,
             )
-        except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError):
-            logger.exception("Inline mock debate failed")
-            return error_response("Debate failed unexpectedly", 500)
 
     @staticmethod
     def _persist_and_respond(

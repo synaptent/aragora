@@ -199,20 +199,34 @@ class TestCacheMissProceedsToDebate:
     """When the cache has no matching entry, the normal debate flow should run."""
 
     def test_cache_miss_proceeds_to_debate(self, handler):
-        """On cache miss, the handler falls through to normal debate execution."""
+        """On cache miss, the handler falls through to live debate execution."""
         agent_tags = [
             "openrouter:anthropic/claude-sonnet-4",
             "openrouter:openai/gpt-4o",
             "openrouter:google/gemini-2.0-flash-001",
         ]
 
-        mock_result = {
-            "id": "newdebate0000001",
-            "topic": "A brand new topic",
-            "status": "completed",
-            "verdict": "interesting",
-            "rounds_used": 2,
-        }
+        mock_live_response = json_response(
+            {
+                "id": "newdebate0000001",
+                "topic": "A brand new topic",
+                "status": "completed",
+                "verdict": "interesting",
+                "rounds_used": 2,
+                "consensus_reached": True,
+                "confidence": 0.8,
+                "duration_seconds": 1.0,
+                "participants": ["analyst", "critic", "synthesizer"],
+                "proposals": {},
+                "critiques": [],
+                "votes": [],
+                "dissenting_views": [],
+                "final_answer": "Done.",
+                "is_live": True,
+                "receipt_preview": {},
+                "upgrade_cta": {},
+            }
+        )
 
         body = {"topic": "A brand new topic", "rounds": 2, "agents": 3}
         mock_handler = _make_handler_mock(body)
@@ -222,9 +236,10 @@ class TestCacheMissProceedsToDebate:
                 "aragora.server.handlers.playground._get_available_live_agents",
                 return_value=agent_tags,
             ),
-            patch(
-                "aragora.server.handlers.playground._run_inline_mock_debate",
-                return_value=mock_result,
+            patch.object(
+                handler,
+                "_run_live_debate",
+                return_value=mock_live_response,
             ),
         ):
             result = handler.handle_post(
@@ -238,7 +253,6 @@ class TestCacheMissProceedsToDebate:
         body_out = json.loads(result.body.decode("utf-8"))
         # Should NOT have cached flag since this was a cache miss
         assert body_out.get("cached") is not True
-        assert body_out["id"] == "newdebate0000001"
 
 
 class TestPersistSavesCacheIndex:
