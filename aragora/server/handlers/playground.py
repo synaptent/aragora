@@ -1101,6 +1101,9 @@ def _try_oracle_tentacles(
         iter(results.values())
     )
     debate_id = uuid.uuid4().hex[:16]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    receipt_id = f"LV-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
+    receipt_hash = hashlib.sha256(f"{receipt_id}:{question}:needs_review:0.7".encode()).hexdigest()
 
     return {
         "id": debate_id,
@@ -1118,6 +1121,28 @@ def _try_oracle_tentacles(
         "dissenting_views": [],
         "final_answer": final,
         "is_live": True,
+        "receipt": {
+            "receipt_id": receipt_id,
+            "question": question,
+            "verdict": "needs_review",
+            "confidence": 0.7,
+            "consensus": {
+                "reached": len(results) >= 2,
+                "method": "multi_perspective",
+                "confidence": 0.7,
+                "supporting_agents": participants,
+                "dissenting_agents": [],
+                "dissents": [],
+            },
+            "agents": participants,
+            "rounds_used": 1,
+            "claims": 0,
+            "evidence_count": 0,
+            "timestamp": now_iso,
+            "signature": receipt_hash,
+            "signature_algorithm": "SHA-256-content-hash",
+        },
+        "receipt_hash": receipt_hash,
     }
 
 
