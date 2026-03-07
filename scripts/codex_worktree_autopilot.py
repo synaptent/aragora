@@ -27,6 +27,7 @@ from typing import Any
 from uuid import uuid4
 
 UTC = timezone.utc
+DEFAULT_TTL_HOURS = 24
 
 
 @dataclass
@@ -88,6 +89,253 @@ def _git_common_dir(repo_root: Path) -> Path:
 
 def _dev_coordination_db_path(repo_root: Path) -> Path:
     return _git_common_dir(repo_root) / "aragora-agent-state" / "dev_coordination.db"
+
+
+def _archive_root(repo_root: Path) -> Path:
+    return _git_common_dir(repo_root) / "worktree-archive"
+
+
+def _resolve_ref_sha(repo_root: Path, ref: str) -> str | None:
+    proc = _run_git(repo_root, "rev-parse", ref)
+    if proc.returncode != 0:
+        return None
+    sha = proc.stdout.strip()
+    return sha or None
+
+
+def _base_ref(base: str) -> str:
+    return f"origin/{base}"
+
+
+def _lease_snapshot(repo_root: Path, worktree_path: Path) -> dict[str, Any]:
+    """Return the most relevant lease metadata for a worktree path."""
+    snapshot: dict[str, Any] = {
+        "lease_id": None,
+        "lease_status": None,
+        "last_heartbeat_at": None,
+        "lease_expires_at": None,
+        "owner_agent": None,
+        "owner_session_id": None,
+        "branch": None,
+        "title": None,
+        "has_live_lease": False,
+    }
+    db_path = _dev_coordination_db_path(repo_root)
+    if not db_path.exists():
+        return snapshot
+
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                """
+                SELECT lease_id, status, updated_at, expires_at, owner_agent, owner_session_id,
+                       branch, title
+                FROM leases
+                WHERE worktree_path = ?
+                ORDER BY updated_at DESC, created_at DESC
+                """,
+                (str(worktree_path.resolve()),),
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return snapshot
+
+    if not rows:
+        return snapshot
+
+    now = _utc_now()
+    chosen: sqlite3.Row | None = None
+    has_live_lease = False
+    for row in rows:
+        expires_at = _parse_ts(row["expires_at"])
+        is_live = row["status"] == "active" and (expires_at is None or expires_at > now)
+        if is_live:
+            chosen = row
+            has_live_lease = True
+            break
+        if chosen is None:
+            chosen = row
+
+    if chosen is None:
+        return snapshot
+
+    snapshot.update(
+        {
+            "lease_id": chosen["lease_id"],
+            "lease_status": chosen["status"],
+            "last_heartbeat_at": chosen["updated_at"],
+            "lease_expires_at": chosen["expires_at"],
+            "owner_agent": chosen["owner_agent"],
+            "owner_session_id": chosen["owner_session_id"],
+            "branch": chosen["branch"],
+            "title": chosen["title"],
+            "has_live_lease": has_live_lease,
+        }
+    )
+    if has_live_lease:
+        snapshot["lease_status"] = "active"
+    return snapshot
+
+
+def _session_last_activity(session: dict[str, Any]) -> datetime | None:
+    return _parse_ts(str(session.get("last_seen_at", ""))) or _parse_ts(
+        str(session.get("created_at", ""))
+    )
+
+
+def _safe_worktree_dirty(repo_root: Path, worktree: Path, base: str) -> bool:
+    try:
+        return bool(_worktree_status(repo_root, worktree, base)["dirty"])
+    except (OSError, ValueError):
+        return False
+
+
+def _classify_session(
+    repo_root: Path,
+    session: dict[str, Any],
+    *,
+    active_paths: set[str],
+    ttl: timedelta,
+) -> dict[str, Any]:
+    path = Path(str(session.get("path", ""))).resolve()
+    branch = str(session.get("branch", ""))
+    base_branch = str(session.get("base_branch") or "main")
+    path_exists = path.exists()
+    tracked_worktree = path_exists and str(path) in active_paths
+    active_session = path_exists and _has_active_session(path)
+    lease = _lease_snapshot(repo_root, path)
+    last_activity = _session_last_activity(session)
+    within_ttl = bool(last_activity and (_utc_now() - last_activity) <= ttl)
+    ahead = _branch_ahead_count(repo_root, base_branch, branch) if branch else 0
+    dirty = _safe_worktree_dirty(repo_root, path, base_branch) if tracked_worktree else False
+
+    cleanup_lock = False
+    cleanup_lock_reason: str | None = None
+    lifecycle_state = "safe-to-clean"
+
+    if active_session:
+        lifecycle_state = "active"
+        cleanup_lock = True
+        cleanup_lock_reason = "active_session"
+    elif lease["has_live_lease"]:
+        lifecycle_state = "grace"
+        cleanup_lock = True
+        cleanup_lock_reason = "active_lease"
+    elif tracked_worktree and within_ttl:
+        lifecycle_state = "grace"
+    elif str(lease.get("lease_status")) == "expired" or dirty or ahead > 0:
+        lifecycle_state = "expired"
+    else:
+        lifecycle_state = "safe-to-clean"
+
+    return {
+        "lifecycle_state": lifecycle_state,
+        "cleanup_lock": cleanup_lock,
+        "cleanup_lock_reason": cleanup_lock_reason,
+        "path_exists": path_exists,
+        "tracked_worktree": tracked_worktree,
+        "active_session": active_session,
+        "dirty": dirty,
+        "ahead": ahead,
+        "base_branch": base_branch,
+        "base_sha": _resolve_ref_sha(repo_root, _base_ref(base_branch)),
+        "last_heartbeat_at": lease["last_heartbeat_at"],
+        "lease_status": lease["lease_status"],
+        "lease_id": lease["lease_id"],
+        "lease_expires_at": lease["lease_expires_at"],
+    }
+
+
+def _annotate_session(
+    repo_root: Path,
+    session: dict[str, Any],
+    *,
+    active_paths: set[str],
+    ttl: timedelta,
+    base_branch: str | None = None,
+) -> dict[str, Any]:
+    if base_branch:
+        session["base_branch"] = base_branch
+    metadata = _classify_session(repo_root, session, active_paths=active_paths, ttl=ttl)
+    session.update(metadata)
+    return metadata
+
+
+def _write_text_file(path: Path, value: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(value, encoding="utf-8")
+
+
+def _copy_untracked_entries(worktree: Path, archive_dir: Path) -> None:
+    proc = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=worktree,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return
+    for rel in [line.strip() for line in proc.stdout.splitlines() if line.strip()]:
+        src = (worktree / rel).resolve()
+        dst = (archive_dir / "untracked" / rel).resolve()
+        if not src.exists():
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if src.is_dir():
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dst)
+
+
+def _archive_session(
+    repo_root: Path,
+    session: dict[str, Any],
+    metadata: dict[str, Any],
+) -> tuple[bool, str | None]:
+    archive_root = _archive_root(repo_root)
+    path = Path(str(session.get("path", ""))).resolve()
+    base_branch = str(session.get("base_branch") or "main")
+    session_label = str(session.get("session_id") or path.name or "session")
+    archive_dir = archive_root / f"{session_label}-{_utc_now().strftime('%Y%m%d-%H%M%S')}"
+    try:
+        archive_dir.mkdir(parents=True, exist_ok=False)
+        manifest = {
+            "archived_at": _utc_now().isoformat(),
+            "repo_root": str(repo_root),
+            "session": dict(session),
+            "metadata": dict(metadata),
+        }
+        _write_text_file(
+            archive_dir / "manifest.json", json.dumps(manifest, indent=2, sort_keys=True)
+        )
+
+        branch = str(session.get("branch", ""))
+        if branch:
+            branch_patch = _run_git(
+                repo_root,
+                "diff",
+                "--binary",
+                f"{_base_ref(base_branch)}..{branch}",
+            )
+            if branch_patch.returncode == 0 and branch_patch.stdout:
+                _write_text_file(archive_dir / "branch.patch", branch_patch.stdout)
+
+        if path.exists() and metadata.get("tracked_worktree"):
+            status_proc = _run_git(repo_root, "status", "--porcelain=v1", "--branch", cwd=path)
+            if status_proc.returncode == 0:
+                _write_text_file(archive_dir / "status.txt", status_proc.stdout)
+            worktree_patch = _run_git(repo_root, "diff", "--binary", "HEAD", cwd=path)
+            if worktree_patch.returncode == 0 and worktree_patch.stdout:
+                _write_text_file(archive_dir / "worktree.patch", worktree_patch.stdout)
+            _copy_untracked_entries(path, archive_dir)
+        return True, str(archive_dir)
+    except OSError:
+        shutil.rmtree(archive_dir, ignore_errors=True)
+        return False, None
 
 
 def _parse_worktree_porcelain(text: str) -> list[WorktreeEntry]:
@@ -340,8 +588,15 @@ def _create_managed_worktree(
         "branch": branch,
         "path": str(worktree_path),
         "base_branch": base,
+        "base_sha": _resolve_ref_sha(repo_root, _base_ref(base)),
         "created_at": now.isoformat(),
         "last_seen_at": now.isoformat(),
+        "cleanup_lock": False,
+        "cleanup_lock_reason": None,
+        "last_heartbeat_at": None,
+        "lease_status": None,
+        "lease_expires_at": None,
+        "lifecycle_state": "grace",
     }
 
 
@@ -364,6 +619,7 @@ def cmd_ensure(args: argparse.Namespace) -> int:
             active_paths=active_paths,
         )
 
+    ttl = timedelta(hours=DEFAULT_TTL_HOURS)
     created = False
     if session is None:
         session = _create_managed_worktree(
@@ -378,8 +634,17 @@ def cmd_ensure(args: argparse.Namespace) -> int:
         session["last_seen_at"] = _utc_now().isoformat()
         if args.reconcile:
             session_path = Path(session["path"])
-            if session_path.exists() and _has_active_session(session_path):
+            metadata = _annotate_session(
+                repo_root,
+                session,
+                active_paths=active_paths,
+                ttl=ttl,
+                base_branch=args.base,
+            )
+            if metadata["lifecycle_state"] == "active":
                 ok, status = True, "skipped_active_session"
+            elif metadata["lifecycle_state"] == "grace":
+                ok, status = True, "skipped_grace"
             else:
                 ok, status = _integrate_worktree(
                     repo_root,
@@ -399,6 +664,13 @@ def cmd_ensure(args: argparse.Namespace) -> int:
                 )
                 created = True
 
+    _annotate_session(
+        repo_root,
+        session,
+        active_paths=active_paths,
+        ttl=ttl,
+        base_branch=args.base,
+    )
     _upsert_session(state, session)
     _save_state(state_file, state)
 
@@ -458,12 +730,24 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     sessions = _iter_target_sessions(state, active_paths=active_paths, target_path=target_path)
     results: list[dict[str, Any]] = []
     skipped_active_session = 0
+    skipped_grace = 0
+    ttl = timedelta(hours=getattr(args, "ttl_hours", DEFAULT_TTL_HOURS))
 
     for session in sessions:
         path = Path(session["path"])
-        if path.exists() and _has_active_session(path):
+        metadata = _annotate_session(
+            repo_root,
+            session,
+            active_paths=active_paths,
+            ttl=ttl,
+            base_branch=args.base,
+        )
+        if metadata["lifecycle_state"] == "active":
             ok, status = True, "skipped_active_session"
             skipped_active_session += 1
+        elif metadata["lifecycle_state"] == "grace":
+            ok, status = True, "skipped_grace"
+            skipped_grace += 1
         else:
             ok, status = _integrate_worktree(repo_root, path, args.base, args.strategy)
         session["last_seen_at"] = _utc_now().isoformat()
@@ -475,6 +759,8 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
                 "path": session["path"],
                 "ok": ok,
                 "status": status,
+                "lifecycle_state": metadata["lifecycle_state"],
+                "cleanup_lock": metadata["cleanup_lock"],
             }
         )
 
@@ -485,6 +771,7 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         "ok": not failed,
         "count": len(results),
         "skipped_active_session": skipped_active_session,
+        "skipped_grace": skipped_grace,
         "results": results,
     }
     if args.json:
@@ -641,51 +928,103 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
     state = _load_state(state_file)
 
     now = _utc_now()
-    ttl = timedelta(hours=args.ttl_hours)
+    ttl = timedelta(hours=getattr(args, "ttl_hours", DEFAULT_TTL_HOURS))
     kept: list[dict[str, Any]] = []
     removed = 0
+    archived = 0
     skipped_unmerged = 0
     failed_worktree_removals = 0
     failed_branch_deletions = 0
+    failed_archives = 0
 
     skipped_active_session = 0
-    skipped_active_lease = 0
+    skipped_grace = 0
+    results: list[dict[str, Any]] = []
 
     for session in state.get("sessions", []):
         path = Path(str(session.get("path", ""))).resolve()
         branch = str(session.get("branch", ""))
-        created = _parse_ts(str(session.get("created_at", "")))
-        age = (now - created) if created else timedelta.max
-        active = str(path) in active_paths and path.exists()
-        expired = age > ttl
-        stale = not active
+        metadata = _annotate_session(
+            repo_root,
+            session,
+            active_paths=active_paths,
+            ttl=ttl,
+            base_branch=args.base,
+        )
 
-        if not stale and not expired:
-            kept.append(session)
-            continue
-
-        # CRITICAL: Never delete a worktree with an active Claude/Codex session.
-        # Session locks are checked via PID liveness; active sessions are skipped.
-        if path.exists() and _has_active_session(path):
+        if metadata["lifecycle_state"] == "active":
             kept.append(session)
             skipped_active_session += 1
+            results.append(
+                {
+                    "session_id": session["session_id"],
+                    "branch": branch,
+                    "path": str(path),
+                    "status": "skipped_active_session",
+                    "lifecycle_state": metadata["lifecycle_state"],
+                }
+            )
             continue
-        if path.exists() and _has_active_lease(repo_root, path):
+        if metadata["lifecycle_state"] == "grace":
             kept.append(session)
-            skipped_active_lease += 1
+            skipped_grace += 1
+            results.append(
+                {
+                    "session_id": session["session_id"],
+                    "branch": branch,
+                    "path": str(path),
+                    "status": "skipped_grace",
+                    "lifecycle_state": metadata["lifecycle_state"],
+                }
+            )
             continue
 
-        if active and branch:
-            ahead = _branch_ahead_count(repo_root, args.base, branch)
+        if metadata["tracked_worktree"] and branch:
+            ahead = metadata["ahead"]
             if ahead > 0 and not args.force_unmerged:
                 kept.append(session)
                 skipped_unmerged += 1
+                results.append(
+                    {
+                        "session_id": session["session_id"],
+                        "branch": branch,
+                        "path": str(path),
+                        "status": "skipped_unmerged",
+                        "lifecycle_state": metadata["lifecycle_state"],
+                    }
+                )
                 continue
 
-        if active:
+        archived_ok, archive_path = _archive_session(repo_root, session, metadata)
+        if not archived_ok:
+            kept.append(session)
+            failed_archives += 1
+            results.append(
+                {
+                    "session_id": session["session_id"],
+                    "branch": branch,
+                    "path": str(path),
+                    "status": "archive_failed",
+                    "lifecycle_state": metadata["lifecycle_state"],
+                }
+            )
+            continue
+        archived += 1
+
+        if metadata["tracked_worktree"]:
             if not _remove_worktree(repo_root, path):
                 kept.append(session)
                 failed_worktree_removals += 1
+                results.append(
+                    {
+                        "session_id": session["session_id"],
+                        "branch": branch,
+                        "path": str(path),
+                        "status": "remove_failed",
+                        "lifecycle_state": metadata["lifecycle_state"],
+                        "archive_path": archive_path,
+                    }
+                )
                 continue
         elif path.exists():
             shutil.rmtree(path, ignore_errors=True)
@@ -694,6 +1033,16 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
             if not _delete_branch(repo_root, branch):
                 failed_branch_deletions += 1
         removed += 1
+        results.append(
+            {
+                "session_id": session["session_id"],
+                "branch": branch,
+                "path": str(path),
+                "status": "removed",
+                "lifecycle_state": metadata["lifecycle_state"],
+                "archive_path": archive_path,
+            }
+        )
 
     state["sessions"] = kept
     _run_git(repo_root, "worktree", "prune")
@@ -702,21 +1051,26 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
     payload = {
         "ok": True,
         "removed": removed,
+        "archived": archived,
         "kept": len(kept),
         "skipped_unmerged": skipped_unmerged,
         "skipped_active_session": skipped_active_session,
-        "skipped_active_lease": skipped_active_lease,
+        "skipped_grace": skipped_grace,
+        "failed_archives": failed_archives,
         "failed_worktree_removals": failed_worktree_removals,
         "failed_branch_deletions": failed_branch_deletions,
+        "results": results,
     }
     if args.json:
         print(json.dumps(payload, indent=2))
     else:
         print(
             f"cleanup complete: removed={removed} kept={len(kept)} "
+            f"archived={archived} "
             f"skipped_unmerged={skipped_unmerged} "
             f"skipped_active_session={skipped_active_session} "
-            f"skipped_active_lease={skipped_active_lease} "
+            f"skipped_grace={skipped_grace} "
+            f"failed_archives={failed_archives} "
             f"failed_worktree_removals={failed_worktree_removals} "
             f"failed_branch_deletions={failed_branch_deletions}"
         )
@@ -730,9 +1084,16 @@ def cmd_status(args: argparse.Namespace) -> int:
     entries = _get_worktree_entries(repo_root)
     active_paths = _active_path_set(entries)
 
+    ttl = timedelta(hours=args.ttl_hours)
     rows: list[dict[str, Any]] = []
     for session in state.get("sessions", []):
         path = str(session.get("path", ""))
+        metadata = _annotate_session(
+            repo_root,
+            session,
+            active_paths=active_paths,
+            ttl=ttl,
+        )
         rows.append(
             {
                 "session_id": session.get("session_id"),
@@ -740,7 +1101,14 @@ def cmd_status(args: argparse.Namespace) -> int:
                 "branch": session.get("branch"),
                 "path": path,
                 "active": path in active_paths,
-                "lease_active": _has_active_lease(repo_root, Path(path)) if path else False,
+                "lifecycle_state": metadata["lifecycle_state"],
+                "cleanup_lock": metadata["cleanup_lock"],
+                "cleanup_lock_reason": metadata["cleanup_lock_reason"],
+                "base_branch": metadata["base_branch"],
+                "base_sha": metadata["base_sha"],
+                "last_heartbeat_at": metadata["last_heartbeat_at"],
+                "lease_status": metadata["lease_status"],
+                "lease_expires_at": metadata["lease_expires_at"],
                 "created_at": session.get("created_at"),
                 "last_seen_at": session.get("last_seen_at"),
                 "reconcile_status": session.get("reconcile_status"),
@@ -755,9 +1123,10 @@ def cmd_status(args: argparse.Namespace) -> int:
         if not rows:
             print("no managed sessions")
         for row in rows:
-            marker = "active" if row["active"] else "stale"
-            lease = " lease" if row["lease_active"] else ""
-            print(f"[{marker}{lease}] {row['branch']} :: {row['path']}")
+            lock_suffix = (
+                f" lock={row['cleanup_lock_reason']}" if row["cleanup_lock_reason"] else ""
+            )
+            print(f"[{row['lifecycle_state']}{lock_suffix}] {row['branch']} :: {row['path']}")
     return 0
 
 
@@ -777,6 +1146,8 @@ def cmd_maintain(args: argparse.Namespace) -> int:
             args.base,
             "--strategy",
             args.strategy,
+            "--ttl-hours",
+            str(args.ttl_hours),
             "--json",
         ],
         text=True,
@@ -873,6 +1244,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default="ff-only",
         help="Upstream integration strategy",
     )
+    reconcile.add_argument("--ttl-hours", type=int, default=DEFAULT_TTL_HOURS)
     reconcile.add_argument("--all", action="store_true")
     reconcile.add_argument("--path", default=None, help="Specific worktree path to reconcile")
     reconcile.add_argument("--json", action="store_true")
@@ -918,6 +1290,7 @@ def _build_parser() -> argparse.ArgumentParser:
     maintain.set_defaults(func=cmd_maintain)
 
     status = sub.add_parser("status", help="Show managed session status")
+    status.add_argument("--ttl-hours", type=int, default=DEFAULT_TTL_HOURS)
     status.add_argument("--json", action="store_true")
     status.set_defaults(func=cmd_status)
 
