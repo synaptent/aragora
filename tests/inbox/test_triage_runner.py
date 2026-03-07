@@ -325,7 +325,16 @@ async def test_word_form_action_parsing_preserves_archive():
 
 @pytest.mark.asyncio
 async def test_triage_message_uses_from_address_and_body_text_when_present():
-    runner = InboxTriageRunner(gmail_connector=None)
+    wedge_service = SimpleNamespace()
+    wedge_service.execute_receipt = AsyncMock()
+    wedge_service.create_receipt = MagicMock(
+        side_effect=lambda intent, decision, auto_approve=False: _make_envelope(
+            decision,
+            receipt_id="receipt-fields",
+            state=ReceiptState.APPROVED if auto_approve else ReceiptState.CREATED,
+        )
+    )
+    runner = InboxTriageRunner(gmail_connector=None, wedge_service=wedge_service)
     runner._run_debate = AsyncMock(
         return_value={
             "final_answer": "archive",
