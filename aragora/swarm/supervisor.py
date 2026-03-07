@@ -220,8 +220,8 @@ class SwarmSupervisor:
 
     def status_summary(
         self,
-        *,
         run_id: str | None = None,
+        *,
         limit: int = 20,
         refresh_scaling: bool = False,
     ) -> dict[str, Any]:
