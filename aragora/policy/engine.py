@@ -42,23 +42,38 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from collections.abc import Callable
+from typing import Any, TypeAlias
 
 from aragora.policy.risk import RiskBudget
 from aragora.policy.tools import ToolRegistry, get_tool_registry
 
 logger = logging.getLogger(__name__)
 
+PolicyPrimitive: TypeAlias = bool | int | float | str | None
+PolicyValue: TypeAlias = PolicyPrimitive | list["PolicyValue"] | tuple["PolicyValue", ...]
+PolicyContext: TypeAlias = dict[str, PolicyValue]
+AuditEntry: TypeAlias = dict[str, object]
+
+
 # Safe operators for AST-based policy condition evaluation
 # Maps AST operator types to their Python implementations
-_SAFE_COMPARISON_OPS: dict[type, Callable] = {
+def _contains(left: Any, right: Any) -> bool:
+    return left in right
+
+
+def _not_contains(left: Any, right: Any) -> bool:
+    return left not in right
+
+
+_SAFE_COMPARISON_OPS: dict[type[ast.cmpop], Callable[[Any, Any], bool]] = {
     ast.Eq: operator.eq,
     ast.NotEq: operator.ne,
     ast.Lt: operator.lt,
     ast.LtE: operator.le,
     ast.Gt: operator.gt,
     ast.GtE: operator.ge,
-    ast.In: lambda a, b: a in b,
-    ast.NotIn: lambda a, b: a not in b,
+    ast.In: _contains,
+    ast.NotIn: _not_contains,
 }
 
 
@@ -91,7 +106,7 @@ class PolicyResult:
     agent: str = ""
     tool: str = ""
     capability: str = ""
-    context: dict = field(default_factory=dict)
+    context: PolicyContext = field(default_factory=dict)
 
     # Timestamps
     checked_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -148,7 +163,7 @@ class Policy:
         agent: str,
         tool: str,
         capability: str,
-        context: dict,
+        context: PolicyContext,
     ) -> bool:
         """Check if this policy applies to the given action."""
         if not self.enabled:
@@ -177,7 +192,7 @@ class Policy:
 
         return True
 
-    def _eval_condition(self, condition: str, context: dict) -> bool:
+    def _eval_condition(self, condition: str, context: PolicyContext) -> bool:
         """Safely evaluate a condition expression using AST parsing.
 
         This replaces eval() with a secure AST-based evaluator that only
@@ -196,9 +211,7 @@ class Policy:
         except (SyntaxError, ValueError, TypeError, KeyError):
             return False
 
-    def _eval_node(
-        self, node: ast.AST, context: dict
-    ) -> bool | int | float | str | list | tuple | None:
+    def _eval_node(self, node: ast.AST, context: PolicyContext) -> PolicyValue:
         """Recursively evaluate AST nodes safely.
 
         Explicitly blocks:
@@ -287,7 +300,7 @@ class PolicyEngine:
         self._action_timestamps: dict[str, list[datetime]] = {}  # capability -> timestamps
 
         # Audit log
-        self._audit_log: list[dict] = []
+        self._audit_log: list[AuditEntry] = []
 
     def add_policy(self, policy: Policy) -> None:
         """Add a policy to the engine."""
@@ -320,7 +333,7 @@ class PolicyEngine:
         agent: str,
         tool: str,
         capability: str,
-        context: dict | None = None,
+        context: PolicyContext | None = None,
         session_id: str = "default",
     ) -> PolicyResult:
         """Check if an action is allowed by policy.
@@ -492,7 +505,7 @@ class PolicyEngine:
         tool: str,
         capability: str,
         success: bool,
-        context: dict | None = None,
+        context: PolicyContext | None = None,
         session_id: str = "default",
     ) -> None:
         """Record that an action was taken (for auditing)."""
@@ -524,11 +537,11 @@ class PolicyEngine:
             }
         )
 
-    def get_audit_log(self, limit: int = 100) -> list[dict]:
+    def get_audit_log(self, limit: int = 100) -> list[AuditEntry]:
         """Get recent audit log entries."""
         return self._audit_log[-limit:]
 
-    def get_session_summary(self, session_id: str) -> dict:
+    def get_session_summary(self, session_id: str) -> dict[str, object]:
         """Get summary of a session's risk usage."""
         budget = self.get_budget(session_id)
         return {

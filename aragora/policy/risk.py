@@ -18,8 +18,11 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum
+from typing import TypeAlias
 
 logger = logging.getLogger(__name__)
+
+RiskActionRecord: TypeAlias = dict[str, str | float | bool | None]
 
 
 class RiskLevel(IntEnum):
@@ -73,7 +76,7 @@ class RiskBudget:
     max_single_action: float = 30.0  # Max cost for any single action
 
     # Tracking
-    actions: list[dict] = field(default_factory=list)
+    actions: list[RiskActionRecord] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     last_action_at: str | None = None
 
@@ -167,7 +170,7 @@ class RiskBudget:
 
         return within_budget
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Convert to dictionary for serialization."""
         return {
             "total": self.total,
