@@ -1545,25 +1545,7 @@ class PlaygroundHandler(BaseHandler):
         if path != "/api/v1/playground/debate":
             return None
 
-        # Rate limiting
-        client_ip = "unknown"
-        if handler and hasattr(handler, "client_address"):
-            addr = handler.client_address
-            if isinstance(addr, (list, tuple)) and len(addr) >= 1:
-                client_ip = str(addr[0])
-
-        allowed, retry_after = _check_rate_limit(client_ip)
-        if not allowed:
-            return json_response(
-                {
-                    "error": "Rate limit exceeded. Please try again later.",
-                    "code": "rate_limit_exceeded",
-                    "retry_after": retry_after,
-                },
-                status=429,
-            )
-
-        # Parse body
+        # Parse body early so we can check cache before rate limiting
         body = self.read_json_body(handler) if handler else {}
         if body is None:
             body = {}
@@ -1584,14 +1566,11 @@ class PlaygroundHandler(BaseHandler):
         mode = str(body.get("mode", "") or "").strip() or "consult"
 
         # Source: "oracle" for Oracle page, "landing" for main site, etc.
+        # Controls prompt flavour — Oracle uses tentacle language, landing uses neutral.
         source = str(body.get("source", "") or "").strip() or "oracle"
 
         # Session ID for follow-up conversation memory
         session_id = str(body.get("session_id", "") or "").strip() or None
-
-        # Source: "oracle" for Oracle page, "landing" for main site, etc.
-        # Controls prompt flavour — Oracle uses tentacle language, landing uses neutral.
-        source = str(body.get("source", "") or "").strip() or "oracle"
 
         try:
             rounds = int(body.get("rounds", _DEFAULT_ROUNDS))
@@ -1605,6 +1584,49 @@ class PlaygroundHandler(BaseHandler):
             agent_count = _DEFAULT_AGENTS
         agent_count = max(_MIN_AGENTS, min(agent_count, _MAX_AGENTS))
 
+        # --- Content-addressed cache lookup (before rate limiting) ---
+        cache_key: str | None = None
+        model_ids: list[str] = []
+        try:
+            from aragora.storage.debate_store import get_debate_store, normalize_cache_key
+
+            agent_tags = _get_available_live_agents(agent_count)
+            model_ids = [
+                tag.split(":", 1)[1] if tag.startswith("openrouter:") else tag for tag in agent_tags
+            ]
+            effective_topic = question or topic
+            cache_key = normalize_cache_key(effective_topic, model_ids, rounds)
+
+            store = get_debate_store()
+            cached = store.get_by_cache_key(cache_key)
+            if cached is not None:
+                cached["cached"] = True
+                cached["cached_at"] = time.time()
+                logger.info("Cache hit for debate key %.12s…", cache_key)
+                return json_response(cached)
+        except (ImportError, RuntimeError, OSError, ValueError):
+            logger.debug("Cache lookup unavailable, proceeding to debate", exc_info=True)
+        except Exception:  # noqa: BLE001
+            logger.debug("Cache lookup failed, proceeding to debate", exc_info=True)
+
+        # Rate limiting (skipped on cache hit above)
+        client_ip = "unknown"
+        if handler and hasattr(handler, "client_address"):
+            addr = handler.client_address
+            if isinstance(addr, (list, tuple)) and len(addr) >= 1:
+                client_ip = str(addr[0])
+
+        allowed, retry_after = _check_rate_limit(client_ip)
+        if not allowed:
+            return json_response(
+                {
+                    "error": "Rate limit exceeded. Please try again later.",
+                    "code": "rate_limit_exceeded",
+                    "retry_after": retry_after,
+                },
+                status=429,
+            )
+
         return self._run_debate(
             topic,
             rounds,
@@ -1613,6 +1635,8 @@ class PlaygroundHandler(BaseHandler):
             mode=mode,
             session_id=session_id,
             source=source,
+            cache_key=cache_key,
+            model_ids=model_ids,
         )
 
     def _run_debate(
@@ -1624,7 +1648,13 @@ class PlaygroundHandler(BaseHandler):
         mode: str = "consult",
         session_id: str | None = None,
         source: str = "oracle",
+        cache_key: str | None = None,
+        model_ids: list[str] | None = None,
     ) -> HandlerResult:
+        _cache_kw: dict[str, Any] = {}
+        if cache_key is not None:
+            _cache_kw = {"cache_key": cache_key, "model_ids": model_ids or [], "rounds": rounds}
+
         if question:
             if source == "oracle":
                 # Oracle mode: try single-agent Oracle response first
@@ -1636,6 +1666,7 @@ class PlaygroundHandler(BaseHandler):
                         json_response(oracle_result),
                         topic,
                         source,
+                        **_cache_kw,
                     )
                 logger.info(
                     "Oracle LLM call failed — returning placeholder instead of irrelevant mock"
@@ -1667,6 +1698,7 @@ class PlaygroundHandler(BaseHandler):
                     ),
                     topic,
                     source,
+                    **_cache_kw,
                 )
             else:
                 # Non-Oracle source (landing, playground, etc.): try multi-perspective tentacles
@@ -1680,7 +1712,9 @@ class PlaygroundHandler(BaseHandler):
                     summary_depth="none",  # no essay context for non-Oracle sources
                 )
                 if tentacle_result:
-                    return self._persist_and_respond(json_response(tentacle_result), topic, source)
+                    return self._persist_and_respond(
+                        json_response(tentacle_result), topic, source, **_cache_kw
+                    )
                 logger.info("Multi-perspective call failed — falling through to mock debate")
                 # Fall through to mock debate below (no Oracle placeholder for landing)
         else:
@@ -1689,7 +1723,7 @@ class PlaygroundHandler(BaseHandler):
                 result = self._run_debate_with_package(
                     topic, rounds, agent_count, question=question
                 )
-                return self._persist_and_respond(result, topic, source)
+                return self._persist_and_respond(result, topic, source, **_cache_kw)
             except ImportError:
                 logger.info("aragora-debate not installed, using inline mock debate")
             except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError):
@@ -1702,6 +1736,7 @@ class PlaygroundHandler(BaseHandler):
                 json_response(mock_result),
                 topic,
                 source,
+                **_cache_kw,
             )
         except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError):
             logger.exception("Inline mock debate failed")
@@ -1712,8 +1747,17 @@ class PlaygroundHandler(BaseHandler):
         handler_result: HandlerResult,
         topic: str,
         source: str,
+        *,
+        cache_key: str | None = None,
+        model_ids: list[str] | None = None,
+        rounds: int | None = None,
     ) -> HandlerResult:
-        """Persist the debate result and inject share_url into the response."""
+        """Persist the debate result and inject share_url into the response.
+
+        When *cache_key*, *model_ids*, and *rounds* are provided the method
+        also writes a cache index entry so that future identical requests
+        can be served from cache.
+        """
         try:
             from aragora.storage.debate_store import get_debate_store
 
@@ -1733,6 +1777,27 @@ class PlaygroundHandler(BaseHandler):
                 try:
                     store = get_debate_store()
                     store.save(debate_id, topic, data, source=source)
+
+                    # Save cache index so this debate can be found by content hash
+                    if cache_key and model_ids is not None and rounds is not None:
+                        try:
+                            normalized_topic = re.sub(
+                                r"\s+",
+                                " ",
+                                (data.get("topic", topic) or topic).strip().lower(),
+                            )
+                            store.save_cache_index(
+                                cache_key=cache_key,
+                                debate_id=debate_id,
+                                topic_normalized=normalized_topic,
+                                model_ids="|".join(sorted(model_ids)),
+                                rounds=rounds,
+                            )
+                            logger.debug("Saved cache index %.12s… → %s", cache_key, debate_id)
+                        except (RuntimeError, OSError):
+                            logger.debug("Cache index save failed", exc_info=True)
+                        except Exception:  # noqa: BLE001
+                            logger.debug("Cache index save failed unexpectedly", exc_info=True)
                 except (ImportError, RuntimeError, OSError):
                     logger.debug("Debate store unavailable, debate not persisted", exc_info=True)
                 except Exception:  # noqa: BLE001

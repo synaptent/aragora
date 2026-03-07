@@ -343,8 +343,13 @@ class TestRateLimiting:
         allowed, _ = _check_rate_limit("192.168.1.4")
         assert allowed is True
 
-    def test_rate_limit_returns_429(self, handler, mock_http_handler):
-        """Handler returns 429 when rate limit is exceeded."""
+    @patch("aragora.storage.debate_store.DebateResultStore.get_by_cache_key", return_value=None)
+    def test_rate_limit_returns_429(self, _mock_cache, handler, mock_http_handler):
+        """Handler returns 429 when rate limit is exceeded.
+
+        Cache is patched to always miss so that every request goes through
+        the rate limiter (cached results intentionally bypass rate limiting).
+        """
         client_ip = "10.99.99.99"
 
         for _ in range(_PLAYGROUND_RATE_LIMIT):
