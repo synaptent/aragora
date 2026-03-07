@@ -51,6 +51,16 @@ _PLAYGROUND_RATE_WINDOW = 60.0  # seconds
 _LIVE_RATE_LIMIT = 1  # 1 live debate per window per IP
 _LIVE_RATE_WINDOW = 600.0  # 10 minutes
 
+# OpenRouter model diversity for playground debates.
+# Each agent gets a different model architecture for genuine adversarial diversity.
+OPENROUTER_PLAYGROUND_MODELS: list[tuple[str, str]] = [
+    ("analyst", "anthropic/claude-sonnet-4"),
+    ("critic", "openai/gpt-4o"),
+    ("synthesizer", "google/gemini-2.0-flash-001"),
+    ("contrarian", "mistralai/mistral-large-latest"),
+    ("auditor", "deepseek/deepseek-chat"),
+]
+
 # IP -> list of timestamps
 _request_timestamps: dict[str, list[float]] = {}
 _live_request_timestamps: dict[str, list[float]] = {}
@@ -2107,37 +2117,64 @@ _live_semaphore = asyncio.Semaphore(_LIVE_MAX_CONCURRENT)
 
 
 def _get_available_live_agents(count: int) -> list[str]:
-    """Pick agent providers that have API keys configured.
+    """Pick agent providers for playground debates.
 
-    With fallback enabled by default, agents whose primary key is
-    missing can still operate via OpenRouter.  We therefore include
-    providers that *either* have a primary key *or* can fall back.
+    Prefers primary API keys when available. Falls back to OpenRouter
+    with diverse models when primary keys are missing. Raises ValueError
+    if not even OPENROUTER_API_KEY is available.
     """
     has_openrouter = bool(_get_api_key("OPENROUTER_API_KEY"))
 
+    # Try primary providers first
     candidates: list[str] = []
     if _get_api_key("ANTHROPIC_API_KEY"):
         candidates.append("anthropic-api")
-    if _get_api_key("OPENAI_API_KEY") or has_openrouter:
+    if _get_api_key("OPENAI_API_KEY"):
         candidates.append("openai-api")
-    if has_openrouter:
-        candidates.append("openrouter")
-    if _get_api_key("MISTRAL_API_KEY") or has_openrouter:
+    if _get_api_key("MISTRAL_API_KEY"):
         candidates.append("mistral-api")
 
-    # De-duplicate while preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for c in candidates:
-        if c not in seen:
-            seen.add(c)
-            unique.append(c)
-    candidates = unique
+    # If we have enough primary agents, use them
+    if len(candidates) >= count:
+        return candidates[:count]
 
-    # Pad to requested count by repeating
+    # Fill remaining slots with OpenRouter models for diversity
+    if has_openrouter:
+        for _role, model in OPENROUTER_PLAYGROUND_MODELS:
+            if len(candidates) >= count:
+                break
+            tag = f"openrouter:{model}"
+            if tag not in candidates:
+                candidates.append(tag)
+        while len(candidates) < count and candidates:
+            candidates.append(candidates[0])
+        return candidates[:count]
+
+    if not candidates:
+        raise ValueError(
+            "No API keys configured. Set OPENROUTER_API_KEY for universal access "
+            "to multiple LLM providers, or set individual provider keys."
+        )
+
     while len(candidates) < count and candidates:
         candidates.append(candidates[0])
     return candidates[:count]
+
+
+def _resolve_playground_agents(agent_tags: list[str]) -> str:
+    """Convert playground agent tags to comma-separated string for DebateFactory.
+
+    Tags like 'openrouter:anthropic/claude-sonnet-4' become 'openrouter/anthropic/claude-sonnet-4'.
+    Tags like 'anthropic-api' pass through unchanged.
+    """
+    resolved = []
+    for tag in agent_tags:
+        if tag.startswith("openrouter:"):
+            model = tag.split(":", 1)[1]
+            resolved.append(f"openrouter/{model}")
+        else:
+            resolved.append(tag)
+    return ",".join(resolved)
 
 
 def start_playground_debate(
@@ -2171,7 +2208,7 @@ def start_playground_debate(
     if len(agents) < 2:
         raise ValueError("At least 2 agent providers with API keys are required")
 
-    agents_str = ",".join(agents)
+    agents_str = _resolve_playground_agents(agents)
 
     def _run() -> dict[str, Any]:
         try:
