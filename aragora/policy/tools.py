@@ -100,7 +100,7 @@ class Tool:
         """Check if tool has a capability."""
         return self.get_capability(name) is not None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Convert to dictionary for serialization."""
         return {
             "name": self.name,
@@ -208,7 +208,7 @@ class ToolRegistry:
         """List all capabilities and which tools provide them."""
         return dict(self._capability_index)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         """Convert registry to dictionary."""
         return {
             "tools": {name: tool.to_dict() for name, tool in self._tools.items()},
