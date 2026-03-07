@@ -363,16 +363,18 @@ class InboxTriageRunner:
             for model_type, role in [
                 ("anthropic-api", "proposer"),
                 ("openai-api", "critic"),
+                ("grok", "synthesizer"),
+                ("gemini", "critic"),
             ]:
                 try:
                     agents.append(
                         create_agent(model_type=model_type, name=f"triage-{role}", role=role)
                     )
                 except (ImportError, RuntimeError, ValueError, OSError):
-                    pass
+                    logger.debug("Agent %s unavailable, skipping", model_type)
 
             if len(agents) < 2:
-                logger.warning("Fewer than 2 agents available; using stub debate")
+                logger.warning("%d/4 agents available (need 2); using stub debate", len(agents))
                 return {
                     "final_answer": "ignore",
                     "confidence": 0.3,

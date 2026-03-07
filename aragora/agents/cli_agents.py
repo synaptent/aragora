@@ -208,7 +208,8 @@ class CLIAgent(CritiqueMixin, Agent):
         "claude-3-opus-20240229": "anthropic/claude-3-opus",
         "claude-3-sonnet-20240229": "anthropic/claude-3-sonnet",
         # OpenAI/Codex models
-        "gpt-5.3": "openai/gpt-5.3",
+        "gpt-5.4": "openai/gpt-5.4",
+        "gpt-5.3": "openai/gpt-5.3-chat",
         "gpt-5.3-codex": "openai/gpt-5.3-codex",
         "gpt-5.3-chat-latest": "openai/gpt-5.3-chat",
         "gpt-4.1-codex": "openai/gpt-4.1",
