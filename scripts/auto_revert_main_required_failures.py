@@ -27,6 +27,7 @@ DEFAULT_REQUIRED_CONTEXTS = [
     "TypeScript SDK Type Check",
 ]
 PASS_CONCLUSIONS = {"success", "neutral", "skipped"}
+AUTO_REVERT_MARKER = "[auto-revert-required-checks]"
 
 
 class GitHubApiError(RuntimeError):
@@ -179,7 +180,7 @@ def should_skip_commit_message(message: str) -> bool:
         return False
     if msg.startswith("Revert "):
         return True
-    if "[auto-revert-required-checks]" in msg:
+    if AUTO_REVERT_MARKER in msg:
         return True
     return False
 
@@ -270,10 +271,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _recent_revert_exists(repo_path: Path, minutes: int = 10) -> bool:
-    """Check if a revert commit was made in the last *minutes* minutes."""
+def _recent_auto_revert_exists(repo_path: Path, minutes: int = 10) -> bool:
+    """Check if an auto-revert commit was made in the last *minutes* minutes."""
     result = _run(
-        ["git", "log", f"--since={minutes} minutes ago", "--grep=Revert", "--oneline"],
+        [
+            "git",
+            "log",
+            f"--since={minutes} minutes ago",
+            "-F",
+            "--grep",
+            AUTO_REVERT_MARKER,
+            "--oneline",
+        ],
         cwd=repo_path,
     )
     if result.returncode != 0:
@@ -345,7 +354,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
 
         repo_path = Path(args.repo_path).resolve()
-        if _recent_revert_exists(repo_path):
+        if _recent_auto_revert_exists(repo_path):
             print(
                 json.dumps(
                     {

@@ -127,8 +127,13 @@ jobs:
             CANARY_ID=''
           fi
           if [[ -z "$CANARY_ID" ]]; then
-            echo '::warning::No running canary instance found; canary deployment will be skipped'
             echo "has_canary=false" >> "$GITHUB_OUTPUT"
+            if [[ "${{ steps.mode.outputs.validate_only }}" == 'true' ]]; then
+              echo '::warning::No running canary instance found; validate-only mode will report the gap without deploying'
+            else
+              echo '::error::No running canary instance found (tags: Environment=production, Application=aragora, Role=canary)'
+              exit 1
+            fi
           else
             echo "has_canary=true" >> "$GITHUB_OUTPUT"
           fi
@@ -405,7 +410,8 @@ jobs:
       needs.pre-flight.result == 'success' &&
       needs.pre-flight.outputs.validate_only != 'true' &&
       needs.pre-flight.outputs.worker_instances != '' &&
-      (needs.deploy-canary.outputs.canary_ok == 'true' || needs.deploy-canary.result == 'skipped')
+      needs.pre-flight.outputs.has_canary == 'true' &&
+      needs.deploy-canary.outputs.canary_ok == 'true'
     runs-on: aragora
     timeout-minutes: 15
 
@@ -665,7 +671,8 @@ jobs:
       always() &&
       needs.pre-flight.result == 'success' &&
       needs.pre-flight.outputs.validate_only != 'true' &&
-      (needs.deploy-canary.outputs.canary_ok == 'true' || needs.deploy-canary.result == 'skipped') &&
+      needs.pre-flight.outputs.has_canary == 'true' &&
+      needs.deploy-canary.outputs.canary_ok == 'true' &&
       (needs.deploy-workers.result == 'success' || needs.deploy-workers.result == 'skipped')
     runs-on: aragora
     timeout-minutes: 5

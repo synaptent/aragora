@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+from subprocess import CompletedProcess
+
+import pytest
+
 from scripts.auto_revert_main_required_failures import (
+    AUTO_REVERT_MARKER,
+    _recent_auto_revert_exists,
     evaluate_required_contexts,
     select_latest_check_runs,
     should_skip_commit_message,
@@ -51,3 +58,17 @@ def test_should_skip_commit_message_for_reverts_and_marked_commits() -> None:
     assert should_skip_commit_message('Revert "feat: add thing"') is True
     assert should_skip_commit_message("fix: x\n\n[auto-revert-required-checks]") is True
     assert should_skip_commit_message("feat: normal commit") is False
+
+
+def test_recent_auto_revert_exists_greps_marker_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], cwd: Path) -> CompletedProcess:
+        calls.append(cmd)
+        return CompletedProcess(cmd, 0, stdout="abc123 revert marker", stderr="")
+
+    monkeypatch.setattr("scripts.auto_revert_main_required_failures._run", fake_run)
+
+    assert _recent_auto_revert_exists(Path(".")) is True
+    assert calls[0][:4] == ["git", "log", "--since=10 minutes ago", "-F"]
+    assert calls[0][4:6] == ["--grep", AUTO_REVERT_MARKER]
