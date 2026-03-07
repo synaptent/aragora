@@ -35,11 +35,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aragora.inbox import ReceiptState
 from aragora.server.handlers.inbox.email_actions import (
     _email_actions_service,
     get_email_actions_handlers,
@@ -139,6 +141,47 @@ class MockActionLog:
             "timestamp": self.timestamp.isoformat(),
             "details": self.details,
         }
+
+
+def _make_wedge_envelope(
+    *,
+    receipt_id: str = "receipt-1",
+    state: ReceiptState | str = "approved",
+    provider: str = "gmail",
+    user_id: str = "test-user-001",
+    message_id: str = "msg-123",
+    action: str = "archive",
+    label_id: str | None = None,
+) -> SimpleNamespace:
+    state_value = state.value if hasattr(state, "value") else str(state)
+    receipt_state = state if hasattr(state, "value") else SimpleNamespace(value=state_value)
+    return SimpleNamespace(
+        receipt=SimpleNamespace(
+            receipt_id=receipt_id,
+            state=receipt_state,
+            to_dict=lambda: {"receipt_id": receipt_id, "state": state_value},
+        ),
+        intent=SimpleNamespace(
+            provider=provider,
+            user_id=user_id,
+            message_id=message_id,
+            action=action,
+            label_id=label_id,
+            to_dict=lambda: {
+                "provider": provider,
+                "user_id": user_id,
+                "message_id": message_id,
+                "action": action,
+                "label_id": label_id,
+            },
+        ),
+        decision=SimpleNamespace(
+            label_id=label_id,
+            to_dict=lambda: {"final_action": action, "label_id": label_id},
+        ),
+        provider_route="direct",
+        debate_id=None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -433,20 +476,19 @@ class TestArchiveMessage:
     """Tests for handle_archive_message."""
 
     @pytest.mark.asyncio
-    async def test_archive_success(self, mock_service):
+    async def test_archive_requires_receipt(self, mock_service):
         data = {"provider": "gmail"}
         result = await handle_archive_message(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 200
-        body = _data(result)
-        assert body["action"] == "archive"
-        assert body["message_id"] == "msg-123"
-        assert body["success"] is True
+        assert _status(result) == 428
+        assert "decision receipt" in _body(result).get("error", "").lower()
+        mock_service.archive.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_archive_message_id_from_body(self, mock_service):
+    async def test_archive_message_id_from_body_still_requires_receipt(self, mock_service):
         data = {"message_id": "msg-789"}
         result = await handle_archive_message(data, user_id="test-user-001")
-        assert _status(result) == 200
+        assert _status(result) == 428
+        mock_service.archive.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_archive_missing_message_id(self):
@@ -455,18 +497,43 @@ class TestArchiveMessage:
         assert _status(result) == 400
 
     @pytest.mark.asyncio
-    async def test_archive_service_failure(self, mock_service):
-        mock_service.archive.return_value = MockActionResult(success=False, error="Archive err")
-        data = {"provider": "gmail"}
+    async def test_archive_create_receipt_auto_execute_success(self, monkeypatch, mock_service):
+        created = _make_wedge_envelope(receipt_id="receipt-created", state=ReceiptState.APPROVED)
+        executed = _make_wedge_envelope(receipt_id="receipt-created", state=ReceiptState.EXECUTED)
+        wedge_service = MagicMock()
+        wedge_service.create_receipt = MagicMock(return_value=created)
+        wedge_service.execute_receipt = AsyncMock(
+            return_value=SimpleNamespace(to_dict=lambda: {"status": "executed"})
+        )
+        wedge_service.store = SimpleNamespace(get_receipt=MagicMock(return_value=executed))
+        monkeypatch.setattr(
+            "aragora.server.handlers.inbox.email_actions.get_inbox_trust_wedge_service_instance",
+            lambda: wedge_service,
+        )
+
+        data = {
+            "provider": "gmail",
+            "create_receipt": True,
+            "auto_approve": True,
+            "auto_execute": True,
+        }
         result = await handle_archive_message(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 500
+        assert _status(result) == 200
+        body = _data(result)
+        assert body["action"] == "archive"
+        assert body["executed"] is True
+        assert body["receipt"]["state"] == ReceiptState.EXECUTED.value
+        wedge_service.create_receipt.assert_called_once()
+        wedge_service.execute_receipt.assert_awaited_once_with("receipt-created")
+        mock_service.archive.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_archive_service_exception(self, mock_service):
+    async def test_archive_does_not_fall_through_to_direct_service(self, mock_service):
         mock_service.archive.side_effect = OSError("Disk full")
         data = {"provider": "gmail"}
         result = await handle_archive_message(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 500
+        assert _status(result) == 428
+        mock_service.archive.assert_not_awaited()
 
 
 # ============================================================================
@@ -730,18 +797,19 @@ class TestStarMessage:
     """Tests for handle_star_message."""
 
     @pytest.mark.asyncio
-    async def test_star_success(self, mock_service):
+    async def test_star_requires_receipt(self, mock_service):
         data = {"provider": "gmail"}
         result = await handle_star_message(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 200
-        body = _data(result)
-        assert body["action"] == "star"
+        assert _status(result) == 428
+        assert "decision receipt" in _body(result).get("error", "").lower()
+        mock_service.star.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_star_message_id_from_body(self, mock_service):
+    async def test_star_message_id_from_body_still_requires_receipt(self, mock_service):
         data = {"message_id": "msg-456"}
         result = await handle_star_message(data, user_id="test-user-001")
-        assert _status(result) == 200
+        assert _status(result) == 428
+        mock_service.star.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_star_missing_message_id(self):
@@ -750,18 +818,20 @@ class TestStarMessage:
         assert _status(result) == 400
 
     @pytest.mark.asyncio
-    async def test_star_service_failure(self, mock_service):
+    async def test_star_does_not_fall_through_on_service_failure(self, mock_service):
         mock_service.star.return_value = MockActionResult(success=False, error="Err")
         data = {}
         result = await handle_star_message(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 500
+        assert _status(result) == 428
+        mock_service.star.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_star_exception(self, mock_service):
+    async def test_star_does_not_fall_through_on_service_exception(self, mock_service):
         mock_service.star.side_effect = AttributeError("no attr")
         data = {}
         result = await handle_star_message(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 500
+        assert _status(result) == 428
+        mock_service.star.assert_not_awaited()
 
 
 class TestUnstarMessage:
@@ -855,13 +925,11 @@ class TestAddLabel:
     """Tests for handle_add_label."""
 
     @pytest.mark.asyncio
-    async def test_add_label_success(self, mock_service):
-        data = {"provider": "gmail", "labels": ["urgent", "work"]}
+    async def test_add_label_requires_receipt(self, mock_service):
+        data = {"provider": "gmail", "labels": ["urgent"]}
         result = await handle_add_label(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 200
-        body = _data(result)
-        assert body["action"] == "add_labels"
-        assert body["labels"] == ["urgent", "work"]
+        assert _status(result) == 428
+        assert "decision receipt" in _body(result).get("error", "").lower()
 
     @pytest.mark.asyncio
     async def test_add_label_missing_message_id(self):
@@ -870,31 +938,30 @@ class TestAddLabel:
         assert _status(result) == 400
 
     @pytest.mark.asyncio
-    async def test_add_label_missing_labels(self):
+    async def test_add_label_missing_labels_requires_receipt_first(self):
         data = {"provider": "gmail"}
         result = await handle_add_label(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 400
-        assert "labels" in _body(result).get("error", "").lower()
+        assert _status(result) == 428
+        assert "decision receipt" in _body(result).get("error", "").lower()
 
     @pytest.mark.asyncio
-    async def test_add_label_empty_labels(self):
+    async def test_add_label_empty_labels_requires_receipt_first(self):
         data = {"labels": []}
         result = await handle_add_label(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 400
+        assert _status(result) == 428
 
     @pytest.mark.asyncio
-    async def test_add_label_connector_exception(self, mock_service):
-        connector = await mock_service._get_connector("gmail", "test-user-001")
-        connector.modify_message.side_effect = RuntimeError("API fail")
-        data = {"provider": "gmail", "labels": ["urgent"]}
+    async def test_add_label_create_receipt_requires_single_label(self):
+        data = {"provider": "gmail", "labels": ["urgent", "work"], "create_receipt": True}
         result = await handle_add_label(data, message_id="msg-123", user_id="test-user-001")
-        assert _status(result) == 500
+        assert _status(result) == 400
+        assert "exactly one label" in _body(result).get("error", "").lower()
 
     @pytest.mark.asyncio
-    async def test_add_label_message_id_from_body(self, mock_service):
+    async def test_add_label_message_id_from_body_still_requires_receipt(self, mock_service):
         data = {"message_id": "msg-body", "labels": ["label1"]}
         result = await handle_add_label(data, user_id="test-user-001")
-        assert _status(result) == 200
+        assert _status(result) == 428
 
 
 class TestRemoveLabel:
@@ -1418,15 +1485,26 @@ class TestDefaultProvider:
     """Tests that verify default provider is 'gmail' when not specified."""
 
     @pytest.mark.asyncio
-    async def test_archive_default_provider(self, mock_service):
-        data = {"message_id": "msg-1"}
+    async def test_archive_default_provider(self, monkeypatch, mock_service):
+        created = _make_wedge_envelope(
+            receipt_id="receipt-created",
+            state=ReceiptState.CREATED,
+            provider="gmail",
+            message_id="msg-1",
+        )
+        wedge_service = MagicMock()
+        wedge_service.create_receipt = MagicMock(return_value=created)
+        monkeypatch.setattr(
+            "aragora.server.handlers.inbox.email_actions.get_inbox_trust_wedge_service_instance",
+            lambda: wedge_service,
+        )
+
+        data = {"message_id": "msg-1", "create_receipt": True}
         result = await handle_archive_message(data, user_id="test-user-001")
         assert _status(result) == 200
-        call_kwargs = mock_service.archive.call_args
-        assert (
-            call_kwargs.kwargs.get("provider") == "gmail"
-            or call_kwargs[1].get("provider") == "gmail"
-        )
+        intent = wedge_service.create_receipt.call_args.args[0]
+        assert intent.provider == "gmail"
+        mock_service.archive.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_trash_default_provider(self, mock_service):

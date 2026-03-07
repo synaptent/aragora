@@ -150,6 +150,7 @@ async def _maybe_handle_wedge_action(
     provider: str,
     action_name: str,
     requires_label: bool = False,
+    require_receipt: bool = False,
 ) -> HandlerResult | None:
     from aragora.inbox import (
         ActionIntent,
@@ -161,7 +162,16 @@ async def _maybe_handle_wedge_action(
     receipt_id = str(data.get("receipt_id", "") or "").strip()
     create_receipt = bool(data.get("create_receipt"))
     if not receipt_id and not create_receipt:
-        return None
+        if not require_receipt:
+            return None
+        return error_response(
+            (
+                "This action requires a cryptographic decision receipt. "
+                "Provide receipt_id for an approved receipt or create_receipt=true "
+                "to mint one before execution."
+            ),
+            status=428,
+        )
 
     wedge_service = get_inbox_trust_wedge_service_instance()
     expected_action = InboxWedgeAction.parse(action)
@@ -475,6 +485,7 @@ async def handle_archive_message(
             action="archive",
             provider=provider,
             action_name="archive",
+            require_receipt=True,
         )
         if wedge_result is not None:
             return wedge_result
@@ -842,6 +853,7 @@ async def handle_star_message(
             action="star",
             provider=provider,
             action_name="star",
+            require_receipt=True,
         )
         if wedge_result is not None:
             return wedge_result
@@ -1024,6 +1036,7 @@ async def handle_add_label(
             provider=provider,
             action_name="add_labels",
             requires_label=True,
+            require_receipt=True,
         )
         if wedge_result is not None:
             return wedge_result
