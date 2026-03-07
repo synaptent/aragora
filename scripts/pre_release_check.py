@@ -567,7 +567,7 @@ def gate_version_tag() -> bool:
 
 
 def gate_status_doc() -> bool:
-    """Validate that docs/STATUS.md exists and is parseable."""
+    """Validate that release/status docs pass the strict truthfulness checks."""
     status_path = PROJECT_ROOT / "docs" / "STATUS.md"
 
     if not status_path.exists():
@@ -591,7 +591,27 @@ def gate_status_doc() -> bool:
     if not has_sections:
         return _gate("status_doc", False, "docs/STATUS.md has no sections (## headings)")
 
-    return _gate("status_doc", True, f"{len(lines)} lines, well-formed")
+    env = os.environ.copy()
+    env.setdefault("PYTHONPATH", ".")
+    try:
+        result = subprocess.run(
+            [sys.executable, "scripts/reconcile_status_docs.py", "--strict"],
+            capture_output=True,
+            text=True,
+            cwd=PROJECT_ROOT,
+            env=env,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return _gate("status_doc", False, "truthfulness reconciliation timed out after 120s")
+    except OSError as exc:
+        return _gate("status_doc", False, f"could not run truthfulness reconciliation: {exc}")
+
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).strip() or "truthfulness reconciliation failed"
+        return _gate("status_doc", False, detail)
+
+    return _gate("status_doc", True, f"{len(lines)} lines, strict reconciliation passed")
 
 
 # ---------------------------------------------------------------------------

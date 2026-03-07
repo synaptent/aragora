@@ -17,7 +17,7 @@ All aragoradocs should cite these values. Update monthly.
 | Lines of code | 1,490,000 | LOC count |
 | Automated tests | 210,000+ | repo-wide `def test_` count |
 | Test files | 5,000+ | `tests/` file count |
-| API operations | 3,700+ across 2,900+ paths | OpenAPI spec |
+| API operations | 3,100+ across 2,600+ paths | OpenAPI spec |
 | WebSocket event types | 270+ | stream event inventory |
 | SDK namespaces | 186 Python / 185 TypeScript | SDK package |
 | Knowledge Mound adapters | 42 registered adapter specs | adapter factory registry |
@@ -26,8 +26,8 @@ All aragoradocs should cite these values. Update monthly.
 | Workflow templates | 50+ across 6 categories | template registry |
 | Debate modules | 210+ | debate/ directory |
 | Handler modules | 580+ | handlers/ directory |
-| Connector count | 151 production | connectors/STATUS.md |
-| GA readiness | 98% (1 blocker: external pentest) | GA_CHECKLIST.md |
+| Connector count | 149 production + 2 stub | connectors/STATUS.md |
+| GA readiness | Pre-GA; remaining launch work is tracked in GA_CHECKLIST.md | GA_CHECKLIST.md |
 | SOC 2 readiness | 98% | compliance assessment |
 | Mypy type errors | 0 | CI typecheck |
 | Pricing tiers | Free ($0) / Pro ($49/seat/mo) / Enterprise (custom) | -- |

@@ -493,11 +493,12 @@ jobs:
           RELEASE_VERSION: ${{ needs.validate.outputs.version }}
 
       # ---------------------------------------------------------------
-      # STATUS.md validation: ensure the status doc is parseable
+      # STATUS.md validation: enforce strict release/status truthfulness
       # ---------------------------------------------------------------
-      - name: Validate STATUS.md
-        run: |
-          python scripts/pre_release_check.py --gate status-doc
+      - name: Validate release/status truthfulness
+        run: python scripts/pre_release_check.py --gate status-doc
+        env:
+          PYTHONPATH: .
 
   # ---------------------------------------------------------------------------
   # Integration gate: reusable workflow for integration smoke tests.

@@ -52,7 +52,7 @@ This checklist tracks all items required before declaring Aragora self-hosted GA
 
 ## API & SDK
 
-- [x] **REST API** - 3,000+ operations across 2,900+ paths
+- [x] **REST API** - 3,100+ operations across 2,600+ paths
 - [x] **WebSocket streaming** - 190+ event types
 - [x] **Python SDK** - `aragora-sdk` with full API parity
 - [x] **TypeScript SDK** - `@aragora/sdk` with 136/136 namespaces
@@ -119,4 +119,4 @@ This checklist tracks all items required before declaring Aragora self-hosted GA
 | Documentation | 5/5 | 100% |
 | **Total** | **58/59** | **98%** |
 
-**Only blocker: External penetration test.** Everything else is GA-ready.
+**Current unmet checklist item:** External penetration test. Release truthfulness and self-host evidence gates are tracked separately in the status/roadmap docs.

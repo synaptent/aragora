@@ -6,12 +6,12 @@
 
 ## Current Status (March 2026)
 
-Aragora is **98% GA-ready**. The closed-loop backbone (CLB) sprint is now complete (14/14 issues closed). The platform has shipped all core infrastructure and is pending only an external vendor-dependent milestone before public launch.
+Aragora has shipped most of the closed-loop backbone (CLB) infrastructure and completed the 14/14 issue sprint, but launch readiness remains gated by truthfulness, self-host validation, and the remaining tracked launch work below.
 
 **By the numbers:**
 - 208,000+ tests across 5,000+ test files (0 failures on main)
 - 42 Knowledge Mound adapter specs registered (up from 34 in Q4 2025)
-- 3,000+ API operations across 2,900+ paths
+- 3,100+ API operations across 2,600+ paths
 - 15 RBAC resource types, 8 actions, 420+ named permissions
 - SOC 2 controls framework: 98% implemented
 
@@ -29,8 +29,8 @@ Aragora is **98% GA-ready**. The closed-loop backbone (CLB) sprint is now comple
 - PR watch daemon fleet (3 Mac machines, 30 autonomous reviews/hour)
 - Dev swarm coordination layer
 
-**Remaining blockers before GA:**
-- External penetration test (vendor-dependent; scheduling still pending confirmation and remains the only named GA blocker)
+**Remaining tracked launch work:**
+- External penetration test (vendor-dependent; scheduling still pending confirmation)
 
 **EU AI Act enforcement date: August 2, 2026** — the compliance CLI and audit trail infrastructure
 position Aragora as a natural adoption path for enterprises facing this deadline.
@@ -68,7 +68,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 ### Integrations
 - Slack, Discord, Microsoft Teams bots
 - Email-to-debate routing
-- REST API with 3,000+ operations across 2,900+ paths
+- REST API with 3,100+ operations across 2,600+ paths
 - WebSocket real-time API
 - MCP server for Claude Desktop
 
@@ -86,7 +86,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 - [x] Usage dashboard with spend analytics
 
 ### Track 2: Developer Platform
-- [x] OpenAPI 3.1 specification (3,000+ operations)
+- [x] OpenAPI 3.1 specification (3,100+ operations)
 - [x] TypeScript SDK feature parity with Python
 - [x] SDK code generation pipeline
 - [ ] Interactive API explorer at docs.aragora.ai/api
@@ -100,7 +100,7 @@ Aragora is the control plane for multi-agent vetted decisionmaking across organi
 - [x] Helm chart for Kubernetes
 
 ### Enterprise Readiness (Ongoing)
-- [ ] Complete third-party penetration testing (vendor-dependent scheduling remains the only named GA blocker)
+- [ ] Complete third-party penetration testing (vendor-dependent scheduling still pending)
 - [ ] Deploy public status page at status.aragora.ai
 - [x] Implement quarterly disaster recovery drills (BackupScheduler with DR integration)
 - [x] Finalize data classification policy (runtime enforcement, CI PII gate, evidence bundles)

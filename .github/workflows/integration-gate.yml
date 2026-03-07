@@ -240,36 +240,12 @@ jobs:
           python-version: "3.11"
 
       # ---------------------------------------------------------------
-      # Validate that docs/STATUS.md is parseable and well-formed
+      # Validate status docs against the strict truthfulness reconciler
       # ---------------------------------------------------------------
-      - name: "Validate STATUS.md is parseable"
-        run: |
-          python -c "
-          from pathlib import Path
-          import sys
-
-          status_path = Path('docs/STATUS.md')
-          if not status_path.exists():
-              print('::error::docs/STATUS.md does not exist')
-              sys.exit(1)
-
-          content = status_path.read_text()
-
-          # Check basic structure
-          if not content.strip():
-              print('::error::docs/STATUS.md is empty')
-              sys.exit(1)
-
-          # Check for required sections
-          required_markers = ['# Aragora', 'Summary', '##']
-          found = [m for m in required_markers if m in content]
-          if len(found) < 2:
-              print(f'::warning::docs/STATUS.md may be malformed (found {len(found)}/{len(required_markers)} expected markers)')
-
-          lines = content.splitlines()
-          print(f'docs/STATUS.md: {len(lines)} lines, {len(content)} bytes')
-          print('STATUS.md validation passed')
-          "
+      - name: "Validate release/status truthfulness"
+        run: python scripts/pre_release_check.py --gate status-doc
+        env:
+          PYTHONPATH: .
 
       # ---------------------------------------------------------------
       # Verify version in pyproject.toml matches release tag (if tagged)

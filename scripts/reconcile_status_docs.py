@@ -32,6 +32,52 @@ STATUS_DIR = REPO_ROOT / "docs" / "status" / "STATUS.md"
 ROADMAP = REPO_ROOT / "ROADMAP.md"
 CONNECTOR_STATUS = REPO_ROOT / "docs" / "connectors" / "STATUS.md"
 EXECUTION_PROGRAM = REPO_ROOT / "docs" / "status" / "EXECUTION_PROGRAM_2026Q2_Q4.md"
+CANONICAL_GOALS = REPO_ROOT / "docs" / "CANONICAL_GOALS.md"
+FEATURE_DISCOVERY = REPO_ROOT / "docs" / "FEATURE_DISCOVERY.md"
+FEATURE_DISCOVERY_STATUS = REPO_ROOT / "docs" / "status" / "FEATURE_DISCOVERY.md"
+COMMERCIAL_OVERVIEW_STATUS = REPO_ROOT / "docs" / "status" / "COMMERCIAL_OVERVIEW.md"
+OPENAPI_GENERATED = REPO_ROOT / "docs" / "api" / "openapi_generated.json"
+CONNECTOR_ROOT = REPO_ROOT / "aragora" / "connectors"
+
+API_METRIC_DOCS = [
+    (CANONICAL_GOALS, "CANONICAL_GOALS.md"),
+    (FEATURE_DISCOVERY, "FEATURE_DISCOVERY.md"),
+    (FEATURE_DISCOVERY_STATUS, "status/FEATURE_DISCOVERY.md"),
+    (GA_CHECKLIST, "GA_CHECKLIST.md"),
+    (STATUS_DOC, "STATUS.md"),
+    (STATUS_DIR, "status/STATUS.md"),
+    (ROADMAP, "ROADMAP.md"),
+]
+
+LAUNCH_READINESS_DOCS = [
+    (CANONICAL_GOALS, "CANONICAL_GOALS.md"),
+    (STATUS_DOC, "STATUS.md"),
+    (STATUS_DIR, "status/STATUS.md"),
+    (ROADMAP, "ROADMAP.md"),
+    (COMMERCIAL_OVERVIEW_STATUS, "status/COMMERCIAL_OVERVIEW.md"),
+]
+
+API_CLAIM_PATTERNS = [
+    re.compile(
+        r"(?P<ops>\d[\d,]*)\+\s+API operations(?:\s+across\s+(?P<paths>\d[\d,]*)\+\s+paths)?",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?P<ops>\d[\d,]*)\+\s+operations\s+across\s+(?P<paths>\d[\d,]*)\+\s+paths",
+        re.IGNORECASE,
+    ),
+]
+
+LAUNCH_READINESS_PATTERNS = [
+    re.compile(r"98%\s+GA-ready", re.IGNORECASE),
+    re.compile(r"98%\s*\(1 blocker:\s*external pentest\)", re.IGNORECASE),
+    re.compile(r"98%\s+Production Ready", re.IGNORECASE),
+    re.compile(r"only named GA blocker", re.IGNORECASE),
+    re.compile(
+        r"pending only an external vendor-dependent milestone before public launch", re.IGNORECASE
+    ),
+    re.compile(r"\|\s*\*\*OVERALL\*\*\s*\|\s*\*\*98%\*\*\s*\|\s*\*\*GA Ready\*\*", re.IGNORECASE),
+]
 
 
 def _file_age_days(path: Path) -> int | None:
@@ -218,6 +264,167 @@ def _check_connector_status() -> list[dict]:
     return findings
 
 
+def _extract_openapi_counts() -> tuple[int, int] | None:
+    """Return (paths, operations) from the generated OpenAPI spec."""
+    if not OPENAPI_GENERATED.exists():
+        return None
+
+    try:
+        spec = json.loads(OPENAPI_GENERATED.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+    paths = spec.get("paths", {})
+    operations = 0
+    valid_methods = {"get", "post", "put", "patch", "delete", "options", "head", "trace"}
+    for path_item in paths.values():
+        if isinstance(path_item, dict):
+            operations += sum(1 for method in path_item if method.lower() in valid_methods)
+    return len(paths), operations
+
+
+def _check_api_metric_claims() -> list[dict]:
+    """Fail when launch/status docs overstate OpenAPI path or operation counts."""
+    findings = []
+    counts = _extract_openapi_counts()
+    if counts is None:
+        findings.append(
+            {
+                "severity": "warning",
+                "source": "docs/api/openapi_generated.json",
+                "message": "Could not load generated OpenAPI counts for reconciliation",
+            }
+        )
+        return findings
+
+    actual_paths, actual_operations = counts
+
+    for path, label in API_METRIC_DOCS:
+        if not path.exists():
+            continue
+
+        content = path.read_text(encoding="utf-8", errors="replace")
+        seen_spans: set[tuple[int, int]] = set()
+
+        for pattern in API_CLAIM_PATTERNS:
+            for match in pattern.finditer(content):
+                span = match.span()
+                if span in seen_spans:
+                    continue
+                seen_spans.add(span)
+
+                ops_floor = int(match.group("ops").replace(",", ""))
+                paths_group = match.groupdict().get("paths")
+                paths_floor = int(paths_group.replace(",", "")) if paths_group else None
+
+                if ops_floor > actual_operations or (
+                    paths_floor is not None and paths_floor > actual_paths
+                ):
+                    excerpt = " ".join(match.group(0).split())
+                    findings.append(
+                        {
+                            "severity": "critical",
+                            "source": label,
+                            "message": (
+                                f"OpenAPI claim '{excerpt}' exceeds generated counts "
+                                f"(actual: {actual_operations} operations across {actual_paths} paths)"
+                            ),
+                        }
+                    )
+
+    findings.append(
+        {
+            "severity": "info",
+            "source": "docs/api/openapi_generated.json",
+            "message": f"Generated OpenAPI counts: {actual_operations} operations across {actual_paths} paths",
+        }
+    )
+    return findings
+
+
+def _find_explicit_placeholder_connectors() -> list[Path]:
+    """Return connector files that explicitly declare themselves placeholders."""
+    placeholder_files: list[Path] = []
+    if not CONNECTOR_ROOT.exists():
+        return placeholder_files
+
+    marker = re.compile(r"\bthis connector is a placeholder\b", re.IGNORECASE)
+    for path in CONNECTOR_ROOT.rglob("*.py"):
+        try:
+            content = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if marker.search(content):
+            placeholder_files.append(path)
+    return sorted(placeholder_files)
+
+
+def _check_connector_placeholder_drift() -> list[dict]:
+    """Cross-check explicit placeholder connectors against connector status docs."""
+    findings = []
+    if not CONNECTOR_STATUS.exists():
+        return findings
+
+    placeholder_files = _find_explicit_placeholder_connectors()
+    if not placeholder_files:
+        return findings
+
+    content = CONNECTOR_STATUS.read_text(encoding="utf-8", errors="replace")
+    stub_match = re.search(r"(?im)^\s*-\s*\*\*Stub\*\*:\s*(\d+)\s+connectors", content)
+    documented_stub_count = int(stub_match.group(1)) if stub_match else 0
+
+    if documented_stub_count < len(placeholder_files):
+        findings.append(
+            {
+                "severity": "critical",
+                "source": "connectors/STATUS.md",
+                "message": (
+                    f"Connector status documents {documented_stub_count} stub connectors, but "
+                    f"{len(placeholder_files)} explicit placeholder connectors exist in code: "
+                    + ", ".join(str(p.relative_to(CONNECTOR_ROOT)) for p in placeholder_files)
+                ),
+            }
+        )
+
+    for path in placeholder_files:
+        rel = str(path.relative_to(CONNECTOR_ROOT))
+        if re.search(rf"\(`{re.escape(rel)}`\)\s*\|\s*Production\s*\|", content):
+            findings.append(
+                {
+                    "severity": "critical",
+                    "source": "connectors/STATUS.md",
+                    "message": f"Connector `{rel}` is listed as Production but explicitly declares itself a placeholder",
+                }
+            )
+
+    return findings
+
+
+def _check_launch_readiness_claims() -> list[dict]:
+    """Block overconfident GA-readiness messaging in monitored docs."""
+    findings = []
+    for path, label in LAUNCH_READINESS_DOCS:
+        if not path.exists():
+            continue
+        content = path.read_text(encoding="utf-8", errors="replace")
+        for pattern in LAUNCH_READINESS_PATTERNS:
+            match = pattern.search(content)
+            if not match:
+                continue
+            findings.append(
+                {
+                    "severity": "critical",
+                    "source": label,
+                    "message": (
+                        f"Launch-readiness claim '{match.group(0)}' is not allowed in current-source docs. "
+                        "Use evidence-backed wording instead of single-blocker / percentage-ready messaging."
+                    ),
+                }
+            )
+            break
+    return findings
+
+
 def _check_staleness() -> list[dict]:
     """Check all status docs for staleness."""
     findings = []
@@ -253,6 +460,9 @@ def reconcile(strict: bool = False) -> dict:
     findings.extend(_check_capability_matrix_freshness())
     findings.extend(_check_ga_checklist())
     findings.extend(_check_connector_status())
+    findings.extend(_check_api_metric_claims())
+    findings.extend(_check_connector_placeholder_drift())
+    findings.extend(_check_launch_readiness_claims())
     findings.extend(_check_staleness())
 
     critical = [f for f in findings if f["severity"] == "critical"]

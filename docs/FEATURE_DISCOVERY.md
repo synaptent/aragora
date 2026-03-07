@@ -24,7 +24,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 | [Developer Tools](#8-developer-tools) | 35+ | Stable |
 | [Self-Improvement](#9-self-improvement--nomic-loop) | 18+ | Stable |
 
-**Total**: 230+ features | 3,800+ Python modules | 210,000+ tests | 3,700+ API operations
+**Total**: 230+ features | 3,800+ Python modules | 210,000+ tests | 3,100+ API operations across 2,600+ paths
 
 ---
 

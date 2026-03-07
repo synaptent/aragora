@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 from capability_gap_report import build_report
@@ -51,6 +52,9 @@ def _count_cli_commands(repo_root: Path) -> int:
     calls in `aragora/cli/parser.py`.
     """
     try:
+        repo_root_str = str(repo_root)
+        if repo_root_str not in sys.path:
+            sys.path.insert(0, repo_root_str)
         from aragora.cli.parser import build_parser
 
         parser = build_parser()

@@ -106,7 +106,7 @@ Aragora is built on five architectural commitments that together produce somethi
 
 ## Commercial Readiness Assessment
 
-### Overall: 98% Production Ready
+### Overall: Strong pre-GA foundation
 
 | Category | Score | Status | Notes |
 |----------|-------|--------|-------|
@@ -118,7 +118,7 @@ Aragora is built on five architectural commitments that together produce somethi
 | Documentation | 95% | Ready | API docs, runbooks, compliance guides |
 | Compliance & Governance | 98% | Ready | RBAC v2 with 420+ permissions, 7 roles, role hierarchy |
 | SDK & Integrations | 98% | Ready | 186 Python / 185 TypeScript namespaces |
-| **OVERALL** | **98%** | **GA Ready** | Enterprise-grade features integrated, 0 mypy errors |
+| **OVERALL** | **Pre-GA** | **Substantial foundation** | Enterprise-grade features integrated; launch truthfulness and remaining readiness work still open |
 
 ### Deployment Readiness
 

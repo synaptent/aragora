@@ -49,7 +49,7 @@
 - **HTTP handlers**: 700+
 - **KM adapters**: 42 registered adapter specs
 - **Agent types**: 43
-- **API operations**: 3,000+ across 2,900+ paths
+- **API operations**: 3,100+ across 2,600+ paths
 - **RBAC permissions**: 420+
 - **Version**: v2.8.0
 
@@ -401,9 +401,9 @@ All 18 items from the 8-agent comprehensive assessment have been addressed (see 
 - `aragora/memory/continuum/crud.py` - Added async wrappers for all blocking SQLite operations
 - `aragora/server/openapi/endpoints/__init__.py` - Registered OpenClaw endpoints
 
-### GA Readiness Verification Audit (February 3, 2026)
+### Launch Readiness Verification Audit (February 3, 2026)
 
-Independent verification of production readiness found the project is **98% GA-ready** (up from 95% after resolving SDK parity, slash commands, and decision receipts gaps). Key findings:
+Independent verification found substantial launch-ready infrastructure, but Aragora remains pre-GA until the remaining launch work and release-truthfulness gates are closed. Key findings:
 
 | Area | Previous Estimate | Verified Status |
 |------|-------------------|-----------------|
@@ -414,7 +414,7 @@ Independent verification of production readiness found the project is **98% GA-r
 | Self-Hosted Deployment | Missing production setup | Docker Compose + .env.example comprehensive (193 + 125 lines) |
 | Knowledge Handler Tests | Partial | 97 tests passing (whitespace validation fix applied) |
 
-**Remaining GA Gaps (genuine):**
+**Remaining launch-readiness gaps tracked at the time:**
 - External penetration test (requires third-party vendor)
 - ~~TypeScript SDK parity at ~70% (target: 95%)~~ → **RESOLVED**: 99.3% parity (136/136 namespaces matched)
 - ~~Slack/Teams OAuth wizard and slash commands~~ → **RESOLVED**: 7+ slash commands per platform fully implemented
@@ -2816,7 +2816,7 @@ The nomic loop (`scripts/nomic_loop.py`) implements a 6-phase self-improvement c
 - `on_meta_analyzed`, `on_elo_recorded`, `on_claims_extracted`, `on_belief_network_built`
 
 The codebase is **feature-rich with improving exposure**:
-- 3,000+ API operations across 2,900+ paths, 580+ HTTP handler modules
+- 3,100+ API operations across 2,600+ paths, 580+ HTTP handler modules
 - Many sophisticated features now surfaced via new APIs
 - WebSocket-first architecture for real-time, REST for data access
 

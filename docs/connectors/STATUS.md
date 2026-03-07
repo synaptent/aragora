@@ -4,9 +4,9 @@ Last updated: 2026-02-23
 
 ## Summary
 
-- **Production**: 151 connectors
+- **Production**: 149 connectors
 - **Beta**: 0 connectors
-- **Stub**: 0 connectors
+- **Stub**: 2 connectors
 
 ## Status Criteria
 
@@ -271,8 +271,8 @@ Top-level evidence connectors extend `BaseConnector` and provide `search()`/`fet
 | Connector | Status | Features | Tests |
 |-----------|--------|----------|-------|
 | DocuSign (`legal/docusign.py`) | Production | OAuth 2.0/JWT, envelopes, templates, status tracking, retry with backoff | Yes |
-| LexisNexis (`legal/lexis.py`) | Production | Licensed content proxy, query sanitization, retry with backoff, circuit breaker | Yes |
-| Westlaw (`legal/westlaw.py`) | Production | Licensed content proxy, query sanitization, retry with backoff, circuit breaker | Yes |
+| LexisNexis (`legal/lexis.py`) | Stub | Placeholder for licensed proxy integration; query sanitization, retry with backoff, circuit breaker scaffolding | Yes |
+| Westlaw (`legal/westlaw.py`) | Stub | Placeholder for licensed proxy integration; query sanitization, retry with backoff, circuit breaker scaffolding | Yes |
 
 ### Low-Code
 
@@ -384,8 +384,8 @@ Integration connectors post debate results to external platforms and handle bidi
 
 ## Notes
 
-- **Stub connectors**: None remain. All former stubs (SendGrid, Twilio, Instagram, Trello) have been promoted to Production with real API calls, search, fetch, health checks, rate limiting, and circuit breaker integration.
+- **Stub connectors**: 2 licensed legal placeholders remain: LexisNexis and Westlaw. Both expose configuration and resilience scaffolding, but they are still documented as stubs until the licensed integrations are fully wired.
 - **Beta connectors**: None remain. All 18 former Beta connectors have been promoted to Production with circuit breaker patterns, retry with exponential backoff, and query sanitization where applicable. Promotion was achieved via two patterns: (1) BaseConnector subclasses use inherited `_request_with_retry`, (2) standalone connectors use `ProductionConnectorMixin` (`aragora/connectors/production_mixin.py`). Device connectors (Alexa, Google Home) already had circuit breaker and retry via `DeviceConnector` base class. EHR adapters (Epic, Cerner) gained retry/circuit breaker through the updated `EHRAdapter._request` method. Amazon gained production status through its `EnterpriseConnector` base class.
 - **Production connectors** include robust error handling, circuit breakers, rate limiting, caching, and/or retry with exponential backoff.
 - The **enterprise connectors** (`enterprise/`) all extend `EnterpriseConnector` with incremental sync, pagination safety caps (`_MAX_PAGES`), and standardized `SyncItem` output.
-- The **LexisNexis** and **Westlaw** connectors implement configurable proxy endpoints with query sanitization, retry with backoff, and circuit breaker patterns.
+- The **LexisNexis** and **Westlaw** connectors currently provide placeholder-backed licensed proxy scaffolding with query sanitization, retry with backoff, and circuit breaker patterns.
