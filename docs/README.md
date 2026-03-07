@@ -47,6 +47,7 @@ organizational knowledge and channels**.
 |----------|-------------|
 | [STATUS](./status/STATUS.md) | Current shipped state and recent delivery summary |
 | [NEXT_STEPS_CANONICAL](./status/NEXT_STEPS_CANONICAL.md) | Single source of truth for execution priorities |
+| [ACTIVE_EXECUTION_ISSUES](./status/ACTIVE_EXECUTION_ISSUES.md) | Live GitHub issue map for the execution program |
 | [EXECUTION_NEXT_6_WEEKS_2026-03-05](./status/EXECUTION_NEXT_6_WEEKS_2026-03-05.md) | Active short-horizon plan |
 | [DOCUMENTATION_HYGIENE_AND_GAP_REGISTER](./status/DOCUMENTATION_HYGIENE_AND_GAP_REGISTER.md) | Running roadmap, drift, and feature-gap register |
 

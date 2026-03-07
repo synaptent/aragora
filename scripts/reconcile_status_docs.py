@@ -29,15 +29,52 @@ CAPABILITY_YAML = REPO_ROOT / "aragora" / "capability_surfaces.yaml"
 GA_CHECKLIST = REPO_ROOT / "docs" / "GA_CHECKLIST.md"
 STATUS_DOC = REPO_ROOT / "docs" / "STATUS.md"
 STATUS_DIR = REPO_ROOT / "docs" / "status" / "STATUS.md"
+DOCS_README = REPO_ROOT / "docs" / "README.md"
 ROADMAP = REPO_ROOT / "ROADMAP.md"
 CONNECTOR_STATUS = REPO_ROOT / "docs" / "connectors" / "STATUS.md"
 EXECUTION_PROGRAM = REPO_ROOT / "docs" / "status" / "EXECUTION_PROGRAM_2026Q2_Q4.md"
+NEXT_STEPS_CANONICAL = REPO_ROOT / "docs" / "status" / "NEXT_STEPS_CANONICAL.md"
+FEATURE_GAP_LIST = REPO_ROOT / "docs" / "FEATURE_GAP_LIST.md"
+DOCUMENTATION_HYGIENE_REGISTER = (
+    REPO_ROOT / "docs" / "status" / "DOCUMENTATION_HYGIENE_AND_GAP_REGISTER.md"
+)
+ACTIVE_EXECUTION_ISSUES = REPO_ROOT / "docs" / "status" / "ACTIVE_EXECUTION_ISSUES.md"
 CANONICAL_GOALS = REPO_ROOT / "docs" / "CANONICAL_GOALS.md"
 FEATURE_DISCOVERY = REPO_ROOT / "docs" / "FEATURE_DISCOVERY.md"
 FEATURE_DISCOVERY_STATUS = REPO_ROOT / "docs" / "status" / "FEATURE_DISCOVERY.md"
 COMMERCIAL_OVERVIEW_STATUS = REPO_ROOT / "docs" / "status" / "COMMERCIAL_OVERVIEW.md"
 OPENAPI_GENERATED = REPO_ROOT / "docs" / "api" / "openapi_generated.json"
 CONNECTOR_ROOT = REPO_ROOT / "aragora" / "connectors"
+
+EXECUTION_TRACKING_DOCS = [
+    (DOCS_README, "README.md"),
+    (NEXT_STEPS_CANONICAL, "status/NEXT_STEPS_CANONICAL.md"),
+    (FEATURE_GAP_LIST, "FEATURE_GAP_LIST.md"),
+    (DOCUMENTATION_HYGIENE_REGISTER, "status/DOCUMENTATION_HYGIENE_AND_GAP_REGISTER.md"),
+]
+
+REQUIRED_EXECUTION_ISSUES = [
+    273,
+    274,
+    509,
+    804,
+    805,
+    806,
+    807,
+    808,
+    809,
+    810,
+    811,
+    812,
+    813,
+    814,
+    815,
+    816,
+    817,
+    818,
+    819,
+    820,
+]
 
 API_METRIC_DOCS = [
     (CANONICAL_GOALS, "CANONICAL_GOALS.md"),
@@ -454,6 +491,80 @@ def _check_staleness() -> list[dict]:
     return findings
 
 
+def _check_execution_issue_tracking() -> list[dict]:
+    """Ensure canonical execution docs point to the live GitHub backlog."""
+    findings = []
+
+    if not ACTIVE_EXECUTION_ISSUES.exists():
+        findings.append(
+            {
+                "severity": "critical",
+                "source": "status/ACTIVE_EXECUTION_ISSUES.md",
+                "message": "Active execution issue map is missing",
+            }
+        )
+        return findings
+
+    issue_map_content = ACTIVE_EXECUTION_ISSUES.read_text(encoding="utf-8", errors="replace")
+    missing_issue_links = [
+        issue for issue in REQUIRED_EXECUTION_ISSUES if f"/issues/{issue}" not in issue_map_content
+    ]
+    if missing_issue_links:
+        findings.append(
+            {
+                "severity": "critical",
+                "source": "status/ACTIVE_EXECUTION_ISSUES.md",
+                "message": (
+                    "Execution issue map is missing required GitHub issue links: "
+                    + ", ".join(f"#{issue}" for issue in missing_issue_links)
+                ),
+            }
+        )
+
+    for path, label in EXECUTION_TRACKING_DOCS:
+        if not path.exists():
+            findings.append(
+                {
+                    "severity": "warning",
+                    "source": label,
+                    "message": "Execution tracking doc is missing",
+                }
+            )
+            continue
+
+        content = path.read_text(encoding="utf-8", errors="replace")
+        if "ACTIVE_EXECUTION_ISSUES.md" not in content:
+            findings.append(
+                {
+                    "severity": "critical",
+                    "source": label,
+                    "message": "Doc does not link to status/ACTIVE_EXECUTION_ISSUES.md",
+                }
+            )
+
+    if NEXT_STEPS_CANONICAL.exists():
+        next_steps_content = NEXT_STEPS_CANONICAL.read_text(encoding="utf-8", errors="replace")
+        for issue in (804, 805, 806):
+            if f"/issues/{issue}" not in next_steps_content:
+                findings.append(
+                    {
+                        "severity": "critical",
+                        "source": "status/NEXT_STEPS_CANONICAL.md",
+                        "message": f"Canonical execution order is missing epic issue link #{issue}",
+                    }
+                )
+
+    findings.append(
+        {
+            "severity": "info",
+            "source": "status/ACTIVE_EXECUTION_ISSUES.md",
+            "message": f"Execution issue map links {len(REQUIRED_EXECUTION_ISSUES)} required issues",
+        }
+    )
+
+    return findings
+
+
 def reconcile(strict: bool = False) -> dict:
     """Run all reconciliation checks and return report."""
     findings = []
@@ -464,6 +575,7 @@ def reconcile(strict: bool = False) -> dict:
     findings.extend(_check_connector_placeholder_drift())
     findings.extend(_check_launch_readiness_claims())
     findings.extend(_check_staleness())
+    findings.extend(_check_execution_issue_tracking())
 
     critical = [f for f in findings if f["severity"] == "critical"]
     warnings = [f for f in findings if f["severity"] == "warning"]

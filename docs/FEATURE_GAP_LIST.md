@@ -1,6 +1,7 @@
 # Aragora Feature Gap List
 
 > **Living document** — tracks features planned, partially built, or in need of hardening. Updated as items are completed or priorities shift.
+> Active execution status now lives in [docs/status/ACTIVE_EXECUTION_ISSUES.md](status/ACTIVE_EXECUTION_ISSUES.md) and the linked GitHub issues. This file remains the capability and productization backlog truth.
 > Last updated: March 2026
 
 ## How to Read This List
@@ -18,7 +19,7 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| External penetration test | Vendor outreach in progress | Kickoff target: Mar 3, 2026. Only remaining external blocker. |
+| External penetration test | Vendor outreach in progress | Kickoff target: Mar 3, 2026. Tracked in [#273](https://github.com/synaptent/aragora/issues/273), [#274](https://github.com/synaptent/aragora/issues/274), and [#509](https://github.com/synaptent/aragora/issues/509). Kept warm, not the main product lane. |
 | Debate output quality | **VALIDATED — moved to Completed** | Run 012 (Mar 5): composite 8.38-9.39/10. Diverse benchmark (10 domains): 100% pass, avg composite 0.938. |
 
 ---
@@ -27,9 +28,9 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Agent-first beta via REST API | **Fleet deployed (12 runners)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. 3 Hetzner + 6 EC2 + 3 local Macs. PR watch daemon on Mac Studio via launchd. |
+| Agent-first beta via REST API | **Fleet deployed (12 runners)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. 3 Hetzner + 6 EC2 + 3 local Macs. PR watch daemon on Mac Studio via launchd. Shared operator productization is tracked in [#817](https://github.com/synaptent/aragora/issues/817) and [#819](https://github.com/synaptent/aragora/issues/819). |
 | GitHub Actions pre-merge gate | **Workflow created** | `aragora-review-gate.yml` manual-only (workflow_dispatch). Re-enable pull_request trigger when ready. |
-| Public demo at aragora.ai/demo | **Live and verified** | `/demo` (standalone debate), `/demo/pipeline` (pipeline demo), `/demo/instant` (debate replay). All return 200. Landing page CTA wired. |
+| Public demo at aragora.ai/demo | **Live and verified** | `/demo` (standalone debate), `/demo/pipeline` (pipeline demo), `/demo/instant` (debate replay). All return 200. Landing page CTA wired. Productization is tracked in [#818](https://github.com/synaptent/aragora/issues/818). |
 | EU AI Act compliance package | **Substantially complete (90/100)** | Art. 9/10/11/12/13/14/15/43/49 bundle coverage and customer playbook appendix are shipped. Remaining work is packaging polish, regulator-ready validation, and launch collateral hardening. **Deadline: Aug 2, 2026.** |
 | First 2 enterprise pilot engagements | Not started | Closed partnerships — target fintech + healthcare |
 | Developer onboarding <10 min | **Working (2-5 min)** | `aragora quickstart --demo` (zero-config), `aragora review --demo`, Docker quickstart all verified working. Needs cold-start user testing. |
@@ -41,12 +42,12 @@
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Semantic convergence (full embedding) | **VALIDATED — moved to Completed** | PR #723 migrated 5 similarity modules from difflib to embedding-based. Remaining difflib usage is exclusively for text diff display, not similarity. |
-| ERC-8004 on-chain deployment | Contracts written | Solidity contracts exist; not deployed to any mainnet. Needs chain endpoint config + gas management. |
-| OpenClaw end-to-end demo | **Core loop shipped** | PR #727: CodeImplementationTask, SpecExtractor, ComputerUseActionBundle, receipt linkage. Production validation with live agents remaining. |
+| ERC-8004 on-chain deployment | Contracts written | Solidity contracts exist; not deployed to any mainnet. Needs chain endpoint config + gas management. Tracked in [#816](https://github.com/synaptent/aragora/issues/816). |
+| OpenClaw end-to-end demo | **Core loop shipped** | PR #727: CodeImplementationTask, SpecExtractor, ComputerUseActionBundle, receipt linkage. Production validation with live agents remaining. Tracked in [#814](https://github.com/synaptent/aragora/issues/814). |
 | Decision-Integrity UI Workbench | **~90% done** | `(app)/decision-integrity/page.tsx` (910 lines), `(app)/leaderboard/page.tsx`, `(app)/knowledge/page.tsx` (1042 lines) all ship. Remaining: Canvas GUI 8-stage visual DAG (moved to P4). |
 | SOC 2 Type II audit engagement | Scope doc ready | 60+ controls implemented (98%); pentest scope doc v3.1.0 finalized; vendor shortlisted (NCC, Bishop Fox, Trail of Bits, Cure53). Blocker: vendor selection + engagement. |
-| Smart provider routing | **Phase 1 shipped** | PR #724: Pareto optimizer, 8-model pricing database, ProviderRouter. Runtime integration with Arena agent selection remaining. |
-| Enterprise Communication Hub (#293) | **Epic closed** | PR #726: template persistence, router event wiring, E2E tests. Delivery log, retry queue, circuit breakers, event telemetry, user preference UI, Active Triage dashboard, TriageRulesPanel all shipped. Remaining: inbox→debate trigger wiring end-to-end validation. |
+| Smart provider routing | **Phase 1 shipped** | PR #724: Pareto optimizer, 8-model pricing database, ProviderRouter. Runtime integration with Arena agent selection remaining. Tracked in [#813](https://github.com/synaptent/aragora/issues/813). |
+| Enterprise Communication Hub (#293) | **Epic closed** | PR #726: template persistence, router event wiring, E2E tests. Delivery log, retry queue, circuit breakers, event telemetry, user preference UI, Active Triage dashboard, TriageRulesPanel all shipped. Remaining: inbox→debate trigger wiring end-to-end validation, tracked in [#817](https://github.com/synaptent/aragora/issues/817). |
 
 ---
 
@@ -59,7 +60,7 @@
 | Skills Marketplace pilot | Scaffolding | SkillRegistry + SkillMarketplace code exists; no public marketplace endpoint. |
 | On-premise deployment productization | Partial | Docker Compose + Helm chart exist; on-prem installer/wizard not built. |
 | International expansion / EU data residency | Not started | Data residency controls needed for EU enterprise buyers. |
-| 10+ agent coordinated debates | Scaffolding | Current practical limit: 2-6 agents. Coordination infrastructure exists; scale testing needed. |
+| 10+ agent coordinated debates | Scaffolding | Current practical limit: 2-6 agents. Coordination infrastructure exists; scale testing needed. Tracked in [#815](https://github.com/synaptent/aragora/issues/815). |
 | Compute escrow mechanism | Not started | Settlement stakes via crypto compute escrow. Design in docs/plans/. |
 
 ---

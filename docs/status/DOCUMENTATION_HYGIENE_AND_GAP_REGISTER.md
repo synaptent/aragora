@@ -1,8 +1,10 @@
 # Documentation Hygiene And Gap Register
 
-Last updated: 2026-03-06
+Last updated: 2026-03-07
 
 This register is the working record for documentation cleanup, roadmap extraction, and code-vs-doc drift found during the March 2026 hygiene pass.
+
+The live execution backlog now tracks in [ACTIVE_EXECUTION_ISSUES.md](ACTIVE_EXECUTION_ISSUES.md) and the linked GitHub issues. Current-source docs should point there for execution status instead of carrying standalone operational backlog.
 
 ## Scope
 
@@ -19,6 +21,7 @@ This register is the working record for documentation cleanup, roadmap extractio
 - Regenerated `docs/CAPABILITY_MATRIX.md` and `docs-site/docs/contributing/capability-matrix.md` from the YAML source of truth.
 - Added discoverability links for status, roadmap, gap, and hygiene docs from the main indexes.
 - Marked legacy snapshot docs as non-canonical where they were being presented as live status.
+- Canonicalized the current execution program into GitHub issues and added `docs/status/ACTIVE_EXECUTION_ISSUES.md` as the issue map for epics `#804`-`#806`, execution lanes `#807`-`#820`, and assurance issues `#273`, `#274`, `#509`.
 
 ## Validation Snapshot
 
@@ -47,7 +50,7 @@ This register is the working record for documentation cleanup, roadmap extractio
 ### Current Focus (March 2026)
 
 - Closed-loop backbone, inbox trust wedge, swarm supervision, provider routing phase 1, Comms Hub completion, and OpenClaw core-loop delivery are treated as shipped in `docs/status/STATUS.md`.
-- Canonical execution priorities are operational hardening, registry/doc drift control, SDK/version alignment, self-host readiness, and pentest closure in `docs/status/NEXT_STEPS_CANONICAL.md`.
+- Canonical execution priorities are now linked directly to the GitHub backlog: truthfulness/backlog canonicalization (`#804`, `#807`-`#809`), Decision Integrity Kernel unification (`#805`, `#810`-`#816`), and sequential surface productization (`#806`, `#817`-`#820`) in `docs/status/NEXT_STEPS_CANONICAL.md` and `docs/status/ACTIVE_EXECUTION_ISSUES.md`.
 - The active six-week plan is wedge/PMF-focused: first receipt quickly, parity hard-close, reliability cleanup, surface simplification, and status consolidation in `docs/status/EXECUTION_NEXT_6_WEEKS_2026-03-05.md`.
 
 ### Near-Term Goals (Q2 2026)
@@ -96,3 +99,4 @@ This register is the working record for documentation cleanup, roadmap extractio
 - Historical, pricing, investor, and outreach collateral still contains stale counts in places and was not bulk-rewritten in this pass.
 - Duplicate current-status surfaces still exist for compatibility and should eventually be consolidated into pointer docs once inbound links are audited.
 - A follow-up sweep should normalize current SDK, RBAC, and adapter counts across commercial and enterprise collateral.
+- Future execution-lane changes should update the GitHub issues first, then refresh `ACTIVE_EXECUTION_ISSUES.md` and the linked planning summaries.
