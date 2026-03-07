@@ -8,10 +8,13 @@ Provides metrics for RLM compression, queries, caching, and refinement.
 import logging
 import time
 from functools import wraps
-from typing import Any
+from typing import ParamSpec, TypeVar
 from collections.abc import Callable
+from collections.abc import Awaitable
 
 logger = logging.getLogger(__name__)
+P = ParamSpec("P")
+R = TypeVar("R")
 
 from aragora.server.prometheus import (
     PROMETHEUS_AVAILABLE,
@@ -214,7 +217,9 @@ def record_rlm_ready_false(iteration: int) -> None:
         )
 
 
-def timed_rlm_compression(source_type: str) -> Callable[[Callable], Callable]:
+def timed_rlm_compression(
+    source_type: str,
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Async decorator to time RLM compression operations.
 
     Args:
@@ -229,9 +234,9 @@ def timed_rlm_compression(source_type: str) -> Callable[[Callable], Callable]:
             ...
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             start = time.perf_counter()
             success = True
             original_tokens = 0
@@ -269,7 +274,9 @@ def timed_rlm_compression(source_type: str) -> Callable[[Callable], Callable]:
     return decorator
 
 
-def timed_rlm_refinement(strategy: str = "auto") -> Callable[[Callable], Callable]:
+def timed_rlm_refinement(
+    strategy: str = "auto",
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Async decorator to time RLM refinement operations.
 
     Args:
@@ -284,9 +291,9 @@ def timed_rlm_refinement(strategy: str = "auto") -> Callable[[Callable], Callabl
             ...
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             start = time.perf_counter()
             iterations = 1
             success = False
