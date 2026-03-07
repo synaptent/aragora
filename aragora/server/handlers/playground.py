@@ -293,57 +293,123 @@ def _get_api_key(name: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 _TENTACLE_MODELS: list[dict[str, str]] = [
-    # All tentacles route through OpenRouter for unified billing and latest models
+    # Each tentacle tries its direct provider key first, falls back to OpenRouter.
+    # _get_available_tentacle_models resolves which key is available at runtime.
     {
-        "provider": "openrouter",
-        "model": "anthropic/claude-opus-4.6",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-6",
         "name": "claude",
-        "env": "OPENROUTER_API_KEY",
+        "env": "ANTHROPIC_API_KEY",
+        "openrouter_model": "anthropic/claude-sonnet-4-6",
     },
     {
-        "provider": "openrouter",
-        "model": "openai/gpt-5.3",
+        "provider": "openai",
+        "model": "gpt-4.1",
         "name": "gpt",
-        "env": "OPENROUTER_API_KEY",
+        "env": "OPENAI_API_KEY",
+        "openrouter_model": "openai/gpt-4.1",
     },
     {
-        "provider": "openrouter",
-        "model": "x-ai/grok-4.1-fast",
+        "provider": "xai",
+        "model": "grok-3-fast",
         "name": "grok",
-        "env": "OPENROUTER_API_KEY",
+        "env": "XAI_API_KEY",
+        "openrouter_model": "x-ai/grok-3-fast",
     },
     {
         "provider": "openrouter",
-        "model": "deepseek/deepseek-v3.2",
+        "model": "deepseek/deepseek-chat-v3-0324",
         "name": "deepseek",
         "env": "OPENROUTER_API_KEY",
+        "openrouter_model": "deepseek/deepseek-chat-v3-0324",
     },
     {
-        "provider": "openrouter",
-        "model": "google/gemini-2.5-pro",
+        "provider": "google",
+        "model": "gemini-2.5-flash",
         "name": "gemini",
-        "env": "OPENROUTER_API_KEY",
+        "env": "GEMINI_API_KEY",
+        "openrouter_model": "google/gemini-2.5-flash-preview",
     },
     {
         "provider": "openrouter",
-        "model": "mistralai/mistral-large",
+        "model": "mistralai/mistral-large-latest",
         "name": "mistral",
         "env": "OPENROUTER_API_KEY",
+        "openrouter_model": "mistralai/mistral-large-latest",
     },
 ]
 
 
 def _get_available_tentacle_models() -> list[dict[str, str]]:
-    """Return tentacle model configs for which API keys are present."""
+    """Return tentacle model configs for which API keys are present.
+
+    For each model, tries the direct provider key first.  If that key is
+    missing, falls back to the OpenRouter key so the model can still
+    participate via the ``openrouter_model`` mapping.
+    """
     seen_names: set[str] = set()
     available: list[dict[str, str]] = []
+    or_key = _get_api_key("OPENROUTER_API_KEY")
     for m in _TENTACLE_MODELS:
         if m["name"] in seen_names:
             continue
         if _get_api_key(m["env"]):
+            # Direct provider key available — use it (with OR fallback on failure)
             available.append(m)
             seen_names.add(m["name"])
+        elif or_key and m.get("openrouter_model"):
+            # No direct key, but OpenRouter available — route through OR
+            available.append(
+                {
+                    "provider": "openrouter",
+                    "model": m["openrouter_model"],
+                    "name": m["name"],
+                    "env": "OPENROUTER_API_KEY",
+                    "openrouter_model": m["openrouter_model"],
+                }
+            )
+            seen_names.add(m["name"])
     return available
+
+
+def _call_openrouter(
+    model: str,
+    prompt: str,
+    max_tokens: int = 1000,
+    timeout: float = 30.0,
+) -> str | None:
+    """Call OpenRouter directly.  Returns response text or None."""
+    key = _get_api_key("OPENROUTER_API_KEY")
+    if not key:
+        return None
+    try:
+        import openai
+
+        client = openai.OpenAI(
+            api_key=key,
+            base_url="https://openrouter.ai/api/v1",
+            timeout=timeout,
+        )
+        resp = client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        if resp.choices and resp.choices[0].message.content:
+            return resp.choices[0].message.content
+    except (
+        ImportError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        TypeError,
+        KeyError,
+        AttributeError,
+    ):
+        logger.warning("OpenRouter call failed (%s)", model, exc_info=True)
+    except Exception:
+        logger.warning("OpenRouter call failed (unexpected, %s)", model, exc_info=True)
+    return None
 
 
 def _call_provider_llm(
@@ -352,8 +418,38 @@ def _call_provider_llm(
     prompt: str,
     max_tokens: int = 1000,
     timeout: float = 30.0,
+    openrouter_model: str | None = None,
 ) -> str | None:
-    """Call a specific LLM provider. Returns response text or None."""
+    """Call a specific LLM provider.  Returns response text or None.
+
+    When *openrouter_model* is given and the direct provider call fails,
+    automatically retries through OpenRouter for resilience against
+    rate limits, billing exhaustion, or transient outages.
+    """
+    result = _call_provider_llm_direct(provider, model, prompt, max_tokens, timeout)
+    if result is not None:
+        return result
+
+    # Fallback: try OpenRouter if we have a mapping and weren't already using it
+    if provider != "openrouter" and openrouter_model:
+        logger.info(
+            "Direct %s call failed, falling back to OpenRouter (%s)",
+            provider,
+            openrouter_model,
+        )
+        return _call_openrouter(openrouter_model, prompt, max_tokens, timeout)
+
+    return None
+
+
+def _call_provider_llm_direct(
+    provider: str,
+    model: str,
+    prompt: str,
+    max_tokens: int = 1000,
+    timeout: float = 30.0,
+) -> str | None:
+    """Call a specific LLM provider directly (no fallback). Returns response text or None."""
     if provider == "anthropic":
         key = _get_api_key("ANTHROPIC_API_KEY")
         if not key:
@@ -443,37 +539,7 @@ def _call_provider_llm(
         return None
 
     if provider == "openrouter":
-        key = _get_api_key("OPENROUTER_API_KEY")
-        if not key:
-            return None
-        try:
-            import openai
-
-            or_client = openai.OpenAI(
-                api_key=key,
-                base_url="https://openrouter.ai/api/v1",
-                timeout=timeout,
-            )
-            or_resp = or_client.chat.completions.create(
-                model=model,
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            if or_resp.choices and or_resp.choices[0].message.content:
-                return or_resp.choices[0].message.content
-        except (
-            ImportError,
-            OSError,
-            RuntimeError,
-            ValueError,
-            TypeError,
-            KeyError,
-            AttributeError,
-        ):
-            logger.warning("OpenRouter tentacle call failed (%s)", model, exc_info=True)
-        except Exception:
-            logger.warning("OpenRouter tentacle call failed (%s)", model, exc_info=True)
-        return None
+        return _call_openrouter(model, prompt, max_tokens, timeout)
 
     if provider == "google":
         key = _get_api_key("GEMINI_API_KEY")
@@ -764,11 +830,25 @@ def _call_llm(
     if result:
         logger.info("Phase 1 via OpenRouter in %.1fs", time.monotonic() - t0)
         return result
-    result = _call_provider_llm("anthropic", _ORACLE_MODEL_ANTHROPIC, prompt, max_tokens, timeout)
+    result = _call_provider_llm(
+        "anthropic",
+        _ORACLE_MODEL_ANTHROPIC,
+        prompt,
+        max_tokens,
+        timeout,
+        openrouter_model=_ORACLE_MODEL_OPENROUTER,
+    )
     if result:
         logger.info("Phase 1 via Anthropic in %.1fs", time.monotonic() - t0)
         return result
-    result = _call_provider_llm("openai", _ORACLE_MODEL_OPENAI, prompt, max_tokens, timeout)
+    result = _call_provider_llm(
+        "openai",
+        _ORACLE_MODEL_OPENAI,
+        prompt,
+        max_tokens,
+        timeout,
+        openrouter_model="openai/gpt-4.1",
+    )
     if result:
         logger.info("Phase 1 via OpenAI in %.1fs", time.monotonic() - t0)
     return result
@@ -1057,6 +1137,7 @@ def _try_oracle_tentacles(
             prompt,
             max_tokens=800,
             timeout=45.0,
+            openrouter_model=model_cfg.get("openrouter_model"),
         )
         return model_cfg["name"], text
 
@@ -1101,6 +1182,9 @@ def _try_oracle_tentacles(
         iter(results.values())
     )
     debate_id = uuid.uuid4().hex[:16]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    receipt_id = f"LV-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
+    receipt_hash = hashlib.sha256(f"{receipt_id}:{question}:needs_review:0.7".encode()).hexdigest()
 
     return {
         "id": debate_id,
@@ -1118,6 +1202,28 @@ def _try_oracle_tentacles(
         "dissenting_views": [],
         "final_answer": final,
         "is_live": True,
+        "receipt": {
+            "receipt_id": receipt_id,
+            "question": question,
+            "verdict": "needs_review",
+            "confidence": 0.7,
+            "consensus": {
+                "reached": len(results) >= 2,
+                "method": "multi_perspective",
+                "confidence": 0.7,
+                "supporting_agents": participants,
+                "dissenting_agents": [],
+                "dissents": [],
+            },
+            "agents": participants,
+            "rounds_used": 1,
+            "claims": 0,
+            "evidence_count": 0,
+            "timestamp": now_iso,
+            "signature": receipt_hash,
+            "signature_algorithm": "SHA-256-content-hash",
+        },
+        "receipt_hash": receipt_hash,
     }
 
 

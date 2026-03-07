@@ -18,9 +18,13 @@ import pytest
 
 from aragora.compliance.eu_ai_act import (
     ANNEX_III_CATEGORIES,
+    Article10Artifact,
+    Article11Artifact,
     Article12Artifact,
     Article13Artifact,
     Article14Artifact,
+    Article43Artifact,
+    Article49Artifact,
     ArticleMapping,
     ComplianceArtifactBundle,
     ComplianceArtifactGenerator,
@@ -1076,3 +1080,130 @@ class TestArticle15Artifact:
         assert "accuracy_metrics" in d
         assert "robustness_score" in d
         assert "cryptographic_controls" in d
+
+
+# ---------------------------------------------------------------------------
+# Article 10 (Data Governance) tests
+# ---------------------------------------------------------------------------
+
+
+class TestArticle10Artifact:
+    def test_generate_default(self):
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art10(_MINIMAL_RECEIPT, "2026-03-06T00:00:00Z")
+        assert art.artifact_id.startswith("ART10-")
+        assert len(art.data_quality_measures) > 0
+
+    def test_generate_with_populated_fields(self):
+        receipt = {**_MINIMAL_RECEIPT, "data_sources": ["internal_db", "api_feed"]}
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art10(receipt, "2026-03-06T00:00:00Z")
+        assert art.data_sources == ["internal_db", "api_feed"]
+
+    def test_to_dict(self):
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art10(_MINIMAL_RECEIPT, "2026-03-06T00:00:00Z")
+        d = art.to_dict()
+        assert "data_sources" in d
+        assert "bias_detection_methods" in d
+
+    def test_bundle_includes_article10(self):
+        gen = ComplianceArtifactGenerator()
+        bundle = gen.generate(_MINIMAL_RECEIPT)
+        assert bundle.article_10 is not None
+        assert bundle.article_10.artifact_id.startswith("ART10-")
+
+
+# ---------------------------------------------------------------------------
+# Article 11 (Technical Documentation) tests
+# ---------------------------------------------------------------------------
+
+
+class TestArticle11Artifact:
+    def test_generate_default(self):
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art11(_MINIMAL_RECEIPT, "2026-03-06T00:00:00Z")
+        assert art.artifact_id.startswith("ART11-")
+        assert "Aragora" in art.system_description
+
+    def test_generate_with_populated_fields(self):
+        receipt = {**_MINIMAL_RECEIPT, "system_description": "Custom AI system"}
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art11(receipt, "2026-03-06T00:00:00Z")
+        assert art.system_description == "Custom AI system"
+
+    def test_to_dict(self):
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art11(_MINIMAL_RECEIPT, "2026-03-06T00:00:00Z")
+        d = art.to_dict()
+        assert "system_description" in d
+        assert "performance_metrics" in d
+
+    def test_bundle_includes_article11(self):
+        gen = ComplianceArtifactGenerator()
+        bundle = gen.generate(_MINIMAL_RECEIPT)
+        assert bundle.article_11 is not None
+
+
+# ---------------------------------------------------------------------------
+# Article 43 (Conformity Assessment) tests
+# ---------------------------------------------------------------------------
+
+
+class TestArticle43Artifact:
+    def test_generate_default(self):
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art43(_MINIMAL_RECEIPT, "2026-03-06T00:00:00Z")
+        assert art.artifact_id.startswith("ART43-")
+        assert art.assessment_type == "internal"
+
+    def test_generate_with_populated_fields(self):
+        receipt = {**_MINIMAL_RECEIPT, "assessment_type": "third_party", "assessor": "NCC Group"}
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art43(receipt, "2026-03-06T00:00:00Z")
+        assert art.assessment_type == "third_party"
+        assert art.assessor == "NCC Group"
+
+    def test_to_dict(self):
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art43(_MINIMAL_RECEIPT, "2026-03-06T00:00:00Z")
+        d = art.to_dict()
+        assert "standards_applied" in d
+        assert "conformity_status" in d
+
+    def test_bundle_includes_article43(self):
+        gen = ComplianceArtifactGenerator()
+        bundle = gen.generate(_MINIMAL_RECEIPT)
+        assert bundle.article_43 is not None
+
+
+# ---------------------------------------------------------------------------
+# Article 49 (Registration) tests
+# ---------------------------------------------------------------------------
+
+
+class TestArticle49Artifact:
+    def test_generate_default(self):
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art49(_MINIMAL_RECEIPT, "2026-03-06T00:00:00Z")
+        assert art.artifact_id.startswith("ART49-")
+        assert "registration" in art.compliance_notes[0].lower()
+
+    def test_generate_with_populated_fields(self):
+        receipt = {**_MINIMAL_RECEIPT, "registration_id": "EU-2026-0001"}
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art49(receipt, "2026-03-06T00:00:00Z")
+        assert art.registration_id == "EU-2026-0001"
+        assert len(art.compliance_notes) == 0
+
+    def test_to_dict(self):
+        gen = ComplianceArtifactGenerator()
+        art = gen._generate_art49(_MINIMAL_RECEIPT, "2026-03-06T00:00:00Z")
+        d = art.to_dict()
+        assert "provider_info" in d
+        assert "system_purpose" in d
+
+    def test_bundle_includes_article49(self):
+        gen = ComplianceArtifactGenerator()
+        bundle = gen.generate(_MINIMAL_RECEIPT)
+        assert bundle.article_49 is not None
