@@ -419,7 +419,15 @@ class ScenarioComparator:
 
         results = matrix_result.results
         if not results:
-            return {"error": "No results to analyze"}
+            return {
+                "error": "No results to analyze",
+                "outcome_category": OutcomeCategory.INCONCLUSIVE.value,
+                "total_scenarios": 0,
+                "avg_similarity": 0.0,
+                "universal_conclusions": [],
+                "conditional_patterns": {},
+                "comparisons": [],
+            }
 
         # Compare all pairs
         comparisons = []

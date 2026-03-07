@@ -293,6 +293,43 @@ async def test_structured_proposal_header_takes_priority_over_other_action_menti
 
 
 @pytest.mark.asyncio
+async def test_emphasized_action_header_preserves_archive_under_manual_review():
+    gmail = _DummyGmail()
+    wedge_service = SimpleNamespace()
+    wedge_service.execute_receipt = AsyncMock()
+    wedge_service.create_receipt = MagicMock(
+        side_effect=lambda intent, decision, auto_approve=False: _make_envelope(
+            decision,
+            receipt_id="receipt-emphasized",
+            state=ReceiptState.APPROVED if auto_approve else ReceiptState.CREATED,
+        )
+    )
+
+    runner = InboxTriageRunner(gmail_connector=gmail, wedge_service=wedge_service)
+    runner._run_debate = AsyncMock(
+        return_value=DebateResult(
+            debate_id="debate-emphasized",
+            final_answer=(
+                "## ACTION: **ARCHIVE**\n\n"
+                "Alternatives considered: ignore, star, or label depending on follow-up needs."
+            ),
+            confidence=0.5,
+            consensus_reached=False,
+        )
+    )
+
+    decisions = await runner.run_triage(batch_size=1, auto_approve=True)
+
+    decision = decisions[0]
+    assert wedge_service.create_receipt.call_args.kwargs["auto_approve"] is False
+    assert decision.final_action == InboxWedgeAction.ARCHIVE
+    assert decision.blocked_by_policy is True
+    assert "No consensus reached" in decision.dissent_summary
+    assert "fell back to ignore" not in decision.dissent_summary
+    wedge_service.execute_receipt.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_word_form_action_parsing_preserves_archive():
     gmail = _DummyGmail()
     wedge_service = SimpleNamespace()

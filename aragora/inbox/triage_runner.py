@@ -44,7 +44,7 @@ _DECISION_LINE_PATTERNS = [
     re.compile(
         r"(?im)^\s*(?:#+\s*)?"
         r"(?:proposal|recommended action|recommendation|action|final action)\s*:\s*"
-        r"(archive|star|label|ignore)\b"
+        r"(?:\*\*|__)?(archive|star|label|ignore)(?:\*\*|__)?\b"
     ),
 ]
 

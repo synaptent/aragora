@@ -44,6 +44,50 @@ from enum import Enum
 from pathlib import Path
 
 
+def _find_repo_root(start: Path) -> Path | None:
+    """Return the nearest parent that contains a Git marker."""
+    current = start.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def _read_worktree_gitdir(repo_root: Path) -> Path | None:
+    """Resolve the per-worktree gitdir target when running in a linked worktree."""
+    git_marker = repo_root / ".git"
+    if not git_marker.is_file():
+        return None
+
+    try:
+        raw = git_marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+    prefix = "gitdir:"
+    if not raw.startswith(prefix):
+        return None
+
+    gitdir = Path(raw[len(prefix) :].strip())
+    if not gitdir.is_absolute():
+        gitdir = (repo_root / gitdir).resolve()
+    return gitdir.resolve()
+
+
+def _linked_worktree_data_dir(start: Path | None = None) -> Path | None:
+    """Return a stable runtime data dir for a linked worktree, if applicable."""
+    repo_root = _find_repo_root(start or Path.cwd())
+    if repo_root is None:
+        return None
+
+    gitdir = _read_worktree_gitdir(repo_root)
+    if gitdir is None or gitdir.parent.name != "worktrees":
+        return None
+
+    common_git_dir = gitdir.parent.parent
+    return common_git_dir / "aragora" / "data" / gitdir.name
+
+
 class DatabaseType(Enum):
     """Enumeration of all database types in Aragora."""
 
@@ -99,6 +143,10 @@ def get_default_data_dir() -> Path:
     env_dir = os.environ.get("ARAGORA_DATA_DIR") or os.environ.get("ARAGORA_NOMIC_DIR")
     if env_dir:
         return Path(env_dir)
+
+    worktree_data_dir = _linked_worktree_data_dir()
+    if worktree_data_dir is not None:
+        return worktree_data_dir
 
     # Prefer existing .nomic/ for backwards compatibility, otherwise use data/
     nomic_dir = Path(".nomic")

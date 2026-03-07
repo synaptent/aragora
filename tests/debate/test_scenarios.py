@@ -959,7 +959,10 @@ class TestScenarioComparator:
 
         analysis = comparator.analyze_matrix(matrix_result)
 
-        assert analysis == {"error": "No results to analyze"}
+        assert analysis["error"] == "No results to analyze"
+        assert analysis["outcome_category"] == "inconclusive"
+        assert analysis["total_scenarios"] == 0
+        assert analysis["universal_conclusions"] == []
 
     def test_analyze_matrix_consistent_outcomes(self):
         """Test analyzing matrix with consistent outcomes."""
@@ -1623,19 +1626,19 @@ class TestEdgeCases:
 
     @pytest.mark.asyncio
     async def test_runner_empty_matrix(self):
-        """Test running with empty matrix raises KeyError due to empty analysis."""
+        """Test running with empty matrix falls back to inconclusive analysis."""
         mock_func = AsyncMock()
         runner = MatrixDebateRunner(mock_func, max_parallel=1)
 
         matrix = ScenarioMatrix()  # Empty matrix
 
-        # With empty results, analyze_matrix returns {"error": "No results to analyze"}
-        # which doesn't have 'outcome_category', causing a KeyError in run_matrix
-        with pytest.raises(KeyError):
-            await runner.run_matrix("Empty matrix test", matrix)
+        result = await runner.run_matrix("Empty matrix test", matrix)
 
         # The debate function should never have been called
         assert mock_func.call_count == 0
+        assert result.outcome_category == OutcomeCategory.INCONCLUSIVE
+        assert result.results == []
+        assert "Scenarios Analyzed**: 0" in result.summary
 
     def test_scenario_special_characters_in_replacements(self):
         """Test context replacements with special characters."""

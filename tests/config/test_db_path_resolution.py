@@ -17,6 +17,41 @@ def _reload_for_data_dir(tmp_path, monkeypatch):
     return legacy, schema
 
 
+def _run(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        list(args),
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return _run(cwd, "git", *args)
+
+
+def _make_git_repo_with_linked_worktree(tmp_path: Path) -> tuple[Path, Path, Path]:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "Test User")
+    (repo / "README.md").write_text("hello\n")
+    _git(repo, "add", "README.md")
+    _git(repo, "commit", "-m", "initial")
+
+    linked = tmp_path / "linked-worktree"
+    _git(repo, "worktree", "add", "-b", "feature/test", str(linked), "main")
+
+    common_dir = _git(repo, "rev-parse", "--git-common-dir").stdout.strip()
+    common_dir_path = Path(common_dir)
+    if not common_dir_path.is_absolute():
+        common_dir_path = (repo / common_dir_path).resolve()
+
+    return repo, linked, common_dir_path
+
+
 def test_resolve_db_path_uses_data_dir(tmp_path, monkeypatch):
     legacy, _schema = _reload_for_data_dir(tmp_path, monkeypatch)
     resolved = Path(legacy.resolve_db_path("example.db"))
@@ -87,6 +122,19 @@ def test_get_nomic_dir_prefers_nomic_over_data(tmp_path, monkeypatch):
     assert db_config.get_nomic_dir() == Path(".nomic")
 
 
+def test_get_nomic_dir_uses_git_common_dir_for_linked_worktree(tmp_path, monkeypatch):
+    _repo, linked, common_dir = _make_git_repo_with_linked_worktree(tmp_path)
+
+    monkeypatch.delenv("ARAGORA_DATA_DIR", raising=False)
+    monkeypatch.delenv("ARAGORA_NOMIC_DIR", raising=False)
+    monkeypatch.chdir(linked)
+
+    import aragora.persistence.db_config as db_config
+
+    db_config = importlib.reload(db_config)
+    assert db_config.get_nomic_dir() == common_dir / "aragora" / "data" / linked.name
+
+
 def test_resolve_db_path_absolute_passthrough():
     """Absolute paths should be returned as-is."""
     import aragora.config.legacy as legacy
@@ -107,6 +155,20 @@ def test_resolve_db_path_file_uri_passthrough():
     import aragora.config.legacy as legacy
 
     assert legacy.resolve_db_path("file:test?mode=memory").startswith("file:")
+
+
+def test_resolve_db_path_uses_git_common_dir_for_linked_worktree(tmp_path, monkeypatch):
+    _repo, linked, common_dir = _make_git_repo_with_linked_worktree(tmp_path)
+
+    monkeypatch.delenv("ARAGORA_DATA_DIR", raising=False)
+    monkeypatch.delenv("ARAGORA_NOMIC_DIR", raising=False)
+    monkeypatch.chdir(linked)
+
+    import aragora.config.legacy as legacy
+
+    legacy = importlib.reload(legacy)
+    resolved = Path(legacy.resolve_db_path("example.db"))
+    assert resolved == common_dir / "aragora" / "data" / linked.name / "example.db"
 
 
 def test_guard_repo_clean_scan_paths():
