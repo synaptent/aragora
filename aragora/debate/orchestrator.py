@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from types import TracebackType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 import warnings  # noqa: F401 - used for deprecation warnings in __init__
 
 from aragora.core import Agent, Critique, DebateResult, Environment, Message, Vote
@@ -820,17 +820,35 @@ class Arena(ArenaDelegatesMixin):
     # =========================================================================
 
     @classmethod
-    def from_config(cls, environment, agents, protocol=None, config=None) -> "Arena":
+    def from_config(
+        cls,
+        environment: Environment,
+        agents: list[Agent],
+        protocol: DebateProtocol | None = None,
+        config: Any | None = None,
+    ) -> "Arena":
         """Create an Arena from an ArenaConfig for cleaner dependency injection."""
         return _factory_from_config(cls, environment, agents, protocol, config)
 
     @classmethod
-    def from_configs(cls, environment, agents, protocol=None, **kwargs) -> "Arena":
+    def from_configs(
+        cls,
+        environment: Environment,
+        agents: list[Agent],
+        protocol: DebateProtocol | None = None,
+        **kwargs: Any,
+    ) -> "Arena":
         """Create an Arena from grouped config objects."""
         return _factory_from_configs(cls, environment, agents, protocol, **kwargs)
 
     @classmethod
-    def create(cls, environment, agents, protocol=None, **kwargs) -> "Arena":
+    def create(
+        cls,
+        environment: Environment,
+        agents: list[Agent],
+        protocol: DebateProtocol | None = None,
+        **kwargs: Any,
+    ) -> "Arena":
         """Create an Arena with a clean, consolidated interface."""
         return _factory_create(cls, environment, agents, protocol, **kwargs)
 
@@ -867,11 +885,11 @@ class Arena(ArenaDelegatesMixin):
 
     @property
     def user_votes(self) -> deque[dict[str, Any]]:
-        return self.audience_manager._votes
+        return cast(deque[dict[str, Any]], self.audience_manager._votes)
 
     @property
     def user_suggestions(self) -> deque[dict[str, Any]]:
-        return self.audience_manager._suggestions
+        return cast(deque[dict[str, Any]], self.audience_manager._suggestions)
 
     def _init_roles_and_stances(self) -> None:
         _roles_init_roles_and_stances(self)
@@ -1028,11 +1046,14 @@ class Arena(ArenaDelegatesMixin):
         self,
         debate_id: str | None = None,
         limit: int = 100,
-    ) -> list[dict]:
-        return await _cp_list_checkpoints(
-            checkpoint_manager=self.checkpoint_manager,
-            debate_id=debate_id,
-            limit=limit,
+    ) -> list[dict[str, Any]]:
+        return cast(
+            list[dict[str, Any]],
+            await _cp_list_checkpoints(
+                checkpoint_manager=self.checkpoint_manager,
+                debate_id=debate_id,
+                limit=limit,
+            ),
         )
 
     async def cleanup_checkpoints(self, debate_id: str, keep_latest: int = 1) -> int:
