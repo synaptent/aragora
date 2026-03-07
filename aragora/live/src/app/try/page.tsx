@@ -52,16 +52,16 @@ function TryPageInner() {
   const [progressStep, setProgressStep] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(0);
 
   // Cleanup on unmount
   useEffect(() => {
+    const elapsedInterval = elapsedIntervalRef.current;
+
     return () => {
       abortRef.current?.abort();
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-      if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
+      if (elapsedInterval) clearInterval(elapsedInterval);
     };
   }, []);
 
@@ -94,7 +94,6 @@ function TryPageInner() {
 
     const clearTimers = () => {
       stepTimers.forEach(clearTimeout);
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
       if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
     };
 
@@ -202,8 +201,6 @@ function TryPageInner() {
       setElapsed(0);
     }
   };
-
-  const currentStep = PROGRESS_STEPS[Math.min(progressStep, PROGRESS_STEPS.length - 1)];
 
   return (
     <>
