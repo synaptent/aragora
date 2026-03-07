@@ -825,40 +825,148 @@ async def execute_pipeline(
 ) -> PipelineCreateResponse:
     """Execute a completed pipeline's orchestration stage."""
     data = _get_result_or_404(pipeline_id)
+    data_dict = data.to_dict() if hasattr(data, "to_dict") else data
+    if not isinstance(data_dict, dict):
+        raise HTTPException(status_code=500, detail="Pipeline execution failed")
+
+    stage_status = data_dict.get("stage_status", {})
+    incomplete = [
+        stage
+        for stage in ("ideas", "goals", "actions", "orchestration")
+        if stage_status.get(stage) != "complete"
+    ]
+    orch = data_dict.get("orchestration", {}) if isinstance(data_dict, dict) else {}
+    orch_nodes = orch.get("nodes", []) if isinstance(orch, dict) else []
+    agent_tasks = [
+        node
+        for node in orch_nodes
+        if isinstance(node, dict) and node.get("data", {}).get("orch_type") == "agent_task"
+    ]
+
+    if body.sandbox:
+        logger.debug(
+            "Canvas pipeline execute requested sandbox mode for %s; canonical workflow runtime ignores the legacy sandbox flag",
+            pipeline_id,
+        )
+    if body.use_hardened_orchestrator:
+        logger.debug(
+            "Canvas pipeline execute requested hardened orchestrator for %s; routing through canonical DecisionPlan runtime instead",
+            pipeline_id,
+        )
+
+    if body.sandbox:
+        logger.debug("Sandbox execution flag ignored for canonical runtime on %s", pipeline_id)
+
+    if incomplete:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot execute: stages not complete: {', '.join(incomplete)}",
+        )
+
+    execution_state = data_dict.get("execution", {})
+    if isinstance(execution_state, dict) and execution_state.get("status") in {
+        "queued",
+        "running",
+        "executing",
+    }:
+        raise HTTPException(status_code=409, detail="Pipeline is already executing")
 
     try:
-        if body.use_hardened_orchestrator:
-            from aragora.nomic.hardened_orchestrator import HardenedOrchestrator
+        from aragora.pipeline.canonical_execution import (
+            build_decision_plan_from_orchestration,
+            execute_queued_plan,
+            queue_plan_execution,
+        )
 
-            orchestrator = HardenedOrchestrator()
-            execute_fn = getattr(
-                orchestrator, "execute", getattr(orchestrator, "execute_goal", None)
-            )
-            if execute_fn is None:
-                raise AttributeError("HardenedOrchestrator has no execute method")
-            exec_result = await execute_fn(data)
-            if hasattr(exec_result, "to_dict"):
-                return PipelineCreateResponse(
-                    pipeline_id=pipeline_id,
-                    stage_status={"orchestration": "complete"},
-                    stages_completed=1,
-                    result=exec_result.to_dict(),
+        plan, tasks = build_decision_plan_from_orchestration(
+            subject_id=pipeline_id,
+            subject_label=data_dict.get("name") or f"Pipeline {pipeline_id}",
+            nodes=orch_nodes,
+            edges=orch.get("edges", []) if isinstance(orch, dict) else [],
+            source_surface="fastapi_canvas_pipeline",
+            metadata={"pipeline_id": pipeline_id},
+            execution_mode="workflow",
+        )
+        launch = queue_plan_execution(plan, auth_context=auth, execution_mode="workflow")
+        data_dict["execution"] = {
+            **launch,
+            "runtime": "decision_plan",
+            "status": "queued",
+            "tasks_total": len(tasks),
+            "agent_tasks": len(agent_tasks),
+            "total_orchestration_nodes": len(orch_nodes),
+        }
+        _get_store().save(pipeline_id, data_dict)
+
+        async def _execute() -> None:
+            try:
+                data_dict["execution"]["status"] = "running"
+                _get_store().save(pipeline_id, data_dict)
+                outcome, record, decision_receipt = await execute_queued_plan(
+                    plan,
+                    execution_id=launch["execution_id"],
+                    correlation_id=launch["correlation_id"],
+                    auth_context=auth,
+                    execution_mode=launch["execution_mode"],
                 )
-        # Standard execution
-        from aragora.pipeline.idea_to_execution import IdeaToExecutionPipeline
+                receipt_bundle: dict[str, Any] = {
+                    "receipt_id": getattr(outcome, "receipt_id", None),
+                    "pipeline_id": pipeline_id,
+                    "plan_id": plan.id,
+                    "execution_id": launch["execution_id"],
+                    "correlation_id": launch["correlation_id"],
+                    "decision_receipt": decision_receipt,
+                }
+                try:
+                    from aragora.pipeline.receipt_generator import generate_pipeline_receipt
 
-        pipeline = IdeaToExecutionPipeline()
-        execute_fn = getattr(pipeline, "execute", None)
-        result = execute_fn(data, sandbox=body.sandbox) if execute_fn is not None else data
-        if hasattr(result, "pipeline_id"):
-            _store_result(result)
-            return _summarize_result(result)
+                    receipt_bundle["pipeline_receipt"] = await generate_pipeline_receipt(
+                        pipeline_id,
+                        {
+                            **(record or {}),
+                            "execution_id": launch["execution_id"],
+                            "correlation_id": launch["correlation_id"],
+                            "status": "completed" if outcome.success else "failed",
+                        },
+                    )
+                except (ImportError, RuntimeError, ValueError, TypeError, OSError) as exc:
+                    logger.debug("Pipeline provenance receipt generation skipped: %s", exc)
+
+                data_dict["execution"] = {
+                    **data_dict.get("execution", {}),
+                    "status": "completed" if outcome.success else "failed",
+                    "record": record,
+                    "outcome": outcome.to_dict(),
+                    "receipt_id": getattr(outcome, "receipt_id", None),
+                }
+                data_dict["receipt"] = receipt_bundle
+                _get_store().save(pipeline_id, data_dict)
+            except Exception as exc:  # noqa: BLE001 - background task must persist terminal failure
+                logger.error("Pipeline execute failed: %s", exc)
+                data_dict["execution"] = {
+                    **data_dict.get("execution", {}),
+                    "status": "failed",
+                    "error": str(exc),
+                }
+                _get_store().save(pipeline_id, data_dict)
+
+        asyncio.create_task(_execute())
 
         return PipelineCreateResponse(
             pipeline_id=pipeline_id,
-            stage_status={"orchestration": "complete"},
-            stages_completed=1,
-            result=result if isinstance(result, dict) else None,
+            stage_status=data_dict.get("stage_status", {}),
+            stages_completed=sum(
+                1 for value in data_dict.get("stage_status", {}).values() if value == "complete"
+            ),
+            result={
+                "status": "executing",
+                "runtime": "decision_plan",
+                "plan_id": plan.id,
+                "execution_id": launch["execution_id"],
+                "correlation_id": launch["correlation_id"],
+                "agent_tasks": len(agent_tasks),
+                "total_orchestration_nodes": len(orch_nodes),
+            },
         )
 
     except NotFoundError:
@@ -1097,13 +1205,19 @@ async def get_pipeline_graph(
 async def get_pipeline_receipt(pipeline_id: str) -> PipelineReceiptResponse:
     """Get the DecisionReceipt for a pipeline."""
     data = _get_result_or_404(pipeline_id)
+    data_dict = (
+        data.to_dict() if hasattr(data, "to_dict") else (data if isinstance(data, dict) else {})
+    )
+    if isinstance(data_dict, dict) and isinstance(data_dict.get("receipt"), dict):
+        return PipelineReceiptResponse(
+            pipeline_id=pipeline_id,
+            receipt=data_dict.get("receipt"),
+            has_receipt=True,
+        )
 
     try:
         from aragora.pipeline.receipt_generator import generate_pipeline_receipt
 
-        data_dict = (
-            data.to_dict() if hasattr(data, "to_dict") else (data if isinstance(data, dict) else {})
-        )
         receipt = await generate_pipeline_receipt(pipeline_id, data_dict)
         receipt_dict = receipt.to_dict() if hasattr(receipt, "to_dict") else receipt
         return PipelineReceiptResponse(

@@ -137,7 +137,54 @@ class PipelineExecuteHandler(BaseHandler):
                 {"description": g.description, "track": g.track.value, "priority": g.priority}
                 for g in goals
             ]
+            _executions[pipeline_id]["runtime"] = "decision_plan"
             return json_response(_executions[pipeline_id])
+
+        if use_hardened:
+            logger.debug(
+                "Pipeline execute requested hardened orchestrator for %s; routing through canonical DecisionPlan runtime instead",
+                pipeline_id,
+            )
+
+        from aragora.pipeline.canonical_execution import (
+            build_decision_plan_from_orchestration,
+            queue_plan_execution,
+        )
+
+        synthetic_nodes = [
+            {
+                "id": f"goal-{index}",
+                "label": goal.description,
+                "data": {
+                    "orch_type": "human_gate" if require_approval else "agent_task",
+                    "track": getattr(goal.track, "value", str(getattr(goal, "track", "core"))),
+                },
+            }
+            for index, goal in enumerate(goals, start=1)
+        ]
+        plan, tasks = build_decision_plan_from_orchestration(
+            subject_id=pipeline_id,
+            subject_label=f"Pipeline {pipeline_id}",
+            nodes=synthetic_nodes,
+            edges=[],
+            source_surface="pipeline_execute",
+            metadata={"pipeline_id": pipeline_id},
+            budget_limit_usd=budget_limit,
+            execution_mode="workflow",
+            require_task_approval=require_approval,
+        )
+        launch = queue_plan_execution(plan, execution_mode="workflow")
+        _executions[pipeline_id].update(
+            {
+                "status": "started",
+                "runtime": "decision_plan",
+                "plan_id": plan.id,
+                "execution_id": launch["execution_id"],
+                "correlation_id": launch["correlation_id"],
+                "record_status": launch["status"],
+                "tasks_total": len(tasks),
+            }
+        )
 
         # Start background execution
         task = asyncio.create_task(
@@ -148,7 +195,15 @@ class PipelineExecuteHandler(BaseHandler):
         _execution_tasks[pipeline_id] = task
 
         return json_response(
-            {"pipeline_id": pipeline_id, "cycle_id": cycle_id, "status": "started"},
+            {
+                "pipeline_id": pipeline_id,
+                "cycle_id": cycle_id,
+                "status": "started",
+                "runtime": "decision_plan",
+                "plan_id": plan.id,
+                "execution_id": launch["execution_id"],
+                "correlation_id": launch["correlation_id"],
+            },
             status=202,
         )
 
@@ -221,101 +276,120 @@ class PipelineExecuteHandler(BaseHandler):
         require_approval: bool,
         use_hardened: bool = False,
     ) -> None:
-        """Execute pipeline goals via SelfImprovePipeline or HardenedOrchestrator."""
+        """Execute pipeline goals via the canonical DecisionPlan runtime."""
         # Wire WebSocket emitter for real-time progress
         emitter = _get_emitter()
-
-        # Route through HardenedOrchestrator for full safety-gated execution
-        if use_hardened:
-            await self._execute_via_hardened(
-                pipeline_id, cycle_id, goals, budget_limit, require_approval, emitter
-            )
-            return
-
+        execution_state = _executions.get(pipeline_id, {})
         try:
-            from aragora.nomic.self_improve import SelfImproveConfig, SelfImprovePipeline
+            from aragora.pipeline.canonical_execution import (
+                build_decision_plan_from_orchestration,
+                execute_queued_plan,
+                queue_plan_execution,
+            )
+            from aragora.pipeline.plan_store import get_plan_store
+
+            plan = None
+            plan_id = execution_state.get("plan_id")
+            execution_id = execution_state.get("execution_id")
+            correlation_id = execution_state.get("correlation_id")
+            if not plan_id or not execution_id or not correlation_id:
+                synthetic_nodes = [
+                    {
+                        "id": f"goal-{index}",
+                        "label": getattr(goal, "description", f"Goal {index}"),
+                        "data": {
+                            "orch_type": "human_gate" if require_approval else "agent_task",
+                        },
+                    }
+                    for index, goal in enumerate(goals, start=1)
+                ]
+                plan, _tasks = build_decision_plan_from_orchestration(
+                    subject_id=pipeline_id,
+                    subject_label=f"Pipeline {pipeline_id}",
+                    nodes=synthetic_nodes,
+                    edges=[],
+                    source_surface="pipeline_execute",
+                    metadata={"pipeline_id": pipeline_id},
+                    budget_limit_usd=budget_limit,
+                    execution_mode="workflow",
+                    require_task_approval=require_approval,
+                )
+                launch = queue_plan_execution(plan, execution_mode="workflow")
+                execution_state.update(
+                    {
+                        "runtime": "decision_plan",
+                        "plan_id": plan.id,
+                        "execution_id": launch["execution_id"],
+                        "correlation_id": launch["correlation_id"],
+                        "record_status": launch["status"],
+                    }
+                )
+                plan_id = launch["plan_id"]
+                execution_id = launch["execution_id"]
+                correlation_id = launch["correlation_id"]
+
+            store = get_plan_store()
+            plan = store.get(str(plan_id)) or plan
+            if plan is None:
+                raise ValueError(f"Plan not found: {plan_id}")
 
             if emitter:
                 await emitter.emit_started(
                     pipeline_id,
                     {
                         "cycle_id": cycle_id,
+                        "plan_id": plan_id,
+                        "execution_id": execution_id,
                         "goal_count": len(goals),
                     },
                 )
 
-            # Build combined goal description from all orchestration nodes
-            combined_goal = "; ".join(g.description for g in goals[:10])
-
-            # Create progress callback that bridges to WebSocket events
-            event_callback = emitter.as_event_callback(pipeline_id) if emitter else None
-
-            def progress_callback(event: str, data: dict[str, Any]) -> None:
-                # Update in-memory execution state from progress events
-                if event == "stage_started":
-                    _executions[pipeline_id]["current_stage"] = data.get("stage", "")
-                elif event == "step_progress":
-                    _executions[pipeline_id]["progress"] = data.get("progress", 0)
-                # Forward to WebSocket emitter
-                if event_callback:
-                    event_callback(event, data)
-
-            config = SelfImproveConfig(
-                budget_limit_usd=budget_limit or 10.0,
-                require_approval=require_approval,
-                autonomous=not require_approval,
-                max_goals=len(goals),
-                progress_callback=progress_callback,
+            _executions[pipeline_id]["status"] = "running"
+            outcome, record, decision_receipt = await execute_queued_plan(
+                plan,
+                execution_id=str(execution_id),
+                correlation_id=str(correlation_id),
+                execution_mode="workflow",
             )
-            pipeline = SelfImprovePipeline(config=config)
-            result = await pipeline.run(combined_goal)
+            receipt_bundle: dict[str, Any] = decision_receipt or {}
+            try:
+                from aragora.pipeline.receipt_generator import generate_pipeline_receipt
 
+                receipt_bundle = {
+                    **receipt_bundle,
+                    "pipeline_receipt": await generate_pipeline_receipt(
+                        pipeline_id,
+                        {
+                            **(record or {}),
+                            "execution_id": execution_id,
+                            "correlation_id": correlation_id,
+                            "status": "completed" if outcome.success else "failed",
+                        },
+                    ),
+                }
+            except (ImportError, RuntimeError, ValueError, TypeError, OSError) as exc:
+                logger.debug("Pipeline provenance receipt generation skipped: %s", exc)
             _executions[pipeline_id].update(
                 {
-                    "status": "completed" if result.subtasks_completed > 0 else "failed",
+                    "status": "completed" if outcome.success else "failed",
                     "completed_at": datetime.now(timezone.utc).isoformat(),
-                    "total_subtasks": result.subtasks_total,
-                    "completed_subtasks": result.subtasks_completed,
-                    "failed_subtasks": result.subtasks_failed,
+                    "total_subtasks": outcome.tasks_total,
+                    "completed_subtasks": outcome.tasks_completed,
+                    "failed_subtasks": max(0, outcome.tasks_total - outcome.tasks_completed),
+                    "record": record,
+                    "outcome": outcome.to_dict(),
+                    "receipt": receipt_bundle or decision_receipt,
                 }
             )
 
             if emitter:
-                final_status = _executions[pipeline_id]["status"]
-                if final_status == "completed":
+                if outcome.success:
                     await emitter.emit_completed(pipeline_id, _executions[pipeline_id])
                 else:
-                    await emitter.emit_failed(pipeline_id, "No subtasks completed")
-
-            # Create convoy linking pipeline artifacts (best-effort)
-            try:
-                from aragora.workspace.convoy import ConvoyTracker
-
-                convoy_id = f"convoy-{uuid.uuid4().hex[:12]}"
-                tracker = ConvoyTracker()
-                convoy = await tracker.create_convoy(
-                    workspace_id=pipeline_id,
-                    rig_id=pipeline_id,
-                    name=f"Pipeline execution: {combined_goal[:80]}",
-                    bead_ids=[f"pipeline:{pipeline_id}", f"cycle:{cycle_id}"],
-                    convoy_id=convoy_id,
-                    metadata={
-                        "pipeline_id": pipeline_id,
-                        "cycle_id": cycle_id,
-                        "status": _executions[pipeline_id].get("status", "unknown"),
-                    },
-                )
-                _executions[pipeline_id]["convoy_id"] = convoy.convoy_id
-            except (ImportError, RuntimeError, ValueError, OSError, TypeError, AttributeError) as e:
-                logger.debug("Convoy creation skipped: %s", type(e).__name__)
-
-            # Generate provenance receipt
-            try:
-                from aragora.pipeline.receipt_generator import generate_pipeline_receipt
-
-                await generate_pipeline_receipt(pipeline_id, _executions[pipeline_id])
-            except (ImportError, RuntimeError, ValueError, OSError) as e:
-                logger.debug("Receipt generation skipped: %s", type(e).__name__)
+                    await emitter.emit_failed(
+                        pipeline_id,
+                        outcome.error or "Pipeline execution failed",
+                    )
 
         except asyncio.CancelledError:
             _executions[pipeline_id].update(
@@ -326,28 +400,17 @@ class PipelineExecuteHandler(BaseHandler):
             )
             if emitter:
                 await emitter.emit_failed(pipeline_id, "Pipeline cancelled")
-        except ImportError:
-            logger.debug("SelfImprovePipeline not available")
+        except Exception as e:  # noqa: BLE001 - background execution must preserve error state
+            logger.error("Pipeline execution failed: %s", e)
             _executions[pipeline_id].update(
                 {
                     "status": "failed",
-                    "error": "Self-improvement pipeline not available",
+                    "error": str(e),
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                 }
             )
             if emitter:
-                await emitter.emit_failed(pipeline_id, "Self-improvement pipeline not available")
-        except (RuntimeError, ValueError, TypeError, OSError) as e:
-            logger.error("Pipeline execution failed: %s", type(e).__name__)
-            _executions[pipeline_id].update(
-                {
-                    "status": "failed",
-                    "error": "Pipeline execution failed",
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-            if emitter:
-                await emitter.emit_failed(pipeline_id, "Pipeline execution failed")
+                await emitter.emit_failed(pipeline_id, str(e))
         finally:
             _execution_tasks.pop(pipeline_id, None)
 
