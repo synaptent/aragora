@@ -1,13 +1,15 @@
 """
 CLI demo command -- run a self-contained adversarial debate in one command.
 
-No API keys required.  Uses StyledMockAgent from the aragora-debate package
-to simulate a realistic multi-perspective debate with real-time output.
+When API keys are available, uses real LLM models for a genuine multi-agent
+debate.  Falls back to mock agents when no keys are present or --offline is
+passed.
 
 Usage:
-    aragora demo                          # Default: microservices debate
+    aragora demo                          # Real debate (if API keys set)
     aragora demo --topic "Should we use Kubernetes?"
     aragora demo --list                   # Show available demos
+    aragora demo --offline                # Force offline mock agents
     aragora demo --server                 # Start offline server and open browser
 """
 
@@ -15,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 import time
 from pathlib import Path
@@ -488,6 +491,114 @@ def _run_server_demo() -> None:
 
 
 # ---------------------------------------------------------------------------
+# API key detection and real-model support
+# ---------------------------------------------------------------------------
+
+
+def _has_any_api_key() -> bool:
+    """Check if any LLM API key is available."""
+    return bool(
+        os.environ.get("OPENROUTER_API_KEY")
+        or os.environ.get("ANTHROPIC_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+    )
+
+
+def _run_real_demo(topic: str) -> None:
+    """Run a real 1-round debate via available API keys with budget cap."""
+    print()
+    print("=" * 64)
+    print("  ARAGORA DEMO — Real AI Debate")
+    print("=" * 64)
+    print()
+    print(f"  Topic: {topic}")
+    print("  Using real AI models via API...")
+    print()
+
+    try:
+        from aragora.server.handlers.playground import start_playground_debate
+
+        start_time = time.monotonic()
+        result = start_playground_debate(
+            question=topic,
+            agent_count=3,
+            max_rounds=1,
+            timeout=30,
+        )
+        elapsed = time.monotonic() - start_time
+
+        # Print results
+        print(f"  Status: {result.get('status', 'completed')}")
+        print(f"  Duration: {elapsed:.1f}s")
+        print(f"  Consensus: {result.get('consensus_reached', False)}")
+        print(f"  Confidence: {result.get('confidence', 0):.0%}")
+        print()
+
+        participants = result.get("participants", [])
+        if participants:
+            print(f"  Participants: {', '.join(str(p) for p in participants)}")
+            print()
+
+        proposals = result.get("proposals", {})
+        if isinstance(proposals, dict):
+            for agent_name, text in proposals.items():
+                print(f"  [{agent_name}]")
+                for line in _wrap(str(text)[:300], width=58):
+                    print(f"    {line}")
+                print()
+
+        final = result.get("final_answer", "")
+        if final:
+            print("  CONCLUSION:")
+            print("  " + "-" * 40)
+            for line in _wrap(str(final), width=58):
+                print(f"    {line}")
+            print()
+
+        print("=" * 64)
+        print()
+
+    except Exception as exc:
+        print(f"  Debate failed: {exc}")
+        print("  Try 'aragora demo --offline' for an offline demo.")
+        print()
+
+
+def _run_mock_demo(args: argparse.Namespace) -> None:
+    """Run the offline mock demo using aragora-debate package or builtin."""
+    if not HAS_ARAGORA_DEBATE:
+        print()
+        print("  Running in offline mode (no aragora-debate package).")
+        print("  Set OPENROUTER_API_KEY for real AI debates.")
+        print()
+        # Simple inline mock output
+        topic = getattr(args, "topic", None) or DEMO_TASKS.get(
+            getattr(args, "name", None) or _DEFAULT_DEMO, {}
+        ).get("topic", "Should we adopt microservices?")
+        print(f"  Topic: {topic}")
+        print("  [Mock] Analyst: Considers multiple perspectives...")
+        print("  [Mock] Critic: Identifies potential issues...")
+        print("  [Mock] Synthesizer: Finds common ground...")
+        print()
+        print("  Verdict: CONSENSUS REACHED (mock)")
+        print("  Confidence: 75%")
+        print()
+        return
+
+    # Use existing aragora-debate based logic
+    receipt_path = getattr(args, "receipt", None)
+    custom_topic = getattr(args, "topic", None)
+    if custom_topic:
+        result, elapsed = asyncio.run(_run_demo_debate(custom_topic))
+        if receipt_path:
+            _save_demo_receipt(result, elapsed, receipt_path)
+        return
+
+    demo_name = getattr(args, "name", None) or _DEFAULT_DEMO
+    run_demo(demo_name, receipt_path=receipt_path)
+
+
+# ---------------------------------------------------------------------------
 # CLI entry points
 # ---------------------------------------------------------------------------
 
@@ -519,11 +630,6 @@ def run_demo(
 
 def main(args: argparse.Namespace) -> None:
     """Handle 'demo' command."""
-    if not HAS_ARAGORA_DEBATE:
-        print("Error: aragora-debate package is not installed.")
-        print("Install it with: pip install aragora-debate")
-        sys.exit(1)
-
     # --list flag
     if getattr(args, "list_demos", False):
         print("\nAvailable demos:")
@@ -538,20 +644,26 @@ def main(args: argparse.Namespace) -> None:
         _run_server_demo()
         return
 
-    receipt_path = getattr(args, "receipt", None)
+    # Determine topic
+    topic = getattr(args, "topic", None)
+    if not topic:
+        demo_name = getattr(args, "name", None) or _DEFAULT_DEMO
+        topic = DEMO_TASKS.get(demo_name, {}).get(
+            "topic", "Should we adopt microservices or keep our monolith?"
+        )
 
-    # Custom topic via --topic
-    custom_topic = getattr(args, "topic", None)
-    if custom_topic:
-        result, elapsed = asyncio.run(_run_demo_debate(custom_topic))
-        if receipt_path:
-            saved = _save_demo_receipt(result, elapsed, receipt_path)
-            print(f"\n  Receipt saved to: {saved}")
+    # --offline flag: always use mock
+    if getattr(args, "offline", False):
+        _run_mock_demo(args)
         return
 
-    # Named demo (or default)
-    demo_name = getattr(args, "name", None) or _DEFAULT_DEMO
-    run_demo(demo_name, receipt_path=receipt_path)
+    # Real debate if API keys available
+    if _has_any_api_key():
+        _run_real_demo(topic)
+    else:
+        print("\n  No API keys found. Running offline demo.")
+        print("  Set OPENROUTER_API_KEY for real AI debates.\n")
+        _run_mock_demo(args)
 
 
 if __name__ == "__main__":
@@ -577,5 +689,10 @@ if __name__ == "__main__":
         "--server",
         action="store_true",
         help="Start server in offline demo mode",
+    )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Force offline mode with mock agents (no API keys used)",
     )
     main(parser.parse_args())
