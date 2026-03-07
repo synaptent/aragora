@@ -133,6 +133,7 @@ async def _run_triage(batch_size: int, auto_approve: bool) -> None:
 def _get_gmail_connector():
     """Build and return an authenticated GmailConnector, or None."""
     import os
+    from pathlib import Path
 
     if not (
         os.environ.get("GMAIL_CLIENT_ID")
@@ -145,6 +146,17 @@ def _get_gmail_connector():
         from aragora.connectors.enterprise.communication.gmail import GmailConnector
 
         connector = GmailConnector()
+
+        # Load refresh token from env var or ~/.aragora/gmail_refresh_token
+        refresh_token = os.environ.get("GMAIL_REFRESH_TOKEN", "").strip()
+        if not refresh_token:
+            token_file = Path.home() / ".aragora" / "gmail_refresh_token"
+            if token_file.exists():
+                refresh_token = token_file.read_text().strip()
+
+        if refresh_token:
+            connector._refresh_token = refresh_token
+
         return connector
     except ImportError:
         logger.warning("GmailConnector not available")
