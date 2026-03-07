@@ -15,8 +15,9 @@ from aragora.pipeline.unified_orchestrator import (
 def mock_arena_factory():
     result = MagicMock()
     result.final_answer = "Use approach A"
-    result.participants = ["claude-sonnet-4", "gpt-4o"]
-    result.consensus = True
+    result.participants = ["agent-claude", "agent-gpt"]
+    result.consensus_reached = True
+    result.metadata = {}
     return AsyncMock(return_value=result)
 
 
@@ -60,8 +61,40 @@ async def test_provider_router_records_outcome(mock_arena_factory, mock_provider
 
     await orch.run("Design a rate limiter")
 
-    # Outcome was recorded for each participant
-    assert mock_provider_router.record_outcome.call_count >= 1
+    # Outcome is recorded against provider IDs, not agent display names.
+    recorded = [call.args[0] for call in mock_provider_router.record_outcome.call_args_list]
+    assert recorded == ["claude-sonnet-4", "gpt-4o", "deepseek-r1"]
+
+
+@pytest.mark.asyncio
+async def test_provider_router_does_not_break_factory_without_provider_hints_kwarg(
+    mock_provider_router,
+):
+    """Factories that don't accept provider_hints still run successfully."""
+
+    async def arena_factory(
+        prompt: str,
+        agents=None,
+        rounds: int = 3,
+        agent_count: int = 3,
+        consensus_threshold: float = 0.6,
+    ):
+        result = MagicMock()
+        result.final_answer = "Use approach A"
+        result.participants = ["agent-claude", "agent-gpt"]
+        result.consensus_reached = True
+        result.metadata = {}
+        return result
+
+    orch = UnifiedOrchestrator(
+        arena_factory=arena_factory,
+        provider_router=mock_provider_router,
+    )
+
+    result = await orch.run("Design a rate limiter")
+
+    assert "debate" in result.stages_completed
+    assert result.errors == []
 
 
 @pytest.mark.asyncio

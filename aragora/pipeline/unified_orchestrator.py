@@ -19,6 +19,7 @@ This is the "one function" entry point that wires together:
 
 from __future__ import annotations
 
+import inspect
 import logging
 import time
 import uuid
@@ -255,13 +256,20 @@ class UnifiedOrchestrator:
             # Record provider outcomes
             if self._provider_router is not None and result.debate_result is not None:
                 try:
-                    participants = getattr(result.debate_result, "participants", [])
-                    for p in participants:
-                        name = p if isinstance(p, str) else str(p)
+                    consensus_reached = bool(
+                        getattr(
+                            result.debate_result,
+                            "consensus",
+                            getattr(result.debate_result, "consensus_reached", False),
+                        )
+                    )
+                    for name in self._provider_names_for_outcome(
+                        result.debate_result,
+                        provider_hints=provider_hints,
+                    ):
                         self._provider_router.record_outcome(
                             name,
-                            consensus_reached=hasattr(result.debate_result, "consensus")
-                            and bool(result.debate_result.consensus),
+                            consensus_reached=consensus_reached,
                         )
                 except Exception:
                     logger.debug("Failed to record provider outcomes")
@@ -458,15 +466,48 @@ class UnifiedOrchestrator:
     ) -> Any:
         """Run debate phase."""
         if self._arena_factory is not None:
+            kwargs = {
+                "agents": agents,
+                "rounds": rounds,
+                "agent_count": agent_count,
+                "consensus_threshold": consensus_threshold,
+            }
+            if provider_hints and self._accepts_keyword_arg(self._arena_factory, "provider_hints"):
+                kwargs["provider_hints"] = provider_hints
             return await self._arena_factory(
                 prompt,
-                agents=agents,
-                rounds=rounds,
-                agent_count=agent_count,
-                consensus_threshold=consensus_threshold,
-                provider_hints=provider_hints,
+                **kwargs,
             )
         return None
+
+    @staticmethod
+    def _accepts_keyword_arg(callable_obj: Any, keyword: str) -> bool:
+        """Best-effort check for optional keyword support on injected callables."""
+        try:
+            sig = inspect.signature(callable_obj)
+        except (TypeError, ValueError):
+            return True
+        if keyword in sig.parameters:
+            return True
+        return any(param.kind is inspect.Parameter.VAR_KEYWORD for param in sig.parameters.values())
+
+    @staticmethod
+    def _provider_names_for_outcome(
+        debate_result: Any,
+        *,
+        provider_hints: list[str] | None = None,
+    ) -> list[str]:
+        """Return provider identifiers suitable for router feedback recording."""
+        metadata = getattr(debate_result, "metadata", {}) or {}
+        for key in ("provider_names", "providers", "provider_hints"):
+            value = metadata.get(key)
+            if isinstance(value, list):
+                names = [str(item) for item in value if str(item)]
+                if names:
+                    return names
+        if provider_hints:
+            return [str(item) for item in provider_hints if str(item)]
+        return []
 
     def _update_phase_elo(self, debate_result: Any, domain: str) -> None:
         """Update phase ELO ratings from debate results."""
