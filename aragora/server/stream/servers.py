@@ -403,7 +403,7 @@ class AiohttpUnifiedServer(  # type: ignore[override]
         with self._cartographers_lock:
             self.cartographers.pop(loop_id, None)
 
-    def _get_loops_data(self) -> list[dict]:
+    def _get_loops_data(self) -> list[dict[str, Any]]:
         """Get serializable list of active loops. Thread-safe."""
         with self._active_loops_lock:
             return [
@@ -418,7 +418,7 @@ class AiohttpUnifiedServer(  # type: ignore[override]
                 for loop in self.active_loops.values()
             ]
 
-    def _cors_headers(self, origin: str | None = None) -> dict:
+    def _cors_headers(self, origin: str | None = None) -> dict[str, str]:
         """Generate CORS headers with proper origin validation.
 
         Only allows origins in the whitelist. Does NOT fallback to first
@@ -609,7 +609,7 @@ class AiohttpUnifiedServer(  # type: ignore[override]
                 logger.debug("[server] TTS bridge cleanup skipped: %s", e)
         logger.debug("[server] Arena finished callback completed")
 
-    async def _handle_start_debate(self, request) -> aiohttp.web.Response:
+    async def _handle_start_debate(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
         """POST /api/debate - Start an ad-hoc debate with specified question.
 
         Accepts JSON body with:
