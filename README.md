@@ -177,7 +177,7 @@ Aragora treats each model as an **unreliable witness** and uses structured debat
 | **Decision Receipts** | Cryptographic audit trails with evidence chains, dissent tracking, and confidence calibration |
 | **Gauntlet Mode** | Red-team stress-tests for specs, policies, and architectures using adversarial personas |
 | **Calibrated Trust** | ELO rankings and Brier scores track which models are actually reliable on which domains |
-| **Institutional Memory** | Decisions persist across sessions with 4-tier memory and Knowledge Mound (<!-- adpt-count -->45<!-- /adpt-count --> adapters) |
+| **Institutional Memory** | Decisions persist across sessions with 4-tier memory and Knowledge Mound (<!-- adpt-count -->42<!-- /adpt-count --> adapters) |
 | **Channel Delivery** | Results route to Slack, Teams, Discord, Telegram, WhatsApp, email, or voice |
 
 ---
