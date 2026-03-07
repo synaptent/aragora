@@ -167,6 +167,13 @@ class PlanStore:
 
     def create(self, plan: DecisionPlan) -> None:
         """Insert a new plan into the store."""
+        try:
+            from aragora.pipeline.receipt_gate import ensure_plan_receipt
+
+            ensure_plan_receipt(plan)
+        except Exception as exc:  # noqa: BLE001 - keep persistence available; execution gate enforces
+            logger.warning("Failed to pre-persist decision receipt for plan %s: %s", plan.id, exc)
+
         now = datetime.now(timezone.utc).isoformat()
         budget_json = json.dumps(plan.budget.to_dict()) if plan.budget else "{}"
         approval_json = json.dumps(plan.approval_record.to_dict()) if plan.approval_record else None
@@ -354,6 +361,19 @@ class PlanStore:
             updated = cursor.rowcount > 0
             if updated:
                 logger.info("Updated plan %s to status %s", plan_id, status.value)
+                if status in (PlanStatus.APPROVED, PlanStatus.REJECTED, PlanStatus.COMPLETED):
+                    try:
+                        from aragora.pipeline.receipt_gate import sync_plan_receipt_state
+
+                        plan = self.get(plan_id)
+                        if plan is not None:
+                            sync_plan_receipt_state(plan, on_status=status)
+                    except Exception as exc:  # noqa: BLE001 - do not mask status update
+                        logger.warning(
+                            "Failed to synchronize decision receipt for plan %s: %s",
+                            plan_id,
+                            exc,
+                        )
             return updated
         finally:
             conn.close()
@@ -423,6 +443,19 @@ class PlanStore:
                     new_status.value,
                     ",".join(expected_values),
                 )
+                if new_status in (PlanStatus.APPROVED, PlanStatus.REJECTED, PlanStatus.COMPLETED):
+                    try:
+                        from aragora.pipeline.receipt_gate import sync_plan_receipt_state
+
+                        plan = self.get(plan_id)
+                        if plan is not None:
+                            sync_plan_receipt_state(plan, on_status=new_status)
+                    except Exception as exc:  # noqa: BLE001 - do not mask status update
+                        logger.warning(
+                            "Failed to synchronize decision receipt for plan %s: %s",
+                            plan_id,
+                            exc,
+                        )
             return updated
         finally:
             conn.close()

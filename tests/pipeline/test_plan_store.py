@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from aragora.gauntlet.receipt_store import ReceiptState, get_receipt_store, reset_receipt_store
 from aragora.pipeline.decision_plan.core import (
     ApprovalMode,
     BudgetAllocation,
@@ -31,6 +32,13 @@ def store(tmp_path: Path) -> PlanStore:
     """Create a PlanStore with a temp database."""
     db_path = str(tmp_path / "test_plans.db")
     return PlanStore(db_path=db_path)
+
+
+@pytest.fixture(autouse=True)
+def _reset_receipt_store_fixture() -> None:
+    reset_receipt_store()
+    yield
+    reset_receipt_store()
 
 
 @pytest.fixture
@@ -77,6 +85,22 @@ class TestPlanStoreCreate:
         assert retrieved is not None
         assert retrieved.metadata["priority"] == "high"
         assert len(retrieved.metadata["action_items"]) == 1
+
+    def test_create_persists_pre_execution_receipt(
+        self, store: PlanStore, sample_plan: DecisionPlan
+    ) -> None:
+        store.create(sample_plan)
+        retrieved = store.get(sample_plan.id)
+
+        assert retrieved is not None
+        receipt_meta = retrieved.metadata["decision_receipt"]
+        receipt_id = receipt_meta["receipt_id"]
+        stored = get_receipt_store().get(receipt_id)
+
+        assert receipt_id
+        assert receipt_meta["state"] == ReceiptState.CREATED.value
+        assert stored is not None
+        assert stored.state == ReceiptState.CREATED
 
     def test_create_preserves_max_auto_risk(self, store: PlanStore) -> None:
         plan = DecisionPlan(
@@ -273,6 +297,10 @@ class TestPlanStoreUpdate:
         assert plan.approval_record is not None
         assert plan.approval_record.approved is True
         assert plan.approval_record.approver_id == "user-42"
+        receipt_id = plan.metadata["decision_receipt"]["receipt_id"]
+        stored = get_receipt_store().get(receipt_id)
+        assert stored is not None
+        assert stored.state == ReceiptState.APPROVED
 
     def test_update_status_reject(self, store: PlanStore, sample_plan: DecisionPlan) -> None:
         store.create(sample_plan)
@@ -290,6 +318,25 @@ class TestPlanStoreUpdate:
         assert plan.approval_record is not None
         assert plan.approval_record.approved is False
         assert plan.approval_record.reason == "Too risky"
+        receipt_id = plan.metadata["decision_receipt"]["receipt_id"]
+        stored = get_receipt_store().get(receipt_id)
+        assert stored is not None
+        assert stored.state == ReceiptState.EXPIRED
+
+    def test_update_status_completed_marks_receipt_executed(
+        self, store: PlanStore, sample_plan: DecisionPlan
+    ) -> None:
+        sample_plan.status = PlanStatus.APPROVED
+        store.create(sample_plan)
+        result = store.update_status(sample_plan.id, PlanStatus.COMPLETED)
+
+        assert result is True
+        plan = store.get(sample_plan.id)
+        assert plan is not None
+        receipt_id = plan.metadata["decision_receipt"]["receipt_id"]
+        stored = get_receipt_store().get(receipt_id)
+        assert stored is not None
+        assert stored.state == ReceiptState.EXECUTED
 
     def test_update_nonexistent_returns_false(self, store: PlanStore) -> None:
         result = store.update_status("ghost", PlanStatus.APPROVED)

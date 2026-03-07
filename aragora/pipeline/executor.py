@@ -278,6 +278,10 @@ class PlanExecutor:
             plan.metadata.setdefault("org_id", getattr(auth_context, "org_id", None))
             plan.metadata.setdefault("requested_by", getattr(auth_context, "user_id", None))
 
+        from aragora.pipeline.receipt_gate import ensure_plan_receipt, sync_plan_receipt_state
+
+        ensure_plan_receipt(plan)
+
         # Transition to executing
         plan.status = PlanStatus.EXECUTING
         plan.execution_started_at = datetime.now()
@@ -503,6 +507,10 @@ class PlanExecutor:
             logger.debug("Convoy creation failed (non-critical): %s", e)
 
         # Update store with final state
+        sync_plan_receipt_state(
+            plan,
+            on_status=PlanStatus.COMPLETED if outcome.success else PlanStatus.FAILED,
+        )
         store_plan(plan)
 
         return outcome
