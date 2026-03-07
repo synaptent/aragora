@@ -45,6 +45,12 @@ This index intentionally links to actively maintained docs with validated paths.
 ## Product Status and Planning
 
 - [Status](status/STATUS.md)
+- [Feature Discovery](status/FEATURE_DISCOVERY.md)
+- [Feature Gap List](FEATURE_GAP_LIST.md)
+- [Next Steps (Canonical)](status/NEXT_STEPS_CANONICAL.md)
+- [Active 6-Week Execution Plan](status/EXECUTION_NEXT_6_WEEKS_2026-03-05.md)
+- [Documentation Hygiene Register](status/DOCUMENTATION_HYGIENE_AND_GAP_REGISTER.md)
+- [Roadmap](../ROADMAP.md)
 
 ## Reference
 

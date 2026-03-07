@@ -1,9 +1,11 @@
 # Aragora Feature Documentation
 
-> **Last Updated:** 2026-02-03
+> **Last reviewed:** 2026-03-06
+> **Snapshot basis:** 2026-02-03
+> Historical phase-by-phase feature chronology. For current state and planning, use [STATUS](STATUS.md), [FEATURE_DISCOVERY](FEATURE_DISCOVERY.md), [FEATURE_GAP_LIST](../FEATURE_GAP_LIST.md), and [DOCUMENTATION_HYGIENE_AND_GAP_REGISTER](DOCUMENTATION_HYGIENE_AND_GAP_REGISTER.md).
 
 
-This document provides a snapshot of major features and their origins. For live counts and recent updates, see `docs/STATUS.md`.
+This document provides a snapshot of major features and their origins. For live counts and recent updates, see `docs/status/STATUS.md`.
 
 ## Table of Contents
 

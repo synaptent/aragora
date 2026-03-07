@@ -54,8 +54,8 @@ High-risk AI systems (Article 6 + Annex III) must implement:
   into force       apply            apply            ENFORCEMENT       systems
                                                          ^
                                                          |
-                                              YOU ARE HERE (Feb 2026)
-                                              ~6 months remaining
+                                              YOU ARE HERE (March 2026)
+                                              ~5 months remaining
 ```
 
 ---
@@ -69,14 +69,14 @@ obligations.
 
 | EU AI Act Requirement | Article | Aragora Feature | Module | Status |
 |---|---|---|---|---|
-| Risk management system | Art. 9 | Gauntlet adversarial stress-testing: 3-phase red team attacks, capability probes, scenario matrix. ELO + Brier score calibration tracks per-agent reliability. Art. 9 conformity checking is included in the `ConformityReportGenerator` output. **No dedicated Art. 9 artifact file is generated** — a dedicated artifact bundle is planned (see roadmap). | `aragora/gauntlet/`, `aragora/compliance/eu_ai_act.py` | Conformity checking ✓ / Dedicated artifact: planned |
-| Data governance | Art. 10 | Knowledge Mound with 45 adapters, provenance tracking, validation feedback, contradiction detection, and confidence decay. | `aragora/knowledge/mound/` | Ready |
+| Risk management system | Art. 9 | Gauntlet adversarial stress-testing: 3-phase red team attacks, capability probes, scenario matrix. ELO + Brier score calibration tracks per-agent reliability. `ComplianceArtifactGenerator` emits a dedicated `Article9Artifact` with identified risks, misuse scenarios, mitigations, residual risk level, and monitoring plan. | `aragora/gauntlet/`, `aragora/compliance/eu_ai_act.py` | Ready |
+| Data governance | Art. 10 | Knowledge Mound with 42 registered adapter specs, provenance tracking, validation feedback, contradiction detection, and confidence decay. | `aragora/knowledge/mound/` | Ready |
 | Technical documentation | Art. 11 | Decision receipts capture full system configuration: agents, protocol, consensus thresholds, Annex IV sections auto-populated. | `aragora/export/decision_receipt.py` | Ready |
 | Record-keeping / logging | Art. 12 | `Article12Artifact`: provenance chain event log, Annex IV tech doc summary, reference databases, retention policy (6-month minimum per Art. 26(6)). | `aragora/compliance/eu_ai_act.py` | Ready |
 | Transparency | Art. 13 | `Article13Artifact`: provider identity, intended purpose, accuracy/robustness metrics, known risks (automation bias, hollow consensus, hallucination), output interpretation with confidence context. | `aragora/compliance/eu_ai_act.py` | Ready |
 | Human oversight | Art. 14 | `Article14Artifact`: HITL/HOTL oversight model, automation bias safeguards, override mechanisms (reject, override with reason, reverse), intervention capability (stop debate, cancel decision). | `aragora/compliance/eu_ai_act.py` | Ready |
 | Accuracy, robustness, cybersecurity | Art. 15 | Heterogeneous multi-model consensus (Claude, GPT, Gemini, Mistral), circuit breakers, Trickster hollow-consensus detection, AES-256-GCM encryption, key rotation, RBAC with MFA. | `aragora/resilience/`, `aragora/security/` | Ready |
-| Quality management | Art. 17 | Gauntlet receipts with SHA-256 integrity hashing, calibration tracking, 129,000+ automated tests, observability with Prometheus metrics and OpenTelemetry tracing. | `aragora/gauntlet/`, `aragora/observability/` | Ready |
+| Quality management | Art. 17 | Gauntlet receipts with SHA-256 integrity hashing, calibration tracking, 208,000+ automated tests, observability with Prometheus metrics and OpenTelemetry tracing. | `aragora/gauntlet/`, `aragora/observability/` | Ready |
 | Risk classification | Art. 6 | `RiskClassifier` auto-classifies use cases across all 4 risk tiers and all 8 Annex III high-risk categories using keyword and pattern matching. | `aragora/compliance/eu_ai_act.py` | Ready |
 | Conformity assessment | Art. 43 | `ConformityReportGenerator` maps receipt fields to article requirements, scores compliance per-article, generates markdown or JSON conformity reports. | `aragora/compliance/eu_ai_act.py` | Ready |
 | Explainability | Art. 13(1) | Factor decomposition, counterfactual analysis, evidence chains linking claims to sources, vote pivot analysis showing which arguments changed outcomes. | `aragora/explainability/` | Ready |
@@ -147,7 +147,7 @@ gen = ComplianceArtifactGenerator(
     provider_contact="compliance@yourcompany.com",
     eu_representative="Your Company EU GmbH",
     system_name="Your Decision Platform",
-    system_version="2.6.3",
+    system_version="2.8.0",
 )
 
 bundle = gen.generate(receipt_dict)
@@ -172,7 +172,8 @@ aragora compliance audit receipt.json --format json --output report.json
 ## 4. Compliance Artifact Bundle
 
 The `ComplianceArtifactBundle` packages all EU AI Act compliance evidence into a
-single auditable unit with cryptographic integrity verification.
+single auditable unit with cryptographic integrity verification. The bundle now
+includes dedicated artifacts for Articles 9, 10, 11, 12, 13, 14, 15, and 43.
 
 ### Bundle structure
 
@@ -182,9 +183,14 @@ single auditable unit with cryptographic integrity verification.
 | **integrity_hash** | SHA-256 hash of bundle metadata (tamper detection) |
 | **risk_classification** | RiskLevel + Annex III category + obligations list |
 | **conformity_report** | Per-article status (satisfied/partial/not_satisfied), overall status, recommendations |
+| **article_9** (Risk Management) | Identified risks, foreseeable misuse scenarios, mitigation measures, residual risk level, post-market monitoring plan |
+| **article_10** (Data Governance) | Data sources, quality measures, bias detection methods, training-data provenance, governance policy notes |
+| **article_11** (Technical Documentation) | System description, design specifications, monitoring capabilities, performance metrics, compliance notes |
 | **article_12** (Record-Keeping) | Event log, reference databases, input record with SHA-256 hash, Annex IV technical documentation (3 sections), retention policy (6-month min per Art. 26(6)) |
-| **article_13** (Transparency) | Provider identity + EU representative, intended purpose, accuracy/robustness metrics, 3 known risks (automation bias, hollow consensus, hallucination), output interpretation with confidence context |
-| **article_14** (Human Oversight) | HITL/HOTL oversight model, automation bias safeguards (4 mechanisms), factor decomposition + counterfactuals, override capability (reject/override/reverse), intervention capability (stop/cancel with safe state) |
+| **article_13** (Transparency) | Provider identity + EU representative, intended purpose, accuracy/robustness metrics, known risks, output interpretation with confidence context |
+| **article_14** (Human Oversight) | HITL/HOTL oversight model, automation bias safeguards, factor decomposition + counterfactuals, override capability, intervention capability |
+| **article_15** (Accuracy / Robustness / Cybersecurity) | Consensus confidence, robustness score, adversarial-testing indicators, cryptographic controls, error indicators |
+| **article_43** (Conformity Assessment) | Assessment type, assessor, standards applied, findings, conformity status, compliance notes |
 
 ### Integrity verification
 
@@ -289,6 +295,51 @@ systems must already have conformity documentation in place.
 - Document human oversight procedures (approval gates, override protocols)
 - Prepare calibration reports showing accuracy vs. confidence alignment
 - Perform internal conformity assessment using generated bundles
+
+---
+
+## Appendix: Additional Article Artifacts
+
+### Article 10 — Data and Data Governance
+
+`Article10Artifact` captures data provenance, quality measures, and bias detection
+methods. When no explicit data sources are declared in the receipt, the artifact
+notes this and falls back to platform-level governance defaults (heterogeneous
+model ensemble, adversarial dissent capture, Trickster hollow-consensus detection).
+
+Fields: `data_sources`, `data_quality_measures`, `bias_detection_methods`,
+`training_data_provenance`, `data_governance_policy`, `compliance_notes`.
+
+### Article 11 — Technical Documentation
+
+`Article11Artifact` generates Annex IV-aligned technical documentation including
+system description, design specifications, development process, monitoring
+capabilities, and performance metrics. When receipt fields are absent, defaults
+are auto-generated from platform configuration.
+
+Fields: `system_description`, `design_specifications`, `development_process`,
+`monitoring_capabilities`, `performance_metrics`, `compliance_notes`.
+
+### Article 43 — Conformity Assessment
+
+`Article43Artifact` records conformity assessment metadata: assessment type
+(internal or third-party), assessor identity, applied standards, findings from
+risk analysis, and overall conformity status. Critical risks automatically set
+status to `non_conformant`; high risks set `conditional` when no explicit status
+is provided.
+
+Fields: `assessment_type`, `assessment_date`, `assessor`, `standards_applied`,
+`findings`, `conformity_status`, `compliance_notes`.
+
+### Article 49 — Registration
+
+`Article49Artifact` prepares the data required for EU AI database registration
+per Article 49. It captures provider information, system purpose, risk level,
+and registration identifiers. When no registration ID is present, a compliance
+note flags that registration is required before market placement.
+
+Fields: `registration_id`, `registered_date`, `eu_database_entry`,
+`provider_info`, `system_purpose`, `risk_level`, `compliance_notes`.
 
 ---
 

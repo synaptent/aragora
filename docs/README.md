@@ -28,7 +28,8 @@ organizational knowledge and channels**.
 | Document | Description |
 |----------|-------------|
 | [ARCHITECTURE](./architecture/ARCHITECTURE.md) | System architecture overview |
-| [FEATURES](./status/FEATURES.md) | Complete feature documentation |
+| [FEATURE_DISCOVERY](./status/FEATURE_DISCOVERY.md) | Current feature inventory and file map |
+| [FEATURE_GAP_LIST](./FEATURE_GAP_LIST.md) | Planned, partial, and hardening work |
 | [MODES_GUIDE](./guides/MODES_GUIDE.md) | Debate modes (standard, gauntlet, genesis) |
 | [DEBATE_INTERNALS](./debate/DEBATE_INTERNALS.md) | Debate engine internals (Arena, phases, consensus) |
 | [REASONING](./workflow/REASONING.md) | Belief networks, provenance, and claims |
@@ -37,8 +38,17 @@ organizational knowledge and channels**.
 | [CONTROL_PLANE](./reference/CONTROL_PLANE.md) | Control plane architecture |
 | [CONTROL_PLANE_GUIDE](./guides/CONTROL_PLANE_GUIDE.md) | Control plane operations guide |
 | [MEMORY](./knowledge/MEMORY.md) | Memory systems overview |
-| [KNOWLEDGE_MOUND](./knowledge/KNOWLEDGE_MOUND.md) | Centralized knowledge storage with 45 adapters |
+| [KNOWLEDGE_MOUND](./knowledge/KNOWLEDGE_MOUND.md) | Centralized knowledge storage with 42 registered adapter specs |
 | [DOCUMENTS](./reference/DOCUMENTS.md) | Document ingestion and parsing |
+
+## Current Status & Planning
+
+| Document | Description |
+|----------|-------------|
+| [STATUS](./status/STATUS.md) | Current shipped state and recent delivery summary |
+| [NEXT_STEPS_CANONICAL](./status/NEXT_STEPS_CANONICAL.md) | Single source of truth for execution priorities |
+| [EXECUTION_NEXT_6_WEEKS_2026-03-05](./status/EXECUTION_NEXT_6_WEEKS_2026-03-05.md) | Active short-horizon plan |
+| [DOCUMENTATION_HYGIENE_AND_GAP_REGISTER](./status/DOCUMENTATION_HYGIENE_AND_GAP_REGISTER.md) | Running roadmap, drift, and feature-gap register |
 
 ### Memory Tiers
 

@@ -20,8 +20,8 @@ Aragora is built on five architectural commitments that together produce somethi
 | Pillar | What It Means |
 |--------|---------------|
 | **1. SMB-Ready, Enterprise-Grade** | Useful to a 5-person startup on day one; scales to regulated enterprise without rearchitecting. Security and compliance built in, not bolted on. |
-| **2. Leading-Edge Memory and Context** | 4-tier Continuum Memory, Knowledge Mound (45 adapters), unified memory gateway, and RLM context management enable coherence across long multi-round sessions and large document sets. |
-| **3. Extensible and Modular** | Connectors, SDKs (Python 185 namespaces + TypeScript 183 namespaces), 3,000+ API operations, OpenClaw integration, workflow engine, marketplace. |
+| **2. Leading-Edge Memory and Context** | 4-tier Continuum Memory, Knowledge Mound (42 registered adapter specs), unified memory gateway, and RLM context management enable coherence across long multi-round sessions and large document sets. |
+| **3. Extensible and Modular** | Connectors, SDKs (Python 186 namespaces + TypeScript 185 namespaces), 3,000+ API operations, OpenClaw integration, workflow engine, marketplace. |
 | **4. Multi-Agent Robustness** | Heterogeneous agents (Claude, GPT, Gemini, Grok, Mistral, DeepSeek, Qwen, Kimi) produce outputs more robust, less biased, and higher quality than single models. |
 | **5. Self-Healing and Self-Extending** | Nomic Loop autonomous improvement, red-team stress-testing, multi-agent code editing with human approval gates. |
 
@@ -116,8 +116,8 @@ Aragora is built on five architectural commitments that together produce somethi
 | Observability & Monitoring | 95% | Ready | Prometheus, Grafana, OpenTelemetry |
 | Testing & QA | 98% | Ready | 208,000+ tests across 4,300+ files |
 | Documentation | 95% | Ready | API docs, runbooks, compliance guides |
-| Compliance & Governance | 98% | Ready | RBAC v2 with 390+ permissions, 7 roles, role hierarchy |
-| SDK & Integrations | 98% | Ready | 184 Python / 183 TypeScript namespaces (99.3% parity) |
+| Compliance & Governance | 98% | Ready | RBAC v2 with 420+ permissions, 7 roles, role hierarchy |
+| SDK & Integrations | 98% | Ready | 186 Python / 185 TypeScript namespaces |
 | **OVERALL** | **98%** | **GA Ready** | Enterprise-grade features integrated, 0 mypy errors |
 
 ### Deployment Readiness
@@ -254,11 +254,11 @@ Structured debate for strategic decisions with evidence-based recommendations.
 
 | Capability | Resolution | Status |
 |------------|------------|--------|
-| Fine-grained RBAC | RBAC v2 with 7 roles, 390+ permissions | Complete |
+| Fine-grained RBAC | RBAC v2 with 7 roles, 420+ permissions | Complete |
 | Automated backups | BackupManager with incremental support | Complete |
 | Bot handler consolidation | BotHandlerMixin across 8 platforms | Complete |
-| Python SDK | 185 namespaces with typed clients | Complete |
-| TypeScript SDK | 183 namespaces with full IntelliSense | Complete |
+| Python SDK | 186 namespaces with typed clients | Complete |
+| TypeScript SDK | 185 namespaces with full IntelliSense | Complete |
 | OpenClaw integration | Portable agent governance | Complete |
 | Knowledge Mound Phase A2 | Contradiction detection, confidence decay, RBAC governance | Complete |
 | SLA documentation | Legally-binding service levels | In Progress |

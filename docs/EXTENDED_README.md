@@ -35,7 +35,7 @@ Single agents lose context. Aragora's 4-tier Continuum Memory (fast / medium / s
 
 ### 3. Extensible and Modular
 
-Connectors for Slack, Teams, Discord, Telegram, WhatsApp, email, voice, Kafka, RabbitMQ, GitHub, Jira, Salesforce, healthcare HL7/FHIR, and dozens more. SDKs in Python and TypeScript (184 Python / 183 TypeScript namespaces). 3,000+ API operations across 2,900+ paths and 260+ WebSocket event types. OpenClaw integration for portable agent governance. A workflow engine with DAG execution and 60+ templates. A marketplace for agent personas, debate templates, and workflow patterns. Aragora adapts to your stack.
+Connectors for Slack, Teams, Discord, Telegram, WhatsApp, email, voice, Kafka, RabbitMQ, GitHub, Jira, Salesforce, healthcare HL7/FHIR, and dozens more. SDKs in Python and TypeScript (186 Python / 185 TypeScript namespaces). 3,000+ API operations across 2,900+ paths and 270+ WebSocket event types. OpenClaw integration for portable agent governance. A workflow engine with DAG execution and 60+ templates. A marketplace for agent personas, debate templates, and workflow patterns. Aragora adapts to your stack.
 
 ### 4. Multi-Agent Robustness
 
@@ -466,7 +466,7 @@ aragora context --preview --rlm
 |---------|---------|--------------|
 | **`aragora`** | Full control plane (server, CLI, SDK) | `pip install aragora` |
 | **`aragora-sdk`** | Official Python SDK (remote HTTP API; sync + async + streaming) | `pip install aragora-sdk` |
-| **`@aragora/sdk`** | TypeScript/Node.js SDK (183 namespaces) | `npm install @aragora/sdk` |
+| **`@aragora/sdk`** | TypeScript/Node.js SDK (185 namespaces) | `npm install @aragora/sdk` |
 
 **Deprecated packages** (avoid for new integrations):
 - `aragora-client` -- Legacy async client. Migrate to `aragora-sdk`.

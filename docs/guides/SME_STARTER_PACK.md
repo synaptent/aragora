@@ -198,7 +198,7 @@ SME tier includes simplified role model:
 | **Admin** | Manage integrations, templates, view all debates |
 | **Member** | Run debates, view own results, export receipts |
 
-**Implementation:** `aragora/rbac/` module with 390+ granular permissions across 165+ resource types, mapped to these simplified roles for the SME tier.
+**Implementation:** `aragora/rbac/` module with 420+ granular permission strings across 15 core resource types, mapped to these simplified roles for the SME tier.
 
 ### Compliance
 

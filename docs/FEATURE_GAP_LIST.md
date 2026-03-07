@@ -30,7 +30,7 @@
 | Agent-first beta via REST API | **Fleet deployed (12 runners)** | `aragora openclaw watch` polls repos, runs multi-agent review, posts findings. 3 Hetzner + 6 EC2 + 3 local Macs. PR watch daemon on Mac Studio via launchd. |
 | GitHub Actions pre-merge gate | **Workflow created** | `aragora-review-gate.yml` manual-only (workflow_dispatch). Re-enable pull_request trigger when ready. |
 | Public demo at aragora.ai/demo | **Live and verified** | `/demo` (standalone debate), `/demo/pipeline` (pipeline demo), `/demo/instant` (debate replay). All return 200. Landing page CTA wired. |
-| EU AI Act compliance package | **Substantially complete (85/100)** | Art. 9/12/13/14/15 dedicated bundles + CLI export + 7,524 lines compliance code + 300+ tests. Customer playbook needs Art. 10/11/43/49 appendix. **Deadline: Aug 2, 2026.** |
+| EU AI Act compliance package | **Substantially complete (90/100)** | Art. 9/10/11/12/13/14/15/43/49 bundle coverage and customer playbook appendix are shipped. Remaining work is packaging polish, regulator-ready validation, and launch collateral hardening. **Deadline: Aug 2, 2026.** |
 | First 2 enterprise pilot engagements | Not started | Closed partnerships — target fintech + healthcare |
 | Developer onboarding <10 min | **Working (2-5 min)** | `aragora quickstart --demo` (zero-config), `aragora review --demo`, Docker quickstart all verified working. Needs cold-start user testing. |
 
@@ -107,7 +107,7 @@ These items were planned and are now shipped:
 | Feature | Shipped |
 |---------|---------|
 | Nomic Loop end-to-end | Jan 2026 |
-| Knowledge Mound Phase A2 (45 adapters) | Feb 2026 |
+| Knowledge Mound Phase A2 (adapter registry + unified memory hardening) | Feb 2026 |
 | Unified Memory Gateway | Feb 2026 |
 | Retention Gate (Titans/MIRAS) | Feb 2026 |
 | RBAC v2 (14 resource types, 8 actions) | Feb 2026 |

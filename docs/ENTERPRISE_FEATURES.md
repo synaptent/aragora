@@ -104,11 +104,11 @@ Fine-grained role-based access control with hierarchical permissions.
 
 Permissions are defined as `(ResourceType, Action, Scope)` tuples:
 
-- **16 resource types**: Debate, Agent, Workflow, Document, Memory, Culture, KnowledgeNode, AuditSession, AuditFinding, TrainingJob, SpecialistModel, Workspace, Organization, Billing, APIKey
+- **15 resource types**: Debate, Agent, Workflow, Document, Memory, Culture, KnowledgeNode, AuditSession, AuditFinding, TrainingJob, SpecialistModel, Workspace, Organization, Billing, APIKey
 - **8 actions**: Create, Read, Update, Delete, Execute, Export, Share, Admin
 - **4 scope levels**: Global, Organization, Workspace, Resource
 
-**390+ named permissions** across all resource domains, including debates, agents, users, organizations, API keys, memory, workflows, analytics, knowledge, provenance, connectors, devices, repositories, webhooks, gauntlet, marketplace, explainability, findings, decisions, policies, compliance, control plane, finance, receipts, scheduling, billing, sessions, approvals, templates, roles, backups, disaster recovery, data governance (classification, retention, lineage, PII), computer use, and more.
+**420+ named permissions** across all resource domains, including debates, agents, users, organizations, API keys, memory, workflows, analytics, knowledge, provenance, connectors, devices, repositories, webhooks, gauntlet, marketplace, explainability, findings, decisions, policies, compliance, control plane, finance, receipts, scheduling, billing, sessions, approvals, templates, roles, backups, disaster recovery, data governance (classification, retention, lineage, PII), computer use, and more.
 
 ### Default Roles
 
@@ -274,7 +274,7 @@ Aragora implements technical controls aligned with SOC 2 Trust Service Criteria:
 
 | Control | Implementation |
 |---|---|
-| CC6.1 - Logical access security | RBAC v2 with 390+ permissions, OIDC/SAML SSO, MFA |
+| CC6.1 - Logical access security | RBAC v2 with 420+ permissions, OIDC/SAML SSO, MFA |
 | CC6.5 - Secure data disposal | GDPR deletion scheduler with cascade management and erasure verification |
 | CC6.6 - Secure external transmissions | TLS 1.2+ enforced, webhook URL validation, SSRF protection |
 | CC7.1 - Detection of unauthorized activity | Anomaly detection, security audit logging, rate limiting |
@@ -616,7 +616,7 @@ Implementation: `aragora/control_plane/policy.py`, `aragora/control_plane/schedu
 | Capability | Key Numbers |
 |---|---|
 | Authentication | OIDC + SAML SSO, MFA (TOTP/HOTP), SCIM 2.0, API key management |
-| Authorization | 390+ permissions, 7 default roles, 4 scope levels, 16 resource types |
+| Authorization | 420+ permissions, 7 default roles, 4 scope levels, 15 resource types |
 | Multi-tenancy | Full isolation, resource quotas, usage metering, cost attribution |
 | Encryption | AES-256-GCM, field-level encryption, key rotation with versioning |
 | Compliance | SOC 2 controls, GDPR (Art. 17/20), HIPAA framework, EU AI Act artifacts |
@@ -628,4 +628,4 @@ Implementation: `aragora/control_plane/policy.py`, `aragora/control_plane/schedu
 
 ---
 
-*See [COMMERCIAL_OVERVIEW.md](COMMERCIAL_OVERVIEW.md) for pricing and deployment tiers. See [WHY_ARAGORA.md](WHY_ARAGORA.md) for competitive positioning. See [STATUS.md](STATUS.md) for detailed feature implementation status.*
+*See [COMMERCIAL_OVERVIEW.md](COMMERCIAL_OVERVIEW.md) for pricing and deployment tiers. See [WHY_ARAGORA.md](WHY_ARAGORA.md) for competitive positioning. See [status/STATUS.md](status/STATUS.md) for detailed feature implementation status.*

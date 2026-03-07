@@ -17,6 +17,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Support"],
             "summary": "Connect support integration",
+            "description": "Create or authorize a support-system integration used for ticket ingestion and response workflows.",
             "operationId": "createSupportConnect",
             "responses": {"200": _ok_response("Connected", _obj)},
         },
@@ -25,6 +26,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Support"],
             "summary": "Triage support request",
+            "description": "Run triage over a support request and return routing or prioritization metadata.",
             "operationId": "createSupportTriage",
             "responses": {"200": _ok_response("Triage result", _obj)},
         },
@@ -33,6 +35,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Support"],
             "summary": "Auto-respond to support ticket",
+            "description": "Generate and send an automated response for a support ticket using configured support workflows.",
             "operationId": "createSupportAutoRespond",
             "responses": {"200": _ok_response("Response sent", _obj)},
         },
@@ -41,8 +44,17 @@ SDK_MISSING_ENDPOINTS: dict = {
         "delete": {
             "tags": ["Support"],
             "summary": "Delete support integration",
+            "description": "Remove a previously configured support integration and revoke its active connection.",
             "operationId": "deleteSupportIntegration",
-            "parameters": [{"name": "support_id", "in": "path", "required": True, "schema": _str}],
+            "parameters": [
+                {
+                    "name": "support_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique support integration identifier.",
+                    "schema": _str,
+                }
+            ],
             "responses": {"200": _ok_response("Deleted")},
         },
     },
@@ -50,8 +62,17 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Support"],
             "summary": "Create support ticket",
+            "description": "Create a new ticket within the specified support integration.",
             "operationId": "createSupportTicket",
-            "parameters": [{"name": "support_id", "in": "path", "required": True, "schema": _str}],
+            "parameters": [
+                {
+                    "name": "support_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique support integration identifier.",
+                    "schema": _str,
+                }
+            ],
             "responses": {"201": _ok_response("Ticket created", _obj)},
         },
     },
@@ -59,10 +80,23 @@ SDK_MISSING_ENDPOINTS: dict = {
         "put": {
             "tags": ["Support"],
             "summary": "Update support ticket",
+            "description": "Update ticket fields or workflow state for a ticket in the configured support system.",
             "operationId": "updateSupportTicket",
             "parameters": [
-                {"name": "support_id", "in": "path", "required": True, "schema": _str},
-                {"name": "ticket_id", "in": "path", "required": True, "schema": _str},
+                {
+                    "name": "support_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique support integration identifier.",
+                    "schema": _str,
+                },
+                {
+                    "name": "ticket_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique ticket identifier within the support system.",
+                    "schema": _str,
+                },
             ],
             "responses": {"200": _ok_response("Ticket updated", _obj)},
         },
@@ -71,10 +105,23 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Support"],
             "summary": "Reply to support ticket",
+            "description": "Post a reply to an existing support ticket and return delivery metadata.",
             "operationId": "createSupportTicketReply",
             "parameters": [
-                {"name": "support_id", "in": "path", "required": True, "schema": _str},
-                {"name": "ticket_id", "in": "path", "required": True, "schema": _str},
+                {
+                    "name": "support_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique support integration identifier.",
+                    "schema": _str,
+                },
+                {
+                    "name": "ticket_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique ticket identifier within the support system.",
+                    "schema": _str,
+                },
             ],
             "responses": {"200": _ok_response("Reply sent", _obj)},
         },
@@ -84,6 +131,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Verification"],
             "summary": "List verification proofs",
+            "description": "Return stored verification proofs and associated metadata for prior verification runs.",
             "operationId": "listVerificationProofs",
             "responses": {"200": _ok_response("Proofs list", _arr_obj)},
         },
@@ -92,6 +140,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Verification"],
             "summary": "Validate claims",
+            "description": "Validate supplied claims or evidence and return a verification result payload.",
             "operationId": "createVerificationValidate",
             "responses": {"200": _ok_response("Validation result", _obj)},
         },
@@ -101,6 +150,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Calibration"],
             "summary": "Get calibration curve",
+            "description": "Fetch calibration-curve data used to evaluate model or agent confidence quality.",
             "operationId": "getCalibrationCurve",
             "responses": {"200": _ok_response("Calibration curve data", _obj)},
         },
@@ -109,6 +159,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Calibration"],
             "summary": "Get calibration history",
+            "description": "List historical calibration measurements and snapshots for supported agents or systems.",
             "operationId": "getCalibrationHistory",
             "responses": {"200": _ok_response("Calibration history", _arr_obj)},
         },
@@ -118,8 +169,17 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Services"],
             "summary": "Get service health",
+            "description": "Return health information for an external or internal service registered with Aragora.",
             "operationId": "getServiceHealth",
-            "parameters": [{"name": "service_id", "in": "path", "required": True, "schema": _str}],
+            "parameters": [
+                {
+                    "name": "service_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique service identifier.",
+                    "schema": _str,
+                }
+            ],
             "responses": {"200": _ok_response("Service health", _obj)},
         },
     },
@@ -127,8 +187,17 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Services"],
             "summary": "Get service metrics",
+            "description": "Return operational metrics for a registered service.",
             "operationId": "getServiceMetrics",
-            "parameters": [{"name": "service_id", "in": "path", "required": True, "schema": _str}],
+            "parameters": [
+                {
+                    "name": "service_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique service identifier.",
+                    "schema": _str,
+                }
+            ],
             "responses": {"200": _ok_response("Service metrics", _obj)},
         },
     },
@@ -137,8 +206,17 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Flips"],
             "summary": "Get flip details",
+            "description": "Retrieve detailed metadata for a recorded flip event.",
             "operationId": "getFlip",
-            "parameters": [{"name": "flip_id", "in": "path", "required": True, "schema": _str}],
+            "parameters": [
+                {
+                    "name": "flip_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique flip identifier.",
+                    "schema": _str,
+                }
+            ],
             "responses": {"200": _ok_response("Flip details", _obj)},
         },
     },
@@ -147,6 +225,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Ecommerce"],
             "summary": "Connect ecommerce integration",
+            "description": "Create or authorize an ecommerce integration used for inventory and fulfillment workflows.",
             "operationId": "createEcommerceConnect",
             "responses": {"200": _ok_response("Connected", _obj)},
         },
@@ -155,6 +234,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Ecommerce"],
             "summary": "Sync inventory",
+            "description": "Trigger an inventory synchronization job for a connected ecommerce system.",
             "operationId": "createEcommerceSyncInventory",
             "responses": {"200": _ok_response("Inventory synced", _obj)},
         },
@@ -163,6 +243,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Ecommerce"],
             "summary": "Ship order",
+            "description": "Create or trigger shipment handling for an ecommerce order.",
             "operationId": "createEcommerceShip",
             "responses": {"200": _ok_response("Shipment created", _obj)},
         },
@@ -171,9 +252,16 @@ SDK_MISSING_ENDPOINTS: dict = {
         "delete": {
             "tags": ["Ecommerce"],
             "summary": "Delete ecommerce integration",
+            "description": "Remove a connected ecommerce integration and stop future sync activity.",
             "operationId": "deleteEcommerceIntegration",
             "parameters": [
-                {"name": "integration_id", "in": "path", "required": True, "schema": _str}
+                {
+                    "name": "integration_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique ecommerce integration identifier.",
+                    "schema": _str,
+                }
             ],
             "responses": {"200": _ok_response("Deleted")},
         },
@@ -183,6 +271,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["CRM"],
             "summary": "Connect CRM integration",
+            "description": "Create or authorize a CRM integration for lead sync and enrichment workflows.",
             "operationId": "createCrmConnect",
             "responses": {"200": _ok_response("Connected", _obj)},
         },
@@ -191,6 +280,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["CRM"],
             "summary": "Sync lead to CRM",
+            "description": "Push a lead or contact update into the configured CRM system.",
             "operationId": "createCrmSyncLead",
             "responses": {"200": _ok_response("Lead synced", _obj)},
         },
@@ -199,6 +289,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["CRM"],
             "summary": "Enrich CRM contact",
+            "description": "Run enrichment for a CRM contact and return the updated contact payload.",
             "operationId": "createCrmEnrich",
             "responses": {"200": _ok_response("Contact enriched", _obj)},
         },
@@ -207,9 +298,16 @@ SDK_MISSING_ENDPOINTS: dict = {
         "delete": {
             "tags": ["CRM"],
             "summary": "Delete CRM integration",
+            "description": "Remove a configured CRM integration and revoke its active connection.",
             "operationId": "deleteCrmIntegration",
             "parameters": [
-                {"name": "integration_id", "in": "path", "required": True, "schema": _str}
+                {
+                    "name": "integration_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique CRM integration identifier.",
+                    "schema": _str,
+                }
             ],
             "responses": {"200": _ok_response("Deleted")},
         },
@@ -219,6 +317,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Matches"],
             "summary": "Get match statistics",
+            "description": "Return aggregate statistics for the match system.",
             "operationId": "getMatchStats",
             "responses": {"200": _ok_response("Match statistics", _obj)},
         },
@@ -227,8 +326,17 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Matches"],
             "summary": "Get match details",
+            "description": "Retrieve a single match record and its associated metadata.",
             "operationId": "getMatch",
-            "parameters": [{"name": "match_id", "in": "path", "required": True, "schema": _str}],
+            "parameters": [
+                {
+                    "name": "match_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique match identifier.",
+                    "schema": _str,
+                }
+            ],
             "responses": {"200": _ok_response("Match details", _obj)},
         },
     },
@@ -237,6 +345,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "post": {
             "tags": ["Quotas"],
             "summary": "Request quota increase",
+            "description": "Submit a quota increase request for review.",
             "operationId": "createQuotaIncreaseRequest",
             "responses": {"200": _ok_response("Request submitted", _obj)},
         },
@@ -246,6 +355,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Reputation"],
             "summary": "Get domain reputation scores",
+            "description": "Return domain-level reputation scores or reputation summaries.",
             "operationId": "getReputationDomain",
             "responses": {"200": _ok_response("Domain reputation", _obj)},
         },
@@ -254,6 +364,7 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Reputation"],
             "summary": "Get reputation history",
+            "description": "List historical reputation events or score snapshots.",
             "operationId": "getReputationHistory",
             "responses": {"200": _ok_response("Reputation history", _arr_obj)},
         },
@@ -262,8 +373,17 @@ SDK_MISSING_ENDPOINTS: dict = {
         "get": {
             "tags": ["Reputation"],
             "summary": "Get agent reputation",
+            "description": "Retrieve the current reputation profile for a specific agent.",
             "operationId": "getReputationByAgentId",
-            "parameters": [{"name": "agent_id", "in": "path", "required": True, "schema": _str}],
+            "parameters": [
+                {
+                    "name": "agent_id",
+                    "in": "path",
+                    "required": True,
+                    "description": "Unique agent identifier.",
+                    "schema": _str,
+                }
+            ],
             "responses": {"200": _ok_response("Agent reputation", _obj)},
         },
     },
