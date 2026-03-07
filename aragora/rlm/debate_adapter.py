@@ -315,12 +315,12 @@ class DebateContextAdapter:
             consensus = debate_result.final_answer
 
         # Build helper functions
-        def get_round(n: int) -> dict | None:
+        def get_round(n: int) -> dict[str, Any] | None:
             if 0 < n <= len(rounds):
                 return rounds[n - 1]
             return None
 
-        def get_critiques_for(agent: str) -> list[dict]:
+        def get_critiques_for(agent: str) -> list[dict[str, Any]]:
             return [c for c in critiques if c["target"] == agent]
 
         def get_proposals_by(agent: str) -> list[str]:
