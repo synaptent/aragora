@@ -80,6 +80,9 @@ def _validate_where_clause(where: str, has_params: bool = False) -> None:
 
 
 T = TypeVar("T")
+QueryParams = tuple[Any, ...]
+RowDict = dict[str, Any]
+BatchUpdateGroup = dict[tuple[str, ...], list[tuple[Any, QueryParams]]]
 
 
 class DatabaseRepository:
@@ -182,7 +185,7 @@ class DatabaseRepository:
             cursor.execute(query, (id_value,))
             return cursor.fetchone() is not None
 
-    def count(self, where: str = "", params: tuple = ()) -> int:
+    def count(self, where: str = "", params: QueryParams = ()) -> int:
         """
         Count records matching criteria.
 
@@ -205,7 +208,7 @@ class DatabaseRepository:
             row = cursor.fetchone()
             return row[0] if row else 0
 
-    def get_by_id(self, id_value: Any, id_column: str = "id") -> dict | None:
+    def get_by_id(self, id_value: Any, id_column: str = "id") -> RowDict | None:
         """
         Get a single record by ID.
 
@@ -231,8 +234,8 @@ class DatabaseRepository:
         offset: int = 0,
         order_by: str = "",
         where: str = "",
-        params: tuple = (),
-    ) -> list[dict]:
+        params: QueryParams = (),
+    ) -> list[RowDict]:
         """
         Get multiple records with pagination.
 
@@ -282,7 +285,7 @@ class DatabaseRepository:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
-    def batch_get(self, id_values: list[Any], id_column: str = "id") -> list[dict]:
+    def batch_get(self, id_values: list[Any], id_column: str = "id") -> list[RowDict]:
         """
         Get multiple records by IDs in a single query.
 
@@ -333,7 +336,7 @@ class DatabaseRepository:
 
         return deleted
 
-    def delete_where(self, where: str, params: tuple) -> int:
+    def delete_where(self, where: str, params: QueryParams) -> int:
         """
         Delete records matching criteria.
 
@@ -428,7 +431,7 @@ class DatabaseRepository:
         safe_id_col = _validate_column_name(id_column)
 
         # Group updates by the set of columns being updated (for efficient batching)
-        update_groups: dict[tuple[str, ...], list[tuple[Any, tuple]]] = {}
+        update_groups: BatchUpdateGroup = {}
 
         for id_value, column_values in updates:
             if not column_values:
@@ -536,7 +539,7 @@ class DatabaseRepository:
     # Utility Methods
     # =========================================================================
 
-    def execute(self, query: str, params: tuple = ()) -> list[dict]:
+    def execute(self, query: str, params: QueryParams = ()) -> list[RowDict]:
         """
         Execute a custom query and return results.
 
@@ -553,7 +556,7 @@ class DatabaseRepository:
             cursor.execute(query, params)
             return [dict(row) for row in cursor.fetchall()]
 
-    def execute_write(self, query: str, params: tuple = ()) -> int:
+    def execute_write(self, query: str, params: QueryParams = ()) -> int:
         """
         Execute a write query (INSERT, UPDATE, DELETE).
 
