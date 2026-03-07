@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from aragora.agents.calibration import CalibrationTracker
     from aragora.agents.flip_detector import FlipDetector
     from aragora.agents.personas import PersonaManager
-    from aragora.core import Environment
+    from aragora.core import Agent, Environment
     from aragora.debate.protocol import DebateProtocol
     from aragora.debate.roles import RoleAssignment, RoleRotator
     from aragora.evidence.collector import EvidencePack
@@ -52,6 +52,7 @@ except ImportError:
     RLMContextAdapter = None
 
 logger = logging.getLogger(__name__)
+PatternRecord = dict[str, Any]
 
 
 # --- Module-level cached functions for pure computations ---
@@ -249,7 +250,7 @@ def _get_language_constraint_impl(enforce: bool, language: str) -> str:
     )
 
 
-def _hash_patterns(patterns: list[dict]) -> str:
+def _hash_patterns(patterns: list[PatternRecord]) -> str:
     """Create a stable hash key for a list of pattern dicts."""
     serialized = str(
         [
@@ -343,7 +344,7 @@ class PromptBuilder(PromptContextMixin, PromptAssemblyMixin):
         self.trending_topics: list[TrendingTopic] = []
 
         # Pulse topics for enhanced context (set via set_pulse_topics)
-        self._pulse_topics: list[dict] = []
+        self._pulse_topics: list[dict[str, Any]] = []
 
         # Pulse enrichment context (set via inject_pulse_enrichment)
         self._pulse_enrichment_context: str = ""
@@ -353,7 +354,7 @@ class PromptBuilder(PromptContextMixin, PromptAssemblyMixin):
         self.current_role_assignments: dict[str, RoleAssignment] = {}
         self._historical_context_cache: str = ""
         self._continuum_context_cache: str = ""
-        self.user_suggestions: list = []
+        self.user_suggestions: list[dict[str, Any]] = []
 
         # Question classification cache (populated by classify_question_async)
         self._classification: QuestionClassification | None = None
@@ -469,14 +470,14 @@ class PromptBuilder(PromptContextMixin, PromptAssemblyMixin):
         clear_all_prompt_caches()
         logger.debug("PromptBuilder caches cleared")
 
-    def _evict_cache_if_needed(self, cache: dict) -> None:
+    def _evict_cache_if_needed(self, cache: dict[str, str]) -> None:
         """Evict oldest entries if cache exceeds max size."""
         if len(cache) > self._cache_max_size:
             keys_to_remove = list(cache.keys())[: self._cache_max_size // 2]
             for key in keys_to_remove:
                 cache.pop(key, None)
 
-    def warm_introspection_cache(self, agents: list) -> None:
+    def warm_introspection_cache(self, agents: list[Agent]) -> None:
         """Pre-load introspection data for all agents at debate start.
 
         Called once at Arena initialization to populate the cache so per-agent
