@@ -8,10 +8,13 @@ Provides metrics for Nomic loop phase execution and cycle tracking.
 import logging
 import time
 from functools import wraps
-from typing import Any
-from collections.abc import Callable
+from typing import Any, ParamSpec, TypeVar
+from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 from aragora.server.prometheus import (
     PROMETHEUS_AVAILABLE,
@@ -103,7 +106,9 @@ def record_nomic_agent_phase(
         )
 
 
-def timed_nomic_phase(phase: str) -> Callable[[Callable], Callable]:
+def timed_nomic_phase(
+    phase: str,
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Async decorator to time nomic phase execution.
 
     Args:
@@ -118,7 +123,7 @@ def timed_nomic_phase(phase: str) -> Callable[[Callable], Callable]:
             ...
     """
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             start = time.perf_counter()
