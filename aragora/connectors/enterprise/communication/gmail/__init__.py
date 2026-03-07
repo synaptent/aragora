@@ -26,6 +26,7 @@ from .client import (
     GMAIL_SCOPES_FULL,
     GMAIL_SCOPES_READONLY,
     GmailClientMixin,
+    _load_refresh_token_fallback,
 )
 from .labels import GmailLabelsMixin
 from .messages import GmailMessagesMixin
@@ -105,7 +106,7 @@ class GmailConnector(  # type: ignore[misc]  # mypy does not support mixin Proto
 
         # OAuth tokens (protected by _token_lock for thread-safety)
         self._access_token: str | None = None
-        self._refresh_token: str | None = None
+        self._refresh_token: str | None = _load_refresh_token_fallback()
         self._token_expiry = None
         self._token_lock: asyncio.Lock = asyncio.Lock()
 

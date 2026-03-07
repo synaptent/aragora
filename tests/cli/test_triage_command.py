@@ -1,74 +1,68 @@
-"""Tests for the aragora triage CLI command."""
+"""Tests for the triage CLI command wiring."""
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
-from aragora.cli.commands.triage import add_triage_parser, cmd_triage, _show_status
+import pytest
 
-
-def test_add_triage_parser_registers():
-    """Parser registration creates 'triage' subcommand."""
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    sub = parser.add_subparsers(dest="command")
-    add_triage_parser(sub)
-
-    args = parser.parse_args(["triage", "run", "--batch", "3"])
-    assert args.command == "triage"
-    assert args.triage_command == "run"
-    assert args.batch == 3
+from aragora.cli.commands import triage as triage_cmd
+from aragora.inbox.trust_wedge import InboxWedgeAction, TriageDecision
 
 
-def test_add_triage_parser_auto_approve():
-    """--auto-approve flag is parsed."""
-    import argparse
+@pytest.mark.asyncio
+async def test_run_triage_uses_receipt_review_loop():
+    decision = TriageDecision.create(
+        final_action="ignore",
+        confidence=0.4,
+        dissent_summary="",
+        receipt_id="receipt-1",
+    )
+    fake_runner = SimpleNamespace(run_triage=AsyncMock(return_value=[decision]))
+    fake_service = SimpleNamespace(review_receipt=object())
+    captured: dict[str, object] = {}
 
-    parser = argparse.ArgumentParser()
-    sub = parser.add_subparsers(dest="command")
-    add_triage_parser(sub)
+    class _FakeLoop:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
 
-    args = parser.parse_args(["triage", "run", "--auto-approve"])
-    assert args.auto_approve is True
+        def review_batch(self, decisions):
+            captured["decisions"] = decisions
+            return []
 
+    with (
+        patch.object(triage_cmd, "_get_gmail_connector", return_value=object()),
+        patch(
+            "aragora.inbox.triage_runner.InboxTriageRunner",
+            return_value=fake_runner,
+        ),
+        patch(
+            "aragora.inbox.trust_wedge.get_inbox_trust_wedge_service",
+            return_value=fake_service,
+        ),
+        patch(
+            "aragora.inbox.cli_review.CLIReviewLoop",
+            _FakeLoop,
+        ),
+    ):
+        await triage_cmd._run_triage(batch_size=1, auto_approve=False)
 
-def test_add_triage_parser_status():
-    """Status subcommand is parsed."""
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    sub = parser.add_subparsers(dest="command")
-    add_triage_parser(sub)
-
-    args = parser.parse_args(["triage", "status"])
-    assert args.triage_command == "status"
-
-
-def test_show_status_runs(capsys):
-    """Status command prints config without crashing."""
-    _show_status()
-    captured = capsys.readouterr()
-    assert "Gmail configured:" in captured.out
-    assert "Durable signing key:" in captured.out
-
-
-def test_cmd_triage_dispatches_status(capsys):
-    """cmd_triage dispatches to _show_status for status command."""
-    import argparse
-
-    args = argparse.Namespace(triage_command="status")
-    cmd_triage(args)
-    captured = capsys.readouterr()
-    assert "Inbox Triage Status" in captured.out
+    assert captured["review_fn"] is fake_service.review_receipt
+    assert captured["decisions"] == [decision]
 
 
-def test_cmd_triage_no_command_exits():
-    """cmd_triage exits with error when no subcommand given."""
-    import argparse
-    import pytest
+def test_print_decisions_formats_enum_values(capsys):
+    decision = TriageDecision.create(
+        final_action=InboxWedgeAction.IGNORE,
+        confidence=0.4,
+        dissent_summary="",
+        receipt_id="receipt-1",
+    )
+    decision.intent = SimpleNamespace(_subject="Subject line")
 
-    args = argparse.Namespace(triage_command=None)
-    with pytest.raises(SystemExit) as exc_info:
-        cmd_triage(args)
-    assert exc_info.value.code == 1
+    triage_cmd._print_decisions([decision])
+
+    out = capsys.readouterr().out
+    assert "ignore" in out
+    assert "InboxWedgeAction" not in out

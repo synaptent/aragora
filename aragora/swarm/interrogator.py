@@ -6,8 +6,10 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
+from aragora.harnesses.adapter import AnalysisType
 from aragora.swarm.config import InterrogatorConfig
 from aragora.swarm.spec import SwarmSpec
 
@@ -89,7 +91,7 @@ class SwarmInterrogator:
         _print("=" * 60)
         _print(f"\nYour goal: {initial_goal}\n")
 
-        harness = self._get_harness()
+        harness = await self._get_harness()
         if harness is not None:
             await self._interrogate_with_llm(harness, _input, _print)
         elif self.config.fallback_to_fixed_questions:
@@ -126,8 +128,8 @@ class SwarmInterrogator:
 
             try:
                 result = await harness.analyze_repository(
-                    repo_path=str(harness.config.get("repo_path", ".")),
-                    analysis_type="general",
+                    repo_path=Path.cwd(),
+                    analysis_type=AnalysisType.GENERAL,
                     prompt=prompt,
                 )
                 response = result.raw_output if hasattr(result, "raw_output") else str(result)
@@ -136,7 +138,9 @@ class SwarmInterrogator:
                 remaining = FALLBACK_QUESTIONS[turn:]
                 for q in remaining:
                     _print(f"\n{q}")
-                    answer = _input("> ")
+                    answer = self._safe_input(_input, "> ")
+                    if answer is None:
+                        return
                     self._conversation.append({"role": "assistant", "content": q})
                     self._conversation.append({"role": "user", "content": answer})
                 return
@@ -150,7 +154,9 @@ class SwarmInterrogator:
             self._conversation.append({"role": "assistant", "content": question})
 
             _print(f"\n{question}")
-            answer = _input("> ")
+            answer = self._safe_input(_input, "> ")
+            if answer is None:
+                break
             self._conversation.append({"role": "user", "content": answer})
 
             conversation_text += f"\nAssistant: {question}\nUser: {answer}"
@@ -165,7 +171,9 @@ class SwarmInterrogator:
 
         for question in FALLBACK_QUESTIONS:
             _print(f"\n{question}")
-            answer = _input("> ")
+            answer = self._safe_input(_input, "> ")
+            if answer is None:
+                return
             if answer.strip():
                 self._conversation.append({"role": "assistant", "content": question})
                 self._conversation.append({"role": "user", "content": answer})
@@ -190,8 +198,8 @@ class SwarmInterrogator:
             try:
                 prompt = SPEC_EXTRACTION_PROMPT.format(conversation=conversation_text)
                 result = await harness.analyze_repository(
-                    repo_path=str(harness.config.get("repo_path", ".")),
-                    analysis_type="general",
+                    repo_path=Path.cwd(),
+                    analysis_type=AnalysisType.GENERAL,
                     prompt=prompt,
                 )
                 raw = result.raw_output if hasattr(result, "raw_output") else str(result)
@@ -288,7 +296,7 @@ class SwarmInterrogator:
             "requires_approval": False,
         }
 
-    def _get_harness(self) -> Any:
+    async def _get_harness(self) -> Any:
         """Try to initialize the Claude Code harness."""
         if self._harness is not None:
             return self._harness
@@ -296,9 +304,18 @@ class SwarmInterrogator:
             from aragora.harnesses.claude_code import ClaudeCodeHarness
 
             harness = ClaudeCodeHarness()
-            if harness.initialize():
+            if await harness.initialize():
                 self._harness = harness
                 return harness
         except (ImportError, Exception):
             pass
         return None
+
+    @staticmethod
+    def _safe_input(input_fn: Any, prompt: str) -> str | None:
+        """Read one input safely, returning None on EOF/non-interactive stdin."""
+        try:
+            return input_fn(prompt)
+        except EOFError:
+            logger.info("Interrogation input ended early; proceeding with gathered context")
+            return None

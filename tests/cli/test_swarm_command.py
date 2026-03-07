@@ -146,6 +146,39 @@ class TestSwarmCommand:
         assert output_spec.exists()
         assert output_spec.read_text() == "id: generated\n"
 
+    def test_cmd_swarm_dry_run_skip_interrogation_builds_direct_spec(self, capsys):
+        args = argparse.Namespace(
+            swarm_action_or_goal="verify dry run",
+            swarm_goal=None,
+            spec=None,
+            skip_interrogation=True,
+            dry_run=True,
+            budget_limit=11.0,
+            require_approval=True,
+            save_spec=None,
+            from_obsidian=None,
+            obsidian_vault=None,
+            no_obsidian_receipts=False,
+            profile="developer",
+            autonomy="propose",
+            max_parallel=20,
+            no_loop=False,
+            target_branch="main",
+            concurrency_cap=8,
+            managed_dir_pattern=".worktrees/{agent}-auto",
+            json=False,
+            run_id=None,
+            status_limit=20,
+            refresh_scaling=False,
+        )
+
+        with patch("aragora.swarm.SwarmCommander"):
+            cmd_swarm(args)
+
+        out = capsys.readouterr().out
+        assert "[DRY RUN] Skipping interrogation" in out
+        assert '"raw_goal": "verify dry run"' in out
+
     def test_cmd_swarm_skip_interrogation_dispatches(self):
         fake_run = MagicMock()
         mock_commander = SimpleNamespace(run_supervised_from_spec=AsyncMock(return_value=fake_run))

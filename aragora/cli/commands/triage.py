@@ -13,8 +13,15 @@ import argparse
 import asyncio
 import logging
 import sys
+from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+def _action_value(action: object) -> str:
+    if isinstance(action, Enum):
+        return str(action.value)
+    return str(action)
 
 
 def add_triage_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -91,7 +98,13 @@ async def _run_triage(batch_size: int, auto_approve: bool) -> None:
         )
         sys.exit(1)
 
-    runner = InboxTriageRunner(gmail_connector=gmail)
+    from aragora.inbox.trust_wedge import get_inbox_trust_wedge_service
+
+    wedge_service = get_inbox_trust_wedge_service()
+    runner = InboxTriageRunner(
+        gmail_connector=gmail,
+        wedge_service=wedge_service,
+    )
     print(f"Fetching up to {batch_size} unread messages...")
 
     decisions = await runner.run_triage(
@@ -108,7 +121,7 @@ async def _run_triage(batch_size: int, auto_approve: bool) -> None:
         try:
             from aragora.inbox.cli_review import CLIReviewLoop
 
-            loop = CLIReviewLoop()
+            loop = CLIReviewLoop(review_fn=wedge_service.review_receipt)
             loop.review_batch(decisions)
         except ImportError:
             # CLI review not available — print summary
@@ -145,7 +158,7 @@ def _print_decisions(decisions: list) -> None:
     print(f"{'─' * 60}")
 
     for d in decisions:
-        action = getattr(d, "final_action", "?")
+        action = _action_value(getattr(d, "final_action", "?"))
         confidence = getattr(d, "confidence", 0.0)
         intent = getattr(d, "intent", None)
         subject = "(unknown)"

@@ -88,6 +88,16 @@ def client_mixin():
     return TestMixin()
 
 
+@pytest.fixture(autouse=True)
+def reset_refresh_token_fallback():
+    """Prevent live saved Gmail tokens from leaking into unit tests."""
+    with patch(
+        "aragora.connectors.enterprise.communication.gmail.client._load_refresh_token_fallback",
+        return_value=None,
+    ):
+        yield
+
+
 @pytest.fixture
 def authenticated_mixin(client_mixin):
     """Create an authenticated client mixin."""
@@ -455,6 +465,29 @@ class TestTokenManagement:
         """Test error when no token and no refresh token."""
         with pytest.raises(ValueError, match="No valid access token"):
             await client_mixin._get_access_token()
+
+    @pytest.mark.asyncio
+    async def test_get_access_token_uses_saved_refresh_token_fallback(self, client_mixin):
+        """Test access token lookup loads a saved refresh token fallback."""
+        client_mixin._access_token = None
+        client_mixin._refresh_token = None
+
+        with (
+            patch(
+                "aragora.connectors.enterprise.communication.gmail.client._load_refresh_token_fallback",
+                return_value="saved-refresh-token",
+            ),
+            patch.object(
+                client_mixin,
+                "_refresh_access_token",
+                AsyncMock(return_value="new_access_token"),
+            ) as mock_refresh,
+        ):
+            token = await client_mixin._get_access_token()
+
+        assert token == "new_access_token"
+        assert client_mixin._refresh_token == "saved-refresh-token"
+        mock_refresh.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_get_access_token_thread_safe(self, authenticated_mixin, mock_httpx_response):

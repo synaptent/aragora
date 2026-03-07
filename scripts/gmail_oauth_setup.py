@@ -60,22 +60,55 @@ TOKEN_FILE = TOKEN_DIR / "gmail_refresh_token"
 # ---------------------------------------------------------------------------
 
 
+def _load_local_dotenv() -> None:
+    """Best-effort local dotenv loading for script parity with local CLI runs."""
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+        load_dotenv("/etc/aragora/.env")
+    except Exception:
+        return
+
+
+def _get_secret_fallback(name: str) -> str:
+    """Resolve a secret via Aragora's secret loader when available."""
+    try:
+        from aragora.config.secrets import get_secret
+
+        return str(get_secret(name) or "")
+    except Exception:
+        return ""
+
+
+def _resolve_credential(*candidates: str) -> tuple[str, str]:
+    """Resolve one credential from env first, then Aragora secret fallbacks."""
+    for name in candidates:
+        value = os.environ.get(name)
+        if value:
+            return value, f"env:{name}"
+    for name in candidates:
+        value = _get_secret_fallback(name)
+        if value:
+            return value, f"secret:{name}"
+    return "", ""
+
+
 def get_client_credentials() -> tuple[str, str]:
-    """Read OAuth client ID and secret from environment.
+    """Read OAuth client ID and secret from local env or Aragora secrets.
 
     Mirrors the lookup order in GmailClientMixin._get_client_credentials().
     """
-    client_id = (
-        os.environ.get("GMAIL_CLIENT_ID")
-        or os.environ.get("GOOGLE_GMAIL_CLIENT_ID")
-        or os.environ.get("GOOGLE_CLIENT_ID")
-        or ""
+    _load_local_dotenv()
+    client_id, _ = _resolve_credential(
+        "GMAIL_CLIENT_ID",
+        "GOOGLE_GMAIL_CLIENT_ID",
+        "GOOGLE_CLIENT_ID",
     )
-    client_secret = (
-        os.environ.get("GMAIL_CLIENT_SECRET")
-        or os.environ.get("GOOGLE_GMAIL_CLIENT_SECRET")
-        or os.environ.get("GOOGLE_CLIENT_SECRET")
-        or ""
+    client_secret, _ = _resolve_credential(
+        "GMAIL_CLIENT_SECRET",
+        "GOOGLE_GMAIL_CLIENT_SECRET",
+        "GOOGLE_CLIENT_SECRET",
     )
     return client_id, client_secret
 
@@ -84,6 +117,22 @@ def check_credentials() -> tuple[bool, str, str]:
     """Return (ok, client_id, client_secret). ok is True when both are set."""
     client_id, client_secret = get_client_credentials()
     return bool(client_id and client_secret), client_id, client_secret
+
+
+def get_credential_sources() -> tuple[str, str]:
+    """Return the selected client ID and client secret sources."""
+    _load_local_dotenv()
+    _, client_id_source = _resolve_credential(
+        "GMAIL_CLIENT_ID",
+        "GOOGLE_GMAIL_CLIENT_ID",
+        "GOOGLE_CLIENT_ID",
+    )
+    _, client_secret_source = _resolve_credential(
+        "GMAIL_CLIENT_SECRET",
+        "GOOGLE_GMAIL_CLIENT_SECRET",
+        "GOOGLE_CLIENT_SECRET",
+    )
+    return client_id_source or "missing", client_secret_source or "missing"
 
 
 # ---------------------------------------------------------------------------
@@ -304,6 +353,15 @@ def load_refresh_token() -> str | None:
     return None
 
 
+def _prompt_yes_no(prompt: str, *, default: bool = False) -> bool:
+    """Read a yes/no answer, defaulting safely on non-interactive stdin."""
+    try:
+        answer = input(prompt).strip().lower()
+    except EOFError:
+        return default
+    return answer == "y"
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -341,13 +399,16 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Client ID found: {client_id[:12]}...{client_id[-4:]}")
     print("Client Secret found: ****")
+    client_id_source, client_secret_source = get_credential_sources()
+    print(f"Client ID source: {client_id_source}")
+    print(f"Client Secret source: {client_secret_source}")
+    print(f"Redirect URI: {REDIRECT_URI}")
 
     # Step 2: Check for existing token
     existing = load_refresh_token()
     if existing:
         print(f"\nExisting refresh token found at {TOKEN_FILE}")
-        answer = input("Re-authorize? (y/N): ").strip().lower()
-        if answer != "y":
+        if not _prompt_yes_no("Re-authorize? (y/N): ", default=False):
             print("Keeping existing token. Done.")
             return 0
 
