@@ -6,6 +6,7 @@ that gets injected into debate prompts.
 """
 
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -141,7 +142,7 @@ class IntrospectionSnapshot:
 
         return "; ".join(directives[:2])  # Max 2 directives to stay concise
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize snapshot to dictionary."""
         return {
             "agent_name": self.agent_name,
