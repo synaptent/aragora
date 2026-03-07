@@ -95,7 +95,16 @@ def build_autopilot_command(
             cmd.append("--json")
 
     elif request.action == "reconcile":
-        cmd.extend(["--base", request.base_branch, "--strategy", request.strategy])
+        cmd.extend(
+            [
+                "--base",
+                request.base_branch,
+                "--strategy",
+                request.strategy,
+                "--ttl-hours",
+                str(request.ttl_hours),
+            ]
+        )
         if request.reconcile_all:
             cmd.append("--all")
         if request.path:
@@ -134,8 +143,10 @@ def build_autopilot_command(
         if request.json_output:
             cmd.append("--json")
 
-    elif request.action == "status" and request.json_output:
-        cmd.append("--json")
+    elif request.action == "status":
+        cmd.extend(["--ttl-hours", str(request.ttl_hours)])
+        if request.json_output:
+            cmd.append("--json")
 
     return cmd
 

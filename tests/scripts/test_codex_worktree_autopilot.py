@@ -332,7 +332,21 @@ def test_cmd_cleanup_skips_worktree_with_active_lease(
     )
     monkeypatch.setattr(mod, "_load_state", lambda _state_file: state)
     monkeypatch.setattr(mod, "_has_active_session", lambda _path: False)
-    monkeypatch.setattr(mod, "_has_active_lease", lambda _repo_root, _path: True)
+    monkeypatch.setattr(
+        mod,
+        "_lease_snapshot",
+        lambda _repo_root, _path: {
+            "lease_id": "lease-1",
+            "lease_status": "active",
+            "last_heartbeat_at": "2026-02-24T00:00:00+00:00",
+            "lease_expires_at": "2026-02-24T08:00:00+00:00",
+            "owner_agent": "codex",
+            "owner_session_id": "sess-1",
+            "branch": "codex/lease1",
+            "title": "leased",
+            "has_live_lease": True,
+        },
+    )
     monkeypatch.setattr(
         mod,
         "_run_git",
@@ -362,8 +376,10 @@ def test_cmd_cleanup_skips_worktree_with_active_lease(
     payload = json.loads(capsys.readouterr().out)
     assert payload["removed"] == 0
     assert payload["kept"] == 1
-    assert payload["skipped_active_lease"] == 1
+    assert payload["skipped_grace"] == 1
     assert payload["skipped_active_session"] == 0
+    assert payload["results"][0]["status"] == "skipped_grace"
+    assert payload["results"][0]["lifecycle_state"] == "grace"
     assert saved_state["sessions"] == state["sessions"]
 
 
@@ -442,3 +458,247 @@ def test_cmd_reconcile_skips_active_session_lock(
     assert payload["skipped_active_session"] == 1
     assert payload["results"][0]["status"] == "skipped_active_session"
     assert saved_state["sessions"][0]["reconcile_status"] == "skipped_active_session"
+
+
+def test_cmd_reconcile_skips_grace_lane_with_live_lease(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import codex_worktree_autopilot as mod
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    grace_path = tmp_path / "grace-wt"
+    grace_path.mkdir()
+    state = {
+        "sessions": [
+            {
+                "session_id": "grace-1",
+                "agent": "codex",
+                "branch": "codex/grace-1",
+                "path": str(grace_path),
+                "created_at": "2026-02-01T00:00:00+00:00",
+            }
+        ]
+    }
+    saved_state: dict[str, object] = {}
+
+    monkeypatch.setattr(mod, "_repo_root_from", lambda _path: repo_root)
+    monkeypatch.setattr(
+        mod,
+        "_get_worktree_entries",
+        lambda _repo: [mod.WorktreeEntry(path=grace_path, branch="codex/grace-1")],
+    )
+    monkeypatch.setattr(mod, "_load_state", lambda _state_file: state)
+    monkeypatch.setattr(mod, "_has_active_session", lambda _path: False)
+    monkeypatch.setattr(
+        mod,
+        "_lease_snapshot",
+        lambda _repo_root, _path: {
+            "lease_id": "lease-1",
+            "lease_status": "active",
+            "last_heartbeat_at": "2026-02-24T00:00:00+00:00",
+            "lease_expires_at": "2026-02-24T08:00:00+00:00",
+            "owner_agent": "codex",
+            "owner_session_id": "sess-1",
+            "branch": "codex/grace-1",
+            "title": "grace",
+            "has_live_lease": True,
+        },
+    )
+    monkeypatch.setattr(
+        mod,
+        "_integrate_worktree",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("should not reconcile")),
+    )
+    monkeypatch.setattr(
+        mod, "_save_state", lambda _state_file, payload: saved_state.update(payload)
+    )
+
+    args = argparse.Namespace(
+        repo=".",
+        managed_dir=".worktrees/codex-auto",
+        base="main",
+        strategy="ff-only",
+        ttl_hours=24,
+        all=True,
+        path=None,
+        json=True,
+    )
+    rc = mod.cmd_reconcile(args)
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["count"] == 1
+    assert payload["skipped_grace"] == 1
+    assert payload["results"][0]["status"] == "skipped_grace"
+    assert payload["results"][0]["lifecycle_state"] == "grace"
+    assert saved_state["sessions"][0]["reconcile_status"] == "skipped_grace"
+
+
+def test_cmd_cleanup_archives_before_removal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import codex_worktree_autopilot as mod
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    stale_path = tmp_path / "stale-wt"
+    stale_path.mkdir()
+    state = {
+        "sessions": [
+            {
+                "session_id": "stale-1",
+                "agent": "codex",
+                "branch": "codex/stale-1",
+                "path": str(stale_path),
+                "created_at": "2026-02-01T00:00:00+00:00",
+            }
+        ]
+    }
+    saved_state: dict[str, object] = {}
+    removed_paths: list[Path] = []
+
+    monkeypatch.setattr(mod, "_repo_root_from", lambda _path: repo_root)
+    monkeypatch.setattr(
+        mod,
+        "_get_worktree_entries",
+        lambda _repo: [mod.WorktreeEntry(path=stale_path, branch="codex/stale-1")],
+    )
+    monkeypatch.setattr(mod, "_load_state", lambda _state_file: state)
+    monkeypatch.setattr(mod, "_has_active_session", lambda _path: False)
+    monkeypatch.setattr(
+        mod,
+        "_lease_snapshot",
+        lambda _repo_root, _path: {
+            "lease_id": None,
+            "lease_status": None,
+            "last_heartbeat_at": None,
+            "lease_expires_at": None,
+            "owner_agent": None,
+            "owner_session_id": None,
+            "branch": None,
+            "title": None,
+            "has_live_lease": False,
+        },
+    )
+    monkeypatch.setattr(mod, "_worktree_status", lambda *_args, **_kwargs: {"dirty": False})
+    monkeypatch.setattr(mod, "_branch_ahead_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(
+        mod,
+        "_archive_session",
+        lambda _repo_root, _session, _metadata: (True, "/tmp/archive/stale-1"),
+    )
+    monkeypatch.setattr(
+        mod,
+        "_remove_worktree",
+        lambda _repo_root, path: removed_paths.append(path) or True,
+    )
+    monkeypatch.setattr(mod, "_delete_branch", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        mod,
+        "_run_git",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["git", "worktree", "prune"],
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        mod, "_save_state", lambda _state_file, payload: saved_state.update(payload)
+    )
+
+    args = argparse.Namespace(
+        repo=".",
+        managed_dir=".worktrees/codex-auto",
+        base="main",
+        ttl_hours=0,
+        force_unmerged=False,
+        delete_branches=True,
+        json=True,
+    )
+    rc = mod.cmd_cleanup(args)
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["archived"] == 1
+    assert payload["removed"] == 1
+    assert payload["failed_archives"] == 0
+    assert payload["results"][0]["archive_path"] == "/tmp/archive/stale-1"
+    assert removed_paths == [stale_path]
+    assert saved_state["sessions"] == []
+
+
+def test_cmd_status_reports_lifecycle_and_lock_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import codex_worktree_autopilot as mod
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    state = {
+        "sessions": [
+            {
+                "session_id": "s1",
+                "agent": "codex",
+                "branch": "codex/s1",
+                "path": str(tmp_path / "active"),
+                "created_at": "2026-02-01T00:00:00+00:00",
+            },
+            {
+                "session_id": "s2",
+                "agent": "codex",
+                "branch": "codex/s2",
+                "path": str(tmp_path / "safe"),
+                "created_at": "2026-02-01T00:00:00+00:00",
+            },
+        ]
+    }
+
+    metadata_rows = iter(
+        [
+            {
+                "lifecycle_state": "active",
+                "cleanup_lock": True,
+                "cleanup_lock_reason": "active_session",
+                "base_branch": "main",
+                "base_sha": "abc123",
+                "last_heartbeat_at": "2026-02-24T00:00:00+00:00",
+                "lease_status": "active",
+                "lease_expires_at": "2026-02-24T08:00:00+00:00",
+            },
+            {
+                "lifecycle_state": "safe-to-clean",
+                "cleanup_lock": False,
+                "cleanup_lock_reason": None,
+                "base_branch": "main",
+                "base_sha": "def456",
+                "last_heartbeat_at": None,
+                "lease_status": None,
+                "lease_expires_at": None,
+            },
+        ]
+    )
+
+    monkeypatch.setattr(mod, "_repo_root_from", lambda _path: repo_root)
+    monkeypatch.setattr(mod, "_load_state", lambda _state_file: state)
+    monkeypatch.setattr(mod, "_get_worktree_entries", lambda _repo: [])
+    monkeypatch.setattr(
+        mod,
+        "_annotate_session",
+        lambda *_args, **_kwargs: next(metadata_rows),
+    )
+
+    args = argparse.Namespace(
+        repo=".",
+        managed_dir=".worktrees/codex-auto",
+        ttl_hours=24,
+        json=True,
+    )
+    rc = mod.cmd_status(args)
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["sessions"][0]["lifecycle_state"] == "active"
+    assert payload["sessions"][0]["cleanup_lock_reason"] == "active_session"
+    assert payload["sessions"][1]["lifecycle_state"] == "safe-to-clean"
