@@ -60,7 +60,14 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: aragora/live
-        run: npx playwright install --with-deps chromium
+        shell: bash
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            npx playwright install --with-deps chromium
+          else
+            echo "::notice::apt-get unavailable on runner; installing Chromium without OS package bootstrap"
+            npx playwright install chromium
+          fi
 
       - name: Run production smoke tests
         working-directory: aragora/live
@@ -133,7 +140,14 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: aragora/live
-        run: npx playwright install --with-deps chromium
+        shell: bash
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            npx playwright install --with-deps chromium
+          else
+            echo "::notice::apt-get unavailable on runner; installing Chromium without OS package bootstrap"
+            npx playwright install chromium
+          fi
 
       - name: Run auth flow tests
         working-directory: aragora/live
@@ -213,7 +227,14 @@ jobs:
 
       - name: Install Playwright browsers
         working-directory: aragora/live
-        run: npx playwright install --with-deps chromium
+        shell: bash
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            npx playwright install --with-deps chromium
+          else
+            echo "::notice::apt-get unavailable on runner; installing Chromium without OS package bootstrap"
+            npx playwright install chromium
+          fi
 
       - name: Run full production test suite
         working-directory: aragora/live
