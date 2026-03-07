@@ -32,6 +32,7 @@ import logging
 import re
 import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from aragora.server.handlers.base import HandlerResult, error_response, handle_errors, json_response
@@ -50,8 +51,8 @@ _DEBATE_TO_PIPELINE = re.compile(r"^/api/v1/debates/([a-zA-Z0-9_-]+)/to-pipeline
 
 # Live PipelineResult objects for advance_stage() (cannot be persisted)
 _pipeline_objects: dict[str, Any] = {}
-# Async pipeline tasks (cannot be persisted)
-_pipeline_tasks: dict[str, asyncio.Task[Any]] = {}
+# Async pipeline tasks / worker threads (cannot be persisted)
+_pipeline_tasks: dict[str, Any] = {}
 
 
 def _spectate_pipeline(event_type: str, pipeline_id: str, data: dict[str, Any]) -> None:
@@ -1892,8 +1893,6 @@ class CanvasPipelineHandler:
         Body:
             dry_run: bool (default False) — Preview execution plan without running
         """
-        import uuid as _uuid
-
         store = _get_store()
         existing = store.get(pipeline_id)
         if not existing:
@@ -1917,13 +1916,11 @@ class CanvasPipelineHandler:
             if isinstance(n, dict) and n.get("data", {}).get("orch_type") == "agent_task"
         ]
 
-        execution_id = f"exec-{_uuid.uuid4().hex[:8]}"
-
         if dry_run:
             return json_response(
                 {
                     "pipeline_id": pipeline_id,
-                    "execution_id": execution_id,
+                    "runtime": "decision_plan",
                     "status": "dry_run",
                     "stages_complete": [
                         s
@@ -1941,6 +1938,14 @@ class CanvasPipelineHandler:
                 f"Cannot execute: stages not complete: {', '.join(incomplete)}",
                 400,
             )
+
+        execution_state = existing.get("execution", {})
+        if isinstance(execution_state, dict) and execution_state.get("status") in {
+            "queued",
+            "running",
+            "executing",
+        }:
+            return error_response("Pipeline is already executing", 409)
 
         # Set up stream emitter for real-time progress
         emitter = None
@@ -1979,7 +1984,35 @@ class CanvasPipelineHandler:
         except (ImportError, RuntimeError, TypeError, ValueError) as exc:
             logger.debug("Canvas-to-workflow sync skipped: %s", exc)
 
-        # Start async execution
+        from aragora.pipeline.canonical_execution import (
+            build_decision_plan_from_orchestration,
+            execute_queued_plan,
+            queue_plan_execution,
+        )
+
+        plan, tasks = build_decision_plan_from_orchestration(
+            subject_id=pipeline_id,
+            subject_label=existing.get("name") or f"Pipeline {pipeline_id}",
+            nodes=orch_nodes,
+            edges=orch_data.get("edges", []) if isinstance(orch_data, dict) else [],
+            source_surface="canvas_pipeline",
+            metadata={
+                "pipeline_id": pipeline_id,
+                "synced_workflow": existing.get("synced_workflow"),
+            },
+            execution_mode="workflow",
+        )
+        launch = queue_plan_execution(plan, execution_mode="workflow")
+        existing["execution"] = {
+            **launch,
+            "runtime": "decision_plan",
+            "status": "queued",
+            "tasks_total": len(tasks),
+            "agent_tasks": len(agent_tasks),
+            "total_orchestration_nodes": len(orch_nodes),
+        }
+        store.save(pipeline_id, existing)
+
         async def _execute() -> None:
             try:
                 if emitter:
@@ -1987,71 +2020,90 @@ class CanvasPipelineHandler:
                         pipeline_id,
                         "execution",
                         {
-                            "execution_id": execution_id,
+                            "execution_id": launch["execution_id"],
+                            "plan_id": plan.id,
                             "agent_tasks": len(agent_tasks),
                         },
                     )
 
-                # Execute each agent task in sequence
-                _agent_names = ["Analyst", "Implementer", "Reviewer", "Architect"]
-                task_results = []
-                for i, task_node in enumerate(agent_tasks):
-                    task_data = task_node.get("data", {})
-                    task_label = task_data.get("label", f"Task {i + 1}")
-                    agent_name = task_data.get("agent", _agent_names[i % len(_agent_names)])
+                existing["execution"]["status"] = "running"
+                store.save(pipeline_id, existing)
 
-                    if emitter:
-                        await emitter.emit_step_progress(
-                            pipeline_id,
-                            f"[{agent_name}] {task_label}",
-                            i / max(len(agent_tasks), 1),
-                        )
+                outcome, record, decision_receipt = await execute_queued_plan(
+                    plan,
+                    execution_id=launch["execution_id"],
+                    correlation_id=launch["correlation_id"],
+                    execution_mode=launch["execution_mode"],
+                )
 
-                    # Brief delay to allow WebSocket clients to see progress
-                    await asyncio.sleep(0.3)
-
-                    task_results.append(
-                        {
-                            "task": task_label,
-                            "agent": agent_name,
-                            "status": "completed",
-                        }
-                    )
-
-                # Update pipeline status in store
-                existing["execution"] = {
-                    "execution_id": execution_id,
-                    "status": "completed",
-                    "tasks_executed": len(agent_tasks),
-                    "task_results": task_results,
+                receipt_bundle: dict[str, Any] = {
+                    "receipt_id": getattr(outcome, "receipt_id", None),
+                    "pipeline_id": pipeline_id,
+                    "plan_id": plan.id,
+                    "execution_id": launch["execution_id"],
+                    "correlation_id": launch["correlation_id"],
+                    "decision_receipt": decision_receipt,
                 }
+                try:
+                    from aragora.pipeline.receipt_generator import generate_pipeline_receipt
+
+                    receipt_bundle["pipeline_receipt"] = await generate_pipeline_receipt(
+                        pipeline_id,
+                        {
+                            **(record or {}),
+                            "execution_id": launch["execution_id"],
+                            "correlation_id": launch["correlation_id"],
+                            "status": "completed" if outcome.success else "failed",
+                            "started_at": existing["execution"].get("scheduled_at"),
+                            "completed_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                    )
+                except (ImportError, RuntimeError, ValueError, TypeError, OSError) as exc:
+                    logger.debug("Pipeline provenance receipt generation skipped: %s", exc)
+
+                existing["execution"] = {
+                    **existing.get("execution", {}),
+                    "status": "completed" if outcome.success else "failed",
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "record": record,
+                    "outcome": outcome.to_dict(),
+                    "receipt_id": getattr(outcome, "receipt_id", None),
+                }
+                existing["receipt"] = receipt_bundle
                 store.save(pipeline_id, existing)
 
                 if emitter:
-                    await emitter.emit_completed(pipeline_id, existing.get("receipt"))
-            except (ImportError, ValueError, TypeError, OSError) as exc:
+                    await emitter.emit_completed(pipeline_id, receipt_bundle)
+            except Exception as exc:  # noqa: BLE001 - background execution must update state before surfacing
                 logger.error("Pipeline execution failed: %s", exc)
+                existing["execution"] = {
+                    **existing.get("execution", {}),
+                    "status": "failed",
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "error": str(exc),
+                }
+                store.save(pipeline_id, existing)
                 if emitter:
-                    await emitter.emit_failed(pipeline_id, "Execution failed")
+                    await emitter.emit_failed(pipeline_id, str(exc))
 
         task = asyncio.create_task(_execute())
         task.add_done_callback(
-            lambda t: logger.error(
-                "Pipeline execute task failed: %s",
-                t.exception(),
-            )
+            lambda t: logger.error("Pipeline execute task failed: %s", t.exception())
             if not t.cancelled() and t.exception()
             else None
         )
-        _pipeline_tasks[execution_id] = task
+        _pipeline_tasks[launch["execution_id"]] = task
 
         return json_response(
             {
                 "pipeline_id": pipeline_id,
-                "execution_id": execution_id,
+                "execution_id": launch["execution_id"],
+                "plan_id": plan.id,
+                "correlation_id": launch["correlation_id"],
                 "status": "executing",
                 "agent_tasks": len(agent_tasks),
                 "total_orchestration_nodes": len(orch_nodes),
+                "runtime": "decision_plan",
             },
             202,
         )

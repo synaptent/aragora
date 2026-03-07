@@ -14,6 +14,7 @@ from typing import Any
 
 from aragora.storage.base_store import SQLiteStore
 from aragora.storage.schema import SchemaManager
+from aragora.storage.schema import safe_add_column
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class PipelineResultStore(SQLiteStore):
     """Persistent storage for idea-to-execution pipeline results."""
 
     SCHEMA_NAME = "pipeline_results"
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     INITIAL_SCHEMA = """
         CREATE TABLE IF NOT EXISTS pipeline_results (
@@ -37,6 +38,7 @@ class PipelineResultStore(SQLiteStore):
             provenance_count INTEGER DEFAULT 0,
             integrity_hash TEXT,
             receipt_json TEXT,
+            execution_json TEXT,
             duration REAL DEFAULT 0.0,
             created_at REAL NOT NULL,
             updated_at REAL NOT NULL
@@ -49,7 +51,17 @@ class PipelineResultStore(SQLiteStore):
 
     def register_migrations(self, manager: SchemaManager) -> None:
         """Register schema migrations."""
-        pass
+        manager.register_migration(
+            from_version=1,
+            to_version=2,
+            function=lambda conn: safe_add_column(
+                conn,
+                "pipeline_results",
+                "execution_json",
+                "TEXT",
+            ),
+            description="Persist canonical execution metadata",
+        )
 
     def save(self, pipeline_id: str, result_dict: dict[str, Any]) -> None:
         """Save or update a pipeline result.
@@ -79,8 +91,8 @@ class PipelineResultStore(SQLiteStore):
                     id, status, stage_status_json,
                     ideas_json, goals_json, actions_json, orchestration_json,
                     transitions_json, provenance_count, integrity_hash,
-                    receipt_json, duration, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    receipt_json, execution_json, duration, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     status = excluded.status,
                     stage_status_json = excluded.stage_status_json,
@@ -92,6 +104,7 @@ class PipelineResultStore(SQLiteStore):
                     provenance_count = excluded.provenance_count,
                     integrity_hash = excluded.integrity_hash,
                     receipt_json = excluded.receipt_json,
+                    execution_json = excluded.execution_json,
                     duration = excluded.duration,
                     updated_at = excluded.updated_at
                 """,
@@ -109,6 +122,9 @@ class PipelineResultStore(SQLiteStore):
                     result_dict.get("provenance_count", 0),
                     result_dict.get("integrity_hash", ""),
                     json.dumps(result_dict.get("receipt")) if result_dict.get("receipt") else None,
+                    json.dumps(result_dict.get("execution"))
+                    if result_dict.get("execution")
+                    else None,
                     result_dict.get("duration", 0.0),
                     now,
                     now,
@@ -251,6 +267,9 @@ def _deserialize_row(row: dict[str, Any]) -> dict[str, Any]:
     receipt_json = row.get("receipt_json")
     if receipt_json:
         result["receipt"] = _parse_json(receipt_json)
+    execution_json = row.get("execution_json")
+    if execution_json:
+        result["execution"] = _parse_json(execution_json)
     return result
 
 

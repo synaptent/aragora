@@ -26,6 +26,7 @@ def _make_result(
     provenance_count: int = 0,
     integrity_hash: str = "",
     receipt: dict | None = None,
+    execution: dict | None = None,
     duration: float = 0.0,
 ) -> dict:
     return {
@@ -38,6 +39,7 @@ def _make_result(
         "provenance_count": provenance_count,
         "integrity_hash": integrity_hash,
         "receipt": receipt,
+        "execution": execution,
         "duration": duration,
     }
 
@@ -95,6 +97,18 @@ class TestSave:
 
         retrieved = store.get("pipe-1")
         assert retrieved["receipt"] == receipt
+
+    def test_save_preserves_execution(self, store):
+        execution = {
+            "plan_id": "plan-123",
+            "execution_id": "exec-123",
+            "correlation_id": "corr-123",
+            "status": "running",
+        }
+        store.save("pipe-1", _make_result(execution=execution))
+
+        retrieved = store.get("pipe-1")
+        assert retrieved["execution"] == execution
 
     def test_save_preserves_transitions(self, store):
         transitions = [{"from": "ideas", "to": "goals", "timestamp": 1234.5}]

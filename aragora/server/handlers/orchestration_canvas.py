@@ -564,17 +564,83 @@ class OrchestrationCanvasHandler(SecureHandler):
                 nodes = [n.to_dict() for n in canvas.nodes.values()]
                 edges = [e.to_dict() for e in canvas.edges.values()]
 
-            execution_id = f"exec-{uuid.uuid4().hex[:8]}"
+            from aragora.pipeline.canonical_execution import (
+                build_decision_plan_from_orchestration,
+                execute_queued_plan,
+                queue_plan_execution,
+                schedule_coroutine,
+            )
+
+            plan, tasks = build_decision_plan_from_orchestration(
+                subject_id=canvas_id,
+                subject_label=canvas_meta.get("name") or f"Orchestration canvas {canvas_id}",
+                nodes=nodes,
+                edges=edges,
+                source_surface="orchestration_canvas",
+                metadata={
+                    "canvas_id": canvas_id,
+                    "canvas_metadata": canvas_meta.get("metadata", {}),
+                },
+                execution_mode="workflow",
+            )
+            launch = queue_plan_execution(plan, auth_context=context, execution_mode="workflow")
+
+            metadata = dict(canvas_meta.get("metadata", {}) or {})
+            metadata["execution"] = {
+                **launch,
+                "runtime": "decision_plan",
+                "status": "queued",
+                "tasks_total": len(tasks),
+                "nodes_count": len(nodes),
+                "edges_count": len(edges),
+            }
+            store.update_canvas(canvas_id=canvas_id, metadata=metadata)
+
+            async def _execute() -> None:
+                try:
+                    outcome, record, decision_receipt = await execute_queued_plan(
+                        plan,
+                        execution_id=launch["execution_id"],
+                        correlation_id=launch["correlation_id"],
+                        auth_context=context,
+                        execution_mode=launch["execution_mode"],
+                    )
+                    updated_metadata = dict(store.load_canvas(canvas_id).get("metadata", {}) or {})
+                    updated_metadata["execution"] = {
+                        **updated_metadata.get("execution", {}),
+                        "status": "completed" if outcome.success else "failed",
+                        "record": record,
+                        "outcome": outcome.to_dict(),
+                        "receipt": decision_receipt,
+                    }
+                    store.update_canvas(canvas_id=canvas_id, metadata=updated_metadata)
+                except Exception as exc:  # noqa: BLE001 - persist terminal failure state
+                    logger.error("Failed to execute orchestration canvas %s: %s", canvas_id, exc)
+                    updated_metadata = dict(store.load_canvas(canvas_id).get("metadata", {}) or {})
+                    updated_metadata["execution"] = {
+                        **updated_metadata.get("execution", {}),
+                        "status": "failed",
+                        "error": str(exc),
+                    }
+                    store.update_canvas(canvas_id=canvas_id, metadata=updated_metadata)
+
+            schedule_coroutine(
+                _execute(),
+                name=f"orch-plan-exec-{canvas_id[:8]}",
+            )
 
             return json_response(
                 {
-                    "execution_id": execution_id,
+                    "execution_id": launch["execution_id"],
+                    "plan_id": plan.id,
+                    "correlation_id": launch["correlation_id"],
                     "canvas_id": canvas_id,
                     "stage": "orchestration",
                     "nodes_count": len(nodes),
                     "edges_count": len(edges),
                     "metadata": canvas_meta.get("metadata", {}),
                     "status": "queued",
+                    "runtime": "decision_plan",
                 },
                 status=201,
             )
