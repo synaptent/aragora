@@ -21,7 +21,7 @@ import pytest
 
 
 @pytest.fixture()
-def gmail_setup():
+def gmail_setup(monkeypatch):
     """Import the gmail_oauth_setup module."""
     import importlib
     import sys
@@ -31,6 +31,8 @@ def gmail_setup():
         sys.path.insert(0, scripts_dir)
 
     mod = importlib.import_module("gmail_oauth_setup")
+    monkeypatch.setattr(mod, "_get_secret_fallback", lambda _name: "")
+    monkeypatch.setattr(mod, "_load_local_dotenv", lambda: None)
     yield mod
 
     # Clean up sys.path addition
@@ -154,6 +156,31 @@ class TestCheckCredentials:
 
         ok, cid, _ = gmail_setup.check_credentials()
         assert cid == "gmail-id"
+
+    def test_secret_loader_fallback(self, gmail_setup, monkeypatch):
+        """Secret fallback should work when raw env vars are absent."""
+        for var in (
+            "GMAIL_CLIENT_ID",
+            "GOOGLE_GMAIL_CLIENT_ID",
+            "GOOGLE_CLIENT_ID",
+            "GMAIL_CLIENT_SECRET",
+            "GOOGLE_GMAIL_CLIENT_SECRET",
+            "GOOGLE_CLIENT_SECRET",
+        ):
+            monkeypatch.delenv(var, raising=False)
+
+        def fake_secret(name: str) -> str:
+            mapping = {
+                "GMAIL_CLIENT_ID": "secret-id",
+                "GMAIL_CLIENT_SECRET": "secret-secret",
+            }
+            return mapping.get(name, "")
+
+        monkeypatch.setattr(gmail_setup, "_get_secret_fallback", fake_secret)
+        ok, cid, csecret = gmail_setup.check_credentials()
+        assert ok is True
+        assert cid == "secret-id"
+        assert csecret == "secret-secret"
 
 
 # ---------------------------------------------------------------------------
@@ -303,3 +330,46 @@ class TestMainExitCodes:
 
         result = gmail_setup.main([])
         assert result == 0
+
+    def test_exits_0_on_eof_with_existing_token(self, gmail_setup, monkeypatch, tmp_path):
+        """main() keeps the existing token when stdin is unavailable."""
+        for var in (
+            "GMAIL_CLIENT_ID",
+            "GOOGLE_GMAIL_CLIENT_ID",
+            "GOOGLE_CLIENT_ID",
+            "GMAIL_CLIENT_SECRET",
+            "GOOGLE_GMAIL_CLIENT_SECRET",
+            "GOOGLE_CLIENT_SECRET",
+        ):
+            monkeypatch.delenv(var, raising=False)
+
+        monkeypatch.setenv("GMAIL_CLIENT_ID", "id")
+        monkeypatch.setenv("GMAIL_CLIENT_SECRET", "secret")
+
+        token_file = tmp_path / "gmail_refresh_token"
+        token_file.write_text("existing-token\n")
+        monkeypatch.setattr(gmail_setup, "TOKEN_DIR", tmp_path)
+        monkeypatch.setattr(gmail_setup, "TOKEN_FILE", token_file)
+        monkeypatch.setattr("builtins.input", mock.Mock(side_effect=EOFError))
+
+        result = gmail_setup.main([])
+        assert result == 0
+
+    def test_prints_selected_sources(self, gmail_setup, monkeypatch, capsys, tmp_path):
+        """main() should print the credential sources and redirect URI."""
+        monkeypatch.setenv("GMAIL_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("GMAIL_CLIENT_SECRET", "test-secret")
+
+        token_file = tmp_path / "gmail_refresh_token"
+        token_file.write_text("existing-token\n")
+        monkeypatch.setattr(gmail_setup, "TOKEN_DIR", tmp_path)
+        monkeypatch.setattr(gmail_setup, "TOKEN_FILE", token_file)
+        monkeypatch.setattr("builtins.input", lambda _: "n")
+
+        result = gmail_setup.main([])
+        captured = capsys.readouterr()
+
+        assert result == 0
+        assert "Client ID source: env:GMAIL_CLIENT_ID" in captured.out
+        assert "Client Secret source: env:GMAIL_CLIENT_SECRET" in captured.out
+        assert f"Redirect URI: {gmail_setup.REDIRECT_URI}" in captured.out
