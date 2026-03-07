@@ -79,6 +79,56 @@ def _extract_dissent(debate_result: Any) -> str:
     return ""
 
 
+def _create_triage_agents() -> list:
+    """Create agents for triage debates.
+
+    Prefers cheap, fast models:
+      - Anthropic Haiku as proposer
+      - OpenRouter/DeepSeek as critic
+    Falls back to OpenAI if keys are missing.
+    """
+    import os
+
+    from aragora.agents.base import create_agent
+
+    agents: list = []
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        try:
+            agents.append(
+                create_agent(
+                    "anthropic-api",
+                    name="triage-proposer",
+                    role="proposer",
+                    model="claude-haiku-4-5-20251001",
+                )
+            )
+        except (ImportError, RuntimeError, ValueError, OSError):
+            pass
+
+    if os.environ.get("OPENROUTER_API_KEY"):
+        try:
+            agents.append(
+                create_agent(
+                    "openrouter",
+                    name="triage-critic",
+                    role="critic",
+                    model="deepseek/deepseek-chat",
+                )
+            )
+        except (ImportError, RuntimeError, ValueError, OSError):
+            pass
+
+    # Fallback: try OpenAI if still short
+    if len(agents) < 2 and os.environ.get("OPENAI_API_KEY"):
+        role = "critic" if agents else "proposer"
+        try:
+            agents.append(create_agent("openai-api", name=f"triage-{role}", role=role))
+        except (ImportError, RuntimeError, ValueError, OSError):
+            pass
+
+    return agents
+
+
 class InboxTriageRunner:
     """Orchestrates the full inbox triage flow.
 
@@ -256,22 +306,11 @@ class InboxTriageRunner:
         )
 
         try:
-            from aragora.agents.base import create_agent
             from aragora.core import Environment
             from aragora.debate.orchestrator import Arena
             from aragora.debate.protocol import DebateProtocol
 
-            agents = []
-            for model_type, role in [
-                ("anthropic-api", "proposer"),
-                ("openai-api", "critic"),
-            ]:
-                try:
-                    agents.append(
-                        create_agent(model_type=model_type, name=f"triage-{role}", role=role)
-                    )
-                except (ImportError, RuntimeError, ValueError, OSError):
-                    pass
+            agents = _create_triage_agents()
 
             if len(agents) < 2:
                 logger.warning("Fewer than 2 agents available; using stub debate")
