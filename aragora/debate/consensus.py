@@ -38,7 +38,7 @@ class Evidence:
     supports_claim: bool  # True if supports, False if refutes
     strength: float  # 0-1
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -267,7 +267,7 @@ class ConsensusProof:
     # Metadata
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     rounds_to_consensus: int = 0
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Cached checksum (computed on first access, excluded from repr/compare)
     _cached_checksum: str | None = field(default=None, repr=False, compare=False)
@@ -278,7 +278,7 @@ class ConsensusProof:
         if self._cached_checksum is not None:
             return self._cached_checksum
 
-        def enum_dict_factory(data: list) -> dict:
+        def enum_dict_factory(data: list[tuple[str, Any]]) -> dict[str, Any]:
             """Convert Enum values to their string values for JSON serialization."""
             return {k: v.value if isinstance(v, Enum) else v for k, v in data}
 
@@ -430,10 +430,10 @@ class ConsensusProof:
 
         return correlation
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
 
-        def enum_dict_factory(data: list) -> dict:
+        def enum_dict_factory(data: list[tuple[str, Any]]) -> dict[str, Any]:
             """Convert Enum values to their string values for JSON serialization."""
             return {k: v.value if isinstance(v, Enum) else v for k, v in data}
 
@@ -747,7 +747,7 @@ class ConsensusBuilder:
                 )
 
         # Build claims-by-author index for O(1) lookup (optimization)
-        claims_by_author: dict[str, list] = {}
+        claims_by_author: dict[str, list[Any]] = {}
         for claim in builder.claims:
             if claim.author not in claims_by_author:
                 claims_by_author[claim.author] = []

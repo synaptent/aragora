@@ -63,7 +63,7 @@ class Vulnerability:
         """Calculate risk score from exploitability and impact."""
         return self.exploitability * self.impact
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "title": self.title,
@@ -98,7 +98,7 @@ class AttackSummary:
     robustness_score: float = 1.0
     coverage_score: float = 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "total_attacks": self.total_attacks,
             "successful_attacks": self.successful_attacks,
@@ -121,7 +121,7 @@ class ProbeSummary:
     vulnerability_rate: float = 0.0
     elo_penalty: float = 0.0
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "probes_run": self.probes_run,
             "vulnerabilities_found": self.vulnerabilities_found,
@@ -141,7 +141,7 @@ class ScenarioSummary:
     universal_conclusions: list[str] = field(default_factory=list)
     conditional_patterns: dict[str, list[str]] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "scenarios_run": self.scenarios_run,
             "outcome_category": self.outcome_category,
@@ -319,7 +319,7 @@ class GauntletResult:
             "estimated_effort": effort,
         }
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "gauntlet_id": self.gauntlet_id,
             "input_hash": self.input_hash,
