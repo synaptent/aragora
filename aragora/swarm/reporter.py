@@ -154,12 +154,19 @@ def _merge_readiness(
     queue_status: str,
     stale_heartbeat: bool,
     missing_receipt: bool,
+    scope_violation: bool,
     superseded: bool,
     collisions: list[str],
 ) -> str:
     if superseded:
         return "superseded"
-    if collisions or stale_heartbeat or missing_receipt or queue_status in {"blocked", "failed"}:
+    if (
+        collisions
+        or stale_heartbeat
+        or missing_receipt
+        or scope_violation
+        or queue_status in {"blocked", "failed"}
+    ):
         return "blocked"
     if queue_status == "merged":
         return "merged"
@@ -179,6 +186,7 @@ def _next_action(
     readiness: str,
     stale_heartbeat: bool,
     missing_receipt: bool,
+    scope_violation: bool,
     superseded: bool,
     collisions: list[str],
     queue_status: str,
@@ -187,6 +195,8 @@ def _next_action(
         return "Close or archive the superseded lane."
     if collisions:
         return "Resolve the branch or file-scope collision before integrating."
+    if scope_violation:
+        return "Narrow the lane scope or split ownership before it can re-enter merge review."
     if stale_heartbeat:
         return "Inspect the stale lane and decide whether to salvage or reassign it."
     if missing_receipt:
@@ -264,6 +274,20 @@ def build_integrator_view(
             queue_branch_counts[branch] += 1
         if session_id:
             queue_by_session[session_id].append(item)
+
+    scope_violations = coordination.get("scope_violations", [])
+    scope_violation_by_lease: dict[str, dict[str, Any]] = {}
+    scope_violation_by_session_branch: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in scope_violations:
+        if not isinstance(item, dict):
+            continue
+        lease_id = _text(item.get("lease_id"))
+        if lease_id:
+            scope_violation_by_lease[lease_id] = item
+        session_id = _text(item.get("owner_session_id"))
+        branch = _text(item.get("branch"))
+        if session_id or branch:
+            scope_violation_by_session_branch[(session_id, branch)] = item
 
     lanes: list[dict[str, Any]] = []
     seen_worktree_keys: set[tuple[str, str]] = set()
@@ -365,6 +389,12 @@ def build_integrator_view(
             )
 
         lease_id = _first_text(work_order.get("lease_id"), work_order_meta.get("lease_id"))
+        scope_violation_record = (
+            scope_violation_by_lease.get(lease_id)
+            if lease_id
+            else scope_violation_by_session_branch.get((session_id, branch))
+        )
+        scope_violation = isinstance(scope_violation_record, dict)
         lease_health = "idle"
         if lease_id:
             lease_health = "stale" if stale_heartbeat else "healthy"
@@ -378,6 +408,7 @@ def build_integrator_view(
             queue_status=queue_status,
             stale_heartbeat=stale_heartbeat,
             missing_receipt=missing_receipt,
+            scope_violation=scope_violation,
             superseded=superseded,
             collisions=collision_reasons,
         )
@@ -402,6 +433,8 @@ def build_integrator_view(
             blockers.append("stale_heartbeat")
         if missing_receipt:
             blockers.append("missing_receipt")
+        if scope_violation:
+            blockers.append("scope_violation")
         if superseded:
             blockers.append("superseded")
         blockers = sorted(set(blockers))
@@ -438,6 +471,7 @@ def build_integrator_view(
             "merge_queue_status": queue_status or None,
             "receipt_id": receipt_id or None,
             "missing_receipt": missing_receipt,
+            "scope_violation": scope_violation_record,
             "superseded": superseded,
             "collisions": collision_reasons,
             "pr": pr,
@@ -447,6 +481,7 @@ def build_integrator_view(
                 readiness=readiness,
                 stale_heartbeat=stale_heartbeat,
                 missing_receipt=missing_receipt,
+                scope_violation=scope_violation,
                 superseded=superseded,
                 collisions=collision_reasons,
                 queue_status=queue_status,
@@ -548,6 +583,7 @@ def build_integrator_view(
         "stale_heartbeats": [],
         "superseded_lanes": [],
         "missing_receipts": [],
+        "scope_violations": [],
         "merge_ready": [],
     }
     for lane in lanes:
@@ -565,6 +601,8 @@ def build_integrator_view(
             alerts["superseded_lanes"].append(ref)
         if lane["missing_receipt"]:
             alerts["missing_receipts"].append(ref)
+        if isinstance(lane.get("scope_violation"), dict):
+            alerts["scope_violations"].append(ref)
         if lane["merge_readiness"] == "ready":
             alerts["merge_ready"].append(ref)
 
@@ -589,6 +627,7 @@ def build_integrator_view(
         "stale_heartbeat_lanes": len(alerts["stale_heartbeats"]),
         "superseded_lanes": len(alerts["superseded_lanes"]),
         "missing_receipt_lanes": len(alerts["missing_receipts"]),
+        "scope_violation_lanes": len(alerts.get("scope_violations", [])),
         "merge_ready_lanes": len(alerts["merge_ready"]),
         "coordination_counts": coordination.get("counts", {}),
     }

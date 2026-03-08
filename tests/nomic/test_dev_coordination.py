@@ -10,6 +10,7 @@ import pytest
 from aragora.nomic.dev_coordination import (
     CompletionReceipt,
     DevCoordinationStore,
+    FileScopeViolationError,
     IntegrationDecisionType,
     LeaseConflictError,
     SalvageStatus,
@@ -160,6 +161,66 @@ def test_record_completion_creates_pending_integration(store: DevCoordinationSto
     merge_queue = store.fleet_store.list_merge_queue()
     assert len(merge_queue) == 1
     assert merge_queue[0]["metadata"]["receipt_id"] == receipt.receipt_id
+
+
+def test_record_completion_rejects_out_of_scope_changes(store: DevCoordinationStore) -> None:
+    lease = store.claim_lease(
+        task_id="clb-scope",
+        title="Scope guarded lane",
+        owner_agent="codex",
+        owner_session_id="sess-scope",
+        branch="codex/scope",
+        worktree_path="/tmp/wt-scope",
+        claimed_paths=["aragora/server/auth_checks.py"],
+    )
+
+    with pytest.raises(FileScopeViolationError) as exc_info:
+        store.record_completion(
+            lease_id=lease.lease_id,
+            owner_agent="codex",
+            owner_session_id="sess-scope",
+            branch="codex/scope",
+            worktree_path="/tmp/wt-scope",
+            commit_shas=["abc12345"],
+            changed_paths=["aragora/server/handlers/playground.py"],
+        )
+
+    violation_types = {item["type"] for item in exc_info.value.violations}
+    assert "out_of_scope" in violation_types
+    assert "unowned_path" in violation_types
+    assert store.list_completion_receipts() == []
+    assert store.fleet_store.list_merge_queue() == []
+
+    summary = store.status_summary()
+    assert summary["counts"]["scope_violations"] == 1
+    assert summary["scope_violations"][0]["owner_session_id"] == "sess-scope"
+    assert summary["scope_violations"][0]["violations"][0]["type"] in violation_types
+
+
+def test_record_completion_rejects_protected_hot_paths(store: DevCoordinationStore) -> None:
+    lease = store.claim_lease(
+        task_id="clb-hot",
+        title="Hot path lane",
+        owner_agent="codex",
+        owner_session_id="sess-hot",
+        branch="codex/hot",
+        worktree_path="/tmp/wt-hot",
+        allowed_globs=["aragora/server/**"],
+        metadata={"hot_paths": ["aragora/server/handlers/**"]},
+    )
+
+    with pytest.raises(FileScopeViolationError) as exc_info:
+        store.record_completion(
+            lease_id=lease.lease_id,
+            owner_agent="codex",
+            owner_session_id="sess-hot",
+            branch="codex/hot",
+            worktree_path="/tmp/wt-hot",
+            commit_shas=["abc12345"],
+            changed_paths=["aragora/server/handlers/playground.py"],
+        )
+
+    assert any(item["type"] == "protected_path" for item in exc_info.value.violations)
 
 
 def test_supervisor_run_tracks_lease_completion_and_decision(store: DevCoordinationStore) -> None:

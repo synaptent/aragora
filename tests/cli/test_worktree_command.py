@@ -303,7 +303,7 @@ class TestWorktreeFleetStatus:
         out = capsys.readouterr().out
         assert "[active] codex/test-session" in out
         assert (
-            "Integrator: ready=0 review=0 blocked=0 stale=0 collisions=0 missing_receipts=0 superseded=0"
+            "Integrator: ready=0 review=0 blocked=0 stale=0 collisions=0 missing_receipts=0 scope_violations=0 superseded=0"
             in out
         )
         assert "dirty_files: 2 ahead/behind(main): +1/-0" in out
@@ -359,6 +359,81 @@ class TestWorktreeFleetStatus:
         assert payload["claims"] == []
         assert payload["merge_queue"] == []
         assert payload["integrator_view"]["summary"]["total_lanes"] == 1
+
+    @patch("aragora.cli.commands.worktree.build_integrator_view")
+    @patch("aragora.cli.commands.worktree.FleetCoordinationStore")
+    @patch("aragora.cli.commands.worktree.build_fleet_rows")
+    def test_fleet_status_surfaces_scope_violation(
+        self, mock_rows, mock_store_cls, mock_integrator_view, capsys, tmp_path: Path
+    ):
+        mock_rows.return_value = [
+            {
+                "session_id": "session-a",
+                "path": str(tmp_path),
+                "branch": "codex/test-session",
+                "detached": False,
+                "has_lock": True,
+                "pid": 123,
+                "pid_alive": True,
+                "agent": "codex",
+                "mode": "codex",
+                "dirty_files": 1,
+                "ahead": 1,
+                "behind": 0,
+                "last_activity": "2026-03-07T00:00:00+00:00",
+                "orchestration_pattern": "generic",
+                "log_path": None,
+                "log_tail": [],
+            }
+        ]
+        mock_integrator_view.return_value = {
+            "summary": {
+                "ready_lanes": 0,
+                "review_lanes": 0,
+                "blocked_lanes": 1,
+                "stale_heartbeat_lanes": 0,
+                "collision_lanes": 0,
+                "missing_receipt_lanes": 0,
+                "scope_violation_lanes": 1,
+                "superseded_lanes": 0,
+            },
+            "next_actions": [
+                "codex/test-session: Narrow the lane scope or split ownership before it can re-enter merge review."
+            ],
+            "lanes": [
+                {
+                    "owner_session_id": "session-a",
+                    "worktree_path": str(tmp_path),
+                    "lease_health": "healthy",
+                    "merge_readiness": "blocked",
+                    "scope_violation": {
+                        "violations": [
+                            {
+                                "type": "out_of_scope",
+                                "path": "aragora/server/handlers/playground.py",
+                            }
+                        ]
+                    },
+                }
+            ],
+        }
+        store = MagicMock()
+        store.list_claims.return_value = [{"session_id": "session-a", "path": "aragora/server/**"}]
+        store.list_merge_queue.return_value = []
+        mock_store_cls.return_value = store
+
+        _cmd_worktree_fleet_status(
+            _fleet_args(tail=0),
+            repo_path=tmp_path,
+            base_branch="main",
+        )
+
+        out = capsys.readouterr().out
+        assert "scope_violations=1" in out
+        assert "merge_readiness: blocked" in out
+        assert (
+            "Narrow the lane scope or split ownership before it can re-enter merge review." in out
+        )
 
 
 class TestWorktreeFleetOwnership:

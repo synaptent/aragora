@@ -40,6 +40,49 @@ def test_claim_paths_detects_conflicts(tmp_path: Path) -> None:
     assert second["conflicts"][0]["session_id"] == "session-a"
 
 
+def test_claim_paths_detects_glob_to_file_conflicts(tmp_path: Path) -> None:
+    store = FleetCoordinationStore(tmp_path)
+    first = store.claim_paths(
+        session_id="session-a",
+        paths=["aragora/server/**"],
+        mode="exclusive",
+    )
+    assert first["conflicts"] == []
+
+    second = store.claim_paths(
+        session_id="session-b",
+        paths=["aragora/server/handlers/a.py"],
+        mode="exclusive",
+    )
+    assert len(second["conflicts"]) == 1
+    assert second["conflicts"][0]["session_id"] == "session-a"
+
+
+def test_audit_session_paths_detects_unowned_and_foreign_claims(tmp_path: Path) -> None:
+    store = FleetCoordinationStore(tmp_path)
+    store.claim_paths(
+        session_id="session-a",
+        paths=["aragora/server/**"],
+        mode="exclusive",
+    )
+    store.claim_paths(
+        session_id="session-b",
+        paths=["aragora/cli/**"],
+        mode="exclusive",
+    )
+
+    audit = store.audit_session_paths(
+        session_id="session-a",
+        paths=["aragora/server/handlers/a.py", "aragora/cli/main.py"],
+        branch="codex/session-a",
+    )
+
+    assert audit["owned_paths"] == ["aragora/server/handlers/a.py"]
+    assert audit["unowned_paths"] == ["aragora/cli/main.py"]
+    assert audit["conflicts"][0]["session_id"] == "session-b"
+    assert audit["ok"] is False
+
+
 def test_release_paths_by_subset(tmp_path: Path) -> None:
     store = FleetCoordinationStore(tmp_path)
     store.claim_paths(session_id="session-a", paths=["a.py", "b.py"])
