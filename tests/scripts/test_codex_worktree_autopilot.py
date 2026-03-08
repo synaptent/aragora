@@ -46,25 +46,24 @@ def test_parse_worktree_porcelain_includes_branch_and_detached():
     assert entries[2].branch is None
 
 
-def test_prune_stale_state_removes_inactive_paths(tmp_path):
+def test_prune_stale_state_keeps_existing_orphan_paths_and_removes_missing(tmp_path):
     import codex_worktree_autopilot as mod
 
-    a_path = tmp_path / "a"
-    b_path = tmp_path / "b"
-    a_path.mkdir()
-    b_path.mkdir()
+    existing_path = tmp_path / "existing"
+    missing_path = tmp_path / "missing"
+    existing_path.mkdir()
 
     state = {
         "sessions": [
-            {"session_id": "a", "path": str(a_path)},
-            {"session_id": "b", "path": str(b_path)},
+            {"session_id": "existing", "path": str(existing_path)},
+            {"session_id": "missing", "path": str(missing_path)},
         ]
     }
-    active = {str(b_path)}
+    active: set[str] = set()
     pruned, removed = mod._prune_stale_state(state, active)
     assert removed == 1
     assert len(pruned["sessions"]) == 1
-    assert pruned["sessions"][0]["session_id"] == "b"
+    assert pruned["sessions"][0]["session_id"] == "existing"
 
 
 def test_choose_reusable_session_prefers_latest_last_seen():
@@ -383,6 +382,56 @@ def test_cmd_cleanup_skips_worktree_with_active_lease(
     assert saved_state["sessions"] == state["sessions"]
 
 
+def test_classify_session_fails_closed_when_lease_lookup_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import codex_worktree_autopilot as mod
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    path = tmp_path / "lease-error-wt"
+    path.mkdir()
+    session = {
+        "session_id": "lease-error",
+        "agent": "codex",
+        "branch": "codex/lease-error",
+        "path": str(path),
+        "created_at": "2026-02-01T00:00:00+00:00",
+        "last_seen_at": "2026-02-01T00:00:00+00:00",
+    }
+
+    monkeypatch.setattr(mod, "_has_active_session", lambda _path: False)
+    monkeypatch.setattr(
+        mod,
+        "_lease_snapshot",
+        lambda _repo_root, _path: {
+            "lease_id": None,
+            "lease_status": None,
+            "last_heartbeat_at": None,
+            "lease_expires_at": None,
+            "owner_agent": None,
+            "owner_session_id": None,
+            "branch": None,
+            "title": None,
+            "has_live_lease": False,
+            "lookup_failed": True,
+        },
+    )
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_args, **_kwargs: "abc123")
+
+    metadata = mod._classify_session(
+        repo_root,
+        session,
+        active_paths=set(),
+        ttl=mod.timedelta(hours=24),
+    )
+
+    assert metadata["lifecycle_state"] == "grace"
+    assert metadata["cleanup_lock"] is True
+    assert metadata["cleanup_lock_reason"] == "lease_lookup_error"
+    assert metadata["lease_lookup_failed"] is True
+
+
 def test_has_active_session_detects_codex_lock_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -627,6 +676,146 @@ def test_cmd_cleanup_archives_before_removal(
     assert payload["results"][0]["archive_path"] == "/tmp/archive/stale-1"
     assert removed_paths == [stale_path]
     assert saved_state["sessions"] == []
+
+
+def test_cmd_cleanup_archives_orphaned_existing_directory_before_delete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import codex_worktree_autopilot as mod
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    orphan_path = tmp_path / "orphan-wt"
+    orphan_path.mkdir()
+    state = {
+        "sessions": [
+            {
+                "session_id": "orphan-1",
+                "agent": "codex",
+                "branch": "codex/orphan-1",
+                "path": str(orphan_path),
+                "created_at": "2026-02-01T00:00:00+00:00",
+            }
+        ]
+    }
+    saved_state: dict[str, object] = {}
+    deleted_paths: list[Path] = []
+
+    monkeypatch.setattr(mod, "_repo_root_from", lambda _path: repo_root)
+    monkeypatch.setattr(mod, "_get_worktree_entries", lambda _repo: [])
+    monkeypatch.setattr(mod, "_load_state", lambda _state_file: state)
+    monkeypatch.setattr(mod, "_has_active_session", lambda _path: False)
+    monkeypatch.setattr(
+        mod,
+        "_lease_snapshot",
+        lambda _repo_root, _path: {
+            "lease_id": None,
+            "lease_status": None,
+            "last_heartbeat_at": None,
+            "lease_expires_at": None,
+            "owner_agent": None,
+            "owner_session_id": None,
+            "branch": None,
+            "title": None,
+            "has_live_lease": False,
+            "lookup_failed": False,
+        },
+    )
+    monkeypatch.setattr(mod, "_branch_ahead_count", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(
+        mod,
+        "_archive_session",
+        lambda _repo_root, _session, metadata: (
+            metadata["tracked_worktree"] is False,
+            "/tmp/archive/orphan-1",
+        ),
+    )
+    monkeypatch.setattr(
+        mod.shutil,
+        "rmtree",
+        lambda path, ignore_errors=True: deleted_paths.append(Path(path)),
+    )
+    monkeypatch.setattr(mod, "_delete_branch", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        mod,
+        "_run_git",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=["git", "worktree", "prune"],
+            returncode=0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(
+        mod, "_save_state", lambda _state_file, payload: saved_state.update(payload)
+    )
+
+    args = argparse.Namespace(
+        repo=".",
+        managed_dir=".worktrees/codex-auto",
+        base="main",
+        ttl_hours=0,
+        force_unmerged=False,
+        delete_branches=True,
+        json=True,
+    )
+    rc = mod.cmd_cleanup(args)
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["archived"] == 1
+    assert payload["removed"] == 1
+    assert payload["results"][0]["archive_path"] == "/tmp/archive/orphan-1"
+    assert deleted_paths == [orphan_path]
+    assert saved_state["sessions"] == []
+
+
+def test_cmd_reconcile_preserves_drifted_existing_session_in_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import codex_worktree_autopilot as mod
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    drifted_path = tmp_path / "drifted-wt"
+    drifted_path.mkdir()
+    state = {
+        "sessions": [
+            {
+                "session_id": "drifted-1",
+                "agent": "codex",
+                "branch": "codex/drifted-1",
+                "path": str(drifted_path),
+                "created_at": "2026-02-01T00:00:00+00:00",
+            }
+        ]
+    }
+    saved_state: dict[str, object] = {}
+
+    monkeypatch.setattr(mod, "_repo_root_from", lambda _path: repo_root)
+    monkeypatch.setattr(mod, "_get_worktree_entries", lambda _repo: [])
+    monkeypatch.setattr(mod, "_load_state", lambda _state_file: state)
+    monkeypatch.setattr(
+        mod, "_save_state", lambda _state_file, payload: saved_state.update(payload)
+    )
+
+    args = argparse.Namespace(
+        repo=".",
+        managed_dir=".worktrees/codex-auto",
+        base="main",
+        strategy="ff-only",
+        ttl_hours=24,
+        all=True,
+        path=None,
+        json=True,
+    )
+    rc = mod.cmd_reconcile(args)
+
+    assert rc == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["count"] == 0
+    assert len(saved_state["sessions"]) == 1
+    assert saved_state["sessions"][0]["session_id"] == "drifted-1"
 
 
 def test_cmd_status_reports_lifecycle_and_lock_metadata(
