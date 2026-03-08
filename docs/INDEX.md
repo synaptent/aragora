@@ -33,6 +33,13 @@ This index intentionally links to actively maintained docs with validated paths.
 - [Security Deployment](deployment/SECURITY_DEPLOYMENT.md)
 - [Runbook](deployment/RUNBOOK.md)
 - [Incident Response](deployment/INCIDENT_RESPONSE.md)
+- [Aragora Conductor Workflow](guides/CONDUCTOR_WORKFLOW.md)
+- [Aragora Worker Prompt Pack](guides/WORKER_PROMPT_PACK.md)
+- [Dev Swarm Coordination](architecture/DEV_SWARM_COORDINATION.md)
+
+## Architecture and Planning
+
+- [Conductor Control Plane Implementation Spec](plans/2026-03-07-conductor-control-plane.md)
 
 ## Security and Compliance
 
