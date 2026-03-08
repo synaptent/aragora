@@ -47,6 +47,14 @@ class LeaseConflictError(ValueError):
         self.conflicts = conflicts
 
 
+class FileScopeViolationError(ValueError):
+    """Raised when a completion touches files outside the claimed scope."""
+
+    def __init__(self, violations: list[dict[str, Any]]):
+        super().__init__("Completion violates file-scope ownership")
+        self.violations = violations
+
+
 class LeaseStatus(str, Enum):
     """Lifecycle states for work leases."""
 
@@ -504,6 +512,23 @@ class DevCoordinationStore:
         pending_integrations = self.list_integration_decisions(only_pending=True)
         salvage = self.list_salvage_candidates(statuses=sorted(_OPEN_SALVAGE_STATUSES))
         supervisor_runs = self.list_supervisor_runs(statuses=sorted(_OPEN_SUPERVISOR_RUN_STATUSES))
+        scope_violations = []
+        for lease in active_leases:
+            violation = lease.metadata.get("last_scope_violation")
+            if not isinstance(violation, dict):
+                continue
+            scope_violations.append(
+                {
+                    "lease_id": lease.lease_id,
+                    "task_id": lease.task_id,
+                    "title": lease.title,
+                    "owner_agent": lease.owner_agent,
+                    "owner_session_id": lease.owner_session_id,
+                    "branch": lease.branch,
+                    "worktree_path": lease.worktree_path,
+                    **violation,
+                }
+            )
         return {
             "db_path": str(self.db_path),
             "fleet_path": str(self.fleet_store.path),
@@ -511,6 +536,7 @@ class DevCoordinationStore:
             "pending_integrations": [item.to_dict() for item in pending_integrations],
             "open_salvage_candidates": [item.to_dict() for item in salvage],
             "supervisor_runs": supervisor_runs,
+            "scope_violations": scope_violations,
             "counts": {
                 "active_leases": len(active_leases),
                 "pending_integrations": len(pending_integrations),
@@ -518,6 +544,7 @@ class DevCoordinationStore:
                 "supervisor_runs": len(supervisor_runs),
                 "fleet_claims": len(self.fleet_store.list_claims()),
                 "fleet_merge_queue": len(self.fleet_store.list_merge_queue()),
+                "scope_violations": len(scope_violations),
             },
         }
 
@@ -1056,6 +1083,9 @@ class DevCoordinationStore:
         blockers: list[str] | None = None,
         confidence: float = 0.0,
     ) -> CompletionReceipt:
+        normalized_changed_paths = [
+            _normalize_claim(item) for item in changed_paths or [] if str(item).strip()
+        ]
         receipt = CompletionReceipt(
             receipt_id=str(uuid.uuid4())[:12],
             lease_id=lease_id,
@@ -1064,9 +1094,7 @@ class DevCoordinationStore:
             branch=branch,
             worktree_path=str(Path(worktree_path).resolve()),
             commit_shas=list(commit_shas or []),
-            changed_paths=[
-                _normalize_claim(item) for item in changed_paths or [] if str(item).strip()
-            ],
+            changed_paths=normalized_changed_paths,
             tests_run=list(tests_run or []),
             assumptions=list(assumptions or []),
             blockers=list(blockers or []),
@@ -1082,6 +1110,37 @@ class DevCoordinationStore:
             if lease_row is None:
                 raise KeyError(f"Unknown lease_id: {lease_id}")
             lease = WorkLease.from_row(lease_row)
+            violations = self._validate_completion_scope(
+                lease,
+                changed_paths=receipt.changed_paths,
+                owner_session_id=owner_session_id,
+                branch=branch,
+            )
+            if violations:
+                metadata = {
+                    **_json_loads(lease_row["metadata_json"], {}),
+                    "last_scope_violation": {
+                        "detected_at": now,
+                        "changed_paths": list(receipt.changed_paths),
+                        "violations": violations,
+                    },
+                }
+                conn.execute(
+                    "UPDATE leases SET updated_at = ?, metadata_json = ? WHERE lease_id = ?",
+                    (now, _json_dump(metadata), lease_id),
+                )
+                conn.commit()
+                self._publish(
+                    "scope_violation_detected",
+                    track=branch,
+                    data={
+                        "lease_id": lease_id,
+                        "owner_session_id": owner_session_id,
+                        "changed_paths": receipt.changed_paths,
+                        "violations": violations,
+                    },
+                )
+                raise FileScopeViolationError(violations)
             conn.execute(
                 "INSERT INTO completion_receipts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -1625,6 +1684,76 @@ class DevCoordinationStore:
                 return item
         return None
 
+    def _validate_completion_scope(
+        self,
+        lease: WorkLease,
+        *,
+        changed_paths: list[str],
+        owner_session_id: str,
+        branch: str,
+    ) -> list[dict[str, Any]]:
+        scope_patterns = list(dict.fromkeys([*lease.claimed_paths, *lease.allowed_globs]))
+        protected_patterns = list(
+            dict.fromkeys(
+                _normalize_claim(item)
+                for key in ("forbidden_paths", "forbidden_globs", "hot_paths", "hot_globs")
+                for item in lease.metadata.get(key, [])
+                if str(item).strip()
+            )
+        )
+        violations: list[dict[str, Any]] = []
+
+        if changed_paths and not scope_patterns:
+            return [
+                {
+                    "type": "undeclared_scope",
+                    "message": "Lease has no declared file scope for the recorded changes.",
+                    "paths": list(changed_paths),
+                }
+            ]
+
+        for path in changed_paths:
+            if scope_patterns and not any(
+                _path_matches_glob(path, pattern) for pattern in scope_patterns
+            ):
+                violations.append(
+                    {
+                        "type": "out_of_scope",
+                        "path": path,
+                        "allowed_scope": list(scope_patterns),
+                    }
+                )
+            if protected_patterns and any(
+                _path_matches_glob(path, pattern) for pattern in protected_patterns
+            ):
+                violations.append(
+                    {
+                        "type": "protected_path",
+                        "path": path,
+                        "protected_scope": list(protected_patterns),
+                    }
+                )
+
+        audit = self.fleet_store.audit_session_paths(
+            session_id=owner_session_id,
+            paths=changed_paths,
+            branch=branch,
+        )
+        for path in audit["unowned_paths"]:
+            violations.append({"type": "unowned_path", "path": path})
+        for conflict in audit["conflicts"]:
+            violations.append(
+                {
+                    "type": "conflicting_claim",
+                    "path": str(conflict.get("path", "")),
+                    "conflicting_path": str(conflict.get("conflicting_path", "")),
+                    "session_id": str(conflict.get("session_id", "")),
+                    "branch": str(conflict.get("branch", "")),
+                    "mode": str(conflict.get("mode", "")),
+                }
+            )
+        return violations
+
     def mark_supervisor_run_merged(
         self,
         *,
@@ -1784,6 +1913,9 @@ def _path_matches_glob(path: str, pattern: str) -> bool:
     if not clean_pattern:
         return False
     if _has_wildcard(clean_pattern):
+        if clean_pattern.endswith("/**"):
+            prefix = clean_pattern[:-3].rstrip("/")
+            return clean_path == prefix or clean_path.startswith(f"{prefix}/")
         return PurePosixPath(clean_path).match(clean_pattern)
     return clean_path == clean_pattern or clean_path.startswith(f"{clean_pattern}/")
 

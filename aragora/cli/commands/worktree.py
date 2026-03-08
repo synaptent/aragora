@@ -501,6 +501,7 @@ def _cmd_worktree_fleet_status(
         f"stale={integrator_summary.get('stale_heartbeat_lanes', 0)} "
         f"collisions={integrator_summary.get('collision_lanes', 0)} "
         f"missing_receipts={integrator_summary.get('missing_receipt_lanes', 0)} "
+        f"scope_violations={integrator_summary.get('scope_violation_lanes', 0)} "
         f"superseded={integrator_summary.get('superseded_lanes', 0)}"
     )
     for action in integrator_view.get("next_actions", [])[:3]:
@@ -542,6 +543,8 @@ def _cmd_worktree_fleet_status(
             )
             if lane.get("collisions"):
                 print(f"  collisions: {', '.join(lane['collisions'])}")
+            if isinstance(lane.get("scope_violation"), dict):
+                print("  scope_violation: yes")
             if lane.get("missing_receipt"):
                 print("  receipt: missing")
             elif lane.get("receipt_id"):

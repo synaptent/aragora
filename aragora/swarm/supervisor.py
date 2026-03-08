@@ -17,6 +17,7 @@ from typing import Any
 from aragora.nomic.approval import ApprovalLevel, ApprovalPolicy
 from aragora.nomic.dev_coordination import (
     DevCoordinationStore,
+    FileScopeViolationError,
     LeaseConflictError,
     LeaseStatus,
 )
@@ -690,19 +691,32 @@ class SwarmSupervisor:
         if result.exit_code == 0:
             receipt_id = str(item.get("receipt_id", "")).strip()
             if lease_id and not receipt_id:
-                receipt = self.store.record_completion(
-                    lease_id=lease_id,
-                    owner_agent=str(item.get("target_agent", result.agent)),
-                    owner_session_id=str(item.get("owner_session_id", result.session_id)),
-                    branch=str(item.get("branch", result.branch)),
-                    worktree_path=str(item.get("worktree_path", result.worktree_path)),
-                    commit_shas=list(result.commit_shas),
-                    changed_paths=list(result.changed_paths),
-                    tests_run=list(result.tests_run),
-                    assumptions=[],
-                    blockers=[],
-                    confidence=self._completion_confidence(item, result),
-                )
+                try:
+                    receipt = self.store.record_completion(
+                        lease_id=lease_id,
+                        owner_agent=str(item.get("target_agent", result.agent)),
+                        owner_session_id=str(item.get("owner_session_id", result.session_id)),
+                        branch=str(item.get("branch", result.branch)),
+                        worktree_path=str(item.get("worktree_path", result.worktree_path)),
+                        commit_shas=list(result.commit_shas),
+                        changed_paths=list(result.changed_paths),
+                        tests_run=list(result.tests_run),
+                        assumptions=[],
+                        blockers=[],
+                        confidence=self._completion_confidence(item, result),
+                    )
+                except FileScopeViolationError as exc:
+                    self._mark_needs_human(
+                        item,
+                        "worker completion violated file-scope ownership; narrow or split the lane",
+                    )
+                    item["review_status"] = "changes_requested"
+                    item["scope_violation"] = {
+                        "violations": list(exc.violations),
+                        "changed_paths": list(result.changed_paths),
+                    }
+                    item["exit_code"] = result.exit_code
+                    return
                 item["receipt_id"] = receipt.receipt_id
                 item["confidence"] = receipt.confidence
             item["status"] = "completed"

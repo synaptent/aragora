@@ -8,7 +8,7 @@ import os
 import subprocess
 from collections import deque
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 import uuid
 
@@ -33,6 +33,45 @@ SUPPORTED_ORCHESTRATORS = {
     "nomic",
     "generic",
 }
+
+
+def _has_wildcard(pattern: str) -> bool:
+    return any(token in pattern for token in ("*", "?", "["))
+
+
+def _path_matches_claim(path: str, pattern: str) -> bool:
+    clean_path = path.strip().strip("/")
+    clean_pattern = pattern.strip().strip("/")
+    if not clean_path or not clean_pattern:
+        return False
+    if _has_wildcard(clean_pattern):
+        if clean_pattern.endswith("/**"):
+            prefix = clean_pattern[:-3].rstrip("/")
+            return clean_path == prefix or clean_path.startswith(f"{prefix}/")
+        return PurePosixPath(clean_path).match(clean_pattern)
+    return clean_path == clean_pattern or clean_path.startswith(f"{clean_pattern}/")
+
+
+def _claims_overlap(first: str, second: str) -> bool:
+    left = first.strip().strip("/")
+    right = second.strip().strip("/")
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    left_wild = _has_wildcard(left)
+    right_wild = _has_wildcard(right)
+    if not left_wild and not right_wild:
+        return left.startswith(f"{right}/") or right.startswith(f"{left}/")
+    if not left_wild:
+        return _path_matches_claim(left, right)
+    if not right_wild:
+        return _path_matches_claim(right, left)
+    left_prefix = left.split("*", 1)[0]
+    right_prefix = right.split("*", 1)[0]
+    if left_prefix and right_prefix:
+        return left_prefix.startswith(right_prefix) or right_prefix.startswith(left_prefix)
+    return False
 
 
 def resolve_repo_root(path_hint: Path) -> Path:
@@ -359,7 +398,7 @@ class FleetCoordinationStore:
                 conflict_rows = [
                     c
                     for c in claims
-                    if str(c.get("path", "")) == path
+                    if _claims_overlap(str(c.get("path", "")), path)
                     and str(c.get("session_id", "")) != session_id
                     and ("exclusive" in {str(c.get("mode", "exclusive")), mode})
                 ]
@@ -410,6 +449,63 @@ class FleetCoordinationStore:
             }
 
         return self._mutate_state(mutate)
+
+    def audit_session_paths(
+        self,
+        *,
+        session_id: str,
+        paths: list[str],
+        branch: str | None = None,
+    ) -> dict[str, Any]:
+        """Validate that a session owns the provided paths."""
+        state = self._load()
+        claims = [c for c in state["claims"] if isinstance(c, dict)]
+        normalized = [self._normalize_claim_path(path) for path in paths]
+        normalized = sorted({item for item in normalized if item})
+        owner_claims = [c for c in claims if str(c.get("session_id", "")) == session_id]
+
+        owned: list[str] = []
+        unowned: list[str] = []
+        conflicts: list[dict[str, str]] = []
+        for path in normalized:
+            covering_owner_claims = [
+                claim for claim in owner_claims if _claims_overlap(str(claim.get("path", "")), path)
+            ]
+            if covering_owner_claims:
+                owned.append(path)
+            else:
+                unowned.append(path)
+
+            owner_modes = {str(claim.get("mode", "exclusive")) for claim in covering_owner_claims}
+            for claim in claims:
+                foreign_session = str(claim.get("session_id", ""))
+                if foreign_session == session_id:
+                    continue
+                foreign_path = str(claim.get("path", ""))
+                if not _claims_overlap(foreign_path, path):
+                    continue
+                foreign_mode = str(claim.get("mode", "exclusive"))
+                if owner_modes == {"shared"} and foreign_mode == "shared":
+                    continue
+                conflicts.append(
+                    {
+                        "path": path,
+                        "conflicting_path": foreign_path,
+                        "session_id": foreign_session,
+                        "branch": str(claim.get("branch", "")),
+                        "mode": foreign_mode,
+                    }
+                )
+
+        return {
+            "session_id": session_id,
+            "branch": branch or "",
+            "paths": normalized,
+            "owned_paths": sorted(set(owned)),
+            "unowned_paths": sorted(set(unowned)),
+            "conflicts": conflicts,
+            "ok": not unowned and not conflicts,
+        }
 
     def release_paths(self, *, session_id: str, paths: list[str] | None = None) -> dict[str, Any]:
         def mutate(state: dict[str, Any]) -> dict[str, Any]:
