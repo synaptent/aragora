@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -57,6 +58,123 @@ class SwarmSpec:
     # Metadata
     interrogation_turns: int = 0
     user_expertise: str = "non-developer"
+
+    @staticmethod
+    def _nonempty_strings(values: list[str]) -> list[str]:
+        return [str(item).strip() for item in values if str(item).strip()]
+
+    @staticmethod
+    def infer_file_scope_hints(text: str) -> list[str]:
+        """Extract path-like hints from free-form prompt text."""
+        hints: list[str] = []
+        for raw in re.split(r"\s+", text or ""):
+            token = raw.strip().strip("`'\".,;:()[]{}<>")
+            if not token or token.startswith(("http://", "https://")):
+                continue
+            normalized = token.removeprefix("./")
+            if "/" not in normalized:
+                continue
+            normalized = normalized.rstrip("/")
+            if not normalized:
+                continue
+            hints.append(normalized)
+        return list(dict.fromkeys(hints))
+
+    @staticmethod
+    def infer_constraints(messages: list[str]) -> list[str]:
+        """Extract obvious constraints from user language."""
+        markers = (
+            "do not ",
+            "don't ",
+            "must not ",
+            "without ",
+            "leave ",
+            "only touch ",
+            "should not ",
+        )
+        constraints: list[str] = []
+        for message in messages:
+            text = str(message).strip()
+            lower = text.lower()
+            if text and any(marker in lower for marker in markers):
+                constraints.append(text)
+        return list(dict.fromkeys(constraints))
+
+    @staticmethod
+    def infer_acceptance_criteria(messages: list[str]) -> list[str]:
+        """Extract obvious success criteria from user language."""
+        markers = (
+            "done looks like",
+            "done means",
+            "works when",
+            "success is",
+            "should ",
+            "must ",
+            "passes ",
+            "pass when",
+        )
+        criteria: list[str] = []
+        for message in messages:
+            text = str(message).strip()
+            lower = text.lower()
+            if len(text) >= 12 and any(marker in lower for marker in markers):
+                criteria.append(text)
+        return list(dict.fromkeys(criteria))
+
+    @classmethod
+    def from_direct_goal(
+        cls,
+        raw_goal: str,
+        *,
+        budget_limit_usd: float | None,
+        requires_approval: bool,
+        user_expertise: str,
+    ) -> SwarmSpec:
+        """Build a direct spec from a raw goal without conversational interrogation."""
+        return cls(
+            id=str(uuid.uuid4()),
+            created_at=datetime.now(timezone.utc),
+            raw_goal=raw_goal,
+            refined_goal=raw_goal,
+            constraints=cls.infer_constraints([raw_goal]),
+            budget_limit_usd=budget_limit_usd,
+            file_scope_hints=cls.infer_file_scope_hints(raw_goal),
+            requires_approval=requires_approval,
+            interrogation_turns=0,
+            user_expertise=user_expertise,
+        )
+
+    def dispatch_bounds(self) -> dict[str, bool]:
+        """Return which fields make this spec safe enough to dispatch."""
+        return {
+            "acceptance_criteria": bool(self._nonempty_strings(self.acceptance_criteria)),
+            "constraints": bool(self._nonempty_strings(self.constraints)),
+            "file_scope_hints": bool(self._nonempty_strings(self.file_scope_hints)),
+            "work_orders": bool([item for item in self.work_orders if isinstance(item, dict)]),
+        }
+
+    def is_dispatch_bounded(self) -> bool:
+        """Whether the spec has at least one concrete bound for dispatch."""
+        return any(self.dispatch_bounds().values())
+
+    def missing_dispatch_bounds(self) -> list[str]:
+        """Human-readable names for missing dispatch-bounding fields."""
+        labels = {
+            "acceptance_criteria": "acceptance criterion",
+            "constraints": "constraint",
+            "file_scope_hints": "file-scope hint",
+            "work_orders": "explicit work order",
+        }
+        return [labels[key] for key, present in self.dispatch_bounds().items() if not present]
+
+    def dispatch_gate_reason(self) -> str:
+        """Reason why this spec may or may not dispatch."""
+        if self.is_dispatch_bounded():
+            return "dispatch-bounded"
+        return (
+            "Swarm spec is under-specified for dispatch. Add at least one acceptance "
+            "criterion, constraint, file-scope hint, or explicit work order."
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""

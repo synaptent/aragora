@@ -151,3 +151,28 @@ class TestSwarmSpecSummary:
         spec = SwarmSpec(work_orders=[{"work_order_id": "docs-lane"}])
         summary = spec.summary()
         assert "Explicit work orders: 1" in summary
+
+
+class TestSwarmSpecDispatchBounds:
+    def test_empty_spec_is_not_dispatch_bounded(self):
+        spec = SwarmSpec(raw_goal="Make it better")
+        assert spec.is_dispatch_bounded() is False
+        assert "under-specified" in spec.dispatch_gate_reason()
+
+    def test_acceptance_criterion_makes_spec_dispatch_bounded(self):
+        spec = SwarmSpec(raw_goal="Goal", acceptance_criteria=["Tests pass"])
+        assert spec.is_dispatch_bounded() is True
+
+    def test_file_scope_hint_makes_spec_dispatch_bounded(self):
+        spec = SwarmSpec(raw_goal="Goal", file_scope_hints=["aragora/swarm/spec.py"])
+        assert spec.is_dispatch_bounded() is True
+
+    def test_direct_goal_builder_extracts_path_scope(self):
+        spec = SwarmSpec.from_direct_goal(
+            "Only touch aragora/swarm/spec.py and tests/swarm/test_spec.py",
+            budget_limit_usd=5.0,
+            requires_approval=False,
+            user_expertise="developer",
+        )
+        assert spec.is_dispatch_bounded() is True
+        assert "aragora/swarm/spec.py" in spec.file_scope_hints

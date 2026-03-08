@@ -76,7 +76,11 @@ class TestSwarmCommanderRunFromSpec:
 
     @pytest.mark.asyncio
     async def test_run_supervised_from_spec_uses_supervisor(self):
-        spec = SwarmSpec(raw_goal="Test goal", refined_goal="Test goal refined")
+        spec = SwarmSpec(
+            raw_goal="Test goal",
+            refined_goal="Test goal refined",
+            file_scope_hints=["aragora/swarm/spec.py"],
+        )
         commander = SwarmCommander()
         fake_run = MagicMock()
         fake_run.run_id = "test-run-id"
@@ -94,7 +98,11 @@ class TestSwarmCommanderRunFromSpec:
 
     @pytest.mark.asyncio
     async def test_run_supervised_from_spec_wait_false_returns_refreshed_run(self):
-        spec = SwarmSpec(raw_goal="Test goal", refined_goal="Test goal refined")
+        spec = SwarmSpec(
+            raw_goal="Test goal",
+            refined_goal="Test goal refined",
+            file_scope_hints=["aragora/swarm/spec.py"],
+        )
         commander = SwarmCommander()
         fake_run = MagicMock()
         fake_run.run_id = "test-run-id"
@@ -202,6 +210,14 @@ class TestSwarmCommanderRunFromSpec:
         mock_sup.dispatch_workers.assert_not_awaited()
         mock_sup.refresh_run.assert_called_once_with(fake_run.run_id)
         mock_reconciler_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_run_supervised_from_spec_rejects_under_specified_spec(self):
+        commander = SwarmCommander()
+        spec = SwarmSpec(raw_goal="Make it better", refined_goal="Make it better")
+
+        with pytest.raises(ValueError, match="under-specified for dispatch"):
+            await commander.run_supervised_from_spec(spec)
 
 
 class TestSwarmCommanderDryRun:

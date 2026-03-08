@@ -247,11 +247,11 @@ class TestSwarmCommand:
         assert "[DRY RUN] Skipping interrogation" in out
         assert '"raw_goal": "verify dry run"' in out
 
-    def test_cmd_swarm_skip_interrogation_dispatches(self):
+    def test_cmd_swarm_skip_interrogation_dispatches_when_goal_is_already_bounded(self):
         fake_run = MagicMock()
         mock_commander = SimpleNamespace(run_supervised_from_spec=AsyncMock(return_value=fake_run))
         args = argparse.Namespace(
-            swarm_action_or_goal="harden CI",
+            swarm_action_or_goal="Only touch aragora/swarm/spec.py",
             swarm_goal=None,
             spec=None,
             skip_interrogation=True,
@@ -279,6 +279,40 @@ class TestSwarmCommand:
             cmd_swarm(args)
 
         mock_commander.run_supervised_from_spec.assert_awaited_once()
+
+    def test_cmd_swarm_skip_interrogation_fails_closed_for_vague_goal(self, capsys):
+        mock_commander = SimpleNamespace(run_supervised_from_spec=AsyncMock())
+        args = argparse.Namespace(
+            swarm_action_or_goal="make it better",
+            swarm_goal=None,
+            spec=None,
+            skip_interrogation=True,
+            dry_run=False,
+            budget_limit=9.0,
+            require_approval=True,
+            save_spec=None,
+            from_obsidian=None,
+            obsidian_vault=None,
+            no_obsidian_receipts=False,
+            profile="developer",
+            autonomy="propose",
+            max_parallel=20,
+            no_loop=False,
+            target_branch="main",
+            concurrency_cap=8,
+            managed_dir_pattern=".worktrees/{agent}-auto",
+            json=False,
+            run_id=None,
+            status_limit=20,
+            refresh_scaling=False,
+        )
+
+        with patch("aragora.swarm.SwarmCommander", return_value=mock_commander):
+            cmd_swarm(args)
+
+        out = capsys.readouterr().out
+        assert "under-specified for dispatch" in out
+        mock_commander.run_supervised_from_spec.assert_not_called()
 
     @patch("aragora.worktree.fleet.FleetCoordinationStore")
     @patch("aragora.worktree.fleet.build_fleet_rows")
