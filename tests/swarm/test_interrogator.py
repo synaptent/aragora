@@ -149,3 +149,24 @@ class TestInterrogatorInputSafety:
 
         assert spec.raw_goal == "Check dry-run plumbing"
         assert spec.refined_goal == "Check dry-run plumbing"
+
+
+class TestInterrogatorDispatchBounds:
+    @pytest.mark.asyncio
+    async def test_interrogator_keeps_asking_until_spec_is_dispatch_bounded(self):
+        answers = iter(["", "", "", "", "", "", "Only touch aragora/swarm/spec.py"])
+        output: list[str] = []
+        interrogator = SwarmInterrogator(
+            config=InterrogatorConfig(fallback_to_fixed_questions=True, max_turns=8)
+        )
+
+        with patch.object(interrogator, "_get_harness", new=AsyncMock(return_value=None)):
+            spec = await interrogator.interrogate(
+                "Make it better",
+                input_fn=lambda _prompt: next(answers),
+                print_fn=lambda msg: output.append(str(msg)),
+            )
+
+        assert spec.is_dispatch_bounded() is True
+        assert "aragora/swarm/spec.py" in spec.file_scope_hints
+        assert any("concrete boundary" in line.lower() for line in output)

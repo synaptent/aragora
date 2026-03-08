@@ -45,6 +45,12 @@ class SwarmCommander:
         self._spec: SwarmSpec | None = None
         self._result: Any = None
 
+    @staticmethod
+    def _require_dispatch_bounded(spec: SwarmSpec) -> None:
+        if spec.is_dispatch_bounded():
+            return
+        raise ValueError(spec.dispatch_gate_reason())
+
     async def run(
         self,
         initial_goal: str,
@@ -232,6 +238,7 @@ class SwarmCommander:
             wait: If True, reconcile until the run reaches a stable stop condition.
         """
         self._spec = spec
+        self._require_dispatch_bounded(spec)
         from aragora.swarm.worker_launcher import LaunchConfig, WorkerLauncher
 
         launcher = WorkerLauncher(config=LaunchConfig(detach=not wait))

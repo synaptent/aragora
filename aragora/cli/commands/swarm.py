@@ -48,6 +48,14 @@ def _print_supervisor_run(run: dict[str, object]) -> None:
     print(f"work_orders={len(work_orders)} [{counts_text}]")
 
 
+def _run_supervised_or_report(awaitable: object) -> object | None:
+    try:
+        return asyncio.run(awaitable)
+    except ValueError as exc:
+        print(f"Error: {exc}")
+        return None
+
+
 def cmd_swarm(args: argparse.Namespace) -> None:
     """Handle 'swarm' command."""
     from aragora.swarm import (
@@ -245,7 +253,7 @@ def cmd_swarm(args: argparse.Namespace) -> None:
         spec = SwarmSpec.from_yaml(spec_path.read_text())
         print(f"\nLoaded spec from {spec_file}")
         print(spec.summary())
-        run = asyncio.run(
+        run = _run_supervised_or_report(
             commander.run_supervised_from_spec(
                 spec,
                 repo_path=Path.cwd(),
@@ -259,6 +267,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_ticks=max_ticks,
             )
         )
+        if run is None:
+            return
         if as_json:
             print(json.dumps(run.to_dict(), indent=2))
         else:
@@ -284,19 +294,18 @@ def cmd_swarm(args: argparse.Namespace) -> None:
             Path(save_path).write_text(spec.to_yaml())
             print(f"\nSpec saved to {save_path}")
     elif skip_interrogation:
-        spec = SwarmSpec(
-            id=str(uuid4()),
-            created_at=datetime.now(timezone.utc),
-            raw_goal=goal,
-            refined_goal=goal,
+        spec = SwarmSpec.from_direct_goal(
+            goal,
             budget_limit_usd=budget_limit,
             requires_approval=require_approval,
-            interrogation_turns=0,
             user_expertise="developer",
         )
         print("\nSkipping interrogation (developer mode)")
         print(spec.summary())
-        run = asyncio.run(
+        if not spec.is_dispatch_bounded():
+            print(f"Error: {spec.dispatch_gate_reason()}")
+            return
+        run = _run_supervised_or_report(
             commander.run_supervised_from_spec(
                 spec,
                 repo_path=Path.cwd(),
@@ -310,12 +319,14 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_ticks=max_ticks,
             )
         )
+        if run is None:
+            return
         if as_json:
             print(json.dumps(run.to_dict(), indent=2))
         else:
             _print_supervisor_run(run.to_dict())
     else:
-        run = asyncio.run(
+        run = _run_supervised_or_report(
             commander.run_supervised(
                 goal,
                 repo_path=Path.cwd(),
@@ -329,6 +340,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 max_ticks=max_ticks,
             )
         )
+        if run is None:
+            return
         if as_json:
             print(json.dumps(run.to_dict(), indent=2))
         else:

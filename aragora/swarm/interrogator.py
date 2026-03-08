@@ -49,6 +49,11 @@ Produce a JSON object with these fields:
 Respond with ONLY the JSON object, no other text.
 """
 
+FOLLOW_UP_BOUNDING_PROMPT = (
+    "I still need at least one concrete boundary before dispatch. Give me one acceptance "
+    "criterion, one constraint, one file or directory to touch, or one explicit work order."
+)
+
 
 class SwarmInterrogator:
     """Gathers requirements from a non-developer user via conversational Q&A.
@@ -100,6 +105,7 @@ class SwarmInterrogator:
             logger.warning("No Claude CLI available and fallback disabled")
 
         spec = await self._produce_spec(initial_goal, harness)
+        spec = await self._complete_dispatch_bounds(spec, initial_goal, harness, _input, _print)
 
         _print("\n" + "-" * 60)
         _print("SPEC SUMMARY")
@@ -227,6 +233,30 @@ class SwarmInterrogator:
             user_expertise=spec_data.get("user_expertise", "non-developer"),
         )
 
+    async def _complete_dispatch_bounds(
+        self,
+        spec: SwarmSpec,
+        initial_goal: str,
+        harness: Any,
+        _input: Any,
+        _print: Any,
+    ) -> SwarmSpec:
+        """Keep interrogation open briefly when the resulting spec is too vague to dispatch."""
+        while not spec.is_dispatch_bounded():
+            user_turns = len([m for m in self._conversation if m["role"] == "user"])
+            if user_turns >= self.config.max_turns:
+                break
+            _print(f"\n{FOLLOW_UP_BOUNDING_PROMPT}")
+            answer = self._safe_input(_input, "> ")
+            if answer is None or not answer.strip():
+                break
+            self._conversation.append({"role": "assistant", "content": FOLLOW_UP_BOUNDING_PROMPT})
+            self._conversation.append({"role": "user", "content": answer})
+            spec = await self._produce_spec(initial_goal, harness)
+        if not spec.is_dispatch_bounded():
+            _print(f"\nDispatch gate: {spec.dispatch_gate_reason()}\n")
+        return spec
+
     def _parse_json_from_response(self, text: str) -> dict[str, Any] | None:
         """Extract JSON object from LLM response text."""
         # Try direct parse
@@ -286,12 +316,16 @@ class SwarmInterrogator:
             if keyword in lower and track not in hints:
                 hints.append(track)
 
+        acceptance_criteria = SwarmSpec.infer_acceptance_criteria(user_messages[1:])
+        constraints = SwarmSpec.infer_constraints(user_messages[1:])
+        file_scope_hints = SwarmSpec.infer_file_scope_hints(combined)
+
         return {
             "refined_goal": refined_goal,
-            "acceptance_criteria": [],
-            "constraints": [],
+            "acceptance_criteria": acceptance_criteria,
+            "constraints": constraints,
             "track_hints": hints,
-            "file_scope_hints": [],
+            "file_scope_hints": file_scope_hints,
             "estimated_complexity": "medium",
             "requires_approval": False,
         }
@@ -316,6 +350,6 @@ class SwarmInterrogator:
         """Read one input safely, returning None on EOF/non-interactive stdin."""
         try:
             return input_fn(prompt)
-        except EOFError:
+        except (EOFError, StopIteration):
             logger.info("Interrogation input ended early; proceeding with gathered context")
             return None
