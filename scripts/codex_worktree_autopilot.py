@@ -119,6 +119,7 @@ def _lease_snapshot(repo_root: Path, worktree_path: Path) -> dict[str, Any]:
         "branch": None,
         "title": None,
         "has_live_lease": False,
+        "lookup_failed": False,
     }
     db_path = _dev_coordination_db_path(repo_root)
     if not db_path.exists():
@@ -141,6 +142,7 @@ def _lease_snapshot(repo_root: Path, worktree_path: Path) -> dict[str, Any]:
         finally:
             conn.close()
     except sqlite3.Error:
+        snapshot["lookup_failed"] = True
         return snapshot
 
     if not rows:
@@ -220,6 +222,10 @@ def _classify_session(
         lifecycle_state = "active"
         cleanup_lock = True
         cleanup_lock_reason = "active_session"
+    elif lease.get("lookup_failed", False):
+        lifecycle_state = "grace"
+        cleanup_lock = True
+        cleanup_lock_reason = "lease_lookup_error"
     elif lease["has_live_lease"]:
         lifecycle_state = "grace"
         cleanup_lock = True
@@ -242,10 +248,11 @@ def _classify_session(
         "ahead": ahead,
         "base_branch": base_branch,
         "base_sha": _resolve_ref_sha(repo_root, _base_ref(base_branch)),
-        "last_heartbeat_at": lease["last_heartbeat_at"],
-        "lease_status": lease["lease_status"],
-        "lease_id": lease["lease_id"],
-        "lease_expires_at": lease["lease_expires_at"],
+        "last_heartbeat_at": lease.get("last_heartbeat_at"),
+        "lease_status": lease.get("lease_status"),
+        "lease_id": lease.get("lease_id"),
+        "lease_expires_at": lease.get("lease_expires_at"),
+        "lease_lookup_failed": lease.get("lookup_failed", False),
     }
 
 
@@ -324,14 +331,17 @@ def _archive_session(
             if branch_patch.returncode == 0 and branch_patch.stdout:
                 _write_text_file(archive_dir / "branch.patch", branch_patch.stdout)
 
-        if path.exists() and metadata.get("tracked_worktree"):
-            status_proc = _run_git(repo_root, "status", "--porcelain=v1", "--branch", cwd=path)
-            if status_proc.returncode == 0:
-                _write_text_file(archive_dir / "status.txt", status_proc.stdout)
-            worktree_patch = _run_git(repo_root, "diff", "--binary", "HEAD", cwd=path)
-            if worktree_patch.returncode == 0 and worktree_patch.stdout:
-                _write_text_file(archive_dir / "worktree.patch", worktree_patch.stdout)
-            _copy_untracked_entries(path, archive_dir)
+        if path.exists():
+            if metadata.get("tracked_worktree"):
+                status_proc = _run_git(repo_root, "status", "--porcelain=v1", "--branch", cwd=path)
+                if status_proc.returncode == 0:
+                    _write_text_file(archive_dir / "status.txt", status_proc.stdout)
+                worktree_patch = _run_git(repo_root, "diff", "--binary", "HEAD", cwd=path)
+                if worktree_patch.returncode == 0 and worktree_patch.stdout:
+                    _write_text_file(archive_dir / "worktree.patch", worktree_patch.stdout)
+                _copy_untracked_entries(path, archive_dir)
+            else:
+                shutil.copytree(path, archive_dir / "worktree_snapshot", symlinks=True)
         return True, str(archive_dir)
     except OSError:
         shutil.rmtree(archive_dir, ignore_errors=True)
@@ -434,7 +444,7 @@ def _prune_stale_state(
     removed = 0
     for session in state.get("sessions", []):
         path = str(session.get("path", ""))
-        if not path or not Path(path).exists() or path not in active_paths:
+        if not path or not Path(path).exists():
             removed += 1
             continue
         pruned.append(session)
