@@ -1,147 +1,37 @@
-"""Core utilities and shared services for Aragora.
+"""Minimal core exports for the standalone debate wedge."""
 
-This package re-exports core types from aragora.core_types and adds
-additional utilities like the unified embedding service and decision router.
-
-Core types (from aragora/core_types.py):
-    - Message, Critique, Vote, DebateResult, Environment, Agent
-    - TaskComplexity, AgentRole, AgentStance
-    - DisagreementReport
-
-Embeddings (from aragora.core.embeddings):
-    - UnifiedEmbeddingService, get_embedding_service
-    - EmbeddingConfig, EmbeddingResult, EmbeddingBackend
-
-Decision (from aragora.core.decision):
-    - DecisionRequest, DecisionResult, DecisionRouter
-    - DecisionType, InputSource, Priority
-    - ResponseChannel, RequestContext, DecisionConfig
-"""
+from __future__ import annotations
 
 from typing import Any
 
-# Import all exports from the core_types module (formerly core.py)
 from aragora.core_types import (
+    Agent,
     AgentRole,
     AgentStance,
-    TaskComplexity,
-    Message,
     Critique,
-    Vote,
-    DisagreementReport,
     DebateResult,
+    DisagreementReport,
     Environment,
-    Agent,
-)
-
-# Import embeddings
-from aragora.core.embeddings import (
-    EmbeddingBackend,
-    EmbeddingConfig,
-    EmbeddingResult,
-    UnifiedEmbeddingService,
-    get_embedding_service,
-)
-
-# Import decision routing
-from aragora.core.decision import (
-    DecisionConfig,
-    DecisionRequest,
-    DecisionResult,
-    DecisionRouter,
-    DecisionType,
-    InputSource,
-    Priority,
-    RequestContext,
-    ResponseChannel,
-    ResponseFormat,
-    get_decision_router,
-)
-
-# Import decision cache
-from aragora.core.decision_cache import (
-    CacheConfig,
-    DecisionCache,
-    get_decision_cache,
-    reset_decision_cache,
-)
-
-# Import routing rules
-from aragora.core.routing_rules import (
-    Action,
-    ActionType,
-    Condition,
-    ConditionOperator,
-    RoutingRule,
-    RoutingRulesEngine,
-    RuleEvaluationResult,
-    RULE_TEMPLATES,
-)
-
-# Import shared types
-from aragora.core.types import (
-    HealthLevel,
-    HealthReport,
-    HealthStatus,
-    SyncResult,
-    ValidationResult,
+    Message,
+    TaskComplexity,
+    Vote,
 )
 
 __all__ = [
-    # Core types
+    "Agent",
     "AgentRole",
     "AgentStance",
-    "TaskComplexity",
-    "Message",
     "Critique",
-    "Vote",
-    "DisagreementReport",
+    "DebateProtocol",
     "DebateResult",
+    "DisagreementReport",
     "Environment",
-    "Agent",
-    "DebateProtocol",  # Lazy import
-    # Embeddings
-    "EmbeddingBackend",
-    "EmbeddingConfig",
-    "EmbeddingResult",
-    "UnifiedEmbeddingService",
-    "get_embedding_service",
-    # Decision routing
-    "DecisionConfig",
-    "DecisionRequest",
-    "DecisionResult",
-    "DecisionRouter",
-    "DecisionType",
-    "InputSource",
-    "Priority",
-    "RequestContext",
-    "ResponseChannel",
-    "ResponseFormat",
-    "get_decision_router",
-    # Decision cache
-    "CacheConfig",
-    "DecisionCache",
-    "get_decision_cache",
-    "reset_decision_cache",
-    # Routing rules
-    "Action",
-    "ActionType",
-    "Condition",
-    "ConditionOperator",
-    "RoutingRule",
-    "RoutingRulesEngine",
-    "RuleEvaluationResult",
-    "RULE_TEMPLATES",
-    # Shared types
-    "HealthLevel",
-    "HealthReport",
-    "HealthStatus",
-    "SyncResult",
-    "ValidationResult",
+    "Message",
+    "TaskComplexity",
+    "Vote",
 ]
 
 
-# Lazy imports for backwards compatibility
 def __getattr__(name: str) -> Any:
     if name == "DebateProtocol":
         from aragora.debate.protocol import DebateProtocol
