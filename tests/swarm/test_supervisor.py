@@ -470,6 +470,84 @@ async def test_collect_results_updates_work_orders(repo: Path, store: DevCoordin
 
 
 @pytest.mark.asyncio
+async def test_collect_results_marks_scope_violation_needs_human(
+    repo: Path, store: DevCoordinationStore
+) -> None:
+    lease = store.claim_lease(
+        task_id="scope-lane",
+        title="Scope lane",
+        owner_agent="claude",
+        owner_session_id="scope-session",
+        branch="main",
+        worktree_path=str(repo),
+        claimed_paths=["aragora/server/auth_checks.py"],
+    )
+    run_record = store.create_supervisor_run(
+        goal="scope violation",
+        target_branch="main",
+        supervisor_agents={},
+        approval_policy={},
+        spec={"raw_goal": "scope violation"},
+        work_orders=[
+            {
+                "work_order_id": "wo-scope",
+                "status": "dispatched",
+                "worktree_path": str(repo),
+                "branch": "main",
+                "target_agent": "claude",
+                "owner_session_id": "scope-session",
+                "lease_id": lease.lease_id,
+                "review_status": "pending",
+            }
+        ],
+        status="active",
+    )
+    run_id = run_record["run_id"]
+
+    mock_launcher = MagicMock(spec=WorkerLauncher)
+    completed_worker = WorkerProcess(
+        work_order_id="wo-scope",
+        agent="claude",
+        worktree_path=str(repo),
+        branch="main",
+        session_id="scope-session",
+        pid=100,
+        exit_code=0,
+        completed_at="2026-03-06T20:00:00+00:00",
+        diff="diff --git a/aragora/server/handlers/playground.py",
+        changed_paths=["aragora/server/handlers/playground.py"],
+        commit_shas=["abc12345"],
+        tests_run=["pytest -q tests/swarm/test_supervisor.py"],
+    )
+    mock_launcher.get_worker = MagicMock(return_value=completed_worker)
+    mock_launcher.wait = AsyncMock(return_value=completed_worker)
+
+    supervisor = SwarmSupervisor(
+        repo_root=repo,
+        store=store,
+        launcher=mock_launcher,
+    )
+
+    results = await supervisor.collect_results(run_id)
+    assert len(results) == 1
+    assert results[0].exit_code == 0
+
+    updated = store.get_supervisor_run(run_id)
+    assert updated is not None
+    wo = updated["work_orders"][0]
+    assert wo["status"] == "needs_human"
+    assert wo["review_status"] == "changes_requested"
+    assert "file-scope ownership" in wo["dispatch_error"]
+    assert wo["receipt_id"] is None
+    assert wo["lease_id"] == lease.lease_id
+    assert wo["scope_violation"]["violations"][0]["type"] == "out_of_scope"
+
+    summary = store.status_summary()
+    assert summary["counts"]["scope_violations"] == 1
+    assert summary["counts"]["active_leases"] == 1
+
+
+@pytest.mark.asyncio
 async def test_dispatch_handles_missing_cli(repo: Path, store: DevCoordinationStore) -> None:
     """dispatch_workers should requeue onto the fallback agent when one CLI is unavailable."""
     run_record = store.create_supervisor_run(
