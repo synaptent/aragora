@@ -25,6 +25,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from aragora.inbox import InboxWedgeAction
 
 
 # ---------------------------------------------------------------------------
@@ -1117,6 +1118,101 @@ class TestBulkAction:
             )
             result = await handler.handle_request(req, "/api/v1/inbox/bulk-action", "POST")
             assert _status(result) == 200
+
+    @pytest.mark.asyncio
+    async def test_bulk_action_archive_executes_receipt_backed_single_message(
+        self, handler, mock_store
+    ):
+        mock_store.get_message.return_value = _message_record("msg-1")
+        mock_service = MagicMock()
+        mock_envelope = MagicMock()
+        mock_envelope.intent.provider = "gmail"
+        mock_envelope.intent.user_id = "acct-1"
+        mock_envelope.intent.message_id = "ext-123"
+        mock_envelope.intent.action = InboxWedgeAction.ARCHIVE
+        mock_envelope.intent.to_dict.return_value = {
+            "provider": "gmail",
+            "user_id": "acct-1",
+            "message_id": "ext-123",
+            "action": "archive",
+        }
+        mock_envelope.decision.to_dict.return_value = {
+            "final_action": "archive",
+            "confidence": 0.93,
+        }
+        mock_envelope.receipt.to_dict.return_value = {
+            "receipt_id": "receipt-1",
+            "state": "executed",
+        }
+        mock_envelope.provider_route = "direct"
+        mock_envelope.debate_id = "debate-1"
+        mock_service.validate_receipt.return_value = MagicMock(
+            valid=True,
+            envelope=mock_envelope,
+            error=None,
+        )
+        mock_service.execute_receipt = AsyncMock(
+            return_value=MagicMock(to_dict=MagicMock(return_value={"archived": True}))
+        )
+        mock_service.store.get_receipt.return_value = mock_envelope
+
+        with patch(
+            "aragora.server.handlers.features.unified_inbox.handler.execute_bulk_action",
+            new_callable=AsyncMock,
+        ) as mock_bulk:
+            with patch(
+                "aragora.inbox.get_inbox_trust_wedge_service",
+                return_value=mock_service,
+            ):
+                req = _req(
+                    method="POST",
+                    path="/api/v1/inbox/bulk-action",
+                    body={
+                        "message_ids": ["msg-1"],
+                        "action": "archive",
+                        "receipt_id": "receipt-1",
+                    },
+                )
+                result = await handler.handle_request(req, "/api/v1/inbox/bulk-action", "POST")
+
+        assert _status(result) == 200
+        body = _body(result)
+        assert body["success"] is True
+        assert body["data"]["executed"] is True
+        assert body["data"]["receipt"]["receipt_id"] == "receipt-1"
+        assert body["data"]["provider_message_id"] == "ext-123"
+        mock_service.execute_receipt.assert_awaited_once_with("receipt-1")
+        mock_bulk.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_bulk_action_receipt_rejects_multiple_message_ids(self, handler, mock_store):
+        req = _req(
+            method="POST",
+            path="/api/v1/inbox/bulk-action",
+            body={
+                "message_ids": ["msg-1", "msg-2"],
+                "action": "archive",
+                "receipt_id": "receipt-1",
+            },
+        )
+        result = await handler.handle_request(req, "/api/v1/inbox/bulk-action", "POST")
+        assert _status(result) == 400
+        assert "exactly one message_id" in _body(result)["error"].lower()
+
+    @pytest.mark.asyncio
+    async def test_bulk_action_receipt_rejects_unsupported_action(self, handler, mock_store):
+        req = _req(
+            method="POST",
+            path="/api/v1/inbox/bulk-action",
+            body={
+                "message_ids": ["msg-1"],
+                "action": "mark_read",
+                "receipt_id": "receipt-1",
+            },
+        )
+        result = await handler.handle_request(req, "/api/v1/inbox/bulk-action", "POST")
+        assert _status(result) == 400
+        assert "archive and star only" in _body(result)["error"].lower()
 
     @pytest.mark.asyncio
     async def test_bulk_action_no_message_ids(self, handler, mock_store):

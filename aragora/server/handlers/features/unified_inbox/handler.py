@@ -440,6 +440,7 @@ class UnifiedInboxHandler(BaseHandler):
             body = await self._get_json_body(request)
             message_ids = body.get("message_ids", [])
             action = body.get("action", "")
+            receipt_id = str(body.get("receipt_id", "") or "").strip()
 
             if not message_ids:
                 return error_response("No message IDs provided", 400)
@@ -449,12 +450,116 @@ class UnifiedInboxHandler(BaseHandler):
                     f"Invalid action. Must be one of: {', '.join(VALID_ACTIONS)}", 400
                 )
 
+            if receipt_id:
+                wedge_result = await self._handle_receipt_backed_bulk_action(
+                    tenant_id, message_ids, action, receipt_id
+                )
+                if wedge_result is not None:
+                    return wedge_result
+
             result = await execute_bulk_action(tenant_id, message_ids, action, self._store)
             return success_response(result)
 
         except (KeyError, ValueError, TypeError) as e:
             logger.exception("Error executing bulk action: %s", e)
             return error_response("Bulk action failed", 500)
+
+    async def _handle_receipt_backed_bulk_action(
+        self,
+        tenant_id: str,
+        message_ids: list[str],
+        action: str,
+        receipt_id: str,
+    ) -> HandlerResult | None:
+        """Execute the narrow receipt-backed single-message bulk path.
+
+        Unified inbox bulk actions are still mostly non-receipt-backed. This
+        helper only consolidates the exact archive/star single-message execution
+        path onto the inbox trust wedge.
+        """
+        if action not in {"archive", "star"}:
+            return error_response(
+                (
+                    "Receipt-backed inbox bulk actions currently support "
+                    "single-message archive and star only."
+                ),
+                400,
+            )
+        if len(message_ids) != 1:
+            return error_response(
+                "Receipt-backed inbox bulk actions currently support exactly one message_id.",
+                400,
+            )
+
+        from aragora.inbox import InboxWedgeAction, ReceiptState, get_inbox_trust_wedge_service
+
+        message_id = message_ids[0]
+        record = await self._store.get_message(tenant_id, message_id)
+        if not record:
+            return error_response("Message not found", 404)
+
+        message = record_to_message(record)
+        if message.provider is not EmailProvider.GMAIL:
+            return error_response(
+                "Inbox trust wedge currently supports Gmail unified inbox messages only",
+                400,
+            )
+        if not message.account_id:
+            return error_response("Message missing connected account ID", 400)
+
+        provider_message_id = message.external_id or message.id
+        if not provider_message_id:
+            return error_response("Message missing provider message ID", 400)
+
+        expected_action = InboxWedgeAction.ARCHIVE if action == "archive" else InboxWedgeAction.STAR
+        wedge_service = get_inbox_trust_wedge_service()
+        validation = wedge_service.validate_receipt(receipt_id, require_state=ReceiptState.APPROVED)
+        if not validation.valid or validation.envelope is None:
+            return error_response(validation.error or "receipt validation failed", 400)
+
+        envelope = validation.envelope
+        if envelope.intent.provider != message.provider.value:
+            return error_response("receipt provider mismatch", 400)
+        if envelope.intent.user_id != message.account_id:
+            return error_response("receipt user mismatch", 400)
+        if envelope.intent.message_id != provider_message_id:
+            return error_response("receipt message mismatch", 400)
+        if envelope.intent.action is not expected_action:
+            return error_response("receipt action mismatch", 400)
+
+        try:
+            execution_result = await wedge_service.execute_receipt(receipt_id)
+        except ValueError as exc:
+            return error_response(str(exc), 400)
+        except (
+            AttributeError,
+            RuntimeError,
+            OSError,
+            ConnectionError,
+            TypeError,
+            KeyError,
+        ):
+            logger.exception("Error executing unified inbox trust wedge receipt")
+            return error_response("Receipt execution failed", 500)
+
+        updated = wedge_service.store.get_receipt(receipt_id) or envelope
+        return success_response(
+            {
+                "action": action,
+                "success_count": 1,
+                "error_count": 0,
+                "errors": None,
+                "source_message_id": message.id,
+                "provider_message_id": provider_message_id,
+                "receipt": updated.receipt.to_dict(),
+                "intent": updated.intent.to_dict(),
+                "decision": updated.decision.to_dict(),
+                "provider_route": updated.provider_route,
+                "debate_id": updated.debate_id,
+                "executed": True,
+                "execution_result": execution_result.to_dict(),
+            }
+        )
 
     # =========================================================================
     # Stats & Trends
