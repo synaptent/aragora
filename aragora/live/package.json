@@ -3,6 +3,9 @@
   "version": "2.9.0",
   "description": "Control Plane for Multi-Agent Vetted Decisionmaking - Orchestrate AI debate across org knowledge and channels",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "dev:local": "next dev",
@@ -40,7 +43,7 @@
   },
   "dependencies": {
     "@aragora/sdk": "file:../../sdk/typescript",
-    "@supabase/supabase-js": "^2.108.2",
+    "@supabase/supabase-js": "2.109.0",
     "@types/d3-drag": "^3.0.7",
     "@types/d3-force": "^3.0.10",
     "@types/d3-selection": "^3.0.11",

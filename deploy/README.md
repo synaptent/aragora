@@ -99,5 +99,5 @@ deploy/
 ```bash
 # From repo root
 docker build -t aragora/api:latest .
-docker build -t aragora/dashboard:latest -f aragora/live/Dockerfile aragora/live/
+docker build -t aragora/dashboard:latest -f aragora/live/Dockerfile .
 ```

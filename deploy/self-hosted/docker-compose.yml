@@ -272,8 +272,8 @@ services:
   dashboard:
     image: ${ARAGORA_DASHBOARD_IMAGE:-ghcr.io/synaptent/aragora-dashboard:2.8.0}
     build:
-      context: ../../aragora/live
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: aragora/live/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${ARAGORA_PUBLIC_API_URL:-http://localhost:8080}
         NEXT_PUBLIC_WS_URL: ${ARAGORA_PUBLIC_WS_URL:-ws://localhost:8765/ws}
