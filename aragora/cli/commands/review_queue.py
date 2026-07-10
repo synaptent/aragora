@@ -46,6 +46,18 @@ from aragora.cli.commands.review_queue_comment_verdicts import (
     has_blocking_or_negative_verdict as _has_blocking_or_negative_verdict,
     highest_blocking_severity as _highest_blocking_severity,
 )
+from aragora.cli.commands.review_queue_tier4_settlement import (
+    DEFAULT_TRUSTED_SETTLEMENT_CREATOR as DEFAULT_TRUSTED_SETTLEMENT_CREATOR,
+    HUMAN_SETTLEMENT_CONTEXT as HUMAN_SETTLEMENT_CONTEXT,
+    SETTLEMENT_CREATOR_ENV_VAR as SETTLEMENT_CREATOR_ENV_VAR,
+    TIER_FOUR_AUTHORIZED_MERGE_TOKENS as TIER_FOUR_AUTHORIZED_MERGE_TOKENS,
+    TIER_FOUR_SETTLEMENT_MARKER as TIER_FOUR_SETTLEMENT_MARKER,
+    _has_tier_four_human_preapproval_comment as _has_tier_four_human_preapproval_comment,
+    _human_settlement_status_creator_verified as _human_settlement_status_creator_verified,
+    _trusted_settlement_creator as _trusted_settlement_creator,
+    _trusted_recorded_settlement_comment_url as _trusted_recorded_settlement_comment_url,
+    _trusted_tier_four_human_preapproval_comment_url as _trusted_tier_four_human_preapproval_comment_url,
+)
 from aragora.cli.commands.review_queue_transport import (
     _GhError,
     _gh_error_kind,
@@ -91,10 +103,6 @@ class AutoHandleCalibrationStore:
 LARGE_DIFF_THRESHOLD = 500  # additions + deletions, beyond which "needs_human_attention"
 MODEL_REVIEW_QUEUE_CAP = 6
 MODEL_REVIEW_QUORUM_VERSION = "model_review_quorum.v1"
-HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"
-TIER_FOUR_SETTLEMENT_MARKER = "Tier-4 Human Settlement Authorization"
-DEFAULT_TRUSTED_SETTLEMENT_CREATOR = "scarmani"
-SETTLEMENT_CREATOR_ENV_VAR = "ARAGORA_SETTLEMENT_CREATOR"
 GITHUB_TRANSPORT_ERROR_KIND = "github_transport"
 GITHUB_TRANSPORT_BLOCKED_STATUS = "transport_blocked"
 _GITHUB_TRANSPORT_ERROR_MARKERS = (
@@ -120,7 +128,6 @@ _GITHUB_TRANSPORT_ERROR_MARKERS = (
     "timeout awaiting response headers",
     "tls handshake timeout",
 )
-TIER_FOUR_AUTHORIZED_MERGE_TOKENS = ("admin_squash_merge", "admin squash")
 CANONICAL_MODEL_FAMILIES: tuple[str, ...] = (
     "claude",
     "openai",
@@ -248,6 +255,7 @@ TIER_4_PREFIXES: tuple[str, ...] = (
     # Elevate to Tier 4 (human preapproval) so the human chain-of-trust is
     # not delegated to the artifact under review.
     "aragora/cli/commands/review_queue.py",
+    "aragora/swarm/quorum_evidence.py",
     # ``aragora/cli/parser.py`` is the registration surface for every
     # ``aragora`` subcommand the operator can invoke. Adding or modifying a
     # registration changes which entrypoints exist on the merge-authority
@@ -1248,14 +1256,23 @@ def _cmd_record_settlement(args: argparse.Namespace) -> int:
     status_failed = False
     if getattr(args, "post_github_status", False):
         try:
+            repo_slug = _resolve_settlement_repo_slug(getattr(args, "repo", None))
+            status_target_url = _trusted_recorded_settlement_comment_url(
+                pr_number=result.receipt.pr_number,
+                repo_slug=repo_slug,
+                repo_override=getattr(args, "repo", None),
+                head_sha=head_sha,
+                gh_json=_gh_json,
+            )
             github_status = _post_human_settlement_status(
-                repo_slug=_resolve_settlement_repo_slug(getattr(args, "repo", None)),
+                repo_slug=repo_slug,
                 head_sha=head_sha,
                 context=str(
                     getattr(args, "github_status_context", "") or "aragora/human-settlement"
                 ),
                 pr_ref=str(getattr(args, "pr")),
                 receipt_sha256=result.receipt_sha256,
+                target_url=status_target_url,
             )
         except _GhError as exc:
             status_failed = True
@@ -1632,13 +1649,19 @@ def _post_human_settlement_status(
     context: str,
     pr_ref: str,
     receipt_sha256: str,
+    target_url: str,
 ) -> dict[str, Any]:
-    """POST the head-bound human-settlement commit status, citing the receipt.
+    """POST the head-bound human-settlement status, citing receipt and comment.
 
     Only called after the local receipt is durably written, so the status is
     always backed by a receipt. The receipt sha is embedded in the status
-    description for an auditable status->receipt link.
+    description for an auditable status->receipt link. ``target_url`` binds the
+    status to the trusted exact-head Tier 4 settlement comment that quorum later
+    verifies.
     """
+    target_url = str(target_url or "").strip()
+    if not target_url:
+        raise _GhError("human-settlement status requires a trusted settlement comment target_url")
     pr_digits = "".join(ch for ch in str(pr_ref) if ch.isdigit()) or str(pr_ref)
     description = (f"Settlement receipt {receipt_sha256} recorded for PR #{pr_digits}")[:140]
     resp = _gh_json(
@@ -1653,6 +1676,8 @@ def _post_human_settlement_status(
             f"context={context}",
             "-f",
             f"description={description}",
+            "-f",
+            f"target_url={target_url}",
         ]
     )
     state = ""
@@ -1666,6 +1691,7 @@ def _post_human_settlement_status(
         "state": state,
         "head_sha": head_sha,
         "receipt_sha256": receipt_sha256,
+        "target_url": target_url,
     }
 
 
@@ -3432,32 +3458,53 @@ def _build_model_review_quorum(
         and not advisory_settle_eligible
     )
     requires_human_preapproval = bool(requirement["requires_human_preapproval"])
-    human_preapproval_recorded = (
-        requires_human_preapproval
-        and human_risk_settlement_recorded
-        and _has_successful_status_context(pr, HUMAN_SETTLEMENT_CONTEXT)
-        and _has_tier_four_human_preapproval_comment(pr, head_sha=head_sha)
+    local_human_risk_settlement_recorded = human_risk_settlement_recorded
+    resolved_repo_slug = repo_slug or rest_fallback._repo_slug_from_pr_payload(pr, None)
+    preapproval_comment_url = (
+        _trusted_tier_four_human_preapproval_comment_url(
+            pr,
+            head_sha=head_sha,
+            head_committed_at=head_committed_at,
+            repo_slug=resolved_repo_slug,
+            gh_json=_gh_json,
+        )
+        if requires_human_preapproval
+        else ""
     )
+    # Cross-process Tier 4 settlement is repo-visible by design: it counts only
+    # when an exact-head trusted operator comment is bound to a matching
+    # aragora/human-settlement status created by that same trusted operator.
+    repo_visible_human_preapproval_recorded = (
+        requires_human_preapproval
+        and _has_successful_status_context(pr, HUMAN_SETTLEMENT_CONTEXT)
+        and bool(preapproval_comment_url)
+    )
+    human_preapproval_recorded = False
     settlement_creator_pin = dict(
         trusted_creator=_trusted_settlement_creator(), checked=False, verified=False, reason=""
     )
-    if human_preapproval_recorded:
+    if repo_visible_human_preapproval_recorded:
         creator_verified, creator_reason = _human_settlement_status_creator_verified(
-            repo_slug=repo_slug or rest_fallback._repo_slug_from_pr_payload(pr, None),
+            repo_slug=resolved_repo_slug,
             head_sha=head_sha,
+            target_url=preapproval_comment_url,
+            gh_json=_gh_json,
         )
         settlement_creator_pin["checked"] = True
         settlement_creator_pin["verified"] = creator_verified
         settlement_creator_pin["reason"] = creator_reason
-        if not creator_verified:
-            human_preapproval_recorded = False
+        if creator_verified:
+            human_preapproval_recorded = True
     reasons = [tier_reason]
     if settlement_creator_pin["checked"] and not settlement_creator_pin["verified"]:
         reasons.append(str(settlement_creator_pin["reason"]))
     if settlement_recorded:
         reasons.append("exact-head admin_squash_merge settlement receipt recorded")
     elif human_preapproval_recorded:
-        reasons.append("exact-head human risk settlement receipt recorded")
+        if local_human_risk_settlement_recorded:
+            reasons.append("exact-head human risk settlement receipt recorded")
+        else:
+            reasons.append("repo-visible exact-head human risk settlement recorded")
         reasons.append("exact-head Tier 4 human preapproval verified")
         reasons.append(str(settlement_creator_pin["reason"]))
     elif human_risk_settlement_recorded:
@@ -3600,7 +3647,7 @@ def _build_model_review_quorum(
         "has_western_frontier_signal": has_western_frontier_signal,
         "requires_adversarial_dogfood": requirement["requires_adversarial_dogfood"],
         "requires_human_risk_settlement": requires_human_risk_settlement,
-        "human_risk_settlement_recorded": human_risk_settlement_recorded,
+        "human_risk_settlement_recorded": local_human_risk_settlement_recorded,
         "requires_human_preapproval": requires_human_preapproval,
         "human_preapproval_recorded": human_preapproval_recorded,
         "settlement_creator_pin": settlement_creator_pin,
@@ -3811,72 +3858,6 @@ def _has_successful_status_context(pr: dict[str, Any], context: str) -> bool:
     return False
 
 
-def _trusted_settlement_creator() -> str:
-    return (
-        str(os.environ.get(SETTLEMENT_CREATOR_ENV_VAR, "") or "").strip()
-        or DEFAULT_TRUSTED_SETTLEMENT_CREATOR
-    )
-
-
-def _human_settlement_status_creator_verified(
-    *, repo_slug: str, head_sha: str, context: str = HUMAN_SETTLEMENT_CONTEXT
-) -> tuple[bool, str]:
-    trusted = _trusted_settlement_creator()
-
-    def fail(reason: str) -> tuple[bool, str]:
-        return (False, f"settlement-creator pin: {reason}")
-
-    if not repo_slug or not head_sha:
-        return fail("missing repo slug or head sha; failing closed")
-    try:
-        payload = _gh_json(["api", f"repos/{repo_slug}/commits/{head_sha}/statuses?per_page=100"])
-    except _GhError as exc:
-        return fail(f"could not fetch commit statuses ({exc}); failing closed")
-    if not isinstance(payload, list):
-        return fail("unexpected statuses payload shape; failing closed")
-    for status in payload:
-        if not isinstance(status, dict) or str(status.get("context") or "").strip() != context:
-            continue
-        state = str(status.get("state") or "").strip().lower()
-        creator = status.get("creator")
-        login = str(creator.get("login") or "").strip() if isinstance(creator, dict) else ""
-        if state != "success":
-            return fail(f"newest '{context}' status state is '{state}', not success")
-        if not login:
-            return fail(f"newest '{context}' status has no creator login; failing closed")
-        if login.casefold() != trusted.casefold():
-            return fail(
-                f"newest '{context}' status was created by '{login}', "
-                f"not trusted settlement creator '{trusted}'"
-            )
-        return (
-            True,
-            f"settlement-creator pin: '{context}' status created by trusted settlement creator '{trusted}'",
-        )
-    return fail(f"no '{context}' status found on head commit; failing closed")
-
-
-def _has_tier_four_human_preapproval_comment(pr: dict[str, Any], *, head_sha: str) -> bool:
-    head = str(head_sha or "").strip()
-    if not head:
-        return False
-    for comment in pr.get("comments") or []:
-        if not isinstance(comment, dict):
-            continue
-        body = str(comment.get("body") or "")
-        lowered = body.lower()
-        if TIER_FOUR_SETTLEMENT_MARKER not in body:
-            continue
-        if head not in body:
-            continue
-        if not any(token in lowered for token in TIER_FOUR_AUTHORIZED_MERGE_TOKENS):
-            continue
-        if "human-risk settlement" not in lowered:
-            continue
-        return True
-    return False
-
-
 def _reviewer_signals_from_protocol(protocol: dict[str, Any]) -> list[dict[str, Any]]:
     validation = protocol.get("validation_summary") or {}
     reviewer_execution = validation.get("reviewer_execution") or {}
@@ -4069,28 +4050,23 @@ def _head_committed_at_from_pr(pr: dict[str, Any]) -> str:
 
     Used to anchor comment-based quorum signals to the current head
     SHA per the "grounded in the current head SHA" requirement of
-    ``docs/REVIEW_AUTHORITY_PRINCIPLES.md``.  Falls back to the most
-    recent ``committedDate`` in the commits list when the head SHA
-    is not separately matched, and returns ``""`` when the PR fetch
-    did not include commit metadata (no-op for legacy callers).
+    ``docs/REVIEW_AUTHORITY_PRINCIPLES.md``.  Missing identity fails
+    closed for comment recency checks.
     """
     head_sha = str(pr.get("headRefOid", "") or "").strip()
     commits = pr.get("commits") or []
     if not isinstance(commits, list):
         return ""
-    latest_committed_at = ""
     for entry in commits:
         if not isinstance(entry, dict):
             continue
         committed_at = str(entry.get("committedDate", "") or "").strip()
         if not committed_at:
             continue
-        oid = str(entry.get("oid", "") or "").strip()
+        oid = str(entry.get("oid") or entry.get("sha") or "").strip()
         if head_sha and oid == head_sha:
             return committed_at
-        if committed_at > latest_committed_at:
-            latest_committed_at = committed_at
-    return latest_committed_at
+    return ""
 
 
 def _known_model_reviewer_id(item: dict[str, Any]) -> str:

@@ -457,6 +457,82 @@ def _format_seconds(seconds: float) -> str:
     return f"{seconds:g}"
 
 
+def _reviewer_collection_timeout_seconds(reviewer_count: int, max_workers: int) -> float:
+    attempts = 1 + _reviewer_infra_retries()
+    per_attempt = _timeout_seconds(_REVIEWER_TIMEOUT_ENV, _REVIEWER_TIMEOUT)
+    cleanup = max(0.0, float(_REVIEWER_CLEANUP_TIMEOUT))
+    worker_count = max(1, max_workers)
+    waves = max(1, math.ceil(max(0, reviewer_count) / worker_count))
+    return max(0.1, waves * attempts * (per_attempt + cleanup))
+
+
+def _run_reviewers_with_timeout(
+    *,
+    supported: Sequence[str],
+    reviewer_runner: Callable[[str, str], ReviewerResult],
+    prompt: str,
+) -> dict[str, ReviewerResult]:
+    """Run reviewers concurrently, failing closed for workers that do not return."""
+    if not supported:
+        return {}
+
+    max_workers = max(1, min(len(supported), _MAX_REVIEWER_WORKERS))
+    timeout_seconds = _reviewer_collection_timeout_seconds(len(supported), max_workers)
+    deadline = time.monotonic() + timeout_seconds
+    result_queue: queue.Queue[tuple[str, ReviewerResult]] = queue.Queue()
+    pending_order = list(supported)
+    pending = set(supported)
+    active: set[str] = set()
+    reviews: dict[str, ReviewerResult] = {}
+
+    def reviewer_worker(family: str) -> None:
+        try:
+            result = _run_reviewer_with_infra_retry(reviewer_runner, family, prompt)
+        except Exception as exc:  # noqa: BLE001 - one bad reviewer must not abort the run
+            result = ReviewerResult(family, "", False, f"{type(exc).__name__}: {str(exc)[:200]}")
+        result_queue.put((family, result))
+
+    def start_available_workers() -> None:
+        while pending_order and len(active) < max_workers:
+            family = pending_order.pop(0)
+            active.add(family)
+            thread = threading.Thread(
+                target=reviewer_worker,
+                args=(family,),
+                name=f"quorum-evidence-reviewer-{family}",
+                daemon=True,
+            )
+            thread.start()
+
+    start_available_workers()
+    while pending:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            family, result = result_queue.get(timeout=min(remaining, 0.25))
+        except queue.Empty:
+            continue
+        active.discard(family)
+        if family not in pending:
+            continue
+        reviews[family] = result
+        pending.remove(family)
+        start_available_workers()
+
+    for family in supported:
+        if family in reviews:
+            continue
+        reviews[family] = ReviewerResult(
+            family,
+            "",
+            False,
+            f"reviewer timed out after {_format_seconds(timeout_seconds)}s without evidence",
+        )
+
+    return reviews
+
+
 @dataclass
 class ReviewerResult:
     """Raw output of one genuine reviewer run."""

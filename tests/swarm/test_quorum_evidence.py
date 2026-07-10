@@ -1360,6 +1360,109 @@ def test_collect_records_raising_reviewer_as_failure() -> None:
     assert "reviewer boom" in outcome.failures[0].error
 
 
+def test_collect_times_out_one_hung_reviewer_and_keeps_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fakes, _ = _fakes(tier=1)
+    monkeypatch.setattr(qe, "_REVIEWER_TIMEOUT", 0.02)
+    monkeypatch.setattr(qe, "_REVIEWER_CLEANUP_TIMEOUT", 0.01)
+    monkeypatch.setattr(qe, "_reviewer_infra_retries", lambda: 0)
+
+    def maybe_hang(family: str, prompt: str) -> ReviewerResult:
+        if family == "grok":
+            time.sleep(0.5)
+        return ReviewerResult(family, f"Verdict: PASS from {family}", True)
+
+    fakes["reviewer_runner"] = maybe_hang
+    started_at = time.monotonic()
+
+    outcome = collect_evidence(
+        repo="o/r", pr=1, families=["claude", "grok"], author="me", apply=True, **fakes
+    )
+
+    assert time.monotonic() - started_at < 0.4
+    assert [item.family for item in outcome.items] == ["claude"]
+    assert [failure.family for failure in outcome.failures] == ["grok"]
+    assert "timed out" in outcome.failures[0].error
+    assert outcome.action == "prepare"
+    assert "supportive quorum incomplete" in outcome.action_reason
+
+
+def test_collect_times_out_all_hung_reviewers(monkeypatch: pytest.MonkeyPatch) -> None:
+    fakes, posted = _fakes(tier=1)
+    monkeypatch.setattr(qe, "_REVIEWER_TIMEOUT", 0.02)
+    monkeypatch.setattr(qe, "_REVIEWER_CLEANUP_TIMEOUT", 0.01)
+    monkeypatch.setattr(qe, "_reviewer_infra_retries", lambda: 0)
+
+    def hanging_runner(family: str, prompt: str) -> ReviewerResult:
+        time.sleep(0.5)
+        return ReviewerResult(family, f"Verdict: PASS from {family}", True)
+
+    fakes["reviewer_runner"] = hanging_runner
+    started_at = time.monotonic()
+
+    outcome = collect_evidence(
+        repo="o/r", pr=1, families=["claude", "grok"], author="me", apply=True, **fakes
+    )
+
+    assert time.monotonic() - started_at < 0.4
+    assert outcome.items == []
+    assert [failure.family for failure in outcome.failures] == ["claude", "grok"]
+    assert all("timed out" in failure.error for failure in outcome.failures)
+    assert outcome.action == "prepare"
+    assert outcome.posted == []
+    assert posted == []
+
+
+def test_collect_bounded_reviewer_wait_preserves_successful_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fakes, _ = _fakes(tier=1)
+    monkeypatch.setattr(qe, "_REVIEWER_TIMEOUT", 0.02)
+    monkeypatch.setattr(qe, "_REVIEWER_CLEANUP_TIMEOUT", 0.01)
+    monkeypatch.setattr(qe, "_reviewer_infra_retries", lambda: 0)
+
+    outcome = collect_evidence(
+        repo="o/r", pr=1, families=["claude", "grok"], author="me", apply=False, **fakes
+    )
+
+    assert [item.family for item in outcome.items] == ["claude", "grok"]
+    assert outcome.failures == []
+    assert outcome.supportive_families == ["claude", "grok"]
+
+
+def test_collect_later_worker_wave_gets_full_reviewer_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fakes, _ = _fakes(tier=1)
+    monkeypatch.setattr(qe, "_MAX_REVIEWER_WORKERS", 2)
+    monkeypatch.setattr(qe, "_REVIEWER_TIMEOUT", 0.1)
+    monkeypatch.setattr(qe, "_REVIEWER_CLEANUP_TIMEOUT", 0)
+    monkeypatch.setattr(qe, "_reviewer_infra_retries", lambda: 0)
+
+    def wave_runner(family: str, prompt: str) -> ReviewerResult:
+        if family in {"claude", "grok"}:
+            time.sleep(0.08)
+        if family == "openai":
+            time.sleep(0.05)
+        return ReviewerResult(family, f"Verdict: PASS from {family}", True)
+
+    fakes["reviewer_runner"] = wave_runner
+
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "grok", "openai"],
+        author="me",
+        apply=False,
+        **fakes,
+    )
+
+    assert [item.family for item in outcome.items] == ["claude", "grok", "openai"]
+    assert outcome.failures == []
+    assert outcome.supportive_families == ["claude", "grok", "openai"]
+
+
 def test_collect_low_tier_apply_triggers_same_pr_quorum_reconciler_after_posts() -> None:
     fakes, posted = _fakes(tier=1)
     calls: list[tuple[str, int, int]] = []

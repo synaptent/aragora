@@ -49,6 +49,7 @@ from aragora.cli.commands.review_queue import (
     add_review_queue_parser,
     cmd_review_queue,
 )
+from aragora.cli.commands import review_queue_tier4_settlement as tier4_settlement
 from aragora.cli.commands import review_queue_rest_fallback as rest_fallback
 from aragora.review import (
     EvidenceKind,
@@ -1061,6 +1062,7 @@ class TestModelReviewQuorum:
             (["deploy/k8s/app.yaml"], 4),
             # Merge-authority self-modification: see TIER_4_PREFIXES rationale.
             (["aragora/cli/commands/review_queue.py"], 4),
+            (["aragora/swarm/quorum_evidence.py"], 4),
             (["aragora/cli/parser.py"], 4),
             (["scripts/settle_tier4_pr.py"], 4),
             (["scripts/settle_one_pr.py"], 4),
@@ -2209,6 +2211,87 @@ class TestModelReviewQuorum:
         assert quorum["admin_squash_allowed"] is False
         assert quorum["requires_human_preapproval"] is True
 
+    def test_tier_four_repo_visible_helper_settlement_clears_preapproval(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        files = ["aragora/cli/commands/review_queue.py"]
+        pr = _make_pr(number=8406, files=files)
+        head_sha = str(pr["headRefOid"])
+        pr["commits"] = [{"oid": head_sha, "committedDate": "2026-06-15T02:21:41Z"}]
+        settlement_url = "https://github.example/pr/8406#issuecomment-settlement"
+        pr["comments"] = [
+            _codex_openai_comment(body=f"Reviewed exact head {head_sha}."),
+            {
+                "author": {"login": "scarmani"},
+                "body": (
+                    "## Claude independent model review\n\n"
+                    "Model family: claude\n"
+                    f"Current head: {head_sha}\n\n"
+                    "Verdict: approve."
+                ),
+            },
+            {
+                "author": {"login": "scarmani"},
+                "authorAssociation": "OWNER",
+                "createdAt": "2026-06-15T02:22:41Z",
+                "url": settlement_url,
+                "body": (
+                    "Tier-4 Human Settlement Authorization\n\n"
+                    "PR: #8406\n"
+                    f"Exact head: {head_sha}\n"
+                    "Authorized action: admin_squash_merge and "
+                    "branch_protection_reconcile, only if #8406 is non-draft "
+                    "and live exact-head checks/merge-packet remain otherwise "
+                    "green.\n\n"
+                    "Human-risk settlement: I accept the Tier 4 risk for this PR."
+                ),
+            },
+        ]
+        pr["statusCheckRollup"] = [
+            {"name": "lint", "status": "COMPLETED", "conclusion": "SUCCESS"},
+            {"context": "aragora/human-settlement", "state": "SUCCESS"},
+        ]
+
+        def _gh_json_dispatch(args: list[str]) -> Any:
+            endpoint = str(args[-1])
+            if "/collaborators/scarmani/permission" in endpoint:
+                return {"permission": "admin"}
+            if "/statuses" in endpoint:
+                return [
+                    {
+                        "context": "aragora/human-settlement",
+                        "state": "success",
+                        "creator": {"login": "scarmani"},
+                        "target_url": settlement_url,
+                    }
+                ]
+            raise AssertionError(f"unexpected gh api call: {args}")
+
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            _gh_json_dispatch,
+        )
+
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=files,
+            protocol=_executed_protocol(),
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+            repo_slug="synaptent/aragora",
+        )
+
+        assert quorum["status"] == "satisfied"
+        assert quorum["verdict"] == "admin_squash_allowed"
+        assert quorum["admin_squash_allowed"] is True
+        assert quorum["human_risk_settlement_recorded"] is False
+        assert quorum["human_preapproval_recorded"] is True
+        assert quorum["requires_human_risk_settlement"] is False
+        assert quorum["requires_human_preapproval"] is False
+        assert "repo-visible exact-head human risk settlement recorded" in quorum["reasons"]
+
     def test_open_tier_four_with_exact_helper_settlement_is_authorized(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -2217,6 +2300,8 @@ class TestModelReviewQuorum:
         files = ["aragora/cli/commands/review_queue.py"]
         pr_payload = _make_pr(number=7736, files=files)
         head_sha = str(pr_payload["headRefOid"])
+        pr_payload["commits"] = [{"oid": head_sha, "committedDate": "2026-06-15T02:21:41Z"}]
+        settlement_url = "https://github.example/pr/7736#issuecomment-settlement"
         pr_payload["comments"] = [
             _codex_openai_comment(body=f"Reviewed exact head {head_sha}."),
             {
@@ -2229,7 +2314,10 @@ class TestModelReviewQuorum:
                 ),
             },
             {
-                "author": {"login": "an0mium"},
+                "author": {"login": "scarmani"},
+                "authorAssociation": "OWNER",
+                "createdAt": "2026-06-15T02:22:41Z",
+                "url": settlement_url,
                 "body": (
                     "Tier-4 Human Settlement Authorization\n\n"
                     "PR: #7736\n"
@@ -2261,12 +2349,16 @@ class TestModelReviewQuorum:
         def _gh_json_dispatch(args: list[str]) -> Any:
             # TET H2: the settlement-creator pin fetches the head commit's
             # statuses via the REST API; everything else hydrates the PR.
-            if any("/statuses" in str(arg) for arg in args):
+            endpoint = str(args[-1])
+            if "/collaborators/scarmani/permission" in endpoint:
+                return {"permission": "admin"}
+            if "/statuses" in endpoint:
                 return [
                     {
                         "context": "aragora/human-settlement",
                         "state": "success",
                         "creator": {"login": "scarmani"},
+                        "target_url": settlement_url,
                     }
                 ]
             return pr_payload
@@ -2309,6 +2401,8 @@ class TestModelReviewQuorum:
         files = ["aragora/cli/commands/review_queue.py"]
         pr = _make_pr(number=number, files=files)
         head_sha = str(pr["headRefOid"])
+        pr["commits"] = [{"oid": head_sha, "committedDate": "2026-06-15T02:21:41Z"}]
+        settlement_url = f"https://github.example/pr/{number}#issuecomment-settlement"
         pr["comments"] = [
             _codex_openai_comment(body=f"Reviewed exact head {head_sha}."),
             {
@@ -2321,7 +2415,10 @@ class TestModelReviewQuorum:
                 ),
             },
             {
-                "author": {"login": "an0mium"},
+                "author": {"login": "scarmani"},
+                "authorAssociation": "OWNER",
+                "createdAt": "2026-06-15T02:22:41Z",
+                "url": settlement_url,
                 "body": (
                     "Tier-4 Human Settlement Authorization\n\n"
                     f"PR: #{number}\n"
@@ -2343,10 +2440,21 @@ class TestModelReviewQuorum:
         *,
         state: str = "success",
         context: str = "aragora/human-settlement",
+        target_url: str = "https://github.example/pr/7900#issuecomment-settlement",
+        updated_at: str | None = None,
+        created_at: str | None = None,
     ) -> dict[str, Any]:
-        status: dict[str, Any] = {"context": context, "state": state}
+        status: dict[str, Any] = {
+            "context": context,
+            "state": state,
+            "target_url": target_url,
+        }
         if login is not None:
             status["creator"] = {"login": login}
+        if updated_at is not None:
+            status["updated_at"] = updated_at
+        if created_at is not None:
+            status["created_at"] = created_at
         return status
 
     def _pin_quorum(
@@ -2361,9 +2469,11 @@ class TestModelReviewQuorum:
             pr, files = self._tier_four_settled_pr()
 
         def _gh_json_dispatch(args: list[str]) -> Any:
-            assert any("/statuses" in str(arg) for arg in args), (
-                "only the statuses API may be called from the quorum builder"
-            )
+            endpoint = str(args[-1])
+            if "/collaborators/" in endpoint and endpoint.endswith("/permission"):
+                return {"permission": "admin"}
+            if not any("/statuses" in str(arg) for arg in args):
+                raise AssertionError(f"unexpected gh api call: {args}")
             if isinstance(statuses, Exception):
                 raise statuses
             return statuses
@@ -2393,6 +2503,228 @@ class TestModelReviewQuorum:
         assert pin["trusted_creator"] == "scarmani"
         assert any("settlement-creator pin" in reason for reason in quorum["reasons"])
 
+    def test_untrusted_preapproval_comment_with_trusted_status_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+        settlement_comment = pr["comments"][-1]
+        settlement_comment["author"] = {"login": "random-contributor"}
+        settlement_comment["authorAssociation"] = "CONTRIBUTOR"
+        settlement_url = settlement_comment["url"]
+
+        def _gh_json_dispatch(args: list[str]) -> Any:
+            assert any("/statuses" in str(arg) for arg in args), (
+                "untrusted settlement comments must fail before collaborator permission lookup"
+            )
+            return [self._settlement_status("scarmani", target_url=settlement_url)]
+
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            _gh_json_dispatch,
+        )
+
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=files,
+            protocol=_executed_protocol(),
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+            human_risk_settlement_recorded=True,
+            repo_slug="synaptent/aragora",
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert quorum["admin_squash_allowed"] is False
+        assert quorum["settlement_creator_pin"]["checked"] is False
+
+    def test_trusted_admin_collaborator_comment_with_bound_status_counts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+        settlement_comment = pr["comments"][-1]
+        settlement_comment["author"] = {"login": "scarmani"}
+        settlement_comment["authorAssociation"] = "COLLABORATOR"
+        settlement_url = settlement_comment["url"]
+
+        def _gh_json_dispatch(args: list[str]) -> Any:
+            endpoint = str(args[-1])
+            if "/collaborators/scarmani/permission" in endpoint:
+                return {"permission": "admin"}
+            if "/statuses" in endpoint:
+                return [self._settlement_status("scarmani", target_url=settlement_url)]
+            raise AssertionError(f"unexpected gh api call: {args}")
+
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            _gh_json_dispatch,
+        )
+
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=files,
+            protocol=_executed_protocol(),
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+            human_risk_settlement_recorded=True,
+            repo_slug="synaptent/aragora",
+        )
+
+        assert quorum["human_preapproval_recorded"] is True
+        assert quorum["admin_squash_allowed"] is True
+
+    def test_owner_preapproval_comment_requires_live_admin_permission(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+
+        def _gh_json_dispatch(args: list[str]) -> Any:
+            endpoint = str(args[-1])
+            if "/collaborators/scarmani/permission" in endpoint:
+                return {"permission": "write"}
+            raise AssertionError(f"unexpected gh api call: {args}")
+
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            _gh_json_dispatch,
+        )
+
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=files,
+            protocol=_executed_protocol(),
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+            human_risk_settlement_recorded=True,
+            repo_slug="synaptent/aragora",
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert quorum["admin_squash_allowed"] is False
+        assert quorum["settlement_creator_pin"]["checked"] is False
+
+    def test_non_admin_collaborator_preapproval_comment_is_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+        settlement_comment = pr["comments"][-1]
+        settlement_comment["author"] = {"login": "scarmani"}
+        settlement_comment["authorAssociation"] = "COLLABORATOR"
+
+        def _gh_json_dispatch(args: list[str]) -> Any:
+            endpoint = str(args[-1])
+            if "/collaborators/scarmani/permission" in endpoint:
+                return {"permission": "write"}
+            raise AssertionError(f"unexpected gh api call: {args}")
+
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            _gh_json_dispatch,
+        )
+
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=files,
+            protocol=_executed_protocol(),
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+            human_risk_settlement_recorded=True,
+            repo_slug="synaptent/aragora",
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert quorum["admin_squash_allowed"] is False
+        assert quorum["settlement_creator_pin"]["checked"] is False
+
+    def test_settlement_status_target_url_must_match_trusted_comment(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [
+                self._settlement_status(
+                    "scarmani",
+                    target_url="https://github.example/pr/7900#issuecomment-wrong",
+                )
+            ],
+            pr=pr,
+            files=files,
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert quorum["admin_squash_allowed"] is False
+        assert "target_url does not match" in quorum["settlement_creator_pin"]["reason"]
+
+    def test_newer_trusted_settlement_comment_status_pair_counts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+        head_sha = str(pr["headRefOid"])
+        newer_url = "https://github.example/pr/7900#issuecomment-settlement-retry"
+        pr["comments"].append(
+            {
+                "author": {"login": "scarmani"},
+                "authorAssociation": "OWNER",
+                "createdAt": "2026-06-15T02:24:41Z",
+                "url": newer_url,
+                "body": (
+                    "Tier-4 Human Settlement Authorization\n\n"
+                    "PR: #7900\n"
+                    f"Exact head: {head_sha}\n"
+                    "Authorized action: admin_squash_merge only if checks stay green.\n\n"
+                    "Human-risk settlement: I accept the Tier 4 risk for this PR."
+                ),
+            }
+        )
+
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [self._settlement_status("scarmani", target_url=newer_url)],
+            pr=pr,
+            files=files,
+        )
+
+        assert quorum["human_preapproval_recorded"] is True
+        assert quorum["admin_squash_allowed"] is True
+
+    def test_older_settlement_comment_target_rejected_after_newer_retry(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+        head_sha = str(pr["headRefOid"])
+        older_url = str(pr["comments"][-1]["url"])
+        pr["comments"].append(
+            {
+                "author": {"login": "scarmani"},
+                "authorAssociation": "OWNER",
+                "createdAt": "2026-06-15T02:24:41Z",
+                "url": "https://github.example/pr/7900#issuecomment-settlement-retry",
+                "body": (
+                    "Tier-4 Human Settlement Authorization\n\n"
+                    "PR: #7900\n"
+                    f"Exact head: {head_sha}\n"
+                    "Authorized action: admin_squash_merge only if checks stay green.\n\n"
+                    "Human-risk settlement: I accept the Tier 4 risk for this PR."
+                ),
+            }
+        )
+
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [self._settlement_status("scarmani", target_url=older_url)],
+            pr=pr,
+            files=files,
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert quorum["admin_squash_allowed"] is False
+        assert "target_url does not match" in quorum["settlement_creator_pin"]["reason"]
+
     def test_settlement_creator_an0mium_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The #8169 precedent gap: an automation-capable login posting the
         status must NOT count, even though every other condition holds."""
@@ -2417,7 +2749,14 @@ class TestModelReviewQuorum:
 
     def test_settlement_creator_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ARAGORA_SETTLEMENT_CREATOR", "alice-oversight")
-        quorum = self._pin_quorum(monkeypatch, [self._settlement_status("alice-oversight")])
+        pr, files = self._tier_four_settled_pr()
+        pr["comments"][-1]["author"] = {"login": "alice-oversight"}
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [self._settlement_status("alice-oversight")],
+            pr=pr,
+            files=files,
+        )
         assert quorum["human_preapproval_recorded"] is True
         assert quorum["settlement_creator_pin"]["trusted_creator"] == "alice-oversight"
 
@@ -2453,8 +2792,11 @@ class TestModelReviewQuorum:
         quorum = self._pin_quorum(
             monkeypatch,
             [
-                self._settlement_status("aragora-automation-fable[bot]"),
-                self._settlement_status("scarmani"),
+                self._settlement_status(
+                    "aragora-automation-fable[bot]",
+                    updated_at="2026-06-15T02:25:41Z",
+                ),
+                self._settlement_status("scarmani", updated_at="2026-06-15T02:22:41Z"),
             ],
         )
         assert quorum["human_preapproval_recorded"] is False
@@ -2466,12 +2808,128 @@ class TestModelReviewQuorum:
         quorum = self._pin_quorum(
             monkeypatch,
             [
-                self._settlement_status("scarmani", state="pending"),
-                self._settlement_status("scarmani"),
+                self._settlement_status(
+                    "scarmani",
+                    state="pending",
+                    updated_at="2026-06-15T02:25:41Z",
+                ),
+                self._settlement_status("scarmani", updated_at="2026-06-15T02:22:41Z"),
             ],
         )
         assert quorum["human_preapproval_recorded"] is False
         assert "not success" in quorum["settlement_creator_pin"]["reason"]
+
+    @pytest.mark.parametrize("newer_state", ["pending", "failure"])
+    def test_newer_non_success_status_blocks_older_trusted_success_even_if_returned_later(
+        self, monkeypatch: pytest.MonkeyPatch, newer_state: str
+    ) -> None:
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [
+                self._settlement_status(
+                    "scarmani",
+                    updated_at="2026-06-15T02:22:41Z",
+                    created_at="2026-06-15T02:22:41Z",
+                ),
+                self._settlement_status(
+                    "scarmani",
+                    state=newer_state,
+                    updated_at="2026-06-15T02:25:41Z",
+                    created_at="2026-06-15T02:25:41Z",
+                ),
+            ],
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert "not success" in quorum["settlement_creator_pin"]["reason"]
+
+    @pytest.mark.parametrize("older_state", ["pending", "failure"])
+    def test_newer_trusted_success_counts_despite_older_non_success_returned_first(
+        self, monkeypatch: pytest.MonkeyPatch, older_state: str
+    ) -> None:
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [
+                self._settlement_status(
+                    "scarmani",
+                    state=older_state,
+                    updated_at="2026-06-15T02:22:41Z",
+                    created_at="2026-06-15T02:22:41Z",
+                ),
+                self._settlement_status(
+                    "scarmani",
+                    updated_at="2026-06-15T02:25:41Z",
+                    created_at="2026-06-15T02:25:41Z",
+                ),
+            ],
+        )
+
+        assert quorum["human_preapproval_recorded"] is True
+        assert quorum["admin_squash_allowed"] is True
+
+    def test_conflicting_human_statuses_without_timestamps_fail_closed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [
+                self._settlement_status("scarmani"),
+                self._settlement_status("scarmani", state="pending"),
+            ],
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert "timestamp" in quorum["settlement_creator_pin"]["reason"]
+
+    def test_tied_newest_human_status_timestamps_fail_closed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        quorum = self._pin_quorum(
+            monkeypatch,
+            [
+                self._settlement_status(
+                    "scarmani",
+                    updated_at="2026-06-15T02:25:41Z",
+                ),
+                self._settlement_status(
+                    "scarmani",
+                    state="pending",
+                    updated_at="2026-06-15T02:25:41Z",
+                ),
+            ],
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert "timestamp" in quorum["settlement_creator_pin"]["reason"]
+
+    def test_settlement_comment_without_matching_head_timestamp_fails_closed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        pr, files = self._tier_four_settled_pr()
+        pr.pop("headCommittedDate", None)
+        pr["commits"] = [{"committedDate": "2026-06-15T02:21:41Z"}]
+
+        def _gh_json_dispatch(args: list[str]) -> Any:
+            raise AssertionError(f"missing head timestamp should fail before gh call: {args}")
+
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._gh_json",
+            _gh_json_dispatch,
+        )
+
+        quorum = _build_model_review_quorum(
+            pr=pr,
+            files=files,
+            protocol=_executed_protocol(),
+            machine_recommendation="approve_candidate",
+            has_pending=False,
+            has_failures=False,
+            human_risk_settlement_recorded=True,
+            repo_slug="synaptent/aragora",
+        )
+
+        assert quorum["human_preapproval_recorded"] is False
+        assert tier4_settlement._head_committed_at_from_pr(pr) == ""
 
     def test_pin_not_consulted_below_tier_four(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Non-Tier-4 packets must not pay the statuses API call at all."""
@@ -2504,6 +2962,23 @@ class TestModelReviewQuorum:
             repo_slug="synaptent/aragora", head_sha=""
         )
         assert ok is False
+
+    def test_creator_check_helper_requires_comment_target_url(self) -> None:
+        from aragora.cli.commands.review_queue import (
+            _human_settlement_status_creator_verified,
+        )
+
+        def _explode(args: list[str]) -> Any:
+            raise AssertionError(f"missing target_url should fail before gh call: {args}")
+
+        ok, reason = _human_settlement_status_creator_verified(
+            repo_slug="synaptent/aragora",
+            head_sha="abc123",
+            gh_json=_explode,
+        )
+
+        assert ok is False
+        assert "missing trusted settlement comment target_url" in reason
 
     # --- Finding 2: source-side filter on _dogfood_evidence_from_comments ---
 
@@ -7308,6 +7783,201 @@ class TestSettlementHelpers:
 
         assert rc == 1
         assert "gh unavailable" in err_buf.getvalue()
+
+    def test_record_settlement_post_status_targets_trusted_comment(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue.resolve_repo_root",
+            lambda cwd: tmp_path,
+        )
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._require_clean_worktree",
+            lambda repo_root: None,
+        )
+        settlement_url = "https://github.example/pr/6294#issuecomment-settlement"
+        status_posts: list[list[str]] = []
+
+        def _fake_gh_json(args: list[str]) -> dict[str, Any]:
+            fields = str(args[4]) if args[:4] == ["pr", "view", "6294", "--json"] else ""
+            if args[:2] == ["pr", "view"] and "comments,commits" not in fields:
+                return {
+                    "number": 6294,
+                    "url": "https://github.com/synaptent/aragora/pull/6294",
+                    "headRefOid": "headsha123",
+                    "baseRefOid": "basesha123",
+                    "state": "OPEN",
+                    "mergedAt": "",
+                }
+            if args[:2] == ["pr", "view"] and "comments,commits" in fields:
+                return {
+                    "number": 6294,
+                    "url": "https://github.com/synaptent/aragora/pull/6294",
+                    "headRefOid": "headsha123",
+                    "commits": [{"oid": "headsha123", "committedDate": "2026-06-15T20:38:38Z"}],
+                    "comments": [
+                        {
+                            "author": {"login": "scarmani"},
+                            "authorAssociation": "OWNER",
+                            "createdAt": "2026-06-15T20:39:38Z",
+                            "url": settlement_url,
+                            "body": (
+                                "Tier-4 Human Settlement Authorization\n\n"
+                                "PR: #6294\n"
+                                "Exact head: headsha123\n"
+                                "Authorized action: admin_squash_merge only if checks stay green.\n\n"
+                                "Human-risk settlement: I accept the Tier 4 risk for this PR."
+                            ),
+                        }
+                    ],
+                }
+            if args == ["api", "user"]:
+                return {"login": "scarmani"}
+            if args == ["repo", "view", "--json", "nameWithOwner"]:
+                return {"nameWithOwner": "synaptent/aragora"}
+            if args == ["api", "repos/synaptent/aragora/collaborators/scarmani/permission"]:
+                return {"permission": "admin"}
+            if args[:4] == [
+                "api",
+                "--method",
+                "POST",
+                "repos/synaptent/aragora/statuses/headsha123",
+            ]:
+                status_posts.append(args)
+                return {"state": "success", "context": "aragora/human-settlement"}
+            raise AssertionError(args)
+
+        monkeypatch.setattr("aragora.cli.commands.review_queue._gh_json", _fake_gh_json)
+        ns = argparse.Namespace(
+            review_queue_command="record-settlement",
+            pr="6294",
+            repo=None,
+            head_sha="headsha123",
+            action="comment",
+            reason="operator authorized exact-head human settlement",
+            review_queue_root=None,
+            apply_post_merge_lane_audit=False,
+            post_github_status=True,
+            github_status_context="aragora/human-settlement",
+            json=True,
+            json_output=True,
+        )
+
+        out_buf = io.StringIO()
+        with redirect_stdout(out_buf):
+            rc = cmd_review_queue(ns)
+
+        payload = json.loads(out_buf.getvalue())
+        assert rc == 0
+        assert payload["github_status"]["target_url"] == settlement_url
+        assert status_posts == [
+            [
+                "api",
+                "--method",
+                "POST",
+                "repos/synaptent/aragora/statuses/headsha123",
+                "-f",
+                "state=success",
+                "-f",
+                "context=aragora/human-settlement",
+                "-f",
+                f"description=Settlement receipt {payload['receipt_sha256']} recorded for PR #6294",
+                "-f",
+                f"target_url={settlement_url}",
+            ]
+        ]
+        ok, reason = tier4_settlement._human_settlement_status_creator_verified(
+            repo_slug="synaptent/aragora",
+            head_sha="headsha123",
+            target_url=settlement_url,
+            gh_json=lambda args: [
+                {
+                    "context": "aragora/human-settlement",
+                    "state": "success",
+                    "creator": {"login": "scarmani"},
+                    "target_url": settlement_url,
+                }
+            ],
+        )
+        assert ok is True
+        assert "status created by trusted settlement creator 'scarmani'" in reason
+
+    def test_record_settlement_post_status_requires_trusted_comment_target(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue.resolve_repo_root",
+            lambda cwd: tmp_path,
+        )
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._require_clean_worktree",
+            lambda repo_root: None,
+        )
+        status_posts: list[list[str]] = []
+
+        def _fake_gh_json(args: list[str]) -> dict[str, Any]:
+            fields = str(args[4]) if args[:4] == ["pr", "view", "6294", "--json"] else ""
+            if args[:2] == ["pr", "view"] and "comments,commits" not in fields:
+                return {
+                    "number": 6294,
+                    "url": "https://github.com/synaptent/aragora/pull/6294",
+                    "headRefOid": "headsha123",
+                    "baseRefOid": "basesha123",
+                    "state": "OPEN",
+                    "mergedAt": "",
+                }
+            if args[:2] == ["pr", "view"] and "comments,commits" in fields:
+                return {
+                    "number": 6294,
+                    "url": "https://github.com/synaptent/aragora/pull/6294",
+                    "headRefOid": "headsha123",
+                    "commits": [{"oid": "headsha123", "committedDate": "2026-06-15T20:38:38Z"}],
+                    "comments": [],
+                }
+            if args == ["api", "user"]:
+                return {"login": "scarmani"}
+            if args == ["repo", "view", "--json", "nameWithOwner"]:
+                return {"nameWithOwner": "synaptent/aragora"}
+            if args[:4] == [
+                "api",
+                "--method",
+                "POST",
+                "repos/synaptent/aragora/statuses/headsha123",
+            ]:
+                status_posts.append(args)
+                return {"state": "success", "context": "aragora/human-settlement"}
+            raise AssertionError(args)
+
+        monkeypatch.setattr("aragora.cli.commands.review_queue._gh_json", _fake_gh_json)
+        ns = argparse.Namespace(
+            review_queue_command="record-settlement",
+            pr="6294",
+            repo=None,
+            head_sha="headsha123",
+            action="comment",
+            reason="operator authorized exact-head human settlement",
+            review_queue_root=None,
+            apply_post_merge_lane_audit=False,
+            post_github_status=True,
+            github_status_context="aragora/human-settlement",
+            json=True,
+            json_output=True,
+        )
+
+        out_buf = io.StringIO()
+        err_buf = io.StringIO()
+        with redirect_stdout(out_buf), redirect_stderr(err_buf):
+            rc = cmd_review_queue(ns)
+
+        payload = json.loads(out_buf.getvalue())
+        assert rc == 1
+        assert status_posts == []
+        assert payload["github_status"]["posted"] is False
+        assert (
+            "no trusted exact-head Tier 4 settlement comment URL found"
+            in payload["github_status"]["error"]
+        )
+        assert "receipt written but GitHub status POST failed" in err_buf.getvalue()
 
     def test_record_settlement_command_records_audit_apply_failure_then_returns_1(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

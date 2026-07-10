@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -58,6 +59,7 @@ TRUSTED_OPERATOR_LOGINS_ENV = "ARAGORA_TIER4_TRUSTED_OPERATORS"
 PermissionChecker = Callable[[str], bool]
 HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"
 HUMAN_SETTLEMENT_STATUS_BLOCKER = f"missing or unsuccessful {HUMAN_SETTLEMENT_CONTEXT} status"
+HUMAN_SETTLEMENT_STATUS_PIN_BLOCKER = f"untrusted or unbound {HUMAN_SETTLEMENT_CONTEXT} status"
 MERGE_QUORUM_CONTEXT = "aragora-merge-quorum"
 OPERATOR_COMMENT_BLOCKER = "missing repo-visible Tier 4 operator settlement comment"
 REQUIRED_CHECKS_BLOCKER = "required checks are missing"
@@ -75,6 +77,16 @@ COMMAND_FAILURE_DETAIL_LIMIT = 1000
 SUCCESS_STATES = {"SUCCESS", "PASS", "PASSED", "SKIPPED", "NEUTRAL"}
 BLOCKING_MERGE_STATES = {"DIRTY", "CONFLICTING"}
 MIN_TIER4_COUNTED_REVIEWER_IDS = 2
+STATUS_TIMESTAMP_FIELDS = (
+    "updatedAt",
+    "updated_at",
+    "createdAt",
+    "created_at",
+    "completedAt",
+    "completed_at",
+    "startedAt",
+    "started_at",
+)
 ALLOWED_TIER4_NOT_READY = {
     "human_risk_settlement",
     "tier4_human_risk_settlement",
@@ -406,25 +418,149 @@ def _required_checks_are_green(required_checks: list[dict[str, Any]] | None) -> 
     return True
 
 
-def _status_signal_items(pr_view: dict[str, Any]) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    for key in ("statusCheckRollup", "commitStatuses"):
-        value = pr_view.get(key)
-        if not isinstance(value, list):
-            continue
-        items.extend(item for item in value if isinstance(item, dict))
-    return items
-
-
-def _human_settlement_status_is_success(pr_view: dict[str, Any]) -> bool:
-    for item in _status_signal_items(pr_view):
+def _human_settlement_status_items(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    settlement_statuses: list[dict[str, Any]] = []
+    for item in items:
         if not isinstance(item, dict):
             continue
         context = str(item.get("context") or item.get("name") or "")
-        if context != HUMAN_SETTLEMENT_CONTEXT:
+        if context == HUMAN_SETTLEMENT_CONTEXT:
+            settlement_statuses.append(item)
+    return settlement_statuses
+
+
+def _status_timestamp(item: dict[str, Any]) -> datetime | None:
+    for key in STATUS_TIMESTAMP_FIELDS:
+        text = _parse_timestamp(item.get(key))
+        if not text:
             continue
-        state = item.get("state") or item.get("conclusion")
-        return _state_is_success(state)
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    return None
+
+
+def _status_state(item: dict[str, Any]) -> str:
+    return str(item.get("state") or item.get("conclusion") or "").strip().upper()
+
+
+def _status_equivalence_key(item: dict[str, Any]) -> tuple[str, str, str, str]:
+    context = str(item.get("context") or item.get("name") or "").strip()
+    return (
+        context,
+        _status_target_url(item),
+        _status_creator_login(item),
+        _status_state(item),
+    )
+
+
+def _dedupe_status_observations(items: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: dict[tuple[str, str, str, str], dict[str, Any]] = {}
+    for item in items:
+        key = _status_equivalence_key(item)
+        previous = deduped.get(key)
+        if previous is None:
+            deduped[key] = item
+            continue
+        previous_timestamp = _status_timestamp(previous)
+        item_timestamp = _status_timestamp(item)
+        if previous_timestamp is None and item_timestamp is not None:
+            deduped[key] = item
+        elif (
+            previous_timestamp is not None
+            and item_timestamp is not None
+            and item_timestamp > previous_timestamp
+        ):
+            deduped[key] = item
+    return list(deduped.values())
+
+
+def _successful_human_settlement_status(pr_view: dict[str, Any]) -> dict[str, Any] | None:
+    settlement_statuses = _human_settlement_status_items(pr_view.get("commitStatuses"))
+    if not settlement_statuses:
+        settlement_statuses = _dedupe_status_observations(
+            _human_settlement_status_items(pr_view.get("statusCheckRollup"))
+        )
+    if not settlement_statuses:
+        return None
+    if len(settlement_statuses) == 1:
+        item = settlement_statuses[0]
+        return item if _state_is_success(_status_state(item)) else None
+    timestamped: list[tuple[datetime, int, dict[str, Any]]] = []
+    for index, item in enumerate(settlement_statuses):
+        timestamp = _status_timestamp(item)
+        if timestamp is None:
+            return None
+        timestamped.append((timestamp, index, item))
+    timestamped.sort(key=lambda entry: (entry[0], entry[1]), reverse=True)
+    newest = timestamped[0]
+    if len(timestamped) > 1 and timestamped[1][0] == newest[0]:
+        return None
+    return newest[2] if _state_is_success(_status_state(newest[2])) else None
+
+
+def _human_settlement_status_is_success(pr_view: dict[str, Any]) -> bool:
+    return _successful_human_settlement_status(pr_view) is not None
+
+
+def _status_creator_login(item: dict[str, Any]) -> str:
+    for key in ("creator", "author", "user"):
+        author = item.get(key)
+        if isinstance(author, dict):
+            login = str(author.get("login") or "").strip().lower()
+            if login:
+                return login
+        elif isinstance(author, str) and author.strip():
+            return author.strip().lower()
+    return ""
+
+
+def _status_target_url(item: dict[str, Any]) -> str:
+    for key in ("targetUrl", "target_url"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _accepted_authorization_diagnostics(
+    diagnostic_report: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if not isinstance(diagnostic_report, dict):
+        return []
+    diagnostics = diagnostic_report.get("authorization_diagnostics")
+    if not isinstance(diagnostics, list):
+        return []
+    return [
+        diagnostic
+        for diagnostic in diagnostics
+        if isinstance(diagnostic, dict) and bool(diagnostic.get("accepted"))
+    ]
+
+
+def _human_settlement_status_is_bound_to_accepted_comment(
+    pr_view: dict[str, Any],
+    accepted_diagnostics: Sequence[dict[str, Any]],
+) -> bool:
+    status = _successful_human_settlement_status(pr_view)
+    if status is None:
+        return False
+    status_creator = _status_creator_login(status)
+    status_target_url = _status_target_url(status)
+    if not status_creator or not status_target_url:
+        return False
+    for diagnostic in accepted_diagnostics:
+        comment_url = str(diagnostic.get("url") or "").strip()
+        comment_author = str(diagnostic.get("author") or "").strip().lower()
+        if comment_url and comment_author and status_target_url == comment_url:
+            if status_creator == comment_author:
+                return True
     return False
 
 
@@ -502,7 +638,15 @@ def _operator_authorized_actions(
             trusted_operator_logins=trusted_operator_logins,
             permission_checker=permission_checker,
         )
-    for diagnostic in report.get("authorization_diagnostics", []):
+    accepted_diagnostics = _accepted_authorization_diagnostics(report)
+    if not accepted_diagnostics:
+        return set()
+    if not _human_settlement_status_is_bound_to_accepted_comment(
+        pr_view,
+        accepted_diagnostics,
+    ):
+        return set()
+    for diagnostic in accepted_diagnostics:
         if not isinstance(diagnostic, dict) or not diagnostic.get("accepted"):
             continue
         actions = diagnostic.get("authorized_actions")
@@ -564,6 +708,23 @@ def _packet_marks_tier4_human_settlement(merge_packet: dict[str, Any], *, pr: in
         return True
     required = merge_packet.get("human_risk_settlement_required")
     return isinstance(required, list) and str(pr) in {str(item) for item in required}
+
+
+def _numeric_not_ready_allowed(
+    merge_packet: dict[str, Any], *, pr: int, pr_view: dict[str, Any]
+) -> bool:
+    if _packet_marks_tier4_human_settlement(merge_packet, pr=pr):
+        return True
+    entry = _entry_for_pr(merge_packet, pr=pr)
+    if not entry:
+        return False
+    return bool(
+        pr_view.get("isDraft")
+        and entry.get("status") == "repair_or_wait"
+        and entry.get("verdict") == "not_ready_for_settlement"
+        and entry.get("requires_human_risk_settlement")
+        and entry.get("requires_human_preapproval")
+    )
 
 
 def _packet_marks_tier4_settlement_surface(merge_packet: dict[str, Any], *, pr: int) -> bool:
@@ -971,7 +1132,7 @@ def evaluate_tier4_gate(
     not_ready = merge_packet.get("not_ready")
     if isinstance(not_ready, list):
         allowed_not_ready = set(ALLOWED_TIER4_NOT_READY)
-        if _packet_marks_tier4_human_settlement(merge_packet, pr=pr):
+        if _numeric_not_ready_allowed(merge_packet, pr=pr, pr_view=pr_view):
             allowed_not_ready.add(str(pr))
         merge_packet_blockers = sorted({str(item) for item in not_ready} - allowed_not_ready)
         if merge_packet_blockers:
@@ -1004,26 +1165,35 @@ def evaluate_tier4_gate(
         evaluate_member_permissions=not blockers,
     )
     authorized_actions: set[str] = set()
+    status_pin_blocker = False
     if (
         actual_head == expected_head
         and required_checks_green
         and not authorization_precondition_blockers
         and not blockers
     ):
-        authorized_actions = _operator_authorized_actions(
+        accepted_diagnostics = _accepted_authorization_diagnostics(diagnostic_report)
+        if accepted_diagnostics and not _human_settlement_status_is_bound_to_accepted_comment(
             pr_view,
-            pr=pr,
-            head=expected_head,
-            merge_packet=merge_packet,
-            required_checks=required_checks,
-            require_branch_protection_token=require_branch_protection_token,
-            repo=repo,
-            cwd=cwd,
-            trusted_operator_logins=trusted_operator_logins,
-            permission_checker=permission_checker,
-            diagnostic_report=diagnostic_report,
-        )
-        if not authorized_actions:
+            accepted_diagnostics,
+        ):
+            status_pin_blocker = True
+            blockers.append(HUMAN_SETTLEMENT_STATUS_PIN_BLOCKER)
+        if not status_pin_blocker:
+            authorized_actions = _operator_authorized_actions(
+                pr_view,
+                pr=pr,
+                head=expected_head,
+                merge_packet=merge_packet,
+                required_checks=required_checks,
+                require_branch_protection_token=require_branch_protection_token,
+                repo=repo,
+                cwd=cwd,
+                trusted_operator_logins=trusted_operator_logins,
+                permission_checker=permission_checker,
+                diagnostic_report=diagnostic_report,
+            )
+        if not authorized_actions and not status_pin_blocker:
             blockers.append(OPERATOR_COMMENT_BLOCKER)
 
     packet_diagnostics = _merge_packet_entry_diagnostics(merge_packet, pr=pr)
@@ -1367,11 +1537,29 @@ def _fetch_direct_commit_check_runs_for_gate(
     return runs, ""
 
 
+def _rest_status_creator_login(status: dict[str, Any]) -> str:
+    creator = status.get("creator")
+    if isinstance(creator, dict):
+        login = str(creator.get("login") or "").strip()
+        if login:
+            return login
+    for key in ("creator_login", "creatorLogin"):
+        login = str(status.get(key) or "").strip()
+        if login:
+            return login
+    user = status.get("user")
+    if isinstance(user, dict):
+        return str(user.get("login") or "").strip()
+    return ""
+
+
 def _normalize_rest_status_for_gate(status: dict[str, Any]) -> dict[str, Any]:
+    creator_login = _rest_status_creator_login(status)
     return {
         "context": str(status.get("context") or "").strip(),
         "state": str(status.get("state") or "").strip().upper(),
         "targetUrl": str(status.get("target_url") or "").strip(),
+        "creator": {"login": creator_login} if creator_login else {},
         "updatedAt": str(status.get("updated_at") or "").strip(),
         "createdAt": str(status.get("created_at") or "").strip(),
     }
@@ -1398,6 +1586,21 @@ def _fetch_direct_commit_statuses_for_gate(
     except Exception as exc:
         return [], str(exc)
     return statuses, ""
+
+
+def _attach_direct_commit_statuses_for_gate(
+    pr_view: dict[str, Any], *, cwd: Path, repo: str
+) -> None:
+    head = str(pr_view.get("headRefOid") or "").strip()
+    if not head:
+        return
+    statuses, _status_error = _fetch_direct_commit_statuses_for_gate(
+        repo,
+        head,
+        gh_json=lambda command: _gh_json_for_rest_fallback(command, cwd=cwd),
+    )
+    if statuses:
+        pr_view["commitStatuses"] = statuses
 
 
 def _strict_branch_freshness_state(
@@ -1651,6 +1854,7 @@ def _load_live_inputs(
     pr: int, *, cwd: Path, repo: str = DEFAULT_REPO
 ) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
     pr_view = _load_pr_view(pr, cwd=cwd, repo=repo)
+    _attach_direct_commit_statuses_for_gate(pr_view, cwd=cwd, repo=repo)
     merge_packet = _run_json(
         [
             sys.executable,
@@ -1981,8 +2185,12 @@ def _apply_settlement_signal(*, pr: int, head: str, repo: str, cwd: Path) -> lis
     ]
     try:
         comment_url = _run_text_command(comment_command, cwd=cwd).strip()
-        if comment_url:
-            status_command.extend(["-f", f"target_url={comment_url}"])
+        if not comment_url:
+            raise RuntimeError(
+                "Tier 4 settlement comment URL unavailable; refusing to post "
+                "unbound aragora/human-settlement status"
+            )
+        status_command.extend(["-f", f"target_url={comment_url}"])
         _run_command(status_command, cwd=cwd)
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError(f"Tier 4 settlement signal failed: {exc}") from exc

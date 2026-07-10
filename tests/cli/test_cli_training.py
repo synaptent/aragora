@@ -14,6 +14,7 @@ import pytest
 import typer  # noqa: F811
 from typer.testing import CliRunner
 
+import aragora.cli.training as training_cli
 from aragora.cli.training import app
 
 
@@ -41,6 +42,8 @@ class TestExportSft:
         assert result.exit_code == 0
         assert "100" in result.output
         assert "SFT" in result.output
+        mock_exporter_class.assert_called_once_with(db_path="agora_memory.db")
+        mock_exporter.export_to_file.assert_called_once()
 
     @patch("aragora.training.exporters.SFTExporter")
     def test_export_sft_with_options(self, mock_exporter_class, runner, tmp_path):
@@ -66,10 +69,30 @@ class TestExportSft:
         )
 
         assert result.exit_code == 0
+        mock_exporter_class.assert_called_once_with(db_path="agora_memory.db")
+        mock_exporter.export_to_file.assert_called_once()
         # Verify options were passed
         call_kwargs = mock_exporter.export_to_file.call_args[1]
         assert call_kwargs["min_confidence"] == 0.8
         assert call_kwargs["limit"] == 500
+
+
+class TestDependencyLookup:
+    """Tests for dependency lookup assumptions used by source-module patches."""
+
+    def test_training_cli_does_not_cache_patch_target_classes(self):
+        """Source-module patch targets stay valid because commands import at call time."""
+        cached_names = {
+            "CritiqueStore",
+            "DPOExporter",
+            "EloSystem",
+            "GauntletExporter",
+            "SFTExporter",
+            "TinkerClient",
+            "TrainingScheduler",
+        }
+
+        assert cached_names.isdisjoint(vars(training_cli))
 
 
 class TestExportDpo:
@@ -90,6 +113,8 @@ class TestExportDpo:
         assert result.exit_code == 0
         assert "75" in result.output
         assert "DPO" in result.output
+        mock_exporter_class.assert_called_once_with()
+        mock_exporter.export_to_file.assert_called_once()
 
     @patch("aragora.training.exporters.DPOExporter")
     def test_export_dpo_with_elo_diff(self, mock_exporter_class, runner, tmp_path):
@@ -110,6 +135,8 @@ class TestExportDpo:
         )
 
         assert result.exit_code == 0
+        mock_exporter_class.assert_called_once_with()
+        mock_exporter.export_to_file.assert_called_once()
         call_kwargs = mock_exporter.export_to_file.call_args[1]
         assert call_kwargs["min_elo_difference"] == 100.0
 
@@ -132,6 +159,8 @@ class TestExportGauntlet:
         assert result.exit_code == 0
         assert "30" in result.output
         assert "Gauntlet" in result.output
+        mock_exporter_class.assert_called_once_with()
+        mock_exporter.export_to_file.assert_called_once()
 
 
 class TestExportAll:
@@ -159,6 +188,12 @@ class TestExportAll:
         assert "SFT" in result.output
         assert "DPO" in result.output
         assert "Gauntlet" in result.output
+        mock_sft.assert_called_once_with()
+        mock_dpo.assert_called_once_with()
+        mock_gauntlet.assert_called_once_with()
+        assert mock_sft.return_value.export_to_file.call_count == 1
+        assert mock_dpo.return_value.export_to_file.call_count == 1
+        assert mock_gauntlet.return_value.export_to_file.call_count == 1
 
 
 class TestTestConnection:

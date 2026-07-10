@@ -60,11 +60,27 @@ def _pr_view(
     *,
     comments: list[dict[str, Any]],
     human_settlement_state: str | None = "SUCCESS",
+    human_settlement_creator: str | None = None,
+    human_settlement_target_url: str = "https://github.example/pr/7423#issuecomment-1",
     extra_status_rollup: list[dict[str, Any]] | None = None,
     merge_state: str = "BLOCKED",
 ) -> dict[str, Any]:
+    status_creator = human_settlement_creator
+    if status_creator is None and comments:
+        author = comments[0].get("author")
+        if isinstance(author, dict):
+            status_creator = str(author.get("login") or "").strip()
+    if status_creator is None:
+        status_creator = "owner-user"
     status_rollup = (
-        [{"context": "aragora/human-settlement", "state": human_settlement_state}]
+        [
+            {
+                "context": "aragora/human-settlement",
+                "state": human_settlement_state,
+                "creator": {"login": status_creator} if status_creator else {},
+                "targetUrl": human_settlement_target_url,
+            }
+        ]
         if human_settlement_state is not None
         else []
     )
@@ -343,6 +359,7 @@ def _rest_human_settlement_status() -> dict[str, Any]:
         "context": settler.HUMAN_SETTLEMENT_CONTEXT,
         "state": "success",
         "target_url": "https://github.example/pr/7423#issuecomment-1",
+        "creator": {"login": "owner-user"},
         "created_at": AUTH_CREATED_AT,
         "updated_at": AUTH_CREATED_AT,
     }
@@ -392,6 +409,7 @@ def test_load_live_inputs_uses_rest_pr_view_when_graphql_is_rate_limited(
     assert pr_view["headRefOid"] == head
     assert pr_view["comments"][0]["authorAssociation"] == "OWNER"
     assert pr_view["commitStatuses"][0]["context"] == settler.HUMAN_SETTLEMENT_CONTEXT
+    assert pr_view["commitStatuses"][0]["creator"] == {"login": "owner-user"}
     assert pr_view["mergeStateStatus"] == "CLEAN"
     assert merge_packet["entries"][0]["pr_number"] == 7423
     assert required_checks == _valid_checks()
@@ -403,6 +421,25 @@ def test_load_live_inputs_uses_rest_pr_view_when_graphql_is_rate_limited(
         required_checks=required_checks,
     )
     assert gate["ok"] is True
+
+
+def test_rest_normalized_human_status_without_creator_fails_closed() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    status = _rest_human_settlement_status()
+    status.pop("creator")
+    pr_view = _pr_view(head, comments=[_authorized_comment(head)], human_settlement_state=None)
+    pr_view["commitStatuses"] = [settler._normalize_rest_status_for_gate(status)]
+
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=pr_view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+
+    assert result["ok"] is False
+    assert "untrusted or unbound aragora/human-settlement status" in result["blockers"]
 
 
 def test_load_live_inputs_uses_rest_required_checks_when_graphql_checks_rate_limited(
@@ -1090,6 +1127,195 @@ def test_operator_comment_without_human_status_does_not_authorize() -> None:
     assert "missing repo-visible Tier 4 operator settlement comment" not in result["blockers"]
 
 
+def test_human_status_target_url_must_match_accepted_operator_comment() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(
+            head,
+            comments=[_authorized_comment(head)],
+            human_settlement_target_url="https://github.example/pr/7423#issuecomment-stale",
+        ),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+
+    assert result["ok"] is False
+    assert "untrusted or unbound aragora/human-settlement status" in result["blockers"]
+    assert "missing repo-visible Tier 4 operator settlement comment" not in result["blockers"]
+
+
+def test_human_status_creator_must_match_accepted_operator_comment_author() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(
+            head,
+            comments=[_authorized_comment(head)],
+            human_settlement_creator="github-actions",
+        ),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+
+    assert result["ok"] is False
+    assert "untrusted or unbound aragora/human-settlement status" in result["blockers"]
+    assert "missing repo-visible Tier 4 operator settlement comment" not in result["blockers"]
+
+
+def test_duplicate_rest_and_rollup_human_success_authorizes() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    pr_view = _pr_view(head, comments=[_authorized_comment(head)])
+    pr_view["commitStatuses"] = [
+        {
+            "context": settler.HUMAN_SETTLEMENT_CONTEXT,
+            "state": "success",
+            "creator": {"login": "owner-user"},
+            "target_url": "https://github.example/pr/7423#issuecomment-1",
+            "updated_at": "2026-05-22T00:06:00Z",
+        }
+    ]
+
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=pr_view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+
+    assert result["ok"] is True
+    assert result["blockers"] == []
+
+
+def test_direct_rest_human_status_authorizes_with_incomplete_started_at_rollup() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    pr_view = _pr_view(
+        head,
+        comments=[_authorized_comment(head)],
+        human_settlement_state=None,
+    )
+    pr_view["statusCheckRollup"] = [
+        {
+            "context": settler.HUMAN_SETTLEMENT_CONTEXT,
+            "state": "SUCCESS",
+            "startedAt": "2026-05-22T00:06:00Z",
+        }
+    ]
+    pr_view["commitStatuses"] = [
+        settler._normalize_rest_status_for_gate(_rest_human_settlement_status())
+    ]
+
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=pr_view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+
+    assert result["ok"] is True
+    assert result["blockers"] == []
+
+
+def test_newer_pending_human_status_blocks_older_success() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    pr_view = _pr_view(head, comments=[_authorized_comment(head)])
+    pr_view["statusCheckRollup"][0]["updatedAt"] = "2026-05-22T00:04:00Z"
+    pr_view["commitStatuses"] = [
+        {
+            "context": settler.HUMAN_SETTLEMENT_CONTEXT,
+            "state": "pending",
+            "creator": {"login": "owner-user"},
+            "target_url": "https://github.example/pr/7423#issuecomment-1",
+            "updatedAt": "2026-05-22T00:06:00Z",
+        }
+    ]
+
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=pr_view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+
+    assert result["ok"] is False
+    assert settler.HUMAN_SETTLEMENT_STATUS_BLOCKER in result["blockers"]
+
+
+def test_newer_bound_human_success_authorizes_despite_older_pending() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    pr_view = _pr_view(head, comments=[_authorized_comment(head)])
+    pr_view["statusCheckRollup"][0]["state"] = "PENDING"
+    pr_view["statusCheckRollup"][0]["updatedAt"] = "2026-05-22T00:04:00Z"
+    pr_view["commitStatuses"] = [
+        {
+            "context": settler.HUMAN_SETTLEMENT_CONTEXT,
+            "state": "success",
+            "creator": {"login": "owner-user"},
+            "target_url": "https://github.example/pr/7423#issuecomment-1",
+            "updatedAt": "2026-05-22T00:06:00Z",
+        }
+    ]
+
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=pr_view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+
+    assert result["ok"] is True
+    assert result["blockers"] == []
+
+
+def test_conflicting_human_statuses_without_timestamps_fail_closed() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    pr_view = _pr_view(head, comments=[_authorized_comment(head)])
+    pr_view["commitStatuses"] = [
+        {
+            "context": settler.HUMAN_SETTLEMENT_CONTEXT,
+            "state": "pending",
+            "creator": {"login": "owner-user"},
+            "target_url": "https://github.example/pr/7423#issuecomment-1",
+        }
+    ]
+
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=pr_view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+
+    assert result["ok"] is False
+    assert settler.HUMAN_SETTLEMENT_STATUS_BLOCKER in result["blockers"]
+
+
+def test_human_status_bound_to_accepted_operator_comment_authorizes() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(
+            head,
+            comments=[_authorized_comment(head, author="trusted-member", association="MEMBER")],
+        ),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        trusted_operator_logins=["trusted-member"],
+        permission_checker=lambda login: login == "trusted-member",
+    )
+
+    assert result["ok"] is True
+    assert result["blockers"] == []
+
+
 def test_operator_comment_without_counted_evidence_does_not_authorize() -> None:
     head = "57c740022e3c432718462efa12ca79f1df4f674d"
     result = settler.evaluate_tier4_gate(
@@ -1168,6 +1394,56 @@ def test_numeric_not_ready_is_allowed_when_packet_marks_tier4_human_settlement()
 
     assert result["ok"] is True
     assert result["blockers"] == []
+
+
+def test_draft_tier4_preapproval_numeric_not_ready_is_diagnostic_only() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    packet = _tier4_packet()
+    packet["entries"][0]["status"] = "repair_or_wait"
+    packet["entries"][0]["verdict"] = "not_ready_for_settlement"
+    packet["entries"][0]["requires_human_risk_settlement"] = True
+    packet["entries"][0]["requires_human_preapproval"] = True
+    packet["human_risk_settlement_required"] = []
+    pr_view = _pr_view(
+        head,
+        comments=[_authorized_comment(head, include_branch_protection=False)],
+    )
+    pr_view["isDraft"] = True
+
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=pr_view,
+        merge_packet=packet,
+        required_checks=[{"name": "lint", "state": "SUCCESS"}],
+    )
+
+    assert result["ok"] is False
+    assert result["blockers"] == ["PR #7423 is draft"]
+
+
+def test_non_draft_repair_or_wait_preapproval_not_ready_is_unexpected() -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    packet = _tier4_packet()
+    packet["entries"][0]["status"] = "repair_or_wait"
+    packet["entries"][0]["verdict"] = "not_ready_for_settlement"
+    packet["entries"][0]["requires_human_risk_settlement"] = True
+    packet["entries"][0]["requires_human_preapproval"] = True
+    packet["human_risk_settlement_required"] = []
+
+    result = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(
+            head,
+            comments=[_authorized_comment(head, include_branch_protection=False)],
+        ),
+        merge_packet=packet,
+        required_checks=[{"name": "lint", "state": "SUCCESS"}],
+    )
+
+    assert result["ok"] is False
+    assert "merge-packet has unexpected blockers: 7423" in result["blockers"]
 
 
 def test_untrusted_author_comment_does_not_authorize() -> None:
@@ -1411,6 +1687,254 @@ def test_cli_trusted_operator_login_authorizes_member_comment(
     )
 
     assert rc == 0
+
+
+def test_cli_check_uses_rest_fallback_when_pr_view_and_checks_hit_graphql_limit(
+    monkeypatch: Any, tmp_path: Path, capsys: Any
+) -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    comment = _authorized_comment(head, include_branch_protection=False)
+    api_calls: list[str] = []
+
+    def fake_run_json(command: list[str], *, cwd: Path | None = None) -> dict[str, Any]:
+        if command[:3] == ["gh", "pr", "view"]:
+            assert "--repo" in command
+            assert command[command.index("--repo") + 1] == "synaptent/aragora"
+            raise RuntimeError("gh pr view 7423 failed: GraphQL: API rate limit already exceeded")
+        if command[:4] == [
+            sys.executable,
+            "-m",
+            "aragora.cli.main",
+            "review-queue",
+        ]:
+            return _tier4_packet()
+        raise AssertionError(f"unexpected JSON command: {command}")
+
+    def fake_run_json_any(command: list[str], *, cwd: Path | None = None) -> Any:
+        if command[:3] == ["gh", "pr", "checks"]:
+            assert "--repo" in command
+            assert command[command.index("--repo") + 1] == "synaptent/aragora"
+            raise RuntimeError("gh pr checks 7423 failed: GraphQL: API rate limit already exceeded")
+        if command[:2] != ["gh", "api"]:
+            raise AssertionError(f"unexpected JSON command: {command}")
+        endpoint = command[2]
+        api_calls.append(endpoint)
+        if endpoint == "repos/synaptent/aragora/pulls/7423":
+            return {
+                "number": 7423,
+                "title": "Tier 4 fallback probe",
+                "html_url": "https://github.com/synaptent/aragora/pull/7423",
+                "state": "open",
+                "merged_at": None,
+                "merge_commit_sha": "",
+                "draft": False,
+                "mergeable": True,
+                "mergeable_state": "clean",
+                "user": {"login": "an0mium"},
+                "head": {"ref": "codex/tier4-fallback-probe", "sha": head},
+                "base": {"ref": "main", "sha": "base-sha"},
+                "labels": [],
+                "additions": 1,
+                "deletions": 0,
+                "changed_files": 1,
+                "body": "",
+            }
+        if endpoint == "repos/synaptent/aragora/pulls/7423/files?per_page=100":
+            return [{"filename": "scripts/settle_tier4_pr.py"}]
+        if endpoint == "repos/synaptent/aragora/issues/7423/comments?per_page=100":
+            return [
+                {
+                    "user": {"login": "owner-user"},
+                    "author_association": "OWNER",
+                    "body": comment["body"],
+                    "created_at": AUTH_CREATED_AT,
+                    "html_url": "https://github.example/pr/7423#issuecomment-1",
+                }
+            ]
+        if endpoint == "repos/synaptent/aragora/pulls/7423/reviews?per_page=100":
+            return []
+        if endpoint == "repos/synaptent/aragora/pulls/7423/commits?per_page=100":
+            return [
+                {
+                    "sha": head,
+                    "commit": {"author": {"date": HEAD_COMMITTED_AT}},
+                }
+            ]
+        if endpoint == f"repos/synaptent/aragora/commits/{head}/statuses?per_page=100":
+            return [
+                {
+                    "context": "aragora/human-settlement",
+                    "state": "success",
+                    "target_url": "https://github.example/pr/7423#issuecomment-1",
+                    "creator": {"login": "owner-user"},
+                    "created_at": AUTH_CREATED_AT,
+                    "updated_at": AUTH_CREATED_AT,
+                }
+            ]
+        if endpoint == "repos/synaptent/aragora/branches/main/protection/required_status_checks":
+            return {
+                "contexts": ["lint", "aragora-merge-quorum"],
+                "checks": [
+                    {"context": "lint", "app_id": None},
+                    {"context": "aragora-merge-quorum", "app_id": None},
+                ],
+                "strict": False,
+            }
+        if endpoint == f"repos/synaptent/aragora/commits/{head}/check-runs?per_page=100":
+            return {
+                "check_runs": [
+                    {
+                        "name": "lint",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "html_url": "https://github.example/actions/lint",
+                    },
+                    {
+                        "name": "aragora-merge-quorum",
+                        "status": "completed",
+                        "conclusion": "success",
+                        "html_url": "https://github.example/actions/quorum",
+                    },
+                ]
+            }
+        raise AssertionError(f"unexpected gh api endpoint: {endpoint}")
+
+    monkeypatch.setattr(settler, "_run_json", fake_run_json)
+    monkeypatch.setattr(settler, "_run_json_any", fake_run_json_any)
+
+    rc = settler.main(
+        [
+            "--check",
+            "--pr",
+            "7423",
+            "--head",
+            head,
+            "--repo",
+            "synaptent/aragora",
+            "--cwd",
+            str(tmp_path),
+            "--json",
+        ]
+    )
+
+    assert rc == 0
+    payload = settler.json.loads(capsys.readouterr().out)
+    gate = payload["gate"]
+    assert gate["ok"] is True
+    assert gate["actual_head"] == head
+    assert gate["blockers"] == []
+    assert gate["authorization_diagnostics"][0]["authorAssociation"] == "OWNER"
+    assert f"repos/synaptent/aragora/commits/{head}/check-runs?per_page=100" in api_calls
+
+
+def test_rest_fallback_reports_strict_branch_protection_required_contexts(
+    monkeypatch: Any, tmp_path: Path, capsys: Any
+) -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    comment = _authorized_comment(head, include_branch_protection=False)
+
+    def fake_run_json(command: list[str], *, cwd: Path | None = None) -> dict[str, Any]:
+        if command[:3] == ["gh", "pr", "view"]:
+            raise RuntimeError("gh pr view 7423 failed: GraphQL: API rate limit already exceeded")
+        if command[:4] == [
+            sys.executable,
+            "-m",
+            "aragora.cli.main",
+            "review-queue",
+        ]:
+            return _tier4_packet()
+        raise AssertionError(f"unexpected JSON command: {command}")
+
+    def fake_run_json_any(command: list[str], *, cwd: Path | None = None) -> Any:
+        if command[:3] == ["gh", "pr", "checks"]:
+            raise RuntimeError("gh pr checks 7423 failed: GraphQL: API rate limit already exceeded")
+        if command[:2] != ["gh", "api"]:
+            raise AssertionError(f"unexpected JSON command: {command}")
+        endpoint = command[2]
+        if endpoint == "repos/synaptent/aragora/pulls/7423":
+            return {
+                "number": 7423,
+                "title": "Tier 4 fallback probe",
+                "html_url": "https://github.com/synaptent/aragora/pull/7423",
+                "state": "open",
+                "merged_at": None,
+                "merge_commit_sha": "",
+                "draft": False,
+                "mergeable": True,
+                "mergeable_state": "clean",
+                "user": {"login": "an0mium"},
+                "head": {"ref": "codex/tier4-fallback-probe", "sha": head},
+                "base": {"ref": "main", "sha": "base-sha"},
+                "labels": [],
+                "additions": 1,
+                "deletions": 0,
+                "changed_files": 1,
+                "body": "",
+            }
+        if endpoint == "repos/synaptent/aragora/pulls/7423/files?per_page=100":
+            return [{"filename": "scripts/settle_tier4_pr.py"}]
+        if endpoint == "repos/synaptent/aragora/issues/7423/comments?per_page=100":
+            return [
+                {
+                    "user": {"login": "owner-user"},
+                    "author_association": "OWNER",
+                    "body": comment["body"],
+                    "created_at": AUTH_CREATED_AT,
+                    "html_url": "https://github.example/pr/7423#issuecomment-1",
+                }
+            ]
+        if endpoint == "repos/synaptent/aragora/pulls/7423/reviews?per_page=100":
+            return []
+        if endpoint == "repos/synaptent/aragora/pulls/7423/commits?per_page=100":
+            return [{"sha": head, "commit": {"author": {"date": HEAD_COMMITTED_AT}}}]
+        if endpoint == f"repos/synaptent/aragora/commits/{head}/statuses?per_page=100":
+            return [
+                {
+                    "context": "aragora/human-settlement",
+                    "state": "success",
+                    "target_url": "https://github.example/pr/7423#issuecomment-1",
+                    "creator": {"login": "owner-user"},
+                    "created_at": AUTH_CREATED_AT,
+                    "updated_at": AUTH_CREATED_AT,
+                }
+            ]
+        if endpoint == "repos/synaptent/aragora/branches/main/protection/required_status_checks":
+            return {
+                "contexts": ["lint", "aragora-merge-quorum"],
+                "checks": [
+                    {"context": "lint", "app_id": None},
+                    {"context": "aragora-merge-quorum", "app_id": None},
+                ],
+                "strict": True,
+            }
+        raise AssertionError(f"unexpected gh api endpoint: {endpoint}")
+
+    monkeypatch.setattr(settler, "_run_json", fake_run_json)
+    monkeypatch.setattr(settler, "_run_json_any", fake_run_json_any)
+
+    rc = settler.main(
+        [
+            "--check",
+            "--pr",
+            "7423",
+            "--head",
+            head,
+            "--repo",
+            "synaptent/aragora",
+            "--cwd",
+            str(tmp_path),
+            "--json",
+        ]
+    )
+
+    assert rc == 1
+    payload = settler.json.loads(capsys.readouterr().out)
+    gate = payload["gate"]
+    assert gate["ok"] is False
+    assert "required check required check REST visibility is UNKNOWN" in gate["blockers"]
+    assert "required check lint is PENDING" in gate["blockers"]
+    assert "required check aragora-merge-quorum is PENDING" in gate["blockers"]
+    assert not any("STRICT_BASE_REQUIRED" in blocker for blocker in gate["blockers"])
 
 
 def test_collaborator_permission_payload_only_treats_admin_as_admin() -> None:
@@ -2084,6 +2608,62 @@ def test_settle_only_posts_comment_and_status_without_merge(
             None,
         )
     ]
+
+
+def test_settle_only_refuses_unbound_status_when_comment_url_missing(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    head = "57c740022e3c432718462efa12ca79f1df4f674d"
+    text_commands: list[tuple[list[str], str | None]] = []
+    commands: list[tuple[list[str], str | None]] = []
+
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda pr, cwd, repo=settler.DEFAULT_REPO: (
+            _pr_view(head, comments=[], human_settlement_state=None),
+            _tier4_packet(),
+            [
+                {"name": "lint", "state": "SUCCESS"},
+                {"name": "aragora-merge-quorum", "state": "FAILURE"},
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        settler,
+        "_run_text_command",
+        lambda command, cwd, input_text=None: text_commands.append((command, input_text)) or "\n",
+    )
+    monkeypatch.setattr(
+        settler,
+        "_run_command",
+        lambda command, cwd, input_text=None: commands.append((command, input_text)),
+    )
+    monkeypatch.setattr(settler, "_current_gh_login", lambda cwd: "trusted-member")
+    monkeypatch.setattr(
+        settler,
+        "_login_has_admin_permission",
+        lambda login, repo, cwd: login == "trusted-member",
+    )
+
+    rc = settler.main(
+        [
+            "--settle-only",
+            "--pr",
+            "7423",
+            "--head",
+            head,
+            "--trusted-operator-login",
+            "trusted-member",
+            "--cwd",
+            str(tmp_path),
+            "--json",
+        ]
+    )
+
+    assert rc == 2
+    assert text_commands[0][0][:3] == ["gh", "pr", "comment"]
+    assert commands == []
 
 
 def test_settle_only_requires_proof_for_quorum_only_repair_packet() -> None:
