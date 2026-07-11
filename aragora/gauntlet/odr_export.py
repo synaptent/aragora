@@ -380,6 +380,17 @@ def _map_attestation(attestation: dict[str, Any] | None) -> dict[str, Any]:
     return block
 
 
+def _map_epistemic(receipt: DecisionReceipt) -> dict[str, Any] | None:
+    block: dict[str, Any] = {"status": "present"}
+    if receipt.unverified:
+        block["unverified"] = list(receipt.unverified)
+    if receipt.assumptions:
+        block["assumptions"] = list(receipt.assumptions)
+    if receipt.falsification:
+        block["falsification"] = dict(receipt.falsification)
+    return block if len(block) > 1 else None
+
+
 def decision_receipt_to_odr(
     receipt: DecisionReceipt,
     *,
@@ -405,7 +416,7 @@ def decision_receipt_to_odr(
     Returns:
         A JSON-serializable dict conforming to ``aragora/gauntlet/odr_schema.json``.
     """
-    return {
+    odr: dict[str, Any] = {
         "odr_version": ODR_VERSION,
         "profile": ODR_PROFILE_URI,
         "receipt_id": receipt.receipt_id,
@@ -427,6 +438,10 @@ def decision_receipt_to_odr(
             "artifact_hash": receipt.artifact_hash,
         },
     }
+    epistemic = _map_epistemic(receipt)
+    if epistemic is not None:
+        odr["epistemic"] = epistemic
+    return odr
 
 
 def load_odr_schema() -> dict[str, Any]:

@@ -14,6 +14,7 @@ import logging
 from typing import Any
 
 from aragora.config.secrets import get_secret_presence
+from aragora.epistemic.question_batteries import QuestionBattery, build_intake_battery_questions
 from aragora.prompt_engine.processing import append_context_block, parse_json_object
 from aragora.prompt_engine.timing import OperationTiming, append_timing, format_timings, start_timer
 from aragora.prompt_engine.types import (
@@ -37,6 +38,12 @@ questions that MUST be answered before building an implementation specification.
 
 Focus on questions that change the architecture, scope, or approach. Skip
 trivial clarifications.
+
+Reusable epistemic question patterns to consider when the prompt is vague:
+- What do you need from me?
+- What would make this wrong?
+- What did we assume?
+- Should this be done?
 
 For each question provide:
 - question: The question text
@@ -235,7 +242,14 @@ class PromptInterrogator:
                     ambiguity_ref=amb,
                 )
             )
-        return questions or [
+        prompt_text = intent.raw_prompt or intent.summary
+        battery_questions = [
+            PromptInterrogator._battery_to_clarifying_question(battery)
+            for battery in build_intake_battery_questions(prompt_text)
+        ]
+        if questions:
+            return questions + battery_questions
+        return [
             ClarifyingQuestion(
                 question="What is the primary goal of this request?",
                 why_it_matters="Determines scope and approach",
@@ -250,4 +264,17 @@ class PromptInterrogator:
                     ),
                 ],
             )
+        ] + battery_questions
+
+    @staticmethod
+    def _battery_to_clarifying_question(battery: QuestionBattery) -> ClarifyingQuestion:
+        options = [
+            QuestionOption(label=option, description=option, tradeoffs="")
+            for option in battery.options[:4]
         ]
+        return ClarifyingQuestion(
+            question=battery.question,
+            why_it_matters=battery.why_it_matters,
+            options=options,
+            default=battery.options[0] if battery.options else None,
+        )

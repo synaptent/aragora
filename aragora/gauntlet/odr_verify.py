@@ -131,7 +131,7 @@ class VerifyResult:
 # review round (head e0e7df74: "weakening signals warn-only").
 # ---------------------------------------------------------------------------
 
-_ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source"}
+_ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source", "epistemic"}
 
 _QUORUM_REQUIRED = (
     "method",
@@ -212,6 +212,8 @@ def _validate_structure(doc: Any) -> list[str]:
         _validate_routing(errors, doc["routing"])
     if "signatures" in doc:
         _validate_signatures(errors, doc["signatures"])
+    if "epistemic" in doc:
+        _validate_epistemic(errors, doc["epistemic"])
     if "source" in doc:
         _validate_source(errors, doc["source"])
     return errors
@@ -469,6 +471,43 @@ def _validate_signatures(errors: list[str], value: Any) -> None:
         # signed_at is optional but strictly a string when present: a non-string
         # value would silently corrupt the signing-time audit trail.
         _optional_string(errors, f"signatures[{i}]", sig, "signed_at")
+
+
+def _validate_epistemic(errors: list[str], value: Any) -> None:
+    if not isinstance(value, dict):
+        errors.append("epistemic: must be an object")
+        return
+    _unknown_members(
+        errors,
+        "epistemic",
+        value,
+        frozenset({"status", "unverified", "assumptions", "falsification"}),
+    )
+    if value.get("status") != "present":
+        errors.append("epistemic.status: must be 'present'")
+    if "unverified" in value:
+        _string_array(errors, "epistemic.unverified", value["unverified"])
+    if "assumptions" in value:
+        _string_array(errors, "epistemic.assumptions", value["assumptions"])
+    if "falsification" in value:
+        _validate_epistemic_falsification(errors, value["falsification"])
+
+
+def _validate_epistemic_falsification(errors: list[str], value: Any) -> None:
+    if not isinstance(value, dict):
+        errors.append("epistemic.falsification: must be an object")
+        return
+    _unknown_members(
+        errors,
+        "epistemic.falsification",
+        value,
+        frozenset({"observation", "owner", "source", "check_by"}),
+    )
+    for required in ("observation", "check_by"):
+        if not isinstance(value.get(required), str) or not value.get(required):
+            errors.append(f"epistemic.falsification.{required}: required non-empty string")
+    _optional_string(errors, "epistemic.falsification", value, "owner")
+    _optional_string(errors, "epistemic.falsification", value, "source")
 
 
 def _validate_source(errors: list[str], value: Any) -> None:

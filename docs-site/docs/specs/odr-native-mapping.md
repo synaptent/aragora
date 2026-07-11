@@ -39,6 +39,7 @@ portable Open Decision Receipt (ODR) content profile emitted by
 | `confidence` | `DecisionReceipt` confidence + optional calibration | `_map_confidence(receipt, calibration_provenance)` | Provisional; optional `provenance_ref` when calibration data is supplied. |
 | `cruxes` | optional `crux_set` argument | `_map_cruxes(crux_set)` | Load-bearing disagreement; absent marker when no crux set is passed. |
 | `attestation` | optional `attestation` argument | `_map_attestation(attestation)` | Human accountability; honest `autonomous` disposition when omitted. |
+| `epistemic` | `DecisionReceipt.unverified` / `assumptions` / `falsification` | `_map_epistemic(receipt)` when at least one epistemic limit exists | Optional decision-limit block: what was not verified, accepted assumptions, and future observation/check date that would falsify the decision. |
 | `routing` | (reserved) | `{"status": "reserved"}` | Reserved tier; no compatibility promise until defined (ODR §9.1). |
 | `signatures` | (none at export) | `[]` | Always empty at export; detached signing is a separate step (ODR §8, item 4). |
 | `source` | `DecisionReceipt` provenance | inline block | Native-record provenance: `system`, `schema`, `schema_version` (= `receipt.schema_version`), `receipt_id`, `artifact_hash`. |

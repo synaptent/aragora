@@ -70,6 +70,21 @@ class TestInterrogationQuestioner:
         result = questioner.generate(dims, research)
         assert len(result.questions) == 0
 
+    def test_vague_dimensions_include_epistemic_battery_questions(self, questioner):
+        dims = [
+            Dimension(
+                name="product",
+                description="Make our product better",
+                vagueness_score=0.8,
+                keywords=["product", "better"],
+            )
+        ]
+        result = questioner.generate(dims, ResearchResult())
+        texts = [q.text for q in result.questions]
+        assert any("What do you need from me" in text for text in texts)
+        assert any("What would make this wrong" in text for text in texts)
+        assert any(q.dimension_name == "epistemic:falsifier" for q in result.questions)
+
     def test_question_includes_research_context(self, questioner, dimensions_with_research):
         dims, research = dimensions_with_research
         result = questioner.generate(dims, research)

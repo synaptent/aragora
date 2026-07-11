@@ -21,10 +21,15 @@ from aragora.modes import custom  # Expose submodule for patching
 from aragora.modes.base import Mode, ModeRegistry
 from aragora.modes.builtin import (
     ArchitectMode,
+    AssumptionSurfacerMode,
     CoderMode,
     DebuggerMode,
+    DeleterMode,
     EpistemicHygieneMode,
+    FalsifierMode,
     OrchestratorMode,
+    OutsiderMode,
+    QuestionPersonaMode,
     ReviewerMode,
     register_all_builtins,
 )
@@ -91,8 +96,7 @@ def load_builtins() -> None:
     This is safe to call multiple times (idempotent). Import of the
     builtin subpackage triggers registration via ``register_all_builtins()``.
     Call this explicitly before looking up modes by name to guarantee
-    all five built-in modes (architect, coder, reviewer, debugger,
-    orchestrator) are available.
+    all built-in operational and epistemic-question modes are available.
     """
     register_all_builtins()
 
@@ -117,6 +121,11 @@ __all__ = [
     "DebuggerMode",
     "OrchestratorMode",
     "EpistemicHygieneMode",
+    "QuestionPersonaMode",
+    "OutsiderMode",
+    "FalsifierMode",
+    "DeleterMode",
+    "AssumptionSurfacerMode",
     "register_all_builtins",
     # Debate Modes (lazy)
     "RedTeamMode",

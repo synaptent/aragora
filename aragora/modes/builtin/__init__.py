@@ -14,6 +14,13 @@ from aragora.modes.builtin.coder import CoderMode
 from aragora.modes.builtin.debugger import DebuggerMode
 from aragora.modes.builtin.epistemic_hygiene import EpistemicHygieneMode
 from aragora.modes.builtin.orchestrator import OrchestratorMode
+from aragora.modes.builtin.question_personas import (
+    AssumptionSurfacerMode,
+    DeleterMode,
+    FalsifierMode,
+    OutsiderMode,
+    QuestionPersonaMode,
+)
 from aragora.modes.builtin.reviewer import ReviewerMode
 
 __all__ = [
@@ -23,6 +30,11 @@ __all__ = [
     "DebuggerMode",
     "OrchestratorMode",
     "EpistemicHygieneMode",
+    "QuestionPersonaMode",
+    "OutsiderMode",
+    "FalsifierMode",
+    "DeleterMode",
+    "AssumptionSurfacerMode",
 ]
 
 
@@ -40,6 +52,10 @@ def register_all_builtins() -> None:
     DebuggerMode()
     OrchestratorMode()
     EpistemicHygieneMode()
+    OutsiderMode()
+    FalsifierMode()
+    DeleterMode()
+    AssumptionSurfacerMode()
 
 
 # Auto-register on import

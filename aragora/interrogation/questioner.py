@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from aragora.epistemic.question_batteries import build_intake_battery_questions
 from aragora.interrogation.decomposer import Dimension
 from aragora.interrogation.researcher import ResearchResult
 
@@ -60,6 +61,22 @@ class InterrogationQuestioner:
                 context=context,
             )
             questions.append(q)
+
+        vague_prompt = " ".join(dim.description or dim.name for dim in dimensions)
+        max_vagueness = max((dim.vagueness_score for dim in dimensions), default=0.0)
+        if max_vagueness >= _VAGUENESS_THRESHOLD:
+            battery_priority = max_vagueness * 0.75
+            for battery in build_intake_battery_questions(vague_prompt):
+                questions.append(
+                    Question(
+                        text=battery.question,
+                        why=battery.why_it_matters,
+                        dimension_name=battery.dimension,
+                        priority=battery_priority,
+                        options=list(battery.options),
+                        context=f"Epistemic question battery: {battery.name}",
+                    )
+                )
 
         questions.sort(key=lambda q: q.priority, reverse=True)
         return QuestionSet(questions=questions)

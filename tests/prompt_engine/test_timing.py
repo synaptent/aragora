@@ -30,3 +30,17 @@ def test_pipeline_timing_surfaces_stage_breakdown_and_targets() -> None:
     assert payload["optimization_targets"][0]["share_of_total_pct"] == 35.0
     assert payload["operation_timings"][0]["stage"] == "decompose"
     assert payload["bottlenecks"] == []
+
+
+def test_top_operations_orders_sub_millisecond_operations_by_duration() -> None:
+    timing = PipelineTiming(
+        operation_timings=[
+            OperationTiming("research.agent_generate", 0.1, category="llm"),
+            OperationTiming("research.parse_results", 0.9, category="compute"),
+        ]
+    )
+
+    assert [item.operation for item in timing.top_operations()] == [
+        "research.parse_results",
+        "research.agent_generate",
+    ]

@@ -93,6 +93,24 @@ def test_valid_unsigned_receipt_passes_structurally() -> None:
     assert _check(result, "signature").status == WARN
 
 
+def test_valid_receipt_with_epistemic_blocks_passes_structurally() -> None:
+    doc = _valid_odr()
+    doc["epistemic"] = {
+        "status": "present",
+        "unverified": ["No live load test was run."],
+        "assumptions": ["Demand forecast is directionally correct."],
+        "falsification": {
+            "observation": "Trial-to-paid conversion stays below 8%.",
+            "owner": "growth",
+            "source": "billing dashboard",
+            "check_by": "2026-07-15",
+        },
+    }
+    result = verify_odr_document(doc)
+    assert result.ok is True
+    assert _check(result, "schema_conformance").status == PASS
+
+
 def test_digest_matches_emitter() -> None:
     doc = _valid_odr()
     assert verify_odr_document(doc).odr_digest == odr_content_digest(doc)
@@ -222,6 +240,30 @@ _SCHEMA_VIOLATIONS: list[Any] = [
         lambda d: d["claim"].__setitem__("statement", ""),
         "claim.statement: must be a non-empty string or an absent marker",
         id="claim_statement_empty",
+    ),
+    pytest.param(
+        lambda d: d.__setitem__("epistemic", {"status": "present", "unverified": "nope"}),
+        "epistemic.unverified: must be an array of strings",
+        id="epistemic_unverified_not_array",
+    ),
+    pytest.param(
+        lambda d: d.__setitem__(
+            "epistemic",
+            {
+                "status": "present",
+                "falsification": {
+                    "observation": "Conversion drops.",
+                    "check_by": 20260715,
+                },
+            },
+        ),
+        "epistemic.falsification.check_by: required non-empty string",
+        id="epistemic_falsification_check_by_wrong_type",
+    ),
+    pytest.param(
+        lambda d: d.__setitem__("epistemic", {"status": "present", "surprise": True}),
+        "epistemic.surprise: unknown member (additionalProperties: false)",
+        id="epistemic_unknown_member",
     ),
     # [P1 bypass] malformed subject.digest
     pytest.param(

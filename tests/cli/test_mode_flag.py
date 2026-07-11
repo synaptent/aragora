@@ -14,6 +14,18 @@ from aragora.modes.base import ModeRegistry
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _ARAGORA_PACKAGE_ROOT = _REPO_ROOT / "aragora"
+_EXPECTED_BUILTIN_MODES = {
+    "architect",
+    "assumption_surfacer",
+    "coder",
+    "debugger",
+    "deleter",
+    "epistemic_hygiene",
+    "falsifier",
+    "orchestrator",
+    "outsider",
+    "reviewer",
+}
 
 
 def _import_checkout_decide_module():
@@ -55,7 +67,7 @@ class TestLoadBuiltins:
         assert "debugger" in registered
         assert "orchestrator" in registered
         assert "epistemic_hygiene" in registered
-        assert len(registered) == 6
+        assert set(registered) == _EXPECTED_BUILTIN_MODES
 
     def test_load_builtins_idempotent(self):
         """Calling load_builtins() twice does not duplicate modes."""
@@ -63,7 +75,8 @@ class TestLoadBuiltins:
         first = len(ModeRegistry.list_all())
         load_builtins()
         second = len(ModeRegistry.list_all())
-        assert first == second == 6
+        assert first == second == len(_EXPECTED_BUILTIN_MODES)
+        assert set(ModeRegistry.list_all()) == _EXPECTED_BUILTIN_MODES
 
     def test_architect_mode_has_system_prompt(self):
         """Architect mode provides a non-empty system prompt."""
@@ -74,9 +87,9 @@ class TestLoadBuiltins:
         assert len(prompt) > 0
 
     def test_all_modes_have_system_prompt(self):
-        """All 5 built-in modes have non-empty system prompts."""
+        """All built-in modes have non-empty system prompts."""
         load_builtins()
-        for name in ["architect", "coder", "reviewer", "debugger", "orchestrator"]:
+        for name in _EXPECTED_BUILTIN_MODES:
             mode = ModeRegistry.get(name)
             assert mode is not None, f"Mode '{name}' not registered"
             prompt = mode.get_system_prompt()

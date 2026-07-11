@@ -18,11 +18,11 @@ Live project-scale numbers are auto-regenerated in [`docs/METRICS.md`](METRICS.m
 | Metric | Value | Source |
 |--------|-------|--------|
 | Version | 2.9.0 | `pyproject.toml` |
-| Python files under `aragora/` | 4,263 | `docs/METRICS.md` |
+| Python files under `aragora/` | 4,266 | `docs/METRICS.md` |
 | Python modules | 144 top-level package directories | `docs/METRICS.md` |
-| Lines of code under `aragora/` | 1,978,194 | `docs/METRICS.md` |
-| Automated tests | 223,533 test functions | `docs/METRICS.md` |
-| Test files | 5,453 | `docs/METRICS.md` |
+| Lines of code under `aragora/` | 1,979,013 | `docs/METRICS.md` |
+| Automated tests | 223,561 test functions | `docs/METRICS.md` |
+| Test files | 5,455 | `docs/METRICS.md` |
 | API operations | 3,297 across 2,870 paths | `docs/METRICS.md` |
 | API paths | 2,870 | `docs/METRICS.md` |
 | Knowledge Mound adapters | 46 adapter files / 41 registered specs | `docs/METRICS.md` |

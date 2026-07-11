@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pytest
 
+import aragora_verify.schema as schema
 from aragora_verify import compute_key_id, load_public_key, verify
 from aragora_verify.verifier import FAIL, PASS, SKIP, WARN
 
@@ -47,6 +48,89 @@ def test_routing_must_be_reserved() -> None:
     doc["routing"] = {"status": "active"}
     result = verify(doc)
     assert result.ok is False
+
+
+def test_epistemic_block_is_allowed_without_jsonschema(monkeypatch) -> None:
+    monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
+    doc = valid_odr()
+    doc["epistemic"] = {
+        "status": "present",
+        "unverified": ["independent replication pending"],
+        "assumptions": ["source fixture remains unchanged"],
+        "falsification": {
+            "observation": "fixture digest mismatch",
+            "source": "standalone package test",
+            "check_by": "2026-07-06",
+        },
+    }
+
+    assert schema.validate_structure(doc) == []
+    result = verify(doc)
+    assert result.ok is True
+    assert _check(result, "schema_conformance").status == PASS
+
+
+def test_malformed_epistemic_block_fails_without_jsonschema(monkeypatch) -> None:
+    monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
+    doc = valid_odr()
+    doc["epistemic"] = {
+        "status": "present",
+        "falsification": {"observation": "fixture digest mismatch"},
+    }
+
+    errors = schema.validate_structure(doc)
+    assert "epistemic.falsification.check_by: required non-empty string" in errors
+    result = verify(doc)
+    assert result.ok is False
+    assert _check(result, "schema_conformance").status == FAIL
+
+
+def test_source_block_is_validated_without_jsonschema(monkeypatch) -> None:
+    monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
+    doc = valid_odr()
+    doc["source"] = {
+        "system": "aragora",
+        "schema": "open-decision-receipt",
+        "schema_version": "0.1",
+        "receipt_id": "native-rcpt-0001",
+        "artifact_hash": "sha-256:deadbeef",
+    }
+
+    assert schema.validate_structure(doc) == []
+    result = verify(doc)
+    assert result.ok is True
+    assert _check(result, "schema_conformance").status == PASS
+
+
+def test_malformed_source_block_fails_without_jsonschema(monkeypatch) -> None:
+    monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
+    doc = valid_odr()
+    doc["source"] = {
+        "system": 42,
+        "schema_version": "0.1",
+        "receipt_id": "native-rcpt-0001",
+        "extra": "unexpected",
+    }
+
+    errors = schema.validate_structure(doc)
+    assert "source.schema: required" in errors
+    assert "source.system: must be a string" in errors
+    assert "source.extra: unknown member (additionalProperties: false)" in errors
+    result = verify(doc)
+    assert result.ok is False
+    assert _check(result, "schema_conformance").status == FAIL
+
+
+def test_unknown_top_level_member_fails_without_jsonschema(monkeypatch) -> None:
+    monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
+    doc = valid_odr()
+    doc["unexpected"] = {"status": "present"}
+
+    errors = schema.validate_structure(doc)
+    assert "unknown top-level member: unexpected (additionalProperties: false)" in errors
+    result = verify(doc)
+    assert result.ok is False
+    assert _check(result, "schema_conformance").status == FAIL
 
 
 # --- signatures ------------------------------------------------------------

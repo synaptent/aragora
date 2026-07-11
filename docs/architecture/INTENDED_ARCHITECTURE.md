@@ -658,4 +658,3 @@ descriptive inventory — the normative machine encoding is `charters.yaml`.
 
 Totals: 144 top-level packages — 64 MAPPED, 80 UNMAPPED.
 (Top-level single-file modules under `aragora/*.py` follow their nearest package's state; `resilience_patterns.py`/`resilience_config.py` are chartered in CHR-X-006.)
-

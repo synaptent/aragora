@@ -276,6 +276,33 @@
         "additionalProperties": false
       }
     },
+    "epistemic": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": { "const": "present" },
+        "unverified": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "falsification": {
+          "type": "object",
+          "required": ["observation", "check_by"],
+          "properties": {
+            "observation": { "type": "string", "minLength": 1 },
+            "owner": { "type": "string" },
+            "source": { "type": "string" },
+            "check_by": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "source": {
       "type": "object",
       "required": ["system", "schema", "receipt_id"],

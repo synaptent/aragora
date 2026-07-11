@@ -195,6 +195,206 @@ class TestDecisionReceiptCreation:
         assert basic_receipt.gauntlet_id == "gauntlet-456"
         assert basic_receipt.verdict == "CONDITIONAL"
         assert basic_receipt.confidence == 0.75
+        assert basic_receipt.unverified == []
+        assert basic_receipt.assumptions == []
+        assert basic_receipt.falsification is None
+
+    def test_epistemic_blocks_round_trip_and_render(self):
+        """Optional epistemic receipt blocks serialize, verify, and render."""
+        receipt = DecisionReceipt(
+            receipt_id="test-receipt-epistemic",
+            gauntlet_id="gauntlet-epistemic",
+            timestamp="2024-01-15T10:30:00Z",
+            input_summary="Ship product bet",
+            input_hash="abc123def456",
+            risk_summary={"critical": 0, "high": 0, "medium": 1, "low": 1},
+            attacks_attempted=4,
+            attacks_successful=0,
+            probes_run=3,
+            vulnerabilities_found=1,
+            verdict="PASS",
+            confidence=0.8,
+            robustness_score=0.7,
+            unverified=["The support-load forecast was not independently checked."],
+            assumptions=["Enterprise buyers will accept the initial manual workflow."],
+            falsification={
+                "observation": "Trial-to-paid conversion stays below 8%.",
+                "owner": "growth",
+                "source": "billing dashboard",
+                "check_by": "2024-03-01",
+            },
+        )
+
+        data = receipt.to_dict()
+        assert data["unverified"] == ["The support-load forecast was not independently checked."]
+        assert data["assumptions"] == ["Enterprise buyers will accept the initial manual workflow."]
+        assert data["falsification"]["observation"] == "Trial-to-paid conversion stays below 8%."
+
+        restored = DecisionReceipt.from_dict(data)
+        assert restored.unverified == receipt.unverified
+        assert restored.assumptions == receipt.assumptions
+        assert restored.falsification == receipt.falsification
+        assert restored.verify_integrity()
+
+        markdown = restored.to_markdown()
+        html = restored.to_html()
+        paginated_html = restored.to_html_paginated()
+        assert "Epistemic Limits" in markdown
+        assert "Not verified" in markdown
+        assert "Trial-to-paid conversion stays below 8%." in markdown
+        assert "Epistemic Limits" in html
+        assert "billing dashboard" in html
+        assert "Epistemic Limits" in paginated_html
+        assert "The support-load forecast was not independently checked." in paginated_html
+        assert "Enterprise buyers will accept the initial manual workflow." in paginated_html
+        assert "Trial-to-paid conversion stays below 8%." in paginated_html
+        assert "billing dashboard" in paginated_html
+
+    def test_partial_falsification_is_not_retained(self):
+        """Incomplete falsification blocks cannot later export invalid ODR."""
+        receipt = DecisionReceipt(
+            receipt_id="test-receipt-partial-falsification",
+            gauntlet_id="gauntlet-epistemic",
+            timestamp="2024-01-15T10:30:00Z",
+            input_summary="Ship product bet",
+            input_hash="abc123def456",
+            risk_summary={"critical": 0},
+            attacks_attempted=1,
+            attacks_successful=0,
+            probes_run=1,
+            vulnerabilities_found=0,
+            verdict="PASS",
+            confidence=0.8,
+            robustness_score=0.7,
+            falsification={"observation": "Conversion drops below target."},
+        )
+
+        assert receipt.falsification is None
+        assert "falsification" not in receipt.to_dict()
+
+    def test_epistemic_fields_are_integrity_protected(self):
+        """Audit-relevant epistemic fields must affect the artifact hash."""
+        receipt = DecisionReceipt(
+            receipt_id="test-receipt-epistemic-integrity",
+            gauntlet_id="gauntlet-epistemic",
+            timestamp="2024-01-15T10:30:00Z",
+            input_summary="Ship product bet",
+            input_hash="abc123def456",
+            risk_summary={"critical": 0},
+            attacks_attempted=1,
+            attacks_successful=0,
+            probes_run=1,
+            vulnerabilities_found=0,
+            verdict="PASS",
+            confidence=0.8,
+            robustness_score=0.7,
+            unverified=["Load test not run."],
+            assumptions=["Manual support can absorb rollout."],
+            falsification={
+                "observation": "P95 latency exceeds 600ms.",
+                "check_by": "2026-07-15",
+            },
+        )
+
+        original_hash = receipt.artifact_hash
+        assert receipt.verify_integrity() is True
+
+        receipt.unverified.append("Security review skipped.")
+        assert receipt.artifact_hash == original_hash
+        assert receipt.verify_integrity() is False
+
+        receipt.unverified = ["Load test not run."]
+        receipt.assumptions.append("Enterprise demand is stable.")
+        assert receipt.verify_integrity() is False
+
+        receipt.assumptions = ["Manual support can absorb rollout."]
+        assert receipt.falsification is not None
+        receipt.falsification["observation"] = "Trial conversion drops below target."
+        assert receipt.verify_integrity() is False
+
+    def test_legacy_hash_verifies_without_epistemic_fields(self):
+        """Existing unsigned receipts hashed before epistemic fields stay valid."""
+        receipt = DecisionReceipt(
+            receipt_id="test-receipt-legacy-epistemic-integrity",
+            gauntlet_id="gauntlet-epistemic",
+            timestamp="2024-01-15T10:30:00Z",
+            input_summary="Ship product bet",
+            input_hash="abc123def456",
+            risk_summary={"critical": 0},
+            attacks_attempted=1,
+            attacks_successful=0,
+            probes_run=1,
+            vulnerabilities_found=0,
+            verdict="PASS",
+            confidence=0.8,
+            robustness_score=0.7,
+        )
+        data = receipt.to_dict()
+        data["artifact_hash"] = receipt._calculate_legacy_hash()
+
+        restored = DecisionReceipt.from_dict(data)
+
+        assert restored.verify_integrity() is True
+        restored.confidence = 0.1
+        assert restored.verify_integrity() is False
+
+    def test_legacy_hash_rejects_added_epistemic_fields(self):
+        """Legacy receipt hashes cannot validate later-added epistemic fields."""
+        receipt = DecisionReceipt(
+            receipt_id="test-receipt-legacy-epistemic-integrity-added",
+            gauntlet_id="gauntlet-epistemic",
+            timestamp="2024-01-15T10:30:00Z",
+            input_summary="Ship product bet",
+            input_hash="abc123def456",
+            risk_summary={"critical": 0},
+            attacks_attempted=1,
+            attacks_successful=0,
+            probes_run=1,
+            vulnerabilities_found=0,
+            verdict="PASS",
+            confidence=0.8,
+            robustness_score=0.7,
+        )
+        data = receipt.to_dict()
+        data["artifact_hash"] = receipt._calculate_legacy_hash()
+        data["unverified"] = ["Load test not run."]
+        data["assumptions"] = ["Manual support can absorb rollout."]
+        data["falsification"] = {
+            "observation": "P95 latency exceeds 600ms.",
+            "check_by": "2026-07-15",
+        }
+
+        restored = DecisionReceipt.from_dict(data)
+
+        assert restored.verify_integrity() is False
+
+    def test_legacy_hash_rejects_added_malformed_falsification_field(self):
+        """Legacy receipt hashes cannot validate raw epistemic fields normalized away."""
+        receipt = DecisionReceipt(
+            receipt_id="test-receipt-legacy-epistemic-integrity-malformed-added",
+            gauntlet_id="gauntlet-epistemic",
+            timestamp="2024-01-15T10:30:00Z",
+            input_summary="Ship product bet",
+            input_hash="abc123def456",
+            risk_summary={"critical": 0},
+            attacks_attempted=1,
+            attacks_successful=0,
+            probes_run=1,
+            vulnerabilities_found=0,
+            verdict="PASS",
+            confidence=0.8,
+            robustness_score=0.7,
+        )
+        data = receipt.to_dict()
+        data["artifact_hash"] = receipt._calculate_legacy_hash()
+        data["falsification"] = {
+            "observation": "P95 latency exceeds 600ms.",
+        }
+
+        restored = DecisionReceipt.from_dict(data)
+
+        assert restored.falsification is None
+        assert restored.verify_integrity() is False
 
     def test_auto_hash_generation(self, basic_receipt):
         """Test automatic artifact hash generation."""

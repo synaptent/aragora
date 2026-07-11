@@ -7,12 +7,14 @@ Runs the following checks on a decision receipt JSON file:
   content hash and compares it to the stored value. Receipts store this hash under
   the canonical ``artifact_hash`` field (as emitted by ``DecisionReceipt.to_dict``).
   A legacy ``checksum`` field is accepted as a fallback for older/alternate
-  producers, and is also validated when present alongside ``artifact_hash`` so
-  dual-field receipts cannot hide a mismatched proof. This hash covers the
-  *decision-integrity fields* --
+  producers, and older ``artifact_hash`` values that predate epistemic receipt
+  fields are accepted with reduced coverage. Multiple integrity proofs are all
+  validated when present so dual-field receipts cannot hide a mismatched proof.
+  The current hash covers the *decision-integrity fields* --
   ``receipt_id``, ``gauntlet_id``, ``input_hash``, ``risk_summary``, ``verdict``,
-  and ``confidence`` -- so tampering with any of those is detected. It does **not**
-  cover presentational/metadata fields such as ``timestamp`` or ``schema_version``;
+  ``confidence``, ``unverified``, ``assumptions``, and ``falsification`` -- so
+  tampering with any of those is detected. It does **not** cover presentational
+  metadata fields such as ``timestamp`` or ``schema_version``;
   for full-payload tamper-evidence, sign the receipt and use the signature check
   (or ``aragora receipt verify``). The reported coverage is scoped accordingly so
   the command does not overclaim.
@@ -44,9 +46,9 @@ def create_verify_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Verify a decision receipt's integrity",
         description=(
             "Validate a decision receipt JSON file. Recomputes the SHA-256 "
-            "decision-integrity hash (artifact_hash, plus legacy checksum fallback; "
-            "both are checked when both are present) to detect tampering of the decision-integrity fields (receipt_id, "
-            "gauntlet_id, input_hash, risk_summary, verdict, confidence); also checks "
+            "decision-integrity hash (artifact_hash, legacy artifact_hash fallback, "
+            "and checksum fallback; all present proofs are checked) to detect tampering "
+            "of the fields covered by the stored proof; also checks "
             "schema_version presence, that the verdict is a valid enum value, and "
             "timestamp format. Note: the integrity hash does not cover presentational "
             "fields like timestamp/schema_version -- for full-payload tamper-evidence "
@@ -127,7 +129,21 @@ _INTEGRITY_HASH_FIELDS: tuple[str, ...] = (
     "risk_summary",
     "verdict",
     "confidence",
+    "unverified",
+    "assumptions",
+    "falsification",
 )
+
+_LEGACY_ARTIFACT_HASH_FIELDS: tuple[str, ...] = (
+    "receipt_id",
+    "gauntlet_id",
+    "input_hash",
+    "risk_summary",
+    "verdict",
+    "confidence",
+)
+
+_EPISTEMIC_HASH_FIELDS: tuple[str, ...] = ("unverified", "assumptions", "falsification")
 
 # Decision-integrity fields covered by the legacy ``checksum`` field.
 _LEGACY_CHECKSUM_FIELDS: tuple[str, ...] = (
@@ -158,8 +174,99 @@ def _recompute_checksum(data: dict[str, Any]) -> str:
     return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
+def _normalize_epistemic_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _normalize_falsification(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    normalized: dict[str, str] = {}
+    for key in ("observation", "owner", "source", "check_by"):
+        raw = value.get(key)
+        if isinstance(raw, str) and raw.strip():
+            normalized[key] = raw.strip()
+    if "observation" not in normalized or "check_by" not in normalized:
+        return None
+    return normalized or None
+
+
+def _malformed_epistemic_hash_field_reasons(data: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    if "unverified" in data and data.get("unverified") != _normalize_epistemic_string_list(
+        data.get("unverified")
+    ):
+        reasons.append("unverified must be a list of non-empty strings")
+    if "assumptions" in data and data.get("assumptions") != _normalize_epistemic_string_list(
+        data.get("assumptions")
+    ):
+        reasons.append("assumptions must be a list of non-empty strings")
+    if "falsification" in data and data.get("falsification") != _normalize_falsification(
+        data.get("falsification")
+    ):
+        reasons.append(
+            "falsification must be an object with non-empty observation and check_by strings"
+        )
+    return reasons
+
+
+def _raise_for_malformed_epistemic_hash_fields(data: dict[str, Any]) -> None:
+    reasons = _malformed_epistemic_hash_field_reasons(data)
+    if reasons:
+        raise ValueError("malformed epistemic hash fields: " + "; ".join(reasons))
+
+
+def _artifact_hash_payload(data: dict[str, Any], *, include_epistemic: bool) -> dict[str, Any]:
+    payload = {
+        "receipt_id": data.get("receipt_id", ""),
+        "gauntlet_id": data.get("gauntlet_id", ""),
+        "input_hash": data.get("input_hash", ""),
+        "risk_summary": data.get("risk_summary", {}),
+        "verdict": data.get("verdict", ""),
+        "confidence": data.get("confidence", 0.0),
+    }
+    if include_epistemic:
+        _raise_for_malformed_epistemic_hash_fields(data)
+        if data.get("unverified"):
+            payload["unverified"] = data.get("unverified", []) or []
+        if data.get("assumptions"):
+            payload["assumptions"] = data.get("assumptions", []) or []
+        if data.get("falsification"):
+            payload["falsification"] = data.get("falsification")
+    return payload
+
+
+def _hash_artifact_payload(payload: dict[str, Any]) -> str:
+    content = json.dumps(payload, sort_keys=True)
+    return hashlib.sha256(content.encode()).hexdigest()
+
+
+def _has_epistemic_hash_fields(data: dict[str, Any]) -> bool:
+    if _malformed_epistemic_hash_field_reasons(data):
+        return True
+    return bool(
+        _normalize_epistemic_string_list(data.get("unverified"))
+        or _normalize_epistemic_string_list(data.get("assumptions"))
+        or _normalize_falsification(data.get("falsification"))
+    )
+
+
+def _recompute_legacy_artifact_hash(data: dict[str, Any]) -> str:
+    """Recompute the pre-epistemic six-field ``artifact_hash``."""
+    return _hash_artifact_payload(_artifact_hash_payload(data, include_epistemic=False))
+
+
 def _recompute_artifact_hash(data: dict[str, Any]) -> str:
-    """Recompute the canonical content-addressable ``artifact_hash``.
+    """Recompute the current canonical content-addressable ``artifact_hash``.
 
     Mirrors ``DecisionReceipt._calculate_hash`` so that receipts emitted by the
     canonical producer (``DecisionReceipt.to_dict``, used by ``aragora demo`` and
@@ -170,18 +277,7 @@ def _recompute_artifact_hash(data: dict[str, Any]) -> str:
     never hard-depends on the gauntlet package being importable. Covers exactly the
     fields in :data:`_INTEGRITY_HASH_FIELDS`.
     """
-    content = json.dumps(
-        {
-            "receipt_id": data.get("receipt_id", ""),
-            "gauntlet_id": data.get("gauntlet_id", ""),
-            "input_hash": data.get("input_hash", ""),
-            "risk_summary": data.get("risk_summary", {}),
-            "verdict": data.get("verdict", ""),
-            "confidence": data.get("confidence", 0.0),
-        },
-        sort_keys=True,
-    )
-    return hashlib.sha256(content.encode()).hexdigest()
+    return _hash_artifact_payload(_artifact_hash_payload(data, include_epistemic=True))
 
 
 def _looks_like_artifact_hash_alias(value: Any) -> bool:
@@ -312,40 +408,91 @@ def _verify_receipt(data: dict[str, Any], *, verbose: bool = False) -> dict[str,
     proof_failures: list[str] = []
     covered_fields: list[str] = []
     if stored_artifact_hash:
-        expected_artifact_hash = _recompute_artifact_hash(data)
-        covered_fields.extend(_INTEGRITY_HASH_FIELDS)
-        if stored_artifact_hash == expected_artifact_hash:
-            detail = f"artifact_hash={stored_artifact_hash[:16]}..."
-            if verbose:
-                detail += f" (recomputed={expected_artifact_hash[:16]}...)"
-            proof_details.append(detail)
-        else:
-            proof_failures.append(
-                f"artifact_hash mismatch: stored={stored_artifact_hash[:16]}..., "
-                f"recomputed={expected_artifact_hash[:16]}..."
-            )
-    if stored_checksum:
-        if _looks_like_artifact_hash_alias(stored_checksum):
-            expected_checksum_alias = _recompute_artifact_hash(data)
+        try:
+            expected_artifact_hash = _recompute_artifact_hash(data)
+        except ValueError as exc:
             covered_fields.extend(_INTEGRITY_HASH_FIELDS)
-            if stored_checksum == expected_checksum_alias:
-                detail = f"checksum artifact_hash alias={stored_checksum[:16]}..."
+            proof_failures.append(str(exc))
+        else:
+            if stored_artifact_hash == expected_artifact_hash:
+                covered_fields.extend(_INTEGRITY_HASH_FIELDS)
+                detail = f"artifact_hash={stored_artifact_hash[:16]}..."
                 if verbose:
-                    detail += f" (recomputed={expected_checksum_alias[:16]}...)"
+                    detail += f" (recomputed={expected_artifact_hash[:16]}...)"
                 proof_details.append(detail)
             else:
-                proof_failures.append(
-                    f"checksum artifact_hash alias mismatch: stored={stored_checksum[:16]}..., "
-                    f"recomputed={expected_checksum_alias[:16]}..."
-                )
+                expected_legacy_artifact_hash = _recompute_legacy_artifact_hash(data)
+                if stored_artifact_hash == expected_legacy_artifact_hash:
+                    if _has_epistemic_hash_fields(data):
+                        covered_fields.extend(_LEGACY_ARTIFACT_HASH_FIELDS)
+                        proof_failures.append(
+                            "legacy artifact_hash cannot validate epistemic fields "
+                            "(unverified, assumptions, falsification)"
+                        )
+                    else:
+                        covered_fields.extend(_LEGACY_ARTIFACT_HASH_FIELDS)
+                        detail = f"legacy artifact_hash={stored_artifact_hash[:16]}..."
+                        if verbose:
+                            detail += f" (recomputed={expected_legacy_artifact_hash[:16]}...)"
+                        proof_details.append(detail)
+                else:
+                    covered_fields.extend(_INTEGRITY_HASH_FIELDS)
+                    proof_failures.append(
+                        f"artifact_hash mismatch: stored={stored_artifact_hash[:16]}..., "
+                        f"recomputed={expected_artifact_hash[:16]}..."
+                    )
+    if stored_checksum:
+        if _looks_like_artifact_hash_alias(stored_checksum):
+            try:
+                expected_checksum_alias = _recompute_artifact_hash(data)
+            except ValueError as exc:
+                covered_fields.extend(_INTEGRITY_HASH_FIELDS)
+                proof_failures.append(str(exc))
+            else:
+                if stored_checksum == expected_checksum_alias:
+                    covered_fields.extend(_INTEGRITY_HASH_FIELDS)
+                    detail = f"checksum artifact_hash alias={stored_checksum[:16]}..."
+                    if verbose:
+                        detail += f" (recomputed={expected_checksum_alias[:16]}...)"
+                    proof_details.append(detail)
+                else:
+                    expected_legacy_checksum_alias = _recompute_legacy_artifact_hash(data)
+                    if stored_checksum == expected_legacy_checksum_alias:
+                        if _has_epistemic_hash_fields(data):
+                            covered_fields.extend(_LEGACY_ARTIFACT_HASH_FIELDS)
+                            proof_failures.append(
+                                "legacy checksum artifact_hash alias cannot validate epistemic "
+                                "fields (unverified, assumptions, falsification)"
+                            )
+                        else:
+                            covered_fields.extend(_LEGACY_ARTIFACT_HASH_FIELDS)
+                            detail = (
+                                f"legacy checksum artifact_hash alias={stored_checksum[:16]}..."
+                            )
+                            if verbose:
+                                detail += f" (recomputed={expected_legacy_checksum_alias[:16]}...)"
+                            proof_details.append(detail)
+                    else:
+                        covered_fields.extend(_INTEGRITY_HASH_FIELDS)
+                        proof_failures.append(
+                            "checksum artifact_hash alias mismatch: "
+                            f"stored={stored_checksum[:16]}..., "
+                            f"recomputed={expected_checksum_alias[:16]}..."
+                        )
         else:
             expected_checksum = _recompute_checksum(data)
             covered_fields.extend(_LEGACY_CHECKSUM_FIELDS)
             if stored_checksum == expected_checksum:
-                detail = f"checksum={stored_checksum}"
-                if verbose:
-                    detail += f" (recomputed={expected_checksum})"
-                proof_details.append(detail)
+                if _has_epistemic_hash_fields(data):
+                    proof_failures.append(
+                        "legacy checksum cannot validate epistemic fields "
+                        "(unverified, assumptions, falsification)"
+                    )
+                else:
+                    detail = f"checksum={stored_checksum}"
+                    if verbose:
+                        detail += f" (recomputed={expected_checksum})"
+                    proof_details.append(detail)
             else:
                 proof_failures.append(
                     f"checksum mismatch: stored={stored_checksum}, recomputed={expected_checksum}"

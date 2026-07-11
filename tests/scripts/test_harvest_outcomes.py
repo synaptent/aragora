@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -156,6 +160,48 @@ class TestGhGuard:
         ):
             with pytest.raises(RuntimeError):
                 mod.run_gh(argv)
+
+
+class TestReceiptFalsificationFollowups:
+    def test_dry_run_reports_expired_falsification_checks_without_mutation(self, harness):
+        receipt_due = {
+            "receipt_id": "r-due",
+            "falsification": {
+                "observation": "Trial-to-paid conversion stays below 8%.",
+                "owner": "growth",
+                "source": "billing dashboard",
+                "check_by": "2026-07-01",
+            },
+        }
+        receipt_future = {
+            "receipt_id": "r-future",
+            "falsification": {
+                "observation": "Latency exceeds 600ms.",
+                "check_by": "2026-08-01",
+            },
+        }
+
+        result = mod.run_harvest(
+            repo="synaptent/aragora",
+            repo_root=Path("."),
+            ledger_path=harness["ledger"],
+            signal_log=harness["signal_log"],
+            apply=False,
+            receipt_followups=[receipt_due, receipt_future],
+            now=datetime(2026, 7, 2, tzinfo=timezone.utc),
+        )
+
+        assert harness["gh_calls"] == []
+        assert result["receipt_followups"] == [
+            {
+                "receipt_id": "r-due",
+                "observation": "Trial-to-paid conversion stays below 8%.",
+                "owner": "growth",
+                "source": "billing dashboard",
+                "check_by": "2026-07-01",
+                "reason": "falsification check_by is due",
+            }
+        ]
 
 
 @pytest.fixture
@@ -372,6 +418,24 @@ class TestOriginFreshness:
 
 
 class TestMain:
+    def test_script_help_starts_without_repo_package_on_pythonpath(self, tmp_path: Path):
+        repo_root = Path(__file__).resolve().parents[2]
+        env = os.environ.copy()
+        env["PYTHONPATH"] = ""
+
+        proc = subprocess.run(
+            [sys.executable, str(repo_root / "scripts" / "harvest_outcomes.py"), "--help"],
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        assert proc.returncode == 0, proc.stderr
+        assert "Harvest engine" in proc.stdout
+
     def test_defaults(self):
         args = mod.build_parser().parse_args([])
         assert args.since_days == 7

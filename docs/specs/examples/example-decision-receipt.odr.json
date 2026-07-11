@@ -22,6 +22,21 @@
     "reason": "no crux set recorded for this decision (DecisionReceipt does not carry one; supply crux_set= from a CruxReceipt)",
     "status": "absent"
   },
+  "epistemic": {
+    "assumptions": [
+      "Support can absorb initial manual reconciliation."
+    ],
+    "falsification": {
+      "check_by": "2026-07-15",
+      "observation": "P95 latency exceeds 600ms for paid tenants.",
+      "owner": "platform",
+      "source": "latency dashboard"
+    },
+    "status": "present",
+    "unverified": [
+      "No live load test was run against the enterprise tenant."
+    ]
+  },
   "issued_at": "2026-06-11T12:00:00+00:00",
   "odr_version": "0.1",
   "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
@@ -78,7 +93,7 @@
   },
   "signatures": [],
   "source": {
-    "artifact_hash": "f867986c6dd8d1fe78c7da7fd3f92d7e6e6f4ffd8e227ec987f1c23dfe931a2b",
+    "artifact_hash": "421cdf3f8e701426df83231364dba79efc5d34b3c1711de5228dde823a601030",
     "receipt_id": "r-123",
     "schema": "aragora.gauntlet.DecisionReceipt",
     "schema_version": "1.1",

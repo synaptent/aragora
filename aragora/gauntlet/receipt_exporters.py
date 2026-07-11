@@ -21,6 +21,70 @@ if TYPE_CHECKING:
     from .receipt_models import CruxReceipt, DecisionReceipt
 
 
+def _has_epistemic_limits(receipt: DecisionReceipt) -> bool:
+    return bool(
+        getattr(receipt, "unverified", None)
+        or getattr(receipt, "assumptions", None)
+        or getattr(receipt, "falsification", None)
+    )
+
+
+def _render_epistemic_markdown(receipt: DecisionReceipt) -> list[str]:
+    if not _has_epistemic_limits(receipt):
+        return []
+    lines = ["---", "", "## Epistemic Limits", ""]
+    if receipt.unverified:
+        lines.extend(["### Not verified", ""])
+        lines.extend(f"- {item}" for item in receipt.unverified)
+        lines.append("")
+    if receipt.assumptions:
+        lines.extend(["### Assumptions accepted", ""])
+        lines.extend(f"- {item}" for item in receipt.assumptions)
+        lines.append("")
+    if receipt.falsification:
+        falsification = receipt.falsification
+        lines.extend(["### Falsification check", ""])
+        lines.append(f"- **Observation:** {falsification.get('observation', '-')}")
+        if falsification.get("owner"):
+            lines.append(f"- **Owner:** {falsification['owner']}")
+        if falsification.get("source"):
+            lines.append(f"- **Source:** {falsification['source']}")
+        if falsification.get("check_by"):
+            lines.append(f"- **Check by:** {falsification['check_by']}")
+        lines.append("")
+    return lines
+
+
+def _render_epistemic_html(receipt: DecisionReceipt) -> str:
+    if not _has_epistemic_limits(receipt):
+        return ""
+    parts = ['<div class="section"><h2>Epistemic Limits</h2>']
+    if receipt.unverified:
+        parts.append("<h3>Not verified</h3><ul>")
+        parts.extend(f"<li>{escape(item)}</li>" for item in receipt.unverified)
+        parts.append("</ul>")
+    if receipt.assumptions:
+        parts.append("<h3>Assumptions accepted</h3><ul>")
+        parts.extend(f"<li>{escape(item)}</li>" for item in receipt.assumptions)
+        parts.append("</ul>")
+    if receipt.falsification:
+        falsification = receipt.falsification
+        parts.append("<h3>Falsification check</h3>")
+        parts.append('<p class="meta">')
+        parts.append(
+            f"<strong>Observation:</strong> {escape(falsification.get('observation', '-'))}"
+        )
+        if falsification.get("owner"):
+            parts.append(f"<br><strong>Owner:</strong> {escape(falsification['owner'])}")
+        if falsification.get("source"):
+            parts.append(f"<br><strong>Source:</strong> {escape(falsification['source'])}")
+        if falsification.get("check_by"):
+            parts.append(f"<br><strong>Check by:</strong> {escape(falsification['check_by'])}")
+        parts.append("</p>")
+    parts.append("</div>")
+    return "".join(parts)
+
+
 def crux_receipt_to_markdown(receipt: CruxReceipt) -> str:
     """Render a ``CruxReceipt`` as human-readable markdown.
 
@@ -271,6 +335,8 @@ def receipt_to_markdown(
             lines.append(f"- {view}")
         lines.append("")
 
+    lines.extend(_render_epistemic_markdown(receipt))
+
     # Provenance chain section
     if include_provenance and receipt.provenance_chain:
         lines.append("---")
@@ -467,6 +533,8 @@ def receipt_to_html(
         {findings_html or '<p class="meta">No findings reported.</p>'}
     </div>
 
+    {_render_epistemic_html(receipt)}
+
     <div class="section">
         <h2>Integrity</h2>
         <p class="meta">
@@ -616,6 +684,8 @@ def receipt_to_html_paginated(
         <h2>Findings ({len(receipt.vulnerability_details)} total)</h2>
         {findings_html or '<p class="meta">No findings reported.</p>'}
     </div>
+
+    {_render_epistemic_html(receipt)}
 
     {provenance_html}
 

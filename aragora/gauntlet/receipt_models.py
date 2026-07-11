@@ -47,6 +47,48 @@ def _normalize_live_explainability_number(value: Any) -> float | None:
     return None
 
 
+def _normalize_epistemic_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _normalize_falsification(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        return None
+    normalized: dict[str, str] = {}
+    for key in ("observation", "owner", "source", "check_by"):
+        raw = value.get(key)
+        if isinstance(raw, str) and raw.strip():
+            normalized[key] = raw.strip()
+    if "observation" not in normalized or "check_by" not in normalized:
+        return None
+    return normalized or None
+
+
+def _has_malformed_epistemic_hash_fields(data: dict[str, Any]) -> bool:
+    if "unverified" in data and data.get("unverified") != _normalize_epistemic_string_list(
+        data.get("unverified")
+    ):
+        return True
+    if "assumptions" in data and data.get("assumptions") != _normalize_epistemic_string_list(
+        data.get("assumptions")
+    ):
+        return True
+    if "falsification" in data and data.get("falsification") != _normalize_falsification(
+        data.get("falsification")
+    ):
+        return True
+    return False
+
+
 def normalize_live_explainability(payload: Any) -> dict[str, Any] | None:
     """Normalize live explainability snapshots before persisting them in receipts."""
     if not isinstance(payload, dict):
@@ -555,6 +597,21 @@ class DecisionReceipt:
     # Tracks queries, retrievals, and injection counts for cross-debate visibility
     km_operations: dict[str, Any] | None = None
 
+    # Epistemic decision limits (optional, externally valuable receipt block)
+    unverified: list[str] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
+    falsification: dict[str, str] | None = None
+    _raw_epistemic_hash_fields_present: bool = field(
+        default=False,
+        repr=False,
+        compare=False,
+    )
+    _malformed_epistemic_hash_fields_present: bool = field(
+        default=False,
+        repr=False,
+        compare=False,
+    )
+
     # Schema version for forward compatibility
     schema_version: str = "1.1"
 
@@ -570,28 +627,70 @@ class DecisionReceipt:
 
     def __post_init__(self):
         """Calculate artifact hash if not provided."""
+        self.unverified = _normalize_epistemic_string_list(self.unverified)
+        self.assumptions = _normalize_epistemic_string_list(self.assumptions)
+        self.falsification = _normalize_falsification(self.falsification)
         if not self.artifact_hash:
             self.artifact_hash = self._calculate_hash()
 
+    def _hash_payload(self, *, include_epistemic: bool) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "receipt_id": self.receipt_id,
+            "gauntlet_id": self.gauntlet_id,
+            "input_hash": self.input_hash,
+            "risk_summary": self.risk_summary,
+            "verdict": self.verdict,
+            "confidence": self.confidence,
+        }
+        if include_epistemic:
+            if self.unverified:
+                payload["unverified"] = self.unverified
+            if self.assumptions:
+                payload["assumptions"] = self.assumptions
+            if self.falsification:
+                payload["falsification"] = self.falsification
+        return payload
+
     def _calculate_hash(self) -> str:
-        """Calculate content-addressable hash."""
+        """Calculate the current content-addressable hash."""
         content = json.dumps(
-            {
-                "receipt_id": self.receipt_id,
-                "gauntlet_id": self.gauntlet_id,
-                "input_hash": self.input_hash,
-                "risk_summary": self.risk_summary,
-                "verdict": self.verdict,
-                "confidence": self.confidence,
-            },
+            self._hash_payload(include_epistemic=True),
             sort_keys=True,
         )
         return hashlib.sha256(content.encode()).hexdigest()
 
+    def _calculate_legacy_hash(self) -> str:
+        """Calculate the pre-epistemic content-addressable hash.
+
+        Older unsigned receipts were issued before ``unverified``, ``assumptions``,
+        and ``falsification`` became part of the artifact hash. Accepting this
+        fallback keeps those receipts verifiable while new receipts continue to
+        generate and prefer the expanded hash.
+        """
+        content = json.dumps(
+            self._hash_payload(include_epistemic=False),
+            sort_keys=True,
+        )
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def _has_epistemic_hash_fields(self) -> bool:
+        return bool(
+            self._raw_epistemic_hash_fields_present
+            or self.unverified
+            or self.assumptions
+            or self.falsification
+        )
+
     def verify_integrity(self) -> bool:
         """Verify receipt has not been tampered with."""
+        if self._malformed_epistemic_hash_fields_present:
+            return False
         expected_hash = self._calculate_hash()
-        return expected_hash == self.artifact_hash
+        if expected_hash == self.artifact_hash:
+            return True
+        if self._has_epistemic_hash_fields():
+            return False
+        return self._calculate_legacy_hash() == self.artifact_hash
 
     def sign(self, signer: ReceiptSigner | None = None) -> DecisionReceipt:
         """
@@ -1242,6 +1341,7 @@ class DecisionReceipt:
             agent_responses=cls._build_agent_responses(result, cost_summary=cost_summary),
             cost_summary=cost_summary,
             config_used=config_used,
+            unverified=list(getattr(result, "unverified_claims", []) or []),
         )
 
     @classmethod
@@ -2047,6 +2147,12 @@ class DecisionReceipt:
             "artifact_hash": self.artifact_hash,
             "config_used": self.config_used,
         }
+        if self.unverified:
+            data["unverified"] = list(self.unverified)
+        if self.assumptions:
+            data["assumptions"] = list(self.assumptions)
+        if self.falsification:
+            data["falsification"] = dict(self.falsification)
         # Include signature fields if present
         if self.signature:
             data["signature"] = self.signature
@@ -2097,6 +2203,13 @@ class DecisionReceipt:
             settlement_metadata=data.get("settlement_metadata"),
             settlement_status=data.get("settlement_status"),
             explainability=data.get("explainability"),
+            unverified=data.get("unverified", []) or [],
+            assumptions=data.get("assumptions", []) or [],
+            falsification=data.get("falsification"),
+            _raw_epistemic_hash_fields_present=any(
+                field_name in data for field_name in ("unverified", "assumptions", "falsification")
+            ),
+            _malformed_epistemic_hash_fields_present=_has_malformed_epistemic_hash_fields(data),
             config_used=data.get("config_used", {}) or {},
             # Signature fields
             signature=data.get("signature"),

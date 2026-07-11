@@ -38,6 +38,8 @@ _REQUIRED_MEMBERS = (
     "signatures",
 )
 
+_ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"epistemic", "source"}
+
 
 def load_bundled_schema() -> dict[str, Any]:
     """Return the bundled ODR v0.1 JSON Schema (draft 2020-12)."""
@@ -58,6 +60,18 @@ def _check_block(errors: list[str], doc: dict[str, Any], name: str) -> None:
     value = doc.get(name)
     if not isinstance(value, dict):
         errors.append(f"{name}: must be an object")
+
+
+def _unknown_members(
+    errors: list[str], path: str, value: dict[str, Any], allowed: frozenset[str]
+) -> None:
+    for key in sorted(set(value) - allowed):
+        errors.append(f"{path}.{key}: unknown member (additionalProperties: false)")
+
+
+def _string_array(errors: list[str], path: str, value: Any) -> None:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        errors.append(f"{path}: must be an array of strings")
 
 
 def _check_reasoning(errors: list[str], value: Any) -> None:
@@ -132,6 +146,62 @@ def _check_signatures(errors: list[str], value: Any) -> None:
             errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined in v0.1")
 
 
+def _check_epistemic(errors: list[str], value: Any) -> None:
+    if not isinstance(value, dict):
+        errors.append("epistemic: must be an object")
+        return
+    _unknown_members(
+        errors,
+        "epistemic",
+        value,
+        frozenset({"status", "unverified", "assumptions", "falsification"}),
+    )
+    if value.get("status") != "present":
+        errors.append("epistemic.status: must be 'present'")
+    if "unverified" in value:
+        _string_array(errors, "epistemic.unverified", value["unverified"])
+    if "assumptions" in value:
+        _string_array(errors, "epistemic.assumptions", value["assumptions"])
+    if "falsification" in value:
+        _check_epistemic_falsification(errors, value["falsification"])
+
+
+def _check_epistemic_falsification(errors: list[str], value: Any) -> None:
+    if not isinstance(value, dict):
+        errors.append("epistemic.falsification: must be an object")
+        return
+    _unknown_members(
+        errors,
+        "epistemic.falsification",
+        value,
+        frozenset({"observation", "owner", "source", "check_by"}),
+    )
+    for required in ("observation", "check_by"):
+        if not isinstance(value.get(required), str) or not value.get(required):
+            errors.append(f"epistemic.falsification.{required}: required non-empty string")
+    for optional in ("owner", "source"):
+        if optional in value and not isinstance(value[optional], str):
+            errors.append(f"epistemic.falsification.{optional}: must be a string")
+
+
+def _check_source(errors: list[str], value: Any) -> None:
+    if not isinstance(value, dict):
+        errors.append("source: must be an object")
+        return
+    _unknown_members(
+        errors,
+        "source",
+        value,
+        frozenset({"system", "schema", "schema_version", "receipt_id", "artifact_hash"}),
+    )
+    for required in ("system", "schema", "receipt_id"):
+        if required not in value:
+            errors.append(f"source.{required}: required")
+    for key in ("system", "schema", "schema_version", "receipt_id", "artifact_hash"):
+        if key in value and not isinstance(value[key], str):
+            errors.append(f"source.{key}: must be a string")
+
+
 def validate_structure(doc: Any) -> list[str]:
     """Return a list of conformance errors; empty means the receipt is well-formed."""
     errors: list[str] = []
@@ -141,6 +211,8 @@ def validate_structure(doc: Any) -> list[str]:
     for member in _REQUIRED_MEMBERS:
         if member not in doc:
             errors.append(f"missing required member: {member}")
+    for key in sorted(set(doc) - _ALLOWED_TOP_LEVEL):
+        errors.append(f"unknown top-level member: {key} (additionalProperties: false)")
 
     if doc.get("odr_version") != ODR_VERSION:
         errors.append(f"odr_version: must be '{ODR_VERSION}'")
@@ -186,6 +258,10 @@ def validate_structure(doc: Any) -> list[str]:
     if not isinstance(routing, dict) or routing.get("status") != "reserved":
         errors.append("routing.status: must be 'reserved' in v0.1")
     _check_signatures(errors, doc.get("signatures"))
+    if "epistemic" in doc:
+        _check_epistemic(errors, doc["epistemic"])
+    if "source" in doc:
+        _check_source(errors, doc["source"])
 
     errors.extend(_jsonschema_errors(doc))
     return errors

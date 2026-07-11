@@ -148,6 +148,30 @@
       "description": "Claims that could not be verified.",
       "default": []
     },
+    "unverified": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Relevant claims or checks not verified before accepting the decision.",
+      "default": []
+    },
+    "assumptions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Load-bearing assumptions accepted by the decision.",
+      "default": []
+    },
+    "falsification": {
+      "type": ["object", "null"],
+      "description": "Future observation that would falsify or reopen the decision.",
+      "properties": {
+        "observation": { "type": "string" },
+        "owner": { "type": "string" },
+        "source": { "type": "string" },
+        "check_by": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "default": null
+    },
     "agents_involved": {
       "type": "array",
       "items": { "type": "string" },

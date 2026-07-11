@@ -415,6 +415,25 @@ class TestPromptInterrogator:
         assert "primary goal" in questions[0].question.lower()
 
     @pytest.mark.asyncio()
+    async def test_interrogate_fallback_adds_epistemic_battery_for_vague_prompt(self) -> None:
+        from aragora.prompt_engine.interrogator import PromptInterrogator
+
+        agent = AsyncMock()
+        agent.generate = AsyncMock(return_value="not json")
+        interrogator = PromptInterrogator(agent=agent)
+        intent = _make_intent(
+            prompt="Make our product better for enterprise customers",
+            ambiguities=[],
+            assumptions=[],
+        )
+        questions = await interrogator.interrogate(intent)
+        texts = [q.question for q in questions]
+
+        assert any("What would make this wrong" in text for text in texts)
+        assert any("What did we assume" in text for text in texts)
+        assert any("Should this be done" in text for text in texts)
+
+    @pytest.mark.asyncio()
     async def test_interrogate_fallback_with_ambiguities(self) -> None:
         from aragora.prompt_engine.interrogator import PromptInterrogator
 
@@ -846,10 +865,17 @@ class TestPromptConductor:
             "research",
             "specify",
         }
-        assert result.timing.top_operations(limit=1)[0].operation.endswith(".agent_generate")
+        assert any(
+            item.operation.endswith(".agent_generate") for item in result.timing.operation_timings
+        )
+        top_durations = [item.duration_ms for item in result.timing.top_operations()]
+        assert top_durations == sorted(top_durations, reverse=True)
         serialized_timing = result.timing.to_dict()
         assert serialized_timing["slowest_stage"]["stage"] == result.timing.slowest_stage_name
-        assert serialized_timing["top_operations"][0]["operation"].endswith(".agent_generate")
+        assert (
+            serialized_timing["top_operations"][0]["operation"]
+            == result.timing.top_operations(limit=1)[0].operation
+        )
         assert "llm" in serialized_timing["category_durations_ms"]
 
     @pytest.mark.asyncio()

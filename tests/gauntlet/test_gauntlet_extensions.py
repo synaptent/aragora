@@ -149,6 +149,7 @@ class TestDecisionReceipt:
             ],
             medium_findings=[],
             low_findings=[],
+            unverified_claims=["Production load behavior was not verified."],
             agents_involved=["claude", "gpt-4"],
             duration_seconds=12.5,
         )
@@ -157,6 +158,7 @@ class TestDecisionReceipt:
         assert receipt.gauntlet_id == "gauntlet-mode-001"
         assert receipt.input_hash == "hash123"
         assert receipt.risk_summary["high"] == 1
+        assert receipt.unverified == ["Production load behavior was not verified."]
 
 
 class TestRiskHeatmap:
