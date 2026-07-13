@@ -297,17 +297,21 @@ FAMILY_DISPLAY: dict[str, str] = {
 }
 
 # Provider-equivalent CLI/product names that operators naturally type, mapped to
-# the single canonical family key. ``codex``/``gpt`` are the OpenAI family (the
-# Codex CLI is just its local transport). These MUST collapse to the canonical
-# family for BOTH routing and quorum counting via :func:`canonical_family`, so an
-# alias can never be counted as a distinct family — that would let one provider
-# satisfy the 2-distinct-family minimum on its own.
+# the single canonical family key. The canonical family *set* remains
+# ``FAMILY_PROVIDERS``; this table contains aliases only. These MUST collapse to
+# the canonical family for BOTH routing and quorum counting via
+# :func:`canonical_family`, so an alias can never be counted as a distinct family.
 _FAMILY_ALIASES: dict[str, str] = {
     "codex": "openai",
     "gpt": "openai",
     "gpt-5": "openai",
     "gpt5": "openai",
     "chatgpt": "openai",
+    "codestral": "mistral",
+    "yi-large": "yi",
+    "z-ai": "glm",
+    "nous-hermes": "hermes",
+    "nous hermes": "hermes",
 }
 
 
@@ -319,7 +323,29 @@ def canonical_family(name: str) -> str:
     so the two never count as separate families.
     """
     fam = name.strip().lower()
-    return _FAMILY_ALIASES.get(fam, fam)
+    if fam in FAMILY_PROVIDERS:
+        return fam
+    provider_family = next(
+        (family for family, provider in FAMILY_PROVIDERS.items() if fam == provider), ""
+    )
+    return _FAMILY_ALIASES.get(fam, provider_family or fam)
+
+
+def family_identity_markers() -> dict[str, tuple[str, ...]]:
+    """Return runtime-derived heading/provider markers for each canonical family.
+
+    ``review_queue`` consumes this function instead of maintaining a second family
+    table. Runtime additions to :data:`FAMILY_PROVIDERS` therefore become visible to
+    identity parsing without a parser edit, while aliases remain centralized here.
+    """
+
+    markers: dict[str, set[str]] = {
+        family: {family, provider} for family, provider in FAMILY_PROVIDERS.items()
+    }
+    for alias, family in _FAMILY_ALIASES.items():
+        if family in markers:
+            markers[family].add(alias)
+    return {family: tuple(sorted(values)) for family, values in markers.items()}
 
 
 # Default reviewer pair: the two western-frontier families (claude→opus-4.8,
@@ -466,6 +492,7 @@ class ReviewerResult:
     ok: bool
     error: str = ""
     harness: str = ""
+    model_id: str = ""
 
 
 @dataclass
@@ -484,6 +511,18 @@ class EvidenceItem:
     # capture-once pattern as ``CollectOutcome.tiered_gate`` (a different flag —
     # ``severity_gated_dissent_enabled`` here vs ``tiered_merge_gate_enabled`` there).
     severity_gated: bool = field(default_factory=severity_gated_dissent_enabled)
+
+    def __post_init__(self) -> None:
+        if not self.would_count and not self.problems:
+            self.problems = [
+                "would_count is false but no specific lint or identity reason was provided"
+            ]
+
+    @property
+    def non_count_reason(self) -> str:
+        if self.would_count:
+            return ""
+        return "; ".join(self.problems)
 
     @property
     def supportive(self) -> bool:
@@ -620,6 +659,7 @@ class CollectOutcome:
                     "verdict": item.verdict,
                     "counted_reviewer_ids": item.counted_reviewer_ids,
                     "problems": item.problems,
+                    "reason": item.non_count_reason,
                     "body": item.body,
                     # The prepare-time severity-gate regime, persisted so apply can
                     # reconcile it under min(prepared, live) — the SAME treatment as
@@ -714,7 +754,10 @@ def _evidence_item_from_dict(raw: Any) -> EvidenceItem:
         body=body,
         would_count=bool(raw.get("would_count")),
         counted_reviewer_ids=_string_list(raw.get("counted_reviewer_ids")),
-        problems=_string_list(raw.get("problems")),
+        problems=(
+            _string_list(raw.get("problems"))
+            or ([str(raw.get("reason"))] if str(raw.get("reason") or "").strip() else [])
+        ),
         verdict=str(raw.get("verdict") or "unknown"),
         # Restore the prepare-time regime; default fail-CLOSED (strict — every
         # changes_requested blocks) when an older/forged artifact omits it, so a
@@ -735,6 +778,7 @@ def _reviewer_result_from_dict(raw: Any) -> ReviewerResult:
         ok=bool(raw.get("ok", False)),
         error=str(raw.get("error") or ""),
         harness=str(raw.get("harness") or ""),
+        model_id=str(raw.get("model_id") or ""),
     )
 
 
@@ -991,6 +1035,8 @@ def compose_evidence_comment(
     pr: int | str,
     reviewer_text: str,
     harness: str = "",
+    model_id: str = "",
+    receipt_artifact: str = "",
 ) -> str:
     """Compose an evidence comment the quorum parsers recognize and count.
 
@@ -1006,6 +1052,13 @@ def compose_evidence_comment(
     provider = FAMILY_PROVIDERS.get(fam, fam)
     short = head_sha[:7]
     harness_label = harness or f"the Aragora {display} reviewer"
+    safe_harness = re.sub(r"[^A-Za-z0-9 ./_:+\-]", "", harness_label)[:160]
+    safe_model_id = re.sub(r"[^A-Za-z0-9 ./_:+\-]", "", model_id)[:160]
+    if not safe_model_id:
+        safe_model_id = f"{provider}/{fam}"
+    safe_receipt = re.sub(r"[^A-Za-z0-9 ./_:+\-]", "", receipt_artifact)[:240]
+    if not safe_receipt:
+        safe_receipt = f"quorum-evidence:{pr}:{head_sha}:{fam}"
     # Sanitize the timestamp to a safe charset so the disclosure block can never
     # be hijacked even if the field ever carries caller-influenced text.
     safe_committed = re.sub(r"[^A-Za-z0-9:.+\- TZ]", "", head_committed_at)[:40]
@@ -1013,10 +1066,13 @@ def compose_evidence_comment(
     return (
         f"## {display} independent model review\n\n"
         f"Reviewer: {fam} ({provider}) — independent adversarial model review via "
-        f"{harness_label}, grounded on the exact PR head.\n"
+        f"{safe_harness}, grounded on the exact PR head.\n"
         f"Head: {short} ({head_sha}){committed}.\n"
         f"PR: #{pr}.\n"
-        f"Model family: {fam}\n\n"
+        f"Reviewer harness: {safe_harness}\n"
+        f"Model family: {fam}\n"
+        f"Model id: {safe_model_id}\n"
+        f"Receipt artifact: {safe_receipt}\n\n"
         f"{_neutralize_reviewer_text(normalize_reviewer_output(reviewer_text, family=family))}\n\n"
         f"dogfood: yes\n"
     )
@@ -1499,7 +1555,13 @@ def _run_openrouter_reviewer(family: str, prompt: str) -> ReviewerResult:
     )
     result = _run_api_agent(fam, prompt, model=model)
     if result.ok:
-        return ReviewerResult(fam, result.text, True, harness=_OPENROUTER_HARNESS)
+        return ReviewerResult(
+            fam,
+            result.text,
+            True,
+            harness=_OPENROUTER_HARNESS,
+            model_id=model,
+        )
     return result
 
 
@@ -1541,7 +1603,13 @@ def _run_codex_openai_cli(prompt: str) -> ReviewerResult:
                 return ReviewerResult(
                     "openai", "", False, f"codex CLI exit {proc.returncode}: {detail}"
                 )
-            return ReviewerResult("openai", _cap_text(text), True, harness=_CODEX_OPENAI_HARNESS)
+            return ReviewerResult(
+                "openai",
+                _cap_text(text),
+                True,
+                harness=_CODEX_OPENAI_HARNESS,
+                model_id=model,
+            )
         except FileNotFoundError:
             return ReviewerResult("openai", "", False, "codex CLI not found on PATH")
         except subprocess.TimeoutExpired:
@@ -1685,7 +1753,12 @@ def _run_api_agent_in_current_process(
     text = (text or "").strip()
     if not text:
         return ReviewerResult(family, "", False, "empty reviewer output")
-    return ReviewerResult(family, _cap_text(text), True)
+    return ReviewerResult(
+        family,
+        _cap_text(text),
+        True,
+        model_id=str(getattr(agent, "model", "") or ""),
+    )
 
 
 def _build_openrouter_agent(family: str, model: str) -> Any:
@@ -2111,6 +2184,7 @@ def collect_evidence(
             pr=pr,
             reviewer_text=result.text,
             harness=result.harness,
+            model_id=result.model_id,
         )
         lint = linter(pr, head_sha, head_committed_at, author, body, env or {})
         outcome.items.append(
@@ -2523,6 +2597,7 @@ def _clone_reviewer_failures(failures: Sequence[ReviewerResult]) -> list[Reviewe
             ok=failure.ok,
             error=failure.error,
             harness=failure.harness,
+            model_id=failure.model_id,
         )
         for failure in failures
     ]
@@ -2759,7 +2834,7 @@ def _render_outcome(outcome: CollectOutcome) -> str:
         reason = rerun.get("reason") or rerun.get("error") or "unknown"
         lines.append(f"  quorum rerun: {action} ({reason})")
     for item in outcome.items:
-        flag = "counts" if item.would_count else f"DOES NOT count ({', '.join(item.problems)})"
+        flag = "counts" if item.would_count else f"DOES NOT count ({item.non_count_reason})"
         lines.append(f"  - {item.family}: {flag}; verdict={item.verdict}")
     for failure in outcome.failures:
         lines.append(f"  - {failure.family}: reviewer failed ({failure.error})")

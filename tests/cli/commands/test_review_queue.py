@@ -6830,10 +6830,43 @@ class TestCommandDispatch:
         assert payload["current_head_grounding_method"] == "missing_head_sha_citation"
         assert "missing_current_head_grounding" in payload["problems"]
 
+    def test_evidence_lint_rejects_incomplete_lineage_contract_with_reason(self) -> None:
+        ns = argparse.Namespace(
+            review_queue_command="evidence-lint",
+            pr="7445",
+            head_sha="cd87c5a1b2db34f04167906553502db3ede9525e",
+            head_committed_at="2026-05-23T19:00:00Z",
+            body=(
+                "## Claude independent model review\n\n"
+                "Current head: cd87c5a1b2db34f04167906553502db3ede9525e\n"
+                "Focused adversarial dogfood found no blockers."
+            ),
+            body_file=None,
+            author="an0mium",
+            json=True,
+        )
+
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = cmd_review_queue(ns)
+
+        payload = json.loads(out.getvalue())
+        assert rc == 1
+        assert payload["would_count"] is False
+        assert payload["reason"]
+        assert "missing_model_family_disclosure" in payload["problems"]
+        assert "missing_reviewer_harness" in payload["problems"]
+        assert "missing_model_id" in payload["problems"]
+        assert "missing_receipt_artifact" in payload["problems"]
+
     def test_evidence_lint_reads_body_file(self, tmp_path: Path) -> None:
         body_file = tmp_path / "comment.md"
         body_file.write_text(
             "## Claude review\n\n"
+            "**Reviewer harness:** claude-code\n"
+            "**Model family:** claude\n"
+            "**Model id:** claude-opus-4-8\n"
+            "**Receipt artifact:** quorum-evidence:7445:cd87c5a:claude\n\n"
             "Current head: cd87c5a1b2db34f04167906553502db3ede9525e\n"
             "I reviewed the exact-head evidence-lint diff.",
             encoding="utf-8",

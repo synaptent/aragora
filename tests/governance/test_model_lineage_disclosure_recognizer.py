@@ -42,7 +42,7 @@ def test_router_heading_with_canonical_family_counts_by_model_family() -> None:
     assert identity.identity_source == "model_family_metadata"
 
 
-def test_direct_family_heading_self_maps_without_model_family_metadata() -> None:
+def test_new_direct_family_heading_requires_complete_identity_metadata() -> None:
     identity = _resolve_model_review_identity(
         "## Claude independent semantic review on head abc1234\n\nNo findings.\n"
     )
@@ -50,6 +50,22 @@ def test_direct_family_heading_self_maps_without_model_family_metadata() -> None
     assert identity.surface_reviewer_id == "claude"
     assert identity.model_family == "claude"
     assert identity.identity_source == "direct_heading"
+    assert "missing_model_family_disclosure" in identity.identity_problems
+    assert "missing_reviewer_harness" in identity.identity_problems
+    assert "missing_model_id" in identity.identity_problems
+    assert "missing_receipt_artifact" in identity.identity_problems
+
+
+def test_transition_direct_family_heading_is_counted_but_flagged() -> None:
+    identity = _resolve_model_review_identity(
+        "## Claude independent semantic review on head abc1234\n\nNo findings.\n",
+        allow_lineage_transition=True,
+    )
+
+    assert identity.model_family == "claude"
+    assert identity.lineage_undisclosed is True
+    assert identity.lineage_transition_receipt
+    assert identity.identity_problems == ("lineage_undisclosed",)
 
 
 def test_direct_heading_conflicting_model_family_is_rejected() -> None:

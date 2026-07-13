@@ -121,19 +121,9 @@ _GITHUB_TRANSPORT_ERROR_MARKERS = (
     "tls handshake timeout",
 )
 TIER_FOUR_AUTHORIZED_MERGE_TOKENS = ("admin_squash_merge", "admin squash")
-CANONICAL_MODEL_FAMILIES: tuple[str, ...] = (
-    "claude",
-    "openai",
-    "gemini",
-    "grok",
-    "mistral",
-    "deepseek",
-    "qwen",
-    "kimi",
-    "yi",
-    "glm",
-    "minimax",
-    "hermes",
+LINEAGE_DISCLOSURE_TRANSITION_CUTOFF = "2026-07-10T13:00:00Z"
+LINEAGE_DISCLOSURE_TRANSITION_RECEIPT = (
+    "founder-directive-9134:2026-07-10T13:00:00Z:direct-family-heading"
 )
 # Western-frontier families (Tier 1-2 single-signal bar must be one of these).
 # Single canonical definition lives in aragora.swarm.quorum_evidence and is
@@ -141,32 +131,24 @@ CANONICAL_MODEL_FAMILIES: tuple[str, ...] = (
 # (quorum_evidence) reference the *same* frozenset object and cannot drift —
 # replacing the prior test-only parity guard (claude #8507 P2).
 from aragora.swarm.quorum_evidence import (  # noqa: E402
+    FAMILY_PROVIDERS as FAMILY_PROVIDERS,
     WESTERN_FAMILIES as WESTERN_FAMILIES,
     WESTERN_FRONTIER_FAMILIES as WESTERN_FRONTIER_FAMILIES,
     advisory_dissent_settle_enabled as advisory_dissent_settle_enabled,
+    canonical_family as canonical_family,
+    family_identity_markers as family_identity_markers,
     severity_gated_dissent_enabled as severity_gated_dissent_enabled,
     tier_quorum_rule as tier_quorum_rule,
     tiered_merge_gate_enabled as tiered_merge_gate_enabled,
 )
 
-DIRECT_MODEL_FAMILY_MARKERS: dict[str, tuple[str, ...]] = {
-    "claude": ("claude", "anthropic"),
-    "openai": ("openai",),
-    "gemini": ("gemini", "google"),
-    "grok": ("grok", "xai"),
-    "mistral": ("mistral", "codestral"),
-    "deepseek": ("deepseek",),
-    "qwen": ("qwen",),
-    "kimi": ("kimi", "moonshot"),
-    "yi": ("yi", "yi-large"),
-    "glm": ("glm", "zhipu", "z-ai"),
-    "minimax": ("minimax",),
-    "hermes": ("hermes", "nous hermes"),
-}
 ROUTER_SURFACE_REVIEWERS: frozenset[str] = frozenset(("factory", "codex", "tesla", "harvey"))
 IDENTITY_COUNT_BLOCKERS: frozenset[str] = frozenset(
     (
         "missing_model_family_disclosure",
+        "missing_reviewer_harness",
+        "missing_model_id",
+        "missing_receipt_artifact",
         "unknown_model_family",
         "heading_model_family_conflict",
         "unknown_surface_reviewer",
@@ -181,6 +163,8 @@ class ModelReviewIdentity:
     model_id: str
     identity_source: str
     identity_problems: tuple[str, ...] = ()
+    lineage_undisclosed: bool = False
+    lineage_transition_receipt: str = ""
 
     def as_packet_fields(self) -> dict[str, Any]:
         return {
@@ -189,6 +173,8 @@ class ModelReviewIdentity:
             "model_id": self.model_id,
             "identity_source": self.identity_source,
             "identity_problems": list(self.identity_problems),
+            "lineage_undisclosed": self.lineage_undisclosed,
+            "lineage_transition_receipt": self.lineage_transition_receipt,
         }
 
 
@@ -3252,7 +3238,13 @@ def _advisory_settle_review_signals(
         )
         if _is_github_actions_author(author):
             continue
-        identity = _resolve_model_review_identity(body)
+        identity = _resolve_model_review_identity(
+            body,
+            allow_lineage_transition=_comment_lineage_transition(
+                comment,
+                head_committed_at=head_committed_at,
+            ),
+        )
         if any(problem in IDENTITY_COUNT_BLOCKERS for problem in identity.identity_problems):
             continue
         if strict_author:
@@ -4159,8 +4151,14 @@ def _lint_evidence_comment(
         "createdAt": "",
     }
     if grounded and pr_grounded and not negative_verdict:
-        dogfood_evidence = _dogfood_evidence_from_comments([comment])
-        reviewer_signals = _model_review_signals_from_comments([comment])
+        dogfood_evidence = _dogfood_evidence_from_comments(
+            [comment],
+            allow_lineage_transition=False,
+        )
+        reviewer_signals = _model_review_signals_from_comments(
+            [comment],
+            allow_lineage_transition=False,
+        )
     else:
         dogfood_evidence = []
         reviewer_signals = []
@@ -4206,6 +4204,11 @@ def _lint_evidence_comment(
         problems.append("no_counted_model_family")
         problems.append("no_counted_model_reviewer")
 
+    would_count = bool(counted_reviewer_ids)
+    reason = "" if would_count else "; ".join(dict.fromkeys(problems))
+    if not would_count and not reason:
+        reason = "evidence did not satisfy the countable identity and lint contract"
+
     return {
         "mode": "evidence_lint",
         "pr_number": str(pr),
@@ -4220,6 +4223,8 @@ def _lint_evidence_comment(
         "model_id": identity.model_id,
         "identity_source": identity.identity_source,
         "identity_problems": list(identity.identity_problems),
+        "lineage_undisclosed": identity.lineage_undisclosed,
+        "lineage_transition_receipt": identity.lineage_transition_receipt,
         "current_head_grounded": grounded,
         "current_head_grounding_method": grounding_method,
         "current_pr_grounded": pr_grounded,
@@ -4228,7 +4233,8 @@ def _lint_evidence_comment(
         "reviewer_signals": reviewer_signals,
         "counted_reviewer_ids": counted_reviewer_ids,
         "counted_model_families": counted_reviewer_ids,
-        "would_count": bool(counted_reviewer_ids),
+        "would_count": would_count,
+        "reason": reason,
         "problems": problems,
     }
 
@@ -4333,21 +4339,7 @@ def _normalize_model_reviewer_id(value: str) -> str:
     lower = str(value).lower()
     if not lower or "unknown_model_reviewer" in lower:
         return ""
-    known_markers = (
-        ("claude", ("claude", "anthropic")),
-        ("openai", ("openai", "gpt")),
-        ("grok", ("grok", "xai")),
-        ("gemini", ("gemini", "google")),
-        ("mistral", ("mistral", "codestral")),
-        ("deepseek", ("deepseek",)),
-        ("qwen", ("qwen",)),
-        ("kimi", ("kimi", "moonshot")),
-        ("yi", ("yi",)),
-        ("glm", ("glm", "zhipu", "z-ai")),
-        ("minimax", ("minimax",)),
-        ("hermes", ("hermes", "nous hermes")),
-    )
-    for normalized, markers in known_markers:
+    for normalized, markers in family_identity_markers().items():
         if any(marker in lower for marker in markers):
             return normalized
     return ""
@@ -4357,29 +4349,10 @@ def _normalize_model_family(value: str) -> str:
     lower = str(value or "").strip().lower()
     if not lower:
         return ""
-    aliases = {
-        "anthropic": "claude",
-        "google": "gemini",
-        "xai": "grok",
-        "codestral": "mistral",
-        "moonshot": "kimi",
-        "zhipu": "glm",
-        "z-ai": "glm",
-        "nous-hermes": "hermes",
-        "nous hermes": "hermes",
-        # OpenAI-family CLI/product names so a disclosed "Model family: codex"
-        # still counts at the gate (mirrors canonical_family in quorum_evidence).
-        "codex": "openai",
-        "gpt": "openai",
-        "gpt-5": "openai",
-        "gpt5": "openai",
-        "chatgpt": "openai",
-    }
 
     def _lookup(token: str) -> str:
-        if token in CANONICAL_MODEL_FAMILIES:
-            return token
-        return aliases.get(token, "")
+        family = canonical_family(token)
+        return family if family in FAMILY_PROVIDERS else ""
 
     # Fast path: the disclosed value is already a bare canonical family or a
     # known (possibly multi-word) alias such as "nous hermes".
@@ -4433,10 +4406,10 @@ def _first_heading_candidate(text: str) -> tuple[str, int | None]:
 
 def _infer_surface_reviewer_from_candidate(candidate: str) -> str:
     lower = str(candidate or "").lower()
-    for name in ("claude", "codex", "tesla", "harvey", "factory", "grok", "gemini"):
+    for name in ROUTER_SURFACE_REVIEWERS:
         if name in lower:
             return name
-    for family, markers in DIRECT_MODEL_FAMILY_MARKERS.items():
+    for family, markers in family_identity_markers().items():
         if any(marker in lower for marker in markers):
             return family
     return "unknown_model_reviewer"
@@ -4479,15 +4452,69 @@ def _structured_identity_metadata(text: str, heading_index: int | None) -> dict[
     return metadata
 
 
-def _resolve_model_review_identity(text: str) -> ModelReviewIdentity:
+def _lineage_transition_eligible(
+    comment: dict[str, Any],
+    *,
+    head_committed_at: str,
+) -> bool:
+    """Whether a persisted comment is in the bounded founder transition cohort.
+
+    Creation, last edit, and the reviewed head must all predate the cutoff.
+    Requiring the immutable head timestamp and GitHub's edit timestamp prevents
+    an old comment from being edited later to cite a new head while retaining
+    the legacy identity exception.
+    """
+
+    created_at = _parse_github_datetime(comment.get("createdAt"))
+    updated_at = _parse_github_datetime(comment.get("updatedAt"))
+    committed_at = _parse_github_datetime(head_committed_at)
+    cutoff = _parse_github_datetime(LINEAGE_DISCLOSURE_TRANSITION_CUTOFF)
+    persisted_github_shape = "updatedAt" in comment or bool(comment.get("id") or comment.get("url"))
+    if persisted_github_shape:
+        if created_at is None or updated_at is None or committed_at is None or cutoff is None:
+            return False
+        return bool(committed_at <= created_at <= updated_at <= cutoff)
+
+    # Preserve compatibility for synthetic/legacy in-memory callers that do
+    # not carry a persisted GitHub object identity. Production GraphQL payloads
+    # include updatedAt; the REST fallback includes url and therefore takes the
+    # strict branch above even when edit metadata is unavailable.
+    if created_at is None:
+        return not bool(head_committed_at)
+    return bool(cutoff and created_at <= cutoff)
+
+
+def _comment_lineage_transition(
+    comment: dict[str, Any],
+    *,
+    head_committed_at: str,
+    allow_lineage_transition: bool | None = None,
+) -> bool:
+    if allow_lineage_transition is False:
+        return False
+    return _lineage_transition_eligible(
+        comment,
+        head_committed_at=head_committed_at,
+    )
+
+
+def _resolve_model_review_identity(
+    text: str,
+    *,
+    allow_lineage_transition: bool = False,
+) -> ModelReviewIdentity:
     candidate, heading_index = _first_heading_candidate(text)
     surface = _infer_surface_reviewer_from_candidate(candidate)
     metadata = _structured_identity_metadata(text, heading_index)
+    reviewer_harness = metadata.get("reviewer harness", "")
     explicit_family_raw = metadata.get("model family", "")
     explicit_family = _normalize_model_family(explicit_family_raw)
     model_id = metadata.get("model id", "")
     receipt_artifact = metadata.get("receipt artifact", "")
     problems: list[str] = []
+    missing_contract_fields: list[str] = []
+    lineage_undisclosed = False
+    lineage_transition_receipt = ""
 
     if surface == "unknown_model_reviewer":
         problems.append("unknown_surface_reviewer")
@@ -4500,7 +4527,7 @@ def _resolve_model_review_identity(text: str) -> ModelReviewIdentity:
 
     if surface in ROUTER_SURFACE_REVIEWERS:
         if not explicit_family_raw:
-            problems.append("missing_model_family_disclosure")
+            missing_contract_fields.append("missing_model_family_disclosure")
     elif surface != "unknown_model_reviewer":
         direct_family = _normalize_model_family(surface)
         if explicit_family and direct_family and explicit_family != direct_family:
@@ -4508,11 +4535,33 @@ def _resolve_model_review_identity(text: str) -> ModelReviewIdentity:
         if not explicit_family_raw and direct_family:
             model_family = direct_family
             identity_source = "direct_heading"
+            missing_contract_fields.append("missing_model_family_disclosure")
         elif explicit_family and direct_family == explicit_family:
             identity_source = "model_family_metadata"
 
+    if not reviewer_harness:
+        missing_contract_fields.append("missing_reviewer_harness")
+    if not model_id:
+        missing_contract_fields.append("missing_model_id")
     if not receipt_artifact:
-        problems.append("missing_receipt_artifact")
+        missing_contract_fields.append("missing_receipt_artifact")
+
+    hard_identity_problem = any(
+        problem
+        in {"unknown_surface_reviewer", "unknown_model_family", "heading_model_family_conflict"}
+        for problem in problems
+    )
+    if (
+        missing_contract_fields
+        and allow_lineage_transition
+        and model_family
+        and not hard_identity_problem
+    ):
+        lineage_undisclosed = True
+        lineage_transition_receipt = LINEAGE_DISCLOSURE_TRANSITION_RECEIPT
+        problems.append("lineage_undisclosed")
+    else:
+        problems.extend(missing_contract_fields)
 
     return ModelReviewIdentity(
         surface_reviewer_id=surface,
@@ -4520,6 +4569,8 @@ def _resolve_model_review_identity(text: str) -> ModelReviewIdentity:
         model_id=model_id,
         identity_source=identity_source,
         identity_problems=tuple(dict.fromkeys(problems)),
+        lineage_undisclosed=lineage_undisclosed,
+        lineage_transition_receipt=lineage_transition_receipt,
     )
 
 
@@ -4572,7 +4623,11 @@ def _model_family_from_body(body: str) -> str:
     return ""
 
 
-def _resolve_dogfood_identity(body: str) -> ModelReviewIdentity:
+def _resolve_dogfood_identity(
+    body: str,
+    *,
+    allow_lineage_transition: bool = False,
+) -> ModelReviewIdentity:
     """Resolve dogfood-comment identity, allowing a body-named model family.
 
     Starts from the shared :func:`_resolve_model_review_identity` (heading +
@@ -4590,7 +4645,10 @@ def _resolve_dogfood_identity(body: str) -> ModelReviewIdentity:
     NOT count, exactly as the original resolver intended. Falling back in those
     cases would let a body-scanned family silently override a deliberate block.
     """
-    identity = _resolve_model_review_identity(body)
+    identity = _resolve_model_review_identity(
+        body,
+        allow_lineage_transition=allow_lineage_transition,
+    )
     if _known_model_reviewer_id(identity.as_packet_fields()):
         return identity
 
@@ -4600,7 +4658,13 @@ def _resolve_dogfood_identity(body: str) -> ModelReviewIdentity:
     blockers = {
         problem for problem in identity.identity_problems if problem in IDENTITY_COUNT_BLOCKERS
     }
-    if blockers - {"unknown_surface_reviewer"}:
+    fallback_allowed_blockers = {
+        "unknown_surface_reviewer",
+        "missing_reviewer_harness",
+        "missing_model_id",
+        "missing_receipt_artifact",
+    }
+    if blockers - fallback_allowed_blockers:
         return identity
 
     family = _model_family_from_body(body)
@@ -4609,11 +4673,27 @@ def _resolve_dogfood_identity(body: str) -> ModelReviewIdentity:
 
     metadata = _structured_identity_metadata(body, _first_heading_candidate(body)[1])
     model_id = metadata.get("model id", "")
+    receipt_artifact = metadata.get("receipt artifact", "")
+    reviewer_harness = metadata.get("reviewer harness", "")
+    missing = []
+    if not reviewer_harness:
+        missing.append("missing_reviewer_harness")
+    if not model_id:
+        missing.append("missing_model_id")
+    if not receipt_artifact:
+        missing.append("missing_receipt_artifact")
+    lineage_undisclosed = bool(missing and allow_lineage_transition)
+    problems = ["lineage_undisclosed"] if lineage_undisclosed else missing
     return ModelReviewIdentity(
         surface_reviewer_id=family,
         model_family=family,
         model_id=model_id,
         identity_source="dogfood_body_model_family",
+        identity_problems=tuple(problems),
+        lineage_undisclosed=lineage_undisclosed,
+        lineage_transition_receipt=(
+            LINEAGE_DISCLOSURE_TRANSITION_RECEIPT if lineage_undisclosed else ""
+        ),
     )
 
 
@@ -4622,6 +4702,7 @@ def _dogfood_evidence_from_comments(
     *,
     head_sha: str = "",
     head_committed_at: str = "",
+    allow_lineage_transition: bool | None = None,
 ) -> list[dict[str, Any]]:
     """Extract focused-adversarial dogfood signals from PR comments.
 
@@ -4651,7 +4732,14 @@ def _dogfood_evidence_from_comments(
             token in lower for token in ("dogfood", "adversarial", "cross-author", "recheck")
         ):
             continue
-        identity = _resolve_dogfood_identity(body)
+        identity = _resolve_dogfood_identity(
+            body,
+            allow_lineage_transition=_comment_lineage_transition(
+                comment,
+                head_committed_at=head_committed_at,
+                allow_lineage_transition=allow_lineage_transition,
+            ),
+        )
         if identity.surface_reviewer_id == "unknown_model_reviewer":
             continue
         author_payload = comment.get("author")
@@ -4732,9 +4820,21 @@ def _dissenting_views_from_comments(
                 if advisory is not None:
                     advisory_views.append(advisory)
             continue
-        identity = _resolve_model_review_identity(body)
+        identity = _resolve_model_review_identity(
+            body,
+            allow_lineage_transition=_comment_lineage_transition(
+                comment,
+                head_committed_at=head_committed_at,
+            ),
+        )
         if identity.surface_reviewer_id == "unknown_model_reviewer":
-            identity = _resolve_dogfood_identity(body)
+            identity = _resolve_dogfood_identity(
+                body,
+                allow_lineage_transition=_comment_lineage_transition(
+                    comment,
+                    head_committed_at=head_committed_at,
+                ),
+            )
         if identity.surface_reviewer_id == "unknown_model_reviewer":
             continue
         author_payload = comment.get("author")
@@ -4764,9 +4864,21 @@ def _build_advisory_view(comment: dict[str, Any], body: str) -> dict[str, Any] |
     # populated Blocker label. Recording it preserves the reviewer's signal.
     if not _has_blocking_or_negative_verdict(body):
         return None
-    identity = _resolve_model_review_identity(body)
+    identity = _resolve_model_review_identity(
+        body,
+        allow_lineage_transition=_comment_lineage_transition(
+            comment,
+            head_committed_at="",
+        ),
+    )
     if identity.surface_reviewer_id == "unknown_model_reviewer":
-        identity = _resolve_dogfood_identity(body)
+        identity = _resolve_dogfood_identity(
+            body,
+            allow_lineage_transition=_comment_lineage_transition(
+                comment,
+                head_committed_at="",
+            ),
+        )
     if identity.surface_reviewer_id == "unknown_model_reviewer":
         return None
     author_payload = comment.get("author")
@@ -4791,6 +4903,7 @@ def _model_review_signals_from_comments(
     *,
     head_sha: str = "",
     head_committed_at: str = "",
+    allow_lineage_transition: bool | None = None,
 ) -> list[dict[str, Any]]:
     signals: list[dict[str, Any]] = []
     for comment in comments:
@@ -4815,7 +4928,14 @@ def _model_review_signals_from_comments(
             )
         ):
             continue
-        identity = _resolve_model_review_identity(body)
+        identity = _resolve_model_review_identity(
+            body,
+            allow_lineage_transition=_comment_lineage_transition(
+                comment,
+                head_committed_at=head_committed_at,
+                allow_lineage_transition=allow_lineage_transition,
+            ),
+        )
         if identity.surface_reviewer_id == "unknown_model_reviewer":
             continue
         author_payload = comment.get("author")
@@ -5886,6 +6006,8 @@ def _render_evidence_lint(result: dict[str, Any]) -> None:
     print(f"would count: {str(result.get('would_count', False)).lower()}")
     counted = result.get("counted_reviewer_ids") or []
     print(f"counted reviewers: {', '.join(counted) or '(none)'}")
+    if result.get("reason"):
+        print(f"reason: {result['reason']}")
     problems = result.get("problems") or []
     if problems:
         print("problems:")

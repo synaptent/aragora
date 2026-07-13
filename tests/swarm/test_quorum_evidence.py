@@ -180,9 +180,44 @@ def test_composed_comment_includes_head_and_family() -> None:
     )
     assert HEAD[:7] in body
     assert HEAD in body
+    assert "Reviewer harness:" in body
     assert "Model family: claude" in body
+    assert "Model id:" in body
+    assert "Receipt artifact:" in body
     assert "independent model review" in body.lower()
     assert "dogfood: yes" in body
+
+
+def test_uncountable_evidence_item_always_has_human_readable_reason() -> None:
+    item = EvidenceItem(
+        family="openai",
+        body="Verdict: unknown",
+        would_count=False,
+        problems=[],
+    )
+
+    assert item.problems
+    assert item.non_count_reason
+    outcome = CollectOutcome(
+        repo="o/r",
+        pr=1,
+        head_sha=HEAD,
+        head_committed_at=COMMITTED,
+        tier=1,
+        action="prepare",
+        action_reason="test",
+        items=[item],
+    )
+    rendered = qe._render_outcome(outcome)
+    assert "DOES NOT count ()" not in rendered
+    assert item.non_count_reason in rendered
+    assert outcome.to_dict()["items"][0]["reason"] == item.non_count_reason
+
+    legacy = outcome.to_dict()
+    legacy["items"][0].pop("reason")
+    legacy["items"][0]["problems"] = []
+    rehydrated = qe.collect_outcome_from_dict(legacy)
+    assert rehydrated.items[0].non_count_reason
 
 
 def test_reviewer_text_cannot_hijack_family() -> None:
@@ -430,6 +465,7 @@ def test_run_openai_reviewer_without_api_key_uses_codex_cli(
         "Verdict: PASS via Codex",
         True,
         harness=qe._CODEX_OPENAI_HARNESS,
+        model_id=qe._CODEX_DEFAULT_MODELS[0],
     )
     assert seen["cmd"] == [
         "codex",
@@ -487,6 +523,7 @@ def test_run_openai_reviewer_retries_default_codex_model_selection_failure(
         "Verdict: PASS after fallback",
         True,
         harness=qe._CODEX_OPENAI_HARNESS,
+        model_id=qe._CODEX_DEFAULT_MODELS[1],
     )
     assert [call[call.index("--model") + 1] for call in calls] == list(qe._CODEX_DEFAULT_MODELS)
     assert all(not path.exists() for path in output_paths)
