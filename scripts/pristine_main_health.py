@@ -279,8 +279,10 @@ def _version_tuple(value: str) -> tuple[int, int, int]:
     return padded[0], padded[1], padded[2]
 
 
-def _required_mypy_requirement(pristine: Path) -> tuple[str, tuple[int, int, int]]:
-    """Read the declared mypy spec and floor from the dev dependency group."""
+def _required_mypy_requirement(
+    pristine: Path,
+) -> tuple[str, list[tuple[str, tuple[int, int, int]]]]:
+    """Read the declared mypy spec and supported constraints from dev dependencies."""
     pyproject = pristine / "pyproject.toml"
     text = pyproject.read_text(encoding="utf-8")
     dev_match = re.search(r"(?ms)^\s*dev\s*=\s*\[(?P<body>.*?)^\s*\]", text)
@@ -295,15 +297,46 @@ def _required_mypy_requirement(pristine: Path) -> tuple[str, tuple[int, int, int
         raise ValueError(f"mypy dependency missing from {pyproject}")
 
     specifier = dependency_match.group("specifier").strip()
-    floor_match = re.search(r"(?:^|,)\s*>=\s*(?P<floor>\d+(?:\.\d+){1,2})(?:\s*,|$)", specifier)
-    if floor_match is None:
-        raise ValueError(f"mypy dependency has no >= floor in {pyproject}: {specifier}")
-    return specifier, _version_tuple(floor_match.group("floor"))
+    constraints: list[tuple[str, tuple[int, int, int]]] = []
+    for clause in specifier.split(","):
+        constraint_match = re.fullmatch(
+            r"\s*(?P<operator>==|!=|>=|<=|>|<)\s*"
+            r"(?P<version>\d+(?:\.\d+){1,2})\s*",
+            clause,
+        )
+        if constraint_match is None:
+            raise ValueError(
+                f"mypy dependency has unsupported constraint in {pyproject}: {specifier}"
+            )
+        constraints.append(
+            (
+                constraint_match.group("operator"),
+                _version_tuple(constraint_match.group("version")),
+            )
+        )
+    if not constraints:
+        raise ValueError(f"mypy dependency has no constraints in {pyproject}: {specifier}")
+    return specifier, constraints
+
+
+def _mypy_version_satisfies(
+    version: tuple[int, int, int],
+    constraints: list[tuple[str, tuple[int, int, int]]],
+) -> bool:
+    comparisons = {
+        "==": lambda left, right: left == right,
+        "!=": lambda left, right: left != right,
+        ">=": lambda left, right: left >= right,
+        "<=": lambda left, right: left <= right,
+        ">": lambda left, right: left > right,
+        "<": lambda left, right: left < right,
+    }
+    return all(comparisons[operator](version, expected) for operator, expected in constraints)
 
 
 def _check_required_toolchain(pristine: Path) -> str | None:
-    """Return bounded evidence when PATH mypy cannot satisfy the declared floor."""
-    specifier, floor = _required_mypy_requirement(pristine)
+    """Return bounded evidence when PATH mypy cannot satisfy the declared requirement."""
+    specifier, constraints = _required_mypy_requirement(pristine)
     mypy_path = shutil.which("mypy")
     if mypy_path is None:
         return f"required-suite mypy missing from PATH; required mypy{specifier}"
@@ -326,9 +359,9 @@ def _check_required_toolchain(pristine: Path) -> str | None:
         return f"could not parse PATH mypy version at {mypy_path}; required mypy{specifier}\n{evidence}"
 
     found_text = version_match.group("version")
-    if _version_tuple(found_text) < floor:
+    if not _mypy_version_satisfies(_version_tuple(found_text), constraints):
         return (
-            f"PATH mypy below required floor: found {found_text} at {mypy_path}; "
+            f"PATH mypy does not satisfy declared requirement: found {found_text} at {mypy_path}; "
             f"required mypy{specifier} from {pristine / 'pyproject.toml'}"
         )
     return None

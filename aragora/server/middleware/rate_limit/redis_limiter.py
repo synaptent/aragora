@@ -14,6 +14,7 @@ Features:
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import threading
@@ -38,12 +39,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Pre-declare redis_lib for optional import fallback
-redis_lib: Any
-
 # Optional Redis support - redis_lib is set to None when import fails.
 try:
-    import redis as redis_lib
+    redis_lib: Any = importlib.import_module("redis")
 
     REDIS_AVAILABLE = True
 except ImportError:
@@ -478,7 +476,7 @@ class RedisRateLimiter:
             # Use Redis hash to store per-instance metrics
             instance_key = f"{self._metrics_key}{self.instance_id}"
             with self._lock:
-                metrics_data = {
+                metrics_data: dict[str | bytes, bytes | float | int | str] = {
                     "requests_allowed": str(self._requests_allowed),
                     "requests_rejected": str(self._requests_rejected),
                     "redis_failures": str(self._redis_failures),

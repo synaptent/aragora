@@ -12,6 +12,11 @@ name: mypy baseline ratchet
 
 on:
   pull_request:
+    # labeled/unlabeled: the debt-accepted exception reads labels from the
+    # event payload, which GitHub freezes at trigger time — re-running a
+    # failed run after labeling would still see the old payload, so label
+    # changes must trigger a fresh run.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - '.mypy-baseline'
       - '.github/workflows/mypy-baseline-ratchet.yml'
@@ -26,6 +31,7 @@ jobs:
     env:
       BASE_REF: ${{ github.event.pull_request.base.ref }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      DEBT_ACCEPTED: ${{ contains(github.event.pull_request.labels.*.name, 'mypy-debt-accepted') }}
     steps:
       - name: Checkout PR
         uses: actions/checkout@v4
@@ -56,25 +62,23 @@ jobs:
 
           if [[ "${delta}" -gt 0 ]]; then
             echo ""
+            echo "New entries introduced:"
+            git show "origin/${BASE_REF}:.mypy-baseline" > /tmp/base-baseline 2>/dev/null || : > /tmp/base-baseline
+            diff /tmp/base-baseline .mypy-baseline | grep '^>' | head -50 || true
+            echo ""
+            if [[ "${DEBT_ACCEPTED}" == "true" ]]; then
+              echo "::warning::mypy-baseline grew by ${delta} entries, but the PR carries the 'mypy-debt-accepted' label — allowing this deliberate, documented transition."
+              exit 0
+            fi
             echo "::error::mypy-baseline grew by ${delta} entries on this PR."
             echo "The accepted-debt snapshot must not expand. Either:"
             echo "  1. Fix the new mypy errors (preferred), or"
             echo "  2. If the new baseline entries reflect a deliberate, bounded"
             echo "     scope decision, label the PR 'mypy-debt-accepted' and"
             echo "     document the rationale in the PR body."
-            echo ""
-            echo "New entries introduced:"
-            git show "origin/${BASE_REF}:.mypy-baseline" > /tmp/base-baseline 2>/dev/null || : > /tmp/base-baseline
-            diff /tmp/base-baseline .mypy-baseline | grep '^>' | head -50 || true
             exit 1
           fi
 
           if [[ "${delta}" -lt 0 ]]; then
             echo "Baseline shrank by $(( -delta )) entries — thank you."
           fi
-
-      - name: Allow labeled debt-accepted
-        if: ${{ failure() && contains(github.event.pull_request.labels.*.name, 'mypy-debt-accepted') }}
-        run: |
-          echo "::warning::mypy-baseline grew but PR is labeled 'mypy-debt-accepted'; allowing."
-          exit 0

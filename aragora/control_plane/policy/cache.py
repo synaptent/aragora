@@ -7,6 +7,7 @@ Provides fast lookups for frequently evaluated policy decisions.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 from types import ModuleType
 from typing import Any
@@ -33,7 +34,7 @@ aioredis: ModuleType | None = None
 
 # Redis availability check (optional - for distributed cache)
 try:
-    import redis.asyncio as aioredis
+    aioredis = importlib.import_module("redis.asyncio")
 
     REDIS_AVAILABLE = True
 except ImportError:

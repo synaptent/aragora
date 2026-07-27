@@ -461,6 +461,29 @@ def test_path_mypy_satisfying_declared_floor_has_no_toolchain_error(mod, monkeyp
     assert mod._check_required_toolchain(pristine) is None
 
 
+def test_path_mypy_satisfying_exact_pin_has_no_toolchain_error(mod, monkeypatch, tmp_path):
+    pristine = tmp_path / "pristine"
+    _write_required_pyproject(pristine, "==2.3.0")
+    mypy_path = _write_fake_mypy(tmp_path / "bin", "2.3.0")
+    monkeypatch.setenv("PATH", str(mypy_path.parent))
+
+    assert mod._check_required_toolchain(pristine) is None
+
+
+def test_path_mypy_must_match_exact_pin(mod, monkeypatch, tmp_path):
+    pristine = tmp_path / "pristine"
+    _write_required_pyproject(pristine, "==2.3.0")
+    mypy_path = _write_fake_mypy(tmp_path / "bin", "2.2.0")
+    monkeypatch.setenv("PATH", str(mypy_path.parent))
+
+    error = mod._check_required_toolchain(pristine)
+
+    assert error is not None
+    assert "does not satisfy declared requirement" in error
+    assert "found 2.2.0" in error
+    assert "required mypy==2.3.0" in error
+
+
 def test_suite_launch_error_is_infra_error_and_never_writes_halt(
     mod, monkeypatch, tmp_path, capsys
 ):

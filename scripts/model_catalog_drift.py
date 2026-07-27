@@ -81,13 +81,16 @@ def main(argv: list[str] | None = None) -> int:
             drift.append(f"{or_id}: in live catalog but not in snapshot")
             continue
         for key in ("input_per_mtok", "output_per_mtok"):
-            if float(committed_row.get(key, -1)) != float(live_row[key]):
+            live_value = live_row[key]
+            if live_value is None:
+                drift.append(f"{or_id}: {key} missing from live catalog")
+                continue
+            if float(committed_row.get(key, -1)) != float(live_value):
                 drift.append(
                     f"{or_id}: {key} snapshot={committed_row.get(key)} live={live_row[key]}"
                 )
     for or_id in missing:
         drift.append(f"{or_id}: MISSING from live catalog (dead slug?)")
-
     report = {"drift_count": len(drift), "drift": drift, "checked": len(live)}
     print(json.dumps(report, indent=2))
     return 1 if drift else 0

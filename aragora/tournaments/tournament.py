@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 from aragora.core import Agent, DebateResult, Environment
@@ -251,7 +251,7 @@ class Tournament:
 
     async def run(
         self,
-        run_debate_fn: Callable[[Environment, list[Agent]], DebateResult],
+        run_debate_fn: Callable[[Environment, list[Agent]], Awaitable[DebateResult]],
         parallel: bool = True,
     ) -> TournamentResult:
         """

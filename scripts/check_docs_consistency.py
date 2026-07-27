@@ -101,15 +101,15 @@ def markdown_files(root: Path) -> list[Path]:
             files.append(path)
         return files
 
-    files: list[Path] = []
+    fallback_files: list[Path] = []
     for top in ("README.md", "CLAUDE.md", "AGENTS.md"):
         candidate = root / top
         if candidate.exists():
-            files.append(candidate)
+            fallback_files.append(candidate)
     docs = root / "docs"
     if docs.exists():
-        files.extend(sorted(docs.rglob("*.md")))
-    return files
+        fallback_files.extend(sorted(docs.rglob("*.md")))
+    return fallback_files
 def strip_link_title(raw: str) -> str:
     target = raw.strip()
     if target.startswith("<") and ">" in target:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from typing import Any, Literal, cast
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from .decision_types import (
     DecisionType,
@@ -237,7 +237,7 @@ class DecisionRouter:
         self._debate_engine = debate_engine
         self._workflow_engine = workflow_engine
         self._gauntlet_engine = gauntlet_engine
-        self._response_handlers: dict[str, Callable] = {}
+        self._response_handlers: dict[str, Callable[..., Awaitable[None]]] = {}
         self._enable_voice_responses = enable_voice_responses
         self._tts_bridge: Any | None = None
         self._rbac_enforcer = rbac_enforcer
@@ -252,7 +252,7 @@ class DecisionRouter:
     def register_response_handler(
         self,
         platform: str,
-        handler: Callable[[DecisionResult, ResponseChannel], None],
+        handler: Callable[[DecisionResult, ResponseChannel], Awaitable[None]],
     ) -> None:
         """Register a handler for delivering responses to a platform."""
         self._response_handlers[platform.lower()] = handler

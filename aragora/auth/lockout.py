@@ -174,11 +174,15 @@ class RedisLockoutBackend(LockoutBackend):
 
     def _init_client(self) -> None:
         """Initialize Redis client."""
+        redis_url = self._redis_url
+        if redis_url is None:
+            return
+
         try:
             import redis
 
             client = redis.from_url(
-                self._redis_url,
+                redis_url,
                 decode_responses=True,
                 socket_connect_timeout=2,
                 socket_timeout=2,

@@ -183,24 +183,19 @@ case "$tier" in
     ;;
 
   typecheck)
-    # Run mypy on aragora - REQUIRED (0 errors as of Phase 5)
+    # Run the authoritative baseline-aware typecheck gate. CI installs the
+    # pinned mypy into a specific interpreter's user site and passes it via
+    # TYPECHECK_PYTHON; a hardcoded python3 could resolve to a different
+    # interpreter that lacks the pinned toolchain.
     echo -e "${YELLOW}=== Type checking aragora (REQUIRED) ===${NC}"
 
-    # Count actual errors (not notes) - pattern: "file:line:col: error:"
-    # Disable pipefail for this pipeline since mypy returns non-zero on errors
-    ERROR_COUNT=$(set +o pipefail; mypy aragora/ --ignore-missing-imports --show-error-codes 2>/dev/null | { grep -cE "^[^:]+:[0-9]+:[0-9]+: error:" || true; } | tr -d '[:space:]')
-    ERROR_COUNT=${ERROR_COUNT:-0}
-
-    if [ "$ERROR_COUNT" -gt 0 ]; then
-      echo -e "${RED}Found $ERROR_COUNT mypy error(s)!${NC}"
-      mypy aragora/ --ignore-missing-imports --show-error-codes
-      echo ""
+    if "${TYPECHECK_PYTHON:-python3}" scripts/ci/mypy_with_baseline.py; then
+      echo -e "${GREEN}=== Type check passed (no new errors) ===${NC}"
+    else
+      TYPECHECK_STATUS=$?
       echo -e "${RED}=== Type check FAILED ===${NC}"
-      echo "mypy error count must remain at 0 (currently: $ERROR_COUNT)"
-      exit 1
+      exit "$TYPECHECK_STATUS"
     fi
-
-    echo -e "${GREEN}=== Type check passed (0 errors) ===${NC}"
     ;;
 
   frontend)

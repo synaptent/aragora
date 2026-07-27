@@ -370,9 +370,24 @@ jobs:
           echo "python_bin=$PYTHON_BIN" >> "$GITHUB_OUTPUT"
 
       - name: Install mypy and type stubs
+        shell: bash
         run: |
-          "${{ steps.typecheck_python.outputs.python_bin }}" -m pip install --user -e .
-          "${{ steps.typecheck_python.outputs.python_bin }}" -m pip install --user mypy types-requests types-redis types-python-dateutil types-setuptools types-jsonschema types-PyYAML
+          set -euo pipefail
+          PYBIN="${{ steps.typecheck_python.outputs.python_bin }}"
+          "${PYBIN}" -m pip install --user -e .
+          mapfile -t TYPECHECK_REQUIREMENTS < <(
+            "${PYBIN}" scripts/ci/mypy_with_baseline.py --print-install-requirements
+          )
+          if [[ "${#TYPECHECK_REQUIREMENTS[@]}" -ne 3 ]]; then
+            echo "Expected exactly three typecheck tool requirements from pyproject.toml" >&2
+            exit 2
+          fi
+          # The declared requirements include the exact PyJWT signature pin;
+          # do not duplicate that version outside pyproject.toml.
+          "${PYBIN}" -m pip install --user \
+            "${TYPECHECK_REQUIREMENTS[@]}" \
+            types-requests types-redis types-python-dateutil types-setuptools \
+            types-jsonschema types-PyYAML
 
       - name: Resolve phase-1 typecheck plan
         id: typecheck_plan
@@ -427,7 +442,10 @@ jobs:
 
       - name: Run full typecheck tier
         if: steps.typecheck_plan.outputs.mode == 'full'
-        run: PATH="$HOME/.local/bin:$PATH" bash scripts/test_tiers.sh typecheck
+        run: >-
+          PATH="$HOME/.local/bin:$PATH"
+          TYPECHECK_PYTHON="${{ steps.typecheck_python.outputs.python_bin }}"
+          bash scripts/test_tiers.sh typecheck
         shell: bash
         # Phase 5: mypy now REQUIRED (43→0 errors fixed Jan 2026)
 
@@ -457,11 +475,26 @@ jobs:
     steps:
       - name: Evaluate typecheck result
         run: |
-          if [[ "${{ needs.typecheck-run.result }}" == "failure" ]]; then
-            echo "::error::Type check failed"
-            exit 1
+          changes_result="${{ needs.changes.result }}"
+          python_changed="${{ needs.changes.outputs.python }}"
+          typecheck_result="${{ needs.typecheck-run.result }}"
+
+          if [[ "$changes_result" == "success" \
+                && "$python_changed" == "true" \
+                && "$typecheck_result" == "success" ]]; then
+            echo "Type check passed"
+            exit 0
           fi
-          echo "Type check passed (or skipped — no Python-relevant changes)"
+
+          if [[ "$changes_result" == "success" \
+                && "$python_changed" == "false" \
+                && "$typecheck_result" == "skipped" ]]; then
+            echo "Type check skipped — no Python-relevant changes"
+            exit 0
+          fi
+
+          echo "::error::Type check gate failed: changes=${changes_result}, python=${python_changed}, worker=${typecheck_result}"
+          exit 1
 
   typecheck-core:
     runs-on: ubuntu-latest
@@ -510,10 +543,23 @@ jobs:
           python-version: "3.11"
 
       - name: Install mypy and dependencies
+        shell: bash
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
-          python -m pip install mypy types-requests types-redis types-python-dateutil types-setuptools types-jsonschema types-PyYAML
           python -m pip install -e .
+          mapfile -t TYPECHECK_REQUIREMENTS < <(
+            python scripts/ci/mypy_with_baseline.py --print-install-requirements
+          )
+          if [[ "${#TYPECHECK_REQUIREMENTS[@]}" -ne 3 ]]; then
+            echo "Expected exactly three typecheck tool requirements from pyproject.toml" >&2
+            exit 2
+          fi
+          # Same pyproject-declared toolchain as the required typecheck job.
+          python -m pip install \
+            "${TYPECHECK_REQUIREMENTS[@]}" \
+            types-requests types-redis types-python-dateutil types-setuptools \
+            types-jsonschema types-PyYAML
 
       - name: Typecheck core modules (REQUIRED)
         run: |

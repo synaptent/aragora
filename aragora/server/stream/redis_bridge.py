@@ -27,6 +27,7 @@ Environment Variables:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import logging
 import os
@@ -43,7 +44,7 @@ INSTANCE_ID = os.environ.get("ARAGORA_INSTANCE_ID", f"instance-{os.getpid()}")
 
 # Optional redis import
 try:
-    import redis.asyncio as aioredis
+    aioredis: Any = importlib.import_module("redis.asyncio")
 
     REDIS_AVAILABLE = True
 except ImportError:

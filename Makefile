@@ -139,7 +139,7 @@ format:
 	ruff check --fix aragora/ tests/
 
 typecheck:
-	mypy aragora/ --ignore-missing-imports
+	bash scripts/test_tiers.sh typecheck
 
 check: lint typecheck
 
@@ -150,7 +150,7 @@ ci: lint typecheck test-fast
 ci-required:
 	@echo "Running required GitHub checks locally..."
 	ruff check aragora/ tests/ scripts/
-	mypy aragora/ --ignore-missing-imports
+	bash scripts/test_tiers.sh typecheck
 	python scripts/check_version_alignment.py
 	python scripts/check_sdk_parity.py --strict --baseline scripts/baselines/check_sdk_parity.json --budget scripts/baselines/check_sdk_parity_budget.json
 	python scripts/check_sdk_namespace_parity.py --strict --baseline scripts/baselines/check_sdk_namespace_parity.json

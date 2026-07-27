@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from urllib.parse import urlencode
 
 from ..base import (
@@ -587,7 +587,7 @@ class TeamsWorkspaceHandler(SecureHandler):
                 tenant_id=workspace.tenant_id,
             )
             connector_channels = run_async(
-                connector.list_channels(
+                cast(Any, connector).list_channels(
                     team_id=team_id,
                     include_private=include_private,
                 )

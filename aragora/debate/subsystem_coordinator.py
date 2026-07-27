@@ -34,7 +34,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 if TYPE_CHECKING:
     from aragora.agents.calibration import CalibrationTracker
@@ -46,6 +46,9 @@ if TYPE_CHECKING:
     from aragora.agents.grounded import MomentDetector
     from aragora.agents.positions import PositionLedger
     from aragora.agents.truth_grounding import PositionTracker
+    from aragora.billing.calibration_cost_bridge import (
+        CalibrationTracker as BillingCalibrationTracker,
+    )
     from aragora.core import DebateResult
     from aragora.insights.flip_detector import FlipDetector
     from aragora.debate.context import DebateContext
@@ -799,7 +802,7 @@ class SubsystemCoordinator:
             )
 
             self.calibration_cost_bridge = create_calibration_cost_bridge(
-                calibration_tracker=self.calibration_tracker,
+                calibration_tracker=cast("BillingCalibrationTracker", self.calibration_tracker),
                 cost_tracker=self.cost_tracker,
             )
             logger.debug("Auto-initialized CalibrationCostBridge")
