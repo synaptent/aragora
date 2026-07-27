@@ -20,13 +20,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from aragora.server.handlers.tasks.execution import (
+    VALID_TASK_TYPES,
     TaskExecutionHandler,
+    TaskRoute,
+    TaskRouter,
     TaskRecord,
     _clear_tasks,
     _tasks,
 )
 from aragora.server.handlers.utils.responses import HandlerResult
-from aragora.tasks.router import VALID_TASK_TYPES, TaskRoute, TaskRouter
 
 
 # ---------------------------------------------------------------------------

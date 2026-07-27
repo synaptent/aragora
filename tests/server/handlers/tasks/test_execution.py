@@ -19,12 +19,14 @@ import pytest
 
 from aragora.server.handlers.tasks.execution import (
     MAX_GOAL_LENGTH,
+    VALID_TASK_TYPES,
     TaskExecutionHandler,
+    TaskRoute,
+    TaskRouter,
     TaskRecord,
     _clear_tasks,
     _tasks,
 )
-from aragora.tasks.router import VALID_TASK_TYPES, TaskRoute, TaskRouter
 
 
 # ---------------------------------------------------------------------------

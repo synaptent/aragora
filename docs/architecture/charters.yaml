@@ -308,6 +308,20 @@ registry:
     owner: null
     evidence: "removed #8890; re-added charter-blind #8893 (specimen, #8905); re-removed #8909 (2026-07-05). Home: aragora/debate/queue_executor.py"
     superseded_by: null
+  - id: CHR-X-014
+    state: REMOVED
+    binding_in_draft: true
+    ruled: "2026-07-06"
+    paths: [aragora/tasks/]
+    symbols: []
+    deadline: null
+    owner: null
+    evidence: >-
+      PR #9057; operator ruling 2026-07-06 (#8851), salvage-audited. Task routing
+      moved to aragora/server/handlers/tasks/execution.py and the dedicated router
+      tests moved to tests/server/handlers/tasks/test_task_router.py. SDK
+      /api/v2/tasks remains handler-backed.
+    superseded_by: null
 
   # --- 3b. PENDING (no new importers/callers; execute after ratification/#8851) ---
   - id: CHR-X-001
@@ -444,19 +458,6 @@ registry:
     deadline: null
     owner: null
     evidence: "per #8851 ruling; flip ARAGORA_ENABLE_AGENT_FABRIC default->false first (extensions.py:39)"
-    superseded_by: null
-  - id: CHR-X-014
-    state: PENDING
-    ruled: "2026-07-06"
-    paths: [aragora/tasks/]
-    symbols: []
-    deadline: null
-    owner: null
-    evidence: >-
-      RETIRE now — operator ruling 2026-07-06 (#8851), salvage-audited. Inline
-      router.py (incl. VALID_TASK_TYPES) into aragora/server/handlers/tasks/execution.py;
-      REQUIRED: port the 18 passing tests from tests/tasks/test_router.py to the inlined
-      location. SDK /api/v2/tasks unaffected (handler-backed)
     superseded_by: null
   - id: CHR-X-015
     state: PENDING
@@ -801,7 +802,10 @@ registry:
     superseded_by: null
   - id: CHR-E-004
     state: EXCLUSION
-    paths: [aragora/server/]
+    paths:
+      - aragora/server/metrics.py
+      - aragora/server/middleware/tracing.py
+      - aragora/server/http_client_pool.py
     symbols: []
     deadline: null
     owner: null
