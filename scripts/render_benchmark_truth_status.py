@@ -161,6 +161,12 @@ def _format_value(value: Any) -> str:
     return str(value)
 
 
+def _format_bool(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    return "unknown"
+
+
 def _render_mapping(mapping: dict[str, Any]) -> list[str]:
     if not mapping:
         return ["- none"]
@@ -379,6 +385,9 @@ def render_status_markdown(
     deltas = dict(scorecard_payload.get("deltas") or {})
     failure_distribution = dict(scorecard_payload.get("failure_class_distribution") or {})
     rescue_counts = dict(scorecard_payload.get("rescue_counts_by_type") or {})
+    metrics_provenance = dict(
+        scorecard_payload.get("metrics_provenance") or truth_payload.get("metrics_provenance") or {}
+    )
     neutral_classes = dict(proxy_metrics.get("neutral_classes") or {})
     issue_records = [
         item for item in list(truth_payload.get("issues") or []) if isinstance(item, dict)
@@ -453,6 +462,32 @@ def render_status_markdown(
             f"- Corpus-scoped scorecard pointer: `{_repo_stable_path(scorecard_path)}`",
             f"- Revision-scoped truth pointer: `{_repo_stable_path(latest_paths['truth_revision_latest'])}`",
             f"- Revision-scoped scorecard pointer: `{_repo_stable_path(latest_paths['scorecard_revision_latest'])}`",
+            "",
+            "## Evidence Provenance",
+            "",
+            f"- Metrics input: `{_format_value(metrics_provenance.get('path'))}`",
+            f"- Capture scope: `{_format_value(metrics_provenance.get('capture_scope'))}`",
+            f"- Content SHA-256: `{_format_value(metrics_provenance.get('content_sha256'))}`",
+            f"- Repository HEAD: `{_format_value(metrics_provenance.get('repository_head_sha'))}`",
+            "- Tracked in this repository: "
+            f"`{_format_bool(metrics_provenance.get('repository_tracked'))}`",
+            "- Reproducible from this repository: "
+            f"`{_format_bool(metrics_provenance.get('repository_reproducible'))}`",
+            f"- Source workflow run: `{_format_value(metrics_provenance.get('source_run_url'))}`",
+        ]
+    )
+    if metrics_provenance.get("repository_reproducible") is False:
+        lines.extend(
+            [
+                "",
+                "Provenance warning: proxy, failure, and rescue counts come from a "
+                "runner-local metrics window that is not tracked in this repository. "
+                "Treat those counts as an observation from the cited run, not as a "
+                "repository-reproducible benchmark receipt.",
+            ]
+        )
+    lines.extend(
+        [
             "",
             "## Truth Metrics",
             "",

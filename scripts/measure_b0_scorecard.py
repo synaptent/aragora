@@ -23,8 +23,11 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
+import os
 import re
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -102,6 +105,59 @@ def _repo_stable_path(path: Path) -> str:
         return "~/" + resolved.relative_to(Path.home().resolve()).as_posix()
     except ValueError:
         return str(resolved)
+
+
+def build_metrics_provenance(metrics_path: Path) -> dict[str, Any]:
+    """Describe whether a metrics window can be reproduced from this checkout."""
+    stable_path = _repo_stable_path(metrics_path)
+    tracked = (
+        subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", stable_path],
+            cwd=REPO_ROOT,
+            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        ).returncode
+        == 0
+    )
+    head_result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    repository_head_sha = head_result.stdout.strip() if head_result.returncode == 0 else ""
+    clean_at_head = tracked and (
+        subprocess.run(
+            ["git", "diff", "--quiet", "HEAD", "--", stable_path],
+            cwd=REPO_ROOT,
+            check=False,
+        ).returncode
+        == 0
+    )
+    repository_reproducible = bool(repository_head_sha) and clean_at_head
+    provenance: dict[str, Any] = {
+        "capture_scope": (
+            "repository_tracked"
+            if repository_reproducible
+            else "working_tree"
+            if tracked
+            else "runner_local"
+        ),
+        "content_sha256": hashlib.sha256(metrics_path.read_bytes()).hexdigest(),
+        "path": stable_path,
+        "repository_head_sha": repository_head_sha or None,
+        "repository_reproducible": repository_reproducible,
+        "repository_tracked": tracked,
+    }
+    server_url = os.environ.get("GITHUB_SERVER_URL", "").rstrip("/")
+    repository = os.environ.get("GITHUB_REPOSITORY", "").strip("/")
+    run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
+    if server_url and repository and run_id:
+        provenance["source_run_url"] = f"{server_url}/{repository}/actions/runs/{run_id}"
+    return provenance
 
 
 def _slugify(value: str) -> str:
@@ -214,6 +270,7 @@ def auto_publish_truth_artifact(
         client=truth_client,
         freshness_map_path=freshness_map_path,
     )
+    artifact["metrics_provenance"] = build_metrics_provenance(metrics_path)
     if ensure_issues:
         issue_drafts = [
             dict(item)
@@ -349,6 +406,8 @@ def build_published_scorecard(
     published = {
         "generated_at": normalize_generated_at(generated_at),
         "metrics_file": _repo_stable_path(metrics_path),
+        "metrics_provenance": dict(truth_artifact.get("metrics_provenance") or {})
+        or build_metrics_provenance(metrics_path),
         "truth_artifact_path": _repo_stable_path(truth_artifact_path),
         "truth_artifact_generated_at": str(truth_artifact.get("generated_at") or "").strip()
         or None,

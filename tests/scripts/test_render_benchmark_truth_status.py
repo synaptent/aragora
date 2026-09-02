@@ -183,6 +183,49 @@ def test_render_status_markdown_includes_metrics_and_paths(tmp_path: Path) -> No
     )
 
 
+def test_render_status_markdown_warns_for_runner_local_metrics(tmp_path: Path) -> None:
+    corpus_path = _write_json(
+        tmp_path / "corpus.json",
+        {
+            "corpus_id": "tw-01-bounded-execution-v1",
+            "revision": 7,
+            "issues": [{"issue_id": 5754, "title": "Issue A"}],
+        },
+    )
+    latest_paths = mod.resolve_latest_paths(
+        corpus_path=corpus_path,
+        truth_root=tmp_path / "truth",
+        scorecard_root=tmp_path / "scorecards",
+    )
+    truth_payload = _truth_payload(revision=7)
+    scorecard_payload = _scorecard_payload(revision=7)
+    scorecard_payload["metrics_provenance"] = {
+        "capture_scope": "runner_local",
+        "content_sha256": None,
+        "path": ".aragora/overnight/boss_metrics.jsonl",
+        "repository_head_sha": "c1868664248be7f533cabb441a8b8159dc47b908",
+        "repository_reproducible": False,
+        "repository_tracked": False,
+        "source_run_url": "https://github.com/synaptent/aragora/actions/runs/33314070684",
+    }
+
+    markdown = mod.render_status_markdown(
+        corpus_path=corpus_path,
+        truth_path=latest_paths["truth_corpus_latest"],
+        scorecard_path=latest_paths["scorecard_corpus_latest"],
+        truth_payload=truth_payload,
+        scorecard_payload=scorecard_payload,
+        latest_paths=latest_paths,
+    )
+
+    assert "## Evidence Provenance" in markdown
+    assert "- Capture scope: `runner_local`" in markdown
+    assert "- Reproducible from this repository: `false`" in markdown
+    assert "c1868664248be7f533cabb441a8b8159dc47b908" in markdown
+    assert "runner-local metrics window that is not tracked" in markdown
+    assert "actions/runs/33314070684" in markdown
+
+
 def test_load_corpus_rejects_blank_corpus_id(tmp_path: Path) -> None:
     corpus_path = _write_json(
         tmp_path / "corpus.json",

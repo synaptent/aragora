@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -37,6 +38,69 @@ def test_repo_stable_path_relativizes_git_common_root(tmp_path: Path, monkeypatc
     monkeypatch.setattr(mod, "git_common_repo_root", lambda _repo_root: shared_root)
 
     assert mod._repo_stable_path(metrics_path) == ".aragora/overnight/boss_metrics.jsonl"
+
+
+def test_metrics_provenance_distinguishes_tracked_and_runner_local_inputs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo_root, check=True)
+    tracked_path = repo_root / "tracked.jsonl"
+    tracked_path.write_text("tracked\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.jsonl"], cwd=repo_root, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "-qm",
+            "add tracked metrics",
+        ],
+        cwd=repo_root,
+        check=True,
+    )
+    repository_head_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+    runtime_path = repo_root / ".aragora" / "overnight" / "boss_metrics.jsonl"
+    runtime_path.parent.mkdir(parents=True)
+    runtime_path.write_text("runtime\n", encoding="utf-8")
+
+    monkeypatch.setattr(mod, "REPO_ROOT", repo_root)
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "synaptent/aragora")
+    monkeypatch.setenv("GITHUB_RUN_ID", "33314070684")
+
+    tracked = mod.build_metrics_provenance(tracked_path)
+    runtime = mod.build_metrics_provenance(runtime_path)
+
+    assert tracked == {
+        "capture_scope": "repository_tracked",
+        "content_sha256": mod.hashlib.sha256(b"tracked\n").hexdigest(),
+        "path": "tracked.jsonl",
+        "repository_head_sha": repository_head_sha,
+        "repository_reproducible": True,
+        "repository_tracked": True,
+        "source_run_url": "https://github.com/synaptent/aragora/actions/runs/33314070684",
+    }
+    assert runtime == {
+        "capture_scope": "runner_local",
+        "content_sha256": mod.hashlib.sha256(b"runtime\n").hexdigest(),
+        "path": ".aragora/overnight/boss_metrics.jsonl",
+        "repository_head_sha": repository_head_sha,
+        "repository_reproducible": False,
+        "repository_tracked": False,
+        "source_run_url": "https://github.com/synaptent/aragora/actions/runs/33314070684",
+    }
 
 
 def test_main_ci_passes_at_threshold(tmp_path: Path, capsys) -> None:
