@@ -87,7 +87,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
 
       - name: Build and push backend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.backend
@@ -196,7 +196,7 @@ jobs:
       # derivation from the serving host. aragora.ai itself is built with explicit
       # production values by deploy-frontend.yml's Vercel lane, not from this image.
       - name: Build and push frontend
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: deploy/Dockerfile.frontend
@@ -295,7 +295,7 @@ jobs:
             type=raw,value=${{ steps.version.outputs.version }},enable={{is_default_branch}}
 
       - name: Build and push operator
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: aragora-operator/
           file: aragora-operator/Dockerfile
