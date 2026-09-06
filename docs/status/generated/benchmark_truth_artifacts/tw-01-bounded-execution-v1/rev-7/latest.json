@@ -48,10 +48,9 @@
     "status": "complete"
   },
   "failure_class_distribution": {
-    "blocked_not_dispatch_bounded": 5,
-    "rescue_worker_crash": 1
+    "blocked_not_dispatch_bounded": 5
   },
-  "generated_at": "2026-09-01T13:38:18Z",
+  "generated_at": "2026-09-03T13:29:50Z",
   "in_flight_metrics": {
     "in_progress_attempted_count": 5,
     "in_progress_expected_count": 5,
@@ -289,7 +288,7 @@
     },
     {
       "expected_status": "in_progress",
-      "had_rescue": true,
+      "had_rescue": false,
       "issue_closed_at": null,
       "issue_number": 5754,
       "issue_state": "OPEN",
@@ -342,8 +341,6 @@
     "proxy_pr_signal_issue_rate": 0.0
   },
   "repo": "synaptent/aragora",
-  "rescue_counts_by_type": {
-    "rescue_worker_crash": 1
-  },
+  "rescue_counts_by_type": {},
   "run_status": "complete"
 }

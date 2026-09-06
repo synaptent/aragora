@@ -31,19 +31,18 @@
   "deltas": {
     "merged_only_rate": 0.0,
     "no_rescue_truth_success_rate": 0.0,
-    "proxy_no_rescue_success_rate": -0.5,
+    "proxy_no_rescue_success_rate": 0.0,
     "truth_success_rate": 0.0,
     "unique_issues_attempted": 0.0
   },
   "failure_class_distribution": {
-    "blocked_not_dispatch_bounded": 5,
-    "rescue_worker_crash": 1
+    "blocked_not_dispatch_bounded": 5
   },
-  "generated_at": "2026-09-01T13:38:29Z",
+  "generated_at": "2026-09-03T13:29:59Z",
   "metrics_file": ".aragora/overnight/boss_metrics.jsonl",
   "previous_artifact": {
-    "generated_at": "2026-08-19T15:19:55Z",
-    "path": "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260819T151955Z.json"
+    "generated_at": "2026-09-01T13:38:29Z",
+    "path": "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260901T133829Z.json"
   },
   "proxy_metrics": {
     "corpus": {
@@ -62,11 +61,10 @@
       "status": "complete"
     },
     "failure_classes": {
-      "blocked_not_dispatch_bounded": 5,
-      "rescue_worker_crash": 1
+      "blocked_not_dispatch_bounded": 5
     },
-    "mean_elapsed_seconds": 227.1,
-    "median_elapsed_seconds": 424.3,
+    "mean_elapsed_seconds": 0.0,
+    "median_elapsed_seconds": 0.0,
     "neutral_classes": {
       "issue_already_resolved": 5
     },
@@ -75,21 +73,18 @@
     "success_classes": {},
     "terminal_class_distribution": {
       "blocked_not_dispatch_bounded": 5,
-      "issue_already_resolved": 5,
-      "rescue_worker_crash": 1
+      "issue_already_resolved": 5
     },
     "tick_success_rate": 0.0,
-    "total_ticks": 11,
+    "total_ticks": 10,
     "unique_issues_attempted": 10,
     "unique_issues_failed": 5,
     "unique_issues_neutral": 5,
     "unique_issues_succeeded": 0
   },
-  "rescue_counts_by_type": {
-    "rescue_worker_crash": 1
-  },
-  "truth_artifact_generated_at": "2026-09-01T13:38:18Z",
-  "truth_artifact_path": "docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/truth-20260901T133818Z.json",
+  "rescue_counts_by_type": {},
+  "truth_artifact_generated_at": "2026-09-03T13:29:50Z",
+  "truth_artifact_path": "docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/truth-20260903T132950Z.json",
   "truth_metrics": {
     "merged_only_rate": 0.5,
     "no_rescue_truth_success_rate": 0.5,
