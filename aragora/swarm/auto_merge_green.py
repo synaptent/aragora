@@ -20,7 +20,7 @@ to flow through ``scripts/settle_tier4_pr.py`` unchanged.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 # The branch-protection required checks (mirrors boss_drain_pass._REQUIRED).
@@ -34,10 +34,10 @@ QUORUM_CHECK = "aragora-merge-quorum"
 # Tiers 0-2 settle without human risk acceptance; 3-4 always need a human.
 MAX_AUTO_MERGE_TIER = 2
 
-# Merge states from which an authorized admin squash is safe. BLOCKED is allowed
-# only because a satisfied merge-packet is what substitutes for the missing
-# review approval under branch protection; every other non-CLEAN state (DIRTY,
-# BEHIND, UNSTABLE, UNKNOWN) is refused.
+# Merge states from which an authorized admin squash is ordinarily safe. BLOCKED
+# is allowed only because a satisfied merge-packet substitutes for the missing
+# review approval under branch protection. UNSTABLE requires the separate,
+# authoritative required-check proof below; all other states are refused.
 _SAFE_MERGE_STATES = frozenset({"CLEAN", "BLOCKED"})
 
 # Any check ending in one of these conclusions blocks the merge -- even a
@@ -69,6 +69,7 @@ class PRMergeContext:
     mergeable: str
     merge_state_status: str
     check_states: dict[str, str]
+    check_surfaces: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,63 @@ class MergeDecision:
     head_sha: str
     should_merge: bool
     blockers: tuple[str, ...]
+
+
+def required_check_surface_proves_optional_only_unstable(check_surfaces: Any) -> bool:
+    """Return whether an authoritative surface proves every non-green row optional.
+
+    This is deliberately stricter than merely observing ``UNSTABLE``. The
+    required-check query must be available and selected with at least one
+    effective required check, no required failures or pending rows, and the
+    complete rollup diagnostics must classify every non-green row as
+    non-required. Missing or malformed diagnostics fail closed.
+    """
+    if not isinstance(check_surfaces, dict):
+        return False
+    required = check_surfaces.get("required_pr_checks")
+    rollup = check_surfaces.get("pr_rollup")
+    effective_gate = check_surfaces.get("effective_gate")
+    if not isinstance(required, dict) or not isinstance(rollup, dict):
+        return False
+    if not isinstance(effective_gate, dict):
+        return False
+    if required.get("available") is not True or required.get("gate_selected") is not True:
+        return False
+    if effective_gate.get("source") != "required_pr_checks":
+        return False
+    effective_total = required.get("effective_total")
+    if (
+        not isinstance(effective_total, int)
+        or isinstance(effective_total, bool)
+        or effective_total <= 0
+    ):
+        return False
+    gate_blocked_reason = required.get("gate_blocked_reason")
+    if gate_blocked_reason is not None and gate_blocked_reason != "":
+        return False
+    if required.get("failing_or_cancelled") != [] or required.get("pending") != []:
+        return False
+    if rollup.get("available") is not True:
+        return False
+
+    count_keys = (
+        "non_green_count",
+        "non_required_non_green_count",
+        "failing_or_cancelled_count",
+        "pending_count",
+    )
+    counts: dict[str, int] = {}
+    for key in count_keys:
+        value = rollup.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            return False
+        counts[key] = value
+    non_green = counts["non_green_count"]
+    return (
+        non_green > 0
+        and counts["non_required_non_green_count"] == non_green
+        and counts["failing_or_cancelled_count"] + counts["pending_count"] == non_green
+    )
 
 
 def decide_auto_merge(
@@ -142,7 +200,11 @@ def decide_auto_merge(
     if ctx.mergeable != "MERGEABLE":
         blockers.append(f"not mergeable (mergeable={ctx.mergeable or 'unknown'})")
 
-    if ctx.merge_state_status not in _SAFE_MERGE_STATES:
+    optional_only_unstable = (
+        ctx.merge_state_status == "UNSTABLE"
+        and required_check_surface_proves_optional_only_unstable(ctx.check_surfaces)
+    )
+    if ctx.merge_state_status not in _SAFE_MERGE_STATES and not optional_only_unstable:
         blockers.append(
             f"merge state not safe (mergeStateStatus={ctx.merge_state_status or 'unknown'})"
         )
@@ -157,7 +219,7 @@ def decide_auto_merge(
             blockers.append(f"required check not green: {name}={state or 'absent'}")
 
     failing = sorted(n for n, s in ctx.check_states.items() if s in _FAILING_CHECK_STATES)
-    if failing:
+    if failing and not optional_only_unstable:
         shown = ", ".join(failing[:3])
         blockers.append(
             f"failing checks present (incl. non-required): {shown}{', …' if len(failing) > 3 else ''}"
@@ -361,6 +423,11 @@ def context_from_gh(view: dict[str, Any], packet_entry: dict[str, Any] | None) -
         mergeable=str(view.get("mergeable") or ""),
         merge_state_status=str(view.get("mergeStateStatus") or ""),
         check_states=check_states,
+        check_surfaces=(
+            dict(packet.get("check_surfaces") or {})
+            if isinstance(packet.get("check_surfaces"), dict)
+            else {}
+        ),
     )
 
 

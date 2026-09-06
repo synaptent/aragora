@@ -69,6 +69,27 @@ def _packet(number: int = 100, head: str = HEAD, tier: int = 1, **overrides) -> 
     return base
 
 
+def _optional_only_unstable_surface() -> dict:
+    return {
+        "effective_gate": {"source": "required_pr_checks", "summary": "6/6 required green"},
+        "required_pr_checks": {
+            "available": True,
+            "effective_total": 6,
+            "gate_selected": True,
+            "gate_blocked_reason": "",
+            "failing_or_cancelled": [],
+            "pending": [],
+        },
+        "pr_rollup": {
+            "available": True,
+            "non_green_count": 2,
+            "non_required_non_green_count": 2,
+            "failing_or_cancelled_count": 2,
+            "pending_count": 0,
+        },
+    }
+
+
 def _main_runs_green() -> list[dict]:
     return [
         {"id": i, "name": name, "status": "completed", "conclusion": "success"}
@@ -195,6 +216,24 @@ def test_dry_run_never_calls_merge_fn(tmp_path):
     summary = me.run_pass(**_kwargs(h, tmp_path))
     assert h.merge_calls == []
     assert summary["mode"] == "dry-run"
+    assert _actions(summary)[100] == "would-merge"
+
+
+def test_9453_optional_security_failures_reach_would_merge(tmp_path):
+    rollup = _rollup_all_green()
+    rollup.extend(
+        [
+            {"name": "npm Security Scan", "conclusion": "FAILURE"},
+            {"name": "Security Gate Summary", "conclusion": "FAILURE"},
+        ]
+    )
+    view = _view(mergeStateStatus="UNSTABLE", statusCheckRollup=rollup)
+    packet = _packet(check_surfaces=_optional_only_unstable_surface())
+    h = _Harness({100: view}, {100: packet})
+
+    summary = me.run_pass(**_kwargs(h, tmp_path))
+
+    assert h.merge_calls == []
     assert _actions(summary)[100] == "would-merge"
 
 
