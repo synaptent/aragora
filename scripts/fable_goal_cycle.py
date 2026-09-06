@@ -18,6 +18,11 @@ Every context source is best-effort with its own short timeout; failures are
 recorded in the packet as gaps rather than aborting the cycle, so Fable knows
 what it is *not* seeing. The consult itself is hard-bounded (default 900s).
 
+Fresh lane ownership is per-object, never a global lock. The packet includes
+lanes in the canonical active lifecycle states whose latest heartbeat or
+activity timestamp is at most 15 minutes old, matching the canonical owner-tool
+heartbeat window.
+
 The response is strategy input, not authority: executing agents remain bound
 by the operating contract (tier gates, quorum, anti-treadmill rules).
 
@@ -64,6 +69,22 @@ DEFAULT_OUTPUT_DIR = ".aragora/goal_cycles"
 DEFAULT_MODEL = "claude-fable-5"
 MODEL_TRANSPORT_MODES = frozenset(mode.value for mode in TransportMode)
 MAX_ACTIVE_PROCESS_LINES = 40
+MAX_ACTIVE_LANE_LINES = 40
+MAX_ACTIVE_LANE_FIELD_CHARS = 240
+ACTIVE_LANE_FRESH_SECONDS = 15 * 60
+ACTIVE_LANE_STATUSES = frozenset(
+    {
+        "active",
+        "running",
+        "pending",
+        "queued",
+        "claimed",
+        "waiting_for_steering",
+        "acknowledged",
+        "working",
+        "blocked",
+    }
+)
 ACTIVE_PROCESS_SCRIPT_NAMES = frozenset(
     {
         "agent_bridge.py",
@@ -152,6 +173,9 @@ Constraints on your recommendations:
 - One bounded progress unit per cycle; if a blocker repeats, switch progress
   class rather than retrying.
 - Prefer finishing and settling in-flight work over starting new work.
+- Treat the "fresh active lanes (object ownership)" section as collision
+  authority: do not recommend a PR, branch, or worktree listed there. Ownership
+  is per-object, not a global lock; unrelated work remains eligible.
 - Your output is strategy input, not authority: nothing you write authorizes
   merging, settlement, or evidence posting outside normal gates.
 """
@@ -323,6 +347,208 @@ def _active_conductor_processes() -> tuple[bool, str]:
     return False, "; ".join(error for error in errors if error) or "ps unavailable"
 
 
+def _parse_lane_timestamp(value: object) -> _dt.datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = _dt.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(_dt.timezone.utc)
+
+
+def _lane_packet_value(value: object) -> object:
+    if value is None or value == "":
+        return "-"
+    if isinstance(value, (bool, int, float)):
+        return value
+    rendered = " ".join(str(value).split())
+    if len(rendered) <= MAX_ACTIVE_LANE_FIELD_CHARS:
+        return rendered
+    return rendered[: MAX_ACTIVE_LANE_FIELD_CHARS - 3] + "..."
+
+
+def _lane_registry_paths(root: Path, *, home: Path | None = None) -> list[Path]:
+    """Return canonical user and repo/state-root lane registry locations."""
+
+    user_root = home or Path.home()
+    configured = os.environ.get("ARAGORA_AUTOMATION_STATE_ROOT")
+    if configured:
+        state_root = Path(configured).expanduser()
+        state_dir = state_root if state_root.name == ".aragora" else state_root / ".aragora"
+    else:
+        state_dir = root / ".aragora"
+
+    paths: list[Path] = []
+    seen: set[Path] = set()
+    for path in (
+        user_root / ".aragora" / "agent-bridge" / "lanes.json",
+        state_dir / "agent-bridge" / "lanes.json",
+    ):
+        try:
+            identity = path.resolve()
+        except OSError:
+            identity = path
+        if identity in seen:
+            continue
+        seen.add(identity)
+        paths.append(path)
+    return paths
+
+
+def _prefer_lane_record(
+    candidate: dict[str, object],
+    candidate_source: int,
+    current: tuple[dict[str, object], int],
+) -> bool:
+    """Match agent_bridge precedence: newest update, then repo/state-root."""
+
+    current_record, current_source = current
+    candidate_time = _parse_lane_timestamp(candidate.get("updated_at"))
+    current_time = _parse_lane_timestamp(current_record.get("updated_at"))
+    if candidate_time is not None and current_time is not None and candidate_time != current_time:
+        return candidate_time > current_time
+    return candidate_source >= current_source
+
+
+def _fill_sparse_lane_identity(
+    preferred: dict[str, object], fallback: dict[str, object]
+) -> dict[str, object]:
+    merged = dict(preferred)
+    for key in (
+        "lane_id",
+        "owner_session",
+        "pr_number",
+        "branch",
+        "worktree",
+        "next_action",
+    ):
+        if merged.get(key) in (None, "") and fallback.get(key) not in (None, ""):
+            merged[key] = fallback[key]
+    return merged
+
+
+def _fresh_active_lanes(
+    root: Path,
+    *,
+    now: _dt.datetime | None = None,
+    home: Path | None = None,
+) -> tuple[str | None, list[str]]:
+    """Render fresh per-object lane ownership; malformed state becomes a gap."""
+
+    registry_paths = _lane_registry_paths(root, home=home)
+    existing_paths = [path for path in registry_paths if path.exists()]
+    if not existing_paths:
+        rendered = ", ".join(str(path) for path in registry_paths)
+        return None, [f"fresh active lanes (object ownership): lane registries missing: {rendered}"]
+
+    gaps: list[str] = []
+    merged: dict[str, tuple[dict[str, object], int]] = {}
+    anonymous: list[dict[str, object]] = []
+    valid_registry_count = 0
+    malformed_entries = 0
+    for source_index, lanes_path in enumerate(existing_paths):
+        try:
+            raw_lanes = json.loads(lanes_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError) as exc:
+            gaps.append(
+                "fresh active lanes (object ownership): "
+                f"lanes registry unreadable ({lanes_path}): {exc}"
+            )
+            continue
+        except json.JSONDecodeError as exc:
+            gaps.append(
+                "fresh active lanes (object ownership): "
+                f"lanes registry malformed ({lanes_path}): {exc}"
+            )
+            continue
+        if not isinstance(raw_lanes, list):
+            gaps.append(
+                "fresh active lanes (object ownership): "
+                f"lanes registry malformed ({lanes_path}): expected JSON array"
+            )
+            continue
+        valid_registry_count += 1
+        for raw_lane in raw_lanes:
+            if not isinstance(raw_lane, dict):
+                malformed_entries += 1
+                continue
+            lane = {str(key): value for key, value in raw_lane.items()}
+            lane_id = str(lane.get("lane_id") or "").strip()
+            if not lane_id:
+                anonymous.append(lane)
+                continue
+            current = merged.get(lane_id)
+            if current is None:
+                merged[lane_id] = (lane, source_index)
+                continue
+            if _prefer_lane_record(lane, source_index, current):
+                merged[lane_id] = (
+                    _fill_sparse_lane_identity(lane, current[0]),
+                    source_index,
+                )
+            else:
+                merged[lane_id] = (
+                    _fill_sparse_lane_identity(current[0], lane),
+                    current[1],
+                )
+
+    if valid_registry_count == 0:
+        return None, gaps
+
+    current = now or _dt.datetime.now(_dt.timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=_dt.timezone.utc)
+    else:
+        current = current.astimezone(_dt.timezone.utc)
+
+    fresh: list[tuple[_dt.datetime, dict[str, object]]] = []
+    raw_lanes = anonymous + [record for record, _source in merged.values()]
+    for raw_lane in raw_lanes:
+        status = str(raw_lane.get("status") or "").strip().lower()
+        if status not in ACTIVE_LANE_STATUSES:
+            continue
+        heartbeat_raw = raw_lane.get("last_heartbeat_at")
+        heartbeat = _parse_lane_timestamp(heartbeat_raw)
+        if heartbeat is None:
+            heartbeat_raw = raw_lane.get("updated_at")
+            heartbeat = _parse_lane_timestamp(heartbeat_raw)
+        if heartbeat is None:
+            malformed_entries += 1
+            continue
+        age_seconds = max(0.0, (current - heartbeat).total_seconds())
+        if age_seconds > ACTIVE_LANE_FRESH_SECONDS:
+            continue
+        rendered = {
+            "lane_id": _lane_packet_value(raw_lane.get("lane_id")),
+            "owner_session": _lane_packet_value(raw_lane.get("owner_session")),
+            "pr_number": _lane_packet_value(raw_lane.get("pr_number")),
+            "branch": _lane_packet_value(raw_lane.get("branch")),
+            "worktree": _lane_packet_value(raw_lane.get("worktree")),
+            "heartbeat_at": _lane_packet_value(heartbeat_raw),
+            "next_action": _lane_packet_value(raw_lane.get("next_action")),
+        }
+        fresh.append((heartbeat, rendered))
+
+    fresh.sort(key=lambda item: item[0], reverse=True)
+    lines = [json.dumps(item[1], ensure_ascii=True) for item in fresh[:MAX_ACTIVE_LANE_LINES]]
+    omitted = len(fresh) - MAX_ACTIVE_LANE_LINES
+    if omitted > 0:
+        lines.append(f"[truncated {omitted} additional fresh active lane(s)]")
+
+    if malformed_entries:
+        gaps.append(
+            "fresh active lanes (object ownership): "
+            f"skipped {malformed_entries} malformed lane entries"
+        )
+    return "\n".join(lines) if lines else "none observed", gaps
+
+
 def _is_relative_to(path: Path, parent: Path) -> bool:
     try:
         path.relative_to(parent)
@@ -408,6 +634,10 @@ def gather_context(root: Path, since_hours: float, max_prs: int, skip_digest: bo
         sections["active conductor/evidence processes"] = active_processes
     else:
         gaps.append(f"active conductor/evidence processes: {active_processes}")
+    active_lanes, lane_gaps = _fresh_active_lanes(root)
+    if active_lanes is not None:
+        sections["fresh active lanes (object ownership)"] = active_lanes
+    gaps.extend(lane_gaps)
     if shutil.which("gh"):
         section(
             f"open non-draft PRs (up to {max_prs})",

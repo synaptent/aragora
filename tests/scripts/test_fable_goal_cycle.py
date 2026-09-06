@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -366,6 +367,255 @@ def test_active_conductor_processes_falls_back_to_portable_ps(monkeypatch) -> No
         ["ps", "-eo", "pid,ppid,etime,command"],
     ]
     assert "pid=200 elapsed=01:00 command=python3 settle_pr.py" in body
+
+
+def test_fresh_active_lanes_reports_object_identity(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 10, 4, 15, tzinfo=timezone.utc)
+    lanes_path = tmp_path / ".aragora" / "agent-bridge" / "lanes.json"
+    lanes_path.parent.mkdir(parents=True)
+    lanes_path.write_text(
+        json.dumps(
+            [
+                {
+                    "status": "active",
+                    "lane_id": "lane-pr-9083",
+                    "owner_session": "session-1",
+                    "pr_number": 9083,
+                    "branch": "codex/main-red-slice",
+                    "worktree": "/private/tmp/aragora-main-red-slice",
+                    "last_heartbeat_at": (now - timedelta(minutes=4)).isoformat(),
+                    "next_action": "measure current main",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    body, gaps = fable_goal_cycle._fresh_active_lanes(tmp_path, now=now, home=tmp_path / "home")
+
+    assert gaps == []
+    assert body is not None
+    assert '"lane_id": "lane-pr-9083"' in body
+    assert '"pr_number": 9083' in body
+    assert '"branch": "codex/main-red-slice"' in body
+    assert '"heartbeat_at": "2026-07-10T04:11:00+00:00"' in body
+    assert '"next_action": "measure current main"' in body
+
+
+def test_fresh_active_lanes_excludes_stale_and_terminal_lanes(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 10, 4, 15, tzinfo=timezone.utc)
+    lanes_path = tmp_path / ".aragora" / "agent-bridge" / "lanes.json"
+    lanes_path.parent.mkdir(parents=True)
+    lanes_path.write_text(
+        json.dumps(
+            [
+                {
+                    "status": "working",
+                    "lane_id": "stale-working",
+                    "updated_at": (now - timedelta(minutes=16)).isoformat(),
+                },
+                {
+                    "status": "released",
+                    "lane_id": "fresh-released",
+                    "updated_at": (now - timedelta(minutes=1)).isoformat(),
+                },
+                {
+                    "status": "completed",
+                    "lane_id": "fresh-completed",
+                    "updated_at": (now - timedelta(minutes=1)).isoformat(),
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    body, gaps = fable_goal_cycle._fresh_active_lanes(tmp_path, now=now, home=tmp_path / "home")
+
+    assert body == "none observed"
+    assert gaps == []
+
+
+def test_fresh_active_lanes_surfaces_bad_entries_as_gap(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 10, 4, 15, tzinfo=timezone.utc)
+    lanes_path = tmp_path / ".aragora" / "agent-bridge" / "lanes.json"
+    lanes_path.parent.mkdir(parents=True)
+    lanes_path.write_text(
+        json.dumps([42, {"status": "active", "lane_id": "bad-time", "updated_at": "nope"}]),
+        encoding="utf-8",
+    )
+
+    body, gaps = fable_goal_cycle._fresh_active_lanes(tmp_path, now=now, home=tmp_path / "home")
+
+    assert body == "none observed"
+    assert len(gaps) == 1
+    assert "skipped 2 malformed lane entries" in gaps[0]
+
+
+def test_fresh_active_lanes_surfaces_missing_and_malformed_registry(tmp_path: Path) -> None:
+    body, gaps = fable_goal_cycle._fresh_active_lanes(tmp_path, home=tmp_path / "home")
+
+    assert body is None
+    assert len(gaps) == 1
+    assert "lane registries missing" in gaps[0]
+
+    lanes_path = tmp_path / ".aragora" / "agent-bridge" / "lanes.json"
+    lanes_path.parent.mkdir(parents=True)
+    lanes_path.write_text("{not-json", encoding="utf-8")
+
+    body, gaps = fable_goal_cycle._fresh_active_lanes(tmp_path, home=tmp_path / "home")
+
+    assert body is None
+    assert len(gaps) == 1
+    assert "lanes registry malformed" in gaps[0]
+
+
+def test_gather_context_includes_fresh_active_lane_section(monkeypatch, tmp_path: Path) -> None:
+    now = datetime.now(timezone.utc)
+    lanes_path = tmp_path / ".aragora" / "agent-bridge" / "lanes.json"
+    lanes_path.parent.mkdir(parents=True)
+    lanes_path.write_text(
+        json.dumps(
+            [
+                {
+                    "status": "active",
+                    "lane_id": "lane-owned-branch",
+                    "branch": "codex/owned-branch",
+                    "updated_at": now.isoformat(),
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(fable_goal_cycle, "_run", lambda *args, **kwargs: (False, "offline"))
+    monkeypatch.setattr(
+        fable_goal_cycle, "_active_conductor_processes", lambda: (True, "none observed")
+    )
+    monkeypatch.setattr(fable_goal_cycle.shutil, "which", lambda _name: None)
+
+    context = fable_goal_cycle.gather_context(
+        tmp_path, since_hours=24, max_prs=30, skip_digest=True
+    )
+
+    body = context["sections"]["fresh active lanes (object ownership)"]
+    assert '"lane_id": "lane-owned-branch"' in body
+    assert '"branch": "codex/owned-branch"' in body
+
+
+def test_fresh_active_lanes_merges_canonical_registries_and_statuses(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 10, 4, 15, tzinfo=timezone.utc)
+    home = tmp_path / "home"
+    home_path = home / ".aragora" / "agent-bridge" / "lanes.json"
+    repo_path = tmp_path / ".aragora" / "agent-bridge" / "lanes.json"
+    home_path.parent.mkdir(parents=True)
+    repo_path.parent.mkdir(parents=True)
+    home_path.write_text(
+        json.dumps(
+            [
+                {
+                    "status": "running",
+                    "lane_id": "shared-lane",
+                    "owner_session": "home-owner",
+                    "branch": "codex/from-home",
+                    "updated_at": (now - timedelta(minutes=5)).isoformat(),
+                },
+                {
+                    "status": "queued",
+                    "lane_id": "home-only",
+                    "updated_at": (now - timedelta(minutes=3)).isoformat(),
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    repo_path.write_text(
+        json.dumps(
+            [
+                {
+                    "status": "blocked",
+                    "lane_id": "shared-lane",
+                    "owner_session": "repo-owner",
+                    "updated_at": (now - timedelta(minutes=1)).isoformat(),
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    body, gaps = fable_goal_cycle._fresh_active_lanes(tmp_path, now=now, home=home)
+
+    assert gaps == []
+    assert body is not None
+    assert body.count('"lane_id": "shared-lane"') == 1
+    assert '"owner_session": "repo-owner"' in body
+    assert '"branch": "codex/from-home"' in body
+    assert '"lane_id": "home-only"' in body
+
+
+def test_fresh_active_lanes_surfaces_partial_utf8_degradation(tmp_path: Path) -> None:
+    now = datetime(2026, 7, 10, 4, 15, tzinfo=timezone.utc)
+    home = tmp_path / "home"
+    home_path = home / ".aragora" / "agent-bridge" / "lanes.json"
+    repo_path = tmp_path / ".aragora" / "agent-bridge" / "lanes.json"
+    home_path.parent.mkdir(parents=True)
+    repo_path.parent.mkdir(parents=True)
+    home_path.write_bytes(b"\xff\xfe")
+    repo_path.write_text(
+        json.dumps(
+            [
+                {
+                    "status": "claimed",
+                    "lane_id": "repo-lane",
+                    "updated_at": (now - timedelta(minutes=1)).isoformat(),
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    body, gaps = fable_goal_cycle._fresh_active_lanes(tmp_path, now=now, home=home)
+
+    assert body is not None
+    assert '"lane_id": "repo-lane"' in body
+    assert len(gaps) == 1
+    assert "lanes registry unreadable" in gaps[0]
+    assert str(home_path) in gaps[0]
+
+
+def test_fresh_active_lanes_falls_back_from_bad_heartbeat_to_updated_at(
+    tmp_path: Path,
+) -> None:
+    now = datetime(2026, 7, 10, 4, 15, tzinfo=timezone.utc)
+    lanes_path = tmp_path / ".aragora" / "agent-bridge" / "lanes.json"
+    lanes_path.parent.mkdir(parents=True)
+    lanes_path.write_text(
+        json.dumps(
+            [
+                {
+                    "status": "acknowledged",
+                    "lane_id": "fallback-lane",
+                    "last_heartbeat_at": "not-a-time",
+                    "updated_at": (now - timedelta(minutes=2)).isoformat(),
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    body, gaps = fable_goal_cycle._fresh_active_lanes(tmp_path, now=now, home=tmp_path / "home")
+
+    assert gaps == []
+    assert body is not None
+    assert '"lane_id": "fallback-lane"' in body
+    assert '"heartbeat_at": "2026-07-10T04:13:00+00:00"' in body
+
+
+def test_response_instructions_make_fresh_lane_ownership_per_object() -> None:
+    instructions = fable_goal_cycle.RESPONSE_FORMAT_INSTRUCTIONS
+
+    assert "fresh active lane" in instructions
+    assert "PR, branch, or worktree" in instructions
+    assert "per-object" in instructions
+    assert "not a global lock" in instructions
 
 
 def test_run_consult_sets_overall_timeout_and_bounded_outer_timeout(
