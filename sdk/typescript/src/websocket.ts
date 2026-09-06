@@ -21,6 +21,7 @@ import type {
   UserVoteEvent,
   WarningEvent,
 } from './types';
+import { ConnectionError } from './errors';
 
 // Keep Node fallback local to this file without requiring global @types/node.
 declare const require: (moduleName: string) => unknown;
@@ -394,7 +395,9 @@ function getEventDebateId(event: WebSocketEvent): string | undefined {
  * Create an async iterable stream for debate events.
  *
  * This provides a convenient way to consume debate events using async iteration.
- * The stream will automatically handle WebSocket connection, reconnection, and cleanup.
+ * The stream handles connection and cleanup, draining accepted events before ending.
+ * A disconnect without a server terminal event raises ConnectionError after draining;
+ * it does not imply debate completion or resume this iterator on reconnection.
  *
  * @param config - Aragora configuration (baseUrl, apiKey, etc.)
  * @param options - Stream options including optional debateId filter
@@ -432,10 +435,32 @@ export async function* streamDebate(
 ): AsyncGenerator<WebSocketEvent, void, unknown> {
   const ws = new AragoraWebSocket(config, options);
   const eventQueue: WebSocketEvent[] = [];
-  let resolveNext: ((event: WebSocketEvent) => void) | null = null;
-  let rejectNext: ((error: Error) => void) | null = null;
+  let wakeNext: (() => void) | null = null;
   let ended = false;
+  let terminalError: Error | null = null;
+  let signalEnd: () => void;
+  const terminalSignal = new Promise<void>((resolve) => {
+    signalEnd = resolve;
+  });
   const { debateId } = options;
+
+  const wake = () => {
+    if (ended) {
+      signalEnd();
+      // Let connect's onerror finish rejecting before disconnect changes its state.
+      // Cleanup must not depend on when a paused consumer requests another event.
+      queueMicrotask(() => {
+        try {
+          cleanup();
+        } catch {
+          terminalError ??= new ConnectionError('Failed to clean up WebSocket');
+        }
+      });
+    }
+    const notify = wakeNext;
+    wakeNext = null;
+    notify?.();
+  };
 
   // Filter events by debate ID if specified
   const shouldEmit = (event: WebSocketEvent): boolean => {
@@ -448,68 +473,74 @@ export async function* streamDebate(
 
   // Handle incoming messages
   const unsubMessage = ws.on('message', (event) => {
-    if (!shouldEmit(event)) {
+    if (ended || !shouldEmit(event)) {
       return;
     }
 
-    if (resolveNext) {
-      resolveNext(event);
-      resolveNext = null;
-    } else {
-      eventQueue.push(event);
-    }
+    eventQueue.push(event);
 
     // Check for terminal events
     if (event.type === 'debate_end' || event.type === 'error') {
       ended = true;
     }
+    wake();
   });
 
   // Handle errors
   const unsubError = ws.on('error', (error) => {
-    if (rejectNext) {
-      rejectNext(error);
-      rejectNext = null;
-    }
+    if (ended) return;
+    // A transport error commonly precedes close; type it immediately rather than
+    // waiting for a close callback that cleanup may already have detached.
+    // Low-level parse errors can contain raw frames, so do not copy their text.
+    terminalError = error instanceof ConnectionError
+      ? error
+      : new ConnectionError('WebSocket stream failed');
     ended = true;
+    wake();
   });
 
   // Handle disconnection
-  const unsubDisconnect = ws.on('disconnected', ({ code, reason }) => {
+  const unsubDisconnect = ws.on('disconnected', ({ code }) => {
+    if (ended) return;
+    terminalError = new ConnectionError(
+      'WebSocket disconnected before a terminal debate event',
+      undefined,
+      undefined,
+      { code }
+    );
     ended = true;
-    if (resolveNext) {
-      // Create a synthetic end event
-      resolveNext({
-        type: 'debate_end',
-        debate_id: debateId,
-        timestamp: new Date().toISOString(),
-        data: { reason: 'connection_closed', code, close_reason: reason },
-      });
-      resolveNext = null;
-    }
+    wake();
   });
 
-  // Connect to the WebSocket
-  await ws.connect(debateId);
-
-  try {
-    while (!ended) {
-      if (eventQueue.length > 0) {
-        yield eventQueue.shift()!;
-      } else {
-        const event = await new Promise<WebSocketEvent>((resolve, reject) => {
-          resolveNext = resolve;
-          rejectNext = reject;
-        });
-        yield event;
-      }
-    }
-  } finally {
-    // Cleanup
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     unsubMessage();
     unsubError();
     unsubDisconnect();
+    wakeNext = null;
     ws.disconnect();
+  };
+
+  try {
+    // Setup failures need the same cleanup as iterator termination.
+    // A close-before-open need not reject the low-level connection promise.
+    await Promise.race([ws.connect(debateId), terminalSignal]);
+    while (true) {
+      if (eventQueue.length > 0) {
+        yield eventQueue.shift()!;
+      } else if (ended) {
+        if (terminalError) throw terminalError;
+        return;
+      } else {
+        await new Promise<void>((resolve) => {
+          wakeNext = resolve;
+        });
+      }
+    }
+  } finally {
+    cleanup();
   }
 }
 
