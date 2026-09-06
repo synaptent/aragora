@@ -6,14 +6,18 @@
 ## Problem (structural, proven empirically)
 The merge-quorum gate requires **2 supportive PASS verdicts** for Tier 1 (`tier_quorum_rule`,
 `aragora/swarm/quorum_evidence.py:230`). Two thorough adversarial reviewers (claude, openai)
-**never both PASS substantial net-new code** — they each find an endless tail of *advisory*
-`[P2]/[P3]` robustness nits (different ones each round). Demonstrated on #8389 (700-line ODR
-verify engine): 3 rounds of claude findings + a disjoint openai set, all advisory, **zero
-[P0]/[P1]**, `unresolved_dissent: false`. Net effect: **large valuable features cannot clear the
-gate while trivial churn sails through** — backwards for velocity *and* for shipping value.
-`--admin` does **not** bypass it (branch protection enforces the check against admins), and Tier 1
-has no human-settlement path — so there is currently **no clean way to land a substantial new
-feature** the reviewers keep nitpicking.
+**can stall for rounds without both reaching PASS on substantial net-new code** — each surfacing a
+fresh tail of *advisory* `[P2]/[P3]` robustness nits (often different ones each round). This is a
+*bounded-stall risk*, **not** an absolute: a genuinely good PR does converge to a clean 2-0 after
+real revisions — verified on #8730, which reached a clean claude+openai PASS after two fix rounds.
+The failure mode is the *unbounded* case — a PR that keeps drawing disjoint advisory nits round
+after round with **zero [P0]/[P1]** and `unresolved_dissent: false` (seen on #8389, 700-line ODR
+verify engine: 3 rounds of disjoint claude/openai advisory sets). Net effect when it happens:
+**a valuable feature can be held by advisory churn while trivial changes sail through** — backwards
+for velocity *and* for shipping value. `--admin` does **not** bypass it (branch protection enforces
+the check against admins), and Tier 1 has no human-settlement path. Clean 2-0 stays the preferred
+path after real revisions; the settlement path below is the **bounded fallback** for a genuine
+advisory-only stall, not a replacement for earning PASS.
 
 ## The change (staged)
 

@@ -33,6 +33,7 @@ from aragora.swarm.quorum_evidence import (
     EvidenceItem,
     ReviewerResult,
     collect_evidence,
+    compose_advisory_settlement_record,
     compose_evidence_comment,
     decide_action,
 )
@@ -2279,6 +2280,323 @@ def test_collect_severity_gated_p2_only_dissent_is_advisory(
     assert all("changes-requested" not in body.lower() for _repo, body in posted)
 
 
+def test_advisory_settlement_record_is_gate_visible_advisory_dissent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    from aragora.cli.commands.review_queue import _advisory_settle_review_signals
+
+    supportive = EvidenceItem(
+        "claude",
+        compose_evidence_comment(
+            family="claude",
+            head_sha=HEAD,
+            head_committed_at=COMMITTED,
+            pr=1,
+            reviewer_text="Verdict: PASS\n- no blockers",
+        ),
+        True,
+        ["claude"],
+        [],
+        "pass",
+    )
+    advisory = EvidenceItem(
+        "openai",
+        compose_evidence_comment(
+            family="openai",
+            head_sha=HEAD,
+            head_committed_at=COMMITTED,
+            pr=1,
+            reviewer_text="Verdict: CHANGES-REQUESTED\n- [P2] Track the edge case follow-up.",
+        ),
+        True,
+        ["openai"],
+        [],
+        "changes_requested",
+    )
+
+    body = compose_advisory_settlement_record(
+        repo="o/r",
+        pr=1,
+        head_sha=HEAD,
+        head_committed_at=COMMITTED,
+        supportive_items=[supportive],
+        advisory_items=[advisory],
+        followup_issues=["#8755"],
+        settled_by="scarmani",
+    )
+
+    assert "Advisory dissent (non-blocking)" in body
+    assert "advisory_settle: eligible" in body
+    assert "#8755" in body
+    assert _advisory_settle_review_signals(
+        [{"author": {"login": "scarmani"}, "body": body, "createdAt": ""}],
+        head_sha=HEAD,
+        head_committed_at=COMMITTED,
+    ) == (True, True, False)
+
+
+def test_collect_operator_advisory_dissent_posts_settlement_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "0")
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    monkeypatch.setenv("ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE", "1")
+    fakes, posted = _fakes(tier=2)
+    calls: list[tuple[str, int, int]] = []
+
+    def reviewer_runner(family: str, prompt: str) -> ReviewerResult:
+        if family == "openai":
+            return ReviewerResult(
+                "openai",
+                "Verdict: CHANGES-REQUESTED\n- [P2] Track the edge case follow-up.",
+                True,
+            )
+        return ReviewerResult("claude", "Verdict: PASS\n- no blockers", True)
+
+    def quorum_reconciler(repo: str, pr: int) -> dict:
+        calls.append((repo, pr, len(posted)))
+        return {"applied": True}
+
+    fakes["reviewer_runner"] = reviewer_runner
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai"],
+        author="me",
+        apply=True,
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=["#8755"],
+        quorum_reconciler=quorum_reconciler,
+        **fakes,
+    )
+
+    assert outcome.action == "post"
+    assert outcome.supportive_families == ["claude"]
+    assert outcome.advisory_families == ["openai"]
+    assert outcome.posted == ["claude", "advisory-settlement:openai"]
+    assert len(posted) == 2
+    assert "Verdict: PASS" in posted[0][1]
+    assert "Advisory dissent (non-blocking)" in posted[1][1]
+    assert "advisory_settle: eligible" in posted[1][1]
+    assert "#8755" in posted[1][1]
+    assert calls == [("o/r", 1, 2)]
+
+
+def test_collect_operator_advisory_dissent_skips_rerun_if_record_post_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "0")
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    monkeypatch.setenv("ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE", "1")
+    fakes, posted = _fakes(tier=2)
+    calls: list[tuple[str, int]] = []
+
+    def reviewer_runner(family: str, prompt: str) -> ReviewerResult:
+        if family == "openai":
+            return ReviewerResult(
+                "openai",
+                "Verdict: CHANGES-REQUESTED\n- [P2] Track the edge case follow-up.",
+                True,
+            )
+        return ReviewerResult("claude", "Verdict: PASS\n- no blockers", True)
+
+    def poster(repo: str, pr: int, body: str) -> None:
+        if "Advisory dissent (non-blocking)" in body:
+            raise RuntimeError("comment surface down")
+        posted.append((repo, body))
+
+    def quorum_reconciler(repo: str, pr: int) -> dict:
+        calls.append((repo, pr))
+        return {"applied": True}
+
+    fakes["reviewer_runner"] = reviewer_runner
+    fakes["poster"] = poster
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai"],
+        author="me",
+        apply=True,
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=["#8755"],
+        quorum_reconciler=quorum_reconciler,
+        **fakes,
+    )
+
+    assert outcome.posted == ["claude"]
+    assert "advisory-settlement" in outcome.post_errors[0]
+    assert calls == []
+
+
+def test_collect_operator_advisory_dissent_refuses_blocking_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "0")
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    monkeypatch.setenv("ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE", "1")
+    fakes, posted = _fakes(tier=2)
+
+    def reviewer_runner(family: str, prompt: str) -> ReviewerResult:
+        if family == "openai":
+            return ReviewerResult(
+                "openai",
+                "Verdict: CHANGES-REQUESTED\n- [P1] Real blocker remains.",
+                True,
+            )
+        return ReviewerResult("claude", "Verdict: PASS\n- no blockers", True)
+
+    fakes["reviewer_runner"] = reviewer_runner
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai"],
+        author="me",
+        apply=True,
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=["#8755"],
+        **fakes,
+    )
+
+    assert outcome.action == "prepare"
+    assert "reviewer dissent" in outcome.action_reason
+    assert outcome.dissenting_families == ["openai"]
+    assert posted == []
+
+
+def test_collect_operator_advisory_dissent_requires_followup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "0")
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    monkeypatch.setenv("ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE", "1")
+    fakes, posted = _fakes(tier=2)
+
+    def reviewer_runner(family: str, prompt: str) -> ReviewerResult:
+        if family == "openai":
+            return ReviewerResult(
+                "openai",
+                "Verdict: CHANGES-REQUESTED\n- [P2] Track the edge case follow-up.",
+                True,
+            )
+        return ReviewerResult("claude", "Verdict: PASS\n- no blockers", True)
+
+    fakes["reviewer_runner"] = reviewer_runner
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai"],
+        author="me",
+        apply=True,
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=[],
+        **fakes,
+    )
+
+    assert outcome.action == "prepare"
+    assert "follow-up issue" in outcome.action_reason
+    assert posted == []
+
+
+def test_collect_operator_advisory_dissent_requires_followup_per_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "0")
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    monkeypatch.setenv("ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE", "1")
+
+    def reviewer_runner(family: str, prompt: str) -> ReviewerResult:
+        if family == "openai":
+            return ReviewerResult(
+                "openai",
+                "Verdict: CHANGES-REQUESTED\n"
+                "- [P2] Track the first edge case.\n"
+                "- [P3] Track the second edge case.",
+                True,
+            )
+        return ReviewerResult("claude", "Verdict: PASS\n- no blockers", True)
+
+    fakes, posted = _fakes(tier=2)
+    fakes["reviewer_runner"] = reviewer_runner
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai"],
+        author="me",
+        apply=True,
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=["#8755"],
+        **fakes,
+    )
+
+    assert outcome.action == "prepare"
+    assert "every advisory finding" in outcome.action_reason
+    assert posted == []
+
+    fakes, posted = _fakes(tier=2)
+    fakes["reviewer_runner"] = reviewer_runner
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai"],
+        author="me",
+        apply=True,
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=["#8755", "#8756"],
+        **fakes,
+    )
+
+    assert outcome.action == "post"
+    assert outcome.posted == ["claude", "advisory-settlement:openai"]
+    assert len(posted) == 2
+    advisory_record = posted[1][1]
+    assert "#8755" in advisory_record
+    assert "#8756" in advisory_record
+    assert "Track the first edge case." in advisory_record
+    assert "Track the second edge case." in advisory_record
+
+
+def test_collect_operator_advisory_dissent_high_tier_stays_prepare(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENABLE_TIERED_MERGE_GATE", "0")
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    monkeypatch.setenv("ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE", "1")
+    fakes, posted = _fakes(tier=4)
+
+    def reviewer_runner(family: str, prompt: str) -> ReviewerResult:
+        if family == "openai":
+            return ReviewerResult(
+                "openai",
+                "Verdict: CHANGES-REQUESTED\n- [P2] Track the edge case follow-up.",
+                True,
+            )
+        return ReviewerResult("claude", "Verdict: PASS\n- no blockers", True)
+
+    fakes["reviewer_runner"] = reviewer_runner
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai"],
+        author="me",
+        apply=True,
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=["#8755"],
+        **fakes,
+    )
+
+    assert outcome.action == "prepare"
+    assert "operator settlement" in outcome.action_reason
+    assert posted == []
+
+
 def test_collect_severity_gated_finding_free_changes_requested_is_advisory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3617,6 +3935,80 @@ def test_apply_prepared_evidence_requires_lint_identity_match(tmp_path) -> None:
     assert posted == []
 
 
+def test_apply_prepared_evidence_refuses_relint_demoted_advisory_item(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    monkeypatch.setenv("ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE", "1")
+    advisory_body = compose_evidence_comment(
+        family="openai",
+        head_sha=HEAD,
+        head_committed_at=COMMITTED,
+        pr=1,
+        reviewer_text="Verdict: CHANGES-REQUESTED\n- [P2] Track the advisory follow-up.",
+    )
+    prepared = _prepared_outcome_file(
+        tmp_path,
+        items=[
+            EvidenceItem(
+                "claude",
+                _prepared_body("claude"),
+                True,
+                ["claude"],
+                [],
+                "pass",
+                severity_gated=True,
+            ),
+            EvidenceItem(
+                "openai",
+                advisory_body,
+                True,
+                ["openai"],
+                [],
+                "changes_requested",
+                severity_gated=True,
+            ),
+        ],
+    )
+    posted: list[tuple[str, str]] = []
+
+    def linter(pr, head_sha, head_committed_at, author, body, env) -> dict:
+        if "Model family: openai" in body:
+            return {
+                "would_count": False,
+                "counted_reviewer_ids": [],
+                "problems": ["fresh lint rejected prepared comment"],
+            }
+        return {
+            "would_count": True,
+            "counted_reviewer_ids": ["claude"],
+            "problems": [],
+        }
+
+    outcome = qe.apply_prepared_evidence(
+        repo="o/r",
+        pr=1,
+        prepared_json=prepared,
+        author="me",
+        apply=True,
+        families=["claude", "openai"],
+        context_fetcher=lambda repo, pr: {"head_sha": HEAD, "head_committed_at": COMMITTED},
+        tier_fetcher=lambda repo, pr: 1,
+        linter=linter,
+        poster=lambda repo, pr, body: posted.append((repo, body)),
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=["#8755"],
+    )
+
+    assert outcome.action == "prepare"
+    assert "clean lint" in outcome.action_reason
+    assert "openai" in outcome.action_reason
+    assert outcome.posted == []
+    assert posted == []
+
+
 def test_apply_prepared_evidence_rejects_unsupported_family(tmp_path) -> None:
     prepared = _prepared_outcome_file(
         tmp_path,
@@ -3854,6 +4246,45 @@ def test_run_collect_cli_prepared_json_skips_collect_evidence(monkeypatch, tmp_p
     assert seen["prepared_json"] == prepared
     assert seen["apply"] is True
     assert seen["families"] == ("claude", "grok")
+
+
+def test_run_collect_cli_passes_advisory_settlement_flags(monkeypatch, capsys) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_collect(**kwargs) -> CollectOutcome:
+        seen.update(kwargs)
+        return CollectOutcome(
+            repo="o/r",
+            pr=1,
+            head_sha=HEAD,
+            head_committed_at=COMMITTED,
+            tier=2,
+            action="post",
+            action_reason="ok",
+            items=[EvidenceItem("claude", "body", True, ["claude"], [], "pass")],
+            posted=["claude"],
+        )
+
+    monkeypatch.setattr(qe, "collect_evidence", fake_collect)
+    monkeypatch.setattr(qe, "resolve_author", lambda default="local": "me")
+
+    rc = qe.run_collect_cli(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai"],
+        author=None,
+        apply=True,
+        json_output=True,
+        post_advisory_dissent=True,
+        operator_login="scarmani",
+        followup_issues=["#8755"],
+    )
+
+    assert rc == 0
+    assert seen["post_advisory_dissent"] is True
+    assert seen["operator_login"] == "scarmani"
+    assert seen["followup_issues"] == ("#8755",)
+    assert "collect_evidence" in capsys.readouterr().out
 
 
 def test_run_collect_cli_exit_code_quorum_incomplete(monkeypatch) -> None:

@@ -108,6 +108,28 @@ def main(argv: list[str] | None = None) -> int:
             "re-running reviewers."
         ),
     )
+    parser.add_argument(
+        "--post-advisory-dissent",
+        action="store_true",
+        help=(
+            "With --apply, post an operator-approved advisory settlement record "
+            "for advisory-only dissent."
+        ),
+    )
+    parser.add_argument(
+        "--operator-login",
+        default=None,
+        help="Trusted operator GitHub login required by --post-advisory-dissent.",
+    )
+    parser.add_argument(
+        "--followup-issue",
+        dest="followup_issues",
+        action="append",
+        default=[],
+        help=(
+            "Issue reference for an advisory finding being waived. Repeat once per advisory review."
+        ),
+    )
     parser.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
     args = parser.parse_args(argv)
 
@@ -119,6 +141,9 @@ def main(argv: list[str] | None = None) -> int:
         apply=args.apply,
         json_output=args.json_output,
         prepared_json=args.prepared_json,
+        post_advisory_dissent=args.post_advisory_dissent,
+        operator_login=args.operator_login,
+        followup_issues=tuple(args.followup_issues or ()),
         reviewer_timeout_seconds=args.reviewer_timeout,
         overall_timeout_seconds=args.overall_timeout,
     )

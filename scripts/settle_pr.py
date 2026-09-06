@@ -82,7 +82,16 @@ def _resolve_repo(repo: str | None) -> str | None:
     return out.stdout.strip() or None
 
 
-def _collect(repo: str, pr: int, reviewers: list[str], *, apply: bool) -> dict[str, Any]:
+def _collect(
+    repo: str,
+    pr: int,
+    reviewers: list[str],
+    *,
+    apply: bool,
+    post_advisory_dissent: bool = False,
+    operator_login: str | None = None,
+    followup_issues: list[str] | None = None,
+) -> dict[str, Any]:
     """Run collect_quorum_evidence and return its JSON payload.
 
     collect exits non-zero when the quorum is not met but still prints the full
@@ -103,6 +112,12 @@ def _collect(repo: str, pr: int, reviewers: list[str], *, apply: bool) -> dict[s
     ]
     if apply:
         cmd.append("--apply")
+    if post_advisory_dissent:
+        cmd.append("--post-advisory-dissent")
+    if operator_login:
+        cmd.extend(["--operator-login", operator_login])
+    for issue in followup_issues or []:
+        cmd.extend(["--followup-issue", issue])
     out = _run(cmd, timeout=_COLLECT_TIMEOUT)
     try:
         payload = json.loads(out.stdout)
@@ -181,6 +196,21 @@ def main(argv: list[str] | None = None) -> int:
         help="surface Tier-4 merge-apply with ARAGORA_DISABLE_GITHUB_APP_TOKEN=1 "
         "(branch-protection preflight workaround)",
     )
+    ap.add_argument(
+        "--post-advisory-dissent",
+        action="store_true",
+        help=(
+            "with --apply, post an operator-approved advisory settlement record "
+            "for advisory-only dissent"
+        ),
+    )
+    ap.add_argument(
+        "--followup-issue",
+        dest="followup_issues",
+        action="append",
+        default=[],
+        help="issue reference for an advisory finding being waived; repeat as needed",
+    )
     ap.add_argument("--json", action="store_true", help="emit a JSON summary instead of text")
     ap.add_argument(
         "--show-review-bodies",
@@ -201,7 +231,15 @@ def main(argv: list[str] | None = None) -> int:
     # For Tier 3-4, collect treats --apply as prepare-only and refuses to post; we
     # honor that invariant and NEVER post Tier 3-4 evidence ourselves -- the human
     # settlement is surfaced, not automated.
-    payload = _collect(repo, args.pr, args.reviewers, apply=args.apply)
+    payload = _collect(
+        repo,
+        args.pr,
+        args.reviewers,
+        apply=args.apply,
+        post_advisory_dissent=args.post_advisory_dissent,
+        operator_login=args.operator_login,
+        followup_issues=args.followup_issues,
+    )
     summary = summarize_collect(payload)
     # collect emits action="prepare" whenever it does NOT post -- which on a dry-run
     # is ALWAYS (it never posts), and under --apply can mean several things (quorum

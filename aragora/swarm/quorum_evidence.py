@@ -1015,6 +1015,14 @@ class CollectOutcome:
         return [item.family for item in self.items if item.dissenting]
 
     @property
+    def advisory_families(self) -> list[str]:
+        return [
+            item.family
+            for item in self.items
+            if item.verdict == "changes_requested" and not item.dissenting
+        ]
+
+    @property
     def has_supportive_quorum(self) -> bool:
         """Whether the supportive evidence meets the tier's settlement bar.
 
@@ -1075,6 +1083,7 @@ class CollectOutcome:
             "counting_families": self.counting_families,
             "supportive_families": self.supportive_families,
             "dissenting_families": self.dissenting_families,
+            "advisory_families": self.advisory_families,
             "has_supportive_quorum": self.has_supportive_quorum,
             "posted_families": list(self.posted),
             "post_errors": list(self.post_errors),
@@ -1608,6 +1617,126 @@ def compose_evidence_comment(
         f"{transport_disclosure}\n"
         f"{body}\n\n"
         f"dogfood: yes\n"
+    )
+
+
+def _raw_advisory_items(items: Sequence[EvidenceItem]) -> list[EvidenceItem]:
+    return [item for item in items if item.verdict == "changes_requested" and not item.dissenting]
+
+
+def _invalid_advisory_items(items: Sequence[EvidenceItem]) -> list[EvidenceItem]:
+    return [
+        item for item in _raw_advisory_items(items) if not item.would_count or bool(item.problems)
+    ]
+
+
+def _advisory_items(items: Sequence[EvidenceItem]) -> list[EvidenceItem]:
+    invalid = set(id(item) for item in _invalid_advisory_items(items))
+    return [item for item in _raw_advisory_items(items) if id(item) not in invalid]
+
+
+def _issue_refs(followup_issues: Sequence[str] | None) -> list[str]:
+    return [str(issue).strip() for issue in (followup_issues or []) if str(issue).strip()]
+
+
+def _advisory_item_findings(item: EvidenceItem) -> list[str]:
+    findings: list[str] = []
+    seen: set[str] = set()
+    for raw_line in normalize_reviewer_output(item.body, family=item.family).splitlines():
+        line = raw_line.strip()
+        marker_line = re.sub(r"^(?:[-*+]\s+|\d+[.)]\s+)", "", line)
+        if re.match(r"^(?:\*\*)?\[(?:p2|p3)\](?:\*\*)?(?:\s|$|[:.;-])", marker_line, re.I):
+            key = re.sub(r"\s+", " ", marker_line).strip().lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append(line)
+    return findings
+
+
+def _advisory_finding_count(items: Sequence[EvidenceItem]) -> int:
+    return sum(len(_advisory_item_findings(item)) for item in items)
+
+
+def _advisory_item_summary(item: EvidenceItem) -> list[str]:
+    findings = _advisory_item_findings(item)
+    if findings:
+        return findings
+    return ["Advisory changes-requested review with no [P0]/[P1] finding."]
+
+
+def compose_advisory_settlement_record(
+    *,
+    repo: str,
+    pr: int | str,
+    head_sha: str,
+    head_committed_at: str,
+    supportive_items: Sequence[EvidenceItem],
+    advisory_items: Sequence[EvidenceItem],
+    followup_issues: Sequence[str],
+    settled_by: str,
+) -> str:
+    """Compose the operator-approved advisory-dissent settlement record.
+
+    The record is intentionally a recognized exact-head model-review comment with
+    a ``CHANGES-REQUESTED`` verdict and no ``[P0]``/``[P1]`` finding. The merge gate
+    therefore sees it as genuine advisory dissent, while the explicit settlement
+    metadata and follow-up links make clear that it is considered non-blocking.
+    """
+    advisory = list(advisory_items)
+    supportive = list(supportive_items)
+    if not advisory:
+        raise ValueError("advisory settlement requires at least one advisory item")
+    issues = _issue_refs(followup_issues)
+    required_issues = _advisory_finding_count(advisory)
+    if len(issues) < required_issues:
+        raise ValueError(
+            "advisory settlement requires a follow-up issue for every advisory finding"
+        )
+    fam = canonical_family(advisory[0].family)
+    display = FAMILY_DISPLAY.get(fam, fam.title())
+    provider = FAMILY_PROVIDERS.get(fam, fam)
+    short = head_sha[:7]
+    safe_committed = re.sub(r"[^A-Za-z0-9:.+\- TZ]", "", head_committed_at)[:40]
+    committed = f", committed {safe_committed}" if safe_committed else ""
+    settled = re.sub(r"[^A-Za-z0-9_.@/\-]", "", str(settled_by).strip())[:80]
+    support_lines = [
+        f"- {item.family}: counted exact-head PASS ({', '.join(item.counted_reviewer_ids) or item.family})"
+        for item in supportive
+        if item.supportive
+    ]
+    if not support_lines:
+        support_lines = ["- none recorded"]
+    advisory_lines: list[str] = []
+    issue_index = 0
+    for item in advisory:
+        findings = _advisory_item_findings(item)
+        if not findings:
+            advisory_lines.append(f"- {item.family}: advisory review with no [P2]/[P3] finding.")
+            continue
+        for finding in findings:
+            issue = issues[issue_index]
+            issue_index += 1
+            advisory_lines.append(f"- {item.family}: follow-up {issue}")
+            advisory_lines.append(f"  - {finding}")
+    return (
+        f"## {display} advisory settlement record\n\n"
+        f"Reviewer: {fam} ({provider}) - independent model review advisory settlement, "
+        f"grounded on the exact PR head.\n"
+        f"Head: {short} ({head_sha}){committed}.\n"
+        f"PR: #{pr}.\n"
+        f"Repository: {repo}.\n"
+        f"Model family: {fam}\n\n"
+        "Verdict: CHANGES-REQUESTED\n"
+        "advisory_settle: eligible\n"
+        "settlement_record: advisory-dissent-v1\n"
+        f"settled_by: {settled or 'operator'}\n"
+        "policy: zero P0/P1 findings; advisory findings tracked as follow-up issues.\n\n"
+        "Supportive counting reviews:\n"
+        f"{chr(10).join(support_lines)}\n\n"
+        "Advisory dissent (non-blocking):\n"
+        f"{chr(10).join(advisory_lines)}\n\n"
+        "dogfood: yes\n"
     )
 
 
@@ -2971,6 +3100,9 @@ def collect_evidence(
     poster: Callable[[str, int, str], None] = default_poster,
     quorum_reconciler: Callable[[str, int], dict[str, Any] | None] | None = None,
     env: dict[str, str] | None = None,
+    post_advisory_dissent: bool = False,
+    operator_login: str | None = None,
+    followup_issues: Sequence[str] | None = None,
     overall_timeout_seconds: float | None = None,
 ) -> CollectOutcome:
     """Run reviewers, validate evidence, and post only when tier-gating allows."""
@@ -3123,11 +3255,59 @@ def collect_evidence(
             )
             _record_review_adjudication_if_applicable(outcome)
             return outcome
-        if not outcome.has_supportive_quorum:
+        invalid_advisory_items = _invalid_advisory_items(outcome.items)
+        if post_advisory_dissent and invalid_advisory_items:
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "advisory settlement requires clean lint for advisory reviewer(s): "
+                f"{', '.join(item.family for item in invalid_advisory_items)}"
+            )
+            _record_review_adjudication_if_applicable(outcome)
+            return outcome
+        advisory_items = _advisory_items(outcome.items)
+        advisory_requested = bool(post_advisory_dissent and advisory_items)
+        if advisory_requested:
+            if not severity_gated_dissent_enabled():
+                outcome.action = "prepare"
+                outcome.action_reason = (
+                    "advisory settlement requires ARAGORA_ENABLE_SEVERITY_GATED_DISSENT=1"
+                )
+                return outcome
+            if not advisory_dissent_settle_enabled():
+                outcome.action = "prepare"
+                outcome.action_reason = (
+                    "advisory settlement requires ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE=1"
+                )
+                return outcome
+            if tier is None or not 0 <= tier <= 2:
+                outcome.action = "prepare"
+                outcome.action_reason = (
+                    "advisory settlement is Tier 0-2 only; Tier 3-4 require human settlement"
+                )
+                return outcome
+            if not str(operator_login or "").strip():
+                outcome.action = "prepare"
+                outcome.action_reason = "advisory settlement requires --operator-login"
+                return outcome
+            if not outcome.supportive_families:
+                outcome.action = "prepare"
+                outcome.action_reason = (
+                    "advisory settlement requires at least one supportive counting review"
+                )
+                return outcome
+            required_issues = _advisory_finding_count(advisory_items)
+            if len(_issue_refs(followup_issues)) < required_issues:
+                outcome.action = "prepare"
+                outcome.action_reason = (
+                    "advisory settlement requires a follow-up issue for every advisory finding"
+                )
+                return outcome
+        if not outcome.has_supportive_quorum and not advisory_requested:
             outcome.action = "prepare"
             outcome.action_reason = outcome.incomplete_quorum_reason
             _record_review_adjudication_if_applicable(outcome)
             return outcome
+        advisory_record_posted = False
         # Reviewers can take minutes; re-verify the head and tier immediately
         # before posting so a head that moved or a PR promoted to a settlement
         # tier in the meantime is never posted against.
@@ -3160,7 +3340,36 @@ def collect_evidence(
                     outcome.post_errors.append(f"{item.family}: {str(exc)[:200]}")
                     continue
                 outcome.posted.append(item.family)
-        if outcome.posted and outcome.has_supportive_quorum and quorum_reconciler is not None:
+            if advisory_requested and not outcome.post_errors:
+                try:
+                    record = compose_advisory_settlement_record(
+                        repo=repo,
+                        pr=pr,
+                        head_sha=head_sha,
+                        head_committed_at=head_committed_at,
+                        supportive_items=[item for item in outcome.items if item.supportive],
+                        advisory_items=advisory_items,
+                        followup_issues=followup_issues or [],
+                        settled_by=operator_login or "operator",
+                    )
+                    poster(repo, pr, record)
+                    outcome.posted.append(
+                        "advisory-settlement:" + ",".join(item.family for item in advisory_items)
+                    )
+                    advisory_record_posted = True
+                except (
+                    OSError,
+                    RuntimeError,
+                    TypeError,
+                    ValueError,
+                    subprocess.SubprocessError,
+                ) as exc:
+                    outcome.post_errors.append(f"advisory-settlement: {str(exc)[:200]}")
+        if (
+            outcome.posted
+            and (outcome.has_supportive_quorum or advisory_record_posted)
+            and quorum_reconciler is not None
+        ):
             try:
                 outcome.quorum_rerun = quorum_reconciler(repo, pr)
             except Exception as exc:  # noqa: BLE001 - evidence posts should remain reported.
@@ -3617,6 +3826,9 @@ def apply_prepared_evidence(
     poster: Callable[[str, int, str], None] = default_poster,
     quorum_reconciler: Callable[[str, int], dict[str, Any] | None] | None = None,
     env: dict[str, str] | None = None,
+    post_advisory_dissent: bool = False,
+    operator_login: str | None = None,
+    followup_issues: Sequence[str] | None = None,
 ) -> CollectOutcome:
     """Post an exact-head prepared artifact without re-running reviewers.
 
@@ -3752,7 +3964,54 @@ def apply_prepared_evidence(
         )
         _record_review_adjudication_if_applicable(outcome)
         return outcome
-    if not outcome.has_supportive_quorum:
+    invalid_advisory_items = _invalid_advisory_items(outcome.items)
+    if post_advisory_dissent and invalid_advisory_items:
+        outcome.action = "prepare"
+        outcome.action_reason = (
+            "advisory settlement requires clean lint for advisory reviewer(s): "
+            f"{', '.join(item.family for item in invalid_advisory_items)}"
+        )
+        _record_review_adjudication_if_applicable(outcome)
+        return outcome
+    advisory_items = _advisory_items(outcome.items)
+    advisory_requested = bool(post_advisory_dissent and advisory_items)
+    if advisory_requested:
+        if not severity_gated_dissent_enabled():
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "advisory settlement requires ARAGORA_ENABLE_SEVERITY_GATED_DISSENT=1"
+            )
+            return outcome
+        if not advisory_dissent_settle_enabled():
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "advisory settlement requires ARAGORA_ENABLE_ADVISORY_DISSENT_SETTLE=1"
+            )
+            return outcome
+        if tier is None or not 0 <= tier <= 2:
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "advisory settlement is Tier 0-2 only; Tier 3-4 require human settlement"
+            )
+            return outcome
+        if not str(operator_login or "").strip():
+            outcome.action = "prepare"
+            outcome.action_reason = "advisory settlement requires --operator-login"
+            return outcome
+        if not outcome.supportive_families:
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "advisory settlement requires at least one supportive counting review"
+            )
+            return outcome
+        required_issues = _advisory_finding_count(advisory_items)
+        if len(_issue_refs(followup_issues)) < required_issues:
+            outcome.action = "prepare"
+            outcome.action_reason = (
+                "advisory settlement requires a follow-up issue for every advisory finding"
+            )
+            return outcome
+    if not outcome.has_supportive_quorum and not advisory_requested:
         outcome.action = "prepare"
         outcome.action_reason = outcome.incomplete_quorum_reason
         _record_review_adjudication_if_applicable(outcome)
@@ -3785,6 +4044,7 @@ def apply_prepared_evidence(
     outcome.action_reason = (
         "prepared exact-head evidence artifact; posting without reviewer regeneration"
     )
+    advisory_record_posted = False
     for item in outcome.items:
         if not item.supportive:
             continue
@@ -3794,7 +4054,36 @@ def apply_prepared_evidence(
             outcome.post_errors.append(f"{item.family}: {str(exc)[:200]}")
             continue
         outcome.posted.append(item.family)
-    if outcome.posted and outcome.has_supportive_quorum and quorum_reconciler is not None:
+    if advisory_requested and not outcome.post_errors:
+        try:
+            record = compose_advisory_settlement_record(
+                repo=repo,
+                pr=pr,
+                head_sha=head_sha,
+                head_committed_at=head_committed_at,
+                supportive_items=[item for item in outcome.items if item.supportive],
+                advisory_items=advisory_items,
+                followup_issues=followup_issues or [],
+                settled_by=operator_login or "operator",
+            )
+            poster(repo, pr, record)
+            outcome.posted.append(
+                "advisory-settlement:" + ",".join(item.family for item in advisory_items)
+            )
+            advisory_record_posted = True
+        except (
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            subprocess.SubprocessError,
+        ) as exc:
+            outcome.post_errors.append(f"advisory-settlement: {str(exc)[:200]}")
+    if (
+        outcome.posted
+        and (outcome.has_supportive_quorum or advisory_record_posted)
+        and quorum_reconciler is not None
+    ):
         try:
             outcome.quorum_rerun = quorum_reconciler(repo, pr)
         except Exception as exc:  # noqa: BLE001 - evidence posts should remain reported.
@@ -3896,6 +4185,9 @@ def run_collect_cli(
     apply: bool,
     json_output: bool,
     prepared_json: Path | None = None,
+    post_advisory_dissent: bool = False,
+    operator_login: str | None = None,
+    followup_issues: Sequence[str] | None = None,
     reviewer_timeout_seconds: float | None = None,
     overall_timeout_seconds: float | None = None,
     printer: Callable[[str], None] = print,
@@ -3933,6 +4225,9 @@ def run_collect_cli(
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
                     overall_timeout_seconds=overall_timeout_seconds,
+                    post_advisory_dissent=post_advisory_dissent,
+                    operator_login=operator_login,
+                    followup_issues=tuple(followup_issues or ()),
                 )
             else:
                 outcome = apply_prepared_evidence(
@@ -3944,6 +4239,9 @@ def run_collect_cli(
                     families=fams,
                     env=merge_quorum_io.aragora_env(),
                     quorum_reconciler=default_quorum_reconciler if apply else None,
+                    post_advisory_dissent=post_advisory_dissent,
+                    operator_login=operator_login,
+                    followup_issues=tuple(followup_issues or ()),
                 )
     except CollectPreflightTransportError as exc:
         if json_output:

@@ -10,9 +10,12 @@
 ## Thesis (two, tightly linked)
 
 1. **Adjudicate review deadlocks with Aragora's own primitives.** The PR-review "nitpick
-   treadmill" (two adversarial reviewers who never both PASS a substantial diff, each surfacing
-   fresh advisory `[P2]/[P3]` nits every round) is a *decision-adjudication* problem — exactly what
-   this platform exists to solve. We already have the machinery; we are not composing it against our
+   treadmill" (two adversarial reviewers who can stall for rounds without both reaching PASS on a
+   substantial diff, each surfacing fresh advisory `[P2]/[P3]` nits every round) is a
+   *decision-adjudication* problem — exactly what this platform exists to solve. Clean 2-0 remains
+   the preferred path after real revisions (a good PR does converge — see #8730); adjudication is
+   the *bounded fallback* for a genuine advisory-only stall, never a replacement for earning PASS.
+   We already have the machinery; we are not composing it against our
    own gate.
 
 2. **Consolidate by composition, not by rewrite.** The repo is *sprawling around a coherent core*.
