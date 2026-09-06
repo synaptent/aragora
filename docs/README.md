@@ -6,10 +6,9 @@ source. The published site in `docs-site/` is synced from these files via
 landing page; [docs/INDEX.md](INDEX.md) is a flat reference list of the same
 docs.
 
-Aragora is an **auditable execution control plane for consequential
-AI-assisted work**. It uses multi-model review, receipts, provenance, and
-truthful gates so consequential work can be inspected instead of merely
-trusted.
+**Aragora is an auditable execution control plane for AI-assisted decisions: multi-model review in, a verifiable Decision Receipt out.**
+It uses multi-model review, receipts, provenance, and truthful gates so
+consequential decisions can be inspected instead of merely trusted.
 
 ## What Are You Trying To Do?
 
