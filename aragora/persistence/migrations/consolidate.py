@@ -29,7 +29,7 @@ import logging
 import shutil
 import sqlite3
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
@@ -67,11 +67,7 @@ class MigrationStats:
     rows_read: int = 0
     rows_written: int = 0
     rows_skipped: int = 0
-    errors: list[str] | None = None
-
-    def __post_init__(self):
-        if self.errors is None:
-            self.errors = []
+    errors: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -1161,7 +1157,7 @@ class DatabaseConsolidator:
                 )
 
         # Track target connections
-        target_conns: dict[str, sqlite3.Connection] = {}
+        target_conns: dict[str, sqlite3.Connection | None] = {}
 
         try:
             for source_db_name, config in MIGRATION_MAP.items():
@@ -1215,6 +1211,8 @@ class DatabaseConsolidator:
                         except (OSError, RuntimeError, ValueError) as e:
                             logger.warning("Could not count %s: %s", source_table, e)
                     else:
+                        if target_conn is None:
+                            raise RuntimeError(f"Missing target connection for {target_db_name}")
                         stats = self._migrate_table(
                             source_conn=source_conn,
                             target_conn=target_conn,

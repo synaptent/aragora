@@ -540,7 +540,10 @@ class EloRepository(BaseRepository[RatingEntity]):
                     (agent, new_elo, debate_id),
                 )
 
-            return cursor.lastrowid
+            match_id = cursor.lastrowid
+            if match_id is None:
+                raise RuntimeError("SQLite did not return an ID for the recorded match")
+            return match_id
 
     def get_match(self, debate_id: str) -> MatchEntity | None:
         """
