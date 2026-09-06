@@ -22,11 +22,32 @@ import json
 import logging
 import os
 import re
-from typing import Any
+from collections.abc import Callable
+from functools import partial
+from typing import Any, ParamSpec, TypeVar, cast
 
+from aragora_debate._resilience import CircuitBreaker, retry, with_timeout
 from aragora_debate.types import Agent, Critique, Message, Vote
 
 logger = logging.getLogger(__name__)
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+async def _call_sdk(
+    breaker: CircuitBreaker, operation: Callable[_P, _T], *args: _P.args, **kwargs: _P.kwargs
+) -> _T:
+    """Retry timed SDK attempts; every failed attempt counts toward the breaker."""
+    timed = with_timeout()
+
+    @retry()
+    async def attempt() -> _T:
+        async def invoke() -> _T:
+            return await timed(partial(operation, *args, **kwargs))
+
+        return await breaker.call(invoke)
+
+    return await attempt()
 
 
 # ---------------------------------------------------------------------------
@@ -75,21 +96,21 @@ def _parse_json_from_text(text: str) -> dict[str, Any]:
     """Extract a JSON object from LLM output that may contain markdown fences."""
     # Try direct parse first
     try:
-        return json.loads(text)
+        return cast(dict[str, Any], json.loads(text))
     except json.JSONDecodeError:
         pass
     # Strip markdown code fences
     match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group(1))
+            return cast(dict[str, Any], json.loads(match.group(1)))
         except json.JSONDecodeError:
             pass
     # Try to find any JSON object
     match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group(0))
+            return cast(dict[str, Any], json.loads(match.group(0)))
         except json.JSONDecodeError:
             pass
     return {}
@@ -132,7 +153,9 @@ class ClaudeAgent(Agent):
             ) from exc
         self._client = anthropic.Anthropic(
             api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
+            max_retries=0,
         )
+        self._breaker = CircuitBreaker()
         self._max_tokens = max_tokens
         self._temperature = temperature
 
@@ -151,14 +174,16 @@ class ClaudeAgent(Agent):
         )
         if self.stance != "neutral":
             system += f"\n\nYou are arguing from a {self.stance} stance."
-        msg = self._client.messages.create(
+        msg = await _call_sdk(
+            self._breaker,
+            self._client.messages.create,
             model=self.model,
             max_tokens=self._max_tokens,
             temperature=self._temperature,
             system=system,
             messages=[{"role": "user", "content": full_prompt}],
         )
-        return msg.content[0].text
+        return cast(str, msg.content[0].text)
 
     async def critique(
         self,
@@ -172,7 +197,9 @@ class ClaudeAgent(Agent):
         if history:
             prompt = f"## Debate history\n{history}\n\n{prompt}"
         prompt += "\n\nProvide your critique as JSON."
-        msg = self._client.messages.create(
+        msg = await _call_sdk(
+            self._breaker,
+            self._client.messages.create,
             model=self.model,
             max_tokens=self._max_tokens,
             temperature=self._temperature,
@@ -199,7 +226,9 @@ class ClaudeAgent(Agent):
         for agent_name, content in proposals.items():
             lines.append(f"### {agent_name}\n{content}\n")
         lines.append("Vote for the strongest proposal as JSON.")
-        msg = self._client.messages.create(
+        msg = await _call_sdk(
+            self._breaker,
+            self._client.messages.create,
             model=self.model,
             max_tokens=512,
             temperature=0.3,
@@ -262,7 +291,9 @@ class OpenAIAgent(Agent):
             ) from exc
         self._client = openai.OpenAI(
             api_key=api_key or os.environ.get("OPENAI_API_KEY"),
+            max_retries=0,
         )
+        self._breaker = CircuitBreaker()
         self._max_tokens = max_tokens
         self._temperature = temperature
 
@@ -281,7 +312,9 @@ class OpenAIAgent(Agent):
         )
         if self.stance != "neutral":
             system += f"\n\nYou are arguing from a {self.stance} stance."
-        resp = self._client.chat.completions.create(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.chat.completions.create,
             model=self.model,
             max_tokens=self._max_tokens,
             temperature=self._temperature,
@@ -304,7 +337,9 @@ class OpenAIAgent(Agent):
         if history:
             prompt = f"## Debate history\n{history}\n\n{prompt}"
         prompt += "\n\nProvide your critique as JSON."
-        resp = self._client.chat.completions.create(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.chat.completions.create,
             model=self.model,
             max_tokens=self._max_tokens,
             temperature=self._temperature,
@@ -334,7 +369,9 @@ class OpenAIAgent(Agent):
         for agent_name, content in proposals.items():
             lines.append(f"### {agent_name}\n{content}\n")
         lines.append("Vote for the strongest proposal as JSON.")
-        resp = self._client.chat.completions.create(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.chat.completions.create,
             model=self.model,
             max_tokens=512,
             temperature=0.3,
@@ -399,6 +436,7 @@ class MistralAgent(Agent):
         self._client = Mistral(
             api_key=api_key or os.environ.get("MISTRAL_API_KEY", ""),
         )
+        self._breaker = CircuitBreaker()
         self._max_tokens = max_tokens
         self._temperature = temperature
 
@@ -417,7 +455,9 @@ class MistralAgent(Agent):
         )
         if self.stance != "neutral":
             system += f"\n\nYou are arguing from a {self.stance} stance."
-        resp = self._client.chat.complete(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.chat.complete,
             model=self.model,
             max_tokens=self._max_tokens,
             temperature=self._temperature,
@@ -440,7 +480,9 @@ class MistralAgent(Agent):
         if history:
             prompt = f"## Debate history\n{history}\n\n{prompt}"
         prompt += "\n\nProvide your critique as JSON."
-        resp = self._client.chat.complete(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.chat.complete,
             model=self.model,
             max_tokens=self._max_tokens,
             temperature=self._temperature,
@@ -470,7 +512,9 @@ class MistralAgent(Agent):
         for agent_name, content in proposals.items():
             lines.append(f"### {agent_name}\n{content}\n")
         lines.append("Vote for the strongest proposal as JSON.")
-        resp = self._client.chat.complete(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.chat.complete,
             model=self.model,
             max_tokens=512,
             temperature=0.3,
@@ -534,6 +578,7 @@ class GeminiAgent(Agent):
             ) from exc
         key = api_key or os.environ.get("GEMINI_API_KEY", "")
         self._client = genai.Client(api_key=key)
+        self._breaker = CircuitBreaker()
         self._max_tokens = max_tokens
         self._temperature = temperature
 
@@ -554,7 +599,9 @@ class GeminiAgent(Agent):
         )
         if self.stance != "neutral":
             system += f"\n\nYou are arguing from a {self.stance} stance."
-        resp = self._client.models.generate_content(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.models.generate_content,
             model=self.model,
             contents=full_prompt,
             config=types.GenerateContentConfig(
@@ -579,7 +626,9 @@ class GeminiAgent(Agent):
         if history:
             prompt = f"## Debate history\n{history}\n\n{prompt}"
         prompt += "\n\nProvide your critique as JSON."
-        resp = self._client.models.generate_content(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.models.generate_content,
             model=self.model,
             contents=prompt,
             config=types.GenerateContentConfig(
@@ -611,7 +660,9 @@ class GeminiAgent(Agent):
         for agent_name, content in proposals.items():
             lines.append(f"### {agent_name}\n{content}\n")
         lines.append("Vote for the strongest proposal as JSON.")
-        resp = self._client.models.generate_content(
+        resp = await _call_sdk(
+            self._breaker,
+            self._client.models.generate_content,
             model=self.model,
             contents="\n".join(lines),
             config=types.GenerateContentConfig(

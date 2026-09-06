@@ -19,10 +19,16 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from typing import TypedDict
 
-from aragora_debate.evidence import EvidenceQualityAnalyzer
+from aragora_debate.evidence import EvidenceQualityAnalyzer, EvidenceQualityScore
 
 logger = logging.getLogger(__name__)
+
+
+class _EvidenceGroup(TypedDict):
+    text: str
+    agents: set[str]
 
 
 @dataclass
@@ -206,15 +212,15 @@ class CrossProposalAnalyzer:
     def _extract_agent_evidence(
         self,
         proposals: dict[str, str],
-        quality_scores: dict[str, object],
+        quality_scores: dict[str, EvidenceQualityScore],
     ) -> dict[str, list[str]]:
         """Extract evidence text snippets per agent using markers."""
         agent_evidence: dict[str, list[str]] = {}
 
         for agent, text in proposals.items():
-            score = quality_scores[agent]  # type: ignore[index]
+            score = quality_scores[agent]
             evidence_texts: list[str] = []
-            for marker in score.evidence_markers:  # type: ignore[attr-defined]
+            for marker in score.evidence_markers:
                 normalized = self._normalize_evidence(marker.text)
                 if normalized:
                     evidence_texts.append(normalized)
@@ -227,7 +233,7 @@ class CrossProposalAnalyzer:
         agent_evidence: dict[str, list[str]],
     ) -> list[SharedEvidence]:
         """Find evidence cited by multiple agents."""
-        evidence_map: dict[str, dict] = {}
+        evidence_map: dict[str, _EvidenceGroup] = {}
 
         for agent, evidence_list in agent_evidence.items():
             for evidence_text in evidence_list:
@@ -292,10 +298,10 @@ class CrossProposalAnalyzer:
 
         return contradictions[:3]
 
-    def _find_evidence_gaps(
+    def _find_evidence_gaps(  # noqa: C901 - Keep claim matching and evidence scoring together.
         self,
         proposals: dict[str, str],
-        quality_scores: dict[str, object],
+        quality_scores: dict[str, EvidenceQualityScore],
     ) -> list[EvidenceGap]:
         """Find claims made without supporting evidence."""
         gaps = []
@@ -336,8 +342,8 @@ class CrossProposalAnalyzer:
                     # Check if any of these agents provided evidence near this claim
                     has_evidence = False
                     for agent in claiming_agents:
-                        score = quality_scores[agent]  # type: ignore[index]
-                        if score.citation_density > 0.3:  # type: ignore[attr-defined]
+                        score = quality_scores[agent]
+                        if score.citation_density > 0.3:
                             has_evidence = True
                             break
 

@@ -786,7 +786,7 @@ class TestErrorHandling:
 
         assert result.status_code == 200
 
-    def testmap_exception_to_status(self):
+    def test_map_exception_to_status(self):
         """Should map exceptions to appropriate status codes."""
         assert map_exception_to_status(FileNotFoundError()) == 404
         assert map_exception_to_status(ValueError()) == 400

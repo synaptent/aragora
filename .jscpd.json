@@ -1,0 +1,10 @@
+{
+  "path": ["aragora"],
+  "format": ["python"],
+  "minTokens": 70,
+  "threshold": 2.1,
+  "reporters": ["json", "console"],
+  "output": ".jscpd-report",
+  "ignore": ["**/node_modules/**", "aragora/live/**", "**/__pycache__/**"],
+  "gitignore": true
+}

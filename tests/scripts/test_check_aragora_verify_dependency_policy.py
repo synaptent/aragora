@@ -18,7 +18,7 @@ dependencies = ["cryptography>=48"]
 
 [project.optional-dependencies]
 schema = ["jsonschema>=4"]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pytest-cov>=7", "pytest-randomly>=4", "pytest-timeout>=2", "pytest-xdist>=3"]
 """
 
 
@@ -42,7 +42,7 @@ def test_current_manifest_matches_policy() -> None:
             "httpx",
         ),
         ('schema = ["jsonschema>=4"]', 'schema = ["jsonschema>=4", "referencing"]', "referencing"),
-        ('dev = ["pytest>=8"]', 'dev = ["pytest>=8", "ruff"]', "ruff"),
+        ('"pytest>=8"', '"pytest>=8", "ruff"', "ruff"),
     ],
 )
 def test_rejects_unadopted_dependency(
@@ -64,9 +64,14 @@ def test_normalizes_names_with_extras_and_markers(tmp_path: Path) -> None:
     assert _check(tmp_path, content) == []
 
 
-def test_rejects_missing_adopted_dependency(tmp_path: Path) -> None:
-    errors = _check(tmp_path, BASE_MANIFEST.replace('dev = ["pytest>=8"]', "dev = []"))
-    assert any("missing adopted dependency 'pytest'" in error for error in errors)
+@pytest.mark.parametrize(
+    "requirement",
+    ["pytest>=8", "pytest-cov>=7", "pytest-randomly>=4", "pytest-timeout>=2", "pytest-xdist>=3"],
+)
+def test_rejects_missing_adopted_dependency(tmp_path: Path, requirement: str) -> None:
+    content = BASE_MANIFEST.replace(f'"{requirement}", ', "").replace(f', "{requirement}"', "")
+    errors = _check(tmp_path, content)
+    assert any(f"missing adopted dependency '{requirement.split('>=')[0]}'" in e for e in errors)
 
 
 def test_fails_closed_on_malformed_toml(tmp_path: Path) -> None:

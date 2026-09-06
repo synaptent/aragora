@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from aragora.nomic.repository_profile import (
+    NOMIC_DIR_NAME,
     ContextEvidenceReference,
     ContextPack,
     NomicRepositoryProfile,
@@ -185,7 +186,7 @@ class NomicContextBuilder:
         self._pending_pack_verification: (
             tuple[str, tuple[ContextEvidenceReference, ...], dict[str, bytes]] | None
         ) = None
-        self._context_dir = self._aragora_path / ".nomic" / "context"
+        self._context_dir = self._aragora_path / NOMIC_DIR_NAME / "context"
 
     @property
     def index(self) -> CodebaseIndex | None:
@@ -360,7 +361,7 @@ class NomicContextBuilder:
         root = self._aragora_path.resolve()
         if self._max_context_bytes <= 0:
             raise RepositoryStateError("context pack byte budget must be a positive integer")
-        runtime_root = root / ".nomic" / "context" / "packs"
+        runtime_root = root / NOMIC_DIR_NAME / "context" / "packs"
         self._assert_pack_destination_safe(root, runtime_root)
         revision = assert_clean_revision(root)
         normalized_objective = objective.strip()
@@ -396,7 +397,7 @@ class NomicContextBuilder:
             digests,
             include_tests=self._include_tests,
         )
-        destination = root / ".nomic" / "context" / "packs" / revision.commit_sha / pack_id
+        destination = root / NOMIC_DIR_NAME / "context" / "packs" / revision.commit_sha / pack_id
         self._assert_pack_destination_safe(root, destination)
         relative_destination = destination.relative_to(root).as_posix()
         artifact_names = [*artifacts, "context-pack.json"]
@@ -459,7 +460,7 @@ class NomicContextBuilder:
             relative = destination.relative_to(root)
         except ValueError as exc:
             raise RepositoryStateError("context pack destination escapes repository root") from exc
-        if not relative.parts or relative.parts[0] != ".nomic":
+        if not relative.parts or relative.parts[0] != NOMIC_DIR_NAME:
             raise RepositoryStateError("context pack destination must be beneath .nomic")
 
         current = root
@@ -529,15 +530,15 @@ class NomicContextBuilder:
             )
             if ignored.returncode != 0:
                 raise RepositoryStateError(
-                    f"repository must ignore .nomic runtime artifact path {path!r}; add '.nomic/' "
-                    "to .gitignore or a local Git exclude"
+                    f"repository must ignore {NOMIC_DIR_NAME} runtime artifact path {path!r}; "
+                    f"add '{NOMIC_DIR_NAME}/' to .gitignore or a local Git exclude"
                 )
 
     def verify_context_pack(self, pack: ContextPack) -> None:
         """Verify metadata, content address, manifest, and bound artifact digests."""
         expected_path = (
             self._aragora_path.resolve()
-            / ".nomic"
+            / NOMIC_DIR_NAME
             / "context"
             / "packs"
             / pack.revision.commit_sha
@@ -1219,7 +1220,7 @@ class NomicContextBuilder:
                 max_file_bytes = int(os.environ.get("NOMIC_RLM_MAX_FILE_BYTES", "2000000"))
                 force_rebuild = os.environ.get("NOMIC_RLM_FORCE_REBUILD", "0") == "1"
 
-                output_dir = self._aragora_path / ".nomic" / "rlm"
+                output_dir = self._aragora_path / NOMIC_DIR_NAME / "rlm"
                 result = await summarize_codebase_with_rlm(
                     repo_path=self._aragora_path,
                     output_dir=output_dir,

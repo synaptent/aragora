@@ -38,7 +38,12 @@ import binascii
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .jcs import odr_content_digest
 from .schema import validate_structure
@@ -108,7 +113,7 @@ class VerifyResult:
 # ---------------------------------------------------------------------------
 
 
-def _load_ed25519():  # noqa: ANN202 - lazy import keeps import errors actionable
+def _load_ed25519() -> tuple[type[Ed25519PublicKey], ModuleType, type[InvalidSignature]]:
     try:
         from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.primitives import serialization
@@ -121,9 +126,9 @@ def _load_ed25519():  # noqa: ANN202 - lazy import keeps import errors actionabl
     return Ed25519PublicKey, serialization, InvalidSignature
 
 
-def load_public_key(data: bytes):  # noqa: ANN201
+def load_public_key(data: bytes) -> Ed25519PublicKey:
     """Load an Ed25519 public key from PEM, DER, raw 32 bytes, or base64/hex text."""
-    Ed25519PublicKey, serialization, _ = _load_ed25519()
+    Ed25519PublicKey, serialization, _ = _load_ed25519()  # noqa: N806 - Lazy import retains the class name.
     key = None
     # PEM (wrap parse errors instead of leaking a traceback on hostile input).
     if b"-----BEGIN" in data:
@@ -158,7 +163,7 @@ def load_public_key(data: bytes):  # noqa: ANN201
     return key
 
 
-def compute_key_id(public_key) -> str:  # noqa: ANN001
+def compute_key_id(public_key: Ed25519PublicKey) -> str:
     """``ed25519-`` + first 16 hex of SHA-256(raw public key) — the #8225 key id."""
     _, serialization, _ = _load_ed25519()
     raw = public_key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
@@ -195,7 +200,9 @@ def _decode_signature(value: str) -> bytes | None:
 # ---------------------------------------------------------------------------
 
 
-def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key) -> Check:  # noqa: ANN001
+def _check_signatures(  # noqa: C901 - Preserve signature outcome precedence and tamper diagnostics.
+    doc: dict[str, Any], digest_hex: str, public_key: Ed25519PublicKey | None
+) -> Check:
     signatures = doc.get("signatures")
     signatures = signatures if isinstance(signatures, list) else []
     if not signatures and public_key is None:
@@ -214,7 +221,8 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key) -> Check
             f"{len(signatures)} signature(s) present but no --pubkey supplied; authenticity NOT verified",
         )
 
-    _, _, InvalidSignature = _load_ed25519()
+    _, _, InvalidSignature = _load_ed25519()  # noqa: N806 - Lazy import retains the exception class name.
+    public_key = cast("Ed25519PublicKey", public_key)  # None paths returned above.
     message = bytes.fromhex(digest_hex)
     provided_key_id = compute_key_id(public_key)
     verified_any = False
@@ -291,7 +299,9 @@ def _check_quorum_consistency(doc: dict[str, Any]) -> Check:
     )
 
 
-def _check_chain(doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any]] | None) -> Check:
+def _check_chain(  # noqa: C901 - Keep continuity and digest anchoring checks ordered.
+    doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any]] | None
+) -> Check:
     if chain is None:
         return Check("chain_link", SKIP, "no --chain supplied")
     if not chain:
@@ -349,7 +359,7 @@ def _check_chain(doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any
     return Check("chain_link", PASS, "receipt anchored in chain (no prev-hash links to verify)")
 
 
-def _weakening_warnings(doc: dict[str, Any]) -> list[str]:
+def _weakening_warnings(doc: dict[str, Any]) -> list[str]:  # noqa: C901 - Keep independent ODR warning conditions together.
     warnings: list[str] = []
     attestation = doc.get("attestation")
     if isinstance(attestation, dict) and attestation.get("disposition") == "autonomous":
