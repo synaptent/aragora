@@ -1,0 +1,154 @@
+{
+  "_comment": [
+    "Four agent journeys against aragora AS IT EXISTS TODAY. These are the",
+    "baseline: what an agent currently pays to answer one operational question.",
+    "Every command here is read-only. Do not add a mutating command to this file.",
+    "",
+    "Journeys 1 and 4 are the two that carry hard budgets, because they are the",
+    "two an agent pays on EVERY session and every tick respectively. Journeys 2",
+    "and 3 are scored against full_situation.",
+    "",
+    "PR 9924 is used as the live subject. It was READY at capture time; if it has",
+    "since merged, re-point these at any open ready PR -- the shape of the",
+    "measurement does not depend on which PR it is."
+  ],
+  "journeys": {
+    "cold_orientation": {
+      "question": "I just woke up in this repo with no context. What is true right now, and what is the single safest next action I can take?",
+      "budget": "cold_orientation",
+      "calls": [
+        {
+          "label": "read CLAUDE.md (mandatory)",
+          "cmd": "cat CLAUDE.md"
+        },
+        {
+          "label": "read operating contract (mandatory)",
+          "cmd": "cat docs/AGENT_OPERATING_CONTRACT.md"
+        },
+        {
+          "label": "working tree state",
+          "cmd": "git status"
+        },
+        {
+          "label": "recent history",
+          "cmd": "git log --oneline -20"
+        },
+        {
+          "label": "what is in flight",
+          "cmd": "gh pr list --limit 100"
+        },
+        {
+          "label": "is main red?",
+          "cmd": "gh run list --branch main --limit 20"
+        },
+        {
+          "label": "what work is assigned to me",
+          "cmd": "gh issue list --label boss-ready --limit 30"
+        }
+      ]
+    },
+
+    "quiet_recheck": {
+      "question": "Nothing has obviously happened. Has anything meaningful changed since I last looked?",
+      "budget": "quiet_recheck",
+      "calls": [
+        {
+          "label": "working tree delta",
+          "cmd": "git status --porcelain"
+        },
+        {
+          "label": "history delta",
+          "cmd": "git log --oneline -5"
+        },
+        {
+          "label": "PR set delta",
+          "cmd": "gh pr list --limit 100 --json number,title,isDraft,updatedAt"
+        },
+        {
+          "label": "main CI delta",
+          "cmd": "gh run list --branch main --limit 10"
+        }
+      ]
+    },
+
+    "resumption": {
+      "question": "I was working on PR 9924 before I was interrupted. Did it land? If not, what is blocking it, and is the blocker mine to fix?",
+      "budget": "full_situation",
+      "calls": [
+        {
+          "label": "PR state",
+          "cmd": "gh pr view 9924 --json number,title,state,isDraft,mergeStateStatus,mergeable,headRefName,headRefOid,baseRefName,updatedAt"
+        },
+        {
+          "label": "check results",
+          "cmd": "gh pr checks 9924"
+        },
+        {
+          "label": "resolve head sha (join step 1)",
+          "cmd": "gh pr view 9924 --json headRefOid --jq .headRefOid"
+        },
+        {
+          "label": "commit statuses (join step 2)",
+          "cmd": "gh api repos/{owner}/{repo}/commits/$(gh pr view 9924 --json headRefOid --jq .headRefOid)/statuses --jq '.[] | \"\\(.context)\\t\\(.state)\\t\\(.created_at)\"'"
+        },
+        {
+          "label": "did it actually land on main?",
+          "cmd": "git log origin/main --oneline -50 | grep -i 9924 || echo 'not found in last 50 commits'"
+        },
+        {
+          "label": "is my branch behind?",
+          "cmd": "git rev-list --count origin/main ^HEAD 2>/dev/null || echo 'n/a'"
+        }
+      ]
+    },
+
+    "capsule_cold": {
+      "question": "[AFTER] I just woke up with no context. What is true, and what is the safest next action?",
+      "budget": "cold_orientation",
+      "calls": [
+        {
+          "label": "one composed capsule",
+          "cmd": "python3 scripts/agent_surface/situation.py"
+        }
+      ]
+    },
+
+    "capsule_quiet": {
+      "question": "[AFTER] Has anything meaningful changed since my last cursor?",
+      "budget": "quiet_recheck",
+      "calls": [
+        {
+          "label": "delta against held cursor",
+          "cmd": "python3 scripts/agent_surface/situation.py --since $(python3 scripts/agent_surface/situation.py --json | python3 -c 'import json,sys; print(json.load(sys.stdin)[\"cursor\"])')"
+        }
+      ]
+    },
+
+    "high_risk_settle": {
+      "question": "Is PR 9924 genuinely settled and safe to merge, or would merging it violate the gate?",
+      "budget": "full_situation",
+      "calls": [
+        {
+          "label": "settlement status tool",
+          "cmd": "python3 scripts/settle_status.py 9924 2>&1 || echo 'settle_status.py did not resolve'"
+        },
+        {
+          "label": "merge state + rollup",
+          "cmd": "gh pr view 9924 --json mergeStateStatus,statusCheckRollup"
+        },
+        {
+          "label": "human-settlement status (the authoritative one)",
+          "cmd": "gh api repos/{owner}/{repo}/commits/$(gh pr view 9924 --json headRefOid --jq .headRefOid)/statuses --jq '[.[] | select(.context | test(\"settlement\"))] | .[0] // \"NO SETTLEMENT STATUS\"'"
+        },
+        {
+          "label": "required checks present?",
+          "cmd": "gh pr checks 9924 --json name,state,bucket 2>/dev/null | head -c 4000 || gh pr checks 9924 | head -40"
+        },
+        {
+          "label": "review quorum",
+          "cmd": "gh pr view 9924 --json reviews --jq '[.reviews[] | {author: .author.login, state: .state}]'"
+        }
+      ]
+    }
+  }
+}
