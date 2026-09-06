@@ -93,7 +93,7 @@ test = [
     "PyYAML>=6.0.3,<7.0",
     "pytest>=9.1.1,<10.0",
     "pytest-asyncio>=1.4.0,<2.0",
-    "twine>=6.2.0,<7.0",
+    "twine>=6.2.0,<8.0",
 ]
 gateway = [
     "fastapi>=0.139.0,<1.0",
