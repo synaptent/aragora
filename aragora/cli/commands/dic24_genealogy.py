@@ -1,4 +1,4 @@
-"""CLI command: ``aragora genealogy show``.
+"""CLI commands: ``aragora genealogy show`` and ``aragora genealogy report``.
 
 DIC-24 operator surface for the epistemic genealogy ledger (issue #6218).
 
@@ -97,4 +97,69 @@ def cmd_genealogy_show(args: argparse.Namespace) -> int:
             print(f"  [{e.entry_kind}] {e.entry_id} @ {e.timestamp}{meta}")
     else:
         print("  (no entries)")
+    return 0
+
+
+def _all_unit_ids(path: Path) -> list[str]:
+    """Return sorted unique code_unit_ids found in the JSONL store at *path*."""
+    if not path.exists():
+        return []
+    seen: set[str] = set()
+    order: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            obj: dict[str, Any] = json.loads(raw)
+            uid = str(obj["code_unit_id"])
+            if uid not in seen:
+                seen.add(uid)
+                order.append(uid)
+        except (KeyError, ValueError, TypeError):
+            pass
+    return sorted(order)
+
+
+def cmd_genealogy_report(args: argparse.Namespace) -> int:
+    """Show aggregate genealogy report across multiple code units."""
+    if not _flag_enabled():
+        print(
+            f"error: {_FLAG} is not set; set it to '1' to enable genealogy commands",
+            file=sys.stderr,
+        )
+        return 1
+
+    from aragora.epistemic.genealogy_report import build_genealogy_report
+
+    store_path = Path(getattr(args, "store_file", _DEFAULT_STORE)).expanduser()
+    as_json: bool = getattr(args, "json", False)
+    use_all: bool = getattr(args, "all", False)
+    code_unit_ids: list[str] = getattr(args, "code_unit_ids", None) or []
+
+    if use_all:
+        code_unit_ids = _all_unit_ids(store_path)
+
+    store = _load_store(store_path)
+    try:
+        report = build_genealogy_report(code_unit_ids, store, require_enabled=True)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    if as_json:
+        print(json.dumps(report.to_dict(), indent=2))
+        return 0
+
+    print("Genealogy Report")
+    print(f"  units         : {report.unit_count}")
+    print(f"  total_entries : {report.total_entries}")
+    if report.summaries:
+        print()
+        for s in report.summaries:
+            kinds = ", ".join(s.entry_kinds) if s.entry_kinds else "—"
+            print(f"  {s.code_unit_id}")
+            print(f"    entries: {s.entry_count}  kinds: {kinds}")
+    else:
+        print("  (no units)")
     return 0

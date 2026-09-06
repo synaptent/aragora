@@ -87,7 +87,7 @@ For full runtime configuration, see [ENVIRONMENT](../getting-started/environment
 | `export` | - | Export debate artifacts | - |
 | `factory` | - | Read-only inspector for Factory/Droid local session metadata | `sessions` |
 | `gauntlet` | - | Adversarial stress-test a specification, architecture, or policy | - |
-| `genealogy` | - | DIC-24: inspect epistemic genealogy ledger for proof-carrying code units | `show` |
+| `genealogy` | - | DIC-24: inspect epistemic genealogy ledger for proof-carrying code units | `report`, `show` |
 | `handlers` | - | List registered HTTP handlers and routes | `list`, `routes` |
 | `healthcare` | - | Healthcare vertical: adversarial clinical decision review | `review` |
 | `idea` | - | Clarify a vague idea into a structured initiative brief | `intake`, `review`, `triage` |
