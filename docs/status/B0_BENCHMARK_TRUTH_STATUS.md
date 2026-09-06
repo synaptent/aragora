@@ -1,6 +1,6 @@
 # B0 Benchmark Truth Status
 
-Last updated: 2026-09-01T13:38:29Z
+Last updated: 2026-09-04T13:28:39Z
 
 This is the repo-tracked recurring `TW-02` publication surface for the fixed benchmark corpus.
 
@@ -53,7 +53,7 @@ This is the repo-tracked recurring `TW-02` publication surface for the fixed ben
 | Unique issues succeeded | 0 |
 | Unique issues failed | 5 |
 | Unique issues neutral | 5 |
-| Total ticks | 11 |
+| Total ticks | 10 |
 
 Proxy note: neutral issue outcomes are current-corpus rows that were neither fresh success nor failure, such as `issue_already_resolved`.
 
@@ -64,21 +64,20 @@ Proxy note: neutral issue outcomes are current-corpus rows that were neither fre
 ## Failure Class Distribution
 
 - `blocked_not_dispatch_bounded`: 5
-- `rescue_worker_crash`: 1
 
 ## Rescue Counts By Type
 
-- `rescue_worker_crash`: 1
+- none
 
 ## Previous Published Artifact
 
-- Previous artifact path: `docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260819T151955Z.json`
-- Previous generated_at: `2026-08-19T15:19:55Z`
+- Previous artifact path: `docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260901T133829Z.json`
+- Previous generated_at: `2026-09-01T13:38:29Z`
 
 ## Deltas
 
 - Merged-only rate (`merged_only_rate`): 0.0000
 - No-rescue truth success rate (`no_rescue_truth_success_rate`): 0.0000
-- Proxy no-rescue success rate (`proxy_no_rescue_success_rate`): -0.5000
+- Proxy no-rescue success rate (`proxy_no_rescue_success_rate`): 0.0000
 - Full-corpus truth success rate (legacy/context) (`truth_success_rate`): 0.0000
 - Unique issues attempted (`unique_issues_attempted`): 0.0000
