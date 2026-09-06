@@ -224,6 +224,13 @@ Examples:
     _add_coherence_scan_parser(subparsers)  # DIC-26 / #6220
     _add_truth_map_parser(subparsers)  # DIC-18 / #6028
     _add_decay_monitor_parser(subparsers)  # DIC-20 / #6031
+    _qr = subparsers.add_parser("quarantine-report", help="DIC-21: fail-closed quarantine policy")
+    _qr.add_argument("--input", metavar="FILE", default="-", help="DecaySignal JSON; '-'=stdin")
+    _qr.add_argument("--code-unit-class", dest="code_unit_class", default="default")
+    _qr.add_argument("--request-live-swap", dest="request_live_swap", action="store_true")
+    _qr.add_argument("--json", action="store_true")
+    _f = _lazy("aragora.cli.commands.dic21_quarantine_report", "cmd_quarantine_report")
+    _qr.set_defaults(func=_f)
     _add_epistemic_check_parser(subparsers)  # DIC-14 / #6024
 
     # DIC-27: operator crux arbitration surface
