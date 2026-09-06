@@ -1,5 +1,11 @@
 version: 2
 
+# Every entry carries the same cooldown policy: a release must be at least
+# 7 days old (14 for semver-major bumps) before Dependabot proposes it. This is
+# the enforced release-age control for all ecosystems; the npm `.npmrc`
+# `min-release-age` key and `scripts/ci/uv_lock_with_cooldown.sh` cover the
+# local-resolution side (see docs/RATCHETS.md).
+
 updates:
   # Python dependencies
   - package-ecosystem: "pip"
@@ -7,6 +13,9 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -28,6 +37,9 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -59,6 +71,9 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
@@ -75,11 +90,117 @@ updates:
           - "minor"
           - "patch"
 
+  # npm dependencies for the Docusaurus docs site
+  - package-ecosystem: "npm"
+    directory: "/docs-site"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "docs"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Docusaurus core and plugins move together
+      docusaurus:
+        patterns:
+          - "@docusaurus/*"
+          - "docusaurus-*"
+      docs-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # npm dependencies for the VS Code extension host
+  - package-ecosystem: "npm"
+    directory: "/ide/vscode-aragora"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      vscode-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # npm dependencies for the VS Code extension webview
+  - package-ecosystem: "npm"
+    directory: "/ide/vscode-aragora/webview-ui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      webview-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Go modules for the Kubernetes operator
+  - package-ecosystem: "gomod"
+    directory: "/aragora-operator"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # controller-runtime and the k8s.io libraries must be bumped in lockstep
+      kubernetes:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+      go-deps:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 3
     labels:
       - "dependencies"
