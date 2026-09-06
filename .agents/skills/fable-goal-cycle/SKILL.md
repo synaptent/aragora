@@ -61,16 +61,20 @@ Exit codes: `0` ok, `2` consult failed/timed out, `5` response lacked a
 
 Run one cycle at a time:
 
-1. At cycle top, run the command above. If Fable needs prior-cycle context,
+1. After reading live operator steering, read
+   `docs/artifacts/fleet-playbook.md` as advisory shared grounding when it is
+   present. Live owner, halt, tier, and settlement state always takes
+   precedence over a playbook lesson.
+2. At cycle top, run the command above. If Fable needs prior-cycle context,
    place a redacted copy under `.aragora/goal-cycle-context/` and pass that
    file via `--context-file`; arbitrary paths are rejected so packets do not
    accidentally inline shell history, credentials, or local private files.
-2. Read `next_prompt.md`. **Sanity-check it against live state before
+3. Read `next_prompt.md`. **Sanity-check it against live state before
    executing** — verify PR numbers exist and heads match, exactly as you would
    for any operator prompt. If a claim is stale, correct the target, don't
    follow it blindly.
-3. Execute it as one bounded progress unit under the operating contract.
-4. Write your end-of-cycle report; feed it into the next cycle's
+4. Execute it as one bounded progress unit under the operating contract.
+5. Write your end-of-cycle report; feed it into the next cycle's
    `--context-file`.
 
 ## Hard rules
