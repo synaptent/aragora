@@ -268,7 +268,7 @@ class TestAudienceAsync:
 
 
 class TestModesSync:
-    """Sync ModesAPI -- list_modes, get_mode."""
+    """Sync ModesAPI -- list_modes."""
 
     @pytest.fixture(autouse=True)
     def setup(self, sync_client):
@@ -280,26 +280,9 @@ class TestModesSync:
         self.client.request.assert_called_once_with("GET", "/api/v1/modes")
         assert result == {"status": "ok"}
 
-    def test_get_mode_architect(self):
-        result = self.api.get_mode("architect")
-        self.client.request.assert_called_once_with("GET", "/api/v1/modes/architect")
-        assert result == {"status": "ok"}
-
-    def test_get_mode_coder(self):
-        self.api.get_mode("coder")
-        self.client.request.assert_called_once_with("GET", "/api/v1/modes/coder")
-
-    def test_get_mode_reviewer(self):
-        self.api.get_mode("reviewer")
-        self.client.request.assert_called_once_with("GET", "/api/v1/modes/reviewer")
-
-    def test_get_mode_custom(self):
-        self.api.get_mode("my-custom-mode")
-        self.client.request.assert_called_once_with("GET", "/api/v1/modes/my-custom-mode")
-
 
 class TestModesAsync:
-    """Async ModesAPI -- list_modes, get_mode."""
+    """Async ModesAPI -- list_modes."""
 
     @pytest.fixture(autouse=True)
     def setup(self, async_client):
@@ -312,12 +295,6 @@ class TestModesAsync:
         self.client.request.assert_awaited_once_with("GET", "/api/v1/modes")
         assert result == {"status": "ok"}
 
-    @pytest.mark.asyncio
-    async def test_get_mode(self):
-        result = await self.api.get_mode("architect")
-        self.client.request.assert_awaited_once_with("GET", "/api/v1/modes/architect")
-        assert result == {"status": "ok"}
-
 
 # ===========================================================================
 # Spectate
@@ -325,25 +302,12 @@ class TestModesAsync:
 
 
 class TestSpectateSync:
-    """Sync SpectateAPI -- connect_sse (SSE streaming), get_recent, get_status, get_stream."""
+    """Sync SpectateAPI -- get_recent, get_status, get_stream."""
 
     @pytest.fixture(autouse=True)
     def setup(self, sync_client):
         self.client = sync_client
         self.api = SpectateAPI(sync_client)
-
-    def test_connect_sse(self):
-        self.client.request.return_value = {
-            "stream_url": "/sse/debate-1",
-            "debate_id": "debate-1",
-        }
-        result = self.api.connect_sse("debate-1")
-        self.client.request.assert_called_once_with("GET", "/api/v1/spectate/debate-1/stream")
-        assert result["stream_url"] == "/sse/debate-1"
-
-    def test_connect_sse_different_id(self):
-        self.api.connect_sse("debate-xyz")
-        self.client.request.assert_called_once_with("GET", "/api/v1/spectate/debate-xyz/stream")
 
     def test_get_recent_defaults(self):
         self.api.get_recent()
@@ -373,19 +337,12 @@ class TestSpectateSync:
 
 
 class TestSpectateAsync:
-    """Async SpectateAPI -- connect_sse, get_recent, get_status, get_stream."""
+    """Async SpectateAPI -- get_recent, get_status, get_stream."""
 
     @pytest.fixture(autouse=True)
     def setup(self, async_client):
         self.client = async_client
         self.api = AsyncSpectateAPI(async_client)
-
-    @pytest.mark.asyncio
-    async def test_connect_sse(self):
-        self.client.request.return_value = {"stream_url": "/sse/debate-async"}
-        result = await self.api.connect_sse("debate-async")
-        self.client.request.assert_awaited_once_with("GET", "/api/v1/spectate/debate-async/stream")
-        assert result["stream_url"] == "/sse/debate-async"
 
     @pytest.mark.asyncio
     async def test_get_recent(self):
