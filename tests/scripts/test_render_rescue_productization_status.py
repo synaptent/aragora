@@ -135,6 +135,40 @@ def test_main_writes_output_from_latest_report(tmp_path: Path) -> None:
     assert "Last updated: 2026-04-14T18:42:00Z" in rendered
 
 
+def test_render_unavailable_source_does_not_claim_zero_rescue_classes(tmp_path: Path) -> None:
+    report_path = tmp_path / "latest.json"
+    payload = {
+        "ok": False,
+        "generated_at": "2026-08-30T01:30:00Z",
+        "ledger_path": "~/.aragora/rescue_events.jsonl",
+        "productization_map_path": "docs/benchmarks/rescue_productization.json",
+        "source": {
+            "status": "unavailable",
+            "event_count": None,
+            "sha256": None,
+            "error": {
+                "code": "rescue_ledger_missing",
+                "detail": "rescue event ledger does not exist",
+            },
+        },
+        "summary": {},
+        "repeated_classes": [],
+        "issue_linkage_results": [],
+        "issue_drafts": [],
+        "one_off_classes": [],
+        "below_threshold_classes": [],
+    }
+
+    markdown = mod.render_status_markdown(report_path=report_path, payload=payload)
+
+    assert "Rescue ledger status: `unavailable`" in markdown
+    assert "Repeated rescue classes: `n/a`" in markdown
+    assert "Issue drafts remaining: `n/a`" in markdown
+    assert "No rescue-class conclusion is asserted" in markdown
+    assert markdown.count("Not evaluated because the source ledger is unavailable.") == 4
+    assert "No repeated rescue classes found" not in markdown
+
+
 def test_main_refuses_to_downgrade_existing_status_from_stale_report(tmp_path: Path) -> None:
     report_root = tmp_path / "generated" / "rescue_productization"
     report_root.mkdir(parents=True)

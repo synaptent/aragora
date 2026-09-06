@@ -107,6 +107,13 @@ def _render_repeated_classes(rows: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _source_error_detail(source: dict[str, Any]) -> str:
+    error = source.get("error")
+    if not isinstance(error, dict):
+        return "n/a"
+    return str(error.get("detail") or error.get("code") or "n/a").strip()
+
+
 def _render_linkage_actions(rows: list[dict[str, Any]]) -> list[str]:
     if not rows:
         return ["- none"]
@@ -136,6 +143,9 @@ def _render_issue_drafts(rows: list[dict[str, Any]]) -> list[str]:
 
 
 def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str:
+    source = dict(payload.get("source") or {})
+    source_status = str(source.get("status") or "available").strip()
+    source_available = source_status == "available"
     summary = dict(payload.get("summary") or {})
     repeated_classes = list(payload.get("repeated_classes") or [])
     one_off_classes = list(payload.get("one_off_classes") or [])
@@ -155,30 +165,48 @@ def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str
         "",
         f"- Latest report: `{_repo_stable_path(report_path)}`",
         f"- Rescue ledger path: `{_format_value(payload.get('ledger_path'))}`",
+        f"- Rescue ledger status: `{source_status}`",
+        *([] if source_available else [f"- Rescue ledger error: `{_source_error_detail(source)}`"]),
         f"- Productization map: `{_format_value(payload.get('productization_map_path'))}`",
-        f"- Repeated rescue classes: `{_format_value(summary.get('repeated_class_count'))}`",
-        f"- Linked repeated classes: `{_format_value(summary.get('linked_fixture_count', 0) + summary.get('linked_issue_count', 0) + summary.get('linked_other_count', 0))}`",
+        f"- Repeated rescue classes: `{_format_value(summary.get('repeated_class_count') if source_available else None)}`",
+        f"- Linked repeated classes: `{_format_value((summary.get('linked_fixture_count', 0) + summary.get('linked_issue_count', 0) + summary.get('linked_other_count', 0)) if source_available else None)}`",
         f"- Unlinked repeated classes: `{_format_value(summary.get('unlinked_repeated_class_count'))}`",
         f"- One-off classes: `{_format_value(summary.get('one_off_class_count'))}`",
         f"- Below-threshold classes: `{_format_value(summary.get('below_threshold_class_count'))}`",
-        f"- Issue drafts remaining: `{len(issue_drafts)}`",
+        f"- Issue drafts remaining: `{_format_value(len(issue_drafts) if source_available else None)}`",
         "",
         "## Repeated Rescue Classes",
         "",
-        *_render_repeated_classes(repeated_classes),
+        *(
+            _render_repeated_classes(repeated_classes)
+            if source_available
+            else [
+                "- No rescue-class conclusion is asserted because the source ledger is unavailable."
+            ]
+        ),
         "",
         "## Issue Linkage Actions",
         "",
-        *_render_linkage_actions(issue_linkage_results),
+        *(
+            _render_linkage_actions(issue_linkage_results)
+            if source_available
+            else ["- Not evaluated because the source ledger is unavailable."]
+        ),
         "",
         "## Remaining Issue Drafts",
         "",
-        *_render_issue_drafts(issue_drafts),
+        *(
+            _render_issue_drafts(issue_drafts)
+            if source_available
+            else ["- Not evaluated because the source ledger is unavailable."]
+        ),
         "",
         "## One-Off Rescue Classes",
         "",
     ]
-    if one_off_classes:
+    if not source_available:
+        lines.append("- Not evaluated because the source ledger is unavailable.")
+    elif one_off_classes:
         lines.extend(
             f"- `{str(row.get('class') or '').strip()}` ({int(row.get('count', 0) or 0)}x)"
             for row in one_off_classes
@@ -186,7 +214,9 @@ def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str
     else:
         lines.append("- none")
     lines.extend(["", "## Below-Threshold Rescue Classes", ""])
-    if below_threshold_classes:
+    if not source_available:
+        lines.append("- Not evaluated because the source ledger is unavailable.")
+    elif below_threshold_classes:
         lines.extend(
             f"- `{str(row.get('class') or '').strip()}` ({int(row.get('count', 0) or 0)}x)"
             for row in below_threshold_classes
