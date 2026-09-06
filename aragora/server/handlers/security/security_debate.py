@@ -26,14 +26,14 @@ from aragora.core_types import DebateStatus, DebateStatusSource
 from aragora.server.http_utils import run_async
 from aragora.server.middleware.rate_limit import rate_limit
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     json_response,
     require_permission,
     handle_errors,
 )
-from .secure import SecureHandler
+from ..secure import SecureHandler
 
 logger = logging.getLogger(__name__)
 

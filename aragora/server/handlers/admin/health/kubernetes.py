@@ -175,7 +175,7 @@ def readiness_probe_fast(handler: Any) -> HandlerResult:
     redis_url = os.environ.get("REDIS_URL") or os.environ.get("ARAGORA_REDIS_URL")
     if redis_url:
         try:
-            from aragora.cache.redis_cache import get_redis_pool
+            from aragora.utils.redis_config import get_redis_pool
 
             pool = get_redis_pool()
             checks["redis_pool"] = pool is not None

@@ -77,7 +77,7 @@ def _make_apple_id_token(
 # ---------------------------------------------------------------------------
 
 
-_IMPL_MODULE = "aragora.server.handlers._oauth_impl"
+_IMPL_MODULE = "aragora.server.handlers.oauth._oauth_impl"
 
 
 def _make_impl(**overrides: Any) -> ModuleType:

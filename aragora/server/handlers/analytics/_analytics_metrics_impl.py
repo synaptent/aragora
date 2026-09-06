@@ -44,12 +44,12 @@ from aragora.server.handlers.utils.rbac_guard import rbac_fail_closed
 
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
 )
-from .secure import ForbiddenError, SecureHandler, UnauthorizedError
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..secure import ForbiddenError, SecureHandler, UnauthorizedError
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 # Re-export from submodules for backward compatibility
 from ._analytics_metrics_common import (  # noqa: F401
@@ -78,7 +78,7 @@ def _is_demo_mode() -> bool:
 
 def _demo_response(normalized: str) -> HandlerResult | None:
     """Return demo data for analytics endpoints when in demo mode."""
-    from .base import json_response as _json
+    from ..base import json_response as _json
 
     demo = {
         "/api/analytics/debates/overview": {

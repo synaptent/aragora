@@ -22,15 +22,15 @@ if TYPE_CHECKING:
 from aragora.billing.jwt_auth import extract_user_from_request
 from aragora.rbac.decorators import require_permission
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     handle_errors,
     json_response,
     log_request,
 )
-from .utils.rate_limit import rate_limit
-from .secure import SecureHandler
+from ..utils.rate_limit import rate_limit
+from ..secure import SecureHandler
 
 logger = logging.getLogger(__name__)
 

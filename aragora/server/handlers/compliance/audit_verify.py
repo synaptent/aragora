@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 def get_receipt_store():  # type: ignore[override]
     """Indirection for tests that patch compliance_handler.get_receipt_store."""
     try:
-        from aragora.server.handlers import compliance_handler as compat
+        from aragora.server.handlers.compliance import handler as compat
 
         return compat.get_receipt_store()
     except (ImportError, AttributeError):
@@ -252,7 +252,7 @@ class AuditVerifyMixin:
         """Verify audit events in date range by checking integrity."""
         try:
             try:
-                from aragora.server.handlers import compliance_handler as compat
+                from aragora.server.handlers.compliance import handler as compat
 
                 store = compat.get_audit_store()
             except (ImportError, AttributeError):
@@ -332,7 +332,7 @@ class AuditVerifyMixin:
         """Fetch audit events from audit store."""
         try:
             try:
-                from aragora.server.handlers import compliance_handler as compat
+                from aragora.server.handlers.compliance import handler as compat
 
                 store = compat.get_audit_store()
             except (ImportError, AttributeError):

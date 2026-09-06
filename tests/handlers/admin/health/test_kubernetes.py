@@ -122,8 +122,8 @@ def _make_handler_registry_module(exact_routes: dict | None = None):
 
 
 def _make_redis_cache_module(pool: Any = MagicMock()):
-    """Create a fake aragora.cache.redis_cache module."""
-    mod = types.ModuleType("aragora.cache.redis_cache")
+    """Create a fake aragora.utils.redis_config module."""
+    mod = types.ModuleType("aragora.utils.redis_config")
     mod.get_redis_pool = lambda: pool
     return mod
 
@@ -228,12 +228,12 @@ def _remove_handler_registry():
 
 
 def _remove_redis_cache():
-    return patch.dict(sys.modules, {"aragora.cache.redis_cache": None})
+    return patch.dict(sys.modules, {"aragora.utils.redis_config": None})
 
 
 def _patch_redis_cache(pool=MagicMock()):
     mod = _make_redis_cache_module(pool)
-    return patch.dict(sys.modules, {"aragora.cache.redis_cache": mod})
+    return patch.dict(sys.modules, {"aragora.utils.redis_config": mod})
 
 
 def _remove_postgres_pool():
@@ -734,13 +734,13 @@ class TestReadinessProbeFastRedis:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
         handler = _make_mock_handler()
         # Create a module whose get_redis_pool raises RuntimeError
-        mod = types.ModuleType("aragora.cache.redis_cache")
+        mod = types.ModuleType("aragora.utils.redis_config")
         mod.get_redis_pool = MagicMock(side_effect=RuntimeError("Pool error"))
         with (
             _remove_degraded(),
             _remove_unified_server(),
             _remove_handler_registry(),
-            patch.dict(sys.modules, {"aragora.cache.redis_cache": mod}),
+            patch.dict(sys.modules, {"aragora.utils.redis_config": mod}),
         ):
             result = readiness_probe_fast(handler)
         assert _body(result)["checks"]["redis_pool"] == "not_configured"

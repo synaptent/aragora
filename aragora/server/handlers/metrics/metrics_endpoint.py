@@ -13,7 +13,7 @@ Endpoints:
 - GET /api/v1/metrics/prometheus/summary - Aggregated metrics summary
 
 Usage:
-    from aragora.server.handlers.metrics_endpoint import UnifiedMetricsHandler
+    from aragora.server.handlers.metrics.metrics_endpoint import UnifiedMetricsHandler
 
     handler = UnifiedMetricsHandler()
     result = handler.handle("/metrics", {}, request)
@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from .base import BaseHandler, HandlerResult, error_response, safe_error_message
+from ..base import BaseHandler, HandlerResult, error_response, safe_error_message
 from aragora.server.versioning.compat import strip_version_prefix
 
 if TYPE_CHECKING:
