@@ -258,3 +258,18 @@ gmail_failures.json
 
 # Machine-local gt store config (workspace path is per-clone)
 .gt/config.json
+
+# Readiness gate artifacts (make readiness-*): coverage, junit, jscpd reports,
+# VS Code test-electron downloads and the mission venv. Non-anchored so the
+# per-app copies (aragora/live, docs-site, ide/vscode-aragora, ...) are covered.
+.vscode-test/
+coverage/
+junit.xml
+.jscpd-report/
+.venv-mission/
+aragora/live/coverage/
+aragora/live/junit.xml
+docs-site/.jscpd-report/
+ide/vscode-aragora/junit.xml
+ide/vscode-aragora/.vscode-test/
+aragora-operator/cover.out

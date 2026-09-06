@@ -179,6 +179,19 @@ constraint-dependencies = [
     "starlette>=1.3.1",
 ]
 
+# uv workspace: the in-repo sub-packages resolve into the single root uv.lock so
+# `uv lock --check`, `uv sync --all-packages` and `uv run --package <member>`
+# cover them. Members keep their own build backends and publish workflows
+# (they build from their own directories); the root distribution's metadata
+# does not depend on them.
+[tool.uv.workspace]
+members = ["aragora-debate", "aragora-verify", "sdk/python"]
+
+[tool.uv.sources]
+aragora-debate = { workspace = true }
+aragora-verify = { workspace = true }
+aragora-sdk = { workspace = true }
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["aragora*"]
