@@ -80,6 +80,12 @@ dependencies = [
     # scripts/ci_install_project.sh, which already side-loads it in CI (the
     # reason this gap never surfaced there).
     "defusedxml>=0.7,<1.0",
+    # Ed25519 receipt signing (aragora/gauntlet/odr_signing.py) and AES-GCM
+    # encryption import this lazily, so a plain install could still reach a
+    # configured signing key and then fail. Declared in base so the documented
+    # `ARAGORA_ODR_SIGNING_KEY_FILE` path works from `pip install aragora`,
+    # with the same GHSA-537c-gmf6-5ccf floor as the uv constraint below.
+    "cryptography>=48.0.1,<51.0",
 ]
 
 [project.scripts]
@@ -151,21 +157,15 @@ Repository = "https://github.com/synaptent/aragora"
 Issues = "https://github.com/synaptent/aragora/issues"
 
 # -----------------------------------------------------------------------------
-# uv resolver constraints — security floors for transitively-pulled packages.
+# uv resolver constraints — security floors for the pip-audit security gate
+# (scripts/run_pip_audit_gate.py). They bound what the lockfile may resolve
+# to regardless of how a package is reached (direct or transitive):
 #
-# These constrain the locked versions of dependencies that are NOT declared
-# directly (so they stay out of the published wheel's metadata) but must be
-# floored to non-vulnerable releases for the pip-audit security gate
-# (scripts/run_pip_audit_gate.py):
-#
-#   * cryptography >=48.0.1 — fixes GHSA-537c-gmf6-5ccf. Pulled in via
-#     pyjwt[crypto] / secretstorage and used at runtime for AES-256-GCM
-#     encryption (aragora/security/encryption.py). The floor is 48.0.1; the
-#     resolver actually lands on 49.0.0 (a 46 -> 49 jump across three majors).
-#     cryptography's hazmat AES-GCM surface is stable across this range and the
-#     46->49 deprecations are in unused legacy x509/serialization helpers;
-#     verified by exercising encrypt/decrypt + AAD on 49.0.0. pyjwt and
-#     secretstorage floor cryptography far below 48, so nothing caps the bump.
+#   * cryptography >=48.0.1 — fixes GHSA-537c-gmf6-5ccf. Also a direct base
+#     dependency above (Ed25519 receipt signing, AES-256-GCM encryption); this
+#     entry keeps the lock floor pinned even if a transitive path (pyjwt[crypto],
+#     secretstorage) is what pulls it in. The hazmat AES-GCM surface is stable
+#     across 46 -> 50 and the deprecations are in unused legacy x509 helpers.
 #   * starlette >=1.3.1 — fixes CVE-2026-54283, CVE-2026-54282, CVE-2026-48818,
 #     CVE-2026-48817. Pulled in via fastapi (gateway/all extras). fastapi
 #     0.136.3 requires only ``starlette>=0.46.0`` (no upper bound) and already

@@ -32,6 +32,8 @@ from aragora.cli.commands.quickstart import (
     _run_demo_debate,
     _run_live_debate,
     _run_quickstart_spec_first,
+    _run_sync,
+    _run_sync_without_runner,
     _save_receipt,
     add_quickstart_parser,
     cmd_quickstart,
@@ -257,6 +259,135 @@ class TestResolveRounds:
 
     def test_explicit_rounds_win(self):
         assert _resolve_rounds(4, use_demo=False) == 4
+
+
+# =============================================================================
+# Sync runner (Python 3.10 floor has no asyncio.Runner)
+# =============================================================================
+
+
+class TestRunSync:
+    def test_run_sync_returns_coroutine_result(self):
+        async def _work() -> str:
+            await asyncio.sleep(0)
+            return "done"
+
+        assert _run_sync(_work()) == "done"
+
+    def test_run_sync_uses_fallback_when_runner_is_absent(self, monkeypatch):
+        monkeypatch.delattr(asyncio, "Runner", raising=False)
+        calls: list[object] = []
+
+        def _tracking_fallback(coro):
+            calls.append(coro)
+            return _run_sync_without_runner(coro)
+
+        monkeypatch.setattr(
+            "aragora.cli.commands.quickstart._run_sync_without_runner",
+            _tracking_fallback,
+        )
+        seen: dict[str, object] = {}
+
+        async def _work() -> str:
+            seen["loop"] = asyncio.get_running_loop()
+            return "fallback"
+
+        assert _run_sync(_work()) == "fallback"
+        assert len(calls) == 1
+        assert seen["loop"].is_closed()
+
+    def test_run_sync_prefers_runner_when_available(self, monkeypatch):
+        if not hasattr(asyncio, "Runner"):
+            pytest.skip("asyncio.Runner unavailable on this interpreter")
+        calls: list[object] = []
+
+        def _unexpected_fallback(coro):
+            calls.append(coro)
+            return _run_sync_without_runner(coro)
+
+        monkeypatch.setattr(
+            "aragora.cli.commands.quickstart._run_sync_without_runner",
+            _unexpected_fallback,
+        )
+
+        async def _work() -> str:
+            return "runner"
+
+        assert _run_sync(_work()) == "runner"
+        assert calls == []
+
+    def test_fallback_cleans_up_pending_tasks_and_asyncgens(self):
+        cancelled: list[bool] = []
+        closed: list[bool] = []
+
+        async def _agen():
+            try:
+                yield 1
+                yield 2
+            finally:
+                closed.append(True)
+
+        async def _background() -> None:
+            try:
+                await asyncio.sleep(3600)
+            except asyncio.CancelledError:
+                cancelled.append(True)
+                raise
+
+        async def _work() -> str:
+            gen = _agen()
+            await gen.__anext__()
+            asyncio.ensure_future(_background())
+            return "cleanup"
+
+        assert _run_sync_without_runner(_work()) == "cleanup"
+        assert cancelled == [True]
+        assert closed == [True]
+
+    def test_fallback_reports_task_failures_during_shutdown(self):
+        reported: list[dict[str, object]] = []
+
+        async def _fails_on_cancel() -> None:
+            try:
+                await asyncio.sleep(3600)
+            except asyncio.CancelledError:
+                raise RuntimeError("cleanup failed") from None
+
+        async def _work() -> str:
+            loop = asyncio.get_running_loop()
+            loop.set_exception_handler(lambda _loop, ctx: reported.append(ctx))
+            asyncio.ensure_future(_fails_on_cancel())
+            return "shutdown"
+
+        assert _run_sync_without_runner(_work()) == "shutdown"
+        assert len(reported) == 1
+        assert isinstance(reported[0]["exception"], RuntimeError)
+        assert "shutdown" in str(reported[0]["message"])
+
+    def test_fallback_leaves_policy_loop_untouched(self):
+        outer = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(outer)
+
+            async def _work() -> bool:
+                return asyncio.get_running_loop() is not outer
+
+            assert _run_sync_without_runner(_work()) is True
+            assert asyncio.get_event_loop() is outer
+        finally:
+            asyncio.set_event_loop(None)
+            outer.close()
+
+    def test_fallback_propagates_exceptions_and_still_closes_loop(self):
+        seen: dict[str, object] = {}
+
+        async def _boom() -> None:
+            seen["loop"] = asyncio.get_running_loop()
+            raise ValueError("boom")
+
+        with pytest.raises(ValueError, match="boom"):
+            _run_sync_without_runner(_boom())
+        assert seen["loop"].is_closed()
 
 
 # =============================================================================
