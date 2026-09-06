@@ -106,6 +106,8 @@ async def handle_create_customer(
         body, err = await parse_json_body(request, context="handle_create_customer")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
 
         email = body.get("email")
@@ -327,6 +329,8 @@ async def handle_update_customer(
         body, err = await parse_json_body(request, context="handle_update_customer")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
 
         email = body.get("email")
@@ -509,6 +513,8 @@ async def handle_update_subscription(
         body, err = await parse_json_body(request, context="handle_update_subscription")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
 
         if provider == PaymentProvider.AUTHORIZE_NET:
@@ -603,6 +609,8 @@ async def handle_create_subscription(
         body, err = await parse_json_body(request, context="handle_create_subscription")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
 
         customer_id = body.get("customer_id")

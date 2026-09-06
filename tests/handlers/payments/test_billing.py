@@ -1791,3 +1791,30 @@ class TestCoerceRequest:
         mock1 = MagicMock()
         result = _coerce_request(mock1)
         assert result is mock1
+
+
+class TestParsedBodyContract:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("handler_func", "match_info"),
+        [
+            (handle_create_customer, None),
+            (handle_update_customer, {"customer_id": "cus_test_123"}),
+            (handle_update_subscription, {"subscription_id": "sub_test_123"}),
+            (handle_create_subscription, None),
+        ],
+    )
+    async def test_missing_body_without_parser_error_fails_closed(
+        self,
+        handler_func,
+        match_info,
+    ):
+        request = create_mock_request(match_info=match_info)
+        with patch(
+            "aragora.server.handlers.payments.billing.parse_json_body",
+            new_callable=AsyncMock,
+            return_value=(None, None),
+        ):
+            response = await handler_func(request)
+
+        assert _status(response) == 400
