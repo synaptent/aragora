@@ -225,6 +225,7 @@ Examples:
     _add_truth_map_parser(subparsers)  # DIC-18 / #6028
     _add_decay_monitor_parser(subparsers)  # DIC-20 / #6031
     _add_epistemic_check_parser(subparsers)  # DIC-14 / #6024
+    _add_repair_plan_parser(subparsers)  # DIC-22 / #6033
 
     # DIC-27: operator crux arbitration surface
     _add_crux_arbitrate_parser(subparsers)
@@ -939,6 +940,19 @@ def _add_epistemic_check_parser(subparsers) -> None:
         help="Repository root for resolving relative evidence paths (defaults to cwd)",
     )
     p.set_defaults(func=_lazy("aragora.cli.commands.epistemic_check", "cmd_epistemic_check"))
+
+
+def _add_repair_plan_parser(subparsers) -> None:
+    p = subparsers.add_parser("repair-plan", help="DIC-22: repair spec from a DecaySignal")
+    p.add_argument("--input", required=True, metavar="JSON", help="DecaySignal JSON path")
+    p.add_argument(
+        "--repair-kind",
+        dest="repair_kind",
+        default="report_only",
+        choices=("report_only", "shadow_candidate", "pr_candidate"),
+    )
+    p.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    p.set_defaults(func=_lazy("aragora.cli.commands.dic22_repair_plan", "cmd_repair_plan"))
 
 
 def _add_ask_parser(subparsers) -> None:

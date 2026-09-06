@@ -56,6 +56,10 @@ MAX_FILE_LOC_EXCEPTIONS = {
     # quorum_evidence.py/merge_quorum_reconcile.py; extraction tracked in #8553.
     # Bridge ceiling until that lands (do not grow further; extract instead).
     "aragora/cli/commands/review_queue.py": 6000,
+    # parser.py accumulates one _add_*_parser function per CLI subcommand.  The
+    # DIC CLI track (DIC-14..DIC-22, #6024-#6033) pushed it past 5400; the plan
+    # is to migrate DIC subcommand parsers into their command modules (#6033).
+    "aragora/cli/parser.py": 5420,
 }
 
 LAST_RECORDED_BASELINE = {
