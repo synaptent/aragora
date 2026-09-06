@@ -216,7 +216,9 @@ def _hydrate_pr_with_rest_fallback(
         gh_json=gh_json,
     )
     comments = _rest_list(
-        f"repos/{repo_slug}/issues/{number}/comments?per_page=100", gh_json=gh_json
+        f"repos/{repo_slug}/issues/{number}/comments?per_page=100",
+        required=True,
+        gh_json=gh_json,
     )
     reviews = _rest_list(f"repos/{repo_slug}/pulls/{number}/reviews?per_page=100", gh_json=gh_json)
     commits = _rest_list(f"repos/{repo_slug}/pulls/{number}/commits?per_page=100", gh_json=gh_json)
