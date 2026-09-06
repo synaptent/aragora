@@ -363,7 +363,9 @@ class TestOpenAICompatibleMixinInitialization:
     def test_default_values(self):
         """Should have sensible default values."""
         assert OpenAICompatibleMixin.OPENROUTER_MODEL_MAP == {}
-        assert OpenAICompatibleMixin.DEFAULT_FALLBACK_MODEL == "openai/gpt-5.3"
+        # gpt-5.3 is retired (frontier-model-refresh, 2026-09-04); the mixin
+        # default now points at the value-tier frontier sibling.
+        assert OpenAICompatibleMixin.DEFAULT_FALLBACK_MODEL == "openai/gpt-5.6-terra"
         assert OpenAICompatibleMixin.max_tokens == 4096
 
     def test_concrete_agent_initialization(self):
@@ -1069,12 +1071,17 @@ class TestProviderConfiguration:
         assert agent.OPENROUTER_MODEL_MAP["test-model"] == "openai/test-model"
 
     def test_get_fallback_model(self):
-        """Should get correct fallback model from map."""
+        """get_fallback_model() (QuotaFallbackMixin, frontier-model-refresh
+        2026-09-04 review fix round 1 item 3) resolves the current model
+        through the catalog/upgrade map now, not the (vestigial)
+        OPENROUTER_MODEL_MAP class attribute -- "test-model" isn't a real
+        model id, so it falls back to DEFAULT_FALLBACK_MODEL, while a real
+        legacy OpenAI spelling resolves to its current frontier."""
         agent = TestableAgent(model="test-model")
+        assert agent.get_fallback_model() == TestableAgent.DEFAULT_FALLBACK_MODEL
 
-        fallback_model = agent.get_fallback_model()
-
-        assert fallback_model == "openai/test-model"
+        resolvable_agent = TestableAgent(model="gpt-5.5")
+        assert resolvable_agent.get_fallback_model() == "openai/gpt-6-astra"
 
     def test_get_fallback_model_default(self):
         """Should use default fallback model when not in map."""

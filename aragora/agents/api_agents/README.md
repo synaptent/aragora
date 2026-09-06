@@ -112,7 +112,6 @@ Agent (core.py)
 | `QwenAgent` | qwen3.8-max | Alibaba's frontier model |
 | `QwenMaxAgent` | qwen3.8-max | 1M-context frontier model |
 | `MistralAgent` | mistral-large-2411 | Via OpenRouter |
-| `YiAgent` | yi-large | 01.AI flagship |
 | `KimiK3Agent` | kimi-k3 | Latest frontier Kimi model on OpenRouter |
 | `KimiThinkingAgent` | kimi-k2-thinking | Reasoning model |
 | `SonarAgent` | sonar-reasoning-pro | Advanced reasoning + web search |

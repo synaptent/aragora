@@ -44,6 +44,13 @@ if TYPE_CHECKING:
 from aragora.config import (
     CACHE_TTL_LEADERBOARD,
 )
+from aragora.config.model_pins import (
+    FABLE_51_VIA_OPENROUTER,
+    GEMINI_38_FLASH_VIA_OPENROUTER,
+    GPT6_ASTRA_VIA_OPENROUTER,
+    GROK_46_VIA_OPENROUTER,
+    MISTRAL_MEDIUM_VIA_OPENROUTER,
+)
 
 logger = logging.getLogger(__name__)
 from aragora.server.versioning.compat import strip_version_prefix
@@ -82,12 +89,16 @@ AGENT_PERMISSION = AGENTS_READ_PERMISSION
 _agent_limiter = RateLimiter(requests_per_minute=60)
 
 _ENV_VAR_RE = re.compile(r"[A-Z][A-Z0-9_]+")
+# Per-provider OpenRouter fallback targets, derived from aragora.config.
+# model_pins (frontier-model-refresh, 2026-09-04). The previous hand-written
+# slugs had drifted to retired/nonexistent spellings (openai/gpt-4.1-mini,
+# google/gemini-3-flash-preview, x-ai/grok-4.5).
 _OPENROUTER_FALLBACK_MODELS = {
-    "anthropic-api": "anthropic/claude-opus-5",
-    "openai-api": "openai/gpt-4.1-mini",
-    "gemini": "google/gemini-3-flash-preview",
-    "grok": "x-ai/grok-4.5",
-    "mistral-api": "mistralai/mistral-large-2512",
+    "anthropic-api": FABLE_51_VIA_OPENROUTER,
+    "openai-api": GPT6_ASTRA_VIA_OPENROUTER,
+    "gemini": GEMINI_38_FLASH_VIA_OPENROUTER,
+    "grok": GROK_46_VIA_OPENROUTER,
+    "mistral-api": MISTRAL_MEDIUM_VIA_OPENROUTER,
 }
 
 

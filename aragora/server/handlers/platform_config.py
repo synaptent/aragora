@@ -41,7 +41,10 @@ AGENT_DISPLAY_NAMES: dict[str, str] = {
     "sonar": "Perplexity Sonar",
     "command-r": "Cohere Command R+",
     "jamba": "AI21 Jamba",
-    "yi": "Yi Large",
+    # NOTE (frontier-model-refresh, 2026-09-05): "yi" is deliberately absent.
+    # The YiAgent registration is gone (01.AI Yi Large is off the live
+    # OpenRouter catalog), so offering it here let the UI present an agent
+    # type the server now rejects at construction.
     "openrouter": "OpenRouter",
     "deepseek-r1": "DeepSeek V4 Pro",
     "ollama": "Ollama (Local)",

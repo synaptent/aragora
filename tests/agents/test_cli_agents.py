@@ -178,13 +178,128 @@ class TestCLIAgentFallback:
         assert "fallback" in fallback.name
 
     def test_openrouter_model_mapping(self):
-        """Test OPENROUTER_MODEL_MAP has expected mappings."""
+        """CLIAgent has no static OPENROUTER_MODEL_MAP: _get_fallback_agent()
+        resolves the current model through the catalog and upgrade map
+        instead (frontier-model-refresh, 2026-09-04), so legacy CLI model
+        spellings still upgrade to a valid OpenRouter id."""
         from aragora.agents.cli_agents import CLIAgent
 
-        assert "claude" in CLIAgent.OPENROUTER_MODEL_MAP
-        assert "gpt-4o" in CLIAgent.OPENROUTER_MODEL_MAP
-        assert "gemini-3-pro" in CLIAgent.OPENROUTER_MODEL_MAP
-        assert "grok-4" in CLIAgent.OPENROUTER_MODEL_MAP
+        assert not hasattr(CLIAgent, "OPENROUTER_MODEL_MAP")
+
+        for legacy_model in ("gpt-4o", "gemini-3-pro", "grok-4"):
+            agent = DummyCLIAgent(name="test-agent", model=legacy_model, enable_fallback=True)
+            with patch("os.environ.get", return_value="test-api-key"):
+                with patch(
+                    "aragora.agents.api_agents.openrouter.get_api_key",
+                    return_value="test-api-key",
+                ):
+                    fallback = agent._get_fallback_agent()
+            assert fallback is not None
+            assert "/" in fallback.model
+
+
+class TestCLIAgentFamilyAwareFallback:
+    """A CLI model pin must never fall back cross-family.
+
+    Removing the hand-written OPENROUTER_MODEL_MAPs sent eight real CLI
+    spellings (Codex model names, a seeded DeepSeek agent id, ...) to the
+    *Anthropic* frontier, because the last resort was one Anthropic constant.
+    An explicit model pin is exactly the thing that must keep its provider.
+    """
+
+    @staticmethod
+    def _fallback_model(agent):
+        with patch("os.environ.get", return_value="test-api-key"):
+            with patch(
+                "aragora.agents.api_agents.openrouter.get_api_key",
+                return_value="test-api-key",
+            ):
+                fallback = agent._get_fallback_agent()
+        assert fallback is not None
+        return fallback.model
+
+    @pytest.mark.parametrize(
+        ("agent_cls_name", "model", "expected"),
+        [
+            ("CodexAgent", "gpt-5.3-codex", "openai/gpt-6-astra"),
+            ("CodexAgent", "gpt-4.1-codex", "openai/gpt-6-astra"),
+            ("CodexAgent", "gpt-5.3-chat-latest", "openai/gpt-6-astra"),
+            ("GrokCLIAgent", "grok-4-1-fast", "x-ai/grok-4.6"),
+            ("DeepseekCLIAgent", "deepseek-coder", "deepseek/deepseek-v4-pro-0813"),
+            ("DeepseekCLIAgent", "deepseek-v3.2", "deepseek/deepseek-v4-pro-0813"),
+            ("QwenCLIAgent", "qwen-2.5-coder", "qwen/qwen3.8-2.4t-a95b"),
+        ],
+    )
+    def test_legacy_cli_spelling_stays_in_family(self, agent_cls_name, model, expected):
+        import aragora.agents.cli_agents as cli_agents
+
+        agent_cls = getattr(cli_agents, agent_cls_name)
+        agent = agent_cls(name="test-agent", model=model, enable_fallback=True)
+        assert self._fallback_model(agent) == expected
+
+    def test_codestral_latest_falls_back_to_agents_own_family(self):
+        """``codestral-latest`` is a live Mistral SKU, not an UPGRADES entry
+        (aragora/models/upgrade_map.py), and the catalog carries no
+        Codestral row either. From a non-Mistral CLI agent it must NOT
+        resolve to Mistral -- it falls back to THIS agent class's own
+        family frontier via ``_family_frontier_openrouter_id`` (the same
+        family-aware last resort as ``test_unknown_model_falls_back_to_own_family_frontier``)."""
+        import aragora.agents.cli_agents as cli_agents
+        from aragora.models.catalog import spec_or_none
+        from aragora.models.upgrade_map import resolve_model_id
+
+        assert spec_or_none(resolve_model_id("codestral-latest")) is None, (
+            "fixture assumption: codestral-latest must stay unresolvable via "
+            "the catalog/upgrade map"
+        )
+
+        agent = cli_agents.CodexAgent(
+            name="test-agent", model="codestral-latest", enable_fallback=True
+        )
+        assert self._fallback_model(agent) == "openai/gpt-6-astra"
+
+    @pytest.mark.parametrize(
+        ("agent_cls_name", "expected"),
+        [
+            ("CodexAgent", "openai/gpt-6-astra"),
+            ("OpenAIAgent", "openai/gpt-6-astra"),
+            ("ClaudeAgent", "anthropic/claude-fable-5.1"),
+            ("GeminiCLIAgent", "google/gemini-3.1-pro-preview"),
+            ("GrokCLIAgent", "x-ai/grok-4.6"),
+            ("GrokBuildAgent", "x-ai/grok-4.6"),
+            ("QwenCLIAgent", "qwen/qwen3.8-2.4t-a95b"),
+            ("DeepseekCLIAgent", "deepseek/deepseek-v4-pro-0813"),
+            ("KimiCLIAgent", "moonshotai/kimi-k3"),
+            ("AntigravityAgent", "google/gemini-3.1-pro-preview"),
+        ],
+    )
+    def test_unknown_model_falls_back_to_own_family_frontier(self, agent_cls_name, expected):
+        """A spelling neither the catalog nor the upgrade map knows resolves
+        to THIS agent class's family frontier."""
+        import aragora.agents.cli_agents as cli_agents
+        from aragora.models.catalog import spec_or_none
+        from aragora.models.upgrade_map import resolve_model_id
+
+        unknown = "totally-unknown-model-xyz"
+        assert spec_or_none(resolve_model_id(unknown)) is None, "fixture id must stay unknown"
+
+        agent_cls = getattr(cli_agents, agent_cls_name)
+        # Not every CLI subclass forwards enable_fallback through __init__
+        # (e.g. OpenAIAgent narrows the signature); set it after construction.
+        agent = agent_cls(name="test-agent", model=unknown)
+        agent.enable_fallback = True
+        assert self._fallback_model(agent) == expected
+
+    def test_class_with_no_family_falls_back_to_fable(self):
+        """Only a class that declares no family lands on the Anthropic
+        frontier (kilocode brokers several providers)."""
+        from aragora.config.model_pins import FABLE_51_VIA_OPENROUTER
+
+        agent = DummyCLIAgent(
+            name="test-agent", model="totally-unknown-model-xyz", enable_fallback=True
+        )
+        assert agent.MODEL_FAMILY == ""
+        assert self._fallback_model(agent) == FABLE_51_VIA_OPENROUTER
 
 
 class TestCLIAgentSanitization:
@@ -423,6 +538,198 @@ class TestClaudeAgent:
         assert command[command.index("--model") + 1] == "claude-fable-5"
 
 
+class TestRefreshedCLIAgentsPinTheirModel:
+    """A refreshed registry default has to reach the CLI on the wire.
+
+    Four command builders updated their registry default to a frontier pin
+    but never passed ``self.model`` to the CLI, so the local CLI's own
+    default answered while Aragora recorded the refreshed id (finding O-P2b,
+    openai reviewer, #9989 round 4). Each flag below was verified against the
+    installed CLI's ``--help`` on 2026-09-05.
+    """
+
+    # registry name -> (module attribute, the CLI's own model flag)
+    CASES = {
+        "codex": ("CodexAgent", "-m"),
+        "gemini-cli": ("GeminiCLIAgent", "-m"),
+        "grok-cli": ("GrokCLIAgent", "-m"),
+        # `agy --help` spells it --model with no short form.
+        "antigravity": ("AntigravityAgent", "--model"),
+    }
+
+    # Registered CLI agents that deliberately do NOT put self.model on the
+    # wire, and why. Keeping this explicit is what makes the reverse test
+    # below meaningful.
+    #
+    #   qwen-cli / deepseek-cli  their registry defaults were NOT refreshed:
+    #                            both stayed on the CLI's own native
+    #                            pre-refresh model code because the catalog
+    #                            rows are OpenRouter rows (see the comments
+    #                            on their registrations). No behaviour of
+    #                            theirs changed in this PR.
+    #   kimi-cli                 same, and only registered under
+    #                            ARAGORA_ENABLE_KIMI_CLI; its headless
+    #                            invocation is documented as unverified.
+    #   grok-build               "grok-build" names the CLI product, not a
+    #                            model id, so there is no pin to send.
+    #   kilocode                 brokers several providers and sends
+    #                            provider_id via --model, not self.model.
+    NO_WIRE_MODEL = {"qwen-cli", "deepseek-cli", "kimi-cli", "grok-build", "kilocode"}
+
+    @staticmethod
+    async def _capture_command(agent, prompt: str) -> list[str]:
+        from unittest.mock import AsyncMock, patch
+
+        captured: dict = {}
+
+        async def fake_generate(command, *args, **kwargs):
+            captured["command"] = list(command)
+            return "ok"
+
+        with (
+            patch.object(agent, "_generate_with_fallback", AsyncMock(side_effect=fake_generate)),
+            patch(
+                "aragora.agents.cli_agents.build_claude_command",
+                side_effect=lambda cmd: (cmd, None),
+            ),
+        ):
+            await agent.generate(prompt)
+        return captured["command"]
+
+    @pytest.mark.parametrize("registry_name", sorted(CASES))
+    @pytest.mark.asyncio
+    async def test_argv_path_carries_the_model_flag(self, registry_name):
+        import aragora.agents.cli_agents as cli_agents
+
+        attr, flag = self.CASES[registry_name]
+        agent = getattr(cli_agents, attr)(name=f"{registry_name}-test", model="pinned-model-x")
+        command = await self._capture_command(agent, "hello")
+
+        assert flag in command, f"{registry_name} never passed its model flag: {command}"
+        assert command[command.index(flag) + 1] == "pinned-model-x"
+
+    @pytest.mark.parametrize("registry_name", sorted(CASES))
+    @pytest.mark.asyncio
+    async def test_stdin_path_carries_the_model_flag(self, registry_name):
+        """The large-prompt branch is a separate command array and was the
+        half a partial fix would miss."""
+        import aragora.agents.cli_agents as cli_agents
+
+        attr, flag = self.CASES[registry_name]
+        agent = getattr(cli_agents, attr)(name=f"{registry_name}-test", model="pinned-model-x")
+        huge = "x" * (1024 * 1024)
+        command = await self._capture_command(agent, huge)
+
+        assert flag in command, f"{registry_name} stdin path dropped the pin: {command}"
+        assert command[command.index(flag) + 1] == "pinned-model-x"
+        assert command[-1] == "-", command
+
+    @pytest.mark.asyncio
+    async def test_every_registered_cli_agent_sends_its_model_or_is_exempt(self):
+        """Reverse completeness: a future refreshed pin cannot quietly stop
+        at the registry."""
+        import aragora.agents.cli_agents as cli_agents
+        from aragora.agents.registry import AgentRegistry
+
+        offenders: list[str] = []
+        stale_exemptions: list[str] = []
+        for name, spec in sorted(AgentRegistry._registry.items()):
+            if getattr(spec, "agent_type", None) != "CLI":
+                continue
+            cls = getattr(spec, "agent_class", None)
+            default_model = getattr(spec, "default_model", None)
+            if cls is None or cls.__module__ != cli_agents.__name__:
+                continue
+            if name in self.NO_WIRE_MODEL:
+                if default_model is None:
+                    continue
+                agent = cls(name=f"{name}-test", model=default_model)
+                command = await self._capture_command(agent, "hello")
+                if default_model in command:
+                    stale_exemptions.append(name)
+                continue
+            assert default_model, f"{name} is not exempt but has no default model"
+            agent = cls(name=f"{name}-test", model=default_model)
+            command = await self._capture_command(agent, "hello")
+            if default_model not in command:
+                offenders.append(f"{name} -> {command}")
+
+        assert not offenders, (
+            "registered CLI agents record a model the CLI is never told:\n" + "\n".join(offenders)
+        )
+        assert not stale_exemptions, (
+            f"these agents now send their model and must leave NO_WIRE_MODEL: {stale_exemptions}"
+        )
+
+
+class TestUnpinnedCLIAgentsDoNotClaimTheirModel:
+    """An agent whose model never reaches the CLI must say so.
+
+    qwen-cli, deepseek-cli and the opt-in kimi-cli each carry a native model
+    code the CLI is never told about: qwen's own ``-m`` flag exists but its
+    recorded id is a retired spelling with no native successor, and neither
+    the deepseek nor the kimi CLI is installed on the machine this branch was
+    built on, so no flag could be verified rather than guessed (see
+    CLIAgent.SENDS_MODEL_ON_WIRE). They keep the requested pin, because
+    pricing, fallback and the registry all need it, and declare
+    ``metadata["model_pinned_on_wire"] = False`` so nothing downstream
+    attributes the answer to a model the CLI never received (wave-6 ruling,
+    agents, on #9989).
+    """
+
+    @pytest.mark.parametrize(
+        ("attr", "model"),
+        [
+            ("QwenCLIAgent", "qwen3-coder"),
+            ("DeepseekCLIAgent", "deepseek-v4-pro"),
+            ("KimiCLIAgent", "kimi-k2"),
+        ],
+    )
+    def test_unpinned_agent_flags_the_missing_wire_pin(self, attr, model):
+        import aragora.agents.cli_agents as cli_agents
+
+        agent = getattr(cli_agents, attr)(name=f"{attr}-test", model=model)
+        assert agent.model == model, "the requested pin must still be carried"
+        assert agent.metadata["model_pinned_on_wire"] is False
+
+    @pytest.mark.parametrize(
+        "attr",
+        sorted(attr for attr, _flag in TestRefreshedCLIAgentsPinTheirModel.CASES.values()),
+    )
+    def test_a_pinned_agent_claims_its_wire_pin(self, attr):
+        import aragora.agents.cli_agents as cli_agents
+
+        agent = getattr(cli_agents, attr)(name=f"{attr}-test", model="pinned-model-x")
+        assert agent.metadata["model_pinned_on_wire"] is True
+
+    def test_the_wire_claim_agrees_with_the_command_builders(self):
+        """The claim and the exemption list are two statements of one fact.
+
+        ``TestRefreshedCLIAgentsPinTheirModel.NO_WIRE_MODEL`` is proven
+        against the actual command arrays there; this asserts the class
+        attribute never drifts from it, so a future builder that starts (or
+        stops) sending its model cannot leave the metadata lying.
+        """
+        import aragora.agents.cli_agents as cli_agents
+        from aragora.agents.registry import AgentRegistry
+
+        exempt = TestRefreshedCLIAgentsPinTheirModel.NO_WIRE_MODEL
+        mismatched = []
+        for name, spec in sorted(AgentRegistry._registry.items()):
+            if getattr(spec, "agent_type", None) != "CLI":
+                continue
+            cls = getattr(spec, "agent_class", None)
+            if cls is None or cls.__module__ != cli_agents.__name__:
+                continue
+            expected = name not in exempt
+            if cls.SENDS_MODEL_ON_WIRE is not expected:
+                mismatched.append(f"{name}: SENDS_MODEL_ON_WIRE={cls.SENDS_MODEL_ON_WIRE}")
+        assert not mismatched, (
+            "SENDS_MODEL_ON_WIRE disagrees with the proven NO_WIRE_MODEL set: "
+            + ", ".join(mismatched)
+        )
+
+
 class TestGeminiCLIAgent:
     """Test GeminiCLIAgent implementation."""
 
@@ -560,6 +867,59 @@ class TestAntigravityAgent:
         monkeypatch.setenv("ARAGORA_ANTIGRAVITY_BIN", "/custom/path/agy")
         assert _resolve_antigravity_bin() == "/custom/path/agy"
 
+    def test_resolve_effort_defaults_to_medium(self, monkeypatch):
+        from aragora.agents.cli_agents import (
+            ANTIGRAVITY_DEFAULT_EFFORT,
+            _resolve_antigravity_effort,
+        )
+
+        monkeypatch.delenv("ARAGORA_ANTIGRAVITY_EFFORT", raising=False)
+        assert ANTIGRAVITY_DEFAULT_EFFORT == "medium"
+        assert _resolve_antigravity_effort() == "medium"
+
+    def test_resolve_effort_honors_override(self, monkeypatch):
+        from aragora.agents.cli_agents import _resolve_antigravity_effort
+
+        monkeypatch.setenv("ARAGORA_ANTIGRAVITY_EFFORT", "high")
+        assert _resolve_antigravity_effort() == "high"
+
+    @pytest.mark.parametrize("bad", ["foo", "HIGHEST", "1", "medium high", "-"])
+    def test_resolve_effort_rejects_an_unrecognised_level(self, monkeypatch, caplog, bad):
+        """``agy`` accepts exactly low|medium|high, so passing anything else
+        through made every antigravity call error out and fall back to
+        OpenRouter -- the same silent failure --effort was added to prevent,
+        now triggered by a typo (wave-6 re-review, minor 3)."""
+        import logging
+
+        from aragora.agents.cli_agents import _resolve_antigravity_effort
+
+        monkeypatch.setenv("ARAGORA_ANTIGRAVITY_EFFORT", bad)
+        with caplog.at_level(logging.WARNING, logger="aragora.agents.cli_agents"):
+            assert _resolve_antigravity_effort() == "medium"
+        assert [r for r in caplog.records if "ARAGORA_ANTIGRAVITY_EFFORT" in r.getMessage()]
+
+    @pytest.mark.parametrize("level", ["low", "medium", "high"])
+    def test_resolve_effort_accepts_every_documented_level(self, monkeypatch, level):
+        from aragora.agents.cli_agents import _resolve_antigravity_effort
+
+        monkeypatch.setenv("ARAGORA_ANTIGRAVITY_EFFORT", level)
+        assert _resolve_antigravity_effort() == level
+
+    @pytest.mark.parametrize(("spelled", "expected"), [("HIGH", "high"), (" Low ", "low")])
+    def test_resolve_effort_normalizes_case_and_padding(self, monkeypatch, spelled, expected):
+        """An operator writing HIGH means high, not "fall back to medium"."""
+        from aragora.agents.cli_agents import _resolve_antigravity_effort
+
+        monkeypatch.setenv("ARAGORA_ANTIGRAVITY_EFFORT", spelled)
+        assert _resolve_antigravity_effort() == expected
+
+    def test_a_rejected_level_still_reaches_the_command_line_as_medium(self, monkeypatch):
+        """The end-to-end consequence: the argv is valid regardless."""
+        from aragora.agents.cli_agents import _resolve_antigravity_effort
+
+        monkeypatch.setenv("ARAGORA_ANTIGRAVITY_EFFORT", "foo")
+        assert ["--effort", _resolve_antigravity_effort()] == ["--effort", "medium"]
+
     def test_generate_invokes_agy_print_mode(self):
         import os
         from unittest.mock import patch
@@ -580,6 +940,30 @@ class TestAntigravityAgent:
         assert cmd[0] != "agy"
         assert "-p" in cmd
         assert cmd[-1] == "review this PR"
+        # `agy --model <id>` requires a companion `--effort` flag or the
+        # call errors and silently falls back to OpenRouter (finding on
+        # #9989 wave 6).
+        assert cmd[1:5] == ["--model", "gemini-3.5-flash", "--effort", "medium"]
+
+    def test_generate_stdin_path_also_carries_effort(self):
+        """The large-prompt (stdin) branch is a separate command array and
+        would be the half a partial fix missed."""
+        from unittest.mock import patch
+
+        from aragora.agents.cli_agents import AntigravityAgent
+
+        agent = AntigravityAgent(
+            name="agy-test",
+            model="gemini-3.5-flash",
+            enable_fallback=False,
+            enable_circuit_breaker=False,
+        )
+        huge = "x" * (1024 * 1024)
+        with patch.object(agent, "_run_cli", new=AsyncMock(return_value="OK")) as m:
+            asyncio.run(agent.generate(huge))
+        cmd = m.call_args.args[0]
+        assert cmd[1:5] == ["--model", "gemini-3.5-flash", "--effort", "medium"]
+        assert cmd[-2:] == ["-p", "-"]
 
 
 class TestKimiCLIAgent:

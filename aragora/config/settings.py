@@ -260,6 +260,36 @@ class AgentSettings(BaseSettings):
         description="Prioritize local LLMs over cloud providers when available",
     )
 
+    # Anthropic server-side refusal fallback (frontier-model-refresh,
+    # 2026-09-04): Fable 5.1 / Opus 5 can retry a cyber-classifier refusal
+    # against a fallback model server-side when the request carries
+    # "fallbacks": "default" and the matching anthropic-beta header. Default
+    # on; set ARAGORA_ANTHROPIC_REFUSAL_FALLBACK=false to opt out.
+    anthropic_refusal_fallback: bool = Field(
+        default=True,
+        alias="ARAGORA_ANTHROPIC_REFUSAL_FALLBACK",
+        description=(
+            "Enable Anthropic server-side refusal fallback (fallbacks: default + "
+            "anthropic-beta: server-side-fallback-2026-07-01) for Fable 5.1 / Opus 5"
+        ),
+    )
+
+    # Default max_tokens cap for a STREAMED Anthropic call (frontier-model-
+    # refresh, 2026-09-04). ``generate_stream`` takes no caller max_tokens, so
+    # this is the only place that path's output ceiling can be set: the
+    # payload gets min(catalog max_output_tokens, this). 64k is the shipped
+    # default; lower it to cap per-streamed-call output spend without editing
+    # the catalog. Non-streaming keeps its own 16k default.
+    anthropic_stream_max_tokens: int = Field(
+        default=64_000,
+        ge=1,
+        alias="ARAGORA_ANTHROPIC_STREAM_MAX_TOKENS",
+        description=(
+            "Default max_tokens cap for streamed Anthropic calls; the payload uses "
+            "min(catalog max_output_tokens, this value)"
+        ),
+    )
+
     @property
     def default_agent_list(self) -> list[str]:
         """Get default agents as a list."""
@@ -1318,7 +1348,6 @@ ALLOWED_AGENT_TYPES: frozenset[str] = frozenset(
         "mistral",
         "qwen",
         "qwen-max",
-        "yi",
         "kimi",
         "kimi-thinking",
         "llama4-maverick",

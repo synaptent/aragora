@@ -926,6 +926,7 @@ def _build_quickstart_receipt_payload(result: dict[str, Any]) -> dict[str, Any]:
             ],
             cost_summary=payload.get("cost_summary"),
             thinking_traces=payload.get("thinking_traces"),
+            served_models=payload.get("served_models"),
             settlement_metadata=settlement_metadata,
             config_used=(
                 payload.get("config_used", {})
@@ -1252,6 +1253,21 @@ def _extract_thinking_traces(result: Any) -> dict[str, str] | None:
     return None
 
 
+def _extract_served_models(result: Any) -> dict[str, dict[str, Any]] | None:
+    """Extract the per-agent served-model record from debate result metadata.
+
+    Populated by the debate runner only for agents whose provider answered
+    with a DIFFERENT model than the one requested on at least one call; see
+    ``aragora.debate.orchestrator_runner.collect_served_models`` for the
+    entry shape."""
+    metadata = getattr(result, "metadata", None)
+    if isinstance(metadata, dict):
+        served = metadata.get("served_models")
+        if isinstance(served, dict) and served:
+            return served
+    return None
+
+
 def _clean_summary(text: str) -> str:
     """Strip LLM chain-of-thought preamble from the summary for clean CLI output."""
     import re
@@ -1421,6 +1437,7 @@ def _build_live_receipt(
             "tokens_used": int(getattr(result, "total_tokens", 0) or 0),
         },
         thinking_traces=_extract_thinking_traces(result),
+        served_models=_extract_served_models(result),
         settlement_metadata=settlement_metadata,
         config_used={
             "mode": "quickstart-live",
@@ -1624,7 +1641,10 @@ async def _assess_live_provider_path(
         if credential_statuses[agent_spec[0]].config_present
     ]
     reachable, failures, failure_reasons = await _probe_live_agents(configured_agents)
-    failure_details = {
+    # Annotated: summarize_provider_path takes dict[str, str | None], and a
+    # dict is invariant in its value type, so the inferred dict[str, str]
+    # is not assignable to it.
+    failure_details: dict[str, str | None] = {
         failure.split(": ", 1)[0]: failure.split(": ", 1)[1]
         for failure in failures
         if ": " in failure

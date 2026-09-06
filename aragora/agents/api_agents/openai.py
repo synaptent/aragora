@@ -17,6 +17,7 @@ from aragora.agents.api_agents.common import (
     AgentAPIError,
     AgentCircuitOpenError,
     get_primary_api_key,
+    upgrade_retired_model_id,
 )
 from aragora.agents.api_agents.openai_compatible import OpenAICompatibleMixin
 from aragora.agents.registry import AgentRegistry
@@ -29,6 +30,7 @@ from aragora.agents.transports.vibeproxy import (
     VibeProxyTimeoutError,
     VibeProxyUnavailableError,
 )
+from aragora.config.model_pins import GPT6_ASTRA_DIRECT, GPT6_ASTRA_VIA_OPENROUTER
 from aragora.core import Message
 from aragora.core_types import AgentRole
 from aragora.observability.metrics.agents import (
@@ -39,6 +41,9 @@ from aragora.observability.metrics.agents import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Frontier pick for the OpenAI API agent (2026-09-04 frontier-model-refresh).
+DEFAULT_MODEL = GPT6_ASTRA_DIRECT
 
 # Pre-compiled patterns that indicate web search would be helpful
 # Compiled at module load time for performance (avoids recompilation on each call)
@@ -67,19 +72,41 @@ _PROXY_DISCOVERY_TIMEOUT_SECONDS = 6.0
 _PROXY_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="vibeproxy-openai")
 
 
+_OPENAI_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+
 def _resolve_openai_base_url() -> str:
     """OPENAI_BASE_URL override for gateways/proxies (issue #9304)."""
     import os
 
     raw = os.environ.get("OPENAI_BASE_URL", "").strip().rstrip("/")
     if not raw:
-        return "https://api.openai.com/v1"
+        return _OPENAI_DEFAULT_BASE_URL
     return raw if raw.endswith("/v1") else raw + "/v1"
+
+
+def _targets_official_openai_endpoint() -> bool:
+    """Whether requests will actually reach ``api.openai.com``.
+
+    Used ONLY to decide whether a retired explicit model id may be rewritten
+    (finding O-P2a). Deliberately separate from
+    ``self._uses_official_openai_endpoint``, which gates VibeProxy exact-chat
+    routing and keeps its own "no OPENAI_BASE_URL is set at all" meaning: the
+    proxy slice is contract-tested against an unconfigured client, so an env
+    var naming the official endpoint is still outside it.
+
+    The upgrade decision has no such reason to care about the raw env var --
+    it cares where the request lands. Comparing the RESOLVED, normalized URL
+    (as the anthropic/grok/mistral paths do) means
+    ``OPENAI_BASE_URL=https://api.openai.com``, ``.../v1`` and ``.../v1/``
+    all still upgrade a retired id, while any other host does not.
+    """
+    return _resolve_openai_base_url() == _OPENAI_DEFAULT_BASE_URL
 
 
 @AgentRegistry.register(
     "openai-api",
-    default_model="gpt-5.6-sol",
+    default_model=DEFAULT_MODEL,
     default_name="openai-api",
     agent_type="API",
     env_vars="OPENAI_API_KEY",
@@ -97,46 +124,43 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
     Uses OpenAICompatibleMixin for standard OpenAI API implementation.
     """
 
-    # Every OpenAI ID maps to the current frontier (GPT-5.5) via OpenRouter
-    # so weaker historical models are transparently upgraded and a missing
-    # OPENAI_API_KEY never blocks a debate. Distinct OpenRouter model IDs
-    # are kept only where the Pro tier is explicitly requested.
-    OPENROUTER_MODEL_MAP = {
-        "gpt-5.6-sol": "openai/gpt-5.6-sol",
-        "gpt-5.5": "openai/gpt-5.5",
-        "gpt-5.4": "openai/gpt-5.6-sol",
-        "gpt-5.4-pro": "openai/gpt-5.6-sol",
-        "gpt-5.3": "openai/gpt-5.6-sol",
-        "gpt-5.3-chat-latest": "openai/gpt-5.6-sol",
-        "gpt-5.3-codex": "openai/gpt-5.6-sol",
-        "gpt-4.1": "openai/gpt-5.6-sol",
-        "gpt-4.1-mini": "openai/gpt-5.5",
-        "gpt-4.1-nano": "openai/gpt-5.5",
-        "gpt-4o": "openai/gpt-5.5",
-        "gpt-4o-mini": "openai/gpt-5.5",
-        "gpt-4-turbo": "openai/gpt-5.5",
-        "gpt-4": "openai/gpt-5.5",
-        "gpt-3.5-turbo": "openai/gpt-5.5",
-        "gpt-4o-search-preview": "openai/gpt-5.5",
-        "o3": "openai/gpt-5.5",
-        "o3-mini": "openai/gpt-5.5",
-        "o4-mini": "openai/gpt-5.5",
-    }
-    DEFAULT_FALLBACK_MODEL = "openai/gpt-5.5"
+    # No static OPENROUTER_MODEL_MAP: QuotaFallbackMixin.get_fallback_model()
+    # (aragora/agents/fallback.py) resolves the current model through the
+    # catalog/upgrade-map instead, so every legacy or retired OpenAI
+    # spelling (not just a hand-enumerated subset) transparently upgrades
+    # to its frontier via OpenRouter.
+    DEFAULT_FALLBACK_MODEL = GPT6_ASTRA_VIA_OPENROUTER
 
     def __init__(
         self,
         name: str = "openai-api",
-        model: str = "gpt-5.6-sol",
+        model: str = DEFAULT_MODEL,
         role: AgentRole = "proposer",
         timeout: int = 120,
         api_key: str | None = None,
         enable_fallback: bool | None = None,  # None = use config setting
         model_transport: ModelTransportPolicy | None = None,  # None = from env
+        reasoning_effort: str | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
     ) -> None:
         import os
 
+        # VibeProxy exact-chat routing gate: unchanged raw-env-var semantics
+        # (the proxy slice is contract-tested against a client with no
+        # OPENAI_BASE_URL set at all).
         self._uses_official_openai_endpoint = not os.environ.get("OPENAI_BASE_URL", "").strip()
+        # A retired or known-dead explicit id is upgraded before it can be
+        # sent to the native endpoint (finding O-P2a); active and unknown
+        # ids pass through untouched. See upgrade_retired_model_id. Skipped
+        # for a custom OPENAI_BASE_URL (BYOK gateway/proxy, issue #9304):
+        # that endpoint may serve ids under names the public catalog does
+        # not recognize, so rewriting them would silently target the wrong
+        # model on someone else's endpoint. Gated on the RESOLVED URL, not
+        # raw env-var presence, so OPENAI_BASE_URL set to a spelling of the
+        # official endpoint still upgrades (finding O-P2a, round 2).
+        if _targets_official_openai_endpoint():
+            model = upgrade_retired_model_id(model)
         super().__init__(
             name=name,
             model=model,
@@ -146,8 +170,14 @@ class OpenAIAPIAgent(OpenAICompatibleMixin, APIAgent):
             or get_primary_api_key("OPENAI_API_KEY", allow_openrouter_fallback=True),
             # OPENAI_BASE_URL supports BYOK gateways/proxies (issue #9304).
             base_url=_resolve_openai_base_url(),
+            temperature=temperature,
+            top_p=top_p,
         )
         self.agent_type = "openai"
+        # Explicit per-instance override (e.g. the reviewer role passing
+        # "xhigh"); falls back to the catalog's reasoning_effort_default for
+        # the model when unset (see OpenAICompatibleMixin._build_payload).
+        self.reasoning_effort = reasoning_effort
         # Use config setting if not explicitly provided
         if enable_fallback is None:
             from aragora.agents.fallback import get_default_fallback_enabled

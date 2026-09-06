@@ -41,7 +41,13 @@ class TestRejectsSamplingParams:
             "claude-opus-4-6",
             "claude-sonnet-4-6",
             "claude-haiku-4-5",
-            "gpt-5.5",
+            # Not "gpt-5.5": Task 7 (frontier-model-refresh) made this helper
+            # catalog-backed, and gpt-5.5's own catalog row (added earlier in
+            # this same epic) declares supports_sampling_params=False — it is
+            # a real reasoning-tier OpenAI model, not an example of a
+            # provider that still accepts sampling params. See
+            # tests/agents/api_agents/test_request_shapes.py for that case.
+            "gpt-4-turbo",
             "gemini-3.1-pro",
             "mistral-large-2512",
         ],

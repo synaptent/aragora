@@ -47,7 +47,6 @@ _MODEL_FAMILY_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("kimi", ("moonshotai/", "moonshot/", "kimi")),
     ("deepseek", ("deepseek/", "deepseek")),
     ("qwen", ("qwen/", "qwen")),
-    ("yi", ("01-ai/", "yi-")),
 )
 
 

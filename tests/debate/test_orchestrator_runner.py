@@ -1732,3 +1732,147 @@ class TestErrorHandlingAndRecovery:
         # Cleanup
         result = await cleanup_debate_resources(mock_arena, state)
         assert result is not None
+
+
+class TestServedModelsReachTheResultMetadata:
+    """``handle_debate_completion`` must attach served_models end to end.
+
+    ``collect_served_models`` was unit-tested, but nothing exercised the
+    attach block that puts its output on ``ctx.result.metadata`` -- the only
+    path by which a receipt learns that a server-side fallback answered with
+    a model other than the one the debate pinned (2026-09-05 merge-gate
+    addendum on #9989).
+    """
+
+    @staticmethod
+    def _agent(name: str, requested: str, served: str | None):
+        """A fake agent shaped like the Anthropic one: the property the
+        collector reads AND the get_metadata() surface callers see."""
+        agent = MagicMock()
+        agent.name = name
+        agent.model = requested
+        agent.last_served_model = served
+        agent.get_metadata = MagicMock(return_value={"served_model": served})
+        return agent
+
+    @pytest.mark.asyncio
+    async def test_attaches_served_models_for_a_swapped_agent(self, mock_arena, execution_state):
+        swapped = self._agent("claude-1", "claude-fable-5-1", "claude-opus-4-8")
+        as_asked = self._agent("claude-2", "claude-fable-5-1", None)
+        mock_arena.agents = [swapped, as_asked]
+        execution_state.ctx.result.metadata = {}
+
+        await handle_debate_completion(mock_arena, execution_state)
+
+        assert execution_state.ctx.result.metadata["served_models"] == {
+            "claude-1": {"requested": "claude-fable-5-1", "served": ["claude-opus-4-8"]}
+        }
+        # The agent's own metadata surface agrees with what was attached.
+        assert swapped.get_metadata()["served_model"] == "claude-opus-4-8"
+
+    @pytest.mark.asyncio
+    async def test_no_key_when_every_agent_answered_as_asked(self, mock_arena, execution_state):
+        """An empty dict must not be written: absence means 'as asked'."""
+        mock_arena.agents = [self._agent("claude-1", "claude-fable-5-1", None)]
+        execution_state.ctx.result.metadata = {}
+
+        await handle_debate_completion(mock_arena, execution_state)
+
+        assert "served_models" not in execution_state.ctx.result.metadata
+
+    @pytest.mark.asyncio
+    async def test_creates_metadata_when_the_result_has_none(self, mock_arena, execution_state):
+        mock_arena.agents = [self._agent("claude-1", "claude-fable-5-1", "claude-opus-4-8")]
+        execution_state.ctx.result.metadata = None
+
+        await handle_debate_completion(mock_arena, execution_state)
+
+        assert execution_state.ctx.result.metadata["served_models"] == {
+            "claude-1": {"requested": "claude-fable-5-1", "served": ["claude-opus-4-8"]}
+        }
+
+    @pytest.mark.asyncio
+    async def test_existing_metadata_is_preserved(self, mock_arena, execution_state):
+        mock_arena.agents = [self._agent("claude-1", "claude-fable-5-1", "claude-opus-4-8")]
+        execution_state.ctx.result.metadata = {"pre_existing": "keep me"}
+
+        await handle_debate_completion(mock_arena, execution_state)
+
+        assert execution_state.ctx.result.metadata["pre_existing"] == "keep me"
+        assert "served_models" in execution_state.ctx.result.metadata
+
+
+class TestUnpinnedCLIAgentsAreNotAttributedAModel:
+    """A CLI that never received ``self.model`` must not have its output
+    attributed to it (wave-6 ruling, agents, on #9989).
+
+    ``qwen-cli``, ``deepseek-cli`` and the opt-in ``kimi-cli`` each carry a
+    native model code the CLI is never told about -- a retired spelling with
+    no native successor for qwen, an unverifiable flag for the two CLIs that
+    are not installed here (see
+    ``aragora.agents.cli_agents.CLIAgent.SENDS_MODEL_ON_WIRE``). They keep
+    the requested pin
+    (pricing, fallback and the registry all need it) but declare
+    ``metadata["model_pinned_on_wire"] = False``, and the collector then
+    reports the served model as unknown.
+    """
+
+    @staticmethod
+    def _cli_agent(registry_name: str, attr: str, model: str):
+        import os
+        from unittest.mock import patch as _patch
+
+        with _patch.dict(os.environ, {"ARAGORA_ENABLE_KIMI_CLI": "1"}):
+            import aragora.agents.cli_agents as cli_agents
+
+            return getattr(cli_agents, attr)(name=registry_name, model=model)
+
+    @pytest.mark.parametrize(
+        ("registry_name", "attr", "model"),
+        [
+            ("qwen-cli", "QwenCLIAgent", "qwen3-coder"),
+            ("deepseek-cli", "DeepseekCLIAgent", "deepseek-v4-pro"),
+            ("kimi-cli", "KimiCLIAgent", "kimi-k2"),
+        ],
+    )
+    def test_agent_records_that_the_pin_never_reached_the_wire(
+        self, registry_name: str, attr: str, model: str
+    ) -> None:
+        from aragora.debate.orchestrator_runner import (
+            UNKNOWN_CLI_DEFAULT_MODEL,
+            collect_served_models,
+        )
+
+        agent = self._cli_agent(registry_name, attr, model)
+        # The requested pin is still carried -- only the CLAIM about the wire
+        # changes.
+        assert agent.model == model
+        assert agent.metadata["model_pinned_on_wire"] is False
+        assert collect_served_models([agent]) == {
+            registry_name: {"requested": model, "served": [UNKNOWN_CLI_DEFAULT_MODEL]}
+        }
+        assert UNKNOWN_CLI_DEFAULT_MODEL != model
+
+    def test_a_cli_that_does_pin_its_model_is_untouched(self) -> None:
+        """The four CLIs wave 5 pinned still report nothing: their model DID
+        reach the command line, so there is no discrepancy to record."""
+        from aragora.debate.orchestrator_runner import collect_served_models
+
+        agent = self._cli_agent("codex", "CodexAgent", "gpt-6-astra")
+        assert agent.metadata["model_pinned_on_wire"] is True
+        assert collect_served_models([agent]) == {}
+
+    @pytest.mark.asyncio
+    async def test_the_unknown_marker_reaches_the_result_metadata(
+        self, mock_arena, execution_state
+    ) -> None:
+        from aragora.debate.orchestrator_runner import UNKNOWN_CLI_DEFAULT_MODEL
+
+        mock_arena.agents = [self._cli_agent("qwen-cli", "QwenCLIAgent", "qwen3-coder")]
+        execution_state.ctx.result.metadata = {}
+
+        await handle_debate_completion(mock_arena, execution_state)
+
+        assert execution_state.ctx.result.metadata["served_models"] == {
+            "qwen-cli": {"requested": "qwen3-coder", "served": [UNKNOWN_CLI_DEFAULT_MODEL]}
+        }

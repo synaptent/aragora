@@ -11,25 +11,25 @@
     },
     {
       "claim_id": "canonical.python_modules.count",
-      "claimed": "135+",
-      "message": "docs claim 135+ modules; live count is 4145 \u2014 within tolerance",
-      "observed": "4145",
+      "claimed": "145+",
+      "message": "docs claim 145+ modules; live count is 4337 \u2014 within tolerance",
+      "observed": "4337",
       "status": "pass",
       "tolerance": "+/-20%"
     },
     {
       "claim_id": "canonical.test_definitions.count",
-      "claimed": "216016+",
-      "message": "docs claim 216016+ tests; live count is 218808",
-      "observed": "218808",
+      "claimed": "226695+",
+      "message": "docs claim 226695+ tests; live count is 226692",
+      "observed": "226692",
       "status": "pass",
       "tolerance": "+/-20%"
     },
     {
       "claim_id": "canonical.version.matches_pyproject",
-      "claimed": "2.9.0",
-      "message": "docs and pyproject.toml both report version 2.9.0",
-      "observed": "2.9.0",
+      "claimed": "2.10.0",
+      "message": "docs and pyproject.toml both report version 2.10.0",
+      "observed": "2.10.0",
       "status": "pass",
       "tolerance": "exact"
     },

@@ -16,7 +16,15 @@ from datetime import date
 from typing import Any
 
 from aragora.agents.credential_validator import CredentialStatus
+from aragora.config.model_pins import (
+    FABLE_51_DIRECT,
+    GEMINI_31_PRO_DIRECT,
+    GPT6_ASTRA_DIRECT,
+    GROK_46_DIRECT,
+    MISTRAL_MEDIUM_DIRECT,
+)
 from aragora.models import by_any_id
+from aragora.models.catalog import CATALOG
 from aragora.routing.cost_quality_optimizer import CostQualityOptimizer, SelectionStrategy
 from aragora.routing.provider_config import (
     current_pricing_as_of,
@@ -26,6 +34,11 @@ from aragora.routing.provider_config import (
 from aragora.routing.provider_metrics import ProviderMetricsStore
 
 logger = logging.getLogger(__name__)
+
+# DeepSeek has no model_pins constant (it is an OpenRouter-routed family, so
+# there is no native-provider pin); read its canonical id straight from the
+# catalog rather than hardcoding the literal.
+DEEPSEEK_V4_PRO = CATALOG["deepseek-v4-pro-0813"].canonical_id
 
 
 def _is_under_soak(provider: str, as_of: date) -> bool:
@@ -43,15 +56,21 @@ def _is_under_soak(provider: str, as_of: date) -> bool:
 # Minimum number of recorded debates before metrics-based selection is used.
 MIN_DEBATES_FOR_METRICS = 10
 
-# Default round-robin order when insufficient data is available.
+# Default round-robin order when insufficient data is available: the
+# cold-start roster. Derived from aragora.config.model_pins (frontier-model-
+# refresh, 2026-09-04) rather than hand-written ids, which had drifted to a
+# roster that was 100% retired spellings (claude-sonnet-4, gpt-4o,
+# mistral-large, gemini-2.0-flash, claude-opus-4) — so a cold-start debate
+# could not see the current frontier at all. Canonical ids, because
+# _round_robin_selection filters this list by membership in
+# provider_config's pricing table, which is keyed by canonical id.
 DEFAULT_PROVIDER_ORDER = [
-    "claude-sonnet-4",
-    "gpt-4o",
-    "deepseek-v4-pro",
-    "mistral-large",
-    "gemini-2.0-flash",
-    "gpt-4o-mini",
-    "claude-opus-4",
+    FABLE_51_DIRECT,
+    GPT6_ASTRA_DIRECT,
+    GEMINI_31_PRO_DIRECT,
+    GROK_46_DIRECT,
+    MISTRAL_MEDIUM_DIRECT,
+    DEEPSEEK_V4_PRO,
 ]
 
 
@@ -496,10 +515,17 @@ class ProviderRouter:
         num_agents: int,
         per_agent_budget: float | None,
     ) -> list[dict[str, Any]]:
-        """Build provider details from static pricing when no metrics exist."""
+        """Build provider details from static pricing when no metrics exist.
+
+        Soak-gated explicitly for the same reason as ``_round_robin_selection``:
+        the pricing table filters on retirement, so the must-not-adopt rule
+        is applied here, at selection.
+        """
         results: list[dict[str, Any]] = []
-        # current_pricing_table: date-fresh soak gating (#9364 round-5)
+        as_of = current_pricing_as_of()
         for model_key, pricing in current_pricing_table().items():
+            if _is_under_soak(model_key, as_of):
+                continue
             # Estimate cost per debate using 2K input + 1K output tokens
             estimated_cost = (2000 / 1000.0) * pricing.input_cost_per_1k + (
                 1000 / 1000.0
@@ -535,11 +561,23 @@ class ProviderRouter:
         return total_debates >= MIN_DEBATES_FOR_METRICS
 
     def _round_robin_selection(self, n: int) -> list[str]:
-        """Select N providers using deterministic round-robin."""
+        """Select N providers using deterministic round-robin.
+
+        Soak-gated explicitly: the enumerated pricing table is a candidate
+        set filtered on RETIREMENT, not soak (frontier-model-refresh final
+        review #7), so every SELECTION surface applies the must-not-adopt
+        rule itself. This is one of the two no-metrics paths (the other is
+        ``_details_from_pricing``); the metrics-driven paths already gate.
+        """
         pricing_table = current_pricing_table()
-        available = [model for model in DEFAULT_PROVIDER_ORDER if model in pricing_table]
+        as_of = current_pricing_as_of()
+        available = [
+            model
+            for model in DEFAULT_PROVIDER_ORDER
+            if model in pricing_table and not _is_under_soak(model, as_of)
+        ]
         if not available:
-            available = get_available_models()
+            available = [m for m in get_available_models() if not _is_under_soak(m, as_of)]
         if not available:
             return []
 

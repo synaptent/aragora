@@ -63,7 +63,6 @@ AGENT_CREDENTIAL_MAP: dict[str, list[str]] = {
     "llama4-scout": ["OPENROUTER_API_KEY"],
     "qwen": ["OPENROUTER_API_KEY"],
     "qwen-max": ["OPENROUTER_API_KEY"],
-    "yi": ["OPENROUTER_API_KEY"],
     "kimi": ["OPENROUTER_API_KEY"],
     "kimi-k3": ["OPENROUTER_API_KEY"],
     "kimi-k2": ["OPENROUTER_API_KEY"],

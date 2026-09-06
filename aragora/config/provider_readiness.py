@@ -126,8 +126,6 @@ AGENT_PROVIDER_ALIASES: dict[str, tuple[str, ...]] = {
     "llama4-scout": ("openrouter",),
     "qwen": ("openrouter",),
     "qwen-max": ("openrouter",),
-    "qwen-3.5": ("openrouter",),
-    "yi": ("openrouter",),
     "kimi": ("openrouter",),
     "kimi-legacy": ("kimi",),
     "kimi-thinking": ("openrouter",),

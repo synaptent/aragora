@@ -342,6 +342,82 @@ def get_primary_api_key(*env_vars: str, allow_openrouter_fallback: bool = False)
     return get_api_key(*env_vars, required=True)
 
 
+# Retired-id rewrites already logged, keyed by the (original, upgraded)
+# pair so the WARNING is emitted once per distinct rewrite for the process
+# lifetime instead of on every agent construction.
+_LOGGED_MODEL_UPGRADES: set[tuple[str, str]] = set()
+
+
+def native_model_id(model: str) -> str:
+    """The code a NATIVE provider endpoint accepts for ``model``.
+
+    ``resolve_model_id()`` answers with a ``canonical_id`` -- the catalog's
+    internal name for a row, which is NOT guaranteed to be the code the
+    provider's own API takes. It happens to coincide for every native row in
+    the catalog today, but a row like ``command-a-03-2025`` (canonical) with
+    ``command-a`` (direct) would break the coincidence silently, sending a
+    wire id no endpoint accepts (finding C-P3 on #9989).
+
+    So: resolve, then take the resolved row's ``direct_id``. A spelling that
+    resolves to no catalog row is returned unchanged -- a model newer than
+    the catalog must still be callable.
+
+    Caveat (documented on ``ModelSpec.direct_id``): for a ``provider ==
+    "openrouter"`` row, ``direct_id`` is a placeholder equal to
+    ``canonical_id`` and is not a native code at all. Native agents are not
+    pinned to those rows; the call sites that ARE keep their own verified
+    native codes (see ``_NATIVE_ID_EXEMPT`` in
+    ``tests/models/test_reachable_defaults.py``).
+    """
+    from aragora.models.catalog import spec_or_none
+    from aragora.models.upgrade_map import resolve_model_id
+
+    if not model:
+        return model
+    resolved = resolve_model_id(model) or model
+    spec = spec_or_none(resolved)
+    return spec.direct_id if spec is not None else resolved
+
+
+def upgrade_retired_model_id(model: str) -> str:
+    """Rewrite a RETIRED or known-dead model id to its current spelling.
+
+    A native API agent sends ``model`` straight to its provider endpoint, so
+    an explicitly configured id the provider has since retired (``gpt-5.5``,
+    ``grok-4-latest``) fails the call rather than upgrading — the 2026-09-05
+    merge-gate finding O-P2a on #9989. This rewrites exactly two classes of
+    id and nothing else:
+
+    * a spelling that resolves to a catalog row marked ``retired``;
+    * a spelling that is an explicit ``UPGRADES`` key — an id the catalog
+      does not carry at all, recorded in the upgrade map as dead.
+
+    An ACTIVE spelling is returned UNCHANGED, including an active alias: the
+    caller pinned a working id and the native endpoint accepts it verbatim.
+    An UNKNOWN spelling is returned unchanged too — a model newer than the
+    catalog must still be callable, which is why this is deliberately not a
+    blanket ``resolve_model_id()``.
+
+    The rewritten value is the successor row's ``direct_id`` (via
+    ``native_model_id``), not its ``canonical_id``: the caller sends it
+    straight to a native endpoint (finding C-P3 on #9989).
+    """
+    from aragora.models.catalog import spec_or_none
+    from aragora.models.upgrade_map import UPGRADES
+
+    if not model:
+        return model
+    spec = spec_or_none(model)
+    is_dead = model in UPGRADES or (spec is not None and spec.retired)
+    if not is_dead:
+        return model
+    upgraded = native_model_id(model)
+    if upgraded != model and (model, upgraded) not in _LOGGED_MODEL_UPGRADES:
+        _LOGGED_MODEL_UPGRADES.add((model, upgraded))
+        logger.warning("retired model id %s upgraded to %s", model, upgraded)
+    return upgraded
+
+
 async def close_shared_connector() -> None:
     """Close the shared connector, releasing all connections.
 
@@ -536,6 +612,52 @@ class SSEStreamParser:
         self.chunk_timeout = (
             chunk_timeout if chunk_timeout is not None else _get_stream_chunk_timeout()
         )
+        # Populated from an Anthropic "message_delta" event, if the stream
+        # carries one (no-op for providers whose events never use that
+        # shape, e.g. OpenAI): lets a caller detect a streamed
+        # stop_reason == "refusal" after the stream completes, without
+        # changing the yielded text-chunk interface other consumers rely on.
+        self.stop_reason: str | None = None
+        self.stop_details: dict[str, Any] | None = None
+        # Populated from an Anthropic "message_start" event: the model the
+        # server ACTUALLY answered with, which can differ from the requested
+        # id when a server-side fallback fires (the refusal fallback this
+        # agent enables by default). None for providers whose streams carry
+        # no such event.
+        self.served_model: str | None = None
+
+    def _capture_message_start_model(self, event: dict[str, Any]) -> None:
+        """Record the served model id from an Anthropic "message_start"
+        event (``{"type": "message_start", "message": {"model": ...}}``).
+        A no-op for every other event type/provider shape."""
+        if event.get("type") != "message_start":
+            return
+        message: Any = event.get("message")
+        if not isinstance(message, dict):
+            return
+        model: Any = message.get("model")
+        if isinstance(model, str) and model:
+            self.served_model = model
+
+    def _capture_message_delta_stop_info(self, event: dict[str, Any]) -> None:
+        """Record stop_reason/stop_details from an Anthropic "message_delta"
+        event (streaming carries these on the delta and/or event, unlike the
+        non-streaming response body where they are top-level). A no-op for
+        every other event type/provider shape."""
+        if event.get("type") != "message_delta":
+            return
+        delta: Any = event.get("delta")
+        if isinstance(delta, dict):
+            stop_reason = delta.get("stop_reason")
+            if stop_reason is not None:
+                self.stop_reason = stop_reason
+        else:
+            delta = None
+        stop_details: Any = event.get("stop_details")
+        if stop_details is None and isinstance(delta, dict):
+            stop_details = delta.get("stop_details")
+        if isinstance(stop_details, dict):
+            self.stop_details = stop_details
 
     async def parse_stream(
         self,
@@ -592,6 +714,8 @@ class SSEStreamParser:
                                 "[%s] Unexpected JSON type: %s", agent_name, type(event).__name__
                             )
                             continue
+                        self._capture_message_start_model(event)
+                        self._capture_message_delta_stop_info(event)
                         content: str = self.content_extractor(event)
                         if content:
                             yield content
@@ -673,6 +797,7 @@ __all__: list[str] = [
     "DB_TIMEOUT_SECONDS",
     "get_api_key",
     "get_primary_api_key",
+    "upgrade_retired_model_id",
     "get_trace_headers",
     "is_openrouter_fallback_available",
     "Agent",
@@ -698,4 +823,5 @@ __all__: list[str] = [
     "SSEStreamParser",
     "create_openai_sse_parser",
     "create_anthropic_sse_parser",
+    "native_model_id",
 ]

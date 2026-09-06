@@ -36,6 +36,8 @@ from aragora.observability.metrics.debate_slo import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from aragora.debate.orchestrator import Arena
 
 logger = get_structured_logger(__name__)
@@ -706,6 +708,11 @@ async def initialize_debate_context(
     arena._reinit_convergence_for_debate(debate_id)
     _clear_stale_km_prompt_state(arena)
 
+    # Start this debate's served-model record empty. Agents are reusable
+    # across debates, so a fallback observed in an earlier debate must not
+    # be reported in this one's receipt (see reset_served_model_logs).
+    reset_served_model_logs(arena.agents)
+
     # Extract domain early for metrics
     domain = arena._extract_debate_domain()
     km_metadata = _build_km_metadata_template(arena)
@@ -1350,6 +1357,132 @@ def record_debate_metrics(
     arena._track_circuit_breaker_metrics()
 
 
+#: What ``collect_served_models`` records for an agent whose requested model
+#: was never put on the wire: the CLI answered from its own default and
+#: nothing in this process can name it. Deliberately not a model id -- a
+#: receipt must be able to say "unknown", not guess (wave-6 ruling, agents,
+#: on #9989).
+UNKNOWN_CLI_DEFAULT_MODEL = "unknown (CLI default)"
+
+
+def reset_served_model_logs(agents: "Sequence[Any]") -> None:
+    """Clear every agent's debate-scoped served-model log at debate start.
+
+    Agents are supplied by the caller, and the Arena keeps whatever list it
+    was constructed with: the same agent object can serve several debates in
+    one process (``arena.run()`` is callable more than once, and long-lived
+    servers reuse a roster). A fresh agent per debate is therefore NOT
+    guaranteed, so without this reset one debate's server-side fallback would
+    be reported in the next debate's receipt.
+
+    Duck-typed and best-effort: an agent that keeps no log is skipped.
+    """
+    for agent in agents:
+        reset = getattr(agent, "reset_served_model_log", None)
+        if not callable(reset):
+            continue
+        try:
+            reset()
+        except (AttributeError, TypeError, RuntimeError) as e:
+            logger.debug(
+                "reset_served_model_log failed for agent %s: %s",
+                getattr(agent, "name", "?"),
+                e,
+            )
+
+
+def _served_models_from_log(log: Any, requested: str) -> dict[str, Any] | None:
+    """Summarize an agent's per-call served-model log for the receipt.
+
+    Returns ``{"requested": id, "served": [distinct served ids], "calls": n,
+    "fallback_calls": m}``, or ``None`` when the agent answered as asked on
+    every call (``m == 0``) -- an agent that never swapped model earns no
+    receipt entry, which keeps flag-off receipts byte-identical.
+
+    ``served`` lists every DISTINCT id the server echoed across the debate in
+    first-seen order, including the requested model's own echo on the calls
+    that were answered as asked: a debate where round 1 fell back and round 2
+    did not is two models' work, and the receipt has to name both. A call the
+    server answered without echoing any id contributes nothing to the list
+    but is still counted in ``calls``.
+    """
+    if not isinstance(log, list) or not log:
+        return None
+    calls = 0
+    fallback_calls = 0
+    served: list[str] = []
+    for observation in log:
+        if not isinstance(observation, dict):
+            continue
+        calls += 1
+        if observation.get("fallback"):
+            fallback_calls += 1
+        served_id = observation.get("served")
+        if isinstance(served_id, str) and served_id and served_id not in served:
+            served.append(served_id)
+    if fallback_calls == 0:
+        return None
+    return {
+        "requested": requested,
+        "served": served,
+        "calls": calls,
+        "fallback_calls": fallback_calls,
+    }
+
+
+def collect_served_models(agents: "Sequence[Any]") -> dict[str, dict[str, Any]]:
+    """``{agent name: {"requested": id, "served": [ids], ...}}`` for every
+    agent whose answer did not come from the requested model.
+
+    Three ways that happens:
+
+    * the provider answered with a DIFFERENT model on at least one call. The
+      agent keeps an ordered per-call ``served_model_log`` for the current
+      debate (reset by :func:`reset_served_model_logs`), and the entry
+      carries ``calls`` and ``fallback_calls`` alongside the distinct served
+      ids -- a debate-wide claim needs debate-wide evidence. Reading the
+      agent's last call instead reported "no fallback" for a debate whose
+      round-1 proposal came from a different model, because a later matching
+      call cleared the single last-call value (finding C-P2 on #9989).
+    * the provider answered with a different model but the agent keeps no
+      log (a third-party agent implementing only ``last_served_model``). Its
+      entry names that one served id; ``calls``/``fallback_calls`` are
+      omitted rather than guessed, because nothing here can know them.
+    * the requested model never reached the provider in the first place. A
+      CLI agent whose command builder does not put ``self.model`` on the
+      command line answers from the CLI's own default, so the served model
+      is ``UNKNOWN_CLI_DEFAULT_MODEL``; the agent flags that as
+      ``metadata["model_pinned_on_wire"] = False`` (see
+      ``aragora.agents.cli_agents.CLIAgent.SENDS_MODEL_ON_WIRE``). Without
+      this branch a receipt attributed the output to a model code the CLI
+      never received. Counts are omitted here too: the CLI agent counts no
+      calls.
+
+    Agents that implement none of the three -- every other agent today --
+    are skipped, not guessed at.
+    """
+    served_models: dict[str, dict[str, Any]] = {}
+    for agent in agents:
+        requested = getattr(agent, "model", None)
+        if not isinstance(requested, str) or not requested:
+            continue
+        metadata = getattr(agent, "metadata", None)
+        if isinstance(metadata, dict) and metadata.get("model_pinned_on_wire") is False:
+            served_models[agent.name] = {
+                "requested": requested,
+                "served": [UNKNOWN_CLI_DEFAULT_MODEL],
+            }
+            continue
+        from_log = _served_models_from_log(getattr(agent, "served_model_log", None), requested)
+        if from_log is not None:
+            served_models[agent.name] = from_log
+            continue
+        served = getattr(agent, "last_served_model", None)
+        if isinstance(served, str) and served:
+            served_models[agent.name] = {"requested": requested, "served": [served]}
+    return served_models
+
+
 async def handle_debate_completion(
     arena: Arena,
     state: _DebateExecutionState,
@@ -1821,6 +1954,44 @@ async def handle_debate_completion(
                     "thinking_traces_attached debate_id=%s agents=%s",
                     state.debate_id,
                     len(thinking_traces),
+                )
+
+    # Collect the model each provider ACTUALLY answered with, whenever that
+    # was not the id we asked for. Two ways it happens, and the block names
+    # both: a provider answered with a DIFFERENT model (Anthropic's
+    # server-side refusal fallback, on by default for Fable 5.1 / Opus 5), or
+    # the requested id never reached the provider at all because the agent's
+    # CLI takes no model flag -- recorded as UNKNOWN_CLI_DEFAULT_MODEL,
+    # "unknown (CLI default)", because a receipt must be able to say
+    # "unknown" rather than guess. Either way a receipt that attributes the
+    # decision to the requested id is wrong about which model made it.
+    #
+    # The claim is debate-wide, so it comes from each agent's debate-scoped
+    # per-call log (cleared at debate start) rather than from its last call:
+    # an agent whose round-1 proposal fell back and whose round-2 critique
+    # did not is two models' work, and reading the last call reported "no
+    # fallback" (finding C-P2). An empty dict here therefore means BOTH
+    # things: every agent's model reached its provider, and every provider
+    # answered as asked, on every call of this debate. Non-empty entries
+    # carry "calls"/"fallback_calls" when the source can count them --
+    # see collect_served_models and _served_models_from_log.
+    if ctx.result and arena.agents:
+        served_models = collect_served_models(arena.agents)
+        if served_models:
+            metadata = getattr(ctx.result, "metadata", None)
+            if not isinstance(metadata, dict):
+                try:
+                    setattr(ctx.result, "metadata", {})
+                except (AttributeError, TypeError):
+                    metadata = None
+                else:
+                    metadata = getattr(ctx.result, "metadata", None)
+            if isinstance(metadata, dict):
+                metadata["served_models"] = served_models
+                logger.info(
+                    "served_models_attached debate_id=%s agents=%s",
+                    state.debate_id,
+                    len(served_models),
                 )
 
     # Queue for Supabase background sync

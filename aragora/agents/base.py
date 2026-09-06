@@ -293,7 +293,6 @@ AgentType = Literal[
     "mistral",
     "qwen",
     "qwen-max",
-    "yi",
     "kimi",
     "kimi-thinking",
     "llama4-maverick",

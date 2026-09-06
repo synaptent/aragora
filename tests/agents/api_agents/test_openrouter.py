@@ -33,7 +33,7 @@ class TestOpenRouterAgentInitialization:
         agent = OpenRouterAgent()
 
         assert agent.name == "openrouter"
-        assert agent.model == "deepseek/deepseek-v4-pro"
+        assert agent.model == "deepseek/deepseek-v4-pro-0813"
         assert agent.role == "proposer"  # Default role for debate participation
         assert agent.timeout == 300
         assert agent.agent_type == "openrouter"
@@ -294,9 +294,14 @@ class TestOpenRouterModelFallback:
         from aragora.agents.api_agents.openrouter import OPENROUTER_FALLBACK_MODELS
 
         assert len(OPENROUTER_FALLBACK_MODELS) > 0
-        assert "qwen/qwen3.8-max" in OPENROUTER_FALLBACK_MODELS
+        # qwen3.8-max is superseded by qwen3.8-2.4t-a95b (frontier-model-
+        # refresh, 2026-09-04); the fallback map keys on QWEN_3_8_MAX_MODEL,
+        # which now resolves to the new canonical OpenRouter slug.
+        assert "qwen/qwen3.8-2.4t-a95b" in OPENROUTER_FALLBACK_MODELS
         assert "qwen/qwen-2.5-72b-instruct" in OPENROUTER_FALLBACK_MODELS
-        assert "deepseek/deepseek-v4-pro" in OPENROUTER_FALLBACK_MODELS
+        # deepseek-v4-pro is superseded by deepseek-v4-pro-0813
+        # (frontier-model-refresh, 2026-09-04).
+        assert "deepseek/deepseek-v4-pro-0813" in OPENROUTER_FALLBACK_MODELS
 
     def test_fallback_chains(self, mock_env_with_api_keys):
         """Should have sensible fallback chains."""
@@ -304,11 +309,47 @@ class TestOpenRouterModelFallback:
 
         # Qwen -> DeepSeek
         assert (
-            OPENROUTER_FALLBACK_MODELS["qwen/qwen-2.5-72b-instruct"] == "deepseek/deepseek-v4-pro"
+            OPENROUTER_FALLBACK_MODELS["qwen/qwen-2.5-72b-instruct"]
+            == "deepseek/deepseek-v4-pro-0813"
         )
 
-        # DeepSeek -> GPT-5.5
-        assert OPENROUTER_FALLBACK_MODELS["deepseek/deepseek-v4-pro"] == "openai/gpt-5.5"
+        # DeepSeek -> the cheap/bulk OpenAI route
+        assert OPENROUTER_FALLBACK_MODELS["deepseek/deepseek-v4-pro-0813"] == "openai/gpt-5.6-terra"
+
+    def test_every_fallback_target_is_an_active_catalog_row(self, mock_env_with_api_keys):
+        """A fallback target is only useful if a live request to it succeeds.
+
+        The table previously routed nearly every entry to the retired
+        "openai/gpt-5.5" (and "x-ai/grok-4" retired -> retired), so the
+        resilience path itself was dead.
+        """
+        from aragora.agents.api_agents.openrouter import OPENROUTER_FALLBACK_MODELS
+        from aragora.models.catalog import spec_or_none
+
+        dead = {}
+        for primary, target in OPENROUTER_FALLBACK_MODELS.items():
+            spec = spec_or_none(target)
+            if spec is None or spec.retired:
+                dead[primary] = target
+        assert not dead, f"fallback targets that are missing or retired: {dead}"
+
+    def test_every_current_default_has_a_fallback_entry(self, mock_env_with_api_keys):
+        """The models the fleet actually runs must have a fallback of their own."""
+        from aragora.agents.api_agents.openrouter import OPENROUTER_FALLBACK_MODELS
+        from aragora.config import model_pins as mp
+
+        frontier = {
+            mp.FABLE_51_VIA_OPENROUTER,
+            mp.OPUS_5_VIA_OPENROUTER,
+            mp.GPT6_ASTRA_VIA_OPENROUTER,
+            mp.GPT56_TERRA_VIA_OPENROUTER,
+            mp.GROK_46_VIA_OPENROUTER,
+            mp.GEMINI_31_PRO_VIA_OPENROUTER,
+            mp.GEMINI_38_FLASH_VIA_OPENROUTER,
+            mp.MISTRAL_MEDIUM_VIA_OPENROUTER,
+        }
+        missing = frontier - set(OPENROUTER_FALLBACK_MODELS)
+        assert not missing, f"current defaults with no fallback entry: {missing}"
 
     @pytest.mark.parametrize(
         ("retired", "replacement", "frontier_fallback"),
@@ -316,11 +357,14 @@ class TestOpenRouterModelFallback:
             (
                 "perplexity/sonar-reasoning",
                 "perplexity/sonar-reasoning-pro",
-                "openai/gpt-5.5",
+                "openai/gpt-5.6-terra",
             ),
-            ("cohere/command-r-plus", "cohere/command-a", "openai/gpt-5.5"),
-            ("ai21/jamba-1.6-large", "ai21/jamba-large-1.7", "openai/gpt-5.5"),
-            ("x-ai/grok-4", "x-ai/grok-4.5", "openai/gpt-5.5"),
+            ("cohere/command-r-plus", "cohere/command-a", "openai/gpt-5.6-terra"),
+            ("ai21/jamba-1.6-large", "ai21/jamba-large-1.7", "openai/gpt-5.6-terra"),
+            # grok-4 used to fall forward to the now-retired grok-4.5; both
+            # retired spellings go straight to the live family frontier.
+            ("x-ai/grok-4", "x-ai/grok-4.6", "openai/gpt-6-astra"),
+            ("x-ai/grok-4.5", "x-ai/grok-4.6", "openai/gpt-6-astra"),
         ],
     )
     def test_retired_defaults_fall_forward_then_fail_over(
@@ -512,7 +556,7 @@ class TestDeepSeekReasonerAgent:
         agent = DeepSeekReasonerAgent()
 
         assert agent.name == "deepseek-r1"
-        assert agent.model == "deepseek/deepseek-v4-pro"
+        assert agent.model == "deepseek/deepseek-v4-pro-0813"
         assert agent.agent_type == "deepseek-r1"
 
 
@@ -526,7 +570,9 @@ class TestLlamaAgent:
         agent = LlamaAgent()
 
         assert agent.name == "llama"
-        assert "llama" in agent.model.lower()
+        # LlamaAgent now routes to Meta Muse Spark 1.3, which supersedes the
+        # retired Llama 3.3/4 lines (frontier-model-refresh, 2026-09-04).
+        assert agent.model == "meta/muse-spark-1.3"
         assert agent.agent_type == "llama"
 
     def test_agent_registry_registration(self, mock_env_with_api_keys):
@@ -548,7 +594,9 @@ class TestQwenAgent:
         agent = QwenAgent()
 
         assert agent.name == "qwen"
-        assert agent.model == "qwen/qwen3.8-max"
+        # qwen3.8-max is superseded by qwen3.8-2.4t-a95b (frontier-model-
+        # refresh, 2026-09-04).
+        assert agent.model == "qwen/qwen3.8-2.4t-a95b"
         assert agent.agent_type == "qwen"
 
     def test_agent_registry_registration(self, mock_env_with_api_keys):
@@ -570,22 +618,10 @@ class TestQwenMaxAgent:
         agent = QwenMaxAgent()
 
         assert agent.name == "qwen-max"
-        assert agent.model == "qwen/qwen3.8-max"
+        # qwen3.8-max is superseded by qwen3.8-2.4t-a95b (frontier-model-
+        # refresh, 2026-09-04).
+        assert agent.model == "qwen/qwen3.8-2.4t-a95b"
         assert agent.agent_type == "qwen-max"
-
-
-class TestYiAgent:
-    """Tests for Yi agent."""
-
-    def test_init_with_defaults(self, mock_env_with_api_keys):
-        """Should initialize with Yi defaults."""
-        from aragora.agents.api_agents.openrouter import YiAgent
-
-        agent = YiAgent()
-
-        assert agent.name == "yi"
-        assert "yi" in agent.model
-        assert agent.agent_type == "yi"
 
 
 class TestKimiK3Agent:
@@ -625,7 +661,9 @@ class TestKimiThinkingAgent:
         agent = KimiThinkingAgent()
 
         assert agent.name == "kimi-thinking"
-        assert agent.model == "moonshotai/kimi-k2-thinking"
+        # Supersedes the retired Kimi K2 Thinking (frontier-model-refresh,
+        # 2026-09-04).
+        assert agent.model == "moonshotai/kimi-k3"
         assert agent.agent_type == "kimi-thinking"
 
 
@@ -639,7 +677,9 @@ class TestLlama4Agents:
         agent = Llama4MaverickAgent()
 
         assert agent.name == "llama4-maverick"
-        assert "maverick" in agent.model
+        # Supersedes the retired Llama 4 Maverick (frontier-model-refresh,
+        # 2026-09-04).
+        assert agent.model == "meta/muse-spark-1.3"
         assert agent.agent_type == "llama4-maverick"
 
     def test_llama4_scout_init(self, mock_env_with_api_keys):
@@ -649,7 +689,9 @@ class TestLlama4Agents:
         agent = Llama4ScoutAgent()
 
         assert agent.name == "llama4-scout"
-        assert "scout" in agent.model
+        # Supersedes the retired Llama 4 Scout (frontier-model-refresh,
+        # 2026-09-04).
+        assert agent.model == "meta/muse-spark-1.3"
         assert agent.agent_type == "llama4-scout"
 
 
@@ -707,6 +749,9 @@ class TestKimiLegacyAgent:
         agent = KimiLegacyAgent()
 
         assert agent.name == "kimi"
+        # Moonshot's own API model code, deliberately NOT the catalog's
+        # kimi-k3 OpenRouter-side id: this agent talks to api.moonshot.cn
+        # directly (see KIMI_LEGACY_DIRECT_MODEL and ModelSpec.direct_id).
         assert agent.model == "moonshot-v1-8k"
         assert "moonshot" in agent.base_url
         assert agent.api_key == "test-kimi-key"

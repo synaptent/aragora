@@ -353,7 +353,6 @@ ALLOWED_AGENT_TYPES = frozenset(
         "mistral",
         "qwen",
         "qwen-max",
-        "yi",
         "kimi",
         "kimi-thinking",
         "llama4-maverick",
