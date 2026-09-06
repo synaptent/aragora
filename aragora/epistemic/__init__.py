@@ -6,10 +6,11 @@ Exposes:
 - DIC-14: executable claim verification (:class:`ClaimVerifier`)
 - DIC-16: signed CruxReceipt for crux-finder debate runs
   (:class:`CruxEntry`, :class:`CruxReceipt`, :func:`build_crux_receipt`)
-- DIC-17: follow-up-issue bridge for load-bearing cruxes and
-  sharply-losing claims (:class:`FollowupProposal`,
+- DIC-17: follow-up-issue bridge for load-bearing cruxes, sharply-losing
+  claims, and coherence-monitor error issues (:class:`FollowupProposal`,
   :func:`propose_followup_for_crux`, :func:`propose_followup_for_cruxset`,
-  :func:`propose_followup_for_failed_claim`)
+  :func:`propose_followup_for_failed_claim`,
+  :func:`propose_followup_for_coherence_issue`)
 - DIC-18: organizational truth map report (:class:`OrgTruthMapReport`,
   :func:`build_truth_map`, :func:`build_truth_map_from_manifests`)
 - DIC-20: epistemic decay monitor (:class:`DecaySignal`,
@@ -137,6 +138,7 @@ from .followup import (
     DEFAULT_CRUX_LOAD_BEARING_THRESHOLD,
     DEFAULT_DELTA_LOSS_THRESHOLD,
     FollowupProposal,
+    propose_followup_for_coherence_issue,
     propose_followup_for_crux,
     propose_followup_for_cruxset,
     propose_followup_for_failed_claim,
@@ -298,6 +300,7 @@ __all__ = [
     "world_event_to_claim_results",
     "world_events_enabled",
     "from_belief_node",
+    "propose_followup_for_coherence_issue",
     "propose_followup_for_crux",
     "propose_followup_for_cruxset",
     "propose_followup_for_failed_claim",

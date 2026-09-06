@@ -8,7 +8,7 @@ Reads a JSON file where each element is a BeliefEntry dict:
 
 Flag: ``ARAGORA_COHERENCE_MONITOR_ENABLED`` (default OFF).
 Live queue effect: none — read-only operator report.
-Advances: issue #6220 (DIC-26).
+Advances: issue #6220 (DIC-26), issue #6027 (DIC-17 followup bridge).
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -25,10 +26,12 @@ from aragora.epistemic.coherence import (
     coherence_monitor_enabled,
     scan_coherence,
 )
+from aragora.epistemic.followup import FollowupProposal
 
 logger = logging.getLogger(__name__)
 
 _FLAG = "ARAGORA_COHERENCE_MONITOR_ENABLED"
+_FOLLOWUP_FLAG = "ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED"
 _DEFAULT_GAP: float = 0.5
 _DEFAULT_MIN_CONFIDENCE: float = 0.3
 
@@ -59,6 +62,21 @@ def _load_entries(path: Path) -> list[BeliefEntry]:
     return entries
 
 
+def _render_proposals(proposals: list[FollowupProposal], *, followup_enabled: bool) -> None:
+    """Print DIC-17 follow-up proposals in text mode."""
+    print()
+    if proposals:
+        print(f"  DIC-17 follow-up proposals: {len(proposals)}")
+        for p in proposals:
+            print(f"    [{p.source_key}] {p.title}")
+            print(f"      {p.rationale}")
+            print(f"      labels: {', '.join(p.labels)}")
+    else:
+        print("  DIC-17 follow-up proposals: none")
+        if not followup_enabled:
+            print(f"    (set {_FOLLOWUP_FLAG}=1 to enable proposal generation)")
+
+
 def cmd_coherence_scan(args: argparse.Namespace) -> int:
     """Handle the ``aragora coherence-scan`` subcommand."""
     if not coherence_monitor_enabled():
@@ -79,16 +97,31 @@ def cmd_coherence_scan(args: argparse.Namespace) -> int:
         print(f"error: failed to load {input_path}: {exc}", file=sys.stderr)
         return 1
 
+    emit_followup: bool = bool(getattr(args, "emit_followup", False))
+
     report = scan_coherence(
         entries,
         contradiction_gap=float(getattr(args, "contradiction_gap", _DEFAULT_GAP)),
         min_confidence=float(getattr(args, "min_confidence", _DEFAULT_MIN_CONFIDENCE)),
         enabled=True,
+        emit_followup_proposals=emit_followup,
     )
 
     as_json: bool = getattr(args, "json", False)
     if as_json:
-        print(json.dumps(report.to_dict(), indent=2))
+        d = report.to_dict()
+        if emit_followup and report.proposals:
+            d["proposals"] = [
+                {
+                    "source_key": p.source_key,
+                    "source_kind": p.source_kind,
+                    "title": p.title,
+                    "rationale": p.rationale,
+                    "labels": list(p.labels),
+                }
+                for p in report.proposals
+            ]
+        print(json.dumps(d, indent=2))
         return 0
 
     print(f"Coherence scan: {input_path}")
@@ -103,4 +136,17 @@ def cmd_coherence_scan(args: argparse.Namespace) -> int:
             ids = ", ".join(issue.belief_ids)
             print(f"  [{issue.severity}] {issue.kind.value}: {ids}")
             print(f"    {issue.detail}")
+
+    if emit_followup:
+        followup_enabled = str(os.environ.get(_FOLLOWUP_FLAG) or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        _render_proposals(report.proposals, followup_enabled=followup_enabled)
+
     return 0
+
+
+__all__ = ["cmd_coherence_scan"]

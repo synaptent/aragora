@@ -651,14 +651,12 @@ def _add_proof_units_parser(subparsers) -> None:
         "--multi-hop",
         dest="multi_hop",
         action="store_true",
-        default=False,
         help="Include transitively impacted units via dependency edges",
     )
     p.add_argument(
         "--json",
         dest="json",
         action="store_true",
-        default=False,
         help="Emit JSON output",
     )
     p.set_defaults(func=_lazy("aragora.cli.commands.dic19_proof_units", "cmd_proof_units"))
@@ -728,6 +726,12 @@ def _add_coherence_scan_parser(subparsers) -> None:
         help="Minimum confidence threshold for rot detection (default: 0.3)",
     )
     p.add_argument("--json", action="store_true", help="Emit JSON instead of text")
+    p.add_argument(
+        "--emit-followup",
+        dest="emit_followup",
+        action="store_true",
+        help="DIC-17 proposals for errors (requires ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED=1).",
+    )
     p.set_defaults(func=_lazy("aragora.cli.commands.dic26_coherence", "cmd_coherence_scan"))
 
 
@@ -908,13 +912,11 @@ def _add_epistemic_check_parser(subparsers) -> None:
     p.add_argument(
         "--json",
         action="store_true",
-        default=False,
         help="Emit machine-readable JSON (schema_version, results, summary)",
     )
     p.add_argument(
         "--dry-run",
         action="store_true",
-        default=False,
         help=(
             "Skip command execution; return UNSUPPORTED for command-kind claims. "
             "This is already the DEFAULT behavior — the flag is accepted for "
@@ -924,7 +926,6 @@ def _add_epistemic_check_parser(subparsers) -> None:
     p.add_argument(
         "--execute",
         action="store_true",
-        default=False,
         help=(
             "Opt in to running manifest-provided verification commands as "
             "subprocesses. Off by default: command-kind claims are skipped "
