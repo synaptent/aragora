@@ -24,11 +24,13 @@ __all__ = [
 ]
 
 import asyncio
+import copy
 import logging
 import math
 import time
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
@@ -40,7 +42,14 @@ from aragora.debate.phases._phase_invariant import require_phase_result
 from aragora.debate.phases.consensus_verification import ConsensusVerifier
 from aragora.debate.phases.synthesis_generator import SynthesisGenerator
 from aragora.debate.phases.vote_bonus_calculator import VoteBonusCalculator
-from aragora.debate.phases.vote_collector import VoteCollector, VoteCollectorConfig
+from aragora.debate.phases.vote_collector import (
+    MajorityVoteCollection,
+    SlotVote,
+    VoteCollector,
+    VoteCollectorConfig,
+    VoterSlot,
+    get_complexity_governor,
+)
 from aragora.debate.phases.weight_calculator import WeightCalculator
 from aragora.debate.phases.winner_selector import WinnerSelector
 from aragora.events.context import streaming_task_context
@@ -93,6 +102,333 @@ class ConsensusCallbacks:
     get_belief_analyzer: Callable | None = None
     user_vote_multiplier: Callable | None = None
     verify_claims: Callable | None = None  # Optional verification callback
+
+
+@dataclass(frozen=True, slots=True)
+class _UserVoteContribution:
+    """One user-vote contribution resolved before agent voting begins."""
+
+    choice: str
+    intensity: Any
+    user_id: str
+    weight: float
+
+
+@dataclass(frozen=True, slots=True)
+class _VoteWeightPolicy:
+    """Frozen vote-dependent bias controls for one majority decision."""
+
+    enable_self_vote_mitigation: bool
+    self_vote_mode: str
+    self_vote_downweight: float
+    enable_verbosity_normalization: bool
+    verbosity_target_length: int
+    verbosity_penalty_threshold: float
+    verbosity_max_penalty: float
+
+    @classmethod
+    def from_protocol(cls, protocol: Any) -> "_VoteWeightPolicy":
+        return cls(
+            enable_self_vote_mitigation=bool(
+                getattr(protocol, "enable_self_vote_mitigation", False)
+            ),
+            self_vote_mode=str(getattr(protocol, "self_vote_mode", "downweight")),
+            self_vote_downweight=float(getattr(protocol, "self_vote_downweight", 0.5)),
+            enable_verbosity_normalization=bool(
+                getattr(protocol, "enable_verbosity_normalization", False)
+            ),
+            verbosity_target_length=int(getattr(protocol, "verbosity_target_length", 1000)),
+            verbosity_penalty_threshold=float(
+                getattr(protocol, "verbosity_penalty_threshold", 3.0)
+            ),
+            verbosity_max_penalty=float(getattr(protocol, "verbosity_max_penalty", 0.3)),
+        )
+
+    @property
+    def vote_dependent(self) -> bool:
+        return self.enable_self_vote_mitigation or self.enable_verbosity_normalization
+
+    def resolve_slot_weights(
+        self,
+        slots: tuple[VoterSlot, ...],
+        base_slot_weights: tuple[float, ...],
+        ballots: tuple[SlotVote, ...],
+        proposals: dict[str, str],
+    ) -> tuple[float, ...]:
+        """Apply existing bias factors without consulting mutable weight sources."""
+        if not self.vote_dependent:
+            return base_slot_weights
+
+        from aragora.debate.phases.weight_calculator import WeightCalculatorConfig
+
+        config = WeightCalculatorConfig(
+            enable_reputation=False,
+            enable_reliability=True,
+            enable_consistency=False,
+            enable_calibration=False,
+            enable_elo_skill=False,
+            enable_self_vote_mitigation=self.enable_self_vote_mitigation,
+            self_vote_mode=self.self_vote_mode,
+            self_vote_downweight=self.self_vote_downweight,
+            enable_verbosity_normalization=self.enable_verbosity_normalization,
+            verbosity_target_length=self.verbosity_target_length,
+            verbosity_penalty_threshold=self.verbosity_penalty_threshold,
+            verbosity_max_penalty=self.verbosity_max_penalty,
+        )
+        ballots_by_slot = {ballot.slot.index: ballot for ballot in ballots}
+        resolved: list[float] = []
+        for slot, base_weight in zip(slots, base_slot_weights, strict=True):
+            ballot = ballots_by_slot.get(slot.index)
+            if ballot is None:
+                resolved.append(base_weight)
+                continue
+            calculator = WeightCalculator(
+                agent_weights={slot.name: base_weight},
+                config=config,
+                enable_cache=False,
+            )
+            weight = calculator.compute_weights_with_context(
+                [slot],
+                [ballot.vote],
+                proposals,
+            )[slot.name]
+            resolved.append(weight)
+        return tuple(resolved)
+
+
+@dataclass(frozen=True, slots=True)
+class _MajoritySnapshot:
+    """Immutable decision inputs for one majority-consensus attempt."""
+
+    effective_threshold: float
+    min_participation_ratio: float
+    min_participation_count: int
+    required_participation: int
+    slots: tuple[VoterSlot, ...]
+    proposal_items: tuple[tuple[str, str], ...]
+    protocol: Any = field(repr=False, compare=False)
+    task: str
+    domain: str
+    base_slot_weights: tuple[float, ...]
+    fixed_slot_weights: tuple[float, ...] | None
+    vote_weight_policy: _VoteWeightPolicy
+    user_vote_contributions: tuple[_UserVoteContribution, ...]
+    calibration_summaries: tuple[tuple[str, Any], ...] = field(repr=False, compare=False)
+    evidence_pack: Any = field(repr=False, compare=False)
+    initial_process_verification: Any = field(repr=False, compare=False)
+    had_initial_process_verification: bool
+    initial_verification_results: Any = field(repr=False, compare=False)
+    initial_verification_bonuses: Any = field(repr=False, compare=False)
+    group_similar_votes: Callable | None = field(repr=False, compare=False)
+    verify_claims: Callable | None = field(repr=False, compare=False)
+    position_shuffling_enabled: bool
+    position_shuffling_permutations: int
+    position_shuffling_seed: int | None
+    agent_timeout: float
+    collection_timeout: float
+    rlm_early_termination_enabled: bool
+    rlm_early_termination_threshold: float
+    rlm_majority_lead_threshold: float
+
+    @classmethod
+    def capture(
+        cls,
+        *,
+        effective_threshold: float,
+        agents: tuple[Any, ...],
+        min_participation_ratio: float,
+        min_participation_count: int,
+        proposals: dict[str, str],
+        protocol: Any,
+        task: str,
+        domain: str,
+        base_weights_by_name: dict[str, float],
+        tally_inputs_fixed: bool,
+        user_vote_contributions: tuple[_UserVoteContribution, ...],
+        calibration_summaries: tuple[tuple[str, Any], ...],
+        evidence_pack: Any,
+        result: Any,
+        group_similar_votes: Callable | None,
+        verify_claims: Callable | None,
+        position_shuffling_enabled: bool,
+        position_shuffling_permutations: int,
+        position_shuffling_seed: int | None,
+        agent_timeout: float,
+        collection_timeout: float,
+        rlm_early_termination_enabled: bool,
+        rlm_early_termination_threshold: float,
+        rlm_majority_lead_threshold: float,
+    ) -> "_MajoritySnapshot":
+        slots = tuple(
+            VoterSlot(index=index, name=str(getattr(agent, "name", "")))
+            for index, agent in enumerate(agents)
+        )
+        required = max(
+            min_participation_count,
+            math.ceil(len(slots) * min_participation_ratio),
+        )
+        required = min(required, max(len(slots), 1))
+        result_metadata = getattr(result, "metadata", {})
+        had_process_verification = (
+            isinstance(result_metadata, dict) and "process_verification" in result_metadata
+        )
+        snapshot = cls(
+            effective_threshold=effective_threshold,
+            min_participation_ratio=min_participation_ratio,
+            min_participation_count=min_participation_count,
+            required_participation=required,
+            slots=slots,
+            proposal_items=tuple(copy.deepcopy(proposals).items()),
+            protocol=copy.deepcopy(protocol),
+            task=str(task),
+            domain=str(domain),
+            base_slot_weights=(),
+            fixed_slot_weights=None,
+            vote_weight_policy=_VoteWeightPolicy.from_protocol(protocol),
+            user_vote_contributions=user_vote_contributions,
+            calibration_summaries=calibration_summaries,
+            evidence_pack=copy.deepcopy(evidence_pack),
+            initial_process_verification=copy.deepcopy(
+                result_metadata.get("process_verification")
+                if isinstance(result_metadata, dict)
+                else None
+            ),
+            had_initial_process_verification=had_process_verification,
+            initial_verification_results=copy.deepcopy(getattr(result, "verification_results", {})),
+            initial_verification_bonuses=copy.deepcopy(getattr(result, "verification_bonuses", {})),
+            group_similar_votes=group_similar_votes,
+            verify_claims=verify_claims,
+            position_shuffling_enabled=position_shuffling_enabled,
+            position_shuffling_permutations=position_shuffling_permutations,
+            position_shuffling_seed=position_shuffling_seed,
+            agent_timeout=agent_timeout,
+            collection_timeout=collection_timeout,
+            rlm_early_termination_enabled=rlm_early_termination_enabled,
+            rlm_early_termination_threshold=rlm_early_termination_threshold,
+            rlm_majority_lead_threshold=rlm_majority_lead_threshold,
+        )
+        base_slot_weights = snapshot.align_weights(base_weights_by_name)
+        return replace(
+            snapshot,
+            base_slot_weights=base_slot_weights,
+            fixed_slot_weights=base_slot_weights if tally_inputs_fixed else None,
+        )
+
+    @property
+    def eligible_count(self) -> int:
+        return len(self.slots)
+
+    @property
+    def agent_names(self) -> tuple[str, ...]:
+        return tuple(slot.name for slot in self.slots)
+
+    def proposals(self) -> dict[str, str]:
+        """Return a new mutable view of the frozen proposal mapping."""
+        return dict(self.proposal_items)
+
+    def calibration_summary_map(self) -> dict[str, Any]:
+        """Return detached calibration inputs captured at the decision boundary."""
+        return copy.deepcopy(dict(self.calibration_summaries))
+
+    def make_context_view(self, ctx: "DebateContext") -> "DebateContext":
+        """Build an isolated context view for post-await decision helpers."""
+        view = copy.copy(ctx)
+        view.proposals = self.proposals()
+        view.agents = list(self.slots)
+        view.env = SimpleNamespace(task=self.task)
+        view.domain = self.domain
+        view.evidence_pack = copy.deepcopy(self.evidence_pack)
+        return view
+
+    def restore_result_inputs(self, result: Any) -> None:
+        """Discard callback mutations to result fields that affect the tally."""
+        if hasattr(result, "metadata"):
+            metadata = result.metadata if isinstance(result.metadata, dict) else {}
+            if self.had_initial_process_verification:
+                metadata["process_verification"] = copy.deepcopy(self.initial_process_verification)
+            else:
+                metadata.pop("process_verification", None)
+            result.metadata = metadata
+        if hasattr(result, "verification_results"):
+            result.verification_results = copy.deepcopy(self.initial_verification_results)
+        if hasattr(result, "verification_bonuses"):
+            result.verification_bonuses = copy.deepcopy(self.initial_verification_bonuses)
+
+    def resolve_slot_weights(self, ballots: tuple[SlotVote, ...]) -> tuple[float, ...]:
+        """Resolve final exact-slot weights from frozen base factors and policy."""
+        return self.vote_weight_policy.resolve_slot_weights(
+            self.slots,
+            self.base_slot_weights,
+            ballots,
+            self.proposals(),
+        )
+
+    def align_weights(self, weights_by_name: dict[str, float]) -> tuple[float, ...]:
+        """Expand name-keyed legacy weights onto every exact voter slot."""
+        weights: list[float] = []
+        for slot in self.slots:
+            raw_weight = weights_by_name.get(slot.name, 1.0)
+            if (
+                isinstance(raw_weight, bool)
+                or not isinstance(raw_weight, (int, float))
+                or not math.isfinite(raw_weight)
+                or raw_weight < 0.0
+            ):
+                raise ValueError(f"Invalid vote weight for slot {slot.index}")
+            weights.append(float(raw_weight))
+        if weights and (not math.isfinite(sum(weights)) or sum(weights) <= 0.0):
+            raise ValueError("Invalid aggregate voter weight")
+        return tuple(weights)
+
+    def decisive_leader(
+        self,
+        ballots: tuple[SlotVote, ...],
+        *,
+        minimum_collection_ratio: float,
+        minimum_lead_ratio: float,
+    ) -> tuple[bool, str | None]:
+        """Return a winner only when no allocation of pending weight can overtake it."""
+        weights = self.fixed_slot_weights
+        if weights is None or not self.slots or not ballots:
+            return False, None
+        minimum_ballots = int(self.eligible_count * minimum_collection_ratio)
+        if len(ballots) < minimum_ballots:
+            return False, None
+
+        seen_slots: set[int] = set()
+        counts: dict[str, float] = {}
+        received_weight = 0.0
+        for ballot in ballots:
+            slot_index = ballot.slot.index
+            choice = getattr(ballot.vote, "choice", None)
+            if (
+                slot_index in seen_slots
+                or slot_index < 0
+                or slot_index >= self.eligible_count
+                or self.slots[slot_index] != ballot.slot
+                or not isinstance(choice, str)
+                or not choice
+            ):
+                return False, None
+            seen_slots.add(slot_index)
+            weight = weights[slot_index]
+            counts[choice] = counts.get(choice, 0.0) + weight
+            received_weight += weight
+
+        total_weight = sum(weights)
+        leader, leader_weight = max(counts.items(), key=lambda item: item[1])
+        runner_up = max(
+            (weight for choice, weight in counts.items() if choice != leader), default=0.0
+        )
+        pending_weight = max(0.0, total_weight - received_weight)
+        strongest_possible_competitor = runner_up + pending_weight
+        if leader_weight / total_weight < self.effective_threshold:
+            return False, None
+        if leader_weight <= strongest_possible_competitor:
+            return False, None
+        if leader_weight - strongest_possible_competitor < total_weight * minimum_lead_ratio:
+            return False, None
+        return True, leader
 
 
 class ConsensusPhase:
@@ -617,15 +953,19 @@ class ConsensusPhase:
     ) -> None:
         """Handle 'majority' consensus mode - weighted voting."""
         result = require_phase_result(ctx)
-        proposals = ctx.proposals
+        eligible_agents = tuple(ctx.agents)
+
+        # User-event ingestion is part of the decision boundary. Anything that
+        # arrives after this synchronous drain belongs to a later decision.
+        if self._drain_user_events:
+            self._drain_user_events()
 
         # Compute adaptive threshold when enabled and no explicit override
         if threshold_override is None and self._adaptive_consensus is not None:
             try:
-                agents = ctx.agents or []
                 threshold_override, explanation = (
                     self._adaptive_consensus.compute_threshold_with_explanation(
-                        agents,
+                        list(eligible_agents),
                         elo_system=self.elo_system,
                         calibration_tracker=self.calibration_tracker,
                     )
@@ -640,87 +980,235 @@ class ConsensusPhase:
                 logger.info(
                     "adaptive_consensus_threshold=%.4f for %d agents",
                     threshold_override,
-                    len(agents),
+                    len(eligible_agents),
                 )
             except (TypeError, ValueError, AttributeError) as e:
                 logger.debug("Adaptive consensus computation failed: %s", e)
                 threshold_override = None
 
-        # Cast votes from all agents
-        votes = await self._collect_votes(ctx)
-        if not self._ensure_quorum(ctx, len(votes)):
+        effective_threshold = (
+            threshold_override
+            if threshold_override is not None
+            else getattr(self.protocol, "consensus_threshold", 0.5)
+        )
+        min_participation_ratio = getattr(self.protocol, "min_participation_ratio", 0.5)
+        min_participation_count = getattr(self.protocol, "min_participation_count", 1)
+
+        # Capture every decision input before the first voter callback can run.
+        decision_protocol = copy.deepcopy(self.protocol)
+        frozen_proposals = copy.deepcopy(ctx.proposals)
+        frozen_task = str(ctx.env.task if ctx.env else "")
+        frozen_domain = str(getattr(ctx, "domain", None) or "general")
+        collector = self._vote_collector
+        collector_config = collector.config
+        position_shuffling_enabled = bool(collector_config.enable_position_shuffling)
+        position_shuffling_permutations = int(collector_config.position_shuffling_permutations)
+        position_shuffling_seed = collector_config.position_shuffling_seed
+        effective_agent_timeout = get_complexity_governor().get_scaled_timeout(
+            float(collector_config.agent_timeout)
+        )
+        collection_timeout = float(collector_config.vote_collection_timeout)
+        rlm_early_termination_enabled = bool(collector_config.enable_rlm_early_termination)
+        rlm_early_termination_threshold = float(collector_config.rlm_early_termination_threshold)
+        rlm_majority_lead_threshold = float(collector_config.rlm_majority_lead_threshold)
+        user_vote_contributions = self._capture_user_vote_contributions(decision_protocol)
+        provisional_slots = tuple(
+            VoterSlot(index=index, name=str(getattr(agent, "name", "")))
+            for index, agent in enumerate(eligible_agents)
+        )
+        calibration_summaries = self._capture_calibration_summaries(provisional_slots)
+        base_weights_by_name = self._compute_vote_weights(
+            ctx,
+            agents=eligible_agents,
+            protocol=decision_protocol,
+            proposals=frozen_proposals,
+            domain=frozen_domain,
+        )
+        tally_inputs_fixed = self._rlm_tally_inputs_are_fixed(
+            protocol=decision_protocol,
+            user_vote_contributions=user_vote_contributions,
+            group_similar_votes=self._group_similar_votes,
+            position_shuffling_enabled=position_shuffling_enabled,
+        )
+        majority_snapshot = _MajoritySnapshot.capture(
+            effective_threshold=effective_threshold,
+            agents=eligible_agents,
+            min_participation_ratio=min_participation_ratio,
+            min_participation_count=min_participation_count,
+            proposals=frozen_proposals,
+            protocol=decision_protocol,
+            task=frozen_task,
+            domain=frozen_domain,
+            base_weights_by_name=base_weights_by_name,
+            tally_inputs_fixed=tally_inputs_fixed,
+            user_vote_contributions=user_vote_contributions,
+            calibration_summaries=calibration_summaries,
+            evidence_pack=getattr(ctx, "evidence_pack", None),
+            result=result,
+            group_similar_votes=self._group_similar_votes,
+            verify_claims=self._verify_claims,
+            position_shuffling_enabled=position_shuffling_enabled,
+            position_shuffling_permutations=position_shuffling_permutations,
+            position_shuffling_seed=position_shuffling_seed,
+            agent_timeout=effective_agent_timeout,
+            collection_timeout=collection_timeout,
+            rlm_early_termination_enabled=rlm_early_termination_enabled,
+            rlm_early_termination_threshold=rlm_early_termination_threshold,
+            rlm_majority_lead_threshold=rlm_majority_lead_threshold,
+        )
+        roster = tuple(zip(majority_snapshot.slots, eligible_agents, strict=True))
+
+        should_stop = None
+        if (
+            majority_snapshot.rlm_early_termination_enabled
+            and majority_snapshot.fixed_slot_weights is not None
+        ):
+
+            def should_stop(ballots: tuple[SlotVote, ...]) -> tuple[bool, str | None]:
+                return majority_snapshot.decisive_leader(
+                    ballots,
+                    minimum_collection_ratio=majority_snapshot.rlm_early_termination_threshold,
+                    minimum_lead_ratio=majority_snapshot.rlm_majority_lead_threshold,
+                )
+
+        decision_ctx = majority_snapshot.make_context_view(ctx)
+        collection = await collector.collect_majority_votes(
+            decision_ctx,
+            roster,
+            proposals=majority_snapshot.proposals(),
+            should_stop=should_stop,
+            position_shuffling_enabled=majority_snapshot.position_shuffling_enabled,
+            position_shuffling_permutations=(majority_snapshot.position_shuffling_permutations),
+            position_shuffling_seed=majority_snapshot.position_shuffling_seed,
+            agent_timeout=majority_snapshot.agent_timeout,
+            collection_timeout=majority_snapshot.collection_timeout,
+        )
+        majority_snapshot.restore_result_inputs(result)
+        self._record_vote_participation(ctx, collection, majority_snapshot)
+        if not self._ensure_quorum(
+            decision_ctx,
+            len(collection.ballots),
+            required=majority_snapshot.required_participation,
+            total_agents=majority_snapshot.eligible_count,
+        ):
             return
 
         # Apply calibration adjustments to vote confidences
-        votes = self._apply_calibration_to_votes(votes, ctx)
+        votes = self._apply_calibration_to_votes(
+            copy.deepcopy(collection.votes),
+            decision_ctx,
+            calibration_summaries=majority_snapshot.calibration_summary_map(),
+        )
+        ballots = tuple(
+            replace(ballot, vote=vote)
+            for ballot, vote in zip(collection.ballots, votes, strict=True)
+        )
 
         result.votes.extend(votes)
 
         # Group similar votes
-        vote_groups, choice_mapping = self._compute_vote_groups(votes)
+        vote_groups, choice_mapping = self._compute_vote_groups(
+            copy.deepcopy(votes),
+            group_similar_votes=majority_snapshot.group_similar_votes,
+        )
 
-        # Pre-compute vote weights (pass votes for bias mitigation)
-        vote_weight_cache = self._compute_vote_weights(ctx, votes=votes)
+        # Vote-dependent bias factors are resolved against captured base
+        # weights, policy scalars, exact slots, and frozen proposals only.
+        slot_weights = majority_snapshot.resolve_slot_weights(ballots)
 
-        # Count weighted votes
-        vote_counts, total_weighted = self._count_weighted_votes(
-            votes, choice_mapping, vote_weight_cache
+        # Missing, failed, and early-stopped slots remain in the denominator.
+        vote_counts, total_weighted = self._count_snapshot_votes(
+            ballots,
+            choice_mapping,
+            slot_weights,
         )
 
         # Include user votes
-        vote_counts, total_weighted = self._add_user_votes(
-            vote_counts, total_weighted, choice_mapping
+        vote_counts, total_weighted = self._add_snapshot_user_votes(
+            vote_counts,
+            total_weighted,
+            choice_mapping,
+            majority_snapshot.user_vote_contributions,
         )
 
+        consensus_verifier = ConsensusVerifier(
+            protocol=majority_snapshot.protocol,
+            elo_system=self.elo_system,
+            verify_claims=majority_snapshot.verify_claims,
+            extract_debate_domain=self._extract_debate_domain,
+        )
+        vote_bonus_calculator = VoteBonusCalculator(protocol=majority_snapshot.protocol)
+        winner_selector = WinnerSelector(
+            protocol=majority_snapshot.protocol,
+            position_tracker=self.position_tracker,
+            calibration_tracker=self.calibration_tracker,
+            recorder=self.recorder,
+            notify_spectator=self._notify_spectator,
+            extract_debate_domain=self._extract_debate_domain,
+            get_belief_analyzer=self._get_belief_analyzer,
+        )
+        proposals = majority_snapshot.proposals()
+
         # Apply verification bonuses if enabled
-        vote_counts = await self._consensus_verifier.apply_verification_bonuses(
-            ctx, vote_counts, proposals, choice_mapping
+        vote_counts = await consensus_verifier.apply_verification_bonuses(
+            decision_ctx, vote_counts, proposals, choice_mapping
         )
 
         # Adjust individual vote confidences based on verification results
         # This cross-pollinates formal verification with vote confidence
         if hasattr(result, "verification_results") and result.verification_results:
-            self._consensus_verifier.adjust_vote_confidence_from_verification(
+            consensus_verifier.adjust_vote_confidence_from_verification(
                 votes, result.verification_results, proposals
             )
 
         # Apply evidence citation bonuses if enabled
-        vote_counts = self._vote_bonus_calculator.apply_evidence_citation_bonuses(
-            ctx, votes, vote_counts, choice_mapping
+        vote_counts = vote_bonus_calculator.apply_evidence_citation_bonuses(
+            decision_ctx, votes, vote_counts, choice_mapping
         )
 
         # Apply process-based evaluation bonuses if enabled (Agent-as-a-Judge)
-        vote_counts = await self._vote_bonus_calculator.apply_process_evaluation_bonuses(
-            ctx, vote_counts, choice_mapping
+        vote_counts = await vote_bonus_calculator.apply_process_evaluation_bonuses(
+            decision_ctx, vote_counts, choice_mapping
         )
 
         # Apply epistemic hygiene penalties if enabled
-        vote_counts = self._vote_bonus_calculator.apply_epistemic_hygiene_penalties(
-            ctx, vote_counts, choice_mapping
+        vote_counts = vote_bonus_calculator.apply_epistemic_hygiene_penalties(
+            decision_ctx, vote_counts, choice_mapping
         )
 
         # Apply truth ratio bonuses if enabled
-        vote_counts = self._vote_bonus_calculator.apply_truth_ratio_bonuses(
-            ctx, vote_counts, choice_mapping
+        vote_counts = vote_bonus_calculator.apply_truth_ratio_bonuses(
+            decision_ctx, vote_counts, choice_mapping
         )
 
         ctx.vote_tally = dict(vote_counts)
+        decision_ctx.vote_tally = dict(vote_counts)
 
         # Determine winner using WinnerSelector
-        self._winner_selector.determine_majority_winner(
-            ctx,
+        winner_selector.determine_majority_winner(
+            decision_ctx,
             vote_counts,
             total_weighted,
             choice_mapping,
-            normalize_choice=self._normalize_choice_to_agent,
-            threshold_override=threshold_override,
+            normalize_choice=lambda choice, _agents, current_proposals: (
+                self._normalize_choice_to_names(
+                    choice,
+                    majority_snapshot.agent_names,
+                    majority_snapshot.proposals(),
+                )
+            ),
+            threshold_override=majority_snapshot.effective_threshold,
         )
+        ctx.winner_agent = decision_ctx.winner_agent
 
         # Apply process verification gate if enabled
-        self._apply_process_verification_gate(ctx)
+        self._apply_process_verification_gate(
+            decision_ctx,
+            protocol=majority_snapshot.protocol,
+        )
 
         # Analyze belief network for cruxes
-        self._winner_selector.analyze_belief_network(ctx)
+        winner_selector.analyze_belief_network(decision_ctx)
 
     async def _handle_unanimous_consensus(self, ctx: "DebateContext") -> None:
         """Handle 'unanimous' consensus mode - all must agree."""
@@ -783,9 +1271,17 @@ class ConsensusPhase:
             result.consensus_reached = False
             result.confidence = 0.5
 
-    def _apply_process_verification_gate(self, ctx: "DebateContext") -> None:
+    def _apply_process_verification_gate(
+        self,
+        ctx: "DebateContext",
+        *,
+        protocol: Any | None = None,
+    ) -> None:
         """Gate consensus based on process verification scores."""
-        if not self.protocol or not getattr(self.protocol, "enable_process_verification", False):
+        decision_protocol = self.protocol if protocol is None else protocol
+        if not decision_protocol or not getattr(
+            decision_protocol, "enable_process_verification", False
+        ):
             return
         result = require_phase_result(ctx)
         if not result or not result.metadata:
@@ -795,12 +1291,12 @@ class ConsensusPhase:
         if average is None:
             return
 
-        threshold = float(getattr(self.protocol, "process_verification_threshold", 0.6))
+        threshold = float(getattr(decision_protocol, "process_verification_threshold", 0.6))
         metadata["threshold"] = threshold
         metadata["passed"] = average >= threshold
 
         if not metadata["passed"] and getattr(
-            self.protocol, "process_verification_hard_gate", False
+            decision_protocol, "process_verification_hard_gate", False
         ):
             result.consensus_reached = False
             result.consensus_strength = "process_blocked"
@@ -1585,15 +2081,63 @@ class ConsensusPhase:
         return await self._vote_collector.collect_votes_with_errors(ctx)
 
     def _compute_vote_groups(
-        self, votes: list["Vote"]
+        self,
+        votes: list["Vote"],
+        *,
+        group_similar_votes: Callable | None | object = ...,
     ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Group similar votes and create choice mapping."""
-        return self._vote_collector.compute_vote_groups(votes)
+        return self._vote_collector.compute_vote_groups(
+            votes,
+            group_similar_votes=group_similar_votes,
+        )
+
+    def _rlm_tally_inputs_are_fixed(
+        self,
+        *,
+        protocol: Any | None = None,
+        user_vote_contributions: tuple[_UserVoteContribution, ...] | None = None,
+        group_similar_votes: Callable | None | object = ...,
+        position_shuffling_enabled: bool | None = None,
+    ) -> bool:
+        """Return whether collection-time weights can safely authorize a final decision."""
+        decision_protocol = self.protocol if protocol is None else protocol
+        contributions = (
+            self.user_votes if user_vote_contributions is None else user_vote_contributions
+        )
+        grouping = self._group_similar_votes if group_similar_votes is ... else group_similar_votes
+        position_shuffling = (
+            getattr(decision_protocol, "enable_position_shuffling", False)
+            if position_shuffling_enabled is None
+            else position_shuffling_enabled
+        )
+        vote_dependent_features = (
+            "enable_self_vote_mitigation",
+            "enable_verbosity_normalization",
+            "verify_claims_during_consensus",
+            "enable_evidence_weighting",
+            "enable_process_evaluation",
+            "enable_epistemic_hygiene",
+            "enable_truth_ratio_weighting",
+        )
+        return not (
+            contributions
+            or grouping
+            or position_shuffling
+            or any(
+                getattr(decision_protocol, feature, False) for feature in vote_dependent_features
+            )
+        )
 
     def _compute_vote_weights(
         self,
         ctx: "DebateContext",
         votes: list["Vote"] | None = None,
+        *,
+        agents: tuple[Any, ...] | None = None,
+        protocol: Any | None = None,
+        proposals: dict[str, str] | None = None,
+        domain: str | None = None,
     ) -> dict[str, float]:
         """Pre-compute vote weights for all agents.
 
@@ -1606,23 +2150,27 @@ class ConsensusPhase:
         """
         from aragora.debate.phases.weight_calculator import WeightCalculatorConfig
 
-        # Get bias mitigation config from protocol
-        enable_self_vote = getattr(self.protocol, "enable_self_vote_mitigation", False)
-        enable_verbosity = getattr(self.protocol, "enable_verbosity_normalization", False)
+        decision_protocol = self.protocol if protocol is None else protocol
+
+        # Get bias mitigation config from the decision snapshot.
+        enable_self_vote = getattr(decision_protocol, "enable_self_vote_mitigation", False)
+        enable_verbosity = getattr(decision_protocol, "enable_verbosity_normalization", False)
 
         config = WeightCalculatorConfig(
             # Agent-as-a-Judge bias mitigation
             enable_self_vote_mitigation=enable_self_vote,
-            self_vote_mode=getattr(self.protocol, "self_vote_mode", "downweight"),
-            self_vote_downweight=getattr(self.protocol, "self_vote_downweight", 0.5),
+            self_vote_mode=getattr(decision_protocol, "self_vote_mode", "downweight"),
+            self_vote_downweight=getattr(decision_protocol, "self_vote_downweight", 0.5),
             enable_verbosity_normalization=enable_verbosity,
-            verbosity_target_length=getattr(self.protocol, "verbosity_target_length", 1000),
-            verbosity_penalty_threshold=getattr(self.protocol, "verbosity_penalty_threshold", 3.0),
-            verbosity_max_penalty=getattr(self.protocol, "verbosity_max_penalty", 0.3),
+            verbosity_target_length=getattr(decision_protocol, "verbosity_target_length", 1000),
+            verbosity_penalty_threshold=getattr(
+                decision_protocol, "verbosity_penalty_threshold", 3.0
+            ),
+            verbosity_max_penalty=getattr(decision_protocol, "verbosity_max_penalty", 0.3),
         )
 
         # Get domain from context for domain-specific ELO weighting
-        domain = getattr(ctx, "domain", None) or "general"
+        decision_domain = domain or getattr(ctx, "domain", None) or "general"
 
         calculator = WeightCalculator(
             memory=self.memory,
@@ -1632,14 +2180,21 @@ class ConsensusPhase:
             calibration_tracker=self.calibration_tracker,
             get_calibration_weight=self._get_calibration_weight,
             config=config,
-            domain=domain,
+            domain=decision_domain,
         )
 
-        # Use bias-aware computation if votes and proposals available
-        if votes and ctx.proposals and (enable_self_vote or enable_verbosity):
-            return calculator.compute_weights_with_context(ctx.agents, votes, ctx.proposals)
+        eligible_agents = list(ctx.agents if agents is None else agents)
 
-        return calculator.compute_weights(ctx.agents)
+        # Use bias-aware computation if votes and proposals available
+        decision_proposals = ctx.proposals if proposals is None else proposals
+        if votes and decision_proposals and (enable_self_vote or enable_verbosity):
+            return calculator.compute_weights_with_context(
+                eligible_agents,
+                votes,
+                decision_proposals,
+            )
+
+        return calculator.compute_weights(eligible_agents)
 
     def _required_participation(self, total_agents: int) -> int:
         """Compute minimum required votes to proceed with consensus."""
@@ -1649,10 +2204,17 @@ class ConsensusPhase:
         # Never require more votes than agents available
         return min(required, max(total_agents, 1))
 
-    def _ensure_quorum(self, ctx: "DebateContext", vote_count: int) -> bool:
+    def _ensure_quorum(
+        self,
+        ctx: "DebateContext",
+        vote_count: int,
+        *,
+        required: int | None = None,
+        total_agents: int | None = None,
+    ) -> bool:
         """Ensure enough agents participated to make consensus meaningful."""
-        total_agents = len(ctx.agents)
-        required = self._required_participation(total_agents)
+        total_agents = len(ctx.agents) if total_agents is None else total_agents
+        required = self._required_participation(total_agents) if required is None else required
         if vote_count >= required:
             return True
 
@@ -1682,13 +2244,32 @@ class ConsensusPhase:
 
         return False
 
+    def _record_vote_participation(
+        self,
+        ctx: "DebateContext",
+        collection: MajorityVoteCollection,
+        snapshot: _MajoritySnapshot,
+    ) -> None:
+        """Publish exact per-slot majority outcomes as additive result metadata."""
+        result = require_phase_result(ctx)
+        metadata = result.metadata if isinstance(result.metadata, dict) else {}
+        metadata["vote_participation"] = {
+            "eligible": snapshot.eligible_count,
+            "received": len(collection.ballots),
+            "failed": len(collection.failed_slots),
+            "skipped": len(collection.skipped_slots),
+        }
+        result.metadata = metadata
+
     def _apply_calibration_to_votes(
         self,
         votes: list["Vote"],
         ctx: "DebateContext",
+        *,
+        calibration_summaries: dict[str, Any] | None = None,
     ) -> list["Vote"]:
         """Apply calibration adjustments to vote confidences."""
-        if not self.calibration_tracker:
+        if calibration_summaries is None and not self.calibration_tracker:
             return votes
 
         from aragora.agents.calibration import adjust_agent_confidence
@@ -1700,7 +2281,13 @@ class ConsensusPhase:
                 continue
 
             try:
-                summary = self.calibration_tracker.get_calibration_summary(vote.agent)
+                if calibration_summaries is None:
+                    summary = self.calibration_tracker.get_calibration_summary(vote.agent)
+                else:
+                    summary = calibration_summaries.get(vote.agent)
+                    if summary is None:
+                        adjusted_votes.append(vote)
+                        continue
                 original_conf = vote.confidence
                 adjusted_conf = adjust_agent_confidence(original_conf, summary)
 
@@ -1731,6 +2318,29 @@ class ConsensusPhase:
 
         return adjusted_votes
 
+    def _capture_calibration_summaries(
+        self,
+        slots: tuple[VoterSlot, ...],
+    ) -> tuple[tuple[str, Any], ...]:
+        """Copy calibration inputs before any voter callback can mutate them."""
+        if not self.calibration_tracker:
+            return ()
+        summaries: dict[str, Any] = {}
+        for slot in slots:
+            if slot.name in summaries:
+                continue
+            try:
+                summaries[slot.name] = copy.deepcopy(
+                    self.calibration_tracker.get_calibration_summary(slot.name)
+                )
+            except (ValueError, KeyError, TypeError, AttributeError) as error:
+                logger.debug(
+                    "Calibration snapshot failed for %s: %s",
+                    slot.name,
+                    error,
+                )
+        return tuple(summaries.items())
+
     def _count_weighted_votes(
         self,
         votes: list["Vote"],
@@ -1749,6 +2359,20 @@ class ConsensusPhase:
                 total_weighted += weight
 
         return vote_counts, total_weighted
+
+    def _count_snapshot_votes(
+        self,
+        ballots: tuple[SlotVote, ...],
+        choice_mapping: dict[str, str],
+        slot_weights: tuple[float, ...],
+    ) -> tuple[dict[str, float], float]:
+        """Count received ballots while retaining every eligible slot in the denominator."""
+        vote_counts: dict[str, float] = {}
+        for ballot in ballots:
+            canonical = choice_mapping.get(ballot.vote.choice, ballot.vote.choice)
+            weight = slot_weights[ballot.slot.index]
+            vote_counts[canonical] = vote_counts.get(canonical, 0.0) + weight
+        return vote_counts, sum(slot_weights)
 
     def _add_user_votes(
         self,
@@ -1787,6 +2411,54 @@ class ConsensusPhase:
 
         return vote_counts, total_weighted
 
+    def _capture_user_vote_contributions(
+        self,
+        protocol: Any,
+    ) -> tuple[_UserVoteContribution, ...]:
+        """Resolve user-vote weights at the immutable decision boundary."""
+        base_user_weight = float(getattr(protocol, "user_vote_weight", 0.5))
+        contributions: list[_UserVoteContribution] = []
+        for user_vote in tuple(copy.deepcopy(self.user_votes)):
+            choice = user_vote.get("choice", "")
+            if not choice:
+                continue
+            intensity = user_vote.get("intensity", 5)
+            multiplier = (
+                self._user_vote_multiplier(intensity, copy.deepcopy(protocol))
+                if self._user_vote_multiplier
+                else 1.0
+            )
+            contributions.append(
+                _UserVoteContribution(
+                    choice=str(choice),
+                    intensity=copy.deepcopy(intensity),
+                    user_id=str(user_vote.get("user_id", "anonymous")),
+                    weight=base_user_weight * float(multiplier),
+                )
+            )
+        return tuple(contributions)
+
+    @staticmethod
+    def _add_snapshot_user_votes(
+        vote_counts: dict[str, float],
+        total_weighted: float,
+        choice_mapping: dict[str, str],
+        contributions: tuple[_UserVoteContribution, ...],
+    ) -> tuple[dict[str, float], float]:
+        """Add only the user-vote contributions captured by the snapshot."""
+        for contribution in contributions:
+            canonical = choice_mapping.get(contribution.choice, contribution.choice)
+            vote_counts[canonical] = vote_counts.get(canonical, 0.0) + contribution.weight
+            total_weighted += contribution.weight
+            logger.debug(
+                "user_vote user=%s choice=%s intensity=%s weight=%s",
+                contribution.user_id,
+                contribution.choice,
+                contribution.intensity,
+                contribution.weight,
+            )
+        return vote_counts, total_weighted
+
     def _normalize_choice_to_agent(
         self,
         choice: str,
@@ -1794,6 +2466,19 @@ class ConsensusPhase:
         proposals: dict[str, str],
     ) -> str:
         """Normalize a vote choice to an agent name."""
+        return self._normalize_choice_to_names(
+            choice,
+            tuple(agent.name for agent in agents),
+            proposals,
+        )
+
+    def _normalize_choice_to_names(
+        self,
+        choice: str,
+        agent_names: tuple[str, ...],
+        proposals: dict[str, str],
+    ) -> str:
+        """Normalize a choice against copied names rather than mutable agents."""
         if not choice:
             return choice
 
@@ -1806,8 +2491,7 @@ class ConsensusPhase:
             if agent_name.lower() == choice_lower:
                 return agent_name
 
-        for agent in agents:
-            agent_name = agent.name
+        for agent_name in agent_names:
             agent_lower = agent_name.lower()
 
             if agent_lower == choice_lower:
@@ -1824,7 +2508,7 @@ class ConsensusPhase:
                 if base_name == choice_lower or choice_lower.startswith(base_name):
                     return agent_name
 
-        logger.debug("vote_choice_no_match choice=%s agents=%s", choice, [a.name for a in agents])
+        logger.debug("vote_choice_no_match choice=%s agents=%s", choice, agent_names)
         return choice
 
     async def _verify_consensus_formally(self, ctx: "DebateContext") -> None:

@@ -1743,6 +1743,261 @@ class TestQuorumEnsure:
         assert ctx.result.status == "insufficient_participation"
 
 
+class TestImmutableMajoritySnapshot:
+    """Regression coverage for the per-slot majority decision boundary."""
+
+    @pytest.mark.asyncio
+    async def test_freezes_roster_threshold_quorum_and_winner_names(self):
+        agents = [
+            MockAgent(name="alpha-model"),
+            MockAgent(name="beta-model"),
+            MockAgent(name="gamma-model"),
+            MockAgent(name="delta-model"),
+        ]
+        original_names = {id(agent): agent.name for agent in agents}
+        original_agent_ids = set(original_names)
+        ctx, protocol = make_context(
+            agents=agents,
+            proposals={"alpha-model": "Alpha", "beta-model": "Beta"},
+            consensus_mode="majority",
+        )
+        protocol.consensus_threshold = 0.75
+        protocol.min_participation_ratio = 0.75
+        protocol.min_participation_count = 3
+        protocol.enable_rlm_early_termination = False
+        protocol.enable_self_vote_mitigation = True
+        seen_agents: set[int] = set()
+        mutated = False
+
+        async def vote_with_agent(agent, proposals, task):
+            nonlocal mutated
+            seen_agents.add(id(agent))
+            original_name = original_names[id(agent)]
+            if not mutated:
+                mutated = True
+                protocol.consensus_threshold = 0.99
+                protocol.min_participation_ratio = 1.0
+                protocol.min_participation_count = 99
+                for original_agent in agents:
+                    original_agent.name = f"renamed-{original_names[id(original_agent)]}"
+                ctx.agents.extend(MockAgent(name=f"late-{index}") for index in range(6))
+            choice = "alpha" if original_name != "delta-model" else "beta-model"
+            return make_vote(agent=original_name, choice=choice)
+
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(
+                protocol=protocol,
+                agent_weights={
+                    "alpha-model": 2.0,
+                    "beta-model": 1.0,
+                    "gamma-model": 1.0,
+                    "delta-model": 1.0,
+                },
+            ),
+            callbacks=ConsensusCallbacks(vote_with_agent=vote_with_agent),
+        )
+
+        await phase._handle_majority_consensus(ctx)
+
+        assert seen_agents == original_agent_ids
+        assert len(ctx.agents) == 10
+        assert ctx.result.winner == "alpha-model"
+        assert ctx.result.final_answer == "Alpha"
+        assert ctx.result.consensus_reached is True
+        assert ctx.result.confidence == pytest.approx(0.8)
+        assert ctx.result.metadata["vote_participation"] == {
+            "eligible": 4,
+            "received": 4,
+            "failed": 0,
+            "skipped": 0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_duplicate_names_remain_distinct_missing_weight_slots(self):
+        first_duplicate = MockAgent(name="duplicate")
+        second_duplicate = MockAgent(name="duplicate")
+        agents = [first_duplicate, second_duplicate, MockAgent(name="b"), MockAgent(name="c")]
+        ctx, protocol = make_context(
+            agents=agents,
+            proposals={"proposal-a": "Alpha", "proposal-b": "Beta"},
+            consensus_mode="majority",
+        )
+        protocol.consensus_threshold = 0.6
+        protocol.min_participation_ratio = 0.5
+        protocol.min_participation_count = 2
+        protocol.enable_rlm_early_termination = False
+        protocol.enable_position_shuffling = True
+        protocol.position_shuffling_permutations = 2
+
+        async def vote_with_agent(agent, proposals, task):
+            if agent is second_duplicate:
+                raise RuntimeError("duplicate slot failed")
+            choice = "proposal-b" if agent.name == "c" else "proposal-a"
+            return make_vote(agent=agent.name, choice=choice)
+
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(protocol=protocol),
+            callbacks=ConsensusCallbacks(vote_with_agent=vote_with_agent),
+        )
+        phase._compute_vote_weights = MagicMock(return_value={"duplicate": 2.0, "b": 1.0, "c": 1.0})
+
+        await phase._handle_majority_consensus(ctx)
+
+        assert ctx.result.winner == "proposal-a"
+        assert ctx.result.consensus_reached is False
+        assert ctx.result.confidence == pytest.approx(0.5)
+        assert ctx.result.metadata["vote_participation"] == {
+            "eligible": 4,
+            "received": 3,
+            "failed": 1,
+            "skipped": 0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_weighted_rlm_waits_for_effective_threshold(self):
+        agents = [MockAgent(name=f"agent{index}") for index in range(10)]
+        ctx, protocol = make_context(agents=agents, consensus_mode="majority")
+        protocol.consensus_threshold = 0.75
+        protocol.min_participation_ratio = 0.5
+        protocol.min_participation_count = 1
+        hook = MagicMock()
+
+        async def vote_with_agent(agent, proposals, task):
+            if int(agent.name.removeprefix("agent")) >= 8:
+                await asyncio.sleep(10)
+            return make_vote(agent=agent.name, choice="agent0")
+
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(protocol=protocol, hooks={"on_rlm_early_termination": hook}),
+            callbacks=ConsensusCallbacks(vote_with_agent=vote_with_agent),
+        )
+        phase._compute_vote_weights = MagicMock(return_value={agent.name: 1.0 for agent in agents})
+        phase._vote_collector.config.rlm_early_termination_threshold = 0.5
+        phase._vote_collector.config.rlm_majority_lead_threshold = 0.1
+
+        await phase._handle_majority_consensus(ctx)
+
+        assert ctx.result.consensus_reached is True
+        assert ctx.result.confidence == pytest.approx(0.8)
+        assert ctx.result.metadata["vote_participation"] == {
+            "eligible": 10,
+            "received": 8,
+            "failed": 0,
+            "skipped": 2,
+        }
+        hook.assert_called_once_with(leader="agent0", votes_collected=8, total_agents=10)
+
+    @pytest.mark.asyncio
+    async def test_freezes_proposals_through_shuffling_and_final_answer(self):
+        agents = [MockAgent(name=name) for name in ("voter-a", "voter-b", "voter-c")]
+        ctx, protocol = make_context(
+            agents=agents,
+            proposals={"alpha": "Original Alpha", "beta": "Original Beta"},
+            consensus_mode="majority",
+        )
+        protocol.consensus_threshold = 0.6
+        protocol.min_participation_count = 2
+        protocol.enable_rlm_early_termination = False
+        protocol.enable_position_shuffling = True
+        protocol.position_shuffling_permutations = 2
+        seen_proposals: list[dict[str, str]] = []
+        mutated = False
+
+        async def vote_with_agent(agent, proposals, task):
+            nonlocal mutated
+            seen_proposals.append(dict(proposals))
+            if not mutated:
+                mutated = True
+                proposals.clear()
+                proposals["injected"] = "Callback-local mutation"
+                ctx.proposals.clear()
+                ctx.proposals.update({"beta": "Mutated Beta", "injected": "Live-context mutation"})
+            return make_vote(agent=agent.name, choice="alpha")
+
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(protocol=protocol),
+            callbacks=ConsensusCallbacks(vote_with_agent=vote_with_agent),
+        )
+
+        await phase._handle_majority_consensus(ctx)
+
+        assert len(seen_proposals) == len(agents) * 2
+        assert all(set(proposals) == {"alpha", "beta"} for proposals in seen_proposals)
+        assert ctx.proposals == {
+            "beta": "Mutated Beta",
+            "injected": "Live-context mutation",
+        }
+        assert ctx.result.winner == "alpha"
+        assert ctx.result.final_answer == "Original Alpha"
+        assert ctx.result.consensus_reached is True
+
+    @pytest.mark.asyncio
+    async def test_freezes_tally_policy_user_votes_and_verification(self):
+        agents = [MockAgent(name=name) for name in ("voter-a", "voter-b", "voter-c")]
+        ctx, protocol = make_context(
+            agents=agents,
+            proposals={"alpha": "Alpha", "beta": "Beta"},
+            consensus_mode="majority",
+        )
+        protocol.consensus_threshold = 0.6
+        protocol.min_participation_count = 2
+        protocol.enable_rlm_early_termination = False
+        protocol.verify_claims_during_consensus = False
+        user_votes: list[dict[str, Any]] = []
+        verify_claims = AsyncMock(return_value={"verified": 10, "disproven": 0})
+        mutated = False
+        phase: ConsensusPhase
+
+        async def vote_with_agent(agent, proposals, task):
+            nonlocal mutated
+            if not mutated:
+                mutated = True
+                protocol.enable_self_vote_mitigation = True
+                protocol.self_vote_mode = "exclude"
+                protocol.self_vote_downweight = 0.0
+                protocol.user_vote_weight = 100.0
+                protocol.verify_claims_during_consensus = True
+                protocol.verification_weight_bonus = 100.0
+                protocol.enable_process_verification = True
+                protocol.process_verification_hard_gate = True
+                protocol.process_verification_threshold = 1.0
+                phase.agent_weights["voter-c"] = 100.0
+                ctx.result.verification_results["alpha"] = {
+                    "verified": 100,
+                    "disproven": 0,
+                }
+                ctx.result.verification_bonuses["alpha"] = 100.0
+                ctx.result.metadata["process_verification"] = {"average": 0.0}
+                user_votes.append({"choice": "beta", "intensity": 10, "user_id": "late-user"})
+            choice = "beta" if agent.name == "voter-c" else "alpha"
+            return make_vote(agent=agent.name, choice=choice)
+
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(
+                protocol=protocol,
+                agent_weights={agent.name: 1.0 for agent in agents},
+                user_votes=user_votes,
+            ),
+            callbacks=ConsensusCallbacks(
+                vote_with_agent=vote_with_agent,
+                verify_claims=verify_claims,
+            ),
+        )
+
+        await phase._handle_majority_consensus(ctx)
+
+        verify_claims.assert_not_awaited()
+        assert len(user_votes) == 1
+        assert ctx.result.winner == "alpha"
+        assert ctx.result.final_answer == "Alpha"
+        assert ctx.result.consensus_reached is True
+        assert ctx.result.confidence == pytest.approx(2 / 3)
+        assert ctx.vote_tally == {"alpha": 2.0, "beta": 1.0}
+        assert ctx.result.verification_results == {}
+        assert ctx.result.verification_bonuses == {}
+        assert "process_verification" not in ctx.result.metadata
+
+
 # =============================================================================
 # Additional Coverage: Formal Verification Tests
 # =============================================================================

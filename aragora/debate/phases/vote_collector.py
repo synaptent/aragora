@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
@@ -189,6 +189,35 @@ class _VoteTaskOwner:
         except BaseException:  # noqa: BLE001 - make sibling tasks safe before propagation
             self.settle(consumer, propagate=False)
             raise
+
+
+@dataclass(frozen=True, slots=True)
+class VoterSlot:
+    """Immutable identity for one position in an eligible voter roster."""
+
+    index: int
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class SlotVote:
+    """A successful ballot attributed to its exact voter slot."""
+
+    slot: VoterSlot
+    vote: Vote
+
+
+@dataclass(frozen=True, slots=True)
+class MajorityVoteCollection:
+    """Complete per-slot outcome of one majority collection decision."""
+
+    ballots: tuple[SlotVote, ...]
+    failed_slots: tuple[VoterSlot, ...]
+    skipped_slots: tuple[VoterSlot, ...]
+
+    @property
+    def votes(self) -> list[Vote]:
+        return [ballot.vote for ballot in self.ballots]
 
 
 @dataclass
@@ -631,6 +660,259 @@ class VoteCollector:
 
         return votes
 
+    async def _collect_majority_once(
+        self,
+        ctx: DebateContext,
+        roster: tuple[tuple[VoterSlot, Agent], ...],
+        proposals: dict[str, str],
+        *,
+        should_stop: Callable[[tuple[SlotVote, ...]], tuple[bool, str | None]] | None,
+        handle_success: bool,
+        agent_timeout: float | None = None,
+        collection_timeout: float | None = None,
+    ) -> tuple[MajorityVoteCollection, str | None]:
+        """Collect one ballot per frozen slot without re-reading ``ctx.agents``."""
+        slots = tuple(slot for slot, _agent in roster)
+        vote_with_agent = self._vote_with_agent
+        if vote_with_agent is None:
+            return MajorityVoteCollection((), slots, ()), None
+
+        task_text = ctx.env.task if ctx.env else ""
+        with_timeout = self._with_timeout
+        effective_agent_timeout = (
+            get_complexity_governor().get_scaled_timeout(float(self.config.agent_timeout))
+            if agent_timeout is None
+            else agent_timeout
+        )
+        effective_collection_timeout = (
+            self.VOTE_COLLECTION_TIMEOUT if collection_timeout is None else collection_timeout
+        )
+        ballots: list[SlotVote] = []
+        failed_ids: set[int] = set()
+        early_leader: str | None = None
+
+        async def cast_vote(slot: VoterSlot, agent: Agent) -> Any:
+            logger.debug("agent_voting agent=%s slot=%s", slot.name, slot.index)
+            try:
+                proposal_view = dict(proposals)
+                if with_timeout:
+                    return await with_timeout(
+                        vote_with_agent(agent, proposal_view, task_text),
+                        slot.name,
+                        timeout_seconds=effective_agent_timeout,
+                    )
+                return await vote_with_agent(agent, proposal_view, task_text)
+            except (ValueError, KeyError, TypeError) as error:  # noqa: BLE001
+                logger.warning(
+                    "vote_exception agent=%s slot=%s error=%s: %s",
+                    slot.name,
+                    slot.index,
+                    type(error).__name__,
+                    error,
+                )
+                return error
+
+        tasks = [asyncio.create_task(cast_vote(slot, agent)) for slot, agent in roster]
+        binding_by_task = {task: roster[index] for index, task in enumerate(tasks)}
+        owner = _VoteTaskOwner(tasks)
+
+        def consume_vote(completed_task: asyncio.Task[Any]) -> None:
+            slot, agent = binding_by_task[completed_task]
+            try:
+                vote_result = completed_task.result()
+            except asyncio.CancelledError:
+                raise
+            except BaseException as error:  # noqa: BLE001 - preserve control flow
+                if not isinstance(error, Exception):
+                    raise
+                logger.error(
+                    "task_exception phase=majority_vote slot=%s error=%s", slot.index, error
+                )
+                failed_ids.add(slot.index)
+                return
+
+            if isinstance(vote_result, BaseException) and not isinstance(vote_result, Exception):
+                raise vote_result
+            if vote_result is None or isinstance(vote_result, Exception):
+                failed_ids.add(slot.index)
+                if isinstance(vote_result, Exception):
+                    logger.error(
+                        "vote_error agent=%s slot=%s error=%s",
+                        slot.name,
+                        slot.index,
+                        vote_result,
+                    )
+                else:
+                    logger.error(
+                        "vote_error agent=%s slot=%s error=vote returned None",
+                        slot.name,
+                        slot.index,
+                    )
+                return
+
+            if getattr(vote_result, "agent", None) != slot.name:
+                try:
+                    vote_result = replace(vote_result, agent=slot.name)
+                except TypeError:
+                    logger.warning(
+                        "vote_agent_not_rebindable slot=%s expected=%s actual=%s",
+                        slot.index,
+                        slot.name,
+                        getattr(vote_result, "agent", None),
+                    )
+            ballots.append(SlotVote(slot=slot, vote=vote_result))
+            if handle_success:
+                self._handle_vote_success(
+                    ctx,
+                    agent,
+                    vote_result,
+                    agent_name=slot.name,
+                )
+
+        def stop_at_decision_boundary() -> bool:
+            nonlocal early_leader
+            if should_stop is None:
+                return False
+            decisive, leader = should_stop(tuple(ballots))
+            if decisive:
+                early_leader = leader
+            return decisive
+
+        timed_out = False
+        early_terminated = False
+        try:
+            async with asyncio.timeout(effective_collection_timeout):
+                early_terminated = await owner.run(consume_vote, stop_at_decision_boundary)
+        except TimeoutError:
+            timed_out = True
+            logger.warning(
+                "vote_collection_timeout collected=%s expected=%s timeout=%ss",
+                len(ballots),
+                len(roster),
+                effective_collection_timeout,
+            )
+
+        skipped_ids: set[int] = set()
+        for task, (slot, _agent) in binding_by_task.items():
+            if owner.classification(task) == "detached":
+                if early_terminated and not timed_out:
+                    skipped_ids.add(slot.index)
+                else:
+                    failed_ids.add(slot.index)
+
+        ordered_ballots = tuple(sorted(ballots, key=lambda ballot: ballot.slot.index))
+        failed_slots = tuple(slot for slot in slots if slot.index in failed_ids)
+        skipped_slots = tuple(slot for slot in slots if slot.index in skipped_ids)
+        return (
+            MajorityVoteCollection(ordered_ballots, failed_slots, skipped_slots),
+            early_leader,
+        )
+
+    async def collect_majority_votes(
+        self,
+        ctx: DebateContext,
+        roster: tuple[tuple[VoterSlot, Agent], ...],
+        *,
+        should_stop: Callable[[tuple[SlotVote, ...]], tuple[bool, str | None]] | None = None,
+        proposals: dict[str, str] | None = None,
+        position_shuffling_enabled: bool | None = None,
+        position_shuffling_permutations: int | None = None,
+        position_shuffling_seed: int | None | object = ...,
+        agent_timeout: float | None = None,
+        collection_timeout: float | None = None,
+    ) -> MajorityVoteCollection:
+        """Collect majority ballots against one exact immutable slot roster."""
+        decision_proposals = dict(ctx.proposals if proposals is None else proposals)
+        shuffle_enabled = (
+            self.config.enable_position_shuffling
+            if position_shuffling_enabled is None
+            else position_shuffling_enabled
+        )
+        shuffle_permutations = (
+            self.config.position_shuffling_permutations
+            if position_shuffling_permutations is None
+            else position_shuffling_permutations
+        )
+        shuffle_seed = (
+            self.config.position_shuffling_seed
+            if position_shuffling_seed is ...
+            else position_shuffling_seed
+        )
+        if shuffle_enabled and decision_proposals:
+            votes_by_slot: dict[int, list[Vote]] = {slot.index: [] for slot, _agent in roster}
+            for permutation_index, proposal_permutation in enumerate(
+                generate_permutations(
+                    decision_proposals,
+                    num_permutations=shuffle_permutations,
+                    base_seed=shuffle_seed if isinstance(shuffle_seed, int) else None,
+                )
+            ):
+                collection, _leader = await self._collect_majority_once(
+                    ctx,
+                    roster,
+                    proposal_permutation,
+                    should_stop=None,
+                    handle_success=False,
+                    agent_timeout=agent_timeout,
+                    collection_timeout=collection_timeout,
+                )
+                for ballot in collection.ballots:
+                    votes_by_slot[ballot.slot.index].append(ballot.vote)
+                logger.debug(
+                    "position_shuffling_permutation_done perm=%s votes=%s",
+                    permutation_index,
+                    len(collection.ballots),
+                )
+
+            averaged_ballots: list[SlotVote] = []
+            for slot, agent in roster:
+                slot_votes = votes_by_slot[slot.index]
+                if not slot_votes:
+                    continue
+                averaged = average_permutation_votes({slot.name: slot_votes}, decision_proposals)
+                if not averaged:
+                    continue
+                vote = averaged[0]
+                averaged_ballots.append(SlotVote(slot=slot, vote=vote))
+                self._handle_vote_success(ctx, agent, vote, agent_name=slot.name)
+
+            received_ids = {ballot.slot.index for ballot in averaged_ballots}
+            return MajorityVoteCollection(
+                ballots=tuple(averaged_ballots),
+                failed_slots=tuple(
+                    slot for slot, _agent in roster if slot.index not in received_ids
+                ),
+                skipped_slots=(),
+            )
+
+        collection, leader = await self._collect_majority_once(
+            ctx,
+            roster,
+            decision_proposals,
+            should_stop=should_stop,
+            handle_success=True,
+            agent_timeout=agent_timeout,
+            collection_timeout=collection_timeout,
+        )
+        if collection.skipped_slots:
+            if self._notify_spectator:
+                self._notify_spectator(
+                    "rlm_early_termination",
+                    details=(
+                        f"Clear majority for '{leader}' "
+                        f"({len(collection.ballots)}/{len(roster)} votes)"
+                    ),
+                    metric=len(collection.ballots) / len(roster) if roster else 0.0,
+                    agent="system",
+                )
+            if "on_rlm_early_termination" in self.hooks:
+                self.hooks["on_rlm_early_termination"](
+                    leader=leader,
+                    votes_collected=len(collection.ballots),
+                    total_agents=len(roster),
+                )
+        return collection
+
     async def collect_votes_with_errors(self, ctx: DebateContext) -> tuple[list[Vote], int]:
         """Collect votes with error tracking for unanimity mode.
 
@@ -745,6 +1027,7 @@ class VoteCollector:
         agent: Agent,
         vote: Vote,
         unanimous: bool = False,
+        agent_name: str | None = None,
     ) -> None:
         """Handle successful vote: notifications, hooks, recording.
 
@@ -756,8 +1039,9 @@ class VoteCollector:
         """
         result = require_phase_result(ctx)
 
+        recorded_name = agent_name if agent_name is not None else agent.name
         logger.debug(
-            f"vote_cast{'_unanimous' if unanimous else ''} agent={agent.name} "
+            f"vote_cast{'_unanimous' if unanimous else ''} agent={recorded_name} "
             f"choice={vote.choice} confidence={vote.confidence:.0%}"
         )
 
@@ -765,19 +1049,19 @@ class VoteCollector:
         if self._notify_spectator:
             self._notify_spectator(
                 "vote",
-                agent=agent.name,
+                agent=recorded_name,
                 details=f"Voted for {vote.choice}",
                 metric=vote.confidence,
             )
 
         # Emit vote hook
         if "on_vote" in self.hooks:
-            self.hooks["on_vote"](agent.name, vote.choice, vote.confidence)
+            self.hooks["on_vote"](recorded_name, vote.choice, vote.confidence)
 
         # Record vote
         if self.recorder:
             try:
-                self.recorder.record_vote(agent.name, vote.choice, vote.reasoning)
+                self.recorder.record_vote(recorded_name, vote.choice, vote.reasoning)
             except (RuntimeError, AttributeError, TypeError) as e:  # noqa: BLE001
                 logger.debug("Recorder error for vote: %s", e)
 
@@ -789,7 +1073,7 @@ class VoteCollector:
                 )
                 self.position_tracker.record_position(
                     debate_id=debate_id,
-                    agent_name=agent.name,
+                    agent_name=recorded_name,
                     position_type="vote",
                     position_text=vote.choice,
                     round_num=result.rounds_used,
@@ -798,7 +1082,12 @@ class VoteCollector:
             except (RuntimeError, AttributeError, TypeError) as e:  # noqa: BLE001
                 logger.debug("Position tracking error for vote: %s", e)
 
-    def compute_vote_groups(self, votes: list[Vote]) -> tuple[dict[str, list[str]], dict[str, str]]:
+    def compute_vote_groups(
+        self,
+        votes: list[Vote],
+        *,
+        group_similar_votes: Callable | None | object = ...,
+    ) -> tuple[dict[str, list[str]], dict[str, str]]:
         """Group similar votes and create choice mapping.
 
         Args:
@@ -809,12 +1098,15 @@ class VoteCollector:
             - vote_groups: canonical choice -> list of variant choices
             - choice_mapping: variant choice -> canonical choice
         """
-        if not self._group_similar_votes:
+        grouping_callback = (
+            self._group_similar_votes if group_similar_votes is ... else group_similar_votes
+        )
+        if not callable(grouping_callback):
             # No grouping, identity mapping
             choices = set(v.choice for v in votes if not isinstance(v, Exception))
             return {c: [c] for c in choices}, {c: c for c in choices}
 
-        vote_groups = self._group_similar_votes(votes)
+        vote_groups = grouping_callback(votes)
 
         choice_mapping: dict[str, str] = {}
         for canonical, variants in vote_groups.items():
