@@ -5,9 +5,15 @@
 # Usage: Set as ENTRYPOINT in Dockerfile, or call directly.
 # Environment:
 #   SKIP_MIGRATIONS=1  - Skip migration step (e.g., for worker containers)
-#   DATABASE_URL       - PostgreSQL connection string (required for migrations)
+#   DATABASE_URL / ARAGORA_POSTGRES_DSN - PostgreSQL connection string
 
 set -e
+
+if [ -n "${DATABASE_URL}" ] || [ -n "${ARAGORA_POSTGRES_DSN}" ]; then
+    DATABASE_URL="${ARAGORA_POSTGRES_DSN:-${DATABASE_URL}}"
+    ARAGORA_POSTGRES_DSN="$DATABASE_URL"
+    export DATABASE_URL ARAGORA_POSTGRES_DSN
+fi
 
 echo "[entrypoint] Aragora server starting..."
 echo "[entrypoint] ARAGORA_ENV=${ARAGORA_ENV:-not set}"
@@ -16,9 +22,9 @@ echo "[entrypoint] ARAGORA_ENV=${ARAGORA_ENV:-not set}"
 # Wait for PostgreSQL (if configured)
 # --------------------------------------------------------------------------
 if [ -n "${DATABASE_URL}" ] || [ -n "${ARAGORA_POSTGRES_DSN}" ]; then
-    # Extract host and port from DATABASE_URL for a simple TCP check.
+    # Extract host and port from the resolved PostgreSQL URL for a simple TCP check.
     # Format: postgresql://user:pass@host:port/dbname
-    DB_URL="${DATABASE_URL:-${ARAGORA_POSTGRES_DSN}}"
+    DB_URL="$DATABASE_URL"
     DB_HOST=$(echo "$DB_URL" | sed -n 's|.*@\([^:/]*\).*|\1|p')
     DB_PORT=$(echo "$DB_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
     DB_PORT=${DB_PORT:-5432}
@@ -46,7 +52,7 @@ fi
 if [ "${SKIP_MIGRATIONS}" != "1" ]; then
     if [ -n "${DATABASE_URL}" ] || [ -n "${ARAGORA_POSTGRES_DSN}" ]; then
         echo "[entrypoint] Running database migrations..."
-        python -m aragora.migrations.runner upgrade 2>&1 || {
+        python -m aragora.migrations upgrade 2>&1 || {
             echo "[entrypoint] WARNING: Migration failed. Server will start but may use degraded mode."
             echo "[entrypoint] Check DATABASE_URL and database connectivity."
         }
