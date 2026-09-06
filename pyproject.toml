@@ -118,7 +118,7 @@ experimental = [
 dev = [
     "mypy>=2.1.0,<3.0",
     "mypy-baseline>=0.7.4,<0.8",
-    "ruff==0.14.14",
+    "ruff==0.16.1",
     "types-PyYAML>=6.0.12.20260518,<7.0",
     "types-croniter>=6.2.2.20260518,<7.0",
     "bandit>=1.9.4,<2.0",
