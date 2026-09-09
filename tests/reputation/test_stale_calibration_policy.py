@@ -22,8 +22,8 @@ from aragora.reputation.stale_policy import (
 )
 
 HL = 30.0  # days — mirrors settlement default
-LO = 0.5 * HL   # 15.0 — lower band boundary
-HI = 1.5 * HL   # 45.0 — upper band boundary
+LO = 0.5 * HL  # 15.0 — lower band boundary
+HI = 1.5 * HL  # 45.0 — upper band boundary
 
 
 # ---------------------------------------------------------------------------
