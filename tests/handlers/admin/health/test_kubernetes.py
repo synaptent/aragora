@@ -125,7 +125,7 @@ def _make_redis_cache_module(pool: Any = MagicMock()):
     """Create a fake aragora.utils.redis_config module."""
     mod = types.ModuleType("aragora.utils.redis_config")
     mod.get_redis_pool = lambda: pool
-    mod.redis_pool_initialized = lambda: pool is not None
+    mod.__dict__["redis_pool_initialized"] = lambda: pool is not None
     return mod
 
 
