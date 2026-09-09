@@ -125,6 +125,7 @@ def _make_redis_cache_module(pool: Any = MagicMock()):
     """Create a fake aragora.utils.redis_config module."""
     mod = types.ModuleType("aragora.utils.redis_config")
     mod.get_redis_pool = lambda: pool
+    mod.redis_pool_initialized = lambda: pool is not None
     return mod
 
 
@@ -730,10 +731,10 @@ class TestReadinessProbeFastRedis:
             result = readiness_probe_fast(handler)
         assert _body(result)["checks"]["redis_pool"] == "not_configured"
 
-    def test_redis_runtime_error_when_env_set(self, monkeypatch):
+    def test_redis_accessor_missing_when_env_set(self, monkeypatch):
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
         handler = _make_mock_handler()
-        # Create a module whose get_redis_pool raises RuntimeError
+        # Deliberately omit the accessor; the obsolete getter must remain unused.
         mod = types.ModuleType("aragora.utils.redis_config")
         mod.get_redis_pool = MagicMock(side_effect=RuntimeError("Pool error"))
         with (
