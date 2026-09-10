@@ -183,11 +183,18 @@ variables in a server environment. Unset values use these defaults; `true` or
 | `NEXT_PUBLIC_FEATURE_CLI_AGENTS`          | `false` |
 | `NEXT_PUBLIC_FEATURE_AGENT_BRIDGE`        | `false` |
 
+Optional telemetry uses `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`,
+`SENTRY_AUTH_TOKEN`, `SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_POSTHOG_KEY` and
+`NEXT_PUBLIC_POSTHOG_HOST`. The keys are unset by default. See
+[Observability](#observability) for their defaults and enablement rules.
+
 ## Observability
 
 Sentry and PostHog are **off by default**. With their keys unset, their SDKs
 are not imported or initialized. Public values are baked into the client:
 restart the dev server or rebuild after changing them.
+Next config explicitly inlines empty public keys so default production builds
+also exclude the disabled SDK chunks.
 
 | Variable                   | Purpose                                                                                                                             |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -223,6 +230,9 @@ For a local analytics capture endpoint, start with
 and visit <http://localhost:3120/landing/>. A `$pageview` should arrive within
 15 seconds. These examples require capture servers on the specified ports;
 they do not send to real projects. Real vendor verification requires real keys.
+PostHog filters bots, including headless browsers and `navigator.webdriver`;
+automated delivery tests must simulate a normal browser, not disable that
+filter in production. Event compression is disabled for inspectable payloads.
 
 Run the isolated telemetry tests without the global coverage floors:
 
