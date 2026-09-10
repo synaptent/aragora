@@ -343,10 +343,10 @@ const allDebates = await debates.list({ limit: 100, status: 'completed' });
 const debate = await debates.get('debate-123');
 await debates.delete('debate-123');
 
-// Agents namespace - registry and stats
+// Agents namespace - registry and performance
 const agents = new AgentsAPI(client);
 const agentList = await agents.list();
-const stats = await agents.getStats('anthropic-api');
+const performance = await agents.getPerformance('anthropic-api');
 
 // Workflows namespace - template management
 const workflows = new WorkflowsAPI(client);

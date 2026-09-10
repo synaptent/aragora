@@ -66,9 +66,10 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       checks: read
       contents: read
+    outputs:
+      analyzer_artifact_id: ${{ steps.receipt-upload.outputs.artifact-id }}
     env:
       EVENT_NAME: "${{ github.event_name }}"
       HISTORICAL_BACKFILL: "${{ inputs.historical_backfill || false }}"
@@ -119,13 +120,25 @@ jobs:
         with:
           name: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && format('contract-drift-main-receipt-analyzer-{0}', github.sha) || format('contract-drift-main-receipt-{0}', github.sha) }}"
           path: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && 'contract-drift-main-receipt-analyzer.json' || 'contract-drift-main-receipt.json' }}"
+
+  historical-backfill-dispatch:
+    name: contract-drift-historical-backfill-dispatch
+    needs: main-receipt
+    if: success() && github.event_name == 'workflow_dispatch' && inputs.historical_backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    env:
+      ANALYZER_ARTIFACT_ID: "${{ needs.main-receipt.outputs.analyzer_artifact_id }}"
+      SOURCE_SHA: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && github.sha || github.event_name == 'push' && github.event.after || github.sha }}"
+    steps:
       - name: Finalize completed historical receipt
-        if: github.event_name == 'workflow_dispatch' && inputs.historical_backfill
         env:
-          ANALYZER_ARTIFACT_ID: ${{ steps.receipt-upload.outputs.artifact-id }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          [[ "$ANALYZER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
           SOURCE_REF="${GITHUB_REF#refs/heads/}"
           if [[ "$SOURCE_REF" == "$GITHUB_REF" ]]; then
             SOURCE_REF="${GITHUB_REF#refs/tags/}"

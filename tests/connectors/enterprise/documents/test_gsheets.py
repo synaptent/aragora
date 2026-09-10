@@ -82,7 +82,7 @@ class TestGoogleSheetsAuthentication:
             mock_client_instance = AsyncMock()
             mock_client_instance.post = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client_instance)
-            mock_client.return_value.__aexit__ = AsyncMock()
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             token = await connector._get_access_token()
 

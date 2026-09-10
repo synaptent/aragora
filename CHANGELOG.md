@@ -3,7 +3,55 @@
 
 ## [Unreleased]
 
-_Post-v2.9.0 changes land here until the next stable tag._
+_Post-v2.10.0 changes land here until the next stable tag._
+
+
+## [2.10.0] - 2026-09-04
+
+_1,862 commits on `main` since `v2.9.0` (2026-04-25), counted at the release PR's base `b512e13055`, grouped by conventional-commit type: feat 287, fix 784, docs 321, chore 180, test 88, refactor 63, ci 33, perf 1 (the remaining 105 carry no conventional-commit prefix). This is the first release cut under the Receipt-First mission: the headline is that the dissent-preserving Decision Receipt is now producible, signable and verifiable end to end (`aragora review` → ODR export → Ed25519 signature → `aragora-verify`), and that merge-gate disagreement is published as a dataset (Disagreement Atlas v1). No breaking changes to the public Python API; `aragora/__version__.py` is the single canonical version, `scripts/check_version_alignment.py --fix` fanned it out to every manifest and doc spot it tracks (the tracked set grew during review; `python3 scripts/check_version_alignment.py` lists it). `README.md`, `docs/status/metrics/catalog.toml`, the four npm `package-lock.json` roots (including the `../../sdk/typescript` link entry in `aragora/live`), `uv.lock`, every `aragora==X.Y.Z` install command in `docs/deployment/UPGRADE_ROADMAP.md` and this file's Unreleased line were first aligned by hand and are now in the tracked set too: every spot that states the current version or release date is tracked, so a bump is `aragora/__version__.py` plus `--fix`. Release history (this entry, `### v2.10.0 Behavioral Changes` in the upgrade roadmap, prior release notes) is content and is deliberately untracked. The checker also holds every version-plus-date spot (the `docs/STATUS.md` release line, the `UPGRADE_ROADMAP.md` support matrix) to `RELEASE_DATE`, fails on a tracked pattern or manifest that matches nothing, and keeps the support matrix bounded by folding older `Supported` series into one range row. The release PR also removes the stale `docs/plans/2026-04-30-round-briefing.md` (a round briefing for PRs that merged in April 2026, no inbound references) because the docs page count sits at its ceiling and the new `docs/releases/v2.10.0.md` page must be net-zero._
+
+### Added
+- **Open Decision Receipt (ODR) pipeline:** ODR v1.0 contract and quorum→receipt bridge (#8667); in-package verification engine `odr_verify` (#8389); Ed25519 detached signing for ODR exports (#8542) and signing of configured exports (#9080); public signing key served at `/.well-known` and `/api/v2` (#8809); `aragora review` emits ODR receipts (#9343); receipts bind planning evidence in schema 1.3 (#9758); calibration-report endpoint with auditable confidence provenance in receipts (#8290).
+- **`aragora-verify` standalone offline verifier** (#8388) with a one-click PyPI publish workflow (#8693) and a post-publish public-install check (#8945).
+- **GitHub Action emits a verifiable Decision Receipt as a PR artifact** (#8669); `emit-receipt`, `receipt-reviewers` and `openrouter-api-key` inputs.
+- **Disagreement Atlas v1:** merge-gate disagreement dataset with adjudication, `scripts/build_disagreement_atlas.py`, `docs/atlas/` summary + manifest (#9951, closes #9950).
+- **Receipt-first scoreboard** `scripts/receipt_first_scoreboard.py` — ten exit metrics and six guardrails, offline cache, `--json/--markdown/--post/--parked-file` (#9968); fixed harness metrics scoreboard (#9852).
+- **Crux cards** behind `enable_crux_cards` — receipts name the load-bearing dissent (#9414), exposed via `--crux-cards` (#9506); epistemic tags, action affordances and dissent-protected situation envelopes (#9944).
+- **Merge quorum and settlement:** tier quorum (Tier 0-2 settles on one western-frontier signal) (#8507); default reviewer pair claude + openai (#8745); opt-in severity-gated dissent (#8574) and advisory-dissent settlement (#8729); Review Adjudicator core (#8749); `settle_pr` tier-aware settlement orchestrator (#8511); operator-advisory settlement relief valve (#9203); PR-keyed round budgets (#8635, #9056); Tier-4 merge-train (#8414); `--skew-auto-resolve` (#8750); unattended Tier 0-2 auto-merge on green quorum (#8503, #8767); cross-provider CLI reviewers grok-build + antigravity (#8483); VibeProxy Claude quorum transport (#9483) with conditionally countable evidence and grok verdict retry (#9770); grok reviewer 4.5 with Tier 3-4 counting narrowed to frontier Western families (#9205).
+- **Model transports and catalog:** VibeProxy-first Fable transport (#9408) and exact OpenAI routing (#9477); canonical model catalog (#9355) with router pricing (#9364, #9374) and decision-stakes router (#9322); subscription-CLI fleet with cheap-tier cost routing and fail-closed budget cap (#8481); OpenRouter Fusion as a flagged, budget-capped agent (#8444, #8446, #8515); GPT-5.6 Sol + Claude Fable 5 (#9075), Claude Opus 5 (#9588), Kimi K3 (#9778) and Qwen 3.8 Max (#9783) runtime defaults; GLM/MiniMax + Tencent/ByteDance reviewers (#9078).
+- **Native mission engine:** MissionSpec + WorkItem contracts (#8465), relay executor (#8486), orchestrator (#8484), Mission CLI (#8485), control loop (#8655), intake→decomposition bridge (#8766); evidence-bearing repository planning (#9759), commit-addressed context packs (#9757), generic repository profiles (#9756).
+- **Governance tooling:** contract-drift authority roots (#9406), trusted authority bootstrap (#9659) and accepted corrective authority (#9645); Boundary 2 module-edge enforcement (#9787); truthful method-aware route-core operation plane (#9717) with mounted-FastAPI-router evidence (#9728); live workflow state verifier (#9745); charter-compliance checker (#8968); import-graph metrics tool with shrink-only mutual-cycle ratchet (#8331) and `--list-cycles` (#9970); repo-root allowlist checker (#8369).
+- **Outcome-backed evaluation program:** corpus integrity (#9890), scorer/analysis/cost/holdout contracts and ledgers (#9900, #9904, #9905, #9909), source packets (#9913), frozen benchmark conditions and prompt contract (#9917, #9923), preflight (#9926), credentialless roster (#9928), development batch planner (#9936); Ground-Truth Integrity benchmark (#7877); source-linked quorum proof (#9225).
+- **EU AI Act:** Art. 14 human-oversight attestation and oversight-pack generator (#9417).
+- **Packaging:** root distribution installable as `aragora` (#8517); lazy connector imports so the base install runs `aragora ask` (#8522).
+- **Automation and ops:** X bookmark/like research-intake pipeline (#9859); harvest engine (#8768); steering conductor cycle (#8982), founder decision queue (#8944), terminal mailbox ack flow (#8943); nightly pristine-main health run with halt-file (#9058); cancelled-run guardian (#9133) and receipted retrigger (#8849); AWS reinstatement package (#9412); Stage-Gate Conductor drift-issue dedup (#9544); bounded Claude Fable 5 consult + `consult-fable` skill (#8796).
+
+### Changed
+- Concurrent quorum reviewers with App-token read routing (#8426).
+- Import-cycle repairs bringing `mutual_import_cycles` from 144 to 138 (ceiling 140): `gauntlet.odr_export↔odr_signing` (#9971), `debate.security_debate↔security_response` (#9972), `missions.orchestrator↔missions.swarm` (#9973), `nomic.dev_coordination.core↔dev_leases/dev_receipts` routed through the facade (#9974), `observability.middleware.tracing↔otel_bridge` via a shared `trace_state` leaf (#9975).
+- Contract-drift paydown batches removing phantom SDK endpoint pairs from both SDKs (#9969, #9976).
+- Reviewer output normalization so low-cost models reliably count (#8499); reviewer transport hardening with Anthropic-API fallback and two-tier timeouts (#8673).
+- Billing model tiers and token pricing recalibrated to the v4.1 index (#8478); documented long-context tier pricing (#9656).
+
+### Fixed
+- Receipts never mint PASS/APPROVED from zero evidence (#9306); `demo --receipt` writes one receipt file and the banner names it (#9377); debate receipt reasoning no longer truncated at 2,000 chars (#9517).
+- `aragora-verify`: explicit sdist include list so local venvs never break `python -m build` (#8812); cryptography floor raised to `>=48.0.1` (#8970).
+- Swarm: derive diagnostic western-frontier advice from genuine reviewer signals (#9710); dev receipt helper types preserved (#9219); terminal mailbox receipts advisory-only.
+- Governance: release claim bound to publication-time-knowable identity [Tier 4] (#9709); squash binding conformed to VAL-CDG-018 semantic-delta witnesses [Tier 4] (#9707).
+- 784 `fix:` commits in total across CI lanes, quorum collection, automation funnels, lane coordination, docs truthfulness and the frontend; see `git log --format='%s' v2.9.0..v2.10.0 | grep -E '^fix[(:]'` (787 with a bare `^fix` match).
+
+### Security
+- aiohttp floor bumped to `>=3.14.3` with refreshed `uv.lock` CVE pins (#9714); Dependabot sweeps across `aragora/live`, `docs-site`, `examples/sveltekit` and `ide/vscode-aragora` (dompurify, postcss, fast-uri, undici, mermaid, recharts and others).
+- `aragora-verify` dependency policy enforced in CI [Tier 4] (#9785).
+
+### CI
+- `aragora-verify` PyPI publish workflow (#8693) and post-publish install verification (#8945); PR funnel transport (#8312) with shared PR-state cache (#8339); 33 `ci:` commits in total.
+
+### Documentation
+- 321 `docs:` commits: ODR spec draft, `docs/atlas/`, GitHub Action receipt setup, governance and settlement playbooks, model-catalog and pricing references, release/status truth surfaces. Release notes: `docs/releases/v2.10.0.md`.
+
+### Tests and refactors
+- 88 `test:` and 63 `refactor:` commits, including the import-cycle repairs above and the outcome-backed evaluation fixtures.
 
 
 ## [2.9.0] - 2026-04-25

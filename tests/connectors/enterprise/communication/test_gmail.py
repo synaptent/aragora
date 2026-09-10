@@ -300,7 +300,7 @@ class TestAuthentication:
                     return_value=mock_httpx_response(200, token_response)
                 )
                 mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-                mock_instance.__aexit__ = AsyncMock()
+                mock_instance.__aexit__ = AsyncMock(return_value=False)
                 mock_client.return_value = mock_instance
 
                 result = await gmail_connector.authenticate(
@@ -334,7 +334,7 @@ class TestAuthentication:
                     return_value=mock_httpx_response(200, token_response)
                 )
                 mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-                mock_instance.__aexit__ = AsyncMock()
+                mock_instance.__aexit__ = AsyncMock(return_value=False)
                 mock_client.return_value = mock_instance
 
                 result = await gmail_connector.authenticate(
@@ -385,7 +385,7 @@ class TestAuthentication:
                     return_value=mock_httpx_response(401, {"error": "invalid_grant"})
                 )
                 mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-                mock_instance.__aexit__ = AsyncMock()
+                mock_instance.__aexit__ = AsyncMock(return_value=False)
                 mock_client.return_value = mock_instance
 
                 result = await gmail_connector.authenticate(
@@ -442,7 +442,7 @@ class TestTokenManagement:
                     return_value=mock_httpx_response(200, token_response)
                 )
                 mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-                mock_instance.__aexit__ = AsyncMock()
+                mock_instance.__aexit__ = AsyncMock(return_value=False)
                 mock_client.return_value = mock_instance
 
                 token = await authenticated_connector._get_access_token()
@@ -476,7 +476,7 @@ class TestApiRequests:
             mock_instance = AsyncMock()
             mock_instance.request = AsyncMock(return_value=mock_httpx_response(200, response_data))
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock()
+            mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_client.return_value = mock_instance
 
             result = await authenticated_connector._api_request("/messages")
@@ -520,7 +520,7 @@ class TestApiRequests:
             mock_instance = AsyncMock()
             mock_instance.request = AsyncMock(return_value=mock_response)
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock()
+            mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_client.return_value = mock_instance
 
             with patch.object(authenticated_connector, "record_failure") as mock_failure:
@@ -588,7 +588,7 @@ class TestUserInfoAndLabels:
                 mock_client = AsyncMock()
                 mock_client.post = AsyncMock(return_value=mock_httpx_response(200, label_data))
                 mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                mock_client.__aexit__ = AsyncMock()
+                mock_client.__aexit__ = AsyncMock(return_value=False)
                 mock_get_client.return_value = mock_client
 
                 label = await authenticated_connector.create_label("New Label")
@@ -1227,7 +1227,7 @@ class TestSendMessage:
                         return_value=mock_httpx_response(200, response_data)
                     )
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.send_message(
@@ -1252,7 +1252,7 @@ class TestSendMessage:
                         return_value=mock_httpx_response(200, response_data)
                     )
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.send_message(
@@ -1278,7 +1278,7 @@ class TestSendMessage:
                         return_value=mock_httpx_response(200, response_data)
                     )
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.send_message(
@@ -1346,7 +1346,7 @@ class TestReplyToMessage:
                             return_value=mock_httpx_response(200, response_data)
                         )
                         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                        mock_client.__aexit__ = AsyncMock()
+                        mock_client.__aexit__ = AsyncMock(return_value=False)
                         mock_get_client.return_value = mock_client
 
                         result = await authenticated_connector.reply_to_message(
@@ -1383,7 +1383,7 @@ class TestEmailActions:
                         return_value=mock_httpx_response(200, response_data)
                     )
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.modify_message(
@@ -1415,7 +1415,7 @@ class TestEmailActions:
                     mock_client = AsyncMock()
                     mock_client.post = AsyncMock(return_value=mock_httpx_response(200, {}))
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.trash_message("msg_123")
@@ -1431,7 +1431,7 @@ class TestEmailActions:
                     mock_client = AsyncMock()
                     mock_client.post = AsyncMock(return_value=mock_httpx_response(200, {}))
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.untrash_message("msg_123")
@@ -1559,7 +1559,7 @@ class TestBatchOperations:
                     mock_response.status_code = 204
                     mock_client.post = AsyncMock(return_value=mock_response)
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.batch_modify(
@@ -1596,7 +1596,7 @@ class TestBatchOperations:
                     mock_response.status_code = 204
                     mock_client.post = AsyncMock(return_value=mock_response)
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.batch_trash(["msg_1", "msg_2"])
@@ -1634,7 +1634,7 @@ class TestPubSubWatch:
                             return_value=mock_httpx_response(200, watch_response)
                         )
                         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                        mock_client.__aexit__ = AsyncMock()
+                        mock_client.__aexit__ = AsyncMock(return_value=False)
                         mock_get_client.return_value = mock_client
 
                         result = await authenticated_connector.setup_watch(
@@ -1664,7 +1664,7 @@ class TestPubSubWatch:
                     mock_response.status_code = 204
                     mock_client.post = AsyncMock(return_value=mock_response)
                     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-                    mock_client.__aexit__ = AsyncMock()
+                    mock_client.__aexit__ = AsyncMock(return_value=False)
                     mock_get_client.return_value = mock_client
 
                     result = await authenticated_connector.stop_watch()

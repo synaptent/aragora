@@ -14,6 +14,8 @@ Two safety invariants (enforced in :mod:`aragora.swarm.quorum_evidence`):
   operator and never post.
 
 Defaults to a dry run (prepares + lints, prints, posts nothing).
+``--post-advisory-summary`` separately opts into a non-counting summary comment,
+including on draft and Tier 3-4 PRs; it does not opt into evidence posting.
 
 Examples
 --------
@@ -27,6 +29,7 @@ Examples
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -64,7 +67,13 @@ def _hydrate_provider_secrets() -> None:
 
 def main(argv: list[str] | None = None) -> int:
     _hydrate_provider_secrets()
-    from aragora.swarm.quorum_evidence import DEFAULT_FAMILIES, run_collect_cli
+    from aragora.swarm.quorum_evidence import (
+        DEFAULT_FAMILIES,
+        CollectPreflightTransportError,
+        _render_outcome,
+        collect_outcome_from_dict,
+        run_collect_cli,
+    )
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", required=True, help="owner/name of the target repo")
@@ -109,19 +118,104 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--json", dest="json_output", action="store_true", help="Output as JSON")
+    parser.add_argument(
+        "--post-advisory-summary",
+        action="store_true",
+        help="Post a non-counting summary, editing the existing comment for this head.",
+    )
     args = parser.parse_args(argv)
 
-    return run_collect_cli(
+    captured: list[str] = []
+    exit_code = run_collect_cli(
         repo=args.repo,
         pr=args.pr,
         families=args.reviewers,
         author=args.author,
         apply=args.apply,
-        json_output=args.json_output,
+        json_output=True,
+        printer=captured.append,
         prepared_json=args.prepared_json,
         reviewer_timeout_seconds=args.reviewer_timeout,
         overall_timeout_seconds=args.overall_timeout,
     )
+    try:
+        outcome = json.loads("\n".join(captured))
+        if not isinstance(outcome, dict):
+            raise ValueError("expected an object")
+    except ValueError:
+        outcome = {"error": "collection outcome was not a JSON object"}
+    outcome.update(
+        advisory_posted=False,
+        advisory_comment_url=None,
+        advisory_reason="--post-advisory-summary not enabled",
+        advisory_edited=False,
+    )
+    if args.post_advisory_summary:
+        skip_reason = None
+        if not outcome.get("items"):
+            skip_reason = "items: []; no reviewer output"
+        elif args.prepared_json:
+            try:
+                prepared = json.loads(args.prepared_json.read_text())
+                prepared_head = prepared.get("head_sha") if isinstance(prepared, dict) else None
+                if not isinstance(prepared_head, str):
+                    raise ValueError("missing prepared head")
+                live_head = str(outcome.get("head_sha") or "")
+                if prepared_head != live_head:
+                    skip_reason = (
+                        f"prepared head {prepared_head[:7]} differs from live head "
+                        f"{live_head[:7]}; not summarised"
+                    )
+            except (OSError, ValueError):
+                skip_reason = "prepared artifact unreadable; not summarised"
+        if skip_reason:
+            outcome["advisory_reason"] = skip_reason
+        else:
+            try:
+                from aragora.swarm.advisory_dissent import (
+                    compose_advisory_dissent_summary,
+                    post_advisory_summary,
+                )
+
+                head_sha = outcome["head_sha"]
+                body = compose_advisory_dissent_summary(outcome, head_sha=head_sha)
+                result = post_advisory_summary(args.repo, args.pr, body, head_sha=head_sha)
+                outcome.update(
+                    advisory_posted=result.posted,
+                    advisory_comment_url=result.comment_url,
+                    advisory_reason=result.reason,
+                    advisory_edited=result.edited,
+                )
+            except Exception as exc:
+                outcome["advisory_reason"] = f"advisory summary failed ({type(exc).__name__})"
+    if args.json_output:
+        print(json.dumps(outcome, indent=2))
+    else:
+        error = outcome.get("error")
+        if outcome.get("transport_blocked"):
+            error = CollectPreflightTransportError(
+                repo=outcome["repo"],
+                pr=outcome["pr_number"],
+                phase=outcome["phase"],
+                error=RuntimeError(str(error)),
+                attempts=outcome["attempts"],
+            )
+        try:
+            print(
+                f"error: {error}"
+                if "error" in outcome
+                else _render_outcome(collect_outcome_from_dict(outcome))
+            )
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            print(f"error: outcome could not be rendered ({type(exc).__name__})")
+        for key in (
+            "advisory_posted",
+            "advisory_comment_url",
+            "advisory_reason",
+            "advisory_edited",
+        ):
+            print(f"  {key}: {outcome[key]}")
+    return exit_code
 
 
 if __name__ == "__main__":

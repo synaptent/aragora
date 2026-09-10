@@ -16,6 +16,13 @@ from aragora.swarm.quorum_evidence import CollectOutcome, EvidenceItem
 from scripts.emit_pr_receipt import build_receipt, main, verify_receipt
 
 
+@pytest.fixture(autouse=True)
+def unconfigured_signing(monkeypatch):
+    monkeypatch.delenv("ARAGORA_ODR_SIGNING_KEY_FILE", raising=False)
+    monkeypatch.delenv("ARAGORA_ODR_SIGNING_KEY_SECRET", raising=False)
+    monkeypatch.setenv("ARAGORA_USE_SECRETS_MANAGER", "false")
+
+
 def _outcome_dict() -> dict:
     outcome = CollectOutcome(
         repo="synaptent/aragora",
@@ -144,3 +151,48 @@ def test_main_rejects_multiline_github_output_value(tmp_path: Path, monkeypatch)
                 str(gh_out),
             ]
         )
+
+
+@pytest.mark.parametrize("mode", ["missing", "empty", "unset", "valid"])
+def test_file_signing_before_output(tmp_path, monkeypatch, capsys, mode):
+    from cryptography.hazmat.primitives import serialization
+    from aragora.gauntlet.odr_verify import verify_odr_document
+    from tests.gauntlet.odr_test_keys import odr_test_key
+
+    key_file = tmp_path / "test.pem"
+    if mode == "valid":
+        key_file.write_bytes(
+            odr_test_key().private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption(),
+            )
+        )
+        key_file.chmod(0o600)
+    if mode != "unset":
+        monkeypatch.setenv("ARAGORA_ODR_SIGNING_KEY_FILE", "" if mode == "empty" else str(key_file))
+    outcome_path = tmp_path / "outcome.json"
+    outcome_path.write_text(json.dumps(_outcome_dict()))
+    out = tmp_path / "receipt.odr.json"
+    gh_out = tmp_path / "github-output"
+    rc = main(
+        [
+            "--outcome",
+            str(outcome_path),
+            "--out",
+            str(out),
+            "--verify",
+            "--github-output",
+            str(gh_out),
+        ]
+    )
+    if mode == "missing":
+        assert rc == 1
+        assert "configured but could not be used" in capsys.readouterr().err
+        assert not out.exists() and not gh_out.exists()
+    else:
+        assert rc == 0
+        doc = json.loads(out.read_text())
+        assert bool(doc["signatures"]) == (mode == "valid")
+        key = odr_test_key().public_key() if mode == "valid" else None
+        assert verify_odr_document(doc, public_key=key).ok

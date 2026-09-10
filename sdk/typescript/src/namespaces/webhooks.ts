@@ -83,27 +83,6 @@ export interface UpdateWebhookRequest {
 }
 
 /**
- * Webhook delivery attempt
- */
-export interface WebhookDeliveryAttempt {
-  attempt_number: number;
-  timestamp: string;
-  response_code?: number;
-  response_time_ms: number;
-  error?: string;
-}
-
-/**
- * Webhook retry policy
- */
-export interface WebhookRetryPolicy {
-  max_retries: number;
-  initial_delay_ms: number;
-  max_delay_ms: number;
-  backoff_multiplier: number;
-}
-
-/**
  * Interface for the internal client used by WebhooksAPI.
  */
 interface WebhooksClientInterface {
@@ -239,56 +218,6 @@ export class WebhooksAPI {
   }
 
   // ===========================================================================
-  // Delivery Management
-  // ===========================================================================
-
-  /**
-   * List webhook deliveries.
-   */
-  async listDeliveries(webhookId: string, options?: { status?: string; limit?: number; offset?: number }): Promise<{ deliveries: WebhookDelivery[]; total: number }> {
-    return this.client.request('GET', `/api/v1/webhooks/${webhookId}/deliveries`, { params: options });
-  }
-
-  /**
-   * Get delivery details.
-   */
-  async getDelivery(webhookId: string, deliveryId: string): Promise<WebhookDelivery & { attempts: WebhookDeliveryAttempt[] }> {
-    return this.client.request('GET', `/api/v1/webhooks/${webhookId}/deliveries/${deliveryId}`);
-  }
-
-  /**
-   * Retry a failed delivery.
-   */
-  async retryDelivery(webhookId: string, deliveryId: string): Promise<{ retried: boolean; new_delivery_id: string }> {
-    return this.client.request('POST', `/api/v1/webhooks/${webhookId}/deliveries/${deliveryId}/retry`);
-  }
-
-  /**
-   * Get delivery stats for a webhook.
-   */
-  async getDeliveryStats(webhookId: string, options?: { days?: number }): Promise<{ success_rate: number; avg_latency_ms: number; total_deliveries: number; failed_deliveries: number }> {
-    return this.client.request('GET', `/api/v1/webhooks/${webhookId}/stats`, { params: options });
-  }
-
-  // ===========================================================================
-  // Retry Policy
-  // ===========================================================================
-
-  /**
-   * Get webhook retry policy.
-   */
-  async getRetryPolicy(webhookId: string): Promise<WebhookRetryPolicy> {
-    return this.client.request('GET', `/api/v1/webhooks/${webhookId}/retry-policy`);
-  }
-
-  /**
-   * Update webhook retry policy.
-   */
-  async updateRetryPolicy(webhookId: string, policy: Partial<WebhookRetryPolicy>): Promise<WebhookRetryPolicy> {
-    return this.client.request('PUT', `/api/v1/webhooks/${webhookId}/retry-policy`, { json: policy });
-  }
-
-  // ===========================================================================
   // Event Filtering
   // ===========================================================================
 
@@ -297,38 +226,6 @@ export class WebhooksAPI {
    */
   async getEventCategories(): Promise<{ categories: { name: string; description: string; events: string[] }[] }> {
     return this.client.request('GET', '/api/v1/webhooks/events/categories');
-  }
-
-  /**
-   * Subscribe to events for a webhook.
-   */
-  async subscribeEvents(webhookId: string, events: string[]): Promise<{ subscribed: string[] }> {
-    return this.client.request('POST', `/api/v1/webhooks/${webhookId}/events`, { json: { events } });
-  }
-
-  /**
-   * Unsubscribe from events for a webhook.
-   */
-  async unsubscribeEvents(webhookId: string, events: string[]): Promise<{ unsubscribed: string[] }> {
-    return this.client.request('DELETE', `/api/v1/webhooks/${webhookId}/events`, { json: { events } });
-  }
-
-  // ===========================================================================
-  // Signing and Verification
-  // ===========================================================================
-
-  /**
-   * Rotate webhook secret.
-   */
-  async rotateSecret(webhookId: string): Promise<{ new_secret: string; old_secret_valid_until: string }> {
-    return this.client.request('POST', `/api/v1/webhooks/${webhookId}/rotate-secret`);
-  }
-
-  /**
-   * Get signing key info.
-   */
-  async getSigningInfo(webhookId: string): Promise<{ algorithm: string; header_name: string; format: string }> {
-    return this.client.request('GET', `/api/v1/webhooks/${webhookId}/signing`);
   }
 
   // ===========================================================================

@@ -97,22 +97,6 @@ class DocumentsAPI:
         """
         return self._client._request("GET", f"/api/v1/documents/{document_id}")
 
-    def download(self, document_id: str) -> bytes:
-        """
-        Download document content.
-
-        Args:
-            document_id: Document identifier
-
-        Returns:
-            Document content as bytes
-        """
-        import base64
-
-        # TODO: server route not yet implemented
-        response = self._client._request("GET", f"/api/v1/documents/{document_id}/download")
-        return base64.b64decode(response.get("content", ""))
-
     def update(
         self,
         document_id: str,
@@ -193,19 +177,6 @@ class DocumentsAPI:
             "GET", f"/api/v1/documents/{document_id}/chunks", params=params
         )
 
-    def reprocess(self, document_id: str) -> dict[str, Any]:
-        """
-        Reprocess a document (regenerate chunks/embeddings).
-
-        Args:
-            document_id: Document identifier
-
-        Returns:
-            Reprocessing result
-        """
-        # TODO: server route not yet implemented
-        return self._client._request("POST", f"/api/v1/documents/{document_id}/reprocess")
-
 
 class AsyncDocumentsAPI:
     """Asynchronous documents API."""
@@ -256,14 +227,6 @@ class AsyncDocumentsAPI:
         """Get document metadata."""
         return await self._client._request("GET", f"/api/v1/documents/{document_id}")
 
-    async def download(self, document_id: str) -> bytes:
-        """Download document content."""
-        import base64
-
-        # TODO: server route not yet implemented
-        response = await self._client._request("GET", f"/api/v1/documents/{document_id}/download")
-        return base64.b64decode(response.get("content", ""))
-
     async def update(
         self,
         document_id: str,
@@ -305,8 +268,3 @@ class AsyncDocumentsAPI:
         return await self._client._request(
             "GET", f"/api/v1/documents/{document_id}/chunks", params=params
         )
-
-    async def reprocess(self, document_id: str) -> dict[str, Any]:
-        """Reprocess a document (regenerate chunks/embeddings)."""
-        # TODO: server route not yet implemented
-        return await self._client._request("POST", f"/api/v1/documents/{document_id}/reprocess")

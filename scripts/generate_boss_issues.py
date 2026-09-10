@@ -19,6 +19,7 @@ import json
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -45,7 +46,8 @@ _GENERIC_PARENT_PHRASES: tuple[str, ...] = (
     "supporting tests",
     "think about it",
 )
-_OPEN_ISSUE_LIMIT = 500
+_OPEN_ISSUE_PAGE_SIZE = 100
+_OPEN_ISSUE_MAX_PAGES = 10
 _OPEN_PR_PAGE_SIZE = 100
 _OPEN_PR_MAX_PAGES = 10
 _OPEN_PR_FILES_PAGE_SIZE = 100
@@ -67,6 +69,52 @@ class DecompositionTelemetry:
     children_emitted: int = 0
     children_rejected: int = 0
     sanitizer_rejections: int = 0
+
+
+class _AdmissionError(RuntimeError):
+    """A required queue observation is unavailable or incomplete."""
+
+    def __init__(self, stage: str, reason: str) -> None:
+        self.stage = stage
+        self.reason = reason
+        super().__init__(f"{stage}: {reason}")
+
+
+def _github_json(stage: str, endpoint: str, *fields: str) -> object:
+    command = ["gh", "api", "--method", "GET", endpoint]
+    for field in fields:
+        command.extend(["-f", field])
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        raise _AdmissionError(stage, f"{type(exc).__name__}: {exc}") from exc
+    if result.returncode != 0:
+        stderr = (result.stderr or "").strip()[:200]
+        raise _AdmissionError(stage, f"gh failed rc={result.returncode} stderr={stderr!r}")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise _AdmissionError(stage, f"invalid JSON: {exc}") from exc
+
+
+def _github_pages(endpoint: str, *, stage: str, page_size: int, max_pages: int) -> Iterator[dict]:
+    separator = "&" if "?" in endpoint else "?"
+    for page in range(1, max_pages + 1):
+        page_stage = f"{stage} page {page}"
+        payload = _github_json(page_stage, f"{endpoint}{separator}per_page={page_size}&page={page}")
+        if not isinstance(payload, list) or len(payload) > page_size:
+            raise _AdmissionError(page_stage, "expected a bounded list of records")
+        for record in payload:
+            if not isinstance(record, dict):
+                raise _AdmissionError(page_stage, "expected an object record")
+            yield record
+        if len(payload) < page_size:
+            return
+    raise _AdmissionError(stage, f"pagination exceeded configured cap ({max_pages} pages)")
+
+
+def _valid_count(value: object) -> bool:
+    return type(value) is int and value >= 0
 
 
 def format_boss_ready_body(candidate: BossIssueCandidate) -> str:
@@ -130,106 +178,56 @@ def format_boss_ready_body(candidate: BossIssueCandidate) -> str:
 
 def fetch_existing_boss_issues(repo: str) -> list[dict]:
     """Fetch open generated issues from GitHub, regardless of current labels."""
-    try:
-        result = subprocess.run(
-            [
-                "gh",
-                "issue",
-                "list",
-                "--repo",
-                repo,
-                "--state",
-                "open",
-                "--limit",
-                str(_OPEN_ISSUE_LIMIT),
-                "--json",
-                "number,title,body",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            payload = json.loads(result.stdout or "[]")
-            if isinstance(payload, list):
-                return [
-                    issue
-                    for issue in payload
-                    if isinstance(issue, dict) and "<!-- fingerprint:" in (issue.get("body") or "")
-                ]
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
-        pass
-    return []
+    issues: list[dict] = []
+    for issue in _github_pages(
+        f"repos/{repo}/issues?state=open",
+        stage="open issues",
+        page_size=_OPEN_ISSUE_PAGE_SIZE,
+        max_pages=_OPEN_ISSUE_MAX_PAGES,
+    ):
+        number = issue.get("number")
+        if (
+            not _valid_count(number)
+            or number == 0
+            or not isinstance(issue.get("title"), str)
+            or "body" not in issue
+            or (issue["body"] is not None and not isinstance(issue["body"], str))
+        ):
+            raise _AdmissionError("open issues", "malformed issue number/title/body")
+        # The REST issues endpoint also includes PRs; they are checked separately.
+        if "pull_request" in issue:
+            if not isinstance(issue["pull_request"], dict):
+                raise _AdmissionError("open issues", "malformed pull_request marker")
+            continue
+        if "<!-- fingerprint:" in (issue["body"] or ""):
+            issues.append(issue)
+    return issues
 
 
 def fetch_open_pr_files(repo: str) -> set[str]:
     """Fetch file paths changed in open PRs."""
-    try:
-        files: set[str] = set()
-        for page in range(1, _OPEN_PR_MAX_PAGES + 1):
-            prs_result = subprocess.run(
-                [
-                    "gh",
-                    "api",
-                    f"repos/{repo}/pulls?state=open&per_page={_OPEN_PR_PAGE_SIZE}&page={page}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if prs_result.returncode != 0:
-                return set()
-            prs = json.loads(prs_result.stdout or "[]")
-            if not isinstance(prs, list):
-                return set()
-            if not prs:
-                return files
-            for pr in prs:
-                if not isinstance(pr, dict):
-                    continue
-                number = pr.get("number")
-                if not isinstance(number, int):
-                    continue
-                for files_page in range(1, _OPEN_PR_FILES_MAX_PAGES + 1):
-                    files_result = subprocess.run(
-                        [
-                            "gh",
-                            "api",
-                            (
-                                f"repos/{repo}/pulls/{number}/files"
-                                f"?per_page={_OPEN_PR_FILES_PAGE_SIZE}&page={files_page}"
-                            ),
-                        ],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                    )
-                    if files_result.returncode != 0:
-                        return set()
-                    payload = json.loads(files_result.stdout or "[]")
-                    if not isinstance(payload, list):
-                        return set()
-                    if not payload:
-                        break
-                    for item in payload:
-                        path = item.get("filename", "") if isinstance(item, dict) else str(item)
-                        if path:
-                            files.add(path)
-                    if len(payload) < _OPEN_PR_FILES_PAGE_SIZE:
-                        break
-                else:
-                    raise RuntimeError(
-                        "open PR file pagination exceeded configured cap "
-                        f"({_OPEN_PR_FILES_MAX_PAGES} pages) for PR #{number}"
-                    )
-            if len(prs) < _OPEN_PR_PAGE_SIZE:
-                return files
-        raise RuntimeError(
-            f"open PR pagination exceeded configured cap ({_OPEN_PR_MAX_PAGES} pages) for {repo}"
-        )
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
-        pass
-    return set()
+    files: set[str] = set()
+    for pr in _github_pages(
+        f"repos/{repo}/pulls?state=open",
+        stage="open PRs",
+        page_size=_OPEN_PR_PAGE_SIZE,
+        max_pages=_OPEN_PR_MAX_PAGES,
+    ):
+        number = pr.get("number")
+        if not _valid_count(number) or number == 0:
+            raise _AdmissionError("open PRs", "malformed PR number")
+        stage = f"open PR #{number} files"
+        for item in _github_pages(
+            f"repos/{repo}/pulls/{number}/files",
+            stage=stage,
+            page_size=_OPEN_PR_FILES_PAGE_SIZE,
+            max_pages=_OPEN_PR_FILES_MAX_PAGES,
+        ):
+            path = item.get("filename")
+            if not isinstance(path, str) or not path.strip():
+                raise _AdmissionError(stage, "malformed filename")
+            files.add(path)
+    return files
 
 
 def _normalize_tokens(text: str) -> set[str]:
@@ -509,59 +507,27 @@ def apply_net_closure_floor(
     )
 
 
-def _search_issue_total(repo: str, qualifier: str) -> int | None:
-    """Return the total_count of a GitHub issue search, or None on failure.
-
-    Failures are reported (never silent): the underlying gh exit code /
-    stderr / parse error is printed so a fail-open closure floor is always
-    attributable to a concrete cause.
-    """
+def _search_issue_total(repo: str, qualifier: str) -> int:
+    """Return a verified count, rejecting failed or incomplete searches."""
     query = f"repo:{repo} type:issue {qualifier}"
-    try:
-        result = subprocess.run(
-            [
-                "gh",
-                "api",
-                "-X",
-                "GET",
-                "search/issues",
-                "-f",
-                f"q={query}",
-                "-f",
-                "per_page=1",
-                "--jq",
-                ".total_count",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode == 0:
-            return int(result.stdout.strip() or "0")
-        stderr = (result.stderr or "").strip()
-        print(
-            f"  gh search failed for {qualifier!r}: rc={result.returncode} stderr={stderr[:200]!r}"
-        )
-    except (subprocess.TimeoutExpired, OSError, ValueError) as exc:
-        print(f"  gh search failed for {qualifier!r}: {type(exc).__name__}: {exc}")
-    return None
+    stage = f"closure counts ({qualifier})"
+    payload = _github_json(stage, "search/issues", f"q={query}", "per_page=1")
+    if not isinstance(payload, dict) or not _valid_count(payload.get("total_count")):
+        raise _AdmissionError(stage, "missing or invalid total_count")
+    if payload.get("incomplete_results") is not False:
+        raise _AdmissionError(stage, "search completeness unverified (incomplete_results)")
+    return payload["total_count"]
 
 
-def fetch_closure_counts_7d(repo: str) -> tuple[int, int] | None:
-    """Fetch (created_7d, closed_7d) issue counts via the gh REST search API.
-
-    Returns None when either count is unavailable so the caller can fail open
-    with an explicit report instead of throttling on bad data.
-    """
+def fetch_closure_counts_7d(repo: str) -> tuple[int, int]:
+    """Fetch complete (created_7d, closed_7d) counts or block admission."""
     since = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
     created = _search_issue_total(repo, f"created:>={since}")
     closed = _search_issue_total(repo, f"closed:>={since}")
-    if created is None or closed is None:
-        return None
     return created, closed
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Generate boss-ready GitHub issues by scanning the codebase"
     )
@@ -672,15 +638,15 @@ def main() -> None:
 
     # 2. Deduplicate against existing issues (always fetch, even in dry-run)
     print("Fetching existing boss-ready issues...")
-    existing = fetch_existing_boss_issues(args.repo)
-    print(f"  {len(existing)} existing issues")
-
-    # 3. Check PR conflicts (always fetch, even in dry-run)
-    print("Fetching open PR files...")
     try:
+        existing = fetch_existing_boss_issues(args.repo)
+        print(f"  {len(existing)} existing issues")
+
+        # 3. Check PR conflicts (always fetch, even in dry-run)
+        print("Fetching open PR files...")
         pr_files = fetch_open_pr_files(args.repo)
-    except RuntimeError as exc:
-        print(f"Error: {exc}")
+    except _AdmissionError as exc:
+        print(f"BLOCKED: {exc}; 0 issues created")
         return 1
     print(f"  {len(pr_files)} files in open PRs")
 
@@ -762,30 +728,29 @@ def main() -> None:
     # the trailing-7d closed:created ratio falls below the floor.
     created_7d = args.created_7d
     closed_7d = args.closed_7d
-    counts_available = True
-    if args.closure_floor > 0 and (created_7d is None or closed_7d is None):
-        counts = fetch_closure_counts_7d(args.repo)
-        if counts is None:
-            counts_available = False
-            print(
-                f"  Closure floor {args.closure_floor:g}: 7d issue counts "
-                "unavailable (gh search failed); floor NOT applied "
-                f"(fail-open, allowed={args.max_issues})"
-            )
-        else:
-            if created_7d is None:
-                created_7d = counts[0]
-            if closed_7d is None:
-                closed_7d = counts[1]
-    if counts_available:
-        allowed, closure_reason = apply_net_closure_floor(
-            args.max_issues, created_7d or 0, closed_7d or 0, args.closure_floor
-        )
-        print(f"  {closure_reason}")
-        if allowed < len(to_create):
-            # Re-apply the substrate cap at the throttled budget so the
-            # cap's composition is preserved while the total shrinks.
-            to_create, _ = select_with_substrate_cap(to_create, allowed, effective_substrate_cap)
+    try:
+        if args.closure_floor > 0:
+            if created_7d is None or closed_7d is None:
+                counts = fetch_closure_counts_7d(args.repo)
+                if counts is None:
+                    raise _AdmissionError("closure counts", "7d issue counts unavailable")
+                if created_7d is None:
+                    created_7d = counts[0]
+                if closed_7d is None:
+                    closed_7d = counts[1]
+            if not _valid_count(created_7d) or not _valid_count(closed_7d):
+                raise _AdmissionError("closure counts", "counts must be non-negative integers")
+    except _AdmissionError as exc:
+        print(f"BLOCKED: {exc}; 0 issues created")
+        return 1
+    allowed, closure_reason = apply_net_closure_floor(
+        args.max_issues, created_7d or 0, closed_7d or 0, args.closure_floor
+    )
+    print(f"  {closure_reason}")
+    if allowed < len(to_create):
+        # Re-apply the substrate cap at the throttled budget so the
+        # cap's composition is preserved while the total shrinks.
+        to_create, _ = select_with_substrate_cap(to_create, allowed, effective_substrate_cap)
 
     # 6. Create or dry-run
     if args.dry_run:
@@ -824,7 +789,8 @@ def main() -> None:
             time.sleep(1)  # Rate limit safety
 
         print(f"\nDone: {created} created, {failed} failed")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
