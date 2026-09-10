@@ -53,9 +53,7 @@ export function ShortcutKey({ keys, size = 'md', className = '' }: ShortcutKeyPr
         {parts.map((part, i) => (
           <span key={i} className="inline-flex items-center gap-1">
             <kbd className={baseClasses}>{part}</kbd>
-            {i < parts.length - 1 && (
-              <span className="text-text-muted text-xs">then</span>
-            )}
+            {i < parts.length - 1 && <span className="text-text-muted text-xs">then</span>}
           </span>
         ))}
       </span>
@@ -90,11 +88,7 @@ export function ShortcutKey({ keys, size = 'md', className = '' }: ShortcutKeyPr
   }
 
   // For Windows/Linux or single keys
-  return (
-    <kbd className={`${baseClasses} ${className}`}>
-      {formatted}
-    </kbd>
-  );
+  return <kbd className={`${baseClasses} ${className}`}>{formatted}</kbd>;
 }
 
 /**
@@ -104,11 +98,7 @@ export function ShortcutKey({ keys, size = 'md', className = '' }: ShortcutKeyPr
  * Useful for tooltips and compact displays.
  */
 export function ShortcutKeyInline({ keys }: { keys: KeyBinding }) {
-  return (
-    <span className="text-text-muted font-theme-data text-xs">
-      {formatKeyBinding(keys)}
-    </span>
-  );
+  return <span className="text-text-muted font-theme-data text-xs">{formatKeyBinding(keys)}</span>;
 }
 
 export default ShortcutKey;

@@ -41,7 +41,9 @@ export function LearningPanel({ apiBase }: LearningPanelProps) {
       setError(null);
       const [ratingsRes, calibrationsRes, patternsRes] = await Promise.all([
         apiFetch<{ ratings: Record<string, number> }>(`${apiBase}/autonomous/learning/ratings`),
-        apiFetch<{ calibrations: Record<string, Calibration> }>(`${apiBase}/autonomous/learning/calibrations`),
+        apiFetch<{ calibrations: Record<string, Calibration> }>(
+          `${apiBase}/autonomous/learning/calibrations`,
+        ),
         apiFetch<{ patterns: Pattern[] }>(`${apiBase}/autonomous/learning/patterns`),
       ]);
       if (ratingsRes.error) {
@@ -99,7 +101,9 @@ export function LearningPanel({ apiBase }: LearningPanelProps) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500/30 rounded text-red-400">
         {error}
-        <button onClick={fetchData} className="ml-4 text-sm underline">Retry</button>
+        <button onClick={fetchData} className="ml-4 text-sm underline">
+          Retry
+        </button>
       </div>
     );
   }
@@ -138,8 +142,9 @@ export function LearningPanel({ apiBase }: LearningPanelProps) {
   };
 
   const renderCalibrations = () => {
-    const sortedCalibrations = Object.entries(calibrations)
-      .sort((a, b) => b[1].elo_rating - a[1].elo_rating);
+    const sortedCalibrations = Object.entries(calibrations).sort(
+      (a, b) => b[1].elo_rating - a[1].elo_rating,
+    );
 
     if (sortedCalibrations.length === 0) {
       return (
@@ -153,10 +158,7 @@ export function LearningPanel({ apiBase }: LearningPanelProps) {
     return (
       <div className="space-y-2">
         {sortedCalibrations.map(([agent, cal]) => (
-          <div
-            key={agent}
-            className="p-4 border border-white/10 bg-white/5 rounded-lg"
-          >
+          <div key={agent} className="p-4 border border-white/10 bg-white/5 rounded-lg">
             <div className="flex items-center justify-between mb-2">
               <span className="font-medium text-white">{agent}</span>
               <span className={`text-lg font-bold ${getRatingColor(cal.elo_rating)}`}>
@@ -201,10 +203,7 @@ export function LearningPanel({ apiBase }: LearningPanelProps) {
     return (
       <div className="space-y-2">
         {patterns.map((pattern) => (
-          <div
-            key={pattern.id}
-            className="p-4 border border-white/10 bg-white/5 rounded-lg"
-          >
+          <div key={pattern.id} className="p-4 border border-white/10 bg-white/5 rounded-lg">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -218,12 +217,18 @@ export function LearningPanel({ apiBase }: LearningPanelProps) {
                 <div className="text-sm text-white">{pattern.description}</div>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {pattern.agents_involved.map((agent) => (
-                    <span key={agent} className="px-1.5 py-0.5 rounded text-xs bg-white/10 text-white/50">
+                    <span
+                      key={agent}
+                      className="px-1.5 py-0.5 rounded text-xs bg-white/10 text-white/50"
+                    >
                       {agent}
                     </span>
                   ))}
                   {pattern.topics.map((topic) => (
-                    <span key={topic} className="px-1.5 py-0.5 rounded text-xs bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)]">
+                    <span
+                      key={topic}
+                      className="px-1.5 py-0.5 rounded text-xs bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)]"
+                    >
                       {topic}
                     </span>
                   ))}
@@ -262,7 +267,9 @@ export function LearningPanel({ apiBase }: LearningPanelProps) {
             aria-controls="calibrations-panel"
             onClick={() => setActiveTab('calibrations')}
             className={`px-3 py-1.5 text-sm rounded transition-colors ${
-              activeTab === 'calibrations' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'
+              activeTab === 'calibrations'
+                ? 'bg-white/10 text-white'
+                : 'text-white/50 hover:text-white'
             }`}
           >
             Calibrations ({Object.keys(calibrations).length})

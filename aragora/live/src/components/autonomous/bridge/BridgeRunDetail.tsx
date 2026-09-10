@@ -63,9 +63,7 @@ function buildSessionsJsonView(run: AgentBridgeRunDetail) {
 function orderedRoleEntries(run: AgentBridgeRunDetail) {
   const orderedEntries = run.participants
     .map((participant) => [participant.role, run.roles[participant.role]] as const)
-    .filter(
-      (entry): entry is [string, AgentBridgeRunDetail['roles'][string]] => Boolean(entry[1])
-    );
+    .filter((entry): entry is [string, AgentBridgeRunDetail['roles'][string]] => Boolean(entry[1]));
 
   const seenRoles = new Set(orderedEntries.map(([role]) => role));
   const remainingEntries = Object.entries(run.roles).filter(([role]) => !seenRoles.has(role));
@@ -126,7 +124,9 @@ export function BridgeRunDetail({ runId }: BridgeRunDetailProps) {
       <section className="rounded-xl border border-white/10 bg-white/5 p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-[0.25em] text-white/35">Agent Bridge Run</div>
+            <div className="text-xs uppercase tracking-[0.25em] text-white/35">
+              Agent Bridge Run
+            </div>
             <h1 className="mt-1 text-3xl font-theme-display text-white">{run.run_id}</h1>
             <p className="mt-2 max-w-3xl text-sm text-white/60">{run.task}</p>
           </div>
@@ -165,7 +165,9 @@ export function BridgeRunDetail({ runId }: BridgeRunDetailProps) {
       />
 
       <section className="space-y-3">
-        <div className="text-xs uppercase tracking-[0.25em] text-white/35">Participant sessions</div>
+        <div className="text-xs uppercase tracking-[0.25em] text-white/35">
+          Participant sessions
+        </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {roleEntries.map(([role, session]) => (
             <BridgeRoleCard key={role} role={role} session={session} />
@@ -178,20 +180,9 @@ export function BridgeRunDetail({ runId }: BridgeRunDetailProps) {
           ariaLabel="Bridge run detail tabs"
           defaultTab="transcript"
           tabs={[
-            {
-              id: 'transcript',
-              label: 'Transcript',
-              badge: transcriptQuery.turns.length,
-            },
-            {
-              id: 'events',
-              label: 'Events',
-              badge: eventsQuery.events.length,
-            },
-            {
-              id: 'metadata',
-              label: 'Metadata',
-            },
+            { id: 'transcript', label: 'Transcript', badge: transcriptQuery.turns.length },
+            { id: 'events', label: 'Events', badge: eventsQuery.events.length },
+            { id: 'metadata', label: 'Metadata' },
           ]}
           variant="underline"
         >

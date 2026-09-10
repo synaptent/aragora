@@ -22,17 +22,19 @@ export function EvidenceCitationCard({ citation }: EvidenceCitationCardProps) {
           <span className="font-theme-data text-xs text-[var(--acid-cyan)]">
             Round {citation.round}
           </span>
-          <span className="font-theme-data text-xs text-text-muted">
-            {citation.agent}
-          </span>
+          <span className="font-theme-data text-xs text-text-muted">{citation.agent}</span>
           <SourceTypeBadge sourceType={citation.source_type} />
         </div>
         {citation.reliability_score !== undefined && (
-          <span className={`font-theme-data text-xs px-2 py-0.5 rounded ${
-            citation.reliability_score >= 0.7 ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-            citation.reliability_score >= 0.4 ? 'bg-acid-yellow/20 text-[var(--acid-yellow)]' :
-            'bg-acid-red/20 text-acid-red'
-          }`}>
+          <span
+            className={`font-theme-data text-xs px-2 py-0.5 rounded ${
+              citation.reliability_score >= 0.7
+                ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                : citation.reliability_score >= 0.4
+                  ? 'bg-acid-yellow/20 text-[var(--acid-yellow)]'
+                  : 'bg-acid-red/20 text-acid-red'
+            }`}
+          >
             {(citation.reliability_score * 100).toFixed(0)}% reliable
           </span>
         )}
@@ -61,7 +63,9 @@ export function EvidenceCitationCard({ citation }: EvidenceCitationCardProps) {
       </div>
 
       {/* Confidence metrics */}
-      {(citation.confidence !== undefined || citation.freshness !== undefined || citation.authority !== undefined) && (
+      {(citation.confidence !== undefined ||
+        citation.freshness !== undefined ||
+        citation.authority !== undefined) && (
         <div className="space-y-1.5 pt-3 border-t border-[var(--accent)]/10">
           {citation.confidence !== undefined && (
             <ConfidenceBar value={citation.confidence} label="Conf." color="acid-green" />

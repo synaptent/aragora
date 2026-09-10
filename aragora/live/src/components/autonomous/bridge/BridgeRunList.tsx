@@ -50,10 +50,7 @@ export function BridgeRunList() {
       {error ? (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
           Bridge API unreachable
-          <button
-            onClick={retry}
-            className="ml-3 underline underline-offset-2 hover:no-underline"
-          >
+          <button onClick={retry} className="ml-3 underline underline-offset-2 hover:no-underline">
             Retry
           </button>
         </div>

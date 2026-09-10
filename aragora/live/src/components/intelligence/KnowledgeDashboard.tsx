@@ -63,7 +63,9 @@ export function KnowledgeDashboard({ stats, loading = false }: KnowledgeDashboar
                 key={i}
                 className="flex items-center gap-2 p-2 border border-[var(--accent)]/10 rounded hover:bg-[var(--accent)]/5 transition-colors"
               >
-                <span className="text-[var(--acid-cyan)] font-theme-data text-xs w-6">{i + 1}.</span>
+                <span className="text-[var(--acid-cyan)] font-theme-data text-xs w-6">
+                  {i + 1}.
+                </span>
                 <span className="text-text font-theme-data text-sm truncate">{query}</span>
               </div>
             ))}
@@ -74,7 +76,9 @@ export function KnowledgeDashboard({ stats, loading = false }: KnowledgeDashboar
       {/* Recommendations */}
       {stats.recommendations && stats.recommendations.length > 0 && (
         <div className="card p-4">
-          <h3 className="font-theme-data text-sm text-[var(--acid-yellow)] mb-3">{'>'} RECOMMENDATIONS</h3>
+          <h3 className="font-theme-data text-sm text-[var(--acid-yellow)] mb-3">
+            {'>'} RECOMMENDATIONS
+          </h3>
           <div className="space-y-2">
             {stats.recommendations.map((rec, i) => (
               <div

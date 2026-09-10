@@ -40,10 +40,7 @@ const DEBATE_REFRESH_TRIGGERS = new Set([
 ]);
 
 /** Events that additionally affect usage / cost KPIs. */
-const USAGE_REFRESH_TRIGGERS = new Set([
-  'debate_end',
-  'debate_complete',
-]);
+const USAGE_REFRESH_TRIGGERS = new Set(['debate_end', 'debate_complete']);
 
 /**
  * Subscribes to global debate lifecycle events via WebSocket and
@@ -97,10 +94,7 @@ export function useDashboardEvents(): UseDashboardEventsReturn {
     logPrefix: '[Dashboard]',
   });
 
-  return {
-    isConnected,
-    updateCount,
-  };
+  return { isConnected, updateCount };
 }
 
 export default useDashboardEvents;

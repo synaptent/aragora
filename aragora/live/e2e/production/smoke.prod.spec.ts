@@ -100,9 +100,7 @@ test.describe('Production Smoke Tests', () => {
   test.describe('Response Times', () => {
     test('aragora.ai should load within 5 seconds', async ({ page }) => {
       const startTime = Date.now();
-      await page.goto(PRODUCTION_DOMAINS.landing, {
-        waitUntil: 'domcontentloaded',
-      });
+      await page.goto(PRODUCTION_DOMAINS.landing, { waitUntil: 'domcontentloaded' });
       const loadTime = Date.now() - startTime;
 
       console.log(`aragora.ai load time: ${loadTime}ms`);
@@ -111,9 +109,7 @@ test.describe('Production Smoke Tests', () => {
 
     test('live.aragora.ai should load within 5 seconds', async ({ page }) => {
       const startTime = Date.now();
-      await page.goto(PRODUCTION_DOMAINS.dashboard, {
-        waitUntil: 'domcontentloaded',
-      });
+      await page.goto(PRODUCTION_DOMAINS.dashboard, { waitUntil: 'domcontentloaded' });
       const loadTime = Date.now() - startTime;
 
       console.log(`live.aragora.ai load time: ${loadTime}ms`);
@@ -122,9 +118,7 @@ test.describe('Production Smoke Tests', () => {
 
     test('API health check should respond within 2 seconds', async ({ page }) => {
       const startTime = Date.now();
-      await page.goto(`${PRODUCTION_DOMAINS.api}/api/health`, {
-        waitUntil: 'domcontentloaded',
-      });
+      await page.goto(`${PRODUCTION_DOMAINS.api}/api/health`, { waitUntil: 'domcontentloaded' });
       const loadTime = Date.now() - startTime;
 
       console.log(`API health check response time: ${loadTime}ms`);
@@ -133,9 +127,7 @@ test.describe('Production Smoke Tests', () => {
   });
 
   test.describe('Console Errors', () => {
-    test('aragora.ai should have no console errors on load', async ({
-      productionPage,
-    }) => {
+    test('aragora.ai should have no console errors on load', async ({ productionPage }) => {
       await productionPage.goto(PRODUCTION_DOMAINS.landing);
       await productionPage.waitForHydration();
 
@@ -153,9 +145,7 @@ test.describe('Production Smoke Tests', () => {
       expect(errors.length).toBe(0);
     });
 
-    test('live.aragora.ai should have no console errors on load', async ({
-      productionPage,
-    }) => {
+    test('live.aragora.ai should have no console errors on load', async ({ productionPage }) => {
       await productionPage.goto(PRODUCTION_DOMAINS.dashboard);
       await productionPage.waitForHydration();
       await productionPage.dismissBootAnimation();
@@ -190,9 +180,7 @@ test.describe('Production Smoke Tests', () => {
 
     test('HTTP should redirect to HTTPS', async ({ page }) => {
       // Try HTTP version of main domain
-      const _response = await page.goto('http://aragora.ai', {
-        waitUntil: 'domcontentloaded',
-      });
+      const _response = await page.goto('http://aragora.ai', { waitUntil: 'domcontentloaded' });
 
       // Should have redirected to HTTPS
       const finalUrl = page.url();

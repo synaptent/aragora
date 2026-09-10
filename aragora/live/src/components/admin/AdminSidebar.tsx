@@ -53,14 +53,10 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
         {/* Header */}
         <div className="p-3 border-b border-[var(--accent)]/20">
           {!collapsed && (
-            <div className="font-theme-data text-sm text-[var(--accent)]">
-              ADMIN PANEL
-            </div>
+            <div className="font-theme-data text-sm text-[var(--accent)]">ADMIN PANEL</div>
           )}
           {collapsed && (
-            <div className="font-theme-data text-lg text-[var(--accent)] text-center">
-              A
-            </div>
+            <div className="font-theme-data text-lg text-[var(--accent)] text-center">A</div>
           )}
         </div>
 
@@ -74,9 +70,10 @@ export function AdminSidebar({ collapsed = false, onToggleCollapse }: AdminSideb
                 href={item.href}
                 className={`
                   flex items-center gap-3 px-3 py-2 rounded-md transition-colors font-theme-data text-sm
-                  ${active
-                    ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
-                    : 'text-text-muted hover:bg-surface-elevated hover:text-text'
+                  ${
+                    active
+                      ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
+                      : 'text-text-muted hover:bg-surface-elevated hover:text-text'
                   }
                 `}
                 title={collapsed ? item.label : undefined}

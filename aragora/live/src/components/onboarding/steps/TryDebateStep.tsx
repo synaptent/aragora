@@ -20,7 +20,7 @@ export function TryDebateStep() {
 
   // Get templates for the selected industry
   const industryTemplates = TEMPLATES.filter(
-    (t) => t.category === (selectedIndustry as TemplateCategory)
+    (t) => t.category === (selectedIndustry as TemplateCategory),
   );
   const fallbackTemplates = TEMPLATES.filter((t) => t.category === 'general');
   const templates = industryTemplates.length > 0 ? industryTemplates : fallbackTemplates;
@@ -61,9 +61,7 @@ export function TryDebateStep() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-theme-data text-[var(--acid-green)] mb-2">
-          Try a Free Debate
-        </h2>
+        <h2 className="text-lg font-theme-data text-[var(--acid-green)] mb-2">Try a Free Debate</h2>
         <p className="text-sm font-theme-data text-[var(--text-muted)]">
           See how AI agents stress-test a decision. Pick a topic or use one of ours.
         </p>
@@ -82,16 +80,19 @@ export function TryDebateStep() {
 
         {/* Suggested topics from templates */}
         <div className="flex flex-wrap gap-2 mt-2">
-          {templates.slice(0, 3).flatMap((t) => t.exampleTopics.slice(0, 1)).map((ex) => (
-            <button
-              key={ex}
-              onClick={() => setTopic(ex)}
-              disabled={loading}
-              className="text-xs px-2 py-1 border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--acid-green)] hover:border-[var(--acid-green)] transition-colors disabled:opacity-50"
-            >
-              {ex}
-            </button>
-          ))}
+          {templates
+            .slice(0, 3)
+            .flatMap((t) => t.exampleTopics.slice(0, 1))
+            .map((ex) => (
+              <button
+                key={ex}
+                onClick={() => setTopic(ex)}
+                disabled={loading}
+                className="text-xs px-2 py-1 border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--acid-green)] hover:border-[var(--acid-green)] transition-colors disabled:opacity-50"
+              >
+                {ex}
+              </button>
+            ))}
         </div>
       </div>
 
@@ -136,11 +137,13 @@ export function TryDebateStep() {
             <span className="text-[var(--acid-green)] font-theme-data font-bold text-sm">
               Debate Complete
             </span>
-            <span className={`text-xs font-theme-data px-2 py-0.5 border ${
-              (trialDebateResult as Record<string, unknown>).consensus_reached
-                ? 'border-green-500/30 text-green-400 bg-green-500/10'
-                : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10'
-            }`}>
+            <span
+              className={`text-xs font-theme-data px-2 py-0.5 border ${
+                (trialDebateResult as Record<string, unknown>).consensus_reached
+                  ? 'border-green-500/30 text-green-400 bg-green-500/10'
+                  : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10'
+              }`}
+            >
               {(trialDebateResult as Record<string, unknown>).consensus_reached
                 ? 'CONSENSUS'
                 : 'NO CONSENSUS'}
@@ -156,13 +159,14 @@ export function TryDebateStep() {
 
           <div className="flex items-center gap-4 text-xs font-theme-data text-[var(--text-muted)]">
             <span>
-              {(Number((trialDebateResult as Record<string, unknown>).confidence) * 100).toFixed(0)}% confidence
+              {(Number((trialDebateResult as Record<string, unknown>).confidence) * 100).toFixed(0)}
+              % confidence
             </span>
+            <span>{String((trialDebateResult as Record<string, unknown>).rounds_used)} rounds</span>
             <span>
-              {String((trialDebateResult as Record<string, unknown>).rounds_used)} rounds
-            </span>
-            <span>
-              {((trialDebateResult as Record<string, unknown>).participants as string[])?.length || 0} agents
+              {((trialDebateResult as Record<string, unknown>).participants as string[])?.length ||
+                0}{' '}
+              agents
             </span>
           </div>
 

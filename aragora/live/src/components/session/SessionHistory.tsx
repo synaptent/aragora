@@ -29,8 +29,8 @@ export function SessionHistory({ className = '' }: SessionHistoryProps) {
   const [revokingAll, setRevokingAll] = useState(false);
   const [confirmRevokeAll, setConfirmRevokeAll] = useState(false);
 
-  const currentSession = sessions.find(s => s.id === currentSessionId);
-  const otherSessions = sessions.filter(s => s.id !== currentSessionId);
+  const currentSession = sessions.find((s) => s.id === currentSessionId);
+  const otherSessions = sessions.filter((s) => s.id !== currentSessionId);
 
   const handleRevokeSession = async (sessionId: string) => {
     setRevoking(sessionId);
@@ -73,7 +73,9 @@ export function SessionHistory({ className = '' }: SessionHistoryProps) {
   };
 
   // Get browser from device name
-  const getBrowserBadge = (deviceName: string): { label: string; variant: 'info' | 'purple' | 'orange' | 'neutral' } => {
+  const getBrowserBadge = (
+    deviceName: string,
+  ): { label: string; variant: 'info' | 'purple' | 'orange' | 'neutral' } => {
     const lower = deviceName.toLowerCase();
     if (lower.includes('chrome')) return { label: 'Chrome', variant: 'info' };
     if (lower.includes('firefox')) return { label: 'Firefox', variant: 'orange' };
@@ -115,12 +117,8 @@ export function SessionHistory({ className = '' }: SessionHistoryProps) {
               <span className="text-sm font-theme-data text-text truncate">
                 {session.device_name}
               </span>
-              {isCurrent && (
-                <StatusBadge label="Current" variant="success" size="sm" />
-              )}
-              {isExpired && (
-                <StatusBadge label="Expired" variant="error" size="sm" />
-              )}
+              {isCurrent && <StatusBadge label="Current" variant="success" size="sm" />}
+              {isExpired && <StatusBadge label="Expired" variant="error" size="sm" />}
             </div>
 
             <div className="flex items-center gap-3 text-xs font-theme-data text-text-muted mt-2">
@@ -158,9 +156,7 @@ export function SessionHistory({ className = '' }: SessionHistoryProps) {
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
         <div>
-          <h3 className="text-sm font-theme-data text-[var(--accent)]">
-            [ACTIVE SESSIONS]
-          </h3>
+          <h3 className="text-sm font-theme-data text-[var(--accent)]">[ACTIVE SESSIONS]</h3>
           <p className="text-xs font-theme-data text-text-muted mt-1">
             Manage your active login sessions across devices
           </p>
@@ -237,16 +233,14 @@ export function SessionHistory({ className = '' }: SessionHistoryProps) {
               </button>
             )}
           </div>
-          {otherSessions.map(session => renderSessionRow(session, false))}
+          {otherSessions.map((session) => renderSessionRow(session, false))}
         </div>
       )}
 
       {/* Empty State */}
       {sessions.length === 0 && !loading && (
         <div className="p-8 text-center">
-          <p className="text-sm font-theme-data text-text-muted">
-            No active sessions found
-          </p>
+          <p className="text-sm font-theme-data text-text-muted">No active sessions found</p>
         </div>
       )}
 

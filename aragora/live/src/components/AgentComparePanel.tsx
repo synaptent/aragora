@@ -20,12 +20,7 @@ interface AgentProfile {
 
 interface ComparisonResult {
   agents: AgentProfile[];
-  head_to_head?: {
-    matches: number;
-    agent1_wins: number;
-    agent2_wins: number;
-    draws: number;
-  };
+  head_to_head?: { matches: number; agent1_wins: number; agent2_wins: number; draws: number };
 }
 
 interface AgentComparePanelProps {
@@ -33,7 +28,10 @@ interface AgentComparePanelProps {
   availableAgents?: string[];
 }
 
-export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: AgentComparePanelProps) {
+export function AgentComparePanel({
+  initialAgents = [],
+  availableAgents = [],
+}: AgentComparePanelProps) {
   const { isAuthenticated, isLoading: authLoading, tokens } = useAuth();
   const [agent1, setAgent1] = useState(initialAgents[0] || '');
   const [agent2, setAgent2] = useState(initialAgents[1] || '');
@@ -60,12 +58,12 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
     }
 
     fetch(`${apiBase}/api/rankings`, { headers })
-      .then(res => {
+      .then((res) => {
         // Don't retry on rate limit - gracefully handle
         if (res.status === 429) return { rankings: [] };
         return res.json();
       })
-      .then(data => {
+      .then((data) => {
         const agentNames = (data.rankings || []).map((r: { name: string }) => r.name);
         setAgents(agentNames);
         // Set defaults only on initial fetch
@@ -91,7 +89,7 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
 
       const response = await fetch(
         `${apiBase}/api/agent/compare?agents=${encodeURIComponent(agent1)}&agents=${encodeURIComponent(agent2)}`,
-        { headers }
+        { headers },
       );
 
       if (!response.ok) {
@@ -134,7 +132,12 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
       {/* Agent Selection */}
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="flex-1">
-          <label htmlFor="compare-agent-1" className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">Agent 1</label>
+          <label
+            htmlFor="compare-agent-1"
+            className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1"
+          >
+            Agent 1
+          </label>
           <select
             id="compare-agent-1"
             value={agent1}
@@ -154,7 +157,12 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
           <span className="text-zinc-400 dark:text-zinc-500 text-xl">vs</span>
         </div>
         <div className="flex-1">
-          <label htmlFor="compare-agent-2" className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">Agent 2</label>
+          <label
+            htmlFor="compare-agent-2"
+            className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1"
+          >
+            Agent 2
+          </label>
           <select
             id="compare-agent-2"
             value={agent2}
@@ -197,7 +205,8 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
             <div className="flex items-center justify-center">
               {getRatingDiff() !== null && (
                 <span className={getRatingDiff()! > 0 ? 'text-green-400' : 'text-red-400'}>
-                  {getRatingDiff()! > 0 ? '+' : ''}{getRatingDiff()!.toFixed(0)}
+                  {getRatingDiff()! > 0 ? '+' : ''}
+                  {getRatingDiff()!.toFixed(0)}
                 </span>
               )}
             </div>
@@ -215,11 +224,13 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-zinc-700">
                   <th className="py-2 px-3 text-left text-blue-400">
-                    {agent1} <TrustBadge calibration={comparison.agents[0]?.calibration} size="sm" />
+                    {agent1}{' '}
+                    <TrustBadge calibration={comparison.agents[0]?.calibration} size="sm" />
                   </th>
                   <th className="py-2 px-3 text-center text-zinc-500 dark:text-zinc-400">Stat</th>
                   <th className="py-2 px-3 text-right text-purple-400">
-                    {agent2} <TrustBadge calibration={comparison.agents[1]?.calibration} size="sm" />
+                    {agent2}{' '}
+                    <TrustBadge calibration={comparison.agents[1]?.calibration} size="sm" />
                   </th>
                 </tr>
               </thead>
@@ -235,11 +246,17 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
                   <td className="py-2 px-3 text-right text-white">{comparison.agents[1].losses}</td>
                 </tr>
                 <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                  <td className={`py-2 px-3 ${getWinRateColor(comparison.agents[0]?.win_rate ?? 0)}`}>
+                  <td
+                    className={`py-2 px-3 ${getWinRateColor(comparison.agents[0]?.win_rate ?? 0)}`}
+                  >
                     {((Number(comparison.agents[0]?.win_rate) || 0) * 100).toFixed(1)}%
                   </td>
-                  <td className="py-2 px-3 text-center text-zinc-500 dark:text-zinc-400">Win Rate</td>
-                  <td className={`py-2 px-3 text-right ${getWinRateColor(comparison.agents[1]?.win_rate ?? 0)}`}>
+                  <td className="py-2 px-3 text-center text-zinc-500 dark:text-zinc-400">
+                    Win Rate
+                  </td>
+                  <td
+                    className={`py-2 px-3 text-right ${getWinRateColor(comparison.agents[1]?.win_rate ?? 0)}`}
+                  >
                     {((Number(comparison.agents[1]?.win_rate) || 0) * 100).toFixed(1)}%
                   </td>
                 </tr>
@@ -253,7 +270,9 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
                     <td className="py-2 px-3 text-white">
                       {((Number(comparison.agents[0].consistency_score) || 0) * 100).toFixed(0)}%
                     </td>
-                    <td className="py-2 px-3 text-center text-zinc-500 dark:text-zinc-400">Consistency</td>
+                    <td className="py-2 px-3 text-center text-zinc-500 dark:text-zinc-400">
+                      Consistency
+                    </td>
                     <td className="py-2 px-3 text-right text-white">
                       {comparison.agents[1].consistency_score !== undefined
                         ? `${((Number(comparison.agents[1].consistency_score) || 0) * 100).toFixed(0)}%`
@@ -268,7 +287,9 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
           {/* Head-to-Head */}
           {comparison.head_to_head && comparison.head_to_head.matches > 0 && (
             <div className="bg-zinc-50 dark:bg-zinc-900 rounded p-4">
-              <h4 className="text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-3">Head-to-Head Record</h4>
+              <h4 className="text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-3">
+                Head-to-Head Record
+              </h4>
               <div className="flex items-center justify-between">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-400">
@@ -299,13 +320,18 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
           {/* Domain Overlap */}
           {comparison.agents[0].domains && comparison.agents[1].domains && (
             <div className="bg-zinc-50 dark:bg-zinc-900 rounded p-4">
-              <h4 className="text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-3">Domain Expertise</h4>
+              <h4 className="text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-3">
+                Domain Expertise
+              </h4>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">{agent1}</div>
                   <div className="flex flex-wrap gap-1">
                     {comparison.agents[0].domains.slice(0, 5).map((domain, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-blue-900/50 text-blue-300 text-xs rounded">
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 bg-blue-900/50 text-blue-300 text-xs rounded"
+                      >
                         {domain}
                       </span>
                     ))}
@@ -315,7 +341,10 @@ export function AgentComparePanel({ initialAgents = [], availableAgents = [] }: 
                   <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">{agent2}</div>
                   <div className="flex flex-wrap gap-1">
                     {comparison.agents[1].domains.slice(0, 5).map((domain, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded">
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 bg-purple-900/50 text-purple-300 text-xs rounded"
+                      >
                         {domain}
                       </span>
                     ))}

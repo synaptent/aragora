@@ -13,13 +13,10 @@ const groups: { label: string; key: GoalTypeConfig['group']; types: GoalNodeType
  * Drag-and-drop palette for adding goal nodes to the canvas.
  */
 export function GoalPalette() {
-  const onDragStart = useCallback(
-    (e: React.DragEvent, goalType: GoalNodeType) => {
-      e.dataTransfer.setData('application/goal-node-type', goalType);
-      e.dataTransfer.effectAllowed = 'move';
-    },
-    []
-  );
+  const onDragStart = useCallback((e: React.DragEvent, goalType: GoalNodeType) => {
+    e.dataTransfer.setData('application/goal-node-type', goalType);
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
 
   return (
     <div className="w-48 border-r border-[var(--border)] bg-[var(--surface)] p-3 overflow-y-auto">

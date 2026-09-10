@@ -6,9 +6,10 @@ test.describe('Authentication', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Look for sign in button
-    const signInButton = page.locator('button, a').filter({
-      hasText: /sign in|log in|login/i
-    }).first();
+    const signInButton = page
+      .locator('button, a')
+      .filter({ hasText: /sign in|log in|login/i })
+      .first();
 
     // May or may not be visible depending on auth state
     if (await signInButton.isVisible()) {
@@ -21,18 +22,17 @@ test.describe('Authentication', () => {
     await page.route('**/api/auth/**', async (route) => {
       await route.fulfill({
         status: 302,
-        headers: {
-          'Location': 'https://oauth.provider.com/authorize',
-        },
+        headers: { Location: 'https://oauth.provider.com/authorize' },
       });
     });
 
     await page.goto('/');
     await aragoraPage.dismissAllOverlays();
 
-    const signInButton = page.locator('button, a').filter({
-      hasText: /sign in|log in|google|github/i
-    }).first();
+    const signInButton = page
+      .locator('button, a')
+      .filter({ hasText: /sign in|log in|google|github/i })
+      .first();
 
     if (await signInButton.isVisible()) {
       // Just verify button is clickable, don't follow redirect
@@ -47,18 +47,16 @@ test.describe('Authentication', () => {
     });
 
     await mockApiResponse(page, '**/api/auth/me', {
-      user: {
-        id: 'user-123',
-        email: 'test@example.com',
-        name: 'Test User',
-      },
+      user: { id: 'user-123', email: 'test@example.com', name: 'Test User' },
     });
 
     await page.goto('/');
     await aragoraPage.dismissAllOverlays();
 
     // Look for user menu or avatar
-    const userMenu = page.locator('[class*="user"], [class*="avatar"], [data-testid="user-menu"]').first();
+    const userMenu = page
+      .locator('[class*="user"], [class*="avatar"], [data-testid="user-menu"]')
+      .first();
 
     if (await userMenu.isVisible()) {
       await expect(userMenu).toBeEnabled();
@@ -86,9 +84,10 @@ test.describe('Authentication', () => {
       await userMenu.click();
 
       // Find sign out button
-      const signOutButton = page.locator('button, a').filter({
-        hasText: /sign out|log out|logout/i
-      }).first();
+      const signOutButton = page
+        .locator('button, a')
+        .filter({ hasText: /sign out|log out|logout/i })
+        .first();
 
       if (await signOutButton.isVisible()) {
         await signOutButton.click();
@@ -127,7 +126,11 @@ test.describe('Authentication', () => {
     await page.waitForTimeout(1000);
 
     const url = page.url();
-    const hasLoginPrompt = await page.locator('text=/sign in|log in|unauthorized/i').first().isVisible().catch(() => false);
+    const hasLoginPrompt = await page
+      .locator('text=/sign in|log in|unauthorized/i')
+      .first()
+      .isVisible()
+      .catch(() => false);
     const redirectedToLogin = url.includes('login') || url.includes('signin');
     const stayedOnPage = url.includes('settings');
 

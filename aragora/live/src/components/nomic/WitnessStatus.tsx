@@ -14,9 +14,7 @@ interface WitnessStatusProps {
 
 export function WitnessStatus({ status }: WitnessStatusProps) {
   const healthPct =
-    status.agents_total > 0
-      ? Math.round((status.agents_healthy / status.agents_total) * 100)
-      : 0;
+    status.agents_total > 0 ? Math.round((status.agents_healthy / status.agents_total) * 100) : 0;
 
   return (
     <div className="space-y-4">
@@ -24,9 +22,7 @@ export function WitnessStatus({ status }: WitnessStatusProps) {
       <div className="flex items-center gap-3">
         <div
           className={`w-3 h-3 rounded-full ${
-            status.patrolling
-              ? 'bg-[var(--accent)] animate-pulse'
-              : 'bg-text-muted'
+            status.patrolling ? 'bg-[var(--accent)] animate-pulse' : 'bg-text-muted'
           }`}
         />
         <span className="font-theme-data text-sm text-text">
@@ -45,9 +41,7 @@ export function WitnessStatus({ status }: WitnessStatusProps) {
           >
             {status.alert_count}
           </div>
-          <div className="font-theme-data text-[10px] text-text-muted uppercase mt-1">
-            Alerts
-          </div>
+          <div className="font-theme-data text-[10px] text-text-muted uppercase mt-1">Alerts</div>
         </div>
 
         {/* Agent health */}

@@ -40,8 +40,7 @@ function friendlyMessage(raw: string): { message: string; isTransient: boolean }
   }
   if (lower.includes('pool') && (lower.includes('exhausted') || lower.includes('timeout'))) {
     return {
-      message:
-        'The server is experiencing high load. Please wait a moment while we retry\u2026',
+      message: 'The server is experiencing high load. Please wait a moment while we retry\u2026',
       isTransient: true,
     };
   }
@@ -67,8 +66,7 @@ function friendlyMessage(raw: string): { message: string; isTransient: boolean }
   }
   if (lower.includes('user service unavailable')) {
     return {
-      message:
-        'The authentication service is currently unavailable. Please try again shortly.',
+      message: 'The authentication service is currently unavailable. Please try again shortly.',
       isTransient: true,
     };
   }
@@ -88,8 +86,7 @@ function friendlyMessage(raw: string): { message: string; isTransient: boolean }
   }
   if (lower.includes('network') || lower.includes('fetch failed')) {
     return {
-      message:
-        'A network error occurred. Please check your connection and try again.',
+      message: 'A network error occurred. Please check your connection and try again.',
       isTransient: true,
     };
   }
@@ -144,9 +141,7 @@ function OAuthErrorContent() {
 
             {/* User-friendly Error Message */}
             <div className="mb-6 p-4 border border-warning/30 bg-warning/5">
-              <p className="text-text-muted text-sm font-theme-data break-words">
-                {message}
-              </p>
+              <p className="text-text-muted text-sm font-theme-data break-words">{message}</p>
             </div>
 
             {/* Auto-retry countdown for transient errors */}

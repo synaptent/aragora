@@ -17,15 +17,35 @@ interface Document {
 }
 
 const AUDIT_TYPES = [
-  { id: 'security', name: 'Security', description: 'Detect exposed credentials, injection risks, data exposure' },
-  { id: 'compliance', name: 'Compliance', description: 'Check GDPR, HIPAA, SOC2 compliance issues' },
-  { id: 'consistency', name: 'Consistency', description: 'Find contradictions, outdated references' },
+  {
+    id: 'security',
+    name: 'Security',
+    description: 'Detect exposed credentials, injection risks, data exposure',
+  },
+  {
+    id: 'compliance',
+    name: 'Compliance',
+    description: 'Check GDPR, HIPAA, SOC2 compliance issues',
+  },
+  {
+    id: 'consistency',
+    name: 'Consistency',
+    description: 'Find contradictions, outdated references',
+  },
   { id: 'quality', name: 'Quality', description: 'Identify ambiguity, missing documentation' },
 ];
 
 const MODELS = [
-  { id: 'gemini-3-pro', name: 'Gemini 3 Pro', description: '1M token context - best for large documents' },
-  { id: 'claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', description: 'Deep reasoning for complex analysis' },
+  {
+    id: 'gemini-3-pro',
+    name: 'Gemini 3 Pro',
+    description: '1M token context - best for large documents',
+  },
+  {
+    id: 'claude-3.5-sonnet',
+    name: 'Claude 3.5 Sonnet',
+    description: 'Deep reasoning for complex analysis',
+  },
   { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', description: 'Balanced performance and accuracy' },
 ];
 
@@ -37,7 +57,9 @@ function NewAuditContent() {
 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
-  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set(['security', 'compliance', 'consistency', 'quality']));
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(
+    new Set(['security', 'compliance', 'consistency', 'quality']),
+  );
   const [selectedModel, setSelectedModel] = useState('gemini-3-pro');
   const [sessionName, setSessionName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -54,7 +76,7 @@ function NewAuditContent() {
   const fetchDocuments = useCallback(async () => {
     try {
       const response = await fetch(`${backendConfig.api}/api/documents`, {
-        headers: { 'Authorization': `Bearer ${tokens?.access_token || ''}` },
+        headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
       });
       if (response.ok) {
         const data = await response.json();
@@ -85,7 +107,7 @@ function NewAuditContent() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${tokens?.access_token || ''}`,
+          Authorization: `Bearer ${tokens?.access_token || ''}`,
         },
         body: JSON.stringify({
           name: sessionName || undefined,
@@ -104,7 +126,7 @@ function NewAuditContent() {
       // Start the audit
       await fetch(`${backendConfig.api}/api/audit/sessions/${data.id}/start`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${tokens?.access_token || ''}` },
+        headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
       });
 
       router.push(`/audit/view?id=${data.id}`);
@@ -150,14 +172,18 @@ function NewAuditContent() {
             <div className="flex items-center gap-2 text-acid-red">
               <span>⚠️</span>
               <span className="font-theme-data text-sm">{error}</span>
-              <button onClick={() => setError(null)} className="ml-auto">✕</button>
+              <button onClick={() => setError(null)} className="ml-auto">
+                ✕
+              </button>
             </div>
           </div>
         )}
 
         {/* Session Name */}
         <div className="card p-4 mb-4">
-          <label className="block text-sm font-theme-data text-muted mb-2">SESSION NAME (optional)</label>
+          <label className="block text-sm font-theme-data text-muted mb-2">
+            SESSION NAME (optional)
+          </label>
           <input
             type="text"
             value={sessionName}
@@ -177,12 +203,17 @@ function NewAuditContent() {
           ) : documents.length === 0 ? (
             <div className="p-4 text-center">
               <div className="text-muted mb-2">No processed documents available</div>
-              <Link href="/documents" className="text-accent hover:underline">Upload documents →</Link>
+              <Link href="/documents" className="text-accent hover:underline">
+                Upload documents →
+              </Link>
             </div>
           ) : (
             <div className="max-h-64 overflow-y-auto space-y-2">
               {documents.map((doc) => (
-                <label key={doc.id} className="flex items-center gap-3 p-2 hover:bg-surface rounded cursor-pointer">
+                <label
+                  key={doc.id}
+                  className="flex items-center gap-3 p-2 hover:bg-surface rounded cursor-pointer"
+                >
                   <input
                     type="checkbox"
                     checked={selectedDocs.has(doc.id)}
@@ -212,7 +243,10 @@ function NewAuditContent() {
           <label className="block text-sm font-theme-data text-muted mb-2">AUDIT TYPES</label>
           <div className="grid grid-cols-2 gap-3">
             {AUDIT_TYPES.map((type) => (
-              <label key={type.id} className={`flex items-start gap-3 p-3 rounded border cursor-pointer transition-colors ${selectedTypes.has(type.id) ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'}`}>
+              <label
+                key={type.id}
+                className={`flex items-start gap-3 p-3 rounded border cursor-pointer transition-colors ${selectedTypes.has(type.id) ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'}`}
+              >
                 <input
                   type="checkbox"
                   checked={selectedTypes.has(type.id)}
@@ -241,7 +275,10 @@ function NewAuditContent() {
           <label className="block text-sm font-theme-data text-muted mb-2">PRIMARY MODEL</label>
           <div className="space-y-2">
             {MODELS.map((model) => (
-              <label key={model.id} className={`flex items-start gap-3 p-3 rounded border cursor-pointer transition-colors ${selectedModel === model.id ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'}`}>
+              <label
+                key={model.id}
+                className={`flex items-start gap-3 p-3 rounded border cursor-pointer transition-colors ${selectedModel === model.id ? 'border-accent bg-accent/10' : 'border-border hover:border-accent/50'}`}
+              >
                 <input
                   type="radio"
                   name="model"
@@ -261,7 +298,9 @@ function NewAuditContent() {
 
         {/* Actions */}
         <div className="flex items-center justify-between">
-          <Link href="/audit" className="btn btn-ghost">← Back to Dashboard</Link>
+          <Link href="/audit" className="btn btn-ghost">
+            ← Back to Dashboard
+          </Link>
           <button
             onClick={handleCreate}
             disabled={selectedDocs.size === 0 || selectedTypes.size === 0 || creating}
@@ -277,7 +316,13 @@ function NewAuditContent() {
 
 export default function NewAuditPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><span className="text-muted animate-pulse">Loading...</span></div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <span className="text-muted animate-pulse">Loading...</span>
+        </div>
+      }
+    >
       <NewAuditContent />
     </Suspense>
   );

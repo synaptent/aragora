@@ -6,9 +6,7 @@ const VERTICAL_SLUGS = ['legal', 'healthcare', 'finance', 'software', 'research'
 // Generate static params for all verticals at build time
 // Required for static export with dynamic routes
 export function generateStaticParams() {
-  return VERTICAL_SLUGS.map((slug) => ({
-    slug,
-  }));
+  return VERTICAL_SLUGS.map((slug) => ({ slug }));
 }
 
 interface PageProps {

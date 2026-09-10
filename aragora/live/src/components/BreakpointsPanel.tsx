@@ -20,7 +20,10 @@ interface BreakpointsPanelProps {
   onBreakpointResolved?: (id: string) => void;
 }
 
-export function BreakpointsPanel({ apiBase = API_BASE_URL, onBreakpointResolved }: BreakpointsPanelProps) {
+export function BreakpointsPanel({
+  apiBase = API_BASE_URL,
+  onBreakpointResolved,
+}: BreakpointsPanelProps) {
   const { tokens } = useAuth();
   const [breakpoints, setBreakpoints] = useState<Breakpoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +73,7 @@ export function BreakpointsPanel({ apiBase = API_BASE_URL, onBreakpointResolved 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${tokens.access_token}`,
+          Authorization: `Bearer ${tokens.access_token}`,
         },
         body: JSON.stringify({ action, reasoning: `User selected: ${action}` }),
       });
@@ -78,7 +81,7 @@ export function BreakpointsPanel({ apiBase = API_BASE_URL, onBreakpointResolved 
         throw new Error(`HTTP ${response.status}`);
       }
       // Remove resolved breakpoint from list
-      setBreakpoints(prev => prev.filter(bp => bp.id !== id));
+      setBreakpoints((prev) => prev.filter((bp) => bp.id !== id));
       onBreakpointResolved?.(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resolve breakpoint');
@@ -89,10 +92,14 @@ export function BreakpointsPanel({ apiBase = API_BASE_URL, onBreakpointResolved 
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case 'critical': return 'text-red-500 border-red-500/50 bg-red-500/10';
-      case 'high': return 'text-orange-500 border-orange-500/50 bg-orange-500/10';
-      case 'medium': return 'text-yellow-500 border-yellow-500/50 bg-yellow-500/10';
-      default: return 'text-[var(--acid-cyan)] border-[var(--acid-cyan)]/50 bg-[var(--acid-cyan)]/10';
+      case 'critical':
+        return 'text-red-500 border-red-500/50 bg-red-500/10';
+      case 'high':
+        return 'text-orange-500 border-orange-500/50 bg-orange-500/10';
+      case 'medium':
+        return 'text-yellow-500 border-yellow-500/50 bg-yellow-500/10';
+      default:
+        return 'text-[var(--acid-cyan)] border-[var(--acid-cyan)]/50 bg-[var(--acid-cyan)]/10';
     }
   };
 
@@ -144,19 +151,16 @@ export function BreakpointsPanel({ apiBase = API_BASE_URL, onBreakpointResolved 
       ) : (
         <div className="space-y-4">
           {breakpoints.map((bp) => (
-            <div
-              key={bp.id}
-              className={`card p-4 border-l-4 ${getSeverityColor(bp.severity)}`}
-            >
+            <div key={bp.id} className={`card p-4 border-l-4 ${getSeverityColor(bp.severity)}`}>
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-xs font-theme-data uppercase px-2 py-0.5 rounded ${getSeverityColor(bp.severity)}`}>
+                    <span
+                      className={`text-xs font-theme-data uppercase px-2 py-0.5 rounded ${getSeverityColor(bp.severity)}`}
+                    >
                       {bp.severity}
                     </span>
-                    <span className="text-xs font-theme-data text-text-muted">
-                      {bp.type}
-                    </span>
+                    <span className="text-xs font-theme-data text-text-muted">{bp.type}</span>
                   </div>
                   <h3 className="font-theme-data text-[var(--accent)]">{bp.reason}</h3>
                 </div>
@@ -187,11 +191,12 @@ export function BreakpointsPanel({ apiBase = API_BASE_URL, onBreakpointResolved 
                     onClick={() => resolveBreakpoint(bp.id, option)}
                     disabled={resolving === bp.id}
                     className={`px-3 py-1.5 text-xs font-theme-data rounded border transition-colors
-                      ${option === 'abort'
-                        ? 'border-red-500/50 text-red-400 hover:bg-red-500/20'
-                        : option === 'continue'
-                        ? 'border-[var(--accent)]/50 text-[var(--accent)] hover:bg-[var(--accent)]/20'
-                        : 'border-[var(--acid-cyan)]/50 text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/20'
+                      ${
+                        option === 'abort'
+                          ? 'border-red-500/50 text-red-400 hover:bg-red-500/20'
+                          : option === 'continue'
+                            ? 'border-[var(--accent)]/50 text-[var(--accent)] hover:bg-[var(--accent)]/20'
+                            : 'border-[var(--acid-cyan)]/50 text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/20'
                       }
                       ${resolving === bp.id ? 'opacity-50 cursor-not-allowed' : ''}
                     `}

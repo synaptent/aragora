@@ -35,19 +35,9 @@ describe('ExecutiveSummary', () => {
             end: '2026-03-31T12:34:56Z',
             days: 30,
           },
-          debates: {
-            total: 42,
-            completed: 39,
-            consensus_rate: 88.5,
-          },
-          costs: {
-            total_usd: '123.45',
-            avg_per_debate_usd: '2.94',
-            by_provider: {},
-          },
-          quality: {
-            avg_confidence: 0.83,
-          },
+          debates: { total: 42, completed: 39, consensus_rate: 88.5 },
+          costs: { total_usd: '123.45', avg_per_debate_usd: '2.94', by_provider: {} },
+          quality: { avg_confidence: 0.83 },
           agents: {
             top_agents: [
               {

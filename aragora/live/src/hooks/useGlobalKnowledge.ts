@@ -47,7 +47,7 @@ export interface UseGlobalKnowledgeReturn {
 }
 
 export function useGlobalKnowledge(
-  options: UseGlobalKnowledgeOptions = {}
+  options: UseGlobalKnowledgeOptions = {},
 ): UseGlobalKnowledgeReturn {
   const { isAdmin = false } = options;
   const { config: backendConfig } = useBackend();
@@ -75,7 +75,7 @@ export function useGlobalKnowledge(
         setIsLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
   const storeFact = useCallback(
@@ -102,7 +102,7 @@ export function useGlobalKnowledge(
         setIsLoading(false);
       }
     },
-    [api, isAdmin]
+    [api, isAdmin],
   );
 
   const promoteToGlobal = useCallback(
@@ -128,17 +128,10 @@ export function useGlobalKnowledge(
         setIsLoading(false);
       }
     },
-    [api, isAdmin]
+    [api, isAdmin],
   );
 
-  return {
-    results,
-    isLoading,
-    error,
-    queryGlobal,
-    storeFact,
-    promoteToGlobal,
-  };
+  return { results, isLoading, error, queryGlobal, storeFact, promoteToGlobal };
 }
 
 export default useGlobalKnowledge;

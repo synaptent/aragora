@@ -15,10 +15,7 @@ const PRICING_TIERS = {
       'JSON/JSONL export',
       'Standard quality filters',
     ],
-    limits: {
-      maxRecords: 10000,
-      maxExportsPerDay: 10,
-    },
+    limits: { maxRecords: 10000, maxExportsPerDay: 10 },
   },
   pro: {
     name: 'Pro',
@@ -33,10 +30,7 @@ const PRICING_TIERS = {
       'Priority processing',
       'Custom schemas',
     ],
-    limits: {
-      maxRecords: 500000,
-      maxExportsPerDay: 100,
-    },
+    limits: { maxRecords: 500000, maxExportsPerDay: 100 },
   },
   enterprise: {
     name: 'Enterprise',
@@ -61,9 +55,21 @@ const PRICING_TIERS = {
 } as const;
 
 const FORMAT_PRICING = {
-  sft: { name: 'Supervised Fine-Tuning', multiplier: 1.0, description: 'Standard chat/instruction pairs' },
-  dpo: { name: 'Direct Preference Optimization', multiplier: 1.5, description: 'Preference pairs for RLHF' },
-  gauntlet: { name: 'Gauntlet Adversarial', multiplier: 2.0, description: 'Red-team attack/defense pairs' },
+  sft: {
+    name: 'Supervised Fine-Tuning',
+    multiplier: 1.0,
+    description: 'Standard chat/instruction pairs',
+  },
+  dpo: {
+    name: 'Direct Preference Optimization',
+    multiplier: 1.5,
+    description: 'Preference pairs for RLHF',
+  },
+  gauntlet: {
+    name: 'Gauntlet Adversarial',
+    multiplier: 2.0,
+    description: 'Red-team attack/defense pairs',
+  },
 } as const;
 
 interface UsageData {
@@ -80,7 +86,7 @@ interface TrainingPricingPanelProps {
 
 export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPricingPanelProps) {
   const [selectedTier, setSelectedTier] = useState<keyof typeof PRICING_TIERS>(
-    currentUsage?.tier || 'starter'
+    currentUsage?.tier || 'starter',
   );
   const [estimateRecords, setEstimateRecords] = useState(10000);
   const [estimateFormat, setEstimateFormat] = useState<keyof typeof FORMAT_PRICING>('sft');
@@ -112,10 +118,13 @@ export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPri
     };
   }, [selectedTier, estimateRecords, estimateFormat]);
 
-  const handleTierSelect = useCallback((tier: keyof typeof PRICING_TIERS) => {
-    setSelectedTier(tier);
-    onSelectTier?.(tier);
-  }, [onSelectTier]);
+  const handleTierSelect = useCallback(
+    (tier: keyof typeof PRICING_TIERS) => {
+      setSelectedTier(tier);
+      onSelectTier?.(tier);
+    },
+    [onSelectTier],
+  );
 
   return (
     <div className="space-y-6">
@@ -130,7 +139,9 @@ export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPri
         <div className="grid grid-cols-3 gap-4">
           <div>
             <p className="text-text-muted text-xs font-theme-data">RECORDS EXPORTED</p>
-            <p className="text-2xl font-theme-data text-text">{usage.recordsExported.toLocaleString()}</p>
+            <p className="text-2xl font-theme-data text-text">
+              {usage.recordsExported.toLocaleString()}
+            </p>
             <p className="text-xs text-text-muted">
               {remainingFreeRecords.toLocaleString()} free remaining
             </p>
@@ -147,9 +158,7 @@ export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPri
           <div>
             <p className="text-text-muted text-xs font-theme-data">LAST EXPORT</p>
             <p className="text-lg font-theme-data text-text">
-              {usage.lastExportDate
-                ? new Date(usage.lastExportDate).toLocaleDateString()
-                : 'Never'}
+              {usage.lastExportDate ? new Date(usage.lastExportDate).toLocaleDateString() : 'Never'}
             </p>
           </div>
         </div>
@@ -164,7 +173,7 @@ export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPri
             <div
               className="h-full bg-[var(--accent)] transition-all"
               style={{
-                width: `${Math.min(100, (usage.recordsExported / tierInfo.includedRecords) * 100)}%`
+                width: `${Math.min(100, (usage.recordsExported / tierInfo.includedRecords) * 100)}%`,
               }}
             />
           </div>
@@ -175,15 +184,22 @@ export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPri
       <div>
         <h3 className="text-lg font-theme-data text-text mb-4">Pricing Plans</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {(Object.entries(PRICING_TIERS) as [keyof typeof PRICING_TIERS, typeof PRICING_TIERS[keyof typeof PRICING_TIERS]][]).map(([key, tier]) => (
+          {(
+            Object.entries(PRICING_TIERS) as [
+              keyof typeof PRICING_TIERS,
+              (typeof PRICING_TIERS)[keyof typeof PRICING_TIERS],
+            ][]
+          ).map(([key, tier]) => (
             <div
               key={key}
               onClick={() => handleTierSelect(key)}
               className={`
                 p-4 rounded-lg border cursor-pointer transition-all
-                ${selectedTier === key
-                  ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                  : 'border-border hover:border-[var(--accent)]/50'}
+                ${
+                  selectedTier === key
+                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
+                    : 'border-border hover:border-[var(--accent)]/50'
+                }
               `}
             >
               <div className="flex items-center justify-between mb-3">
@@ -235,12 +251,18 @@ export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPri
               <button
                 className={`
                   w-full mt-4 py-2 rounded font-theme-data text-sm transition-colors
-                  ${selectedTier === key
-                    ? 'bg-[var(--accent)] text-bg'
-                    : 'bg-surface border border-border text-text hover:border-[var(--accent)]/50'}
+                  ${
+                    selectedTier === key
+                      ? 'bg-[var(--accent)] text-bg'
+                      : 'bg-surface border border-border text-text hover:border-[var(--accent)]/50'
+                  }
                 `}
               >
-                {selectedTier === key ? 'Current Plan' : key === 'enterprise' ? 'Contact Sales' : 'Select Plan'}
+                {selectedTier === key
+                  ? 'Current Plan'
+                  : key === 'enterprise'
+                    ? 'Contact Sales'
+                    : 'Select Plan'}
               </button>
             </div>
           ))}
@@ -251,13 +273,16 @@ export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPri
       <div>
         <h3 className="text-lg font-theme-data text-text mb-4">Format Pricing</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {(Object.entries(FORMAT_PRICING) as [keyof typeof FORMAT_PRICING, typeof FORMAT_PRICING[keyof typeof FORMAT_PRICING]][]).map(([key, format]) => (
+          {(
+            Object.entries(FORMAT_PRICING) as [
+              keyof typeof FORMAT_PRICING,
+              (typeof FORMAT_PRICING)[keyof typeof FORMAT_PRICING],
+            ][]
+          ).map(([key, format]) => (
             <div key={key} className="p-4 bg-surface border border-border rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-theme-data text-text uppercase text-sm">{key}</h4>
-                <span className="text-[var(--accent)] font-theme-data">
-                  {format.multiplier}x
-                </span>
+                <span className="text-[var(--accent)] font-theme-data">{format.multiplier}x</span>
               </div>
               <p className="text-text font-medium mb-1">{format.name}</p>
               <p className="text-xs text-text-muted">{format.description}</p>
@@ -370,17 +395,23 @@ export function TrainingPricingPanel({ currentUsage, onSelectTier }: TrainingPri
             <tr className="border-t border-border">
               <td className="py-2">100K - 500K</td>
               <td className="py-2 text-[var(--acid-cyan)]">10% off</td>
-              <td className="py-2 font-theme-data">${(tierInfo.pricePerRecord * 0.9).toFixed(5)}</td>
+              <td className="py-2 font-theme-data">
+                ${(tierInfo.pricePerRecord * 0.9).toFixed(5)}
+              </td>
             </tr>
             <tr className="border-t border-border">
               <td className="py-2">500K - 1M</td>
               <td className="py-2 text-[var(--acid-cyan)]">20% off</td>
-              <td className="py-2 font-theme-data">${(tierInfo.pricePerRecord * 0.8).toFixed(5)}</td>
+              <td className="py-2 font-theme-data">
+                ${(tierInfo.pricePerRecord * 0.8).toFixed(5)}
+              </td>
             </tr>
             <tr className="border-t border-border">
               <td className="py-2">1M+</td>
               <td className="py-2 text-[var(--accent)]">30% off</td>
-              <td className="py-2 font-theme-data">${(tierInfo.pricePerRecord * 0.7).toFixed(5)}</td>
+              <td className="py-2 font-theme-data">
+                ${(tierInfo.pricePerRecord * 0.7).toFixed(5)}
+              </td>
             </tr>
           </tbody>
         </table>

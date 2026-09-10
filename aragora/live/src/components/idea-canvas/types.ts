@@ -16,13 +16,7 @@ export type IdeaNodeType =
   | 'hypothesis';
 
 export type IdeaEdgeType =
-  | 'supports'
-  | 'refutes'
-  | 'inspires'
-  | 'refines'
-  | 'challenges'
-  | 'exemplifies'
-  | 'relates_to';
+  'supports' | 'refutes' | 'inspires' | 'refines' | 'challenges' | 'exemplifies' | 'relates_to';
 
 export interface IdeaNodeData {
   ideaType: IdeaNodeType;

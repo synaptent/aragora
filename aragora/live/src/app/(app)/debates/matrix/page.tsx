@@ -9,8 +9,15 @@ import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const ScenarioMatrixView = dynamic(
-  () => import('@/components/scenario-matrix').then(m => ({ default: m.ScenarioMatrixView })),
-  { ssr: false, loading: () => <div className="h-[600px] flex items-center justify-center text-[var(--accent)] font-theme-data animate-pulse">Loading matrix visualization...</div> }
+  () => import('@/components/scenario-matrix').then((m) => ({ default: m.ScenarioMatrixView })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[600px] flex items-center justify-center text-[var(--accent)] font-theme-data animate-pulse">
+        Loading matrix visualization...
+      </div>
+    ),
+  },
 );
 
 function MatrixDebatesContent() {
@@ -71,30 +78,28 @@ export default function MatrixDebatesPage() {
           </div>
         </header>
 
-        <Suspense fallback={
-          <div className="container mx-auto px-4 py-6">
-            <div className="animate-pulse text-[var(--accent)] font-theme-data">Loading matrix debate...</div>
-          </div>
-        }>
+        <Suspense
+          fallback={
+            <div className="container mx-auto px-4 py-6">
+              <div className="animate-pulse text-[var(--accent)] font-theme-data">
+                Loading matrix debate...
+              </div>
+            </div>
+          }
+        >
           <MatrixDebatesContent />
         </Suspense>
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'═'.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} SCENARIO MATRIX // PARALLEL COMPARISON
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'═'.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} SCENARIO MATRIX // PARALLEL COMPARISON</p>
           <p className="text-[var(--acid-cyan)] mt-2">
             <Link href="/" className="hover:text-[var(--accent)] transition-colors">
               [ RETURN TO LIVE ]
             </Link>
           </p>
-          <div className="text-[var(--accent)]/50 mt-4">
-            {'═'.repeat(40)}
-          </div>
+          <div className="text-[var(--accent)]/50 mt-4">{'═'.repeat(40)}</div>
         </footer>
       </main>
     </>

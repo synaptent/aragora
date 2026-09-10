@@ -16,9 +16,7 @@ export default function Error({
   useEffect(() => {
     console.error('App error:', error);
     const reporter = getCrashReporter();
-    const accepted = reporter.capture(error, {
-      componentName: 'next-app-error-boundary',
-    });
+    const accepted = reporter.capture(error, { componentName: 'next-app-error-boundary' });
     if (accepted) {
       reporter.flush();
     }
@@ -42,9 +40,7 @@ export default function Error({
       <div className="max-w-md w-full border border-[var(--crimson)] bg-surface p-6 font-theme-data">
         <div className="text-center mb-6">
           <div className="text-[var(--crimson)] text-4xl mb-3">!</div>
-          <h1 className="text-[var(--crimson)] font-bold text-lg mb-2">
-            SOMETHING WENT WRONG
-          </h1>
+          <h1 className="text-[var(--crimson)] font-bold text-lg mb-2">SOMETHING WENT WRONG</h1>
           <p className="text-text-muted text-sm">
             {isHydrationError
               ? 'A temporary rendering issue occurred. Refreshing usually fixes this.'

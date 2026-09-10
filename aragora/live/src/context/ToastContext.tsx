@@ -25,9 +25,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
   }, [showError]);
 
-  const value = useMemo<ToastContextType>(() => ({
-    showToast, showError, showSuccess, clearToasts,
-  }), [showToast, showError, showSuccess, clearToasts]);
+  const value = useMemo<ToastContextType>(
+    () => ({ showToast, showError, showSuccess, clearToasts }),
+    [showToast, showError, showSuccess, clearToasts],
+  );
 
   return (
     <ToastContext.Provider value={value}>

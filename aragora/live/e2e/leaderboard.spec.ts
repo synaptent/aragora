@@ -11,9 +11,10 @@ test.describe('Leaderboard', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Should have leaderboard heading - actual h1 is "> AGENT LEADERBOARD"
-    const heading = page.locator('h1').filter({
-      hasText: /leaderboard|ranking|agent/i
-    }).first();
+    const heading = page
+      .locator('h1')
+      .filter({ hasText: /leaderboard|ranking|agent/i })
+      .first();
     await expect(heading).toBeVisible({ timeout: 10000 });
   });
 
@@ -24,14 +25,14 @@ test.describe('Leaderboard', () => {
 
     // Should show ranking table, list, or any content
     const rankingItems = page.locator(
-      '[data-testid="ranking-row"], tr[data-agent], .agent-ranking, table tbody tr, [class*="rank"]'
+      '[data-testid="ranking-row"], tr[data-agent], .agent-ranking, table tbody tr, [class*="rank"]',
     );
 
     const emptyState = page.locator('[data-testid="empty-leaderboard"], :text("No rankings")');
     const mainContent = page.locator('main').first();
 
     // Either rankings exist, empty state, or main content visible
-    const hasRankings = await rankingItems.count() > 0;
+    const hasRankings = (await rankingItems.count()) > 0;
     const hasEmptyState = await emptyState.isVisible().catch(() => false);
     const hasContent = await mainContent.isVisible().catch(() => false);
 
@@ -44,7 +45,9 @@ test.describe('Leaderboard', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for ELO, ratings, or any numeric score content
-    const ratings = page.locator('[data-testid="elo-rating"], .elo-score, td, [class*="rating"], [class*="score"]');
+    const ratings = page.locator(
+      '[data-testid="elo-rating"], .elo-score, td, [class*="rating"], [class*="score"]',
+    );
     const mainContent = page.locator('main').first();
 
     // Page should show ratings or main content
@@ -59,9 +62,7 @@ test.describe('Leaderboard', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for agent names
-    const agentNames = page.locator(
-      '[data-testid="agent-name"], .agent-name, td:first-child'
-    );
+    const agentNames = page.locator('[data-testid="agent-name"], .agent-name, td:first-child');
 
     const namesCount = await agentNames.count();
     if (namesCount > 0) {
@@ -78,10 +79,10 @@ test.describe('Leaderboard', () => {
 
     // Look for sort controls
     const sortButtons = page.locator(
-      '[data-testid="sort-button"], th[role="columnheader"], button:has-text("Sort")'
+      '[data-testid="sort-button"], th[role="columnheader"], button:has-text("Sort")',
     );
 
-    if (await sortButtons.count() > 0) {
+    if ((await sortButtons.count()) > 0) {
       // Click on a sort header
       await sortButtons.first().click();
 
@@ -97,10 +98,10 @@ test.describe('Leaderboard', () => {
 
     // Look for win/loss or match statistics
     const stats = page.locator(
-      '[data-testid="win-count"], [data-testid="loss-count"], :text("W:"), :text("L:"), .wins, .losses'
+      '[data-testid="win-count"], [data-testid="loss-count"], :text("W:"), :text("L:"), .wins, .losses',
     );
 
-    const hasStats = await stats.count() > 0;
+    const hasStats = (await stats.count()) > 0;
     // Stats are optional but nice to have
     expect(hasStats).toBeDefined();
   });
@@ -126,7 +127,7 @@ test.describe('Leaderboard', () => {
 
     // During load, might show skeleton or spinner
     const loadingIndicator = page.locator(
-      '[data-testid="loading"], .skeleton, .spinner, [aria-busy="true"]'
+      '[data-testid="loading"], .skeleton, .spinner, [aria-busy="true"]',
     );
 
     // Loading state should be brief
@@ -144,7 +145,7 @@ test.describe('Leaderboard Filtering', () => {
 
     // Look for time period selector
     const periodSelector = page.locator(
-      '[data-testid="period-selector"], select[name*="period"], button:has-text("Week"), button:has-text("Month")'
+      '[data-testid="period-selector"], select[name*="period"], button:has-text("Week"), button:has-text("Month")',
     );
 
     if (await periodSelector.isVisible().catch(() => false)) {
@@ -163,7 +164,7 @@ test.describe('Leaderboard Filtering', () => {
 
     // Look for agent type filter
     const agentFilter = page.locator(
-      '[data-testid="agent-filter"], select[name*="agent"], [data-filter="agent"]'
+      '[data-testid="agent-filter"], select[name*="agent"], [data-filter="agent"]',
     );
 
     if (await agentFilter.isVisible().catch(() => false)) {
@@ -180,9 +181,9 @@ test.describe('Agent Details', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Click on agent name if it's a link
-    const agentLink = page.locator(
-      '[data-testid="agent-link"], .agent-name a, a[href*="agent"]'
-    ).first();
+    const agentLink = page
+      .locator('[data-testid="agent-link"], .agent-name a, a[href*="agent"]')
+      .first();
 
     if (await agentLink.isVisible().catch(() => false)) {
       await agentLink.click();
@@ -198,7 +199,7 @@ test.describe('Agent Details', () => {
 
     // Some leaderboards show inline charts
     const chart = page.locator(
-      '[data-testid="performance-chart"], canvas, svg.recharts-surface, .chart'
+      '[data-testid="performance-chart"], canvas, svg.recharts-surface, .chart',
     );
 
     const hasChart = await chart.isVisible().catch(() => false);

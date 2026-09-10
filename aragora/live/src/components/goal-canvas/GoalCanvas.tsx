@@ -1,13 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  type NodeTypes,
-} from '@xyflow/react';
+import { ReactFlow, Background, Controls, MiniMap, type NodeTypes } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { GoalNode } from './GoalNode';
@@ -17,9 +11,7 @@ import { useGoalCanvas } from './useGoalCanvas';
 import { type GoalNodeType } from './types';
 import { apiPost } from '../../lib/api';
 
-const nodeTypes: NodeTypes = {
-  goalNode: GoalNode as unknown as NodeTypes[string],
-};
+const nodeTypes: NodeTypes = { goalNode: GoalNode as unknown as NodeTypes[string] };
 
 interface GoalCanvasProps {
   canvasId: string;
@@ -57,7 +49,7 @@ export function GoalCanvas({ canvasId, pipelineId, onActionsGenerated }: GoalCan
     (_: React.MouseEvent, node: { id: string }) => {
       setSelectedNodeId(node.id);
     },
-    [setSelectedNodeId]
+    [setSelectedNodeId],
   );
 
   const onPaneClick = useCallback(() => {
@@ -76,7 +68,7 @@ export function GoalCanvas({ canvasId, pipelineId, onActionsGenerated }: GoalCan
       if (!bounds) return;
       onDrop(e, bounds, (pos) => pos);
     },
-    [onDrop]
+    [onDrop],
   );
 
   // -- Generate Actions from goals ----------------------------------------
@@ -92,10 +84,7 @@ export function GoalCanvas({ canvasId, pipelineId, onActionsGenerated }: GoalCan
         pipeline_id: string;
         advanced_to: string;
         stage_status: Record<string, string>;
-      }>('/api/v1/canvas/pipeline/advance', {
-        pipeline_id: pipelineId,
-        target_stage: 'actions',
-      });
+      }>('/api/v1/canvas/pipeline/advance', { pipeline_id: pipelineId, target_stage: 'actions' });
 
       if (onActionsGenerated) {
         onActionsGenerated(result.pipeline_id);

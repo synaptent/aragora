@@ -6,7 +6,10 @@ import { useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const TournamentViewerPanel = dynamic(
-  () => import('@/components/TournamentViewerPanel').then(m => ({ default: m.TournamentViewerPanel })),
+  () =>
+    import('@/components/TournamentViewerPanel').then((m) => ({
+      default: m.TournamentViewerPanel,
+    })),
   {
     ssr: false,
     loading: () => (
@@ -14,7 +17,7 @@ const TournamentViewerPanel = dynamic(
         <div className="h-96 bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function TournamentsPage() {
@@ -38,7 +41,9 @@ export default function TournamentsPage() {
           </div>
 
           <PanelErrorBoundary panelName="Tournament Viewer">
-            <TournamentViewerPanel backendConfig={{ apiUrl: backendConfig.api, wsUrl: backendConfig.ws }} />
+            <TournamentViewerPanel
+              backendConfig={{ apiUrl: backendConfig.api, wsUrl: backendConfig.ws }}
+            />
           </PanelErrorBoundary>
         </div>
       </main>

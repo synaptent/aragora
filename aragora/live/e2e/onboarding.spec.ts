@@ -26,7 +26,10 @@ test.describe('Onboarding Flow', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Step 1: Welcome - click continue
-    const continueButton = page.locator('button').filter({ hasText: /continue|next/i }).first();
+    const continueButton = page
+      .locator('button')
+      .filter({ hasText: /continue|next/i })
+      .first();
     if (await continueButton.isVisible()) {
       await continueButton.click();
     }
@@ -56,7 +59,10 @@ test.describe('Onboarding Flow', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Move to next step
-    const continueButton = page.locator('button').filter({ hasText: /continue|next/i }).first();
+    const continueButton = page
+      .locator('button')
+      .filter({ hasText: /continue|next/i })
+      .first();
     if (await continueButton.isVisible()) {
       await continueButton.click();
       await page.waitForTimeout(500);
@@ -104,7 +110,10 @@ test.describe('Onboarding Flow', () => {
 
     // Navigate to template step (may need multiple clicks)
     for (let i = 0; i < 4; i++) {
-      const continueButton = page.locator('button').filter({ hasText: /continue|next/i }).first();
+      const continueButton = page
+        .locator('button')
+        .filter({ hasText: /continue|next/i })
+        .first();
       if (await continueButton.isVisible()) {
         await continueButton.click();
         await page.waitForTimeout(300);
@@ -127,13 +136,19 @@ test.describe('Onboarding Flow', () => {
 
     // Navigate through all steps
     for (let i = 0; i < 10; i++) {
-      const finishButton = page.locator('button').filter({ hasText: /finish|complete|done/i }).first();
+      const finishButton = page
+        .locator('button')
+        .filter({ hasText: /finish|complete|done/i })
+        .first();
       if (await finishButton.isVisible()) {
         await finishButton.click();
         break;
       }
 
-      const continueButton = page.locator('button').filter({ hasText: /continue|next|skip/i }).first();
+      const continueButton = page
+        .locator('button')
+        .filter({ hasText: /continue|next|skip/i })
+        .first();
       if (await continueButton.isVisible()) {
         await continueButton.click();
         await page.waitForTimeout(300);
@@ -160,7 +175,10 @@ test.describe('Onboarding Flow', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Move forward
-    const continueButton = page.locator('button').filter({ hasText: /continue|next/i }).first();
+    const continueButton = page
+      .locator('button')
+      .filter({ hasText: /continue|next/i })
+      .first();
     if (await continueButton.isVisible()) {
       await continueButton.click();
       await page.waitForTimeout(300);
@@ -203,9 +221,7 @@ test.describe('Slack Integration Wizard', () => {
 
   test('should handle OAuth not configured state', async ({ page, aragoraPage }) => {
     // Mock Slack not configured
-    await mockApiResponse(page, '**/api/integrations/slack/status', {
-      oauth_configured: false,
-    });
+    await mockApiResponse(page, '**/api/integrations/slack/status', { oauth_configured: false });
 
     await page.goto('/connectors');
     await aragoraPage.dismissAllOverlays();
@@ -215,7 +231,9 @@ test.describe('Slack Integration Wizard', () => {
       await slackOption.click();
 
       // Should show configuration instructions
-      const configMessage = page.locator('text=/not configured|SLACK_CLIENT_ID|environment/i').first();
+      const configMessage = page
+        .locator('text=/not configured|SLACK_CLIENT_ID|environment/i')
+        .first();
       if (await configMessage.isVisible()) {
         await expect(configMessage).toBeVisible();
       }
@@ -225,9 +243,7 @@ test.describe('Slack Integration Wizard', () => {
 
 test.describe('Teams Integration Wizard', () => {
   test('should show Teams setup wizard', async ({ page, aragoraPage }) => {
-    await mockApiResponse(page, '**/api/integrations/teams/status', {
-      oauth_configured: true,
-    });
+    await mockApiResponse(page, '**/api/integrations/teams/status', { oauth_configured: true });
 
     await page.goto('/connectors');
     await aragoraPage.dismissAllOverlays();

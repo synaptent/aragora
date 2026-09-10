@@ -43,7 +43,7 @@ export default function CrossDebatePage() {
 
   const { data, isLoading } = useSWRFetch<{ data: CrossDebateResponse }>(
     '/api/v1/system-intelligence/institutional-memory',
-    { refreshInterval: 30000, baseUrl: config.api }
+    { refreshInterval: 30000, baseUrl: config.api },
   );
 
   const crossDebate = data?.data;
@@ -60,10 +60,16 @@ export default function CrossDebatePage() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <div className="flex items-center gap-3">
-              <Link href="/knowledge-flow" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/knowledge-flow"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [KNOWLEDGE FLOW]
               </Link>
-              <Link href="/system-intelligence" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/system-intelligence"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [SYSTEM INTEL]
               </Link>
               <BackendSelector compact />
@@ -85,11 +91,15 @@ export default function CrossDebatePage() {
 
           <PanelErrorBoundary panelName="Cross-Debate Learning">
             {isLoading ? (
-              <div className="text-[var(--accent)] font-theme-data animate-pulse text-center py-12">Loading cross-debate data...</div>
+              <div className="text-[var(--accent)] font-theme-data animate-pulse text-center py-12">
+                Loading cross-debate data...
+              </div>
             ) : !crossDebate ? (
               <div className="p-8 bg-surface border border-border rounded-lg text-center">
                 <p className="text-text-muted font-theme-data">
-                  No cross-debate learning data available. Enable <code className="text-[var(--accent)]">enable_cross_debate_memory</code> in ArenaConfig.
+                  No cross-debate learning data available. Enable{' '}
+                  <code className="text-[var(--accent)]">enable_cross_debate_memory</code> in
+                  ArenaConfig.
                 </p>
               </div>
             ) : (
@@ -136,9 +146,13 @@ export default function CrossDebatePage() {
                             <div className="flex gap-3 text-xs text-text-muted">
                               <span>Seen {pattern.frequency}x</span>
                               <span>From {pattern.source_debates} debates</span>
-                              <span className={`font-theme-data ${
-                                pattern.confidence >= 0.7 ? 'text-[var(--accent)]' : 'text-yellow-400'
-                              }`}>
+                              <span
+                                className={`font-theme-data ${
+                                  pattern.confidence >= 0.7
+                                    ? 'text-[var(--accent)]'
+                                    : 'text-yellow-400'
+                                }`}
+                              >
                                 {(pattern.confidence * 100).toFixed(0)}% conf
                               </span>
                             </div>
@@ -170,7 +184,10 @@ export default function CrossDebatePage() {
                             <div className="text-sm text-text line-clamp-1">{injection.task}</div>
                             <div className="flex gap-2 mt-1">
                               {injection.sources.map((src) => (
-                                <span key={src} className="text-xs px-1 py-0.5 bg-surface rounded text-text-muted">
+                                <span
+                                  key={src}
+                                  className="text-xs px-1 py-0.5 bg-surface rounded text-text-muted"
+                                >
                                   {src}
                                 </span>
                               ))}

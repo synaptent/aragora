@@ -35,9 +35,7 @@ describe('useAsyncData', () => {
     it('uses initialData when provided', () => {
       const fetcher = jest.fn().mockResolvedValue({ value: 'new' });
       const initialData = { value: 'initial' };
-      const { result } = renderHook(() =>
-        useAsyncData(fetcher, { initialData })
-      );
+      const { result } = renderHook(() => useAsyncData(fetcher, { initialData }));
 
       expect(result.current.data).toEqual(initialData);
     });
@@ -46,9 +44,7 @@ describe('useAsyncData', () => {
   describe('Immediate Fetch', () => {
     it('fetches immediately when immediate is true', async () => {
       const fetcher = jest.fn().mockResolvedValue({ value: 'test' });
-      const { result } = renderHook(() =>
-        useAsyncData(fetcher, { immediate: true })
-      );
+      const { result } = renderHook(() => useAsyncData(fetcher, { immediate: true }));
 
       expect(result.current.loading).toBe(true);
 
@@ -128,7 +124,7 @@ describe('useAsyncData', () => {
   describe('Loading States', () => {
     it('sets loading to true during fetch', async () => {
       let resolvePromise: (value: unknown) => void;
-      const promise = new Promise(resolve => {
+      const promise = new Promise((resolve) => {
         resolvePromise = resolve;
       });
       const fetcher = jest.fn().mockReturnValue(promise);
@@ -155,9 +151,9 @@ describe('useAsyncData', () => {
         .mockResolvedValueOnce({ value: 'first' })
         .mockImplementationOnce(
           () =>
-            new Promise(resolve => {
+            new Promise((resolve) => {
               resolvePromise = resolve;
-            })
+            }),
         );
 
       const { result } = renderHook(() => useAsyncData(fetcher));
@@ -253,9 +249,7 @@ describe('useAsyncData', () => {
     it('calls onSuccess with data', async () => {
       const onSuccess = jest.fn();
       const fetcher = jest.fn().mockResolvedValue({ value: 'test' });
-      const { result } = renderHook(() =>
-        useAsyncData(fetcher, { onSuccess })
-      );
+      const { result } = renderHook(() => useAsyncData(fetcher, { onSuccess }));
 
       await act(async () => {
         await result.current.refetch();
@@ -281,12 +275,9 @@ describe('useAsyncData', () => {
   describe('Transform', () => {
     it('applies transform to result', async () => {
       const fetcher = jest.fn().mockResolvedValue({ items: [1, 2, 3] });
-      const transform = (data: unknown) =>
-        (data as { items: number[] }).items.length;
+      const transform = (data: unknown) => (data as { items: number[] }).items.length;
 
-      const { result } = renderHook(() =>
-        useAsyncData(fetcher, { transform })
-      );
+      const { result } = renderHook(() => useAsyncData(fetcher, { transform }));
 
       await act(async () => {
         await result.current.refetch();
@@ -304,14 +295,12 @@ describe('useAsyncData', () => {
         .mockResolvedValueOnce({ value: 'first' })
         .mockImplementationOnce(
           () =>
-            new Promise(resolve => {
+            new Promise((resolve) => {
               resolveSecond = resolve;
-            })
+            }),
         );
 
-      const { result } = renderHook(() =>
-        useAsyncData(fetcher, { keepPreviousData: true })
-      );
+      const { result } = renderHook(() => useAsyncData(fetcher, { keepPreviousData: true }));
 
       // First fetch
       await act(async () => {
@@ -340,7 +329,7 @@ describe('useAsyncData', () => {
     it('resets to initial state', async () => {
       const fetcher = jest.fn().mockResolvedValue({ value: 'test' });
       const { result } = renderHook(() =>
-        useAsyncData(fetcher, { initialData: { value: 'initial' } })
+        useAsyncData(fetcher, { initialData: { value: 'initial' } }),
       );
 
       // Fetch data
@@ -397,9 +386,7 @@ describe('useAsyncData', () => {
 
     it('refetches at specified interval', async () => {
       const fetcher = jest.fn().mockResolvedValue({ value: 'test' });
-      renderHook(() =>
-        useAsyncData(fetcher, { refreshInterval: 1000 })
-      );
+      renderHook(() => useAsyncData(fetcher, { refreshInterval: 1000 }));
 
       expect(fetcher).not.toHaveBeenCalled();
 
@@ -417,9 +404,7 @@ describe('useAsyncData', () => {
 
     it('clears interval on unmount', async () => {
       const fetcher = jest.fn().mockResolvedValue({ value: 'test' });
-      const { unmount } = renderHook(() =>
-        useAsyncData(fetcher, { refreshInterval: 1000 })
-      );
+      const { unmount } = renderHook(() => useAsyncData(fetcher, { refreshInterval: 1000 }));
 
       await act(async () => {
         jest.advanceTimersByTime(1000);
@@ -442,7 +427,7 @@ describe('useAsyncData', () => {
       let dep = 'initial';
 
       const { rerender } = renderHook(() =>
-        useAsyncData(fetcher, { immediate: true, deps: [dep] })
+        useAsyncData(fetcher, { immediate: true, deps: [dep] }),
       );
 
       await waitFor(() => {
@@ -467,13 +452,10 @@ describe('useFetch', () => {
   });
 
   it('fetches from URL successfully', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: 'test' }),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: 'test' }) });
 
     const { result } = renderHook(() =>
-      useFetch<{ data: string }>('/api/test', { immediate: true })
+      useFetch<{ data: string }>('/api/test', { immediate: true }),
     );
 
     await waitFor(() => {
@@ -483,7 +465,7 @@ describe('useFetch', () => {
     expect(result.current.data).toEqual({ data: 'test' });
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/test',
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -494,9 +476,7 @@ describe('useFetch', () => {
       json: async () => ({ error: 'Not found' }),
     });
 
-    const { result } = renderHook(() =>
-      useFetch('/api/test', { immediate: true })
-    );
+    const { result } = renderHook(() => useFetch('/api/test', { immediate: true }));
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -514,9 +494,7 @@ describe('useFetch', () => {
       },
     });
 
-    const { result } = renderHook(() =>
-      useFetch('/api/test', { immediate: true })
-    );
+    const { result } = renderHook(() => useFetch('/api/test', { immediate: true }));
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -526,9 +504,7 @@ describe('useFetch', () => {
   });
 
   it('handles null URL', async () => {
-    const { result } = renderHook(() =>
-      useFetch(null, { immediate: true })
-    );
+    const { result } = renderHook(() => useFetch(null, { immediate: true }));
 
     // Should not fetch with null URL
     expect(mockFetch).not.toHaveBeenCalled();
@@ -536,10 +512,7 @@ describe('useFetch', () => {
   });
 
   it('passes fetchOptions to fetch', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: 'test' }),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: 'test' }) });
 
     const { result } = renderHook(() =>
       useFetch('/api/test', {
@@ -549,7 +522,7 @@ describe('useFetch', () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: 'value' }),
         },
-      })
+      }),
     );
 
     await waitFor(() => {
@@ -562,20 +535,15 @@ describe('useFetch', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: 'value' }),
-      })
+      }),
     );
   });
 
   it('refetches when URL changes', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: 'test' }),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: 'test' }) });
 
     let url = '/api/test1';
-    const { rerender } = renderHook(() =>
-      useFetch(url, { immediate: true })
-    );
+    const { rerender } = renderHook(() => useFetch(url, { immediate: true }));
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith('/api/test1', expect.any(Object));
@@ -633,7 +601,7 @@ describe('useMutation', () => {
 
     it('sets loading during mutation', async () => {
       let resolvePromise: (value: unknown) => void;
-      const promise = new Promise(resolve => {
+      const promise = new Promise((resolve) => {
         resolvePromise = resolve;
       });
       const mutationFn = jest.fn().mockReturnValue(promise);
@@ -706,9 +674,7 @@ describe('useMutation', () => {
     it('calls onSuccess with data and variables', async () => {
       const onSuccess = jest.fn();
       const mutationFn = jest.fn().mockResolvedValue({ id: 1 });
-      const { result } = renderHook(() =>
-        useMutation(mutationFn, { onSuccess })
-      );
+      const { result } = renderHook(() => useMutation(mutationFn, { onSuccess }));
 
       await act(async () => {
         await result.current.mutate({ name: 'test' });
@@ -721,9 +687,7 @@ describe('useMutation', () => {
       const onError = jest.fn();
       const error = new Error('Failed');
       const mutationFn = jest.fn().mockRejectedValue(error);
-      const { result } = renderHook(() =>
-        useMutation(mutationFn, { onError })
-      );
+      const { result } = renderHook(() => useMutation(mutationFn, { onError }));
 
       await act(async () => {
         await result.current.mutate({ name: 'test' });
@@ -735,9 +699,7 @@ describe('useMutation', () => {
     it('calls onSettled on success', async () => {
       const onSettled = jest.fn();
       const mutationFn = jest.fn().mockResolvedValue({ id: 1 });
-      const { result } = renderHook(() =>
-        useMutation(mutationFn, { onSettled })
-      );
+      const { result } = renderHook(() => useMutation(mutationFn, { onSettled }));
 
       await act(async () => {
         await result.current.mutate({ name: 'test' });
@@ -750,9 +712,7 @@ describe('useMutation', () => {
       const onSettled = jest.fn();
       const error = new Error('Failed');
       const mutationFn = jest.fn().mockRejectedValue(error);
-      const { result } = renderHook(() =>
-        useMutation(mutationFn, { onSettled })
-      );
+      const { result } = renderHook(() => useMutation(mutationFn, { onSettled }));
 
       await act(async () => {
         await result.current.mutate({ name: 'test' });
@@ -795,28 +755,19 @@ describe('useMutation', () => {
     }
 
     it('supports typed variables', async () => {
-      const mutationFn = jest.fn().mockImplementation(
-        (variables: CreateUserInput): Promise<User> =>
-          Promise.resolve({
-            id: 1,
-            name: variables.name,
-            email: variables.email,
-          })
-      );
+      const mutationFn = jest
+        .fn()
+        .mockImplementation((variables: CreateUserInput): Promise<User> =>
+          Promise.resolve({ id: 1, name: variables.name, email: variables.email }),
+        );
 
-      const { result } = renderHook(() =>
-        useMutation<User, CreateUserInput>(mutationFn)
-      );
+      const { result } = renderHook(() => useMutation<User, CreateUserInput>(mutationFn));
 
       await act(async () => {
         await result.current.mutate({ name: 'John', email: 'john@example.com' });
       });
 
-      expect(result.current.data).toEqual({
-        id: 1,
-        name: 'John',
-        email: 'john@example.com',
-      });
+      expect(result.current.data).toEqual({ id: 1, name: 'John', email: 'john@example.com' });
     });
   });
 });

@@ -155,9 +155,7 @@ export function PersonaEditor({ apiBase = '/api' }: PersonaEditorProps) {
     }
 
     try {
-      const response = await fetch(`${apiBase}/agent/${agentName}/persona`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(`${apiBase}/agent/${agentName}/persona`, { method: 'DELETE' });
 
       if (!response.ok) {
         const data = await response.json();
@@ -272,7 +270,7 @@ export function PersonaEditor({ apiBase = '/api' }: PersonaEditorProps) {
                 isSelected={selectedPersona?.agent_name === persona.agent_name}
                 onClick={() =>
                   setSelectedPersona(
-                    selectedPersona?.agent_name === persona.agent_name ? null : persona
+                    selectedPersona?.agent_name === persona.agent_name ? null : persona,
                   )
                 }
                 onEdit={() => handleEdit(persona)}
@@ -289,7 +287,7 @@ export function PersonaEditor({ apiBase = '/api' }: PersonaEditorProps) {
                 isSelected={selectedPersona?.agent_name === persona.agent_name}
                 onClick={() =>
                   setSelectedPersona(
-                    selectedPersona?.agent_name === persona.agent_name ? null : persona
+                    selectedPersona?.agent_name === persona.agent_name ? null : persona,
                   )
                 }
                 onEdit={() => handleEdit(persona)}
@@ -365,7 +363,9 @@ function PersonaCard({ persona, isSelected, onClick, onEdit, formatDate }: Perso
           >
             [EDIT]
           </button>
-          <span className="text-xs font-theme-data text-text-muted">{formatDate(persona.updated_at)}</span>
+          <span className="text-xs font-theme-data text-text-muted">
+            {formatDate(persona.updated_at)}
+          </span>
         </div>
       </div>
 
@@ -433,7 +433,9 @@ function PersonaRow({ persona, isSelected, onClick, onEdit, formatDate }: Person
       }`}
     >
       <div className="flex-shrink-0 w-32">
-        <span className="text-sm font-theme-data text-[var(--acid-cyan)] font-medium">{persona.agent_name}</span>
+        <span className="text-sm font-theme-data text-[var(--acid-cyan)] font-medium">
+          {persona.agent_name}
+        </span>
       </div>
 
       <div className="flex-1 min-w-0">
@@ -444,7 +446,9 @@ function PersonaRow({ persona, isSelected, onClick, onEdit, formatDate }: Person
 
       <div className="flex-shrink-0 flex items-center gap-2">
         <span className="text-xs font-theme-data text-purple">{persona.traits.length} traits</span>
-        <span className="text-xs font-theme-data text-[var(--accent)]">{expertiseCount} expertise</span>
+        <span className="text-xs font-theme-data text-[var(--accent)]">
+          {expertiseCount} expertise
+        </span>
       </div>
 
       <button
@@ -458,7 +462,9 @@ function PersonaRow({ persona, isSelected, onClick, onEdit, formatDate }: Person
       </button>
 
       <div className="flex-shrink-0 w-24 text-right">
-        <span className="text-xs font-theme-data text-text-muted">{formatDate(persona.updated_at)}</span>
+        <span className="text-xs font-theme-data text-text-muted">
+          {formatDate(persona.updated_at)}
+        </span>
       </div>
     </div>
   );
@@ -550,7 +556,9 @@ function PersonaDetailPanel({
                   </span>
                 ))
               ) : (
-                <span className="text-xs font-theme-data text-text-muted">No expertise defined</span>
+                <span className="text-xs font-theme-data text-text-muted">
+                  No expertise defined
+                </span>
               )}
             </div>
           </div>
@@ -560,11 +568,15 @@ function PersonaDetailPanel({
       <div className="mt-4 pt-4 border-t border-border flex gap-6">
         <div>
           <span className="text-xs font-theme-data text-text-muted">CREATED: </span>
-          <span className="text-xs font-theme-data text-text-primary">{formatDate(persona.created_at)}</span>
+          <span className="text-xs font-theme-data text-text-primary">
+            {formatDate(persona.created_at)}
+          </span>
         </div>
         <div>
           <span className="text-xs font-theme-data text-text-muted">UPDATED: </span>
-          <span className="text-xs font-theme-data text-text-primary">{formatDate(persona.updated_at)}</span>
+          <span className="text-xs font-theme-data text-text-primary">
+            {formatDate(persona.updated_at)}
+          </span>
         </div>
       </div>
     </div>
@@ -628,7 +640,9 @@ function PersonaEditModal({
         <div className="p-4 space-y-4">
           {/* Agent Name (only editable on create) */}
           <div>
-            <label className="block text-xs font-theme-data text-text-muted mb-1">AGENT NAME *</label>
+            <label className="block text-xs font-theme-data text-text-muted mb-1">
+              AGENT NAME *
+            </label>
             <input
               type="text"
               value={persona.agent_name}
@@ -643,7 +657,9 @@ function PersonaEditModal({
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-theme-data text-text-muted mb-1">DESCRIPTION</label>
+            <label className="block text-xs font-theme-data text-text-muted mb-1">
+              DESCRIPTION
+            </label>
             <textarea
               value={persona.description}
               onChange={(e) => onChange({ ...persona, description: e.target.value })}

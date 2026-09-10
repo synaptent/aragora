@@ -42,10 +42,7 @@ function mockFetchSuccess(personas = mockPersonas) {
       });
     }
     // /personas endpoint
-    return Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ personas }),
-    });
+    return Promise.resolve({ ok: true, json: () => Promise.resolve({ personas }) });
   });
 }
 
@@ -218,7 +215,7 @@ describe('PersonaEditor', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByPlaceholderText(/Search personas by name, traits, or expertise/)
+          screen.getByPlaceholderText(/Search personas by name, traits, or expertise/),
         ).toBeInTheDocument();
       });
     });
@@ -234,10 +231,7 @@ describe('PersonaEditor', () => {
       });
 
       await act(async () => {
-        await user.type(
-          screen.getByPlaceholderText(/Search personas/),
-          'claude'
-        );
+        await user.type(screen.getByPlaceholderText(/Search personas/), 'claude');
       });
 
       expect(screen.getByText('claude')).toBeInTheDocument();
@@ -256,10 +250,7 @@ describe('PersonaEditor', () => {
       });
 
       await act(async () => {
-        await user.type(
-          screen.getByPlaceholderText(/Search personas/),
-          'multimodal'
-        );
+        await user.type(screen.getByPlaceholderText(/Search personas/), 'multimodal');
       });
 
       expect(screen.getByText('gemini')).toBeInTheDocument();
@@ -277,10 +268,7 @@ describe('PersonaEditor', () => {
       });
 
       await act(async () => {
-        await user.type(
-          screen.getByPlaceholderText(/Search personas/),
-          'coding'
-        );
+        await user.type(screen.getByPlaceholderText(/Search personas/), 'coding');
       });
 
       expect(screen.getByText('claude')).toBeInTheDocument();
@@ -298,10 +286,7 @@ describe('PersonaEditor', () => {
       });
 
       await act(async () => {
-        await user.type(
-          screen.getByPlaceholderText(/Search personas/),
-          'nonexistent'
-        );
+        await user.type(screen.getByPlaceholderText(/Search personas/), 'nonexistent');
       });
 
       expect(screen.getByText('No personas match your search')).toBeInTheDocument();

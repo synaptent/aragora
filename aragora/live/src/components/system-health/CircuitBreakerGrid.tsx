@@ -3,9 +3,17 @@
 import { useCircuitBreakers } from '@/hooks/useSystemHealth';
 
 const STATE_BADGE: Record<string, { text: string; border: string; bg: string }> = {
-  closed: { text: 'text-[var(--accent)]', border: 'border-[var(--accent)]/40', bg: 'bg-[var(--accent)]/10' },
+  closed: {
+    text: 'text-[var(--accent)]',
+    border: 'border-[var(--accent)]/40',
+    bg: 'bg-[var(--accent)]/10',
+  },
   open: { text: 'text-acid-red', border: 'border-acid-red/40', bg: 'bg-acid-red/10' },
-  'half-open': { text: 'text-[var(--acid-yellow)]', border: 'border-acid-yellow/40', bg: 'bg-acid-yellow/10' },
+  'half-open': {
+    text: 'text-[var(--acid-yellow)]',
+    border: 'border-acid-yellow/40',
+    bg: 'bg-acid-yellow/10',
+  },
 };
 
 export function CircuitBreakerGrid() {
@@ -35,15 +43,18 @@ export function CircuitBreakerGrid() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {breakers.map((b) => {
             const badge = STATE_BADGE[b.state] || STATE_BADGE.closed;
-            const barColor = b.success_rate > 0.95
-              ? 'bg-[var(--accent)]'
-              : b.success_rate > 0.7
-              ? 'bg-acid-yellow'
-              : 'bg-acid-red';
+            const barColor =
+              b.success_rate > 0.95
+                ? 'bg-[var(--accent)]'
+                : b.success_rate > 0.7
+                  ? 'bg-acid-yellow'
+                  : 'bg-acid-red';
             return (
               <div key={b.name} className="card p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-theme-data text-xs text-text truncate max-w-[60%]">{b.name}</span>
+                  <span className="font-theme-data text-xs text-text truncate max-w-[60%]">
+                    {b.name}
+                  </span>
                   <span
                     className={`text-[10px] font-theme-data px-2 py-0.5 border rounded ${badge.text} ${badge.border} ${badge.bg}`}
                   >

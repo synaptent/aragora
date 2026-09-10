@@ -8,11 +8,11 @@
  * Categories for organizing shortcuts in the help modal
  */
 export type ShortcutCategory =
-  | 'navigation'   // g+i, g+s, etc. - Go to pages
-  | 'debates'      // n, p, r, e, f, s - Debate actions
-  | 'list'         // j, k, o, x - List navigation
-  | 'selection'    // *, x - Selection actions
-  | 'compose'      // c - Create new items
+  | 'navigation' // g+i, g+s, etc. - Go to pages
+  | 'debates' // n, p, r, e, f, s - Debate actions
+  | 'list' // j, k, o, x - List navigation
+  | 'selection' // *, x - Selection actions
+  | 'compose' // c - Create new items
   | 'application'; // ?, /, Escape - App-level shortcuts
 
 /**

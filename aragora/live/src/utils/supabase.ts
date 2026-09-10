@@ -38,9 +38,7 @@ const urlValid = isValidSupabaseUrl(supabaseUrl);
 const keyValid = isValidSupabaseKey(supabaseAnonKey);
 
 // Create client only if both URL and key appear valid
-export const supabase = urlValid && keyValid
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+export const supabase = urlValid && keyValid ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 // Whether Supabase is properly configured
 export const SUPABASE_CONFIGURED = supabase !== null;
@@ -69,7 +67,9 @@ export function getSupabaseWarning(): string | null {
   if (!supabaseAnonKey) {
     issues.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is missing');
   } else if (!keyValid) {
-    issues.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is not valid (should start with "sb_publishable_" or "eyJ...")');
+    issues.push(
+      'NEXT_PUBLIC_SUPABASE_ANON_KEY is not valid (should start with "sb_publishable_" or "eyJ...")',
+    );
   }
 
   if (issues.length === 0) {
@@ -168,10 +168,7 @@ export async function fetchCyclesForLoop(loopId: string): Promise<NomicCycle[]> 
 }
 
 // Fetch events for a specific loop
-export async function fetchEventsForLoop(
-  loopId: string,
-  limit = 500
-): Promise<StreamEventRow[]> {
+export async function fetchEventsForLoop(loopId: string, limit = 500): Promise<StreamEventRow[]> {
   if (!supabase) return [];
 
   const { data, error } = await supabase
@@ -210,7 +207,7 @@ export async function fetchDebatesForLoop(loopId: string): Promise<DebateArtifac
 // Subscribe to real-time events for a loop
 export function subscribeToEvents(
   loopId: string,
-  onEvent: (event: StreamEventRow) => void
+  onEvent: (event: StreamEventRow) => void,
 ): (() => void) | null {
   if (!supabase) return null;
 
@@ -218,15 +215,10 @@ export function subscribeToEvents(
     .channel(`events:${loopId}`)
     .on(
       'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'stream_events',
-        filter: `loop_id=eq.${loopId}`,
-      },
+      { event: 'INSERT', schema: 'public', table: 'stream_events', filter: `loop_id=eq.${loopId}` },
       (payload) => {
         onEvent(payload.new as StreamEventRow);
-      }
+      },
     )
     .subscribe();
 
@@ -274,7 +266,7 @@ export async function fetchRecentDebates(limit = 20): Promise<DebateArtifact[]> 
 
 // Subscribe to all new events (for global monitoring)
 export function subscribeToAllEvents(
-  onEvent: (event: StreamEventRow) => void
+  onEvent: (event: StreamEventRow) => void,
 ): (() => void) | null {
   if (!supabase) return null;
 
@@ -282,14 +274,10 @@ export function subscribeToAllEvents(
     .channel('all-events')
     .on(
       'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'stream_events',
-      },
+      { event: 'INSERT', schema: 'public', table: 'stream_events' },
       (payload) => {
         onEvent(payload.new as StreamEventRow);
-      }
+      },
     )
     .subscribe();
 

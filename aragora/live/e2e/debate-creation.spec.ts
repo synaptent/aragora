@@ -42,9 +42,10 @@ test.describe('Debate Creation', () => {
 
   test('should show advanced options toggle', async ({ page }) => {
     // Look for advanced options button
-    const advancedToggle = page.locator('button, [role="button"]').filter({
-      hasText: /advanced|options|settings|configure/i
-    }).first();
+    const advancedToggle = page
+      .locator('button, [role="button"]')
+      .filter({ hasText: /advanced|options|settings|configure/i })
+      .first();
 
     if (await advancedToggle.isVisible()) {
       await advancedToggle.click();
@@ -55,17 +56,19 @@ test.describe('Debate Creation', () => {
 
   test('should allow selecting debate mode', async ({ page }) => {
     // Open advanced options first
-    const advancedToggle = page.locator('button, [role="button"]').filter({
-      hasText: /advanced|options|settings/i
-    }).first();
+    const advancedToggle = page
+      .locator('button, [role="button"]')
+      .filter({ hasText: /advanced|options|settings/i })
+      .first();
 
     if (await advancedToggle.isVisible()) {
       await advancedToggle.click();
 
       // Check for mode selector
-      const modeSelector = page.locator('select, [role="listbox"], button').filter({
-        hasText: /standard|graph|matrix/i
-      }).first();
+      const modeSelector = page
+        .locator('select, [role="listbox"], button')
+        .filter({ hasText: /standard|graph|matrix/i })
+        .first();
 
       if (await modeSelector.isVisible()) {
         await expect(modeSelector).toBeEnabled();
@@ -75,9 +78,10 @@ test.describe('Debate Creation', () => {
 
   test('should allow selecting agents', async ({ page }) => {
     // Open advanced options
-    const advancedToggle = page.locator('button, [role="button"]').filter({
-      hasText: /advanced|options|settings/i
-    }).first();
+    const advancedToggle = page
+      .locator('button, [role="button"]')
+      .filter({ hasText: /advanced|options|settings/i })
+      .first();
 
     if (await advancedToggle.isVisible()) {
       await advancedToggle.click();
@@ -90,9 +94,10 @@ test.describe('Debate Creation', () => {
 
   test('should show API status indicator', async ({ page }) => {
     // Look for connection/status indicator
-    const statusIndicator = page.locator('[class*="status"], [class*="online"], [class*="connected"]').or(
-      page.locator('text=/online|connected|api/i')
-    ).first();
+    const statusIndicator = page
+      .locator('[class*="status"], [class*="online"], [class*="connected"]')
+      .or(page.locator('text=/online|connected|api/i'))
+      .first();
 
     // Some kind of status should be visible
     await expect(statusIndicator).toBeVisible({ timeout: 10000 });
@@ -117,9 +122,10 @@ test.describe('Debate Creation', () => {
     await questionInput.fill('Should AI systems be open source?');
 
     // Find and click submit button
-    const submitButton = page.locator('button[type="submit"], button').filter({
-      hasText: /start|debate|submit|go/i
-    }).first();
+    const submitButton = page
+      .locator('button[type="submit"], button')
+      .filter({ hasText: /start|debate|submit|go/i })
+      .first();
 
     if (await submitButton.isVisible()) {
       await submitButton.click();
@@ -129,7 +135,9 @@ test.describe('Debate Creation', () => {
 
       // Should either navigate or show debate ID
       const url = page.url();
-      const debateIndicator = page.locator('text=/test-debate-123|debate.*progress|viewing/i').first();
+      const debateIndicator = page
+        .locator('text=/test-debate-123|debate.*progress|viewing/i')
+        .first();
 
       const hasNavigated = url.includes('debate') || url.includes('test-debate-123');
       const hasDebateIndicator = await debateIndicator.isVisible().catch(() => false);
@@ -141,7 +149,7 @@ test.describe('Debate Creation', () => {
   test('should show loading state while submitting', async ({ page }) => {
     // Slow down the API response
     await page.route('**/api/debate', async (route) => {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -152,17 +160,19 @@ test.describe('Debate Creation', () => {
     const questionInput = page.locator('textarea, input[type="text"]').first();
     await questionInput.fill('Test question');
 
-    const submitButton = page.locator('button[type="submit"], button').filter({
-      hasText: /start|debate|submit|go/i
-    }).first();
+    const submitButton = page
+      .locator('button[type="submit"], button')
+      .filter({ hasText: /start|debate|submit|go/i })
+      .first();
 
     if (await submitButton.isVisible()) {
       await submitButton.click();
 
       // Should show loading state
-      const loadingIndicator = page.locator('[class*="loading"], [class*="spinner"], [disabled]').or(
-        page.locator('button').filter({ hasText: /loading|submitting|starting/i })
-      ).first();
+      const loadingIndicator = page
+        .locator('[class*="loading"], [class*="spinner"], [disabled]')
+        .or(page.locator('button').filter({ hasText: /loading|submitting|starting/i }))
+        .first();
 
       await expect(loadingIndicator).toBeVisible({ timeout: 1000 });
     }
@@ -181,26 +191,29 @@ test.describe('Debate Creation', () => {
     const questionInput = page.locator('textarea, input[type="text"]').first();
     await questionInput.fill('Test question');
 
-    const submitButton = page.locator('button[type="submit"], button').filter({
-      hasText: /start|debate|submit|go/i
-    }).first();
+    const submitButton = page
+      .locator('button[type="submit"], button')
+      .filter({ hasText: /start|debate|submit|go/i })
+      .first();
 
     if (await submitButton.isVisible()) {
       await submitButton.click();
 
       // Should show error message
-      const errorMessage = page.locator('[class*="error"], [class*="warning"], [role="alert"]').or(
-        page.locator('text=/error|failed|problem/i')
-      ).first();
+      const errorMessage = page
+        .locator('[class*="error"], [class*="warning"], [role="alert"]')
+        .or(page.locator('text=/error|failed|problem/i'))
+        .first();
 
       await expect(errorMessage).toBeVisible({ timeout: 5000 });
     }
   });
 
   test('should prevent empty submission', async ({ page }) => {
-    const submitButton = page.locator('button[type="submit"], button').filter({
-      hasText: /start|debate|submit|go/i
-    }).first();
+    const submitButton = page
+      .locator('button[type="submit"], button')
+      .filter({ hasText: /start|debate|submit|go/i })
+      .first();
 
     if (await submitButton.isVisible()) {
       // Try to click without filling question

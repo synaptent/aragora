@@ -107,12 +107,7 @@ export function TrendChart({
     const values = data.map((d) => d.value);
     const max = Math.max(...values);
     const min = Math.min(...values, 0); // Include 0 in min
-    return {
-      maxValue: max || 100,
-      minValue: min,
-      chartData: data,
-      range: (max - min) || 1,
-    };
+    return { maxValue: max || 100, minValue: min, chartData: data, range: max - min || 1 };
   }, [data]);
 
   const padding = { top: 20, right: 20, bottom: 35, left: 55 };
@@ -182,10 +177,7 @@ export function TrendChart({
             <stop offset="100%" style={{ stopColor: colors.fillRgba.replace('0.15', '0.05') }} />
           </linearGradient>
         </defs>
-        <path
-          d={areaPath}
-          fill={`url(#gradient-${color})`}
-        />
+        <path d={areaPath} fill={`url(#gradient-${color})`} />
         {/* Line on top */}
         <path
           d={linePath}
@@ -213,8 +205,8 @@ export function TrendChart({
   const renderBarChart = () => {
     if (chartData.length === 0) return null;
 
-    const barWidth = 100 / chartData.length * 0.6;
-    const gap = 100 / chartData.length * 0.2;
+    const barWidth = (100 / chartData.length) * 0.6;
+    const gap = (100 / chartData.length) * 0.2;
 
     return (
       <g>
@@ -268,7 +260,7 @@ export function TrendChart({
           >
             {formatValue(value)}
           </text>
-        </g>
+        </g>,
       );
     }
     return lines;
@@ -297,11 +289,7 @@ export function TrendChart({
     });
   };
 
-  const chartRenderer = {
-    line: renderLineChart,
-    area: renderAreaChart,
-    bar: renderBarChart,
-  };
+  const chartRenderer = { line: renderLineChart, area: renderAreaChart, bar: renderBarChart };
 
   return (
     <div className={`card p-4 ${className}`}>
@@ -338,12 +326,7 @@ export function TrendChart({
         </div>
       ) : (
         <div className="relative">
-          <svg
-            width="100%"
-            height={height}
-            className="overflow-visible"
-            preserveAspectRatio="none"
-          >
+          <svg width="100%" height={height} className="overflow-visible" preserveAspectRatio="none">
             <g transform={`translate(${padding.left}, ${padding.top})`}>
               {renderGrid()}
               {chartRenderer[type]()}

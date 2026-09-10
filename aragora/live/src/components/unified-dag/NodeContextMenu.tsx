@@ -48,61 +48,91 @@ export function NodeContextMenu({
     {
       label: 'Debate',
       icon: '\u2694',
-      action: () => { onDebate(nodeId); onClose(); },
+      action: () => {
+        onDebate(nodeId);
+        onClose();
+      },
       stages: ['ideas', 'principles', 'goals'],
     },
     {
       label: 'Decompose',
       icon: '\u2702',
-      action: () => { onDecompose(nodeId); onClose(); },
+      action: () => {
+        onDecompose(nodeId);
+        onClose();
+      },
       stages: ['ideas', 'goals'],
     },
     {
       label: 'Prioritize',
       icon: '\u2195',
-      action: () => { onPrioritize(nodeId); onClose(); },
+      action: () => {
+        onPrioritize(nodeId);
+        onClose();
+      },
       stages: ['goals', 'actions'],
     },
     {
       label: 'Assign Agents',
       icon: '\u{1F464}',
-      action: () => { onAssignAgents(nodeId); onClose(); },
+      action: () => {
+        onAssignAgents(nodeId);
+        onClose();
+      },
       stages: ['actions', 'orchestration'],
     },
     {
       label: 'Execute',
       icon: '\u25B6',
-      action: () => { onExecute(nodeId); onClose(); },
+      action: () => {
+        onExecute(nodeId);
+        onClose();
+      },
       stages: ['actions', 'orchestration'],
     },
     {
       label: 'Find Precedents',
       icon: '\u{1F50D}',
-      action: () => { onFindPrecedents(nodeId); onClose(); },
+      action: () => {
+        onFindPrecedents(nodeId);
+        onClose();
+      },
       stages: ['ideas', 'principles', 'goals', 'actions', 'orchestration'],
     },
     {
       label: 'Validate',
       icon: '\u{1F6E1}',
-      action: () => { onValidate?.(nodeId); onClose(); },
+      action: () => {
+        onValidate?.(nodeId);
+        onClose();
+      },
       stages: ['goals', 'actions'],
     },
     {
       label: 'Enrich with Knowledge',
       icon: '\u{1F4DA}',
-      action: () => { onEnrich?.(nodeId); onClose(); },
+      action: () => {
+        onEnrich?.(nodeId);
+        onClose();
+      },
       stages: ['ideas', 'principles', 'goals', 'actions', 'orchestration'],
     },
     {
       label: 'Improve This',
       icon: '\u2728',
-      action: () => { onImprove?.(nodeId); onClose(); },
+      action: () => {
+        onImprove?.(nodeId);
+        onClose();
+      },
       stages: ['ideas', 'principles', 'goals', 'actions', 'orchestration'],
     },
     {
       label: 'Delete',
       icon: '\u{1F5D1}',
-      action: () => { onDelete(nodeId); onClose(); },
+      action: () => {
+        onDelete(nodeId);
+        onClose();
+      },
       stages: ['ideas', 'principles', 'goals', 'actions', 'orchestration'],
     },
   ];

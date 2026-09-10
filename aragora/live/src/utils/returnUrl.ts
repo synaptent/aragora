@@ -4,13 +4,18 @@ export const DEFAULT_RETURN_URL = '/';
 const BLOCKED_PREFIXES = ['/auth/callback', '/auth/login', '/login', '/signup'];
 
 function hasBlockedPrefix(path: string): boolean {
-  return BLOCKED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}?`) || path.startsWith(`${prefix}/`));
+  return BLOCKED_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}?`) || path.startsWith(`${prefix}/`),
+  );
 }
 
 /**
  * Ensure redirect paths are local app paths and avoid auth-loop destinations.
  */
-export function normalizeReturnUrl(raw: string | null | undefined, fallback: string = DEFAULT_RETURN_URL): string {
+export function normalizeReturnUrl(
+  raw: string | null | undefined,
+  fallback: string = DEFAULT_RETURN_URL,
+): string {
   if (!raw) return fallback;
 
   const candidate = raw.trim();

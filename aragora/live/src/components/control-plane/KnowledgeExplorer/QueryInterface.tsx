@@ -42,7 +42,7 @@ export function QueryInterface({
       onChange(e.target.value);
       setShowSuggestions(e.target.value.length === 0 && recentQueries.length > 0);
     },
-    [onChange, recentQueries.length]
+    [onChange, recentQueries.length],
   );
 
   // Handle form submit
@@ -54,7 +54,7 @@ export function QueryInterface({
         setShowSuggestions(false);
       }
     },
-    [value, onSearch]
+    [value, onSearch],
   );
 
   // Handle suggestion click
@@ -65,18 +65,15 @@ export function QueryInterface({
       onSearch(query);
       setShowSuggestions(false);
     },
-    [onChange, onSuggestionClick, onSearch]
+    [onChange, onSuggestionClick, onSearch],
   );
 
   // Handle keyboard navigation
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowSuggestions(false);
-      }
-    },
-    []
-  );
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  }, []);
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -101,11 +98,7 @@ export function QueryInterface({
         <div className="relative">
           {/* Search icon */}
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
-            {loading ? (
-              <span className="animate-spin">⟳</span>
-            ) : (
-              <span>🔍</span>
-            )}
+            {loading ? <span className="animate-spin">⟳</span> : <span>🔍</span>}
           </div>
 
           {/* Input */}

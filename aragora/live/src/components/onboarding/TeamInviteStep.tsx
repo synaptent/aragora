@@ -7,11 +7,7 @@ export function TeamInviteStep() {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
 
-  const {
-    teamMembers,
-    addTeamMember,
-    removeTeamMember,
-  } = useOnboardingStore();
+  const { teamMembers, addTeamMember, removeTeamMember } = useOnboardingStore();
 
   const validateEmail = (email: string) => {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -47,9 +43,7 @@ export function TeamInviteStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">
-          Invite Your Team
-        </h3>
+        <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">Invite Your Team</h3>
         <p className="text-sm text-text-muted">
           Add team members who will participate in debates (optional)
         </p>
@@ -57,9 +51,7 @@ export function TeamInviteStep() {
 
       {/* Email Input */}
       <div>
-        <label className="block text-sm font-theme-data text-text mb-2">
-          Team Member Email
-        </label>
+        <label className="block text-sm font-theme-data text-text mb-2">Team Member Email</label>
         <div className="flex gap-2">
           <input
             type="email"
@@ -79,9 +71,7 @@ export function TeamInviteStep() {
             ADD
           </button>
         </div>
-        {emailError && (
-          <p className="text-xs text-accent-red mt-1">{emailError}</p>
-        )}
+        {emailError && <p className="text-xs text-accent-red mt-1">{emailError}</p>}
       </div>
 
       {/* Team Members List */}
@@ -97,12 +87,8 @@ export function TeamInviteStep() {
                 className="flex items-center justify-between px-4 py-2 border border-[var(--accent)]/20 rounded"
               >
                 <div>
-                  <span className="text-sm text-text font-theme-data">
-                    {member.email}
-                  </span>
-                  <span className="text-xs text-text-muted ml-2">
-                    ({member.role})
-                  </span>
+                  <span className="text-sm text-text font-theme-data">{member.email}</span>
+                  <span className="text-xs text-text-muted ml-2">({member.role})</span>
                 </div>
                 <button
                   onClick={() => removeTeamMember(member.email)}

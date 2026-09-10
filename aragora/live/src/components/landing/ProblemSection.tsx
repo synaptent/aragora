@@ -13,17 +13,20 @@ const PROBLEMS: ProblemCard[] = [
   {
     icon: '\u26A0\uFE0F',
     title: 'Hallucination',
-    description: 'When multiple AI models check each other, made-up facts get caught before they reach you.',
+    description:
+      'When multiple AI models check each other, made-up facts get caught before they reach you.',
   },
   {
     icon: '\uD83E\uDD1D',
     title: 'Sycophancy',
-    description: 'AI agents are rewarded for poking holes, not for telling you what you want to hear.',
+    description:
+      'AI agents are rewarded for poking holes, not for telling you what you want to hear.',
   },
   {
     icon: '\uD83D\uDD00',
     title: 'Inconsistency',
-    description: 'Multiple rounds of structured debate produce positions that hold up under scrutiny.',
+    description:
+      'Multiple rounds of structured debate produce positions that hold up under scrutiny.',
   },
 ];
 

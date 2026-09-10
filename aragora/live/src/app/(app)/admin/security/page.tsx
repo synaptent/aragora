@@ -48,17 +48,10 @@ interface SecretsScanResult {
 
 interface SecurityHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
-  encryption_service: {
-    available: boolean;
-    latency_ms?: number;
-  };
+  encryption_service: { available: boolean; latency_ms?: number };
   key_age_days: number;
   rotation_recommended: boolean;
-  compliance: {
-    soc2_compliant: boolean;
-    key_rotation_policy: string;
-    last_audit?: string;
-  };
+  compliance: { soc2_compliant: boolean; key_rotation_policy: string; last_audit?: string };
 }
 
 interface EncryptionKey {
@@ -83,7 +76,9 @@ function StatusBadge({ status }: { status: string }) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.degraded}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.degraded}`}
+    >
       {status.toUpperCase()}
     </span>
   );
@@ -130,14 +125,18 @@ export default function SecurityAdminPage() {
       const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
       // Fetch security status
-      const statusRes = await fetch(`${backendConfig.api}/api/v1/admin/security/status`, { headers });
+      const statusRes = await fetch(`${backendConfig.api}/api/v1/admin/security/status`, {
+        headers,
+      });
       if (statusRes.ok) {
         const data = await statusRes.json();
         setStatus(data);
       }
 
       // Fetch security health
-      const healthRes = await fetch(`${backendConfig.api}/api/v1/admin/security/health`, { headers });
+      const healthRes = await fetch(`${backendConfig.api}/api/v1/admin/security/health`, {
+        headers,
+      });
       if (healthRes.ok) {
         const data = await healthRes.json();
         setHealth(data);
@@ -205,7 +204,7 @@ export default function SecurityAdminPage() {
           try {
             const resultRes = await fetch(
               buildSecretsScanUrl(backendConfig.api, scanData.scan_id),
-              { headers }
+              { headers },
             );
 
             if (!resultRes.ok) {
@@ -281,7 +280,9 @@ export default function SecurityAdminPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading Security Dashboard...</div>
+        <div className="text-[var(--accent)] font-theme-data animate-pulse">
+          Loading Security Dashboard...
+        </div>
       </div>
     );
   }
@@ -298,11 +299,16 @@ export default function SecurityAdminPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <Link href="/admin" className="text-text-muted hover:text-text mb-2 inline-block text-sm">
+            <Link
+              href="/admin"
+              className="text-text-muted hover:text-text mb-2 inline-block text-sm"
+            >
               &larr; Back to Admin
             </Link>
             <h1 className="text-2xl font-theme-data text-[var(--accent)]">Security Dashboard</h1>
-            <p className="text-sm text-text-muted font-theme-data">Encryption keys and security compliance</p>
+            <p className="text-sm text-text-muted font-theme-data">
+              Encryption keys and security compliance
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <BackendSelector />
@@ -326,7 +332,9 @@ export default function SecurityAdminPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="card p-4">
             <div className="text-xs font-theme-data text-text-muted mb-1">Encryption</div>
-            <div className={`text-xl font-theme-data ${status?.encryption_enabled ? 'text-[var(--accent)]' : 'text-acid-red'}`}>
+            <div
+              className={`text-xl font-theme-data ${status?.encryption_enabled ? 'text-[var(--accent)]' : 'text-acid-red'}`}
+            >
               {status?.encryption_enabled ? 'ENABLED' : 'DISABLED'}
             </div>
           </div>
@@ -338,13 +346,17 @@ export default function SecurityAdminPage() {
           </div>
           <div className="card p-4">
             <div className="text-xs font-theme-data text-text-muted mb-1">Key Age</div>
-            <div className={`text-xl font-theme-data ${rotationDue ? 'text-[var(--acid-yellow)]' : 'text-[var(--accent)]'}`}>
+            <div
+              className={`text-xl font-theme-data ${rotationDue ? 'text-[var(--acid-yellow)]' : 'text-[var(--accent)]'}`}
+            >
               {keyAgeDays} days
             </div>
           </div>
           <div className="card p-4">
             <div className="text-xs font-theme-data text-text-muted mb-1">SOC 2 Status</div>
-            <div className={`text-xl font-theme-data ${health?.compliance?.soc2_compliant ? 'text-[var(--accent)]' : 'text-[var(--acid-yellow)]'}`}>
+            <div
+              className={`text-xl font-theme-data ${health?.compliance?.soc2_compliant ? 'text-[var(--accent)]' : 'text-[var(--acid-yellow)]'}`}
+            >
               {health?.compliance?.soc2_compliant ? 'COMPLIANT' : 'REVIEW'}
             </div>
           </div>
@@ -356,9 +368,12 @@ export default function SecurityAdminPage() {
             <div className="flex items-center gap-3">
               <span className="text-[var(--acid-yellow)] text-2xl">!</span>
               <div>
-                <div className="text-[var(--acid-yellow)] font-theme-data">Key Rotation Recommended</div>
+                <div className="text-[var(--acid-yellow)] font-theme-data">
+                  Key Rotation Recommended
+                </div>
                 <div className="text-sm text-text-muted font-theme-data">
-                  Current key is {keyAgeDays} days old. SOC 2 CC6.1 recommends rotation every 90 days.
+                  Current key is {keyAgeDays} days old. SOC 2 CC6.1 recommends rotation every 90
+                  days.
                 </div>
               </div>
             </div>
@@ -371,7 +386,10 @@ export default function SecurityAdminPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             <div>
               <div className="text-xs font-theme-data text-text-muted">Key ID</div>
-              <div className="text-sm font-theme-data text-text truncate" title={status?.active_key_id}>
+              <div
+                className="text-sm font-theme-data text-text truncate"
+                title={status?.active_key_id}
+              >
                 {status?.active_key_id?.slice(0, 16)}...
               </div>
             </div>
@@ -381,11 +399,15 @@ export default function SecurityAdminPage() {
             </div>
             <div>
               <div className="text-xs font-theme-data text-text-muted">Created</div>
-              <div className="text-sm font-theme-data text-text">{formatDateTime(status?.key_created_at)}</div>
+              <div className="text-sm font-theme-data text-text">
+                {formatDateTime(status?.key_created_at)}
+              </div>
             </div>
             <div>
               <div className="text-xs font-theme-data text-text-muted">Last Rotation</div>
-              <div className="text-sm font-theme-data text-text">{formatDateTime(status?.last_rotation_at)}</div>
+              <div className="text-sm font-theme-data text-text">
+                {formatDateTime(status?.last_rotation_at)}
+              </div>
             </div>
           </div>
 
@@ -395,7 +417,8 @@ export default function SecurityAdminPage() {
               <div>
                 <div className="text-sm font-theme-data text-text">Rotate Encryption Key</div>
                 <div className="text-xs font-theme-data text-text-muted">
-                  Creates a new key and re-encrypts all secrets. Existing data will be decrypted with old key and re-encrypted with new key.
+                  Creates a new key and re-encrypts all secrets. Existing data will be decrypted
+                  with old key and re-encrypted with new key.
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -419,8 +442,8 @@ export default function SecurityAdminPage() {
                   {actionLoading === 'rotate'
                     ? 'Rotating...'
                     : rotationConfirm
-                    ? 'Confirm Rotation'
-                    : 'Rotate Key'}
+                      ? 'Confirm Rotation'
+                      : 'Rotate Key'}
                 </button>
               </div>
             </div>
@@ -457,9 +480,7 @@ export default function SecurityAdminPage() {
                       </td>
                       <td className="py-2 text-text-muted">{key.algorithm}</td>
                       <td className="py-2 text-text-muted">{formatDate(key.created_at)}</td>
-                      <td className="py-2 text-text-muted">
-                        {key.used_for?.join(', ') || 'All'}
-                      </td>
+                      <td className="py-2 text-text-muted">{key.used_for?.join(', ') || 'All'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -501,7 +522,8 @@ export default function SecurityAdminPage() {
             <div className="flex items-center gap-4">
               <StatusBadge status={health.status} />
               <span className="text-sm font-theme-data text-text">
-                Encryption service {health.encryption_service?.available ? 'available' : 'unavailable'}
+                Encryption service{' '}
+                {health.encryption_service?.available ? 'available' : 'unavailable'}
               </span>
               {health.encryption_service?.latency_ms && (
                 <span className="text-sm font-theme-data text-text-muted">
@@ -534,7 +556,9 @@ export default function SecurityAdminPage() {
                 onChange={(e) => setIncludeHistory(e.target.checked)}
                 className="w-4 h-4 accent-acid-green"
               />
-              <span className="font-theme-data text-sm text-text-muted whitespace-nowrap">Scan Git History</span>
+              <span className="font-theme-data text-sm text-text-muted whitespace-nowrap">
+                Scan Git History
+              </span>
             </label>
             <button
               onClick={handleSecretsScan}
@@ -550,7 +574,9 @@ export default function SecurityAdminPage() {
             <div className="border-t border-border pt-4 mt-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <StatusBadge status={secretsScan.summary.total_secrets > 0 ? 'degraded' : 'healthy'} />
+                  <StatusBadge
+                    status={secretsScan.summary.total_secrets > 0 ? 'degraded' : 'healthy'}
+                  />
                   <span className="font-theme-data text-sm text-text">
                     {secretsScan.summary.total_secrets} secrets found
                   </span>
@@ -565,19 +591,27 @@ export default function SecurityAdminPage() {
               {secretsScan.summary.total_secrets > 0 && (
                 <div className="grid grid-cols-4 gap-2 mb-4">
                   <div className="p-2 bg-acid-red/10 border border-acid-red/40 rounded text-center">
-                    <div className="text-lg font-theme-data text-acid-red">{secretsScan.summary.critical_count}</div>
+                    <div className="text-lg font-theme-data text-acid-red">
+                      {secretsScan.summary.critical_count}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Critical</div>
                   </div>
                   <div className="p-2 bg-acid-yellow/10 border border-acid-yellow/40 rounded text-center">
-                    <div className="text-lg font-theme-data text-[var(--acid-yellow)]">{secretsScan.summary.high_count}</div>
+                    <div className="text-lg font-theme-data text-[var(--acid-yellow)]">
+                      {secretsScan.summary.high_count}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">High</div>
                   </div>
                   <div className="p-2 bg-[var(--acid-cyan)]/10 border border-[var(--acid-cyan)]/40 rounded text-center">
-                    <div className="text-lg font-theme-data text-[var(--acid-cyan)]">{secretsScan.summary.medium_count}</div>
+                    <div className="text-lg font-theme-data text-[var(--acid-cyan)]">
+                      {secretsScan.summary.medium_count}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Medium</div>
                   </div>
                   <div className="p-2 bg-text-muted/10 border border-text-muted/40 rounded text-center">
-                    <div className="text-lg font-theme-data text-text-muted">{secretsScan.summary.low_count}</div>
+                    <div className="text-lg font-theme-data text-text-muted">
+                      {secretsScan.summary.low_count}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Low</div>
                   </div>
                 </div>
@@ -598,7 +632,10 @@ export default function SecurityAdminPage() {
                     </thead>
                     <tbody>
                       {secretsScan.secrets.slice(0, 20).map((secret) => (
-                        <tr key={secret.id} className="border-b border-border/50 hover:bg-surface/50">
+                        <tr
+                          key={secret.id}
+                          className="border-b border-border/50 hover:bg-surface/50"
+                        >
                           <td className="py-2 text-text">
                             {secret.secret_type.replace(/_/g, ' ')}
                             {secret.is_in_history && (
@@ -606,13 +643,27 @@ export default function SecurityAdminPage() {
                             )}
                           </td>
                           <td className="py-2">
-                            <StatusBadge status={secret.severity === 'critical' ? 'unhealthy' : secret.severity === 'high' ? 'degraded' : 'healthy'} />
+                            <StatusBadge
+                              status={
+                                secret.severity === 'critical'
+                                  ? 'unhealthy'
+                                  : secret.severity === 'high'
+                                    ? 'degraded'
+                                    : 'healthy'
+                              }
+                            />
                           </td>
-                          <td className="py-2 text-text-muted truncate max-w-[200px]" title={secret.file_path}>
+                          <td
+                            className="py-2 text-text-muted truncate max-w-[200px]"
+                            title={secret.file_path}
+                          >
                             {secret.file_path}
                           </td>
                           <td className="py-2 text-text-muted">{secret.line_number}</td>
-                          <td className="py-2 text-[var(--acid-cyan)] truncate max-w-[150px]" title={secret.matched_text}>
+                          <td
+                            className="py-2 text-[var(--acid-cyan)] truncate max-w-[150px]"
+                            title={secret.matched_text}
+                          >
                             {secret.matched_text}
                           </td>
                         </tr>

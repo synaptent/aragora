@@ -12,9 +12,9 @@ export async function generateStaticParams() {
 }
 
 // Generate dynamic metadata for OG cards
-export async function generateMetadata(
-  props: { params: Promise<{ id?: string[] }> },
-): Promise<Metadata> {
+export async function generateMetadata(props: {
+  params: Promise<{ id?: string[] }>;
+}): Promise<Metadata> {
   const params = await props.params;
   const debateId = params.id?.[0];
 
@@ -22,8 +22,7 @@ export async function generateMetadata(
   if (!debateId) {
     return {
       title: 'ARAGORA Debate Viewer',
-      description:
-        'Watch AI agents debate and reach consensus in real-time',
+      description: 'Watch AI agents debate and reach consensus in real-time',
     };
   }
 
@@ -72,9 +71,7 @@ export async function generateMetadata(
   };
 }
 
-export default async function DebateViewerPage(
-  props: { params: Promise<{ id?: string[] }> },
-) {
+export default async function DebateViewerPage(props: { params: Promise<{ id?: string[] }> }) {
   const params = await props.params;
   const debateId = params.id?.[0];
 

@@ -80,15 +80,7 @@ function metricEntries(metrics: Record<string, number> | undefined): Array<[stri
   return Object.entries(metrics ?? {});
 }
 
-function StatCard({
-  label,
-  value,
-  sublabel,
-}: {
-  label: string;
-  value: string;
-  sublabel: string;
-}) {
+function StatCard({ label, value, sublabel }: { label: string; value: string; sublabel: string }) {
   return (
     <div className="rounded-lg border border-[var(--accent)]/20 bg-surface/70 p-4">
       <div className="text-[10px] font-theme-data uppercase tracking-[0.25em] text-text-muted">
@@ -100,13 +92,7 @@ function StatCard({
   );
 }
 
-function DistributionList({
-  title,
-  items,
-}: {
-  title: string;
-  items: Array<[string, number]>;
-}) {
+function DistributionList({ title, items }: { title: string; items: Array<[string, number]> }) {
   return (
     <section className="rounded-lg border border-[var(--accent)]/20 bg-surface/60 p-4">
       <div className="text-xs font-theme-data uppercase tracking-[0.25em] text-text-muted">
@@ -139,7 +125,9 @@ function BlockerRow({ blocker }: { blocker: SwarmBlocker }) {
         <span className="text-xs font-theme-data text-[var(--accent)]">
           #{blocker.issue_number ?? 'unknown'}
         </span>
-        <span className={`rounded border px-2 py-0.5 text-[10px] font-theme-data uppercase ${toneForTerminalClass(blocker.terminal_class)}`}>
+        <span
+          className={`rounded border px-2 py-0.5 text-[10px] font-theme-data uppercase ${toneForTerminalClass(blocker.terminal_class)}`}
+        >
           {blocker.terminal_class || 'unknown'}
         </span>
         {blocker.blocker_kind ? (
@@ -167,10 +155,7 @@ export default function SwarmStatusPage() {
   const { config } = useBackend();
   const { data, error, isLoading, mutate } = useSWRFetch<SwarmStatusResponse>(
     '/api/v1/swarm/status',
-    {
-      baseUrl: config.api,
-      refreshInterval: 30000,
-    }
+    { baseUrl: config.api, refreshInterval: 30000 },
   );
 
   const status = data?.status ?? 'no_data';
@@ -249,7 +234,9 @@ export default function SwarmStatusPage() {
                   <StatCard
                     label="Session State"
                     value={status === 'active' ? 'ACTIVE' : 'NO DATA'}
-                    sublabel={isLoading ? 'Loading current metrics window…' : 'Swarm status endpoint'}
+                    sublabel={
+                      isLoading ? 'Loading current metrics window…' : 'Swarm status endpoint'
+                    }
                   />
                   <StatCard
                     label="Issue Success"

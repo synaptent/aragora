@@ -245,7 +245,7 @@ export function useWorkflowWebSocket({
           break;
       }
     },
-    [onExecutionUpdate, onStepUpdate, onApprovalRequired, onLogEntry]
+    [onExecutionUpdate, onStepUpdate, onApprovalRequired, onLogEntry],
   );
 
   // Use base WebSocket hook
@@ -264,25 +264,17 @@ export function useWorkflowWebSocket({
   // Send approval decision
   const sendApproval = useCallback(
     (approvalId: string, approved: boolean, comment?: string) => {
-      send({
-        type: 'approval_response',
-        approval_id: approvalId,
-        approved,
-        comment,
-      });
+      send({ type: 'approval_response', approval_id: approvalId, approved, comment });
     },
-    [send]
+    [send],
   );
 
   // Cancel execution
   const cancelExecution = useCallback(
     (execId: string) => {
-      send({
-        type: 'cancel_execution',
-        execution_id: execId,
-      });
+      send({ type: 'cancel_execution', execution_id: execId });
     },
-    [send]
+    [send],
   );
 
   return {

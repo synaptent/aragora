@@ -70,14 +70,9 @@ export function SenderInsightsPanel({
           <h3 className="font-theme-data text-sm text-[var(--text)] truncate">
             {email.from_address}
           </h3>
-          <p className="text-xs text-[var(--text-muted)] truncate">
-            {email.subject}
-          </p>
+          <p className="text-xs text-[var(--text-muted)] truncate">{email.subject}</p>
         </div>
-        <button
-          onClick={onClose}
-          className="text-[var(--text-muted)] hover:text-[var(--text)] p-1"
-        >
+        <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)] p-1">
           ✕
         </button>
       </div>
@@ -89,47 +84,33 @@ export function SenderInsightsPanel({
             {'>'} SENDER PROFILE
           </h4>
           <div className="grid grid-cols-2 gap-3">
-            <StatItem
-              label="Total Emails"
-              value={profile.totalEmails.toString()}
-            />
-            <StatItem
-              label="Response Rate"
-              value={`${Math.round(profile.responseRate * 100)}%`}
-            />
-            <StatItem
-              label="Avg Response"
-              value={profile.avgResponseTime}
-            />
-            <StatItem
-              label="Last Contact"
-              value={profile.lastContact}
-            />
+            <StatItem label="Total Emails" value={profile.totalEmails.toString()} />
+            <StatItem label="Response Rate" value={`${Math.round(profile.responseRate * 100)}%`} />
+            <StatItem label="Avg Response" value={profile.avgResponseTime} />
+            <StatItem label="Last Contact" value={profile.lastContact} />
           </div>
         </div>
       )}
 
       {/* AI Analysis */}
       <div className="p-4 border-b border-[var(--border)]">
-        <h4 className="text-xs font-theme-data text-[var(--acid-green)] mb-3">
-          {'>'} AI ANALYSIS
-        </h4>
+        <h4 className="text-xs font-theme-data text-[var(--acid-green)] mb-3">{'>'} AI ANALYSIS</h4>
         <div className="space-y-2">
           <AnalysisItem
             label="Urgency"
-            value={email.priority === 'critical' ? 'High' : email.priority === 'high' ? 'Medium' : 'Low'}
-            color={email.priority === 'critical' ? 'red' : email.priority === 'high' ? 'yellow' : 'green'}
+            value={
+              email.priority === 'critical' ? 'High' : email.priority === 'high' ? 'Medium' : 'Low'
+            }
+            color={
+              email.priority === 'critical' ? 'red' : email.priority === 'high' ? 'yellow' : 'green'
+            }
           />
           <AnalysisItem
             label="Confidence"
             value={`${Math.round((email.confidence || 0.8) * 100)}%`}
             color="cyan"
           />
-          <AnalysisItem
-            label="Category"
-            value={email.category || 'General'}
-            color="default"
-          />
+          <AnalysisItem label="Category" value={email.category || 'General'} color="default" />
         </div>
 
         {email.reasoning && (
@@ -145,26 +126,10 @@ export function SenderInsightsPanel({
           {'>'} QUICK ACTIONS
         </h4>
         <div className="grid grid-cols-2 gap-2">
-          <ActionButton
-            label="Reply"
-            icon="↩️"
-            onClick={() => onAction('reply')}
-          />
-          <ActionButton
-            label="Forward"
-            icon="➡️"
-            onClick={() => onAction('forward')}
-          />
-          <ActionButton
-            label="Archive"
-            icon="📥"
-            onClick={() => onAction('archive')}
-          />
-          <ActionButton
-            label="Snooze"
-            icon="⏰"
-            onClick={() => onAction('snooze')}
-          />
+          <ActionButton label="Reply" icon="↩️" onClick={() => onAction('reply')} />
+          <ActionButton label="Forward" icon="➡️" onClick={() => onAction('forward')} />
+          <ActionButton label="Archive" icon="📥" onClick={() => onAction('archive')} />
+          <ActionButton label="Snooze" icon="⏰" onClick={() => onAction('snooze')} />
           <ActionButton
             label="Mark VIP"
             icon="⭐"
@@ -182,9 +147,7 @@ export function SenderInsightsPanel({
 
       {/* Related Context */}
       <div className="p-4 bg-[var(--bg)] border-t border-[var(--border)]">
-        <h4 className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
-          Related Context
-        </h4>
+        <h4 className="text-xs font-theme-data text-[var(--text-muted)] mb-2">Related Context</h4>
         <div className="flex flex-wrap gap-2">
           <ContextTag label="3 prior emails" />
           <ContextTag label="Slack mention" />
@@ -242,7 +205,8 @@ function ActionButton({
 }) {
   const variantClasses = {
     default: 'bg-[var(--bg)] hover:bg-[var(--surface-lighter)] border-[var(--border)]',
-    primary: 'bg-[var(--acid-green)]/10 hover:bg-[var(--acid-green)]/20 border-[var(--acid-green)]/30 text-[var(--acid-green)]',
+    primary:
+      'bg-[var(--acid-green)]/10 hover:bg-[var(--acid-green)]/20 border-[var(--acid-green)]/30 text-[var(--acid-green)]',
     danger: 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 text-red-400',
   };
 

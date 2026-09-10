@@ -25,31 +25,90 @@ export interface ConnectorConfigModalProps {
 // Configuration schemas for each connector type
 const CONNECTOR_CONFIGS: Record<ConnectorType, ConnectorConfigField[]> = {
   github: [
-    { key: 'org', label: 'Organization/User', type: 'text', required: true, placeholder: 'your-org' },
-    { key: 'repos', label: 'Repositories', type: 'textarea', placeholder: 'repo1, repo2 (leave empty for all)', helperText: 'Comma-separated list of repositories to sync' },
-    { key: 'token', label: 'Personal Access Token', type: 'password', required: true, placeholder: 'ghp_xxxxx', helperText: 'Requires repo scope for private repos' },
+    {
+      key: 'org',
+      label: 'Organization/User',
+      type: 'text',
+      required: true,
+      placeholder: 'your-org',
+    },
+    {
+      key: 'repos',
+      label: 'Repositories',
+      type: 'textarea',
+      placeholder: 'repo1, repo2 (leave empty for all)',
+      helperText: 'Comma-separated list of repositories to sync',
+    },
+    {
+      key: 'token',
+      label: 'Personal Access Token',
+      type: 'password',
+      required: true,
+      placeholder: 'ghp_xxxxx',
+      helperText: 'Requires repo scope for private repos',
+    },
     { key: 'include_issues', label: 'Include Issues', type: 'checkbox', defaultValue: true },
     { key: 'include_prs', label: 'Include Pull Requests', type: 'checkbox', defaultValue: true },
-    { key: 'include_discussions', label: 'Include Discussions', type: 'checkbox', defaultValue: false },
+    {
+      key: 'include_discussions',
+      label: 'Include Discussions',
+      type: 'checkbox',
+      defaultValue: false,
+    },
   ],
   s3: [
     { key: 'bucket', label: 'Bucket Name', type: 'text', required: true, placeholder: 'my-bucket' },
-    { key: 'region', label: 'AWS Region', type: 'select', required: true, options: [
-      { value: 'us-east-1', label: 'US East (N. Virginia)' },
-      { value: 'us-west-2', label: 'US West (Oregon)' },
-      { value: 'eu-west-1', label: 'EU (Ireland)' },
-      { value: 'ap-southeast-1', label: 'Asia Pacific (Singapore)' },
-    ]},
-    { key: 'prefix', label: 'Key Prefix', type: 'text', placeholder: 'documents/', helperText: 'Optional path prefix to sync' },
+    {
+      key: 'region',
+      label: 'AWS Region',
+      type: 'select',
+      required: true,
+      options: [
+        { value: 'us-east-1', label: 'US East (N. Virginia)' },
+        { value: 'us-west-2', label: 'US West (Oregon)' },
+        { value: 'eu-west-1', label: 'EU (Ireland)' },
+        { value: 'ap-southeast-1', label: 'Asia Pacific (Singapore)' },
+      ],
+    },
+    {
+      key: 'prefix',
+      label: 'Key Prefix',
+      type: 'text',
+      placeholder: 'documents/',
+      helperText: 'Optional path prefix to sync',
+    },
     { key: 'access_key_id', label: 'Access Key ID', type: 'password', required: true },
     { key: 'secret_access_key', label: 'Secret Access Key', type: 'password', required: true },
   ],
   sharepoint: [
-    { key: 'tenant_id', label: 'Tenant ID', type: 'text', required: true, placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
-    { key: 'site_url', label: 'Site URL', type: 'text', required: true, placeholder: 'https://company.sharepoint.com/sites/MySite' },
-    { key: 'client_id', label: 'Client ID', type: 'text', required: true, placeholder: 'Azure AD App Client ID' },
+    {
+      key: 'tenant_id',
+      label: 'Tenant ID',
+      type: 'text',
+      required: true,
+      placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+    },
+    {
+      key: 'site_url',
+      label: 'Site URL',
+      type: 'text',
+      required: true,
+      placeholder: 'https://company.sharepoint.com/sites/MySite',
+    },
+    {
+      key: 'client_id',
+      label: 'Client ID',
+      type: 'text',
+      required: true,
+      placeholder: 'Azure AD App Client ID',
+    },
     { key: 'client_secret', label: 'Client Secret', type: 'password', required: true },
-    { key: 'drive_id', label: 'Drive ID', type: 'text', placeholder: 'Leave empty for default document library' },
+    {
+      key: 'drive_id',
+      label: 'Drive ID',
+      type: 'text',
+      placeholder: 'Leave empty for default document library',
+    },
   ],
   postgresql: [
     { key: 'host', label: 'Host', type: 'text', required: true, placeholder: 'localhost' },
@@ -57,55 +116,178 @@ const CONNECTOR_CONFIGS: Record<ConnectorType, ConnectorConfigField[]> = {
     { key: 'database', label: 'Database', type: 'text', required: true, placeholder: 'mydb' },
     { key: 'username', label: 'Username', type: 'text', required: true },
     { key: 'password', label: 'Password', type: 'password', required: true },
-    { key: 'tables', label: 'Tables', type: 'textarea', placeholder: 'table1, table2 (leave empty for all)', helperText: 'Comma-separated list of tables to sync' },
+    {
+      key: 'tables',
+      label: 'Tables',
+      type: 'textarea',
+      placeholder: 'table1, table2 (leave empty for all)',
+      helperText: 'Comma-separated list of tables to sync',
+    },
     { key: 'ssl', label: 'Use SSL', type: 'checkbox', defaultValue: true },
   ],
   mongodb: [
-    { key: 'connection_string', label: 'Connection String', type: 'password', required: true, placeholder: 'mongodb+srv://user:pass@cluster.mongodb.net/db' },
+    {
+      key: 'connection_string',
+      label: 'Connection String',
+      type: 'password',
+      required: true,
+      placeholder: 'mongodb+srv://user:pass@cluster.mongodb.net/db',
+    },
     { key: 'database', label: 'Database', type: 'text', required: true },
-    { key: 'collections', label: 'Collections', type: 'textarea', placeholder: 'collection1, collection2 (leave empty for all)' },
+    {
+      key: 'collections',
+      label: 'Collections',
+      type: 'textarea',
+      placeholder: 'collection1, collection2 (leave empty for all)',
+    },
   ],
   confluence: [
-    { key: 'base_url', label: 'Base URL', type: 'text', required: true, placeholder: 'https://your-domain.atlassian.net/wiki' },
-    { key: 'email', label: 'Email', type: 'text', required: true, placeholder: 'user@company.com', helperText: 'For Cloud instances' },
-    { key: 'api_token', label: 'API Token', type: 'password', required: true, helperText: 'Generate at id.atlassian.com/manage-profile/security/api-tokens' },
-    { key: 'spaces', label: 'Space Keys', type: 'textarea', placeholder: 'ENG, DOCS, HR (leave empty for all)', helperText: 'Comma-separated space keys to sync' },
-    { key: 'include_attachments', label: 'Include Attachments', type: 'checkbox', defaultValue: true },
+    {
+      key: 'base_url',
+      label: 'Base URL',
+      type: 'text',
+      required: true,
+      placeholder: 'https://your-domain.atlassian.net/wiki',
+    },
+    {
+      key: 'email',
+      label: 'Email',
+      type: 'text',
+      required: true,
+      placeholder: 'user@company.com',
+      helperText: 'For Cloud instances',
+    },
+    {
+      key: 'api_token',
+      label: 'API Token',
+      type: 'password',
+      required: true,
+      helperText: 'Generate at id.atlassian.com/manage-profile/security/api-tokens',
+    },
+    {
+      key: 'spaces',
+      label: 'Space Keys',
+      type: 'textarea',
+      placeholder: 'ENG, DOCS, HR (leave empty for all)',
+      helperText: 'Comma-separated space keys to sync',
+    },
+    {
+      key: 'include_attachments',
+      label: 'Include Attachments',
+      type: 'checkbox',
+      defaultValue: true,
+    },
     { key: 'include_comments', label: 'Include Comments', type: 'checkbox', defaultValue: true },
   ],
   notion: [
-    { key: 'api_key', label: 'Integration Token', type: 'password', required: true, placeholder: 'secret_xxxxx', helperText: 'Create at notion.so/my-integrations' },
-    { key: 'root_page_ids', label: 'Root Page IDs', type: 'textarea', placeholder: 'Page IDs to sync (leave empty for all shared pages)', helperText: 'Comma-separated page IDs' },
+    {
+      key: 'api_key',
+      label: 'Integration Token',
+      type: 'password',
+      required: true,
+      placeholder: 'secret_xxxxx',
+      helperText: 'Create at notion.so/my-integrations',
+    },
+    {
+      key: 'root_page_ids',
+      label: 'Root Page IDs',
+      type: 'textarea',
+      placeholder: 'Page IDs to sync (leave empty for all shared pages)',
+      helperText: 'Comma-separated page IDs',
+    },
     { key: 'include_databases', label: 'Include Databases', type: 'checkbox', defaultValue: true },
-    { key: 'include_child_pages', label: 'Include Child Pages', type: 'checkbox', defaultValue: true },
+    {
+      key: 'include_child_pages',
+      label: 'Include Child Pages',
+      type: 'checkbox',
+      defaultValue: true,
+    },
   ],
   slack: [
-    { key: 'bot_token', label: 'Bot Token', type: 'password', required: true, placeholder: 'xoxb-xxxxx', helperText: 'OAuth Bot Token with channels:read, channels:history scopes' },
-    { key: 'channels', label: 'Channels', type: 'textarea', placeholder: '#general, #engineering (leave empty for all public channels)', helperText: 'Comma-separated channel names or IDs' },
+    {
+      key: 'bot_token',
+      label: 'Bot Token',
+      type: 'password',
+      required: true,
+      placeholder: 'xoxb-xxxxx',
+      helperText: 'OAuth Bot Token with channels:read, channels:history scopes',
+    },
+    {
+      key: 'channels',
+      label: 'Channels',
+      type: 'textarea',
+      placeholder: '#general, #engineering (leave empty for all public channels)',
+      helperText: 'Comma-separated channel names or IDs',
+    },
     { key: 'include_threads', label: 'Include Threads', type: 'checkbox', defaultValue: true },
-    { key: 'include_private', label: 'Include Private Channels', type: 'checkbox', defaultValue: false, helperText: 'Requires groups:read, groups:history scopes' },
+    {
+      key: 'include_private',
+      label: 'Include Private Channels',
+      type: 'checkbox',
+      defaultValue: false,
+      helperText: 'Requires groups:read, groups:history scopes',
+    },
     { key: 'max_messages', label: 'Max Messages per Channel', type: 'number', defaultValue: 1000 },
   ],
   fhir: [
-    { key: 'base_url', label: 'FHIR Server URL', type: 'text', required: true, placeholder: 'https://fhir.example.com/r4' },
-    { key: 'auth_type', label: 'Authentication', type: 'select', required: true, options: [
-      { value: 'none', label: 'None' },
-      { value: 'basic', label: 'Basic Auth' },
-      { value: 'bearer', label: 'Bearer Token' },
-      { value: 'smart', label: 'SMART on FHIR' },
-    ]},
+    {
+      key: 'base_url',
+      label: 'FHIR Server URL',
+      type: 'text',
+      required: true,
+      placeholder: 'https://fhir.example.com/r4',
+    },
+    {
+      key: 'auth_type',
+      label: 'Authentication',
+      type: 'select',
+      required: true,
+      options: [
+        { value: 'none', label: 'None' },
+        { value: 'basic', label: 'Basic Auth' },
+        { value: 'bearer', label: 'Bearer Token' },
+        { value: 'smart', label: 'SMART on FHIR' },
+      ],
+    },
     { key: 'username', label: 'Username', type: 'text' },
     { key: 'password', label: 'Password/Token', type: 'password' },
-    { key: 'resource_types', label: 'Resource Types', type: 'textarea', placeholder: 'Patient, Observation, Condition', helperText: 'FHIR resource types to sync' },
-    { key: 'redact_phi', label: 'Redact PHI', type: 'checkbox', defaultValue: true, helperText: 'Automatically redact protected health information' },
+    {
+      key: 'resource_types',
+      label: 'Resource Types',
+      type: 'textarea',
+      placeholder: 'Patient, Observation, Condition',
+      helperText: 'FHIR resource types to sync',
+    },
+    {
+      key: 'redact_phi',
+      label: 'Redact PHI',
+      type: 'checkbox',
+      defaultValue: true,
+      helperText: 'Automatically redact protected health information',
+    },
   ],
   gdrive: [
     { key: 'client_id', label: 'OAuth Client ID', type: 'text', required: true },
     { key: 'client_secret', label: 'OAuth Client Secret', type: 'password', required: true },
-    { key: 'refresh_token', label: 'Refresh Token', type: 'password', helperText: 'Leave empty to initiate OAuth flow' },
-    { key: 'folder_ids', label: 'Folder IDs', type: 'textarea', placeholder: 'Folder IDs to sync (leave empty for entire drive)' },
+    {
+      key: 'refresh_token',
+      label: 'Refresh Token',
+      type: 'password',
+      helperText: 'Leave empty to initiate OAuth flow',
+    },
+    {
+      key: 'folder_ids',
+      label: 'Folder IDs',
+      type: 'textarea',
+      placeholder: 'Folder IDs to sync (leave empty for entire drive)',
+    },
     { key: 'include_shared', label: 'Include Shared Drives', type: 'checkbox', defaultValue: true },
-    { key: 'export_docs', label: 'Export Google Docs as Text', type: 'checkbox', defaultValue: true },
+    {
+      key: 'export_docs',
+      label: 'Export Google Docs as Text',
+      type: 'checkbox',
+      defaultValue: true,
+    },
   ],
 };
 
@@ -183,10 +365,7 @@ export function ConnectorConfigModal({
 
     try {
       const success = await onTest(connector.id, formData);
-      setTestResult({
-        success,
-        message: success ? 'Connection successful!' : 'Connection failed',
-      });
+      setTestResult({ success, message: success ? 'Connection successful!' : 'Connection failed' });
     } catch (err) {
       setTestResult({
         success: false,
@@ -219,10 +398,7 @@ export function ConnectorConfigModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-bg/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative bg-surface border border-border rounded-lg w-full max-w-lg max-h-[90vh] overflow-hidden">

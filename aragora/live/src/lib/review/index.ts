@@ -6,4 +6,4 @@
  * without reaching into the file structure.
  */
 
-export * from "./types";
+export * from './types';

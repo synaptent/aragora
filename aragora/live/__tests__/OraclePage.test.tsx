@@ -12,10 +12,7 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = jest.fn();
   if (!globalThis.crypto?.randomUUID) {
     Object.defineProperty(globalThis, 'crypto', {
-      value: {
-        ...globalThis.crypto,
-        randomUUID: () => '00000000-0000-0000-0000-000000000000',
-      },
+      value: { ...globalThis.crypto, randomUUID: () => '00000000-0000-0000-0000-000000000000' },
     });
   }
 });
@@ -76,14 +73,10 @@ const mockOracle = {
   },
 };
 
-jest.mock('../src/hooks/useOracleWebSocket', () => ({
-  useOracleWebSocket: () => mockOracle,
-}));
+jest.mock('../src/hooks/useOracleWebSocket', () => ({ useOracleWebSocket: () => mockOracle }));
 
 // Re-export so the barrel import from '@/hooks' also resolves
-jest.mock('../src/hooks', () => ({
-  useOracleWebSocket: () => mockOracle,
-}));
+jest.mock('../src/hooks', () => ({ useOracleWebSocket: () => mockOracle }));
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -275,7 +268,9 @@ describe('OraclePage', () => {
 
     // Wait for the response to appear
     await waitFor(() => {
-      expect(screen.getByText('The Oracle has spoken: clarity emerges from debate.')).toBeInTheDocument();
+      expect(
+        screen.getByText('The Oracle has spoken: clarity emerges from debate.'),
+      ).toBeInTheDocument();
     });
   });
 

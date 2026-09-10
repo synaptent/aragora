@@ -12,7 +12,11 @@ import { ExecutionProgressOverlay } from '@/components/pipeline-canvas/Execution
 import { FeedbackLoopPanel } from '@/components/pipeline-canvas/FeedbackLoopPanel';
 import { AutoTransitionSuggestion } from '@/components/pipeline-canvas/AutoTransitionSuggestion';
 import type { TransitionSuggestion } from '@/components/pipeline-canvas/AutoTransitionSuggestion';
-import type { PipelineStageType, PipelineResultResponse, ExecutionStatus } from '@/components/pipeline-canvas/types';
+import type {
+  PipelineStageType,
+  PipelineResultResponse,
+  ExecutionStatus,
+} from '@/components/pipeline-canvas/types';
 import { UseCaseWizard } from '@/components/wizards/UseCaseWizard';
 
 const PipelineCanvas = dynamic(
@@ -21,12 +25,18 @@ const PipelineCanvas = dynamic(
 );
 
 const UnifiedPipelineCanvas = dynamic(
-  () => import('@/components/pipeline-canvas/UnifiedPipelineCanvas').then((m) => m.UnifiedPipelineCanvas),
+  () =>
+    import('@/components/pipeline-canvas/UnifiedPipelineCanvas').then(
+      (m) => m.UnifiedPipelineCanvas,
+    ),
   { ssr: false, loading: () => <CanvasLoadingState /> },
 );
 
 const FractalPipelineCanvas = dynamic(
-  () => import('@/components/pipeline-canvas/FractalPipelineCanvas').then((m) => m.FractalPipelineCanvas),
+  () =>
+    import('@/components/pipeline-canvas/FractalPipelineCanvas').then(
+      (m) => m.FractalPipelineCanvas,
+    ),
   { ssr: false, loading: () => <CanvasLoadingState /> },
 );
 
@@ -120,8 +130,22 @@ function deriveGoldenPathFromPrompt(text: string): GoldenPathSummaryModel | null
   const fragments = Array.from(new Set([...lines, ...sentences]));
 
   const focus = fragments.find((fragment) => fragment.length > 16) ?? normalized;
-  const success = findPromptSignal(fragments, ['success', 'outcome', 'metric', 'ship', 'launch', 'measure']);
-  const constraint = findPromptSignal(fragments, ['constraint', 'avoid', 'without', 'deadline', 'budget', 'must']);
+  const success = findPromptSignal(fragments, [
+    'success',
+    'outcome',
+    'metric',
+    'ship',
+    'launch',
+    'measure',
+  ]);
+  const constraint = findPromptSignal(fragments, [
+    'constraint',
+    'avoid',
+    'without',
+    'deadline',
+    'budget',
+    'must',
+  ]);
   const risk = findPromptSignal(fragments, ['risk', 'worry', 'concern', 'unknown', 'blocker']);
 
   const ideaTitle = truncateText(focus, 9);
@@ -136,7 +160,9 @@ function deriveGoldenPathFromPrompt(text: string): GoldenPathSummaryModel | null
     : 'Route the slice into spec, build, and review lanes';
 
   const signals = [
-    success ? `Outcome: ${truncateText(success, 9)}` : 'Outcome: add owner, measure, and time horizon',
+    success
+      ? `Outcome: ${truncateText(success, 9)}`
+      : 'Outcome: add owner, measure, and time horizon',
     constraint ? `Constraint: ${truncateText(constraint, 9)}` : 'Constraint: none extracted yet',
     risk ? `Risk: ${truncateText(risk, 8)}` : 'Risk: add unknowns before execution',
   ];
@@ -191,35 +217,41 @@ function getNodeDetail(node: Record<string, unknown> | null | undefined): string
   if (!isRecord(node)) return '';
   const data = isRecord(node.data) ? node.data : {};
   return String(
-    data.full_content
-    ?? data.fullContent
-    ?? data.description
-    ?? data.outputPreview
-    ?? data.selectionRationale
-    ?? '',
+    data.full_content ??
+      data.fullContent ??
+      data.description ??
+      data.outputPreview ??
+      data.selectionRationale ??
+      '',
   ).trim();
 }
 
-function getNodes(flow: PipelineResultResponse['ideas'] | PipelineResultResponse['actions'] | PipelineResultResponse['orchestration']): Record<string, unknown>[] {
+function getNodes(
+  flow:
+    | PipelineResultResponse['ideas']
+    | PipelineResultResponse['actions']
+    | PipelineResultResponse['orchestration'],
+): Record<string, unknown>[] {
   if (!isRecord(flow) || !Array.isArray(flow.nodes)) return [];
   return flow.nodes.filter(isRecord);
 }
 
-function deriveGoldenPathFromPipeline(data: PipelineResultResponse | null): GoldenPathSummaryModel | null {
+function deriveGoldenPathFromPipeline(
+  data: PipelineResultResponse | null,
+): GoldenPathSummaryModel | null {
   if (!data) return null;
 
   const ideaNode = getNodes(data.ideas)[0];
   const goalContainer = isRecord(data.goals) ? data.goals : {};
-  const goalItems = Array.isArray(goalContainer.goals)
-    ? goalContainer.goals.filter(isRecord)
-    : [];
+  const goalItems = Array.isArray(goalContainer.goals) ? goalContainer.goals.filter(isRecord) : [];
   const goalItem = goalItems[0];
   const actionNode = getNodes(data.actions)[0];
   const orchestrationNodes = getNodes(data.orchestration);
-  const orchestrationNode = orchestrationNodes.find((node) => {
-    const nodeData = isRecord(node.data) ? node.data : {};
-    return String(nodeData.orch_type ?? nodeData.orchType ?? '').toLowerCase() === 'agent_task';
-  }) ?? orchestrationNodes[0];
+  const orchestrationNode =
+    orchestrationNodes.find((node) => {
+      const nodeData = isRecord(node.data) ? node.data : {};
+      return String(nodeData.orch_type ?? nodeData.orchType ?? '').toLowerCase() === 'agent_task';
+    }) ?? orchestrationNodes[0];
 
   const ideaTitle = getNodeLabel(ideaNode) || 'Ideas captured';
   const goalTitle = String(goalItem?.title ?? goalItem?.label ?? 'Goal drafted').trim();
@@ -230,11 +262,14 @@ function deriveGoldenPathFromPipeline(data: PipelineResultResponse | null): Gold
   const goalPriority = String(goalItem?.priority ?? '').trim();
   const orchData = isRecord(orchestrationNode?.data) ? orchestrationNode.data : {};
   const assignedAgent = String(orchData.assigned_agent ?? orchData.assignedAgent ?? '').trim();
-  const pendingTransitions = (data.transitions || []).filter((transition) => transition.status === 'pending').length;
+  const pendingTransitions = (data.transitions || []).filter(
+    (transition) => transition.status === 'pending',
+  ).length;
 
   return {
     heading: 'Visible idea to execution path',
-    summary: 'One concrete lane is pinned across the current workbench so a vague prompt resolves into a reviewable flow.',
+    summary:
+      'One concrete lane is pinned across the current workbench so a vague prompt resolves into a reviewable flow.',
     sourceLabel: data.pipeline_id,
     signals: [
       `Provenance: ${data.provenance_count} link${data.provenance_count === 1 ? '' : 's'}`,
@@ -245,7 +280,10 @@ function deriveGoldenPathFromPipeline(data: PipelineResultResponse | null): Gold
       {
         stage: 'ideas',
         title: truncateText(ideaTitle || 'Ideas captured', 8),
-        detail: truncateText(getNodeDetail(ideaNode) || ideaTitle || 'The originating idea lane.', 18),
+        detail: truncateText(
+          getNodeDetail(ideaNode) || ideaTitle || 'The originating idea lane.',
+          18,
+        ),
         meta: 'Source idea',
       },
       {
@@ -257,15 +295,20 @@ function deriveGoldenPathFromPipeline(data: PipelineResultResponse | null): Gold
       {
         stage: 'actions',
         title: truncateText(actionTitle || 'Action staged', 9),
-        detail: truncateText(getNodeDetail(actionNode) || 'The first executable action for this goal.', 18),
+        detail: truncateText(
+          getNodeDetail(actionNode) || 'The first executable action for this goal.',
+          18,
+        ),
         meta: 'Action decomposition',
       },
       {
         stage: 'orchestration',
         title: truncateText(orchestrationTitle || 'Execution assigned', 9),
         detail: truncateText(
-          getNodeDetail(orchestrationNode)
-            || (assignedAgent ? `Assigned to ${assignedAgent}.` : 'Queued for orchestration and review.'),
+          getNodeDetail(orchestrationNode) ||
+            (assignedAgent
+              ? `Assigned to ${assignedAgent}.`
+              : 'Queued for orchestration and review.'),
           18,
         ),
         meta: assignedAgent ? `Assigned: ${assignedAgent}` : 'Orchestration lane',
@@ -314,7 +357,9 @@ function PipelinePageContent() {
   const [debateError, setDebateError] = useState('');
   const [key, setKey] = useState(0);
   const [debateImportStatus, setDebateImportStatus] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'stages' | 'unified' | 'fractal' | 'provenance' | 'scenario' | 'dag'>('stages');
+  const [viewMode, setViewMode] = useState<
+    'stages' | 'unified' | 'fractal' | 'provenance' | 'scenario' | 'dag'
+  >('stages');
   const [showLearningPanel, setShowLearningPanel] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
@@ -325,10 +370,7 @@ function PipelinePageContent() {
   const [totalSubtasks, setTotalSubtasks] = useState(0);
 
   // Fetch latest pipeline data from API via SWR for initial load / refresh
-  const {
-    data: swrPipelineData,
-    isLoading: swrLoading,
-  } = useSWRFetch<PipelineResultResponse>(
+  const { data: swrPipelineData, isLoading: swrLoading } = useSWRFetch<PipelineResultResponse>(
     '/api/v1/canvas/pipeline',
     { refreshInterval: 30000, enabled: !pipelineData && !isDemo },
   );
@@ -363,7 +405,11 @@ function PipelinePageContent() {
     setKey((k) => k + 1);
   }, []);
 
-  const { isConnected, completedStages: wsCompletedStages, streamedNodes } = usePipelineWebSocket({
+  const {
+    isConnected,
+    completedStages: wsCompletedStages,
+    streamedNodes,
+  } = usePipelineWebSocket({
     pipelineId: pipelineData?.pipeline_id,
     enabled: !!pipelineData && !isDemo,
     onStageStarted: wsStageStarted,
@@ -406,7 +452,9 @@ function PipelinePageContent() {
           setKey((k) => k + 1);
         })
         .catch((err) => {
-          setDebateImportStatus(`Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          setDebateImportStatus(
+            `Import failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          );
         });
     }
     // Only run once on mount
@@ -493,9 +541,7 @@ function PipelinePageContent() {
   const handleTransitionApprove = useCallback(
     (pipelineId: string, transitionId: string) => {
       // Find the transition to determine source and target stages
-      const transition = pipelineData?.transitions?.find(
-        (t) => (t.id as string) === transitionId,
-      );
+      const transition = pipelineData?.transitions?.find((t) => (t.id as string) === transitionId);
       if (transition) {
         const fromStage = transition.from_stage as PipelineStageType;
         const toStage = transition.to_stage as PipelineStageType;
@@ -508,9 +554,7 @@ function PipelinePageContent() {
 
   const handleTransitionReject = useCallback(
     (pipelineId: string, transitionId: string) => {
-      const transition = pipelineData?.transitions?.find(
-        (t) => (t.id as string) === transitionId,
-      );
+      const transition = pipelineData?.transitions?.find((t) => (t.id as string) === transitionId);
       if (transition) {
         const fromStage = transition.from_stage as PipelineStageType;
         const toStage = transition.to_stage as PipelineStageType;
@@ -563,10 +607,7 @@ function PipelinePageContent() {
       }));
   }, [pipelineData?.transitions, dismissedSuggestions]);
 
-  const draftGoldenPath = useMemo(
-    () => deriveGoldenPathFromPrompt(brainDumpText),
-    [brainDumpText],
-  );
+  const draftGoldenPath = useMemo(() => deriveGoldenPathFromPrompt(brainDumpText), [brainDumpText]);
 
   const pipelineGoldenPath = useMemo(
     () => deriveGoldenPathFromPipeline(pipelineData),
@@ -583,21 +624,23 @@ function PipelinePageContent() {
     [pipelineData, approveTransition],
   );
 
-  const handleSuggestionDismiss = useCallback(
-    (suggestion: TransitionSuggestion) => {
-      setDismissedSuggestions((prev) => new Set(prev).add(suggestion.node_id));
-    },
-    [],
-  );
+  const handleSuggestionDismiss = useCallback((suggestion: TransitionSuggestion) => {
+    setDismissedSuggestions((prev) => new Set(prev).add(suggestion.node_id));
+  }, []);
 
   // Map pipeline stage_status values to ExecutionStatus for StatusBadge
   const mapStageStatus = useCallback((status: string): ExecutionStatus => {
     switch (status) {
-      case 'complete': return 'succeeded';
-      case 'in_progress': return 'in_progress';
-      case 'failed': return 'failed';
-      case 'partial': return 'partial';
-      default: return 'pending';
+      case 'complete':
+        return 'succeeded';
+      case 'in_progress':
+        return 'in_progress';
+      case 'failed':
+        return 'failed';
+      case 'partial':
+        return 'partial';
+      default:
+        return 'pending';
     }
   }, []);
 
@@ -678,8 +721,13 @@ function PipelinePageContent() {
             <div className="flex items-center gap-1.5">
               {(['ideas', 'goals', 'actions', 'orchestration'] as const).map((stage) => (
                 <div key={stage} className="flex items-center gap-1">
-                  <span className="text-[10px] font-theme-data text-text-muted uppercase">{stage.slice(0, 4)}</span>
-                  <StatusBadge status={mapStageStatus(pipelineData.stage_status[stage])} size="sm" />
+                  <span className="text-[10px] font-theme-data text-text-muted uppercase">
+                    {stage.slice(0, 4)}
+                  </span>
+                  <StatusBadge
+                    status={mapStageStatus(pipelineData.stage_status[stage])}
+                    size="sm"
+                  />
                 </div>
               ))}
             </div>
@@ -688,23 +736,28 @@ function PipelinePageContent() {
           {pipelineData && (
             <>
               <div className="flex items-center bg-surface border border-border rounded overflow-hidden">
-                {(['stages', 'unified', 'fractal', 'provenance', 'scenario', 'dag'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setViewMode(mode)}
-                    className={`px-3 py-2 text-sm font-theme-data transition-colors ${
-                      viewMode === mode
-                        ? 'bg-indigo-600 text-white'
-                        : 'text-text-muted hover:text-text'
-                    }`}
-                  >
-                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                  </button>
-                ))}
+                {(['stages', 'unified', 'fractal', 'provenance', 'scenario', 'dag'] as const).map(
+                  (mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      className={`px-3 py-2 text-sm font-theme-data transition-colors ${
+                        viewMode === mode
+                          ? 'bg-indigo-600 text-white'
+                          : 'text-text-muted hover:text-text'
+                      }`}
+                    >
+                      {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                    </button>
+                  ),
+                )}
               </div>
 
               <button
-                onClick={() => { setShowIdeaInput(!showIdeaInput); setShowDebateInput(false); }}
+                onClick={() => {
+                  setShowIdeaInput(!showIdeaInput);
+                  setShowDebateInput(false);
+                }}
                 disabled={loading}
                 className="px-4 py-2 bg-indigo-600 text-white font-theme-data text-sm hover:bg-indigo-500 transition-colors rounded"
               >
@@ -712,7 +765,10 @@ function PipelinePageContent() {
               </button>
 
               <button
-                onClick={() => { setShowDebateInput(!showDebateInput); setShowIdeaInput(false); }}
+                onClick={() => {
+                  setShowDebateInput(!showDebateInput);
+                  setShowIdeaInput(false);
+                }}
                 disabled={loading}
                 className="px-4 py-2 bg-violet-600 text-white font-theme-data text-sm hover:bg-violet-500 transition-colors rounded"
               >
@@ -764,7 +820,9 @@ function PipelinePageContent() {
       {/* Self-improve config panel */}
       {showSelfImproveConfig && pipelineData && orchestrationReady && (
         <div className="px-6 py-4 border-b border-border bg-surface/50">
-          <h3 className="text-sm font-theme-data text-[var(--acid-green)] mb-3">Self-Improvement Configuration</h3>
+          <h3 className="text-sm font-theme-data text-[var(--acid-green)] mb-3">
+            Self-Improvement Configuration
+          </h3>
           <div className="max-w-lg space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-theme-data text-text-muted">Budget limit ($)</label>
@@ -787,7 +845,9 @@ function PipelinePageContent() {
             <button
               onClick={async () => {
                 if (pipelineData?.pipeline_id) {
-                  const res = await executeWithSelfImprove(pipelineData.pipeline_id, { dryRun: siDryRun });
+                  const res = await executeWithSelfImprove(pipelineData.pipeline_id, {
+                    dryRun: siDryRun,
+                  });
                   if (res) {
                     window.location.href = `/self-improve?from=pipeline&id=${pipelineData.pipeline_id}`;
                   }
@@ -812,7 +872,9 @@ function PipelinePageContent() {
             onChange={(e) => setIdeaText(e.target.value)}
             rows={4}
             className="w-full max-w-lg bg-bg border border-border rounded p-3 text-sm text-text font-theme-data resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            placeholder={"Build a rate limiter\nAdd caching layer\nImprove API docs\nSet up monitoring"}
+            placeholder={
+              'Build a rate limiter\nAdd caching layer\nImprove API docs\nSet up monitoring'
+            }
           />
           <div className="flex gap-2 mt-2">
             <button
@@ -840,10 +902,15 @@ function PipelinePageContent() {
           </label>
           <textarea
             value={debateJson}
-            onChange={(e) => { setDebateJson(e.target.value); setDebateError(''); }}
+            onChange={(e) => {
+              setDebateJson(e.target.value);
+              setDebateError('');
+            }}
             rows={6}
             className="w-full max-w-lg bg-bg border border-border rounded p-3 text-sm text-text font-theme-data resize-none focus:outline-none focus:ring-2 focus:ring-violet-500"
-            placeholder={'{\n  "nodes": [\n    {"id": "n1", "type": "proposal", "summary": "...", "content": "..."}\n  ],\n  "edges": [\n    {"source_id": "n2", "target_id": "n1", "relation": "supports"}\n  ]\n}'}
+            placeholder={
+              '{\n  "nodes": [\n    {"id": "n1", "type": "proposal", "summary": "...", "content": "..."}\n  ],\n  "edges": [\n    {"source_id": "n2", "target_id": "n1", "relation": "supports"}\n  ]\n}'
+            }
           />
           {debateError && (
             <p className="text-xs text-red-400 font-theme-data mt-1">{debateError}</p>
@@ -857,7 +924,10 @@ function PipelinePageContent() {
               {loading ? 'Generating...' : 'Import Debate'}
             </button>
             <button
-              onClick={() => { setShowDebateInput(false); setDebateError(''); }}
+              onClick={() => {
+                setShowDebateInput(false);
+                setDebateError('');
+              }}
               className="px-4 py-2 text-sm font-theme-data text-text-muted hover:text-text"
             >
               Cancel
@@ -909,22 +979,14 @@ function PipelinePageContent() {
 
         {pipelineData ? (
           viewMode === 'dag' ? (
-            <UnifiedDAGCanvas
-              key={`dag-${key}`}
-              graphId={pipelineData.pipeline_id}
-            />
+            <UnifiedDAGCanvas key={`dag-${key}`} graphId={pipelineData.pipeline_id} />
           ) : viewMode === 'scenario' ? (
             <div className="h-full p-4 overflow-auto">
-              <ScenarioMatrix
-                key={`scenario-${key}`}
-              />
+              <ScenarioMatrix key={`scenario-${key}`} />
             </div>
           ) : viewMode === 'provenance' ? (
             <div className="h-full p-4">
-              <ProvenanceExplorer
-                key={`provenance-${key}`}
-                graphId={pipelineData.pipeline_id}
-              />
+              <ProvenanceExplorer key={`provenance-${key}`} graphId={pipelineData.pipeline_id} />
             </div>
           ) : viewMode === 'unified' ? (
             <UnifiedPipelineCanvas
@@ -971,7 +1033,9 @@ function PipelinePageContent() {
                           key={stage}
                           className="flex items-center justify-between px-2 py-1.5 rounded bg-bg/50"
                         >
-                          <span className="text-xs font-theme-data text-text capitalize">{stage}</span>
+                          <span className="text-xs font-theme-data text-text capitalize">
+                            {stage}
+                          </span>
                           <StatusBadge
                             status={mapStageStatus(pipelineData.stage_status[stage])}
                             size="sm"
@@ -1012,7 +1076,9 @@ function PipelinePageContent() {
                       {pipelineData.integrity_hash && (
                         <div className="text-xs font-theme-data text-text-muted">
                           <span className="text-text-muted">Integrity: </span>
-                          <span className="text-text">{pipelineData.integrity_hash.slice(0, 12)}</span>
+                          <span className="text-text">
+                            {pipelineData.integrity_hash.slice(0, 12)}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -1060,7 +1126,9 @@ function PipelinePageContent() {
                   </label>
                   <textarea
                     className="w-full min-h-[200px] bg-bg border border-border rounded-lg p-4 text-sm text-text font-theme-data resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder={"Build me an execution plan for...\n\nContext:\n- Current constraints\n- Success criteria\n- Risks to avoid"}
+                    placeholder={
+                      'Build me an execution plan for...\n\nContext:\n- Current constraints\n- Success criteria\n- Risks to avoid'
+                    }
                     value={brainDumpText}
                     onChange={(e) => setBrainDumpText(e.target.value)}
                   />
@@ -1117,13 +1185,19 @@ function PipelinePageContent() {
                   {showAdvancedStart && (
                     <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-3">
                       <button
-                        onClick={() => { setShowIdeaInput(true); setShowDebateInput(false); }}
+                        onClick={() => {
+                          setShowIdeaInput(true);
+                          setShowDebateInput(false);
+                        }}
                         className="px-3 py-2 bg-surface border border-border text-text font-theme-data text-xs rounded hover:border-text transition-colors"
                       >
                         Structured Ideas
                       </button>
                       <button
-                        onClick={() => { setShowDebateInput(true); setShowIdeaInput(false); }}
+                        onClick={() => {
+                          setShowDebateInput(true);
+                          setShowIdeaInput(false);
+                        }}
                         className="px-3 py-2 bg-violet-600/90 text-white font-theme-data text-xs rounded hover:bg-violet-500 transition-colors"
                       >
                         Import Debate JSON

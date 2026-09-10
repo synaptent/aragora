@@ -37,10 +37,10 @@ const DOMAINS = [
 
 const TREND_COLORS = [
   'var(--acid-green)',
-  '#22d3ee',   // cyan
-  '#c084fc',   // purple
-  '#facc15',   // yellow
-  '#f97316',   // orange
+  '#22d3ee', // cyan
+  '#c084fc', // purple
+  '#facc15', // yellow
+  '#f97316', // orange
 ];
 
 // ============================================================================
@@ -126,9 +126,10 @@ function RankingsPanel() {
               {agents.map((agent, idx) => {
                 const rank = idx + 1;
                 const totalGames = (agent.wins || 0) + (agent.losses || 0) + (agent.draws || 0);
-                const winRate = totalGames > 0
-                  ? Math.round(((agent.wins || 0) / totalGames) * 100)
-                  : Math.round(agent.win_rate ?? 0);
+                const winRate =
+                  totalGames > 0
+                    ? Math.round(((agent.wins || 0) / totalGames) * 100)
+                    : Math.round(agent.win_rate ?? 0);
                 const elo = Math.round(agent.elo);
                 const isSelected = selectedAgent === agent.agent_name;
 
@@ -158,9 +159,7 @@ function RankingsPanel() {
                         {agent.agent_name}
                       </Link>
                     </td>
-                    <td className={`py-3 px-4 text-right font-bold ${getEloColor(elo)}`}>
-                      {elo}
-                    </td>
+                    <td className={`py-3 px-4 text-right font-bold ${getEloColor(elo)}`}>{elo}</td>
                     <td className="py-3 px-4 text-right text-text-muted text-xs hidden sm:table-cell">
                       {getEloTier(elo)}
                     </td>
@@ -207,16 +206,21 @@ function RankingsPanel() {
           ) : agentDetail ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-3 bg-bg rounded">
-                <div className={`text-xl font-theme-data font-bold ${getEloColor(agentDetail.elo)}`}>
+                <div
+                  className={`text-xl font-theme-data font-bold ${getEloColor(agentDetail.elo)}`}
+                >
                   {Math.round(agentDetail.elo)}
                 </div>
                 <div className="text-xs text-text-muted">Current ELO</div>
               </div>
               <div className="p-3 bg-bg rounded">
-                <div className={`text-xl font-theme-data font-bold ${
-                  agentDetail.elo_change >= 0 ? 'text-[var(--accent)]' : 'text-red-400'
-                }`}>
-                  {agentDetail.elo_change >= 0 ? '+' : ''}{agentDetail.elo_change}
+                <div
+                  className={`text-xl font-theme-data font-bold ${
+                    agentDetail.elo_change >= 0 ? 'text-[var(--accent)]' : 'text-red-400'
+                  }`}
+                >
+                  {agentDetail.elo_change >= 0 ? '+' : ''}
+                  {agentDetail.elo_change}
                 </div>
                 <div className="text-xs text-text-muted">ELO Change</div>
               </div>
@@ -234,21 +238,22 @@ function RankingsPanel() {
               </div>
 
               {/* Domain Performance */}
-              {agentDetail.domain_performance && Object.keys(agentDetail.domain_performance).length > 0 && (
-                <div className="col-span-2 md:col-span-4 p-3 bg-bg rounded">
-                  <div className="text-xs font-theme-data text-text-muted uppercase mb-2">
-                    Domain Performance
+              {agentDetail.domain_performance &&
+                Object.keys(agentDetail.domain_performance).length > 0 && (
+                  <div className="col-span-2 md:col-span-4 p-3 bg-bg rounded">
+                    <div className="text-xs font-theme-data text-text-muted uppercase mb-2">
+                      Domain Performance
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      {Object.entries(agentDetail.domain_performance).map(([domain, perf]) => (
+                        <div key={domain} className="text-xs font-theme-data">
+                          <span className="text-text-muted">{domain}: </span>
+                          <span className={getEloColor(perf.elo)}>{Math.round(perf.elo)}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-3">
-                    {Object.entries(agentDetail.domain_performance).map(([domain, perf]) => (
-                      <div key={domain} className="text-xs font-theme-data">
-                        <span className="text-text-muted">{domain}: </span>
-                        <span className={getEloColor(perf.elo)}>{Math.round(perf.elo)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )}
 
               {/* Calibration */}
               {agentDetail.calibration_score != null && (
@@ -273,10 +278,7 @@ function RankingsPanel() {
                   <div className="text-xs font-theme-data text-text-muted uppercase mb-2">
                     ELO History
                   </div>
-                  <MiniEloChart
-                    history={agentDetail.elo_history}
-                    color="var(--acid-green)"
-                  />
+                  <MiniEloChart history={agentDetail.elo_history} color="var(--acid-green)" />
                 </div>
               )}
             </div>
@@ -306,12 +308,7 @@ function MiniEloChart({
     const range = max - min || 1;
     const padding = range * 0.1;
 
-    return {
-      min: min - padding,
-      max: max + padding,
-      range: range + padding * 2,
-      points: history,
-    };
+    return { min: min - padding, max: max + padding, range: range + padding * 2, points: history };
   }, [history]);
 
   if (!chartData) return null;
@@ -333,7 +330,14 @@ function MiniEloChart({
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className="w-full" style={{ maxHeight: height }}>
-      <path d={d} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d={d}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       {/* End dot */}
       {(() => {
         const lastPt = chartData.points[chartData.points.length - 1];
@@ -376,9 +380,7 @@ function DomainsPanel() {
         </div>
       ) : error ? (
         <div className="p-8 bg-surface border border-red-500/30 rounded-lg text-center">
-          <p className="text-red-400 font-theme-data text-sm">
-            Failed to load domain leaderboard.
-          </p>
+          <p className="text-red-400 font-theme-data text-sm">Failed to load domain leaderboard.</p>
         </div>
       ) : !agents || agents.length === 0 ? (
         <div className="p-8 bg-surface border border-border rounded-lg text-center">
@@ -406,9 +408,10 @@ function DomainsPanel() {
                 {agents.map((agent, idx) => {
                   const rank = idx + 1;
                   const totalGames = (agent.wins || 0) + (agent.losses || 0) + (agent.draws || 0);
-                  const winRate = totalGames > 0
-                    ? Math.round(((agent.wins || 0) / totalGames) * 100)
-                    : Math.round(agent.win_rate ?? 0);
+                  const winRate =
+                    totalGames > 0
+                      ? Math.round(((agent.wins || 0) / totalGames) * 100)
+                      : Math.round(agent.win_rate ?? 0);
 
                   return (
                     <tr
@@ -430,11 +433,15 @@ function DomainsPanel() {
                           {agent.agent_name}
                         </Link>
                       </td>
-                      <td className={`py-2.5 px-4 text-right font-bold ${getEloColor(Math.round(agent.elo))}`}>
+                      <td
+                        className={`py-2.5 px-4 text-right font-bold ${getEloColor(Math.round(agent.elo))}`}
+                      >
                         {Math.round(agent.elo)}
                       </td>
                       {selectedDomain && (
-                        <td className={`py-2.5 px-4 text-right hidden sm:table-cell ${getEloColor(Math.round(agent.domain_elo))}`}>
+                        <td
+                          className={`py-2.5 px-4 text-right hidden sm:table-cell ${getEloColor(Math.round(agent.domain_elo))}`}
+                        >
                           {Math.round(agent.domain_elo)}
                         </td>
                       )}
@@ -710,8 +717,11 @@ function TrendsPanel() {
                   style={{ backgroundColor: color }}
                 />
                 <span className="font-theme-data text-xs text-text">{agent}</span>
-                <span className={`font-theme-data text-xs ${change >= 0 ? 'text-[var(--accent)]' : 'text-red-400'}`}>
-                  ({change >= 0 ? '+' : ''}{change})
+                <span
+                  className={`font-theme-data text-xs ${change >= 0 ? 'text-[var(--accent)]' : 'text-red-400'}`}
+                >
+                  ({change >= 0 ? '+' : ''}
+                  {change})
                 </span>
               </div>
             );
@@ -735,15 +745,15 @@ function StatsPanel() {
 
     // Find most active (most games)
     const byGames = [...agents].sort((a, b) => {
-      const gamesA = a.games || ((a.wins || 0) + (a.losses || 0) + (a.draws || 0));
-      const gamesB = b.games || ((b.wins || 0) + (b.losses || 0) + (b.draws || 0));
+      const gamesA = a.games || (a.wins || 0) + (a.losses || 0) + (a.draws || 0);
+      const gamesB = b.games || (b.wins || 0) + (b.losses || 0) + (b.draws || 0);
       return gamesB - gamesA;
     });
     const mostActive = byGames[0];
 
     // Find best win rate (minimum 3 games)
     const withGames = agents.filter((a) => {
-      const g = a.games || ((a.wins || 0) + (a.losses || 0) + (a.draws || 0));
+      const g = a.games || (a.wins || 0) + (a.losses || 0) + (a.draws || 0);
       return g >= 3;
     });
     const byWinRate = [...withGames].sort((a, b) => {
@@ -815,7 +825,9 @@ function StatsPanel() {
             <div className="text-lg font-theme-data font-bold text-[var(--accent)]">
               {summary.highest.agent_name}
             </div>
-            <div className={`text-sm font-theme-data ${getEloColor(Math.round(summary.highest.elo))}`}>
+            <div
+              className={`text-sm font-theme-data ${getEloColor(Math.round(summary.highest.elo))}`}
+            >
               {Math.round(summary.highest.elo)} ELO
             </div>
             <div className="text-xs font-theme-data text-text-muted mt-1">
@@ -832,7 +844,11 @@ function StatsPanel() {
               {summary.mostActive.agent_name}
             </div>
             <div className="text-sm font-theme-data text-text">
-              {summary.mostActive.games || ((summary.mostActive.wins || 0) + (summary.mostActive.losses || 0) + (summary.mostActive.draws || 0))} games
+              {summary.mostActive.games ||
+                (summary.mostActive.wins || 0) +
+                  (summary.mostActive.losses || 0) +
+                  (summary.mostActive.draws || 0)}{' '}
+              games
             </div>
           </div>
 
@@ -881,9 +897,7 @@ function StatsPanel() {
           {/* Trending Down */}
           {stats.trending_down.length > 0 && (
             <div className="p-4 bg-surface border border-border rounded-lg">
-              <h3 className="text-sm font-theme-data font-bold text-red-400 mb-3">
-                TRENDING DOWN
-              </h3>
+              <h3 className="text-sm font-theme-data font-bold text-red-400 mb-3">TRENDING DOWN</h3>
               <div className="space-y-1">
                 {stats.trending_down.map((agent) => (
                   <div key={agent} className="flex items-center gap-2 text-sm font-theme-data">
@@ -925,7 +939,9 @@ function StatsPanel() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-xs font-theme-data text-text w-8 text-right">{count}</span>
+                    <span className="text-xs font-theme-data text-text w-8 text-right">
+                      {count}
+                    </span>
                   </div>
                 );
               })}

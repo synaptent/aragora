@@ -51,12 +51,7 @@ export function handleConsensusEvent(data: ParsedEventData, ctx: EventHandlerCon
   // Track consensus as stream event for analytics
   const streamEvent: StreamEvent = {
     type: 'consensus',
-    data: {
-      reached,
-      confidence,
-      answer,
-      synthesis,
-    },
+    data: { reached, confidence, answer, synthesis },
     timestamp: (data.timestamp as number) || Date.now() / 1000,
   };
   ctx.addStreamEvent(streamEvent);
@@ -97,9 +92,10 @@ export function handleAgentMessageEvent(data: ParsedEventData, ctx: EventHandler
   };
 
   // Include reasoning visibility fields when present in event data
-  const confidenceScore = (eventData?.confidence_score as number | undefined)
-    ?? (eventData?.confidence as number | undefined)
-    ?? null;
+  const confidenceScore =
+    (eventData?.confidence_score as number | undefined) ??
+    (eventData?.confidence as number | undefined) ??
+    null;
   if (confidenceScore !== null && confidenceScore !== undefined) {
     msg.confidence_score = confidenceScore;
   }
@@ -113,7 +109,7 @@ export function handleAgentMessageEvent(data: ParsedEventData, ctx: EventHandler
   if (msg.content && ctx.addMessageIfNew(msg)) {
     const agentName = msg.agent;
     if (agentName) {
-      ctx.setAgents(prev => prev.includes(agentName) ? prev : [...prev, agentName]);
+      ctx.setAgents((prev) => (prev.includes(agentName) ? prev : [...prev, agentName]));
     }
   }
 

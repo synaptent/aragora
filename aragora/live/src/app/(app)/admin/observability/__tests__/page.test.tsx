@@ -27,12 +27,11 @@ jest.mock('@/components/admin/AdminLayout', () => ({
 jest.mock('@/components/BackendSelector', () => ({
   useBackend: () => ({ config: { api: 'http://localhost:8080' } }),
 }));
-jest.mock('@/hooks/useObservabilityDashboard', () => ({
-  useObservabilityDashboard: jest.fn(),
-}));
+jest.mock('@/hooks/useObservabilityDashboard', () => ({ useObservabilityDashboard: jest.fn() }));
 
-const mockUseObservabilityDashboard =
-  useObservabilityDashboard as jest.MockedFunction<typeof useObservabilityDashboard>;
+const mockUseObservabilityDashboard = useObservabilityDashboard as jest.MockedFunction<
+  typeof useObservabilityDashboard
+>;
 
 function buildDashboardData(overrides?: Record<string, unknown>) {
   return {
@@ -44,21 +43,9 @@ function buildDashboardData(overrides?: Record<string, unknown>) {
       consensus_rate: 0.6,
       available: true,
     },
-    agent_rankings: {
-      top_agents: [],
-      available: true,
-    },
-    circuit_breakers: {
-      breakers: [],
-      available: true,
-    },
-    self_improve: {
-      total_cycles: 2,
-      successful: 2,
-      failed: 0,
-      recent_runs: [],
-      available: true,
-    },
+    agent_rankings: { top_agents: [], available: true },
+    circuit_breakers: { breakers: [], available: true },
+    self_improve: { total_cycles: 2, successful: 2, failed: 0, recent_runs: [], available: true },
     oracle_stream: {
       sessions_started: 8,
       sessions_completed: 7,
@@ -101,18 +88,8 @@ function buildDashboardData(overrides?: Record<string, unknown>) {
       },
       available: true,
     },
-    system_health: {
-      memory_percent: 40,
-      cpu_percent: 8,
-      pid: 12345,
-      available: true,
-    },
-    error_rates: {
-      total_requests: 100,
-      total_errors: 1,
-      error_rate: 0.01,
-      available: true,
-    },
+    system_health: { memory_percent: 40, cpu_percent: 8, pid: 12345, available: true },
+    error_rates: { total_requests: 100, total_errors: 1, error_rate: 0.01, available: true },
     ...(overrides ?? {}),
   };
 }
@@ -180,7 +157,7 @@ describe('Admin ObservabilityPage', () => {
     render(<ObservabilityPage />);
 
     await waitFor(() =>
-      expect(screen.getByText('Settlement review scheduler unavailable')).toBeInTheDocument()
+      expect(screen.getByText('Settlement review scheduler unavailable')).toBeInTheDocument(),
     );
     expect(screen.getByText('Oracle stream metrics unavailable')).toBeInTheDocument();
   });

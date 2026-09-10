@@ -68,18 +68,8 @@ const MOCK_WORKFLOWS: WorkflowExecution[] = [
         startedAt: '2024-01-16T10:32:00Z',
         executorId: 'executor_2',
       },
-      {
-        id: 'task_003',
-        stepId: 'debate_findings',
-        workflowId: 'wf_001',
-        status: 'pending',
-      },
-      {
-        id: 'task_004',
-        stepId: 'generate_report',
-        workflowId: 'wf_001',
-        status: 'pending',
-      },
+      { id: 'task_003', stepId: 'debate_findings', workflowId: 'wf_001', status: 'pending' },
+      { id: 'task_004', stepId: 'generate_report', workflowId: 'wf_001', status: 'pending' },
     ],
   },
   {
@@ -142,7 +132,7 @@ export function ExecutionMonitor({
   onTaskClick,
 }: ExecutionMonitorProps) {
   const [expandedWorkflowId, setExpandedWorkflowId] = useState<string | null>(
-    workflows.length > 0 ? workflows[0].id : null
+    workflows.length > 0 ? workflows[0].id : null,
   );
 
   const _selectedWorkflow = useMemo(() => {
@@ -156,7 +146,7 @@ export function ExecutionMonitor({
     const totalTasks = workflows.reduce((acc, w) => acc + w.tasks.length, 0);
     const completedTasks = workflows.reduce(
       (acc, w) => acc + w.tasks.filter((t) => t.status === 'completed').length,
-      0
+      0,
     );
 
     return { running, completed, failed, totalTasks, completedTasks };
@@ -179,9 +169,7 @@ export function ExecutionMonitor({
         <h3 className="text-sm font-theme-data font-bold text-[var(--accent)]">
           EXECUTION MONITOR
         </h3>
-        <p className="text-xs text-text-muted mt-1">
-          Real-time workflow and task execution status
-        </p>
+        <p className="text-xs text-text-muted mt-1">Real-time workflow and task execution status</p>
       </div>
 
       {/* Stats Bar */}
@@ -204,9 +192,7 @@ export function ExecutionMonitor({
         </div>
         <div className="text-center">
           <div className="text-xl font-bold text-purple-400">
-            {stats.totalTasks > 0
-              ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
-              : 0}
+            {stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0}
             %
           </div>
           <div className="text-xs text-text-muted">Progress</div>
@@ -227,9 +213,7 @@ export function ExecutionMonitor({
                 {/* Workflow Header */}
                 <button
                   onClick={() => {
-                    setExpandedWorkflowId(
-                      expandedWorkflowId === workflow.id ? null : workflow.id
-                    );
+                    setExpandedWorkflowId(expandedWorkflowId === workflow.id ? null : workflow.id);
                     onWorkflowSelect?.(workflow.id);
                   }}
                   className="w-full px-4 py-3 flex items-center gap-3 hover:bg-surface transition-colors"
@@ -250,7 +234,8 @@ export function ExecutionMonitor({
                   <div className="flex-1 text-left">
                     <div className="font-theme-data font-bold text-text">{workflow.name}</div>
                     <div className="text-xs text-text-muted">
-                      {workflow.tasks.length} tasks • {formatDuration(workflow.startedAt, workflow.completedAt)}
+                      {workflow.tasks.length} tasks •{' '}
+                      {formatDuration(workflow.startedAt, workflow.completedAt)}
                     </div>
                   </div>
 
@@ -262,8 +247,8 @@ export function ExecutionMonitor({
                           workflow.status === 'completed'
                             ? 'bg-[var(--accent)]'
                             : workflow.status === 'failed'
-                            ? 'bg-red-500'
-                            : 'bg-cyan-400'
+                              ? 'bg-red-500'
+                              : 'bg-cyan-400'
                         }`}
                         style={{ width: `${workflow.progress * 100}%` }}
                       />
@@ -343,9 +328,7 @@ export function ExecutionMonitor({
       <div className="px-4 py-2 border-t border-border bg-bg flex-shrink-0">
         <div className="flex items-center justify-between text-xs font-theme-data text-text-muted">
           <span>{workflows.length} workflows</span>
-          <span className="text-cyan-400">
-            {stats.running > 0 && `● ${stats.running} running`}
-          </span>
+          <span className="text-cyan-400">{stats.running > 0 && `● ${stats.running} running`}</span>
         </div>
       </div>
     </div>

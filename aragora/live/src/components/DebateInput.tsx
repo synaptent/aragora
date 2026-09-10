@@ -43,7 +43,10 @@ const DEBATE_MODES: Record<DebateMode, { label: string; description: string; end
   },
 };
 
-const DEBATE_FORMATS: Record<DebateFormat, { label: string; description: string; time: string; icon: string }> = {
+const DEBATE_FORMATS: Record<
+  DebateFormat,
+  { label: string; description: string; time: string; icon: string }
+> = {
   light: {
     label: 'Quick',
     description: '4 rounds, focused analysis',
@@ -69,7 +72,11 @@ type ApiStatus = 'checking' | 'online' | 'offline';
 // Simple domain detection from question text
 function detectDomain(text: string): string {
   const lower = text.toLowerCase();
-  if (/\b(code|programming|api|software|bug|function|class|typescript|javascript|python)\b/.test(lower)) {
+  if (
+    /\b(code|programming|api|software|bug|function|class|typescript|javascript|python)\b/.test(
+      lower,
+    )
+  ) {
     return 'technical';
   }
   if (/\b(security|auth|encryption|vulnerability|attack|password|token)\b/.test(lower)) {
@@ -128,7 +135,10 @@ export function DebateInput({
   const [selectedVertical, setSelectedVertical] = useState<string>('general');
   const [budgetLimit, setBudgetLimit] = useState<string>(defaultBudgetLimit ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
-  const [costEstimate, setCostEstimate] = useState<{ total: number; breakdown: { model: string; subtotal: number }[] } | null>(null);
+  const [costEstimate, setCostEstimate] = useState<{
+    total: number;
+    breakdown: { model: string; subtotal: number }[];
+  } | null>(null);
   const [costLoading, setCostLoading] = useState(false);
   const [costError, setCostError] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -168,11 +178,11 @@ export function DebateInput({
     'You have a one-time time machine: prevent infant Hitler from becoming a dictator, but lose civil-rights movements, the EU, and modern computing. Press the button?',
 
     // Civilization & Future
-    'Should humanity colonize Mars, or focus those resources on solving Earth\'s problems first?',
+    "Should humanity colonize Mars, or focus those resources on solving Earth's problems first?",
     'Should human lifespan be artificially extended, and if so, who decides who gets access?',
     'Are we fundamentally changing human nature with technology, or merely amplifying existing traits?',
     'If we could run a historical Diff Check measuring Net Suffering vs. Net Joy for famous figures, whose score would shock us most?',
-    'If we could access the Universe\'s Error Logs for failed civilizations, what Critical Warning would Earth be flagging?',
+    "If we could access the Universe's Error Logs for failed civilizations, what Critical Warning would Earth be flagging?",
     'Should legal personhood scale with measured consciousness probability? A 70%-sapient AI pays 70% tax; a 30%-conscious pig gets 30% protection?',
 
     // Multi-Agent Debate
@@ -256,7 +266,7 @@ export function DebateInput({
 
   // Select random placeholder on mount (stable across re-renders)
   const [placeholder] = useState(
-    () => allQuestions[Math.floor(Math.random() * allQuestions.length)]
+    () => allQuestions[Math.floor(Math.random() * allQuestions.length)],
   );
 
   // Check API health on mount
@@ -266,9 +276,7 @@ export function DebateInput({
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch(`${apiBase}/api/health`, {
-          signal: controller.signal,
-        });
+        const response = await fetch(`${apiBase}/api/health`, { signal: controller.signal });
         clearTimeout(timeoutId);
 
         setApiStatus(response.ok ? 'online' : 'offline');
@@ -307,10 +315,7 @@ export function DebateInput({
           const response = await fetch(`${apiBase}/api/routing/recommendations`, {
             method: 'POST',
             headers: recHeaders,
-            body: JSON.stringify({
-              primary_domain: domain,
-              limit: 4,
-            }),
+            body: JSON.stringify({ primary_domain: domain, limit: 4 }),
           });
           if (response.ok) {
             const data = await response.json();
@@ -332,10 +337,19 @@ export function DebateInput({
   // Fetch cost estimate when agents/rounds change
   useEffect(() => {
     if (costDebounceRef.current) clearTimeout(costDebounceRef.current);
-    if (apiStatus !== 'online') { setCostEstimate(null); return; }
+    if (apiStatus !== 'online') {
+      setCostEstimate(null);
+      return;
+    }
 
-    const agentList = agents.split(',').map(a => a.trim()).filter(Boolean);
-    if (agentList.length === 0) { setCostEstimate(null); return; }
+    const agentList = agents
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
+    if (agentList.length === 0) {
+      setCostEstimate(null);
+      return;
+    }
 
     costDebounceRef.current = setTimeout(async () => {
       setCostLoading(true);
@@ -348,15 +362,19 @@ export function DebateInput({
         });
         const costHeaders: Record<string, string> = {};
         if (tokens?.access_token) costHeaders['Authorization'] = `Bearer ${tokens.access_token}`;
-        const res = await fetch(`${apiBase}/api/v1/debates/estimate-cost?${params}`, { headers: costHeaders });
+        const res = await fetch(`${apiBase}/api/v1/debates/estimate-cost?${params}`, {
+          headers: costHeaders,
+        });
         if (res.ok) {
           const data = await res.json();
           setCostEstimate({
             total: data.total_estimated_cost_usd ?? 0,
-            breakdown: (data.breakdown_by_model ?? []).map((b: { model?: string; subtotal_usd?: number }) => ({
-              model: b.model ?? 'unknown',
-              subtotal: b.subtotal_usd ?? 0,
-            })),
+            breakdown: (data.breakdown_by_model ?? []).map(
+              (b: { model?: string; subtotal_usd?: number }) => ({
+                model: b.model ?? 'unknown',
+                subtotal: b.subtotal_usd ?? 0,
+              }),
+            ),
           });
         } else {
           setCostError(true);
@@ -368,279 +386,311 @@ export function DebateInput({
       }
     }, 600);
 
-    return () => { if (costDebounceRef.current) clearTimeout(costDebounceRef.current); };
+    return () => {
+      if (costDebounceRef.current) clearTimeout(costDebounceRef.current);
+    };
   }, [agents, rounds, apiBase, apiStatus, tokens?.access_token]);
 
   // Apply recommended agents
   const applyRecommendations = useCallback(() => {
     if (recommendations.length > 0) {
-      const recAgents = recommendations.map(r => r.agent).join(',');
+      const recAgents = recommendations.map((r) => r.agent).join(',');
       setAgents(recAgents);
     }
   }, [recommendations]);
 
-  const preflightAgents = useCallback(async (_agentList: string[]) => {
-    try {
-      const availHeaders: Record<string, string> = {};
-      if (tokens?.access_token) availHeaders['Authorization'] = `Bearer ${tokens.access_token}`;
-      const response = await fetch(`${apiBase}/api/introspection/agents/availability`, { headers: availHeaders });
-      if (!response.ok) {
-        logger.warn('[DebateInput] Agent availability check failed', response.status);
+  const preflightAgents = useCallback(
+    async (_agentList: string[]) => {
+      try {
+        const availHeaders: Record<string, string> = {};
+        if (tokens?.access_token) availHeaders['Authorization'] = `Bearer ${tokens.access_token}`;
+        const response = await fetch(`${apiBase}/api/introspection/agents/availability`, {
+          headers: availHeaders,
+        });
+        if (!response.ok) {
+          logger.warn('[DebateInput] Agent availability check failed', response.status);
+          return null;
+        }
+        const data = await response.json();
+        return data as { available?: string[]; missing?: string[] };
+      } catch (err) {
+        logger.warn('[DebateInput] Agent availability check error', err);
         return null;
       }
-      const data = await response.json();
-      return data as { available?: string[]; missing?: string[] };
-    } catch (err) {
-      logger.warn('[DebateInput] Agent availability check error', err);
-      return null;
-    }
-  }, [apiBase, tokens?.access_token]);
+    },
+    [apiBase, tokens?.access_token],
+  );
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
 
-    // Use placeholder as fallback when input is empty
-    const trimmedQuestion = question.trim() || placeholder;
-    if (!trimmedQuestion || isSubmitting) return;
+      // Use placeholder as fallback when input is empty
+      const trimmedQuestion = question.trim() || placeholder;
+      if (!trimmedQuestion || isSubmitting) return;
 
-    // Check auth state before submitting
-    if (authLoading) {
-      logger.debug('[DebateInput] Auth still loading, waiting...');
-      onError?.('Please wait, authentication is loading...');
-      return;
-    }
+      // Check auth state before submitting
+      if (authLoading) {
+        logger.debug('[DebateInput] Auth still loading, waiting...');
+        onError?.('Please wait, authentication is loading...');
+        return;
+      }
 
-    // In demo/playground mode, skip auth and use playground endpoint
-    if (requiresLiveAuth) {
-      const message = 'Sign in to start a live debate from this page.';
-      setLocalError(message);
-      onError?.(message);
-      return;
-    }
+      // In demo/playground mode, skip auth and use playground endpoint
+      if (requiresLiveAuth) {
+        const message = 'Sign in to start a live debate from this page.';
+        setLocalError(message);
+        onError?.(message);
+        return;
+      }
 
-    const usePlayground = allowPlaygroundFallback && !hasLiveAccess;
+      const usePlayground = allowPlaygroundFallback && !hasLiveAccess;
 
-    setIsSubmitting(true);
-    setLocalError(null);
+      setIsSubmitting(true);
+      setLocalError(null);
 
-    // Create AbortController for request timeout (30 seconds)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+      // Create AbortController for request timeout (30 seconds)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    try {
-      const modeConfig = DEBATE_MODES[debateMode];
-      const requestedAgents = agents
-        .split(',')
-        .map(a => a.trim())
-        .filter(Boolean);
+      try {
+        const modeConfig = DEBATE_MODES[debateMode];
+        const requestedAgents = agents
+          .split(',')
+          .map((a) => a.trim())
+          .filter(Boolean);
 
-      // In playground mode, skip agent preflight (mock agents always available)
-      if (!usePlayground && requestedAgents.length > 0) {
-        const availability = await preflightAgents(requestedAgents);
-        if (availability?.available?.length) {
-          const missingAgents = requestedAgents.filter(
-            agent => !availability.available?.includes(agent)
-          );
-          if (missingAgents.length > 0) {
-            const message = `Missing credentials for: ${missingAgents.join(', ')}`;
-            setLocalError(message);
-            onError?.(message);
-            setIsSubmitting(false);
-            return;
+        // In playground mode, skip agent preflight (mock agents always available)
+        if (!usePlayground && requestedAgents.length > 0) {
+          const availability = await preflightAgents(requestedAgents);
+          if (availability?.available?.length) {
+            const missingAgents = requestedAgents.filter(
+              (agent) => !availability.available?.includes(agent),
+            );
+            if (missingAgents.length > 0) {
+              const message = `Missing credentials for: ${missingAgents.join(', ')}`;
+              setLocalError(message);
+              onError?.(message);
+              setIsSubmitting(false);
+              return;
+            }
           }
         }
-      }
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (!usePlayground && tokens?.access_token) {
-        headers['Authorization'] = `Bearer ${tokens.access_token}`;
-      }
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (!usePlayground && tokens?.access_token) {
+          headers['Authorization'] = `Bearer ${tokens.access_token}`;
+        }
 
-      // Use playground endpoint for unauthenticated users (demo mode / no API keys)
-      const endpoint = usePlayground
-        ? '/api/v1/playground/debate'
-        : modeConfig.endpoint;
+        // Use playground endpoint for unauthenticated users (demo mode / no API keys)
+        const endpoint = usePlayground ? '/api/v1/playground/debate' : modeConfig.endpoint;
 
-      // Debug: Log request details
-      const requestUrl = `${apiBase}${endpoint}`;
-      logger.debug('[DebateInput] Starting debate request:', {
-        endpoint: requestUrl,
-        hasAuth: !!tokens?.access_token,
-        mode: usePlayground ? 'playground' : debateMode,
-        questionPreview: trimmedQuestion.substring(0, 50) + (trimmedQuestion.length > 50 ? '...' : ''),
-      });
+        // Debug: Log request details
+        const requestUrl = `${apiBase}${endpoint}`;
+        logger.debug('[DebateInput] Starting debate request:', {
+          endpoint: requestUrl,
+          hasAuth: !!tokens?.access_token,
+          mode: usePlayground ? 'playground' : debateMode,
+          questionPreview:
+            trimmedQuestion.substring(0, 50) + (trimmedQuestion.length > 50 ? '...' : ''),
+        });
 
-      // Playground endpoint uses "topic" + "agents" (count); standard uses "question" + "agents" (list)
-      const requestBody = usePlayground
-        ? {
-            topic: trimmedQuestion,
-            rounds,
-            agents: requestedAgents.length || 3,
-          }
-        : {
-            question: trimmedQuestion,
-            rounds,
-            debate_format: debateFormat,
-            auto_select: requestedAgents.length === 0,
-            ...(requestedAgents.length > 0 && { agents: requestedAgents }),
-            vertical: selectedVertical !== 'general' ? selectedVertical : undefined,
-            ...(debateMode === 'graph' && { branch_on_disagreement: true }),
-            ...(debateMode === 'matrix' && { scenarios: 3 }),
-            ...(budgetLimit && parseFloat(budgetLimit) > 0 && { budget_limit_usd: parseFloat(budgetLimit) }),
-          };
-
-      const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers,
-        signal: controller.signal,
-        body: JSON.stringify(requestBody),
-      });
-
-      clearTimeout(timeoutId);
-
-      // Debug: Log response details
-      const responseContentType = response.headers.get('content-type') || '';
-      logger.debug('[DebateInput] Response received:', {
-        status: response.status,
-        statusText: response.statusText,
-        contentType: responseContentType,
-        url: response.url,
-      });
-
-      // Check response status BEFORE parsing JSON
-      if (!response.ok) {
-        let errorMessage: string;
-
-        if (responseContentType.includes('application/json')) {
-          // Server returned JSON error - parse it
-          const errorData = await response.json().catch(() => ({}));
-
-          // Auto-fallback to playground if server suggests it (e.g. no API keys configured)
-          if (errorData.use_playground && !usePlayground) {
-            logger.debug('[DebateInput] Server suggests playground fallback, retrying in playground mode');
-            const playgroundUrl = `${apiBase}/api/v1/playground/debate`;
-            const playgroundBody = {
-              topic: trimmedQuestion,
+        // Playground endpoint uses "topic" + "agents" (count); standard uses "question" + "agents" (list)
+        const requestBody = usePlayground
+          ? { topic: trimmedQuestion, rounds, agents: requestedAgents.length || 3 }
+          : {
+              question: trimmedQuestion,
               rounds,
-              agents: requestedAgents.length || 3,
+              debate_format: debateFormat,
+              auto_select: requestedAgents.length === 0,
+              ...(requestedAgents.length > 0 && { agents: requestedAgents }),
+              vertical: selectedVertical !== 'general' ? selectedVertical : undefined,
+              ...(debateMode === 'graph' && { branch_on_disagreement: true }),
+              ...(debateMode === 'matrix' && { scenarios: 3 }),
+              ...(budgetLimit &&
+                parseFloat(budgetLimit) > 0 && { budget_limit_usd: parseFloat(budgetLimit) }),
             };
-            const pgResponse = await fetch(playgroundUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(playgroundBody),
-            });
-            if (pgResponse.ok) {
-              const pgData = await pgResponse.json();
-              const pgDebateId = pgData.debate_id || pgData.id;
-              if (pgDebateId) {
-                onDebateStarted?.(pgDebateId, trimmedQuestion);
-                setQuestion('');
-                setIsSubmitting(false);
-                clearTimeout(timeoutId);
-                return;
-              }
-            }
-            // If playground also fails, fall through to show original error
-          }
 
-          errorMessage = errorData.error || errorData.message || `Server error: ${response.status}`;
-        } else {
-          // Server returned HTML or other non-JSON response - log for debugging
+        const response = await fetch(requestUrl, {
+          method: 'POST',
+          headers,
+          signal: controller.signal,
+          body: JSON.stringify(requestBody),
+        });
+
+        clearTimeout(timeoutId);
+
+        // Debug: Log response details
+        const responseContentType = response.headers.get('content-type') || '';
+        logger.debug('[DebateInput] Response received:', {
+          status: response.status,
+          statusText: response.statusText,
+          contentType: responseContentType,
+          url: response.url,
+        });
+
+        // Check response status BEFORE parsing JSON
+        if (!response.ok) {
+          let errorMessage: string;
+
+          if (responseContentType.includes('application/json')) {
+            // Server returned JSON error - parse it
+            const errorData = await response.json().catch(() => ({}));
+
+            // Auto-fallback to playground if server suggests it (e.g. no API keys configured)
+            if (errorData.use_playground && !usePlayground) {
+              logger.debug(
+                '[DebateInput] Server suggests playground fallback, retrying in playground mode',
+              );
+              const playgroundUrl = `${apiBase}/api/v1/playground/debate`;
+              const playgroundBody = {
+                topic: trimmedQuestion,
+                rounds,
+                agents: requestedAgents.length || 3,
+              };
+              const pgResponse = await fetch(playgroundUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(playgroundBody),
+              });
+              if (pgResponse.ok) {
+                const pgData = await pgResponse.json();
+                const pgDebateId = pgData.debate_id || pgData.id;
+                if (pgDebateId) {
+                  onDebateStarted?.(pgDebateId, trimmedQuestion);
+                  setQuestion('');
+                  setIsSubmitting(false);
+                  clearTimeout(timeoutId);
+                  return;
+                }
+              }
+              // If playground also fails, fall through to show original error
+            }
+
+            errorMessage =
+              errorData.error || errorData.message || `Server error: ${response.status}`;
+          } else {
+            // Server returned HTML or other non-JSON response - log for debugging
+            const text = await response.text();
+            logger.error('[DebateInput] Non-JSON error response:', {
+              status: response.status,
+              contentType: responseContentType,
+              bodyPreview: text.substring(0, 300),
+            });
+
+            // User-friendly messages based on status code
+            if (response.status === 401) {
+              errorMessage = 'Authentication required. Please log in and try again.';
+            } else if (response.status === 403) {
+              errorMessage = 'Access denied. You may not have permission for this action.';
+            } else if (response.status === 404) {
+              errorMessage = 'API endpoint not found. The server may be misconfigured.';
+            } else if (response.status >= 500) {
+              errorMessage = `Server error (${response.status}). The backend may be experiencing issues.`;
+            } else {
+              errorMessage = `Request failed: ${response.status} ${response.statusText}`;
+            }
+          }
+          throw new Error(errorMessage);
+        }
+
+        // Validate content-type before JSON parsing
+        if (!responseContentType.includes('application/json')) {
           const text = await response.text();
-          logger.error('[DebateInput] Non-JSON error response:', {
-            status: response.status,
-            contentType: responseContentType,
+          logger.error('[DebateInput] Unexpected content-type on success:', {
+            expected: 'application/json',
+            got: responseContentType,
             bodyPreview: text.substring(0, 300),
           });
+          throw new Error(
+            `Server returned ${responseContentType || 'unknown content'} instead of JSON. The API may be misconfigured.`,
+          );
+        }
 
-          // User-friendly messages based on status code
-          if (response.status === 401) {
-            errorMessage = 'Authentication required. Please log in and try again.';
-          } else if (response.status === 403) {
-            errorMessage = 'Access denied. You may not have permission for this action.';
-          } else if (response.status === 404) {
-            errorMessage = 'API endpoint not found. The server may be misconfigured.';
-          } else if (response.status >= 500) {
-            errorMessage = `Server error (${response.status}). The backend may be experiencing issues.`;
-          } else {
-            errorMessage = `Request failed: ${response.status} ${response.statusText}`;
+        // Now safe to parse JSON
+        const data = await response.json();
+
+        // Standard endpoint returns {success, debate_id}; playground returns {id, topic, status, ...}
+        const debateId = data.debate_id || data.matrix_id || data.id;
+        const isSuccess = data.success || (usePlayground && debateId);
+
+        if (isSuccess && debateId) {
+          logger.debug('[DebateInput] Debate started successfully:', {
+            debateId,
+            mode: usePlayground ? 'playground' : debateMode,
+          });
+
+          // Navigate to visualization page for Graph/Matrix modes
+          if (!usePlayground && debateMode === 'graph') {
+            router.push(`/debates/graph?id=${debateId}`);
+          } else if (!usePlayground && debateMode === 'matrix') {
+            router.push(`/debates/matrix?id=${data.matrix_id || debateId}`);
+          } else if (!onDebateStarted) {
+            // No callback provided — navigate to the debate detail page by default
+            router.push(`/debates/${debateId}`);
           }
+
+          // Always call onDebateStarted for tracking/notification
+          onDebateStarted?.(debateId, trimmedQuestion);
+          setQuestion('');
+        } else {
+          logger.warn('[DebateInput] Debate creation failed:', data);
+          const errorMessage = data.error || 'Failed to start debate';
+          setLocalError(errorMessage);
+          onError?.(errorMessage);
         }
-        throw new Error(errorMessage);
-      }
+      } catch (err) {
+        // Enhanced error logging
+        logger.error('[DebateInput] Error during debate creation:', err);
 
-      // Validate content-type before JSON parsing
-      if (!responseContentType.includes('application/json')) {
-        const text = await response.text();
-        logger.error('[DebateInput] Unexpected content-type on success:', {
-          expected: 'application/json',
-          got: responseContentType,
-          bodyPreview: text.substring(0, 300),
-        });
-        throw new Error(`Server returned ${responseContentType || 'unknown content'} instead of JSON. The API may be misconfigured.`);
-      }
+        let errorMessage: string;
 
-      // Now safe to parse JSON
-      const data = await response.json();
-
-      // Standard endpoint returns {success, debate_id}; playground returns {id, topic, status, ...}
-      const debateId = data.debate_id || data.matrix_id || data.id;
-      const isSuccess = data.success || (usePlayground && debateId);
-
-      if (isSuccess && debateId) {
-        logger.debug('[DebateInput] Debate started successfully:', { debateId, mode: usePlayground ? 'playground' : debateMode });
-
-        // Navigate to visualization page for Graph/Matrix modes
-        if (!usePlayground && debateMode === 'graph') {
-          router.push(`/debates/graph?id=${debateId}`);
-        } else if (!usePlayground && debateMode === 'matrix') {
-          router.push(`/debates/matrix?id=${data.matrix_id || debateId}`);
-        } else if (!onDebateStarted) {
-          // No callback provided — navigate to the debate detail page by default
-          router.push(`/debates/${debateId}`);
+        if (err instanceof TypeError && err.message === 'Failed to fetch') {
+          errorMessage = 'Cannot reach the server. Please check your connection and try again.';
+          setApiStatus('offline');
+        } else if (err instanceof Error && err.name === 'AbortError') {
+          errorMessage = 'Request timed out after 30 seconds. The server may be overloaded.';
+        } else if (err instanceof SyntaxError && err.message.includes('Unexpected token')) {
+          // This catches JSON parse errors when server returns HTML
+          errorMessage =
+            'Server returned an invalid response (HTML instead of JSON). The API may be down or misconfigured.';
+        } else if (err instanceof Error) {
+          errorMessage = err.message;
+        } else {
+          errorMessage = 'An unexpected error occurred. Please try again.';
         }
 
-        // Always call onDebateStarted for tracking/notification
-        onDebateStarted?.(debateId, trimmedQuestion);
-        setQuestion('');
-      } else {
-        logger.warn('[DebateInput] Debate creation failed:', data);
-        const errorMessage = data.error || 'Failed to start debate';
         setLocalError(errorMessage);
         onError?.(errorMessage);
+      } finally {
+        clearTimeout(timeoutId);
+        setIsSubmitting(false);
       }
-    } catch (err) {
-      // Enhanced error logging
-      logger.error('[DebateInput] Error during debate creation:', err);
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedVertical changes are handled separately
+    },
+    [
+      question,
+      placeholder,
+      agents,
+      rounds,
+      debateMode,
+      debateFormat,
+      apiBase,
+      isSubmitting,
+      onDebateStarted,
+      onError,
+      router,
+      tokens,
+      authLoading,
+      hasLiveAccess,
+      allowPlaygroundFallback,
+      requiresLiveAuth,
+      isAuthenticated,
+    ],
+  );
 
-      let errorMessage: string;
-
-      if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        errorMessage = 'Cannot reach the server. Please check your connection and try again.';
-        setApiStatus('offline');
-      } else if (err instanceof Error && err.name === 'AbortError') {
-        errorMessage = 'Request timed out after 30 seconds. The server may be overloaded.';
-      } else if (err instanceof SyntaxError && err.message.includes('Unexpected token')) {
-        // This catches JSON parse errors when server returns HTML
-        errorMessage = 'Server returned an invalid response (HTML instead of JSON). The API may be down or misconfigured.';
-      } else if (err instanceof Error) {
-        errorMessage = err.message;
-      } else {
-        errorMessage = 'An unexpected error occurred. Please try again.';
-      }
-
-      setLocalError(errorMessage);
-      onError?.(errorMessage);
-    } finally {
-      clearTimeout(timeoutId);
-      setIsSubmitting(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedVertical changes are handled separately
-  }, [question, placeholder, agents, rounds, debateMode, debateFormat, apiBase, isSubmitting, onDebateStarted, onError, router, tokens, authLoading, hasLiveAccess, allowPlaygroundFallback, requiresLiveAuth, isAuthenticated]);
-
-  const isDisabled = isSubmitting || apiStatus === 'offline' || apiStatus === 'checking' || authLoading;
+  const isDisabled =
+    isSubmitting || apiStatus === 'offline' || apiStatus === 'checking' || authLoading;
   const isPlaygroundMode = allowPlaygroundFallback && apiStatus === 'online' && !hasLiveAccess;
 
   return (
@@ -700,7 +750,10 @@ export function DebateInput({
               }
             }}
           />
-          <div id="debate-input-hint" className="absolute bottom-2 right-2 text-xs text-text-muted font-theme-data">
+          <div
+            id="debate-input-hint"
+            className="absolute bottom-2 right-2 text-xs text-text-muted font-theme-data"
+          >
             {question.length > 0 && `${question.length} chars`}
             {question.length === 0 && 'Cmd+Enter to debate this question'}
           </div>
@@ -809,10 +862,16 @@ export function DebateInput({
 
         {/* Advanced Options */}
         {showAdvanced && (
-          <div id="advanced-options" className="border border-[var(--accent)]/30 p-4 space-y-4 bg-surface/50">
+          <div
+            id="advanced-options"
+            className="border border-[var(--accent)]/30 p-4 space-y-4 bg-surface/50"
+          >
             {/* Debate Mode Selector */}
             <div>
-              <label id="debate-mode-label" className="block text-xs font-theme-data text-text-muted mb-2">
+              <label
+                id="debate-mode-label"
+                className="block text-xs font-theme-data text-text-muted mb-2"
+              >
                 DEBATE MODE
               </label>
               <div
@@ -860,7 +919,10 @@ export function DebateInput({
 
             {/* Debate Format Selector */}
             <div>
-              <label id="debate-format-label" className="block text-xs font-theme-data text-text-muted mb-2">
+              <label
+                id="debate-format-label"
+                className="block text-xs font-theme-data text-text-muted mb-2"
+              >
                 DEBATE DEPTH
               </label>
               <div
@@ -922,7 +984,10 @@ export function DebateInput({
             <div className="grid grid-cols-2 gap-4">
               {/* Agents */}
               <div>
-                <label htmlFor="debate-agents" className="block text-xs font-theme-data text-text-muted mb-1">
+                <label
+                  htmlFor="debate-agents"
+                  className="block text-xs font-theme-data text-text-muted mb-1"
+                >
                   AGENTS (comma-separated)
                 </label>
                 <input
@@ -942,7 +1007,10 @@ export function DebateInput({
 
               {/* Rounds */}
               <div>
-                <label htmlFor="debate-rounds" className="block text-xs font-theme-data text-text-muted mb-1">
+                <label
+                  htmlFor="debate-rounds"
+                  className="block text-xs font-theme-data text-text-muted mb-1"
+                >
                   DEBATE ROUNDS
                 </label>
                 <select
@@ -955,7 +1023,8 @@ export function DebateInput({
                 >
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                     <option key={n} value={n}>
-                      {n} round{n !== 1 ? 's' : ''}{n === 8 ? ' (recommended)' : ''}
+                      {n} round{n !== 1 ? 's' : ''}
+                      {n === 8 ? ' (recommended)' : ''}
                     </option>
                   ))}
                 </select>
@@ -966,7 +1035,10 @@ export function DebateInput({
 
               {/* Budget Limit */}
               <div>
-                <label htmlFor="debate-budget" className="block text-xs font-theme-data text-text-muted mb-1">
+                <label
+                  htmlFor="debate-budget"
+                  className="block text-xs font-theme-data text-text-muted mb-1"
+                >
                   BUDGET CAP (USD)
                 </label>
                 <input
@@ -980,13 +1052,22 @@ export function DebateInput({
                   placeholder="No limit"
                   className={`w-full bg-bg border px-3 py-2
                              font-theme-data text-sm text-text focus:outline-none transition-colors
-                             ${budgetLimit && costEstimate && parseFloat(budgetLimit) > 0 && parseFloat(budgetLimit) < costEstimate.total
-                               ? 'border-warning/60 focus:border-warning'
-                               : 'border-[var(--accent)]/30 focus:border-[var(--accent)]'}`}
+                             ${
+                               budgetLimit &&
+                               costEstimate &&
+                               parseFloat(budgetLimit) > 0 &&
+                               parseFloat(budgetLimit) < costEstimate.total
+                                 ? 'border-warning/60 focus:border-warning'
+                                 : 'border-[var(--accent)]/30 focus:border-[var(--accent)]'
+                             }`}
                 />
-                {budgetLimit && costEstimate && parseFloat(budgetLimit) > 0 && parseFloat(budgetLimit) < costEstimate.total ? (
+                {budgetLimit &&
+                costEstimate &&
+                parseFloat(budgetLimit) > 0 &&
+                parseFloat(budgetLimit) < costEstimate.total ? (
                   <p className="text-[10px] text-warning mt-1 font-theme-data">
-                    Budget ${parseFloat(budgetLimit).toFixed(2)} is below estimated cost ${costEstimate.total.toFixed(2)}
+                    Budget ${parseFloat(budgetLimit).toFixed(2)} is below estimated cost $
+                    {costEstimate.total.toFixed(2)}
                   </p>
                 ) : (
                   <p className="text-[10px] text-text-muted mt-1">
@@ -998,17 +1079,25 @@ export function DebateInput({
 
             {/* Cost Estimate Preview */}
             {(costEstimate || costLoading || costError) && (
-              <div className={`border p-3 bg-bg/50 transition-colors ${
-                costError ? 'border-warning/30' : 'border-[var(--acid-cyan)]/30'
-              }`}>
+              <div
+                className={`border p-3 bg-bg/50 transition-colors ${
+                  costError ? 'border-warning/30' : 'border-[var(--acid-cyan)]/30'
+                }`}
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-theme-data text-[var(--acid-cyan)]">ESTIMATED COST</span>
+                  <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                    ESTIMATED COST
+                  </span>
                   {costLoading ? (
                     <span className="text-sm font-theme-data text-text-muted">
                       <span className="inline-flex gap-0.5">
                         <span className="animate-pulse">.</span>
-                        <span className="animate-pulse" style={{ animationDelay: '150ms' }}>.</span>
-                        <span className="animate-pulse" style={{ animationDelay: '300ms' }}>.</span>
+                        <span className="animate-pulse" style={{ animationDelay: '150ms' }}>
+                          .
+                        </span>
+                        <span className="animate-pulse" style={{ animationDelay: '300ms' }}>
+                          .
+                        </span>
                       </span>
                     </span>
                   ) : costError ? (
@@ -1022,7 +1111,10 @@ export function DebateInput({
                 {!costError && costEstimate && costEstimate.breakdown.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {costEstimate.breakdown.map((b, i) => (
-                      <div key={i} className="flex items-center justify-between text-[10px] font-theme-data text-text-muted">
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-[10px] font-theme-data text-text-muted"
+                      >
                         <span>{b.model}</span>
                         <span>${b.subtotal < 0.001 ? '<0.001' : b.subtotal.toFixed(3)}</span>
                       </div>

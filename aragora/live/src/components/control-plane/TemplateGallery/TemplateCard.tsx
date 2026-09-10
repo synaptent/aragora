@@ -3,18 +3,13 @@
 import { useMemo } from 'react';
 
 export type WorkflowCategory =
-  | 'general'
-  | 'legal'
-  | 'healthcare'
-  | 'finance'
-  | 'code'
-  | 'academic'
-  | 'compliance';
+  'general' | 'legal' | 'healthcare' | 'finance' | 'code' | 'academic' | 'compliance';
 
 export interface WorkflowStep {
   id: string;
   name: string;
-  step_type: 'agent' | 'debate' | 'decision' | 'human_checkpoint' | 'task' | 'memory_write' | 'memory_read';
+  step_type:
+    'agent' | 'debate' | 'decision' | 'human_checkpoint' | 'task' | 'memory_write' | 'memory_read';
   description?: string;
 }
 
@@ -171,10 +166,7 @@ export function TemplateCard({
       {/* Step Types Summary */}
       <div className="flex flex-wrap gap-2 mb-3">
         {Object.entries(stepTypeCounts).map(([type, count]) => (
-          <div
-            key={type}
-            className="flex items-center gap-1 px-2 py-1 bg-surface rounded text-xs"
-          >
+          <div key={type} className="flex items-center gap-1 px-2 py-1 bg-surface rounded text-xs">
             <span>{STEP_TYPE_ICONS[type] || '  '}</span>
             <span className="text-text-muted">{count}</span>
           </div>
@@ -209,7 +201,9 @@ export function TemplateCard({
           <div className="text-xs text-text-muted">Inputs</div>
         </div>
         <div className="bg-surface p-2 rounded">
-          <div className="text-lg font-theme-data">{Object.keys(template.outputs || {}).length}</div>
+          <div className="text-lg font-theme-data">
+            {Object.keys(template.outputs || {}).length}
+          </div>
           <div className="text-xs text-text-muted">Outputs</div>
         </div>
       </div>

@@ -44,11 +44,7 @@ function DesktopNavItem({
 
   if (link.anchor) {
     return (
-      <a
-        href={link.href}
-        className="text-sm transition-colors hover:opacity-80"
-        style={style}
-      >
+      <a href={link.href} className="text-sm transition-colors hover:opacity-80" style={style}>
         {link.label}
       </a>
     );
@@ -68,11 +64,7 @@ function DesktopNavItem({
   }
 
   return (
-    <Link
-      href={link.href}
-      className="text-sm transition-colors hover:opacity-80"
-      style={style}
-    >
+    <Link href={link.href} className="text-sm transition-colors hover:opacity-80" style={style}>
       {link.label}
     </Link>
   );
@@ -158,16 +150,19 @@ export function Header({ onLoginClick }: HeaderProps = {}) {
     } else {
       document.body.style.overflow = '';
     }
-    return () => { document.body.style.overflow = ''; };
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [mobileOpen]);
 
   const toggleMenu = useCallback(() => setMobileOpen((o) => !o), []);
 
-  const bgColor = theme === 'dark'
-    ? 'rgba(10,10,10,0.85)'
-    : theme === 'professional'
-      ? 'rgba(255,255,255,0.85)'
-      : 'rgba(250,249,247,0.85)';
+  const bgColor =
+    theme === 'dark'
+      ? 'rgba(10,10,10,0.85)'
+      : theme === 'professional'
+        ? 'rgba(255,255,255,0.85)'
+        : 'rgba(250,249,247,0.85)';
 
   return (
     <>
@@ -202,11 +197,7 @@ export function Header({ onLoginClick }: HeaderProps = {}) {
           <div className="flex items-center gap-6">
             <nav className="hidden sm:flex items-center gap-5">
               {NAV_LINKS.map((link) => (
-                <DesktopNavItem
-                  key={link.href}
-                  link={link}
-                  onLoginClick={onLoginClick}
-                />
+                <DesktopNavItem key={link.href} link={link} onLoginClick={onLoginClick} />
               ))}
             </nav>
             <ThemeSelector />

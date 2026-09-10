@@ -15,14 +15,7 @@ export interface TemplateData {
 }
 
 export type TemplateCategory =
-  | 'code'
-  | 'legal'
-  | 'finance'
-  | 'healthcare'
-  | 'compliance'
-  | 'academic'
-  | 'general'
-  | 'business';
+  'code' | 'legal' | 'finance' | 'healthcare' | 'compliance' | 'academic' | 'general' | 'business';
 
 export interface CategoryMeta {
   label: string;
@@ -302,7 +295,7 @@ export const TEMPLATES: TemplateData[] = [
     rounds: 2,
     tags: ['email', 'inbox', 'triage', 'productivity'],
     exampleTopics: [
-      'Prioritize my inbox for today\'s most urgent items',
+      "Prioritize my inbox for today's most urgent items",
       'Which of these emails need a response before end of day?',
       'Triage my unread emails by urgency and importance',
     ],
@@ -330,7 +323,7 @@ export const TEMPLATES: TemplateData[] = [
     rounds: 2,
     tags: ['meeting', 'preparation', 'context', 'productivity'],
     exampleTopics: [
-      'Prepare me for tomorrow\'s board meeting',
+      "Prepare me for tomorrow's board meeting",
       'Summarize context and key topics for my 1:1 with the CTO',
       'Gather relevant docs and action items for the sprint retrospective',
     ],
@@ -374,7 +367,7 @@ export const TEMPLATES: TemplateData[] = [
     rounds: 5,
     tags: ['business', 'budget', 'allocation', 'planning'],
     exampleTopics: [
-      'Allocate next year\'s engineering budget across teams',
+      "Allocate next year's engineering budget across teams",
       'Decide how to split marketing budget between channels',
       'Prioritize R&D spending across three product lines',
     ],

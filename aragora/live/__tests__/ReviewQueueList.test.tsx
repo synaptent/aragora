@@ -13,15 +13,13 @@ const settlePRMock = jest.fn();
 jest.mock('../src/hooks/useReviewQueue', () => ({
   __esModule: true,
   fetchBrief: jest.fn().mockResolvedValue(null),
-  useSettlePR: (onSettled?: () => void) => async (
-    prNumber: number,
-    action: string,
-    options: Record<string, unknown> = {},
-  ) => {
-    const result = await settlePRMock(prNumber, action, options);
-    onSettled?.();
-    return result;
-  },
+  useSettlePR:
+    (onSettled?: () => void) =>
+    async (prNumber: number, action: string, options: Record<string, unknown> = {}) => {
+      const result = await settlePRMock(prNumber, action, options);
+      onSettled?.();
+      return result;
+    },
   settlePR: jest.fn(),
   generateBrief: jest.fn().mockResolvedValue({ state: 'queued' }),
   getBriefState: jest.fn().mockResolvedValue({ state: 'absent' }),
@@ -93,11 +91,7 @@ describe('ReviewQueueList', () => {
   it('navigates with j/k', () => {
     render(
       <ReviewQueueList
-        prs={[
-          makePR({ number: 1 }),
-          makePR({ number: 2 }),
-          makePR({ number: 3 }),
-        ]}
+        prs={[makePR({ number: 1 }), makePR({ number: 2 }), makePR({ number: 3 })]}
       />,
     );
     expect(screen.getByTestId('review-queue-card-1')).toHaveAttribute('data-selected', 'true');
@@ -120,12 +114,7 @@ describe('ReviewQueueList', () => {
   });
 
   it('approves selected PR with keyboard "a"', async () => {
-    render(
-      <ReviewQueueList
-        prs={[makePR({ number: 11 })]}
-        confirmFn={() => true}
-      />,
-    );
+    render(<ReviewQueueList prs={[makePR({ number: 11 })]} confirmFn={() => true} />);
     fireEvent.keyDown(window, { key: 'a' });
     await waitFor(() => expect(settlePRMock).toHaveBeenCalled());
     expect(settlePRMock.mock.calls[0][0]).toBe(11);
@@ -143,12 +132,7 @@ describe('ReviewQueueList', () => {
   });
 
   it('requests changes via prompt callback', async () => {
-    render(
-      <ReviewQueueList
-        prs={[makePR({ number: 33 })]}
-        promptFn={() => 'needs tests'}
-      />,
-    );
+    render(<ReviewQueueList prs={[makePR({ number: 33 })]} promptFn={() => 'needs tests'} />);
     fireEvent.keyDown(window, { key: 'r' });
     await waitFor(() => expect(settlePRMock).toHaveBeenCalled());
     expect(settlePRMock.mock.calls[0][1]).toBe('request-changes');
@@ -186,9 +170,7 @@ describe('ReviewQueueList', () => {
     // Brief loading indicator or empty state appears once expanded
     await waitFor(() => {
       const newCard = screen.getByTestId('review-queue-card-66');
-      expect(
-        newCard.querySelector('[data-testid^="brief-panel"]'),
-      ).not.toBeNull();
+      expect(newCard.querySelector('[data-testid^="brief-panel"]')).not.toBeNull();
     });
   });
 });

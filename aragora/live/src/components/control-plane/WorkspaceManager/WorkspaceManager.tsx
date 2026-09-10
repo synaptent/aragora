@@ -84,7 +84,9 @@ export function WorkspaceManager({
 
   // Map to component types
   const workspaces = hookWorkspaces.map(mapToComponentWorkspace);
-  const selectedWorkspace = hookSelectedWorkspace ? mapToComponentWorkspace(hookSelectedWorkspace) : null;
+  const selectedWorkspace = hookSelectedWorkspace
+    ? mapToComponentWorkspace(hookSelectedWorkspace)
+    : null;
 
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -97,10 +99,13 @@ export function WorkspaceManager({
     }
   });
 
-  const handleWorkspaceClick = useCallback((workspace: Workspace) => {
-    selectWorkspace(workspace.id);
-    onWorkspaceSelect?.(workspace);
-  }, [selectWorkspace, onWorkspaceSelect]);
+  const handleWorkspaceClick = useCallback(
+    (workspace: Workspace) => {
+      selectWorkspace(workspace.id);
+      onWorkspaceSelect?.(workspace);
+    },
+    [selectWorkspace, onWorkspaceSelect],
+  );
 
   const getUsagePercent = (used: number, quota: number) => {
     return Math.min(100, Math.round((used / quota) * 100));
@@ -124,60 +129,85 @@ export function WorkspaceManager({
   };
 
   // Handle workspace creation
-  const handleCreateWorkspace = useCallback(async (name: string, description: string) => {
-    setIsCreating(true);
-    try {
-      const workspace = await createWorkspace({ name, description });
-      if (workspace) {
-        setShowCreateModal(false);
-        selectWorkspace(workspace.id);
+  const handleCreateWorkspace = useCallback(
+    async (name: string, description: string) => {
+      setIsCreating(true);
+      try {
+        const workspace = await createWorkspace({ name, description });
+        if (workspace) {
+          setShowCreateModal(false);
+          selectWorkspace(workspace.id);
+        }
+      } finally {
+        setIsCreating(false);
       }
-    } finally {
-      setIsCreating(false);
-    }
-  }, [createWorkspace, selectWorkspace]);
+    },
+    [createWorkspace, selectWorkspace],
+  );
 
   // Handle workspace update (from settings)
-  const handleWorkspaceUpdate = useCallback(async (updated: Workspace) => {
-    const result = await updateWorkspace(updated.id, {
-      name: updated.name,
-      description: updated.description,
-      settings: updated.settings,
-    });
-    if (result) {
-      onWorkspaceUpdate?.(updated);
-    }
-  }, [updateWorkspace, onWorkspaceUpdate]);
+  const handleWorkspaceUpdate = useCallback(
+    async (updated: Workspace) => {
+      const result = await updateWorkspace(updated.id, {
+        name: updated.name,
+        description: updated.description,
+        settings: updated.settings,
+      });
+      if (result) {
+        onWorkspaceUpdate?.(updated);
+      }
+    },
+    [updateWorkspace, onWorkspaceUpdate],
+  );
 
   // Handle member add
-  const handleMemberAdd = useCallback(async (email: string, role: WorkspaceMember['role']) => {
-    if (!selectedWorkspace) return;
-    // Convert role to permissions
-    const permissions = role === 'admin' ? ['read', 'write', 'admin'] :
-                       role === 'member' ? ['read', 'write'] : ['read'];
-    await addMember(selectedWorkspace.id, email, permissions);
-  }, [selectedWorkspace, addMember]);
+  const handleMemberAdd = useCallback(
+    async (email: string, role: WorkspaceMember['role']) => {
+      if (!selectedWorkspace) return;
+      // Convert role to permissions
+      const permissions =
+        role === 'admin'
+          ? ['read', 'write', 'admin']
+          : role === 'member'
+            ? ['read', 'write']
+            : ['read'];
+      await addMember(selectedWorkspace.id, email, permissions);
+    },
+    [selectedWorkspace, addMember],
+  );
 
   // Handle member remove
-  const handleMemberRemove = useCallback(async (memberId: string) => {
-    if (!selectedWorkspace) return;
-    await removeMember(selectedWorkspace.id, memberId);
-  }, [selectedWorkspace, removeMember]);
+  const handleMemberRemove = useCallback(
+    async (memberId: string) => {
+      if (!selectedWorkspace) return;
+      await removeMember(selectedWorkspace.id, memberId);
+    },
+    [selectedWorkspace, removeMember],
+  );
 
   // Handle role change (remove and re-add with new permissions)
-  const handleRoleChange = useCallback(async (memberId: string, role: WorkspaceMember['role']) => {
-    if (!selectedWorkspace) return;
-    // For simplicity, we'll need to remove and re-add - or this could be a separate endpoint
-    const permissions = role === 'admin' ? ['read', 'write', 'admin'] :
-                       role === 'member' ? ['read', 'write'] : ['read'];
-    await removeMember(selectedWorkspace.id, memberId);
-    await addMember(selectedWorkspace.id, memberId, permissions);
-  }, [selectedWorkspace, removeMember, addMember]);
+  const handleRoleChange = useCallback(
+    async (memberId: string, role: WorkspaceMember['role']) => {
+      if (!selectedWorkspace) return;
+      // For simplicity, we'll need to remove and re-add - or this could be a separate endpoint
+      const permissions =
+        role === 'admin'
+          ? ['read', 'write', 'admin']
+          : role === 'member'
+            ? ['read', 'write']
+            : ['read'];
+      await removeMember(selectedWorkspace.id, memberId);
+      await addMember(selectedWorkspace.id, memberId, permissions);
+    },
+    [selectedWorkspace, removeMember, addMember],
+  );
 
   // Handle workspace delete
   const handleDeleteWorkspace = useCallback(async () => {
     if (!selectedWorkspace) return;
-    const confirmed = window.confirm(`Are you sure you want to delete "${selectedWorkspace.name}"? This action cannot be undone.`);
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${selectedWorkspace.name}"? This action cannot be undone.`,
+    );
     if (confirmed) {
       await deleteWorkspace(selectedWorkspace.id, true);
       setViewMode('list');
@@ -193,7 +223,11 @@ export function WorkspaceManager({
             WORKSPACE MANAGER
           </h3>
           <p className="text-xs text-text-muted mt-1">
-            {loading ? 'Loading...' : error ? `Error: ${error}` : 'Manage workspaces and team access'}
+            {loading
+              ? 'Loading...'
+              : error
+                ? `Error: ${error}`
+                : 'Manage workspaces and team access'}
           </p>
         </div>
         <button
@@ -232,9 +266,7 @@ export function WorkspaceManager({
         )}
 
         {!loading && error && (
-          <div className="text-center py-8 text-red-400 font-theme-data">
-            Error: {error}
-          </div>
+          <div className="text-center py-8 text-red-400 font-theme-data">Error: {error}</div>
         )}
 
         {!loading && !error && workspaces.length === 0 && (
@@ -254,7 +286,7 @@ export function WorkspaceManager({
             {workspaces.map((workspace) => {
               const usagePercent = getUsagePercent(
                 workspace.settings.documentsUsed,
-                workspace.settings.documentsQuota
+                workspace.settings.documentsQuota,
               );
               const isSelected = workspace.id === selectedWorkspace?.id;
 
@@ -271,7 +303,10 @@ export function WorkspaceManager({
                     <div className="flex items-center gap-3">
                       <span
                         className="text-2xl"
-                        dangerouslySetInnerHTML={{ __html: getVerticalIcon(workspace.settings.defaultVertical) || '&#x1F4C1;' }}
+                        dangerouslySetInnerHTML={{
+                          __html:
+                            getVerticalIcon(workspace.settings.defaultVertical) || '&#x1F4C1;',
+                        }}
                       />
                       <div>
                         <h4 className="font-theme-data font-bold text-text">{workspace.name}</h4>
@@ -293,13 +328,16 @@ export function WorkspaceManager({
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-text-muted">Agents:</span>
-                      <span className="font-theme-data text-text">{workspace.settings.agentLimit}</span>
+                      <span className="font-theme-data text-text">
+                        {workspace.settings.agentLimit}
+                      </span>
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-text-muted">Documents:</span>
                         <span className="font-theme-data text-text">
-                          {workspace.settings.documentsUsed.toLocaleString()} / {workspace.settings.documentsQuota.toLocaleString()}
+                          {workspace.settings.documentsUsed.toLocaleString()} /{' '}
+                          {workspace.settings.documentsQuota.toLocaleString()}
                         </span>
                       </div>
                       <div className="h-1.5 bg-surface rounded-full overflow-hidden">
@@ -352,13 +390,16 @@ export function WorkspaceManager({
       {showCreateModal && (
         <div className="fixed inset-0 bg-bg/80 flex items-center justify-center z-50">
           <div className="bg-surface border border-border rounded-lg p-6 w-full max-w-md">
-            <h3 className="font-theme-data font-bold text-[var(--accent)] mb-4">CREATE WORKSPACE</h3>
+            <h3 className="font-theme-data font-bold text-[var(--accent)] mb-4">
+              CREATE WORKSPACE
+            </h3>
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
                 const form = e.target as HTMLFormElement;
                 const name = (form.elements.namedItem('name') as HTMLInputElement).value;
-                const description = (form.elements.namedItem('description') as HTMLTextAreaElement).value;
+                const description = (form.elements.namedItem('description') as HTMLTextAreaElement)
+                  .value;
                 await handleCreateWorkspace(name, description);
               }}
             >
@@ -375,7 +416,9 @@ export function WorkspaceManager({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-theme-data text-text-muted mb-1">DESCRIPTION</label>
+                  <label className="block text-xs font-theme-data text-text-muted mb-1">
+                    DESCRIPTION
+                  </label>
                   <textarea
                     name="description"
                     rows={3}

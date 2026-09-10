@@ -56,20 +56,12 @@ export function CommandPalette() {
 
     // Show recent items when no query
     if (!query.trim() && recentItems.length > 0) {
-      sectionList.push({
-        id: 'recent',
-        title: 'Recent',
-        items: recentItems,
-      });
+      sectionList.push({ id: 'recent', title: 'Recent', items: recentItems });
     }
 
     // Show quick actions when no query
     if (!query.trim()) {
-      sectionList.push({
-        id: 'actions',
-        title: 'Quick Actions',
-        items: QUICK_ACTIONS.slice(0, 6),
-      });
+      sectionList.push({ id: 'actions', title: 'Quick Actions', items: QUICK_ACTIONS.slice(0, 6) });
     }
 
     // Group results by type when searching
@@ -85,17 +77,20 @@ export function CommandPalette() {
       }
 
       // Add sections in category order
-      const categoryOrder: SearchCategory[] = ['pages', 'actions', 'debates', 'agents', 'documents', 'knowledge'];
+      const categoryOrder: SearchCategory[] = [
+        'pages',
+        'actions',
+        'debates',
+        'agents',
+        'documents',
+        'knowledge',
+      ];
 
       for (const category of categoryOrder) {
         const items = groupedResults[category];
         if (items && items.length > 0) {
           const categoryConfig = CATEGORIES.find((c) => c.id === category);
-          sectionList.push({
-            id: category,
-            title: categoryConfig?.label || category,
-            items,
-          });
+          sectionList.push({ id: category, title: categoryConfig?.label || category, items });
         }
       }
     }
@@ -114,7 +109,8 @@ export function CommandPalette() {
         id: item.id,
         type: 'type' in item ? item.type : 'actions',
         title: 'label' in item ? item.label : item.title,
-        subtitle: 'description' in item ? item.description : 'subtitle' in item ? item.subtitle : undefined,
+        subtitle:
+          'description' in item ? item.description : 'subtitle' in item ? item.subtitle : undefined,
         href: item.href,
         icon: item.icon,
       };
@@ -129,7 +125,7 @@ export function CommandPalette() {
         close();
       }
     },
-    [router, close, addRecentItem]
+    [router, close, addRecentItem],
   );
 
   // Get selected item
@@ -178,7 +174,15 @@ export function CommandPalette() {
         }
       }
     },
-    [moveUp, moveDown, getSelectedItem, handleSelect, selectedIndex, activeCategory, setActiveCategory]
+    [
+      moveUp,
+      moveDown,
+      getSelectedItem,
+      handleSelect,
+      selectedIndex,
+      activeCategory,
+      setActiveCategory,
+    ],
   );
 
   // Handle hover
@@ -186,7 +190,7 @@ export function CommandPalette() {
     (index: number) => {
       setSelectedIndex(index);
     },
-    [setSelectedIndex]
+    [setSelectedIndex],
   );
 
   // Click outside to close
@@ -252,9 +256,10 @@ export function CommandPalette() {
               onClick={() => setActiveCategory(cat.id)}
               className={`
                 flex-shrink-0 px-3 py-2 sm:py-1 text-xs font-theme-data transition-colors rounded-sm min-h-[44px] sm:min-h-0
-                ${activeCategory === cat.id
-                  ? 'bg-[var(--accent)]/20 text-[var(--accent)] border border-[var(--accent)]/40'
-                  : 'text-text-muted hover:text-text border border-transparent'
+                ${
+                  activeCategory === cat.id
+                    ? 'bg-[var(--accent)]/20 text-[var(--accent)] border border-[var(--accent)]/40'
+                    : 'text-text-muted hover:text-text border border-transparent'
                 }
               `}
             >

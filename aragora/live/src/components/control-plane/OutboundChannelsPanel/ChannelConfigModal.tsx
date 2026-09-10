@@ -23,68 +23,158 @@ export interface ChannelConfigModalProps {
 
 const CHANNEL_CONFIG_FIELDS: Record<OutboundChannelType, ChannelConfigField[]> = {
   slack: [
-    { key: 'webhook_url', label: 'Webhook URL', type: 'url', required: true, placeholder: 'https://hooks.slack.com/...' },
+    {
+      key: 'webhook_url',
+      label: 'Webhook URL',
+      type: 'url',
+      required: true,
+      placeholder: 'https://hooks.slack.com/...',
+    },
     { key: 'default_channel', label: 'Default Channel', type: 'text', placeholder: '#general' },
     { key: 'bot_name', label: 'Bot Name', type: 'text', placeholder: 'Aragora Bot' },
     { key: 'include_metadata', label: 'Include Debate Metadata', type: 'toggle' },
   ],
   teams: [
-    { key: 'webhook_url', label: 'Incoming Webhook URL', type: 'url', required: true, placeholder: 'https://outlook.office.com/webhook/...' },
+    {
+      key: 'webhook_url',
+      label: 'Incoming Webhook URL',
+      type: 'url',
+      required: true,
+      placeholder: 'https://outlook.office.com/webhook/...',
+    },
     { key: 'default_channel', label: 'Default Channel', type: 'text', placeholder: 'General' },
     { key: 'adaptive_cards', label: 'Use Adaptive Cards', type: 'toggle' },
   ],
   discord: [
-    { key: 'webhook_url', label: 'Webhook URL', type: 'url', required: true, placeholder: 'https://discord.com/api/webhooks/...' },
+    {
+      key: 'webhook_url',
+      label: 'Webhook URL',
+      type: 'url',
+      required: true,
+      placeholder: 'https://discord.com/api/webhooks/...',
+    },
     { key: 'default_channel', label: 'Default Channel ID', type: 'text', placeholder: '123456789' },
     { key: 'embed_color', label: 'Embed Color', type: 'text', placeholder: '#00ff88' },
   ],
   telegram: [
-    { key: 'bot_token', label: 'Bot Token', type: 'password', required: true, placeholder: '123456:ABC-DEF...' },
-    { key: 'chat_id', label: 'Default Chat ID', type: 'text', required: true, placeholder: '-1001234567890' },
-    { key: 'parse_mode', label: 'Parse Mode', type: 'select', options: [
-      { value: 'HTML', label: 'HTML' },
-      { value: 'Markdown', label: 'Markdown' },
-      { value: 'MarkdownV2', label: 'Markdown V2' },
-    ]},
+    {
+      key: 'bot_token',
+      label: 'Bot Token',
+      type: 'password',
+      required: true,
+      placeholder: '123456:ABC-DEF...',
+    },
+    {
+      key: 'chat_id',
+      label: 'Default Chat ID',
+      type: 'text',
+      required: true,
+      placeholder: '-1001234567890',
+    },
+    {
+      key: 'parse_mode',
+      label: 'Parse Mode',
+      type: 'select',
+      options: [
+        { value: 'HTML', label: 'HTML' },
+        { value: 'Markdown', label: 'Markdown' },
+        { value: 'MarkdownV2', label: 'Markdown V2' },
+      ],
+    },
   ],
   whatsapp: [
     { key: 'api_key', label: 'API Key', type: 'password', required: true },
     { key: 'phone_number_id', label: 'Phone Number ID', type: 'text', required: true },
-    { key: 'default_recipient', label: 'Default Recipient', type: 'text', placeholder: '+1234567890' },
+    {
+      key: 'default_recipient',
+      label: 'Default Recipient',
+      type: 'text',
+      placeholder: '+1234567890',
+    },
   ],
   voice: [
-    { key: 'provider', label: 'Provider', type: 'select', required: true, options: [
-      { value: 'twilio', label: 'Twilio' },
-      { value: 'vonage', label: 'Vonage' },
-      { value: 'aws_connect', label: 'AWS Connect' },
-    ]},
+    {
+      key: 'provider',
+      label: 'Provider',
+      type: 'select',
+      required: true,
+      options: [
+        { value: 'twilio', label: 'Twilio' },
+        { value: 'vonage', label: 'Vonage' },
+        { value: 'aws_connect', label: 'AWS Connect' },
+      ],
+    },
     { key: 'api_key', label: 'API Key', type: 'password', required: true },
     { key: 'api_secret', label: 'API Secret', type: 'password', required: true },
-    { key: 'from_number', label: 'From Number', type: 'text', required: true, placeholder: '+1234567890' },
-    { key: 'voice', label: 'Voice', type: 'select', options: [
-      { value: 'alloy', label: 'Alloy' },
-      { value: 'echo', label: 'Echo' },
-      { value: 'fable', label: 'Fable' },
-      { value: 'onyx', label: 'Onyx' },
-      { value: 'nova', label: 'Nova' },
-    ]},
+    {
+      key: 'from_number',
+      label: 'From Number',
+      type: 'text',
+      required: true,
+      placeholder: '+1234567890',
+    },
+    {
+      key: 'voice',
+      label: 'Voice',
+      type: 'select',
+      options: [
+        { value: 'alloy', label: 'Alloy' },
+        { value: 'echo', label: 'Echo' },
+        { value: 'fable', label: 'Fable' },
+        { value: 'onyx', label: 'Onyx' },
+        { value: 'nova', label: 'Nova' },
+      ],
+    },
   ],
   email: [
-    { key: 'smtp_host', label: 'SMTP Host', type: 'text', required: true, placeholder: 'smtp.gmail.com' },
+    {
+      key: 'smtp_host',
+      label: 'SMTP Host',
+      type: 'text',
+      required: true,
+      placeholder: 'smtp.gmail.com',
+    },
     { key: 'smtp_port', label: 'SMTP Port', type: 'text', required: true, placeholder: '587' },
     { key: 'username', label: 'Username', type: 'text', required: true },
     { key: 'password', label: 'Password', type: 'password', required: true },
-    { key: 'from_email', label: 'From Email', type: 'text', required: true, placeholder: 'decisions@company.com' },
+    {
+      key: 'from_email',
+      label: 'From Email',
+      type: 'text',
+      required: true,
+      placeholder: 'decisions@company.com',
+    },
     { key: 'use_tls', label: 'Use TLS', type: 'toggle' },
   ],
   webhook: [
-    { key: 'url', label: 'Webhook URL', type: 'url', required: true, placeholder: 'https://api.example.com/webhook' },
-    { key: 'method', label: 'HTTP Method', type: 'select', options: [
-      { value: 'POST', label: 'POST' },
-      { value: 'PUT', label: 'PUT' },
-    ]},
-    { key: 'auth_header', label: 'Authorization Header', type: 'password', placeholder: 'Bearer token...' },
-    { key: 'custom_headers', label: 'Custom Headers (JSON)', type: 'text', placeholder: '{"X-Custom": "value"}' },
+    {
+      key: 'url',
+      label: 'Webhook URL',
+      type: 'url',
+      required: true,
+      placeholder: 'https://api.example.com/webhook',
+    },
+    {
+      key: 'method',
+      label: 'HTTP Method',
+      type: 'select',
+      options: [
+        { value: 'POST', label: 'POST' },
+        { value: 'PUT', label: 'PUT' },
+      ],
+    },
+    {
+      key: 'auth_header',
+      label: 'Authorization Header',
+      type: 'password',
+      placeholder: 'Bearer token...',
+    },
+    {
+      key: 'custom_headers',
+      label: 'Custom Headers (JSON)',
+      type: 'text',
+      placeholder: '{"X-Custom": "value"}',
+    },
     { key: 'include_full_response', label: 'Include Full Debate Response', type: 'toggle' },
   ],
 };
@@ -116,7 +206,7 @@ export function ChannelConfigModal({
 
   const fields = useMemo(
     () => (channel ? CHANNEL_CONFIG_FIELDS[channel.type] || [] : []),
-    [channel]
+    [channel],
   );
 
   const handleChange = useCallback((key: string, value: unknown) => {
@@ -147,9 +237,7 @@ export function ChannelConfigModal({
     if (!channel) return;
 
     // Validate required fields
-    const missingFields = fields
-      .filter((f) => f.required && !config[f.key])
-      .map((f) => f.label);
+    const missingFields = fields.filter((f) => f.required && !config[f.key]).map((f) => f.label);
 
     if (missingFields.length > 0) {
       setError(`Missing required fields: ${missingFields.join(', ')}`);
@@ -176,13 +264,8 @@ export function ChannelConfigModal({
       <div className="bg-bg border border-border rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-bg border-b border-border p-4 flex items-center justify-between">
-          <h2 className="font-theme-data font-bold text-lg">
-            Configure {channel.name}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-text-muted hover:text-text transition-colors"
-          >
+          <h2 className="font-theme-data font-bold text-lg">Configure {channel.name}</h2>
+          <button onClick={onClose} className="text-text-muted hover:text-text transition-colors">
             ✕
           </button>
         </div>
@@ -250,9 +333,7 @@ export function ChannelConfigModal({
                 />
               )}
 
-              {field.helpText && (
-                <p className="text-xs text-text-muted mt-1">{field.helpText}</p>
-              )}
+              {field.helpText && <p className="text-xs text-text-muted mt-1">{field.helpText}</p>}
             </div>
           ))}
         </div>

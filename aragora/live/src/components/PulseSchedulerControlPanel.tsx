@@ -21,7 +21,9 @@ function StateBadge({ state }: { state: string }) {
   const color = colors[state] || colors.stopped;
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data uppercase ${color.text} ${color.bg} rounded`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data uppercase ${color.text} ${color.bg} rounded`}
+    >
       {state}
     </span>
   );
@@ -52,19 +54,27 @@ function MetricsDisplay({
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       <div className="text-center">
-        <div className="text-lg font-theme-data text-[var(--accent)]">{metrics.debates_created}</div>
+        <div className="text-lg font-theme-data text-[var(--accent)]">
+          {metrics.debates_created}
+        </div>
         <div className="text-xs font-theme-data text-text-muted">CREATED</div>
       </div>
       <div className="text-center">
-        <div className="text-lg font-theme-data text-[var(--acid-cyan)]">{metrics.polls_completed}</div>
+        <div className="text-lg font-theme-data text-[var(--acid-cyan)]">
+          {metrics.polls_completed}
+        </div>
         <div className="text-xs font-theme-data text-text-muted">POLLS</div>
       </div>
       <div className="text-center">
-        <div className="text-lg font-theme-data text-[var(--acid-yellow)]">{metrics.duplicates_skipped}</div>
+        <div className="text-lg font-theme-data text-[var(--acid-yellow)]">
+          {metrics.duplicates_skipped}
+        </div>
         <div className="text-xs font-theme-data text-text-muted">DUPES</div>
       </div>
       <div className="text-center">
-        <div className="text-lg font-theme-data text-text">{formatUptime(metrics.uptime_seconds)}</div>
+        <div className="text-lg font-theme-data text-text">
+          {formatUptime(metrics.uptime_seconds)}
+        </div>
         <div className="text-xs font-theme-data text-text-muted">UPTIME</div>
       </div>
     </div>
@@ -91,7 +101,7 @@ function ConfigEditor({ config, onUpdate, loading }: ConfigEditorProps) {
   }, [config]);
 
   const handleChange = (key: keyof SchedulerConfig, value: unknown) => {
-    setLocalConfig(prev => ({ ...prev, [key]: value }));
+    setLocalConfig((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
 
@@ -111,7 +121,9 @@ function ConfigEditor({ config, onUpdate, loading }: ConfigEditorProps) {
     if (JSON.stringify(localConfig.platforms) !== JSON.stringify(config.platforms)) {
       updates.platforms = localConfig.platforms;
     }
-    if (JSON.stringify(localConfig.allowed_categories) !== JSON.stringify(config.allowed_categories)) {
+    if (
+      JSON.stringify(localConfig.allowed_categories) !== JSON.stringify(config.allowed_categories)
+    ) {
       updates.allowed_categories = localConfig.allowed_categories;
     }
 
@@ -130,7 +142,10 @@ function ConfigEditor({ config, onUpdate, loading }: ConfigEditorProps) {
     <div className="space-y-4">
       {/* Rate Limit */}
       <div>
-        <label htmlFor="pulse-debates-per-hour" className="block text-xs font-theme-data text-text-muted mb-1">
+        <label
+          htmlFor="pulse-debates-per-hour"
+          className="block text-xs font-theme-data text-text-muted mb-1"
+        >
           Debates per Hour: {localConfig.max_debates_per_hour}
         </label>
         <input
@@ -147,7 +162,10 @@ function ConfigEditor({ config, onUpdate, loading }: ConfigEditorProps) {
 
       {/* Poll Interval */}
       <div>
-        <label htmlFor="pulse-poll-interval" className="block text-xs font-theme-data text-text-muted mb-1">
+        <label
+          htmlFor="pulse-poll-interval"
+          className="block text-xs font-theme-data text-text-muted mb-1"
+        >
           Poll Interval: {Math.round(localConfig.poll_interval_seconds / 60)}min
         </label>
         <input
@@ -165,7 +183,10 @@ function ConfigEditor({ config, onUpdate, loading }: ConfigEditorProps) {
 
       {/* Volume Threshold */}
       <div>
-        <label htmlFor="pulse-min-volume" className="block text-xs font-theme-data text-text-muted mb-1">
+        <label
+          htmlFor="pulse-min-volume"
+          className="block text-xs font-theme-data text-text-muted mb-1"
+        >
           Min Volume: {localConfig.min_volume_threshold}
         </label>
         <input
@@ -193,7 +214,7 @@ function ConfigEditor({ config, onUpdate, loading }: ConfigEditorProps) {
                 onChange={(e) => {
                   const newPlatforms = e.target.checked
                     ? [...localConfig.platforms, platform]
-                    : localConfig.platforms.filter(p => p !== platform);
+                    : localConfig.platforms.filter((p) => p !== platform);
                   handleChange('platforms', newPlatforms);
                 }}
                 className="accent-acid-green"
@@ -206,7 +227,9 @@ function ConfigEditor({ config, onUpdate, loading }: ConfigEditorProps) {
 
       {/* Categories */}
       <div>
-        <label className="block text-xs font-theme-data text-text-muted mb-2">Allowed Categories</label>
+        <label className="block text-xs font-theme-data text-text-muted mb-2">
+          Allowed Categories
+        </label>
         <div className="flex flex-wrap gap-2">
           {AVAILABLE_CATEGORIES.map((category) => (
             <label key={category} className="flex items-center gap-1 cursor-pointer">
@@ -216,7 +239,7 @@ function ConfigEditor({ config, onUpdate, loading }: ConfigEditorProps) {
                 onChange={(e) => {
                   const newCategories = e.target.checked
                     ? [...localConfig.allowed_categories, category]
-                    : localConfig.allowed_categories.filter(c => c !== category);
+                    : localConfig.allowed_categories.filter((c) => c !== category);
                   handleChange('allowed_categories', newCategories);
                 }}
                 className="accent-acid-green"
@@ -270,7 +293,13 @@ function HistoryList({ debates }: { debates: ScheduledDebate[] }) {
                 {debate.consensus_reached !== null && (
                   <>
                     <span>|</span>
-                    <span className={debate.consensus_reached ? 'text-[var(--accent)]' : 'text-[var(--acid-yellow)]'}>
+                    <span
+                      className={
+                        debate.consensus_reached
+                          ? 'text-[var(--accent)]'
+                          : 'text-[var(--acid-yellow)]'
+                      }
+                    >
                       {debate.consensus_reached ? 'CONSENSUS' : 'NO CONSENSUS'}
                     </span>
                   </>
@@ -381,7 +410,11 @@ export function PulseSchedulerControlPanel() {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-[var(--accent)]/10" role="tablist" aria-label="Scheduler panels">
+      <div
+        className="flex border-b border-[var(--accent)]/10"
+        role="tablist"
+        aria-label="Scheduler panels"
+      >
         {(['status', 'config', 'history'] as const).map((tab) => (
           <button
             key={tab}
@@ -404,12 +437,7 @@ export function PulseSchedulerControlPanel() {
       {/* Content */}
       <div className="p-4">
         {activeTab === 'status' && (
-          <div
-            className="space-y-4"
-            role="tabpanel"
-            id="panel-status"
-            aria-labelledby="tab-status"
-          >
+          <div className="space-y-4" role="tabpanel" id="panel-status" aria-labelledby="tab-status">
             {scheduler.metrics ? (
               <MetricsDisplay metrics={scheduler.metrics} />
             ) : (
@@ -424,7 +452,9 @@ export function PulseSchedulerControlPanel() {
                 <div className="grid grid-cols-3 gap-2 text-xs font-theme-data">
                   <div>
                     <span className="text-text-muted">Total: </span>
-                    <span className="text-text">{scheduler.status.store_analytics.total_debates}</span>
+                    <span className="text-text">
+                      {scheduler.status.store_analytics.total_debates}
+                    </span>
                   </div>
                   <div>
                     <span className="text-text-muted">Consensus: </span>

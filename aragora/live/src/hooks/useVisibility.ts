@@ -43,7 +43,7 @@ export interface UseVisibilityReturn {
     granteeType: 'user' | 'workspace' | 'organization' | 'role',
     granteeId: string,
     permissions: string[],
-    expiresAt?: Date
+    expiresAt?: Date,
   ) => Promise<AccessGrant>;
   revokeGrant: (itemId: string, grantId: string) => Promise<void>;
 }
@@ -70,7 +70,7 @@ export function useVisibility(options: UseVisibilityOptions = {}): UseVisibility
         setIsLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
   const setVisibility = useCallback(
@@ -90,7 +90,7 @@ export function useVisibility(options: UseVisibilityOptions = {}): UseVisibility
         setIsLoading(false);
       }
     },
-    [api, workspaceId]
+    [api, workspaceId],
   );
 
   const getGrants = useCallback(
@@ -108,7 +108,7 @@ export function useVisibility(options: UseVisibilityOptions = {}): UseVisibility
         setIsLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
   const addGrant = useCallback(
@@ -117,7 +117,7 @@ export function useVisibility(options: UseVisibilityOptions = {}): UseVisibility
       granteeType: GranteeType,
       granteeId: string,
       permissions: string[],
-      expiresAt?: Date
+      expiresAt?: Date,
     ): Promise<AccessGrant> => {
       setIsLoading(true);
       setError(null);
@@ -138,7 +138,7 @@ export function useVisibility(options: UseVisibilityOptions = {}): UseVisibility
         setIsLoading(false);
       }
     },
-    [api, workspaceId]
+    [api, workspaceId],
   );
 
   const revokeGrant = useCallback(
@@ -155,18 +155,10 @@ export function useVisibility(options: UseVisibilityOptions = {}): UseVisibility
         setIsLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
-  return {
-    isLoading,
-    error,
-    getVisibility,
-    setVisibility,
-    getGrants,
-    addGrant,
-    revokeGrant,
-  };
+  return { isLoading, error, getVisibility, setVisibility, getGrants, addGrant, revokeGrant };
 }
 
 export default useVisibility;

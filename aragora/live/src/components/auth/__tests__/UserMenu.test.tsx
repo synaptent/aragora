@@ -4,11 +4,15 @@ import { UserMenu } from '../UserMenu';
 
 // Mock next/link with forwardRef and onClick support
 jest.mock('next/link', () => {
-
   const React = require('react');
   return React.forwardRef(function MockLink(
-    { children, href, onClick, ...props }: { children: React.ReactNode; href: string; onClick?: () => void },
-    ref: React.Ref<HTMLAnchorElement>
+    {
+      children,
+      href,
+      onClick,
+      ...props
+    }: { children: React.ReactNode; href: string; onClick?: () => void },
+    ref: React.Ref<HTMLAnchorElement>,
   ) {
     return (
       <a
@@ -46,9 +50,7 @@ const mockAuthContext = {
   getCurrentOrgRole: jest.fn().mockReturnValue(null),
 };
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => mockAuthContext,
-}));
+jest.mock('@/context/AuthContext', () => ({ useAuth: () => mockAuthContext }));
 
 describe('UserMenu', () => {
   beforeEach(() => {
@@ -97,10 +99,7 @@ describe('UserMenu', () => {
   describe('authenticated state', () => {
     beforeEach(() => {
       mockAuthContext.isAuthenticated = true;
-      mockAuthContext.user = {
-        email: 'test@example.com',
-        name: 'Test User',
-      };
+      mockAuthContext.user = { email: 'test@example.com', name: 'Test User' };
     });
 
     it('shows user avatar with first letter of name', () => {
@@ -143,10 +142,7 @@ describe('UserMenu', () => {
   describe('dropdown menu', () => {
     beforeEach(() => {
       mockAuthContext.isAuthenticated = true;
-      mockAuthContext.user = {
-        email: 'test@example.com',
-        name: 'Test User',
-      };
+      mockAuthContext.user = { email: 'test@example.com', name: 'Test User' };
     });
 
     it('opens dropdown when button is clicked', async () => {
@@ -177,10 +173,7 @@ describe('UserMenu', () => {
     });
 
     it('shows organization info when available', async () => {
-      mockAuthContext.organization = {
-        name: 'Acme Corp',
-        tier: 'enterprise',
-      };
+      mockAuthContext.organization = { name: 'Acme Corp', tier: 'enterprise' };
       const user = userEvent.setup();
       render(<UserMenu />);
 
@@ -215,7 +208,10 @@ describe('UserMenu', () => {
         await user.click(screen.getByRole('button', { name: /user menu/i }));
       });
 
-      expect(screen.getByText('[BILLING & USAGE]').closest('a')).toHaveAttribute('href', '/billing');
+      expect(screen.getByText('[BILLING & USAGE]').closest('a')).toHaveAttribute(
+        'href',
+        '/billing',
+      );
       expect(screen.getByText('[SETTINGS]').closest('a')).toHaveAttribute('href', '/settings');
       expect(screen.getByText('[DEVELOPER]').closest('a')).toHaveAttribute('href', '/developer');
       expect(screen.getByText('[A/B TESTING]').closest('a')).toHaveAttribute('href', '/ab-testing');
@@ -276,10 +272,7 @@ describe('UserMenu', () => {
   describe('keyboard navigation', () => {
     beforeEach(() => {
       mockAuthContext.isAuthenticated = true;
-      mockAuthContext.user = {
-        email: 'test@example.com',
-        name: 'Test User',
-      };
+      mockAuthContext.user = { email: 'test@example.com', name: 'Test User' };
     });
 
     it('opens dropdown with Enter key', async () => {
@@ -345,10 +338,7 @@ describe('UserMenu', () => {
   describe('click outside', () => {
     beforeEach(() => {
       mockAuthContext.isAuthenticated = true;
-      mockAuthContext.user = {
-        email: 'test@example.com',
-        name: 'Test User',
-      };
+      mockAuthContext.user = { email: 'test@example.com', name: 'Test User' };
     });
 
     it('closes dropdown when clicking outside', async () => {
@@ -357,7 +347,7 @@ describe('UserMenu', () => {
         <div>
           <UserMenu />
           <div data-testid="outside">Outside</div>
-        </div>
+        </div>,
       );
 
       await act(async () => {

@@ -85,8 +85,8 @@ export default function ABTestingDashboard() {
           evolved_wins: 18,
           baseline_debates: 25,
           evolved_debates: 25,
-          evolved_win_rate: 0.60,
-          baseline_win_rate: 0.40,
+          evolved_win_rate: 0.6,
+          baseline_win_rate: 0.4,
           total_debates: 50,
           sample_size: 30,
           is_significant: true,
@@ -203,7 +203,7 @@ export default function ABTestingDashboard() {
     return 'text-[var(--crimson)]';
   };
 
-  const uniqueAgents = Array.from(new Set(tests.map(t => t.agent)));
+  const uniqueAgents = Array.from(new Set(tests.map((t) => t.agent)));
 
   return (
     <>
@@ -218,7 +218,10 @@ export default function ABTestingDashboard() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <div className="flex items-center gap-4">
-              <Link href="/admin" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)]">
+              <Link
+                href="/admin"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)]"
+              >
                 [ADMIN]
               </Link>
               <BackendSelector compact />
@@ -233,11 +236,15 @@ export default function ABTestingDashboard() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <div className="text-xs font-theme-data text-text-muted mb-1">
-                  <Link href="/admin" className="hover:text-[var(--accent)]">Admin</Link>
+                  <Link href="/admin" className="hover:text-[var(--accent)]">
+                    Admin
+                  </Link>
                   <span className="mx-2">/</span>
                   <span className="text-[var(--accent)]">A/B Tests</span>
                 </div>
-                <h1 className="text-2xl font-theme-data text-[var(--accent)]">A/B Testing Dashboard</h1>
+                <h1 className="text-2xl font-theme-data text-[var(--accent)]">
+                  A/B Testing Dashboard
+                </h1>
                 <p className="text-text-muted font-theme-data text-sm mt-1">
                   Compare baseline vs evolved agent prompts through controlled experiments
                 </p>
@@ -254,7 +261,9 @@ export default function ABTestingDashboard() {
             <div className="card p-4 mb-6">
               <div className="flex flex-wrap gap-4 items-center">
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">Status</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    Status
+                  </label>
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
@@ -267,15 +276,19 @@ export default function ABTestingDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">Agent</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    Agent
+                  </label>
                   <select
                     value={agentFilter}
                     onChange={(e) => setAgentFilter(e.target.value)}
                     className="bg-surface border border-border rounded px-3 py-1.5 text-sm font-theme-data"
                   >
                     <option value="">All Agents</option>
-                    {uniqueAgents.map(a => (
-                      <option key={a} value={a}>{a}</option>
+                    {uniqueAgents.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -295,15 +308,19 @@ export default function ABTestingDashboard() {
 
             {loading ? (
               <div className="card p-8 text-center">
-                <div className="animate-pulse font-theme-data text-text-muted">Loading A/B tests...</div>
+                <div className="animate-pulse font-theme-data text-text-muted">
+                  Loading A/B tests...
+                </div>
               </div>
             ) : (
               <div className="grid gap-4">
-                {tests.map(test => (
+                {tests.map((test) => (
                   <div
                     key={test.id}
                     className={`card p-4 cursor-pointer transition-colors ${
-                      selectedTest?.id === test.id ? 'border-[var(--accent)]' : 'hover:border-[var(--accent)]/50'
+                      selectedTest?.id === test.id
+                        ? 'border-[var(--accent)]'
+                        : 'hover:border-[var(--accent)]/50'
                     }`}
                     onClick={() => setSelectedTest(selectedTest?.id === test.id ? null : test)}
                   >
@@ -311,11 +328,15 @@ export default function ABTestingDashboard() {
                       <div>
                         <div className="flex items-center gap-3 mb-2">
                           <span className="font-theme-data font-bold text-lg">{test.agent}</span>
-                          <span className={`text-xs font-theme-data px-2 py-0.5 rounded ${
-                            test.status === 'active' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-                            test.status === 'concluded' ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]' :
-                            'bg-[var(--crimson)]/20 text-[var(--crimson)]'
-                          }`}>
+                          <span
+                            className={`text-xs font-theme-data px-2 py-0.5 rounded ${
+                              test.status === 'active'
+                                ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                                : test.status === 'concluded'
+                                  ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]'
+                                  : 'bg-[var(--crimson)]/20 text-[var(--crimson)]'
+                            }`}
+                          >
                             {test.status.toUpperCase()}
                           </span>
                           {test.is_significant && (
@@ -325,7 +346,8 @@ export default function ABTestingDashboard() {
                           )}
                         </div>
                         <div className="text-xs font-theme-data text-text-muted">
-                          v{test.baseline_prompt_version} (baseline) vs v{test.evolved_prompt_version} (evolved)
+                          v{test.baseline_prompt_version} (baseline) vs v
+                          {test.evolved_prompt_version} (evolved)
                         </div>
                       </div>
                       <div className="text-right">
@@ -341,8 +363,12 @@ export default function ABTestingDashboard() {
                     {/* Win Rate Comparison */}
                     <div className="mt-4 grid grid-cols-2 gap-4">
                       <div className="bg-surface p-3 rounded">
-                        <div className="text-xs font-theme-data text-text-muted mb-1">BASELINE (v{test.baseline_prompt_version})</div>
-                        <div className={`text-2xl font-theme-data ${getWinRateColor(test.baseline_win_rate)}`}>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          BASELINE (v{test.baseline_prompt_version})
+                        </div>
+                        <div
+                          className={`text-2xl font-theme-data ${getWinRateColor(test.baseline_win_rate)}`}
+                        >
                           {(test.baseline_win_rate * 100).toFixed(1)}%
                         </div>
                         <div className="text-xs font-theme-data text-text-muted">
@@ -350,8 +376,12 @@ export default function ABTestingDashboard() {
                         </div>
                       </div>
                       <div className="bg-surface p-3 rounded">
-                        <div className="text-xs font-theme-data text-text-muted mb-1">EVOLVED (v{test.evolved_prompt_version})</div>
-                        <div className={`text-2xl font-theme-data ${getWinRateColor(test.evolved_win_rate)}`}>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          EVOLVED (v{test.evolved_prompt_version})
+                        </div>
+                        <div
+                          className={`text-2xl font-theme-data ${getWinRateColor(test.evolved_win_rate)}`}
+                        >
                           {(test.evolved_win_rate * 100).toFixed(1)}%
                         </div>
                         <div className="text-xs font-theme-data text-text-muted">
@@ -383,19 +413,28 @@ export default function ABTestingDashboard() {
                     {selectedTest?.id === test.id && test.status === 'active' && (
                       <div className="mt-4 pt-4 border-t border-border flex gap-3">
                         <button
-                          onClick={(e) => { e.stopPropagation(); concludeTest(test.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            concludeTest(test.id);
+                          }}
                           className="px-3 py-1.5 bg-[var(--acid-cyan)]/20 border border-[var(--acid-cyan)] text-[var(--acid-cyan)] font-theme-data text-xs rounded hover:bg-[var(--acid-cyan)]/30"
                         >
                           Conclude Test
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); concludeTest(test.id, true); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            concludeTest(test.id, true);
+                          }}
                           className="px-3 py-1.5 bg-acid-yellow/20 border border-acid-yellow text-[var(--acid-yellow)] font-theme-data text-xs rounded hover:bg-acid-yellow/30"
                         >
                           Force Conclude
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); cancelTest(test.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            cancelTest(test.id);
+                          }}
                           className="px-3 py-1.5 bg-[var(--crimson)]/20 border border-[var(--crimson)] text-[var(--crimson)] font-theme-data text-xs rounded hover:bg-[var(--crimson)]/30"
                         >
                           Cancel
@@ -423,12 +462,17 @@ export default function ABTestingDashboard() {
 
         {/* Create Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowCreateModal(false)}>
-            <div className="card p-6 max-w-md w-full mx-4" onClick={e => e.stopPropagation()}>
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setShowCreateModal(false)}
+          >
+            <div className="card p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">Create A/B Test</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="text-xs font-theme-data text-text-muted block mb-1">Agent</label>
+                  <label className="text-xs font-theme-data text-text-muted block mb-1">
+                    Agent
+                  </label>
                   <input
                     type="text"
                     value={newTestAgent}
@@ -439,7 +483,9 @@ export default function ABTestingDashboard() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-theme-data text-text-muted block mb-1">Baseline Version</label>
+                    <label className="text-xs font-theme-data text-text-muted block mb-1">
+                      Baseline Version
+                    </label>
                     <input
                       type="number"
                       value={newTestBaseline}
@@ -449,7 +495,9 @@ export default function ABTestingDashboard() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-theme-data text-text-muted block mb-1">Evolved Version</label>
+                    <label className="text-xs font-theme-data text-text-muted block mb-1">
+                      Evolved Version
+                    </label>
                     <input
                       type="number"
                       value={newTestEvolved}
@@ -481,17 +529,24 @@ export default function ABTestingDashboard() {
 
         {/* Conclude Result Modal */}
         {concludeResult && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setConcludeResult(null)}>
-            <div className="card p-6 max-w-lg w-full mx-4" onClick={e => e.stopPropagation()}>
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            onClick={() => setConcludeResult(null)}
+          >
+            <div className="card p-6 max-w-lg w-full mx-4" onClick={(e) => e.stopPropagation()}>
               <h2 className="text-lg font-theme-data text-[var(--accent)] mb-4">Test Concluded</h2>
               <div className="space-y-4">
                 <div className="text-center">
                   <div className="text-xs font-theme-data text-text-muted mb-2">WINNER</div>
-                  <div className={`text-3xl font-theme-data font-bold ${
-                    concludeResult.winner === 'evolved' ? 'text-success' :
-                    concludeResult.winner === 'baseline' ? 'text-[var(--crimson)]' :
-                    'text-[var(--acid-yellow)]'
-                  }`}>
+                  <div
+                    className={`text-3xl font-theme-data font-bold ${
+                      concludeResult.winner === 'evolved'
+                        ? 'text-success'
+                        : concludeResult.winner === 'baseline'
+                          ? 'text-[var(--crimson)]'
+                          : 'text-[var(--acid-yellow)]'
+                    }`}
+                  >
                     {concludeResult.winner.toUpperCase()}
                   </div>
                   <div className="text-sm font-theme-data text-text-muted mt-2">
@@ -504,11 +559,15 @@ export default function ABTestingDashboard() {
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-center">
                   <div className="bg-surface p-3 rounded">
-                    <div className="text-2xl font-theme-data">{(concludeResult.stats.baseline_win_rate * 100).toFixed(1)}%</div>
+                    <div className="text-2xl font-theme-data">
+                      {(concludeResult.stats.baseline_win_rate * 100).toFixed(1)}%
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Baseline Win Rate</div>
                   </div>
                   <div className="bg-surface p-3 rounded">
-                    <div className="text-2xl font-theme-data">{(concludeResult.stats.evolved_win_rate * 100).toFixed(1)}%</div>
+                    <div className="text-2xl font-theme-data">
+                      {(concludeResult.stats.evolved_win_rate * 100).toFixed(1)}%
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Evolved Win Rate</div>
                   </div>
                 </div>

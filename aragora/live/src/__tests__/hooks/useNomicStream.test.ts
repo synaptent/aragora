@@ -70,7 +70,7 @@ describe('useNomicStream', () => {
     jest.useRealTimers();
     jest.clearAllTimers();
     // Close all mock WebSocket instances to prevent memory leaks
-    MockWebSocket.instances.forEach(ws => {
+    MockWebSocket.instances.forEach((ws) => {
       if (ws.readyState !== 3) ws.readyState = 3;
     });
     MockWebSocket.instances = [];
@@ -221,10 +221,7 @@ describe('useNomicStream', () => {
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'sync',
-          data: { cycle: 5, phase: 'running' },
-        });
+        getLatestWs().simulateMessage({ type: 'sync', data: { cycle: 5, phase: 'running' } });
       });
 
       expect(result.current.nomicState).toEqual({ cycle: 5, phase: 'running' });
@@ -235,10 +232,7 @@ describe('useNomicStream', () => {
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'cycle_start',
-          data: { cycle: 1 },
-        });
+        getLatestWs().simulateMessage({ type: 'cycle_start', data: { cycle: 1 } });
       });
 
       expect(result.current.events.length).toBe(1);
@@ -252,10 +246,7 @@ describe('useNomicStream', () => {
         getLatestWs().simulateOpen();
         // Send more than 5000 events
         for (let i = 0; i < 5100; i++) {
-          getLatestWs().simulateMessage({
-            type: 'test_event',
-            data: { index: i },
-          });
+          getLatestWs().simulateMessage({ type: 'test_event', data: { index: i } });
         }
       });
 
@@ -287,10 +278,7 @@ describe('useNomicStream', () => {
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'cycle_start',
-          data: { cycle: 3 },
-        });
+        getLatestWs().simulateMessage({ type: 'cycle_start', data: { cycle: 3 } });
       });
 
       expect(result.current.nomicState?.phase).toBe('starting');
@@ -302,10 +290,7 @@ describe('useNomicStream', () => {
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'phase_start',
-          data: { phase: 'debate' },
-        });
+        getLatestWs().simulateMessage({ type: 'phase_start', data: { phase: 'debate' } });
       });
 
       expect(result.current.nomicState?.phase).toBe('debate');
@@ -317,10 +302,7 @@ describe('useNomicStream', () => {
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'phase_end',
-          data: { success: true },
-        });
+        getLatestWs().simulateMessage({ type: 'phase_end', data: { success: true } });
       });
 
       expect(result.current.nomicState?.stage).toBe('complete');
@@ -347,10 +329,7 @@ describe('useNomicStream', () => {
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'cycle_end',
-          data: { outcome: 'success' },
-        });
+        getLatestWs().simulateMessage({ type: 'cycle_end', data: { outcome: 'success' } });
       });
 
       expect(result.current.nomicState?.phase).toBe('complete');
@@ -369,10 +348,7 @@ describe('useNomicStream', () => {
 
       act(() => {
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'loop_list',
-          data: { loops, count: 2 },
-        });
+        getLatestWs().simulateMessage({ type: 'loop_list', data: { loops, count: 2 } });
       });
 
       expect(result.current.activeLoops).toEqual(loops);
@@ -417,10 +393,7 @@ describe('useNomicStream', () => {
       expect(result.current.activeLoops.length).toBe(2);
 
       act(() => {
-        getLatestWs().simulateMessage({
-          type: 'loop_unregister',
-          data: { loop_id: 'loop-1' },
-        });
+        getLatestWs().simulateMessage({ type: 'loop_unregister', data: { loop_id: 'loop-1' } });
       });
 
       expect(result.current.activeLoops.length).toBe(1);
@@ -462,9 +435,7 @@ describe('useNomicStream', () => {
         result.current.requestLoopList();
       });
 
-      const requestMessage = ws.sentMessages.find(
-        m => JSON.parse(m).type === 'get_loops'
-      );
+      const requestMessage = ws.sentMessages.find((m) => JSON.parse(m).type === 'get_loops');
       expect(requestMessage).toBeDefined();
     });
   });
@@ -480,10 +451,7 @@ describe('useNomicStream', () => {
       });
 
       expect(ws.sentMessages.length).toBe(1);
-      expect(JSON.parse(ws.sentMessages[0])).toEqual({
-        type: 'test',
-        data: { foo: 'bar' },
-      });
+      expect(JSON.parse(ws.sentMessages[0])).toEqual({ type: 'test', data: { foo: 'bar' } });
     });
 
     it('should auto-inject loop_id for audience messages', () => {
@@ -516,10 +484,7 @@ describe('useNomicStream', () => {
       act(() => {
         result.current.onAck(ackCallback);
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'ack',
-          data: { msg_type: 'user_vote' },
-        });
+        getLatestWs().simulateMessage({ type: 'ack', data: { msg_type: 'user_vote' } });
       });
 
       expect(ackCallback).toHaveBeenCalledWith('user_vote');
@@ -532,10 +497,7 @@ describe('useNomicStream', () => {
       act(() => {
         result.current.onError(errorCallback);
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'error',
-          data: { message: 'Something went wrong' },
-        });
+        getLatestWs().simulateMessage({ type: 'error', data: { message: 'Something went wrong' } });
       });
 
       expect(errorCallback).toHaveBeenCalledWith('Something went wrong');
@@ -553,10 +515,7 @@ describe('useNomicStream', () => {
       act(() => {
         unsubscribe();
         getLatestWs().simulateOpen();
-        getLatestWs().simulateMessage({
-          type: 'ack',
-          data: { msg_type: 'test' },
-        });
+        getLatestWs().simulateMessage({ type: 'ack', data: { msg_type: 'test' } });
       });
 
       expect(callback).not.toHaveBeenCalled();
@@ -589,10 +548,7 @@ describe('fetchNomicState', () => {
   });
 
   it('should throw on error response', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-    });
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 500 });
 
     await expect(fetchNomicState()).rejects.toThrow('Failed to fetch state: 500');
   });
@@ -618,7 +574,10 @@ describe('fetchNomicLog', () => {
 
     const lines = await fetchNomicLog('http://api.test', 50);
 
-    expect(global.fetch).toHaveBeenCalledWith('http://api.test/api/nomic/log?lines=50', expect.anything());
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://api.test/api/nomic/log?lines=50',
+      expect.anything(),
+    );
     expect(lines).toEqual(mockLines);
   });
 
@@ -634,10 +593,7 @@ describe('fetchNomicLog', () => {
   });
 
   it('should throw on error response', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-    });
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 404 });
 
     await expect(fetchNomicLog()).rejects.toThrow('Failed to fetch log: 404');
   });

@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 
 // Rule condition types
 type ConditionField = 'from' | 'to' | 'subject' | 'body' | 'labels' | 'priority' | 'sender_domain';
-type ConditionOperator = 'contains' | 'equals' | 'starts_with' | 'ends_with' | 'matches' | 'greater_than' | 'less_than';
+type ConditionOperator =
+  'contains' | 'equals' | 'starts_with' | 'ends_with' | 'matches' | 'greater_than' | 'less_than';
 
 interface RuleCondition {
   field: ConditionField;
@@ -32,10 +33,7 @@ interface TriageRule {
   enabled: boolean;
   created_at: string;
   updated_at: string;
-  stats?: {
-    total_matches: number;
-    last_matched?: string;
-  };
+  stats?: { total_matches: number; last_matched?: string };
 }
 
 interface TriageRulesPanelProps {
@@ -75,7 +73,6 @@ const ACTION_OPTIONS: { value: ActionType; label: string; icon: string; needsTar
   { value: 'forward', label: 'Forward To', icon: '➡️', needsTarget: true },
 ];
 
-
 export function TriageRulesPanel({
   apiBase,
   workspaceId,
@@ -107,9 +104,7 @@ export function TriageRulesPanel({
     try {
       const response = await fetch(
         `${apiBase}/api/v1/inbox/routing/rules?workspace_id=${workspaceId}`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
+        { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
       );
 
       if (!response.ok) {
@@ -146,10 +141,7 @@ export function TriageRulesPanel({
           'Content-Type': 'application/json',
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
-        body: JSON.stringify({
-          workspace_id: workspaceId,
-          ...newRule,
-        }),
+        body: JSON.stringify({ workspace_id: workspaceId, ...newRule }),
       });
 
       if (!response.ok) {
@@ -184,10 +176,12 @@ export function TriageRulesPanel({
       }
 
       // Update locally only after successful API call
-      setRules(rules.map(r => r.id === ruleId ? { ...r, enabled } : r));
+      setRules(rules.map((r) => (r.id === ruleId ? { ...r, enabled } : r)));
     } catch (error) {
       console.error('Toggle rule failed:', error);
-      setError(`Failed to toggle rule: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setError(
+        `Failed to toggle rule: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   };
 
@@ -206,10 +200,12 @@ export function TriageRulesPanel({
       }
 
       // Update locally only after successful API call
-      setRules(rules.filter(r => r.id !== ruleId));
+      setRules(rules.filter((r) => r.id !== ruleId));
     } catch (error) {
       console.error('Delete rule failed:', error);
-      setError(`Failed to delete rule: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setError(
+        `Failed to delete rule: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   };
 
@@ -234,7 +230,9 @@ export function TriageRulesPanel({
       alert(`Rule "${rule.name}" matches ${data.match_count} emails`);
       onRuleApplied?.(rule.id, data.match_count);
     } catch (err) {
-      alert(`Failed to test rule: ${err instanceof Error ? err.message : 'Unable to connect to server'}`);
+      alert(
+        `Failed to test rule: ${err instanceof Error ? err.message : 'Unable to connect to server'}`,
+      );
     }
   };
 
@@ -261,44 +259,31 @@ export function TriageRulesPanel({
   };
 
   const removeCondition = (index: number) => {
-    setNewRule({
-      ...newRule,
-      conditions: newRule.conditions?.filter((_, i) => i !== index),
-    });
+    setNewRule({ ...newRule, conditions: newRule.conditions?.filter((_, i) => i !== index) });
   };
 
   const updateCondition = (index: number, updates: Partial<RuleCondition>) => {
     setNewRule({
       ...newRule,
-      conditions: newRule.conditions?.map((c, i) =>
-        i === index ? { ...c, ...updates } : c
-      ),
+      conditions: newRule.conditions?.map((c, i) => (i === index ? { ...c, ...updates } : c)),
     });
   };
 
   const addAction = () => {
     setNewRule({
       ...newRule,
-      actions: [
-        ...(newRule.actions || []),
-        { type: 'label', target: '' },
-      ],
+      actions: [...(newRule.actions || []), { type: 'label', target: '' }],
     });
   };
 
   const removeAction = (index: number) => {
-    setNewRule({
-      ...newRule,
-      actions: newRule.actions?.filter((_, i) => i !== index),
-    });
+    setNewRule({ ...newRule, actions: newRule.actions?.filter((_, i) => i !== index) });
   };
 
   const updateAction = (index: number, updates: Partial<RuleAction>) => {
     setNewRule({
       ...newRule,
-      actions: newRule.actions?.map((a, i) =>
-        i === index ? { ...a, ...updates } : a
-      ),
+      actions: newRule.actions?.map((a, i) => (i === index ? { ...a, ...updates } : a)),
     });
   };
 
@@ -373,7 +358,9 @@ export function TriageRulesPanel({
               <span className="text-text-muted text-xs font-theme-data">CONDITIONS</span>
               <select
                 value={newRule.condition_logic || 'AND'}
-                onChange={(e) => setNewRule({ ...newRule, condition_logic: e.target.value as 'AND' | 'OR' })}
+                onChange={(e) =>
+                  setNewRule({ ...newRule, condition_logic: e.target.value as 'AND' | 'OR' })
+                }
                 className="px-2 py-1 text-xs bg-bg border border-[var(--accent)]/30 rounded font-theme-data"
               >
                 <option value="AND">Match ALL</option>
@@ -385,20 +372,28 @@ export function TriageRulesPanel({
                 <div key={idx} className="flex items-center gap-2">
                   <select
                     value={condition.field}
-                    onChange={(e) => updateCondition(idx, { field: e.target.value as ConditionField })}
+                    onChange={(e) =>
+                      updateCondition(idx, { field: e.target.value as ConditionField })
+                    }
                     className="px-2 py-1 text-xs bg-bg border border-[var(--accent)]/30 rounded font-theme-data"
                   >
                     {FIELD_OPTIONS.map((f) => (
-                      <option key={f.value} value={f.value}>{f.label}</option>
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
                     ))}
                   </select>
                   <select
                     value={condition.operator}
-                    onChange={(e) => updateCondition(idx, { operator: e.target.value as ConditionOperator })}
+                    onChange={(e) =>
+                      updateCondition(idx, { operator: e.target.value as ConditionOperator })
+                    }
                     className="px-2 py-1 text-xs bg-bg border border-[var(--accent)]/30 rounded font-theme-data"
                   >
                     {OPERATOR_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
                     ))}
                   </select>
                   <input
@@ -432,7 +427,7 @@ export function TriageRulesPanel({
             <span className="text-text-muted text-xs font-theme-data block mb-2">ACTIONS</span>
             <div className="space-y-2">
               {newRule.actions?.map((action, idx) => {
-                const actionConfig = ACTION_OPTIONS.find(a => a.value === action.type);
+                const actionConfig = ACTION_OPTIONS.find((a) => a.value === action.type);
                 return (
                   <div key={idx} className="flex items-center gap-2">
                     <select
@@ -441,7 +436,9 @@ export function TriageRulesPanel({
                       className="px-2 py-1 text-xs bg-bg border border-[var(--accent)]/30 rounded font-theme-data"
                     >
                       {ACTION_OPTIONS.map((a) => (
-                        <option key={a.value} value={a.value}>{a.icon} {a.label}</option>
+                        <option key={a.value} value={a.value}>
+                          {a.icon} {a.label}
+                        </option>
                       ))}
                     </select>
                     {actionConfig?.needsTarget && (
@@ -516,122 +513,129 @@ export function TriageRulesPanel({
         </div>
       ) : (
         <div className="space-y-2">
-          {rules.sort((a, b) => a.priority - b.priority).map((rule) => (
-            <div
-              key={rule.id}
-              className={`border rounded transition-all ${
-                rule.enabled
-                  ? 'border-[var(--accent)]/30 bg-bg/30'
-                  : 'border-gray-600/30 bg-bg/20 opacity-60'
-              }`}
-            >
+          {rules
+            .sort((a, b) => a.priority - b.priority)
+            .map((rule) => (
               <div
-                className="p-3 cursor-pointer"
-                onClick={() => setExpandedRuleId(expandedRuleId === rule.id ? null : rule.id)}
+                key={rule.id}
+                className={`border rounded transition-all ${
+                  rule.enabled
+                    ? 'border-[var(--accent)]/30 bg-bg/30'
+                    : 'border-gray-600/30 bg-bg/20 opacity-60'
+                }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleRule(rule.id, !rule.enabled);
-                      }}
-                      className={`w-8 h-4 rounded-full relative transition-colors ${
-                        rule.enabled ? 'bg-[var(--accent)]' : 'bg-gray-600'
-                      }`}
-                    >
-                      <div
-                        className={`absolute w-3 h-3 bg-white rounded-full top-0.5 transition-all ${
-                          rule.enabled ? 'left-4' : 'left-0.5'
+                <div
+                  className="p-3 cursor-pointer"
+                  onClick={() => setExpandedRuleId(expandedRuleId === rule.id ? null : rule.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleRule(rule.id, !rule.enabled);
+                        }}
+                        className={`w-8 h-4 rounded-full relative transition-colors ${
+                          rule.enabled ? 'bg-[var(--accent)]' : 'bg-gray-600'
                         }`}
-                      />
-                    </button>
-                    <div>
-                      <div className="text-sm font-theme-data text-text">{rule.name}</div>
-                      {rule.description && (
-                        <div className="text-xs text-text-muted">{rule.description}</div>
+                      >
+                        <div
+                          className={`absolute w-3 h-3 bg-white rounded-full top-0.5 transition-all ${
+                            rule.enabled ? 'left-4' : 'left-0.5'
+                          }`}
+                        />
+                      </button>
+                      <div>
+                        <div className="text-sm font-theme-data text-text">{rule.name}</div>
+                        {rule.description && (
+                          <div className="text-xs text-text-muted">{rule.description}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {rule.stats && (
+                        <span className="text-xs text-text-muted font-theme-data">
+                          {rule.stats.total_matches} matches
+                        </span>
                       )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {rule.stats && (
-                      <span className="text-xs text-text-muted font-theme-data">
-                        {rule.stats.total_matches} matches
+                      <span className="text-xs text-[var(--accent)]/60 font-theme-data">
+                        P{rule.priority}
                       </span>
-                    )}
-                    <span className="text-xs text-[var(--accent)]/60 font-theme-data">
-                      P{rule.priority}
-                    </span>
-                    <span className="text-text-muted">
-                      {expandedRuleId === rule.id ? '▼' : '▶'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Expanded View */}
-              {expandedRuleId === rule.id && (
-                <div className="border-t border-[var(--accent)]/20 p-3 bg-surface/30">
-                  {/* Conditions */}
-                  <div className="mb-3">
-                    <span className="text-text-muted text-xs font-theme-data block mb-1">
-                      CONDITIONS ({rule.condition_logic})
-                    </span>
-                    <div className="space-y-1">
-                      {rule.conditions.map((c, idx) => (
-                        <div key={idx} className="text-xs font-theme-data text-text-muted flex items-center gap-1">
-                          <span className="text-[var(--accent)]">{c.field}</span>
-                          <span>{c.operator}</span>
-                          <span className="text-[var(--acid-cyan)]">"{c.value}"</span>
-                        </div>
-                      ))}
+                      <span className="text-text-muted">
+                        {expandedRuleId === rule.id ? '▼' : '▶'}
+                      </span>
                     </div>
                   </div>
+                </div>
 
-                  {/* Actions */}
-                  <div className="mb-3">
-                    <span className="text-text-muted text-xs font-theme-data block mb-1">ACTIONS</span>
-                    <div className="flex flex-wrap gap-2">
-                      {rule.actions.map((a, idx) => {
-                        const config = ACTION_OPTIONS.find(opt => opt.value === a.type);
-                        return (
-                          <span
+                {/* Expanded View */}
+                {expandedRuleId === rule.id && (
+                  <div className="border-t border-[var(--accent)]/20 p-3 bg-surface/30">
+                    {/* Conditions */}
+                    <div className="mb-3">
+                      <span className="text-text-muted text-xs font-theme-data block mb-1">
+                        CONDITIONS ({rule.condition_logic})
+                      </span>
+                      <div className="space-y-1">
+                        {rule.conditions.map((c, idx) => (
+                          <div
                             key={idx}
-                            className="px-2 py-1 text-xs bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded font-theme-data"
+                            className="text-xs font-theme-data text-text-muted flex items-center gap-1"
                           >
-                            {config?.icon} {config?.label}
-                            {a.target && `: ${a.target}`}
-                          </span>
-                        );
-                      })}
+                            <span className="text-[var(--accent)]">{c.field}</span>
+                            <span>{c.operator}</span>
+                            <span className="text-[var(--acid-cyan)]">"{c.value}"</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="mb-3">
+                      <span className="text-text-muted text-xs font-theme-data block mb-1">
+                        ACTIONS
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {rule.actions.map((a, idx) => {
+                          const config = ACTION_OPTIONS.find((opt) => opt.value === a.type);
+                          return (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 text-xs bg-[var(--accent)]/10 border border-[var(--accent)]/30 rounded font-theme-data"
+                            >
+                              {config?.icon} {config?.label}
+                              {a.target && `: ${a.target}`}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleTestRule(rule)}
+                        className="px-3 py-1 text-xs font-theme-data bg-[var(--acid-cyan)]/10 border border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/20 rounded"
+                      >
+                        Test Rule
+                      </button>
+                      <button
+                        onClick={() => setEditingRule(rule)}
+                        className="px-3 py-1 text-xs font-theme-data border border-[var(--accent)]/30 text-text-muted hover:text-[var(--accent)] rounded"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRule(rule.id)}
+                        className="px-3 py-1 text-xs font-theme-data bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleTestRule(rule)}
-                      className="px-3 py-1 text-xs font-theme-data bg-[var(--acid-cyan)]/10 border border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/20 rounded"
-                    >
-                      Test Rule
-                    </button>
-                    <button
-                      onClick={() => setEditingRule(rule)}
-                      className="px-3 py-1 text-xs font-theme-data border border-[var(--accent)]/30 text-text-muted hover:text-[var(--accent)] rounded"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteRule(rule.id)}
-                      className="px-3 py-1 text-xs font-theme-data bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            ))}
         </div>
       )}
     </div>

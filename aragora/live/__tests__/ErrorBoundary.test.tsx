@@ -32,7 +32,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <div>Child content</div>
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText('Child content')).toBeInTheDocument();
@@ -42,7 +42,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText('RUNTIME ERROR')).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowNamedError />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText(/CustomError/)).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText(/RESET_COMPONENT/)).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('ErrorBoundary', () => {
     const { rerender } = render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     // Error UI should be visible
@@ -83,7 +83,7 @@ describe('ErrorBoundary', () => {
     rerender(
       <ErrorBoundary>
         <ThrowError shouldThrow={false} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     // Click reset after swapping to non-throwing child
@@ -107,7 +107,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary fallback={customFallback}>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(screen.getByText(/Custom fallback/)).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary fallback={customFallback}>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(capturedReset).toBeDefined();
@@ -139,7 +139,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowError shouldThrow={true} />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     expect(console.error).toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe('ErrorBoundary', () => {
     render(
       <ErrorBoundary>
         <ThrowWithStack />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     // Should show part of the stack
@@ -187,7 +187,7 @@ describe('ErrorBoundary nested errors', () => {
         <ErrorBoundary>
           <NestedThrowError />
         </ErrorBoundary>
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
 
     // Outer content should still render

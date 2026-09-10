@@ -110,16 +110,8 @@ export function UsageBreakdown({
             <span>!</span> DEBATE ACTIVITY
           </h4>
           <div className="space-y-1">
-            <KPIMiniCard
-              label="Today"
-              value={summary?.debates.today ?? 0}
-              color="green"
-            />
-            <KPIMiniCard
-              label="This Week"
-              value={summary?.debates.this_week ?? 0}
-              color="cyan"
-            />
+            <KPIMiniCard label="Today" value={summary?.debates.today ?? 0} color="green" />
+            <KPIMiniCard label="This Week" value={summary?.debates.this_week ?? 0} color="cyan" />
             <KPIMiniCard
               label="This Month"
               value={summary?.debates.this_month ?? 0}
@@ -161,7 +153,13 @@ export function UsageBreakdown({
             <KPIMiniCard
               label="Consensus Rate"
               value={summary ? `${(summary.consensus.rate * 100).toFixed(0)}%` : '-'}
-              color={summary && summary.consensus.rate >= 0.8 ? 'green' : summary && summary.consensus.rate >= 0.6 ? 'yellow' : 'red'}
+              color={
+                summary && summary.consensus.rate >= 0.8
+                  ? 'green'
+                  : summary && summary.consensus.rate >= 0.6
+                    ? 'yellow'
+                    : 'red'
+              }
             />
             <KPIMiniCard
               label="Avg Confidence"
@@ -188,33 +186,46 @@ export function UsageBreakdown({
           </h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">Projected Debates</div>
+              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">
+                Projected Debates
+              </div>
               <div className="text-lg font-theme-data font-bold text-[var(--acid-green)]">
                 {formatNumber(forecast.projected_monthly_debates)}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">Projected Tokens</div>
+              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">
+                Projected Tokens
+              </div>
               <div className="text-lg font-theme-data font-bold text-[var(--acid-cyan)]">
                 {formatNumber(forecast.projected_monthly_tokens)}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">Projected Cost</div>
+              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">
+                Projected Cost
+              </div>
               <div className="text-lg font-theme-data font-bold text-yellow-400">
                 {formatCurrency(forecast.projected_monthly_cost_usd)}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">Growth Rate</div>
-              <div className={`text-lg font-theme-data font-bold ${getTrendColor(forecast.trend) === 'green' ? 'text-green-400' : getTrendColor(forecast.trend) === 'red' ? 'text-red-400' : 'text-yellow-400'}`}>
-                {forecast.growth_rate_percent >= 0 ? '+' : ''}{forecast.growth_rate_percent.toFixed(1)}%
+              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">
+                Growth Rate
+              </div>
+              <div
+                className={`text-lg font-theme-data font-bold ${getTrendColor(forecast.trend) === 'green' ? 'text-green-400' : getTrendColor(forecast.trend) === 'red' ? 'text-red-400' : 'text-yellow-400'}`}
+              >
+                {forecast.growth_rate_percent >= 0 ? '+' : ''}
+                {forecast.growth_rate_percent.toFixed(1)}%
               </div>
             </div>
           </div>
           {forecast.recommendations.length > 0 && (
             <div className="mt-4 pt-4 border-t border-[var(--border)]">
-              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">RECOMMENDATIONS:</div>
+              <div className="text-xs font-theme-data text-[var(--text-muted)] mb-2">
+                RECOMMENDATIONS:
+              </div>
               <ul className="space-y-1">
                 {forecast.recommendations.slice(0, 3).map((rec, idx) => (
                   <li key={idx} className="text-xs font-theme-data text-[var(--acid-green)]">

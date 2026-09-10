@@ -35,7 +35,15 @@ function MetricCard({
   );
 }
 
-function BarChart({ value, max, color = 'acid-green' }: { value: number; max: number; color?: string }) {
+function BarChart({
+  value,
+  max,
+  color = 'acid-green',
+}: {
+  value: number;
+  max: number;
+  color?: string;
+}) {
   const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   return (
     <div className="w-full h-3 bg-surface rounded overflow-hidden border border-border">
@@ -78,10 +86,7 @@ export default function ObservabilityPage() {
     isValidating,
     error,
     mutate,
-  } = useObservabilityDashboard({
-    baseUrl: backendConfig.api,
-    refreshInterval: 10000,
-  });
+  } = useObservabilityDashboard({ baseUrl: backendConfig.api, refreshInterval: 10000 });
 
   const fetchData = useCallback(async () => {
     await mutate();
@@ -96,7 +101,7 @@ export default function ObservabilityPage() {
   const overallHealth = (): 'green' | 'yellow' | 'red' => {
     if (!data) return 'gray' as 'green';
     const openBreakers = data.circuit_breakers.breakers.filter(
-      (b) => b.state.toLowerCase() === 'open'
+      (b) => b.state.toLowerCase() === 'open',
     ).length;
     if (openBreakers > 0 || data.error_rates.error_rate > 0.05) return 'red';
     if (
@@ -149,8 +154,8 @@ export default function ObservabilityPage() {
                 overallHealth() === 'green'
                   ? 'acid-green'
                   : overallHealth() === 'yellow'
-                  ? 'acid-yellow'
-                  : 'acid-red'
+                    ? 'acid-yellow'
+                    : 'acid-red'
               }`}
             >
               {data ? healthLabel[overallHealth()] : 'LOADING'}
@@ -188,7 +193,9 @@ export default function ObservabilityPage() {
         />
         <MetricCard
           label="CPU"
-          value={data?.system_health.cpu_percent != null ? `${data.system_health.cpu_percent}%` : '-'}
+          value={
+            data?.system_health.cpu_percent != null ? `${data.system_health.cpu_percent}%` : '-'
+          }
           color="acid-magenta"
         />
         <MetricCard
@@ -260,7 +267,10 @@ export default function ObservabilityPage() {
                   <div className="font-theme-data text-xs text-text-muted mb-2">Last Run</div>
                   <div className="grid grid-cols-3 gap-2 text-xs font-theme-data">
                     <div className="text-text-muted">
-                      Due: <span className="text-text">{data.settlement_review.stats.last_result.receipts_due}</span>
+                      Due:{' '}
+                      <span className="text-text">
+                        {data.settlement_review.stats.last_result.receipts_due}
+                      </span>
                     </div>
                     <div className="text-text-muted">
                       Updated:{' '}
@@ -351,7 +361,9 @@ export default function ObservabilityPage() {
                     <div className="grid grid-cols-[2rem_1fr_4rem_4rem_4rem] gap-2 text-sm font-theme-data items-center">
                       <span className="text-text-muted">{idx + 1}</span>
                       <span className="text-text truncate">{agent.name}</span>
-                      <span className="text-right text-[var(--accent)]">{Math.round(agent.rating)}</span>
+                      <span className="text-right text-[var(--accent)]">
+                        {Math.round(agent.rating)}
+                      </span>
                       <span className="text-right text-text-muted">{agent.matches}</span>
                       <span className="text-right text-[var(--acid-cyan)]">
                         {(agent.win_rate * 100).toFixed(0)}%
@@ -369,13 +381,20 @@ export default function ObservabilityPage() {
         <div className="card p-6">
           <h2 className="font-theme-data text-[var(--accent)] mb-4">Circuit Breakers</h2>
           {!data?.circuit_breakers.available ? (
-            <p className="font-theme-data text-xs text-text-muted">Resilience registry unavailable</p>
+            <p className="font-theme-data text-xs text-text-muted">
+              Resilience registry unavailable
+            </p>
           ) : data.circuit_breakers.breakers.length === 0 ? (
-            <p className="font-theme-data text-xs text-text-muted">No circuit breakers registered</p>
+            <p className="font-theme-data text-xs text-text-muted">
+              No circuit breakers registered
+            </p>
           ) : (
             <div className="space-y-3">
               {data.circuit_breakers.breakers.map((cb) => (
-                <div key={cb.name} className="flex items-center justify-between pb-2 border-b border-border last:border-0">
+                <div
+                  key={cb.name}
+                  className="flex items-center justify-between pb-2 border-b border-border last:border-0"
+                >
                   <div className="flex items-center gap-2">
                     <StatusDot status={cbStateColor(cb.state)} />
                     <span className="font-theme-data text-sm text-text truncate max-w-[200px]">
@@ -409,15 +428,21 @@ export default function ObservabilityPage() {
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div>
                 <div className="font-theme-data text-xs text-text-muted">Total Cycles</div>
-                <div className="font-theme-data text-xl text-[var(--acid-cyan)]">{data.self_improve.total_cycles}</div>
+                <div className="font-theme-data text-xl text-[var(--acid-cyan)]">
+                  {data.self_improve.total_cycles}
+                </div>
               </div>
               <div>
                 <div className="font-theme-data text-xs text-text-muted">Successful</div>
-                <div className="font-theme-data text-xl text-[var(--accent)]">{data.self_improve.successful}</div>
+                <div className="font-theme-data text-xl text-[var(--accent)]">
+                  {data.self_improve.successful}
+                </div>
               </div>
               <div>
                 <div className="font-theme-data text-xs text-text-muted">Failed</div>
-                <div className="font-theme-data text-xl text-acid-red">{data.self_improve.failed}</div>
+                <div className="font-theme-data text-xl text-acid-red">
+                  {data.self_improve.failed}
+                </div>
               </div>
             </div>
             {data.self_improve.recent_runs.length > 0 && (
@@ -426,7 +451,10 @@ export default function ObservabilityPage() {
                   Recent Runs
                 </div>
                 {data.self_improve.recent_runs.map((run) => (
-                  <div key={run.id} className="flex items-center justify-between text-sm font-theme-data">
+                  <div
+                    key={run.id}
+                    className="flex items-center justify-between text-sm font-theme-data"
+                  >
                     <span className="text-text truncate max-w-[60%]">{run.goal || run.id}</span>
                     <div className="flex items-center gap-3">
                       <span className={runStatusColor(run.status)}>{run.status.toUpperCase()}</span>

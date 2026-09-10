@@ -37,10 +37,7 @@ const STATUS_CONFIG: Record<DebateConnectionStatus, { color: string; label: stri
 };
 
 function formatModeLabel(mode: string): string {
-  return mode
-    .replace(/[_-]+/g, ' ')
-    .trim()
-    .toUpperCase();
+  return mode.replace(/[_-]+/g, ' ').trim().toUpperCase();
 }
 
 export function LiveDebateView({
@@ -81,37 +78,40 @@ export function LiveDebateView({
   const [isPaused, setIsPaused] = useState(false);
   const [showReasoning, setShowReasoning] = useState(false);
 
-  const handleChallengeClaim = useCallback(async (content: string, agent: string) => {
-    try {
-      const storedTokens = typeof window !== 'undefined' ? localStorage.getItem('aragora_tokens') : null;
-      let accessToken: string | null = null;
-      if (storedTokens) {
-        try {
-          accessToken = (JSON.parse(storedTokens) as { access_token?: string }).access_token || null;
-        } catch {
-          accessToken = null;
+  const handleChallengeClaim = useCallback(
+    async (content: string, agent: string) => {
+      try {
+        const storedTokens =
+          typeof window !== 'undefined' ? localStorage.getItem('aragora_tokens') : null;
+        let accessToken: string | null = null;
+        if (storedTokens) {
+          try {
+            accessToken =
+              (JSON.parse(storedTokens) as { access_token?: string }).access_token || null;
+          } catch {
+            accessToken = null;
+          }
         }
-      }
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/debates/${encodeURIComponent(debateId)}/challenge`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        const response = await fetch(
+          `${API_BASE_URL}/api/v1/debates/${encodeURIComponent(debateId)}/challenge`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            },
+            body: JSON.stringify({ challenge: `[CHALLENGE to ${agent}] ${content}` }),
           },
-          body: JSON.stringify({
-            challenge: `[CHALLENGE to ${agent}] ${content}`,
-          }),
+        );
+        if (response.ok) {
+          setShowIntervention(true);
         }
-      );
-      if (response.ok) {
-        setShowIntervention(true);
+      } catch (error) {
+        logger.error('Failed to challenge claim:', error);
       }
-    } catch (error) {
-      logger.error('Failed to challenge claim:', error);
-    }
-  }, [debateId]);
+    },
+    [debateId],
+  );
 
   const initErrors = useMemo(() => {
     const errors: Array<{ agent: string; message: string }> = [];
@@ -123,9 +123,7 @@ export function LiveDebateView({
           errors.push({
             agent: (data?.agent as string) || 'unknown',
             message:
-              (data?.error as string) ||
-              (data?.message as string) ||
-              'Initialization failed',
+              (data?.error as string) || (data?.message as string) || 'Initialization failed',
           });
         }
       }
@@ -156,9 +154,7 @@ export function LiveDebateView({
           errors.push({
             agent: (event.agent as string) || (data?.agent as string) || 'unknown',
             message:
-              (data?.message as string) ||
-              (data?.error as string) ||
-              `Agent error: ${errorType}`,
+              (data?.message as string) || (data?.error as string) || `Agent error: ${errorType}`,
           });
         }
       }
@@ -167,7 +163,7 @@ export function LiveDebateView({
   }, [streamEvents]);
 
   const consensusStatus = useMemo(() => {
-    const consensusEvents = streamEvents.filter(event => event.type === 'consensus');
+    const consensusEvents = streamEvents.filter((event) => event.type === 'consensus');
     if (consensusEvents.length === 0) return null;
     const lastEvent = consensusEvents[consensusEvents.length - 1];
     return lastEvent.data as {
@@ -200,7 +196,12 @@ export function LiveDebateView({
       positionSummary: string;
     };
     const defaultEntry = (): AgentSummary => ({
-      confidence: null, lastRole: '', messageCount: 0, lastSnippet: '', phase: '', positionSummary: '',
+      confidence: null,
+      lastRole: '',
+      messageCount: 0,
+      lastSnippet: '',
+      phase: '',
+      positionSummary: '',
     });
     const summary: Record<string, AgentSummary> = {};
     for (const agent of agents) {
@@ -217,8 +218,12 @@ export function LiveDebateView({
       entry.lastSnippet = msg.content?.slice(0, 120) ?? '';
       // Build position summary from the latest non-critique message
       if (msg.content && msg.role !== 'critic' && msg.role !== 'system') {
-        const sentences = msg.content.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ');
-        entry.positionSummary = sentences.length > 120 ? sentences.slice(0, 120) + '...' : sentences;
+        const sentences = msg.content
+          .split(/(?<=[.!?])\s+/)
+          .slice(0, 2)
+          .join(' ');
+        entry.positionSummary =
+          sentences.length > 120 ? sentences.slice(0, 120) + '...' : sentences;
       }
       // Use message-level confidence and phase when available
       if (msg.confidence_score !== null && msg.confidence_score !== undefined) {
@@ -275,16 +280,17 @@ export function LiveDebateView({
   // Calculate current phase/round from stream events or messages
   const currentPhase = useMemo(() => {
     // Try to get phase from phase_progress events
-    const phaseEvents = streamEvents.filter(e => e.type === 'phase_progress');
+    const phaseEvents = streamEvents.filter((e) => e.type === 'phase_progress');
     if (phaseEvents.length > 0) {
       const lastEvent = phaseEvents[phaseEvents.length - 1];
-      const phase = (lastEvent.data as { phase?: number; round?: number })?.phase
-                 ?? (lastEvent.data as { phase?: number; round?: number })?.round;
+      const phase =
+        (lastEvent.data as { phase?: number; round?: number })?.phase ??
+        (lastEvent.data as { phase?: number; round?: number })?.round;
       if (typeof phase === 'number') return phase;
     }
     // Fallback: estimate from messages
     if (messages.length === 0) return 0;
-    return Math.max(...messages.map(m => m.round ?? 0));
+    return Math.max(...messages.map((m) => m.round ?? 0));
   }, [streamEvents, messages]);
 
   return (
@@ -346,9 +352,8 @@ export function LiveDebateView({
             </div>
             {initErrors.length > 0 && (
               <div className="mt-4 border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs font-theme-data text-red-300">
-                Missing agents:{' '}
-                {initErrors.map((err) => err.agent).join(', ')}. Check API keys or Secrets
-                Manager.
+                Missing agents: {initErrors.map((err) => err.agent).join(', ')}. Check API keys or
+                Secrets Manager.
               </div>
             )}
             {consensusStatus?.status === 'insufficient_participation' && (
@@ -357,11 +362,12 @@ export function LiveDebateView({
                 {agentFailureAgents.length === 1 ? '' : 's'} failed or timed out.
               </div>
             )}
-            {runtimeErrors.length > 0 && consensusStatus?.status !== 'insufficient_participation' && (
-              <div className="mt-4 border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs font-theme-data text-yellow-200">
-                Agent errors detected: {runtimeErrors.map((err) => err.agent).join(', ')}.
-              </div>
-            )}
+            {runtimeErrors.length > 0 &&
+              consensusStatus?.status !== 'insufficient_participation' && (
+                <div className="mt-4 border border-yellow-500/30 bg-yellow-500/5 px-3 py-2 text-xs font-theme-data text-yellow-200">
+                  Agent errors detected: {runtimeErrors.map((err) => err.agent).join(', ')}.
+                </div>
+              )}
           </div>
 
           <div className="flex flex-col items-end gap-2">
@@ -424,9 +430,13 @@ export function LiveDebateView({
       <UncertaintyPanel events={streamEvents} />
 
       {/* Live Transcript + Sidebars Grid */}
-      <div className={`grid gap-4 ${showParticipation || showReasoning ? 'lg:grid-cols-3' : 'grid-cols-1'}`}>
+      <div
+        className={`grid gap-4 ${showParticipation || showReasoning ? 'lg:grid-cols-3' : 'grid-cols-1'}`}
+      >
         {/* Live Transcript */}
-        <div className={`bg-surface border border-[var(--accent)]/30 ${showParticipation || showReasoning ? 'lg:col-span-2' : ''}`}>
+        <div
+          className={`bg-surface border border-[var(--accent)]/30 ${showParticipation || showReasoning ? 'lg:col-span-2' : ''}`}
+        >
           <div className="px-4 py-3 border-b border-[var(--accent)]/20 bg-bg/50 flex items-center justify-between">
             <span className="text-xs font-theme-data text-[var(--accent)] uppercase tracking-wider">
               {'>'} LIVE TRANSCRIPT
@@ -435,7 +445,9 @@ export function LiveDebateView({
               <span className="text-xs font-theme-data text-text-muted">
                 {messages.length} messages
                 {streamingMessages.size > 0 && (
-                  <span className="ml-2 text-[var(--acid-cyan)] animate-pulse">({streamingMessages.size} streaming)</span>
+                  <span className="ml-2 text-[var(--acid-cyan)] animate-pulse">
+                    ({streamingMessages.size} streaming)
+                  </span>
                 )}
               </span>
               {cruxes && cruxes.length > 0 && setShowCruxHighlighting && (
@@ -448,7 +460,9 @@ export function LiveDebateView({
                   }`}
                   title={`${cruxes.length} crux claim${cruxes.length !== 1 ? 's' : ''} detected`}
                 >
-                  {showCruxHighlighting ? `[HIDE CRUXES: ${cruxes.length}]` : `[SHOW CRUXES: ${cruxes.length}]`}
+                  {showCruxHighlighting
+                    ? `[HIDE CRUXES: ${cruxes.length}]`
+                    : `[SHOW CRUXES: ${cruxes.length}]`}
                 </button>
               )}
               <button
@@ -519,15 +533,13 @@ export function LiveDebateView({
             {Array.from(streamingMessages.values())
               .sort((a, b) => a.agent.localeCompare(b.agent))
               .map((streamMsg) => (
-              <StreamingMessageCard
-                key={`streaming-${streamMsg.agent}-${streamMsg.taskId || 'default'}`}
-                message={streamMsg}
-              />
-            ))}
+                <StreamingMessageCard
+                  key={`streaming-${streamMsg.agent}-${streamMsg.taskId || 'default'}`}
+                  message={streamMsg}
+                />
+              ))}
             {/* Download panel - appears at bottom of transcript when debate is complete */}
-            {status === 'complete' && (
-              <InlineDownloadPanel debateId={debateId} />
-            )}
+            {status === 'complete' && <InlineDownloadPanel debateId={debateId} />}
           </div>
         </div>
 
@@ -555,18 +567,28 @@ export function LiveDebateView({
             <div className="p-3 space-y-3 max-h-[600px] overflow-y-auto">
               {Object.entries(agentReasoningSummary).map(([agent, info]) => {
                 const agentColors = getAgentColors(agent);
-                const confColor = info.confidence !== null
-                  ? info.confidence >= 0.8 ? 'bg-[var(--accent)]' : info.confidence >= 0.5 ? 'bg-acid-yellow' : 'bg-red-400'
-                  : '';
+                const confColor =
+                  info.confidence !== null
+                    ? info.confidence >= 0.8
+                      ? 'bg-[var(--accent)]'
+                      : info.confidence >= 0.5
+                        ? 'bg-acid-yellow'
+                        : 'bg-red-400'
+                    : '';
                 return (
                   <div key={agent} className="border border-border p-2 space-y-1">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
                         {/* Color-coded confidence dot */}
                         {info.confidence !== null && (
-                          <span className={`w-2 h-2 rounded-full ${confColor}`} title={`${Math.round(info.confidence * 100)}% confidence`} />
+                          <span
+                            className={`w-2 h-2 rounded-full ${confColor}`}
+                            title={`${Math.round(info.confidence * 100)}% confidence`}
+                          />
                         )}
-                        <span className={`font-theme-data text-xs font-bold ${agentColors.text}`}>{agent.toUpperCase()}</span>
+                        <span className={`font-theme-data text-xs font-bold ${agentColors.text}`}>
+                          {agent.toUpperCase()}
+                        </span>
                       </div>
                       {info.confidence !== null && (
                         <span className="text-[10px] font-theme-data text-[var(--acid-yellow)] border border-acid-yellow/30 px-1">
@@ -637,11 +659,7 @@ export function LiveDebateView({
 
       {/* Debate Timeline - post-debate replay */}
       {showTimeline && status === 'complete' && (
-        <DebateTimeline
-          messages={messages}
-          streamEvents={streamEvents}
-          agents={agents}
-        />
+        <DebateTimeline messages={messages} streamEvents={streamEvents} agents={agents} />
       )}
 
       {/* Citations Panel */}
@@ -677,7 +695,9 @@ export function LiveDebateView({
           <div className="p-4 space-y-4">
             {/* Transcript Downloads */}
             <div>
-              <div className="text-xs font-theme-data text-text-muted mb-2 uppercase">Download Transcript</div>
+              <div className="text-xs font-theme-data text-text-muted mb-2 uppercase">
+                Download Transcript
+              </div>
               <div className="flex flex-wrap gap-2">
                 <a
                   href={`${API_BASE_URL}/api/debates/${debateId}/export/txt`}

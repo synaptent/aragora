@@ -59,8 +59,8 @@ export default function PortalPage() {
             Multi Agent Decision Making
           </h1>
           <p className="text-text-muted font-theme-data max-w-2xl mx-auto mb-8">
-            Multi-agent stress testing, compliance auditing, and decision validation.
-            Watch AI agents debate, critique, and forge consensus on your toughest problems.
+            Multi-agent stress testing, compliance auditing, and decision validation. Watch AI
+            agents debate, critique, and forge consensus on your toughest problems.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link
@@ -106,9 +106,7 @@ export default function PortalPage() {
       <section className="relative z-10 py-12 px-4 bg-surface/30">
         <div className="container mx-auto max-w-5xl">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">
-              Live Debates
-            </h2>
+            <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">Live Debates</h2>
             <Link
               href="/debates"
               className="text-sm font-theme-data text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
@@ -133,18 +131,20 @@ export default function PortalPage() {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {liveDebates.map(debate => (
+              {liveDebates.map((debate) => (
                 <Link
                   key={debate.id}
                   href={`/debate/${debate.id}`}
                   className="p-4 bg-bg border border-[var(--accent)]/20 rounded-lg hover:border-[var(--accent)]/50 transition-colors group"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-theme-data px-2 py-0.5 rounded ${
-                      debate.status === 'active'
-                        ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
-                        : 'bg-text-muted/20 text-text-muted'
-                    }`}>
+                    <span
+                      className={`text-xs font-theme-data px-2 py-0.5 rounded ${
+                        debate.status === 'active'
+                          ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                          : 'bg-text-muted/20 text-text-muted'
+                      }`}
+                    >
                       {debate.status === 'active' ? 'LIVE' : 'COMPLETED'}
                     </span>
                     <span className="text-xs font-theme-data text-text-muted">
@@ -156,7 +156,10 @@ export default function PortalPage() {
                   </h3>
                   <div className="mt-2 flex flex-wrap gap-1">
                     {debate.agents.slice(0, 3).map((agent, i) => (
-                      <span key={i} className="text-xs font-theme-data text-text-muted bg-surface px-1 rounded">
+                      <span
+                        key={i}
+                        className="text-xs font-theme-data text-text-muted bg-surface px-1 rounded"
+                      >
                         {agent}
                       </span>
                     ))}
@@ -183,21 +186,27 @@ export default function PortalPage() {
             <div className="grid md:grid-cols-3 gap-6">
               <div className="text-center p-6 border border-[var(--accent)]/20 rounded-lg">
                 <div className="text-4xl mb-4">1</div>
-                <h3 className="font-theme-data font-bold text-[var(--acid-cyan)] mb-2">Describe Your Challenge</h3>
+                <h3 className="font-theme-data font-bold text-[var(--acid-cyan)] mb-2">
+                  Describe Your Challenge
+                </h3>
                 <p className="text-sm text-text-muted font-theme-data">
                   Enter a topic, upload documents, or paste code for review.
                 </p>
               </div>
               <div className="text-center p-6 border border-[var(--accent)]/20 rounded-lg">
                 <div className="text-4xl mb-4">2</div>
-                <h3 className="font-theme-data font-bold text-[var(--acid-cyan)] mb-2">Agents Deliberate</h3>
+                <h3 className="font-theme-data font-bold text-[var(--acid-cyan)] mb-2">
+                  Agents Deliberate
+                </h3>
                 <p className="text-sm text-text-muted font-theme-data">
                   Multiple AI perspectives debate, critique, and refine positions.
                 </p>
               </div>
               <div className="text-center p-6 border border-[var(--accent)]/20 rounded-lg">
                 <div className="text-4xl mb-4">3</div>
-                <h3 className="font-theme-data font-bold text-[var(--acid-cyan)] mb-2">Get Decision Receipt</h3>
+                <h3 className="font-theme-data font-bold text-[var(--acid-cyan)] mb-2">
+                  Get Decision Receipt
+                </h3>
                 <p className="text-sm text-text-muted font-theme-data">
                   Receive documented reasoning and consensus with full audit trail.
                 </p>
@@ -216,22 +225,46 @@ export default function PortalPage() {
             </h2>
             <div className="grid md:grid-cols-4 gap-4">
               {[
-                { icon: '*', title: 'Graph Debates', href: '/debates/graph', desc: 'Multi-dimensional argument topology' },
-                { icon: '#', title: 'Matrix Mode', href: '/debates/matrix', desc: 'Cross-perspective evaluation' },
-                { icon: '%', title: 'Gauntlet', href: '/gauntlet', desc: 'Stress-test decision resilience' },
-                { icon: '!', title: 'Red Team', href: '/red-team', desc: 'Adversarial challenge generation' },
+                {
+                  icon: '*',
+                  title: 'Graph Debates',
+                  href: '/debates/graph',
+                  desc: 'Multi-dimensional argument topology',
+                },
+                {
+                  icon: '#',
+                  title: 'Matrix Mode',
+                  href: '/debates/matrix',
+                  desc: 'Cross-perspective evaluation',
+                },
+                {
+                  icon: '%',
+                  title: 'Gauntlet',
+                  href: '/gauntlet',
+                  desc: 'Stress-test decision resilience',
+                },
+                {
+                  icon: '!',
+                  title: 'Red Team',
+                  href: '/red-team',
+                  desc: 'Adversarial challenge generation',
+                },
                 { icon: '?', title: 'Probes', href: '/probe', desc: 'Capability boundary testing' },
                 { icon: '=', title: 'Memory', href: '/memory', desc: 'Cross-session learning' },
                 { icon: '~', title: 'Workflows', href: '/workflows', desc: 'Automated pipelines' },
                 { icon: '>', title: 'API', href: '/developer', desc: 'Programmatic access' },
-              ].map(item => (
+              ].map((item) => (
                 <Link
                   key={item.title}
                   href={item.href}
                   className="p-4 border border-[var(--accent)]/20 rounded hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/5 transition-colors"
                 >
-                  <div className="text-2xl font-theme-data text-[var(--accent)] mb-2">{item.icon}</div>
-                  <h3 className="font-theme-data font-bold text-sm text-[var(--acid-cyan)] mb-1">{item.title}</h3>
+                  <div className="text-2xl font-theme-data text-[var(--accent)] mb-2">
+                    {item.icon}
+                  </div>
+                  <h3 className="font-theme-data font-bold text-sm text-[var(--acid-cyan)] mb-1">
+                    {item.title}
+                  </h3>
                   <p className="text-xs text-text-muted font-theme-data">{item.desc}</p>
                 </Link>
               ))}
@@ -243,22 +276,41 @@ export default function PortalPage() {
       {/* Footer */}
       <footer className="relative z-10 text-center text-xs font-theme-data py-12 border-t border-[var(--accent)]/20">
         <div className="container mx-auto px-4">
-          <div className="text-[var(--accent)]/50 mb-4">
-            {'═'.repeat(40)}
-          </div>
+          <div className="text-[var(--accent)]/50 mb-4">{'═'.repeat(40)}</div>
           <div className="flex justify-center gap-6 mb-6">
-            <Link href="/about" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">About</Link>
-            <Link href="/security" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">Security</Link>
-            <Link href="/privacy" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">Privacy</Link>
-            <Link href="/developer" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">API</Link>
-            <Link href="/pricing" className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors">Pricing</Link>
+            <Link
+              href="/about"
+              className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+            >
+              About
+            </Link>
+            <Link
+              href="/security"
+              className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+            >
+              Security
+            </Link>
+            <Link
+              href="/privacy"
+              className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+            >
+              Privacy
+            </Link>
+            <Link
+              href="/developer"
+              className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+            >
+              API
+            </Link>
+            <Link
+              href="/pricing"
+              className="text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
+            >
+              Pricing
+            </Link>
           </div>
-          <p className="text-text-muted">
-            Real-time AI stress-testing for decisions that matter.
-          </p>
-          <div className="text-[var(--accent)]/50 mt-4">
-            {'═'.repeat(40)}
-          </div>
+          <p className="text-text-muted">Real-time AI stress-testing for decisions that matter.</p>
+          <div className="text-[var(--accent)]/50 mt-4">{'═'.repeat(40)}</div>
         </div>
       </footer>
     </div>

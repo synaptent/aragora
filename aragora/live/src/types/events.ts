@@ -160,8 +160,8 @@ interface StreamEventBase {
   timestamp: number;
   round?: number;
   agent?: string;
-  seq?: number;  // Global sequence number for ordering
-  agent_seq?: number;  // Per-agent sequence number for token stream ordering
+  seq?: number; // Global sequence number for ordering
+  agent_seq?: number; // Per-agent sequence number for token stream ordering
 }
 
 // Specific event data types for type-safe access
@@ -196,7 +196,7 @@ export interface RoundStartData {
 export interface VoteData {
   agent: string;
   choice: string;
-  vote?: string;  // Alternative field name for choice
+  vote?: string; // Alternative field name for choice
   confidence: number;
   reasoning?: string;
 }
@@ -421,43 +421,63 @@ export interface GenericStreamEvent extends StreamEventBase {
 export type StreamEvent = TypedStreamEvent | GenericStreamEvent;
 
 // Type guard helpers
-export function isAgentMessage(event: StreamEvent): event is StreamEventBase & { type: 'agent_message'; data: AgentMessageData } {
+export function isAgentMessage(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'agent_message'; data: AgentMessageData } {
   return event.type === 'agent_message';
 }
 
-export function isMemoryRecall(event: StreamEvent): event is StreamEventBase & { type: 'memory_recall'; data: MemoryRecallData } {
+export function isMemoryRecall(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'memory_recall'; data: MemoryRecallData } {
   return event.type === 'memory_recall';
 }
 
-export function isFlipDetected(event: StreamEvent): event is StreamEventBase & { type: 'flip_detected'; data: FlipDetectedData } {
+export function isFlipDetected(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'flip_detected'; data: FlipDetectedData } {
   return event.type === 'flip_detected';
 }
 
-export function isAudienceSummary(event: StreamEvent): event is StreamEventBase & { type: 'audience_summary'; data: AudienceSummaryData } {
+export function isAudienceSummary(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'audience_summary'; data: AudienceSummaryData } {
   return event.type === 'audience_summary';
 }
 
-export function isAudienceMetrics(event: StreamEvent): event is StreamEventBase & { type: 'audience_metrics'; data: AudienceMetricsData } {
+export function isAudienceMetrics(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'audience_metrics'; data: AudienceMetricsData } {
   return event.type === 'audience_metrics';
 }
 
-export function isUncertaintyAnalysis(event: StreamEvent): event is StreamEventBase & { type: 'uncertainty_analysis'; data: UncertaintyAnalysisData } {
+export function isUncertaintyAnalysis(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'uncertainty_analysis'; data: UncertaintyAnalysisData } {
   return event.type === 'uncertainty_analysis';
 }
 
-export function isEvidenceFound(event: StreamEvent): event is StreamEventBase & { type: 'evidence_found'; data: EvidenceFoundData } {
+export function isEvidenceFound(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'evidence_found'; data: EvidenceFoundData } {
   return event.type === 'evidence_found';
 }
 
-export function isQuickClassification(event: StreamEvent): event is StreamEventBase & { type: 'quick_classification'; data: QuickClassificationData } {
+export function isQuickClassification(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'quick_classification'; data: QuickClassificationData } {
   return event.type === 'quick_classification';
 }
 
-export function isAgentPreview(event: StreamEvent): event is StreamEventBase & { type: 'agent_preview'; data: AgentPreviewData } {
+export function isAgentPreview(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'agent_preview'; data: AgentPreviewData } {
   return event.type === 'agent_preview';
 }
 
-export function isContextPreview(event: StreamEvent): event is StreamEventBase & { type: 'context_preview'; data: ContextPreviewData } {
+export function isContextPreview(
+  event: StreamEvent,
+): event is StreamEventBase & { type: 'context_preview'; data: ContextPreviewData } {
   return event.type === 'context_preview';
 }
 
@@ -521,26 +541,23 @@ export interface LoopListData {
 
 // Audience summary data from clustered suggestions
 export interface AudienceSummaryData {
-  clusters: Array<{
-    representative: string;
-    count: number;
-  }>;
+  clusters: Array<{ representative: string; count: number }>;
   total: number;
   mode: 'summary' | 'inject';
 }
 
 // Conviction-weighted voting data
 export interface ConvictionHistogram {
-  [intensity: number]: number;  // intensity (1-10) -> count
+  [intensity: number]: number; // intensity (1-10) -> count
 }
 
 export interface AudienceMetricsData {
-  votes: Record<string, number>;  // choice -> raw count
-  weighted_votes?: Record<string, number>;  // choice -> conviction-weighted count
+  votes: Record<string, number>; // choice -> raw count
+  weighted_votes?: Record<string, number>; // choice -> conviction-weighted count
   suggestions: number;
   total: number;
-  histograms?: Record<string, ConvictionHistogram>;  // choice -> intensity histogram
-  conviction_distribution?: ConvictionHistogram;  // global intensity distribution
+  histograms?: Record<string, ConvictionHistogram>; // choice -> intensity histogram
+  conviction_distribution?: ConvictionHistogram; // global intensity distribution
 }
 
 // Deep Audit event data types
@@ -559,11 +576,7 @@ export interface AuditRoundData {
   round: number;
   name: string;
   cognitive_role: string;
-  messages: Array<{
-    agent: string;
-    content: string;
-    confidence?: number;
-  }>;
+  messages: Array<{ agent: string; content: string; confidence?: number }>;
   duration_ms: number;
 }
 

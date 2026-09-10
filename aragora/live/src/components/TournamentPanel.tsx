@@ -62,23 +62,26 @@ export function TournamentPanel({ apiBase = DEFAULT_API_BASE, events = [] }: Tou
     }
   }, [apiBase, selectedTournament, tokens?.access_token]);
 
-  const fetchStandings = useCallback(async (tournamentId: string) => {
-    try {
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-      if (tokens?.access_token) {
-        headers['Authorization'] = `Bearer ${tokens.access_token}`;
+  const fetchStandings = useCallback(
+    async (tournamentId: string) => {
+      try {
+        const headers: HeadersInit = { 'Content-Type': 'application/json' };
+        if (tokens?.access_token) {
+          headers['Authorization'] = `Bearer ${tokens.access_token}`;
+        }
+        const res = await fetch(`${apiBase}/api/tournaments/${tournamentId}/standings`, {
+          headers,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setStandings(data.standings || []);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch standings:', err);
       }
-      const res = await fetch(`${apiBase}/api/tournaments/${tournamentId}/standings`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setStandings(data.standings || []);
-      }
-    } catch (err) {
-      logger.error('Failed to fetch standings:', err);
-    }
-  }, [apiBase, tokens?.access_token]);
+    },
+    [apiBase, tokens?.access_token],
+  );
 
   // Use ref to store latest fetchTournaments to avoid interval recreation
   const fetchTournamentsRef = useRef(fetchTournaments);
@@ -98,9 +101,8 @@ export function TournamentPanel({ apiBase = DEFAULT_API_BASE, events = [] }: Tou
 
   // Refresh on relevant events (match_recorded, leaderboard_update)
   const latestMatchEvent = useMemo(() => {
-    const relevant = events.filter(e =>
-      e.type === 'match_recorded' ||
-      e.type === 'leaderboard_update'
+    const relevant = events.filter(
+      (e) => e.type === 'match_recorded' || e.type === 'leaderboard_update',
     );
     return relevant[relevant.length - 1];
   }, [events]);
@@ -152,9 +154,7 @@ export function TournamentPanel({ apiBase = DEFAULT_API_BASE, events = [] }: Tou
         <div className="text-center text-text-muted py-4">Loading tournaments...</div>
       )}
 
-      {error && (
-        <div className="text-center text-red-400 py-4 text-sm">{error}</div>
-      )}
+      {error && <div className="text-center text-red-400 py-4 text-sm">{error}</div>}
 
       {!loading && tournaments.length === 0 && !error && (
         <div className="text-center text-text-muted py-4 text-sm">
@@ -195,7 +195,10 @@ export function TournamentPanel({ apiBase = DEFAULT_API_BASE, events = [] }: Tou
                       <div className="text-xs text-text-muted">Matches</div>
                     </div>
                     <div className="bg-bg rounded p-2 text-center">
-                      <div className="text-lg font-bold text-yellow-400 truncate" title={t?.top_agent || 'N/A'}>
+                      <div
+                        className="text-lg font-bold text-yellow-400 truncate"
+                        title={t?.top_agent || 'N/A'}
+                      >
                         {t?.top_agent || 'N/A'}
                       </div>
                       <div className="text-xs text-text-muted">Leader</div>
@@ -224,7 +227,9 @@ export function TournamentPanel({ apiBase = DEFAULT_API_BASE, events = [] }: Tou
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-text truncate">{standing.agent}</span>
-                    <span className="text-sm font-theme-data text-accent">{standing.points.toFixed(1)} pts</span>
+                    <span className="text-sm font-theme-data text-accent">
+                      {standing.points.toFixed(1)} pts
+                    </span>
                   </div>
                   <div className="text-xs text-text-muted">
                     {standing.wins}W-{standing.losses}L-{standing.draws}D

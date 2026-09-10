@@ -19,9 +19,7 @@ jest.mock('@/hooks/useApi', () => ({
 }));
 
 jest.mock('@/components/BackendSelector', () => ({
-  useBackend: () => ({
-    config: { api: 'http://localhost:8080' },
-  }),
+  useBackend: () => ({ config: { api: 'http://localhost:8080' } }),
 }));
 
 describe('PolicyDashboard', () => {
@@ -66,9 +64,9 @@ describe('PolicyDashboard', () => {
 
       // Find tab buttons by text content
       const tabs = screen.getAllByRole('button');
-      const overviewTab = tabs.find(t => t.textContent === 'Overview');
-      const violationsTab = tabs.find(t => t.textContent?.includes('Violations'));
-      const riskTab = tabs.find(t => t.textContent?.includes('Risk'));
+      const overviewTab = tabs.find((t) => t.textContent === 'Overview');
+      const violationsTab = tabs.find((t) => t.textContent?.includes('Violations'));
+      const riskTab = tabs.find((t) => t.textContent?.includes('Risk'));
 
       expect(overviewTab).toBeInTheDocument();
       expect(violationsTab).toBeInTheDocument();

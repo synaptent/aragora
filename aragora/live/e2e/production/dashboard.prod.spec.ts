@@ -21,7 +21,8 @@ test.describe('Dashboard - live.aragora.ai', () => {
         await expect(page.locator('body')).toBeVisible();
 
         // No critical errors (excluding React hydration issues which are known)
-        const criticalErrors = productionPage.errorCollector.getErrorsBySeverity('critical')
+        const criticalErrors = productionPage.errorCollector
+          .getErrorsBySeverity('critical')
           .filter((e) => !e.message.includes('Minified React error'));
         if (criticalErrors.length > 0) {
           console.log(`Critical errors on ${pageInfo.name}:`);
@@ -95,9 +96,9 @@ test.describe('Dashboard - live.aragora.ai', () => {
 
       // Should have input or button to create debate
       const createButton = page.locator(
-        'button:has-text("new"), button:has-text("create"), button:has-text("start"), textarea, input[type="text"]'
+        'button:has-text("new"), button:has-text("create"), button:has-text("start"), textarea, input[type="text"]',
       );
-      const hasCreateUI = await createButton.count() > 0;
+      const hasCreateUI = (await createButton.count()) > 0;
 
       // It's OK if creation requires auth
       console.log(`Debates page has create UI: ${hasCreateUI}`);
@@ -164,9 +165,11 @@ test.describe('Dashboard - live.aragora.ai', () => {
       await productionPage.dismissBootAnimation();
 
       // Find theme toggle
-      const themeToggle = page.locator(
-        'button[aria-label*="theme"], button:has-text("dark"), button:has-text("light"), [data-testid="theme-toggle"]'
-      ).first();
+      const themeToggle = page
+        .locator(
+          'button[aria-label*="theme"], button:has-text("dark"), button:has-text("light"), [data-testid="theme-toggle"]',
+        )
+        .first();
 
       if (await themeToggle.isVisible().catch(() => false)) {
         // Get initial background
@@ -193,7 +196,7 @@ test.describe('Dashboard - live.aragora.ai', () => {
 
       // Page should have some navigation links
       const navLinks = page.locator('a[href]');
-      const hasLinks = await navLinks.count() > 0;
+      const hasLinks = (await navLinks.count()) > 0;
       expect(hasLinks).toBe(true);
     });
   });
@@ -244,11 +247,11 @@ test.describe('Dashboard - live.aragora.ai', () => {
 
       // Should have mobile menu or hamburger
       const mobileMenu = page.locator(
-        '[aria-label*="menu"], button[aria-label*="nav"], [data-testid="mobile-menu"], .hamburger'
+        '[aria-label*="menu"], button[aria-label*="nav"], [data-testid="mobile-menu"], .hamburger',
       );
 
       // Either visible mobile menu or regular nav should be present
-      const hasMobileNav = await mobileMenu.count() > 0;
+      const hasMobileNav = (await mobileMenu.count()) > 0;
       console.log(`Has mobile navigation: ${hasMobileNav}`);
     });
   });
@@ -272,9 +275,7 @@ test.describe('Dashboard - live.aragora.ai', () => {
     test('should load within acceptable time', async ({ page }) => {
       const startTime = Date.now();
 
-      await page.goto(PRODUCTION_DOMAINS.dashboard, {
-        waitUntil: 'domcontentloaded',
-      });
+      await page.goto(PRODUCTION_DOMAINS.dashboard, { waitUntil: 'domcontentloaded' });
 
       const loadTime = Date.now() - startTime;
       console.log(`Dashboard DOM content loaded: ${loadTime}ms`);

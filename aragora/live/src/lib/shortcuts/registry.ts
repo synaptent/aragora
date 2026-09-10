@@ -16,12 +16,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   // ============================================
   // NAVIGATION - Go to pages (g + key sequences)
   // ============================================
-  {
-    id: 'nav-hub',
-    keys: sequence('g', 'i'),
-    description: 'Go to Hub',
-    category: 'navigation',
-  },
+  { id: 'nav-hub', keys: sequence('g', 'i'), description: 'Go to Hub', category: 'navigation' },
   {
     id: 'nav-debates',
     keys: sequence('g', 'd'),
@@ -98,12 +93,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   // ============================================
   // COMPOSE - Create new items
   // ============================================
-  {
-    id: 'compose-debate',
-    keys: key('c'),
-    description: 'New Debate',
-    category: 'compose',
-  },
+  { id: 'compose-debate', keys: key('c'), description: 'New Debate', category: 'compose' },
   {
     id: 'compose-stress-test',
     keys: key('t'),
@@ -198,13 +188,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
   // ============================================
   // LIST - Navigation in list views
   // ============================================
-  {
-    id: 'list-next',
-    keys: key('j'),
-    description: 'Next Item',
-    category: 'list',
-    context: 'list',
-  },
+  { id: 'list-next', keys: key('j'), description: 'Next Item', category: 'list', context: 'list' },
   {
     id: 'list-prev',
     keys: key('k'),
@@ -219,12 +203,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     category: 'list',
     context: 'list',
   },
-  {
-    id: 'list-back',
-    keys: key('u'),
-    description: 'Back to List',
-    category: 'list',
-  },
+  { id: 'list-back', keys: key('u'), description: 'Back to List', category: 'list' },
 
   // ============================================
   // SELECTION - Select items in lists
@@ -266,12 +245,7 @@ export const DEFAULT_SHORTCUTS: ShortcutDefinition[] = [
     description: 'New Pipeline',
     category: 'application',
   },
-  {
-    id: 'pipeline-save',
-    keys: cmdKey('s'),
-    description: 'Save Pipeline',
-    category: 'application',
-  },
+  { id: 'pipeline-save', keys: cmdKey('s'), description: 'Save Pipeline', category: 'application' },
 ];
 
 /**
@@ -299,5 +273,7 @@ export function getGlobalShortcuts(): ShortcutDefinition[] {
  * Get shortcuts for a specific context
  */
 export function getContextShortcuts(context: string): ShortcutDefinition[] {
-  return DEFAULT_SHORTCUTS.filter((s) => s.context === context || s.context === 'global' || !s.context);
+  return DEFAULT_SHORTCUTS.filter(
+    (s) => s.context === context || s.context === 'global' || !s.context,
+  );
 }

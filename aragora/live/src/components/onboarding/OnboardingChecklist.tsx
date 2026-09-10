@@ -26,9 +26,7 @@ export function OnboardingChecklist() {
     accountCreated: isAuthenticated || checklist.accountCreated,
   };
 
-  const completedCount = CHECKLIST_ITEMS.filter(
-    (item) => derivedChecklist[item.key]
-  ).length;
+  const completedCount = CHECKLIST_ITEMS.filter((item) => derivedChecklist[item.key]).length;
   const totalCount = CHECKLIST_ITEMS.length;
   const percentage = Math.round((completedCount / totalCount) * 100);
 
@@ -56,24 +54,15 @@ export function OnboardingChecklist() {
         {CHECKLIST_ITEMS.map((item) => {
           const isComplete = derivedChecklist[item.key];
           return (
-            <div
-              key={item.key}
-              className="flex items-center gap-2 text-sm font-theme-data"
-            >
+            <div key={item.key} className="flex items-center gap-2 text-sm font-theme-data">
               <span
-                className={
-                  isComplete
-                    ? 'text-[var(--acid-green)]'
-                    : 'text-[var(--text-muted)]'
-                }
+                className={isComplete ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}
               >
                 {isComplete ? '[x]' : '[ ]'}
               </span>
               <span
                 className={
-                  isComplete
-                    ? 'text-[var(--text)] line-through opacity-60'
-                    : 'text-[var(--text)]'
+                  isComplete ? 'text-[var(--text)] line-through opacity-60' : 'text-[var(--text)]'
                 }
               >
                 {item.label}

@@ -12,12 +12,8 @@ describe('VerdictCard', () => {
   // Helper to create verdict event
   const createVerdictEvent = (
     data: Record<string, unknown>,
-    type: 'grounded_verdict' | 'verdict' | 'consensus' = 'grounded_verdict'
-  ): StreamEvent => ({
-    type,
-    data,
-    timestamp: mockTimestamp,
-  });
+    type: 'grounded_verdict' | 'verdict' | 'consensus' = 'grounded_verdict',
+  ): StreamEvent => ({ type, data, timestamp: mockTimestamp });
 
   describe('Rendering', () => {
     it('renders null when no verdict events exist', () => {
@@ -26,19 +22,14 @@ describe('VerdictCard', () => {
     });
 
     it('renders null when events have no verdict type', () => {
-      const events: StreamEvent[] = [
-        { type: 'agent_message', data: {}, timestamp: mockTimestamp },
-      ];
+      const events: StreamEvent[] = [{ type: 'agent_message', data: {}, timestamp: mockTimestamp }];
       const { container } = render(<VerdictCard events={events} />);
       expect(container.firstChild).toBeNull();
     });
 
     it('renders verdict card when grounded_verdict event exists', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'The test passed successfully.',
-          confidence: 0.85,
-        }),
+        createVerdictEvent({ recommendation: 'The test passed successfully.', confidence: 0.85 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -50,11 +41,8 @@ describe('VerdictCard', () => {
     it('renders verdict card when consensus event exists', () => {
       const events: StreamEvent[] = [
         createVerdictEvent(
-          {
-            content: 'Consensus reached on the topic.',
-            confidence: 0.75,
-          },
-          'consensus'
+          { content: 'Consensus reached on the topic.', confidence: 0.75 },
+          'consensus',
         ),
       ];
 
@@ -80,10 +68,7 @@ describe('VerdictCard', () => {
   describe('Confidence Display', () => {
     it('displays high confidence in green', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'High confidence verdict',
-          confidence: 0.85,
-        }),
+        createVerdictEvent({ recommendation: 'High confidence verdict', confidence: 0.85 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -94,10 +79,7 @@ describe('VerdictCard', () => {
 
     it('displays medium confidence in yellow', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'Medium confidence verdict',
-          confidence: 0.65,
-        }),
+        createVerdictEvent({ recommendation: 'Medium confidence verdict', confidence: 0.65 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -108,10 +90,7 @@ describe('VerdictCard', () => {
 
     it('displays low confidence in red', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'Low confidence verdict',
-          confidence: 0.45,
-        }),
+        createVerdictEvent({ recommendation: 'Low confidence verdict', confidence: 0.45 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -139,11 +118,7 @@ describe('VerdictCard', () => {
 
     it('does not display grounding section when score is 0', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'No grounding',
-          confidence: 0.8,
-          grounding_score: 0,
-        }),
+        createVerdictEvent({ recommendation: 'No grounding', confidence: 0.8, grounding_score: 0 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -153,11 +128,7 @@ describe('VerdictCard', () => {
 
     it('uses evidence_grounding as fallback', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'Verdict',
-          confidence: 0.8,
-          evidence_grounding: 0.6,
-        }),
+        createVerdictEvent({ recommendation: 'Verdict', confidence: 0.8, evidence_grounding: 0.6 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -169,11 +140,7 @@ describe('VerdictCard', () => {
   describe('Citation Count', () => {
     it('displays citation count when present', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'Cited verdict',
-          confidence: 0.8,
-          citation_count: 5,
-        }),
+        createVerdictEvent({ recommendation: 'Cited verdict', confidence: 0.8, citation_count: 5 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -198,11 +165,7 @@ describe('VerdictCard', () => {
 
     it('does not display citation count when 0', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'No citations',
-          confidence: 0.8,
-          citation_count: 0,
-        }),
+        createVerdictEvent({ recommendation: 'No citations', confidence: 0.8, citation_count: 0 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -283,10 +246,7 @@ describe('VerdictCard', () => {
     it('truncates long recommendations by default', () => {
       const longText = 'A'.repeat(400);
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: longText,
-          confidence: 0.8,
-        }),
+        createVerdictEvent({ recommendation: longText, confidence: 0.8 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -299,10 +259,7 @@ describe('VerdictCard', () => {
     it('expands recommendation on button click', () => {
       const longText = 'A'.repeat(400);
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: longText,
-          confidence: 0.8,
-        }),
+        createVerdictEvent({ recommendation: longText, confidence: 0.8 }),
       ];
 
       render(<VerdictCard events={events} />);
@@ -315,10 +272,7 @@ describe('VerdictCard', () => {
 
     it('does not show expand button for short recommendations', () => {
       const events: StreamEvent[] = [
-        createVerdictEvent({
-          recommendation: 'Short text',
-          confidence: 0.8,
-        }),
+        createVerdictEvent({ recommendation: 'Short text', confidence: 0.8 }),
       ];
 
       render(<VerdictCard events={events} />);

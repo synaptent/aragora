@@ -143,19 +143,14 @@ export class DebatesAPI extends BaseAPI {
    * Submit user vote on a debate
    */
   async vote(debateId: string, agentId: string, vote: 'up' | 'down'): Promise<{ message: string }> {
-    return this.http.post(`/api/debates/${debateId}/vote`, {
-      agent_id: agentId,
-      vote,
-    });
+    return this.http.post(`/api/debates/${debateId}/vote`, { agent_id: agentId, vote });
   }
 
   /**
    * Submit user suggestion to a debate
    */
   async suggest(debateId: string, suggestion: string): Promise<{ message: string }> {
-    return this.http.post(`/api/debates/${debateId}/suggest`, {
-      suggestion,
-    });
+    return this.http.post(`/api/debates/${debateId}/suggest`, { suggestion });
   }
 
   /**

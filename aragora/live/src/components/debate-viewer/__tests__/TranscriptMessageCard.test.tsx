@@ -24,9 +24,7 @@ jest.mock('@/utils/agentColors', () => ({
   }),
 }));
 
-const createMessage = (
-  overrides: Partial<TranscriptMessage> = {}
-): TranscriptMessage => ({
+const createMessage = (overrides: Partial<TranscriptMessage> = {}): TranscriptMessage => ({
   agent: 'claude',
   content: 'This is a test message.',
   timestamp: 1705420800, // 2024-01-16 16:00:00 UTC
@@ -106,10 +104,7 @@ describe('TranscriptMessageCard', () => {
 
   describe('synthesis message rendering', () => {
     it('renders synthesis message differently for synthesis role', () => {
-      const message = createMessage({
-        role: 'synthesis',
-        content: 'Final conclusion',
-      });
+      const message = createMessage({ role: 'synthesis', content: 'Final conclusion' });
 
       render(<TranscriptMessageCard message={message} />);
 
@@ -118,10 +113,7 @@ describe('TranscriptMessageCard', () => {
     });
 
     it('renders synthesis message for synthesis-agent', () => {
-      const message = createMessage({
-        agent: 'synthesis-agent',
-        content: 'Synthesized result',
-      });
+      const message = createMessage({ agent: 'synthesis-agent', content: 'Synthesized result' });
 
       render(<TranscriptMessageCard message={message} />);
 
@@ -129,10 +121,7 @@ describe('TranscriptMessageCard', () => {
     });
 
     it('renders synthesis message for consensus agent', () => {
-      const message = createMessage({
-        agent: 'consensus',
-        content: 'Consensus reached',
-      });
+      const message = createMessage({ agent: 'consensus', content: 'Consensus reached' });
 
       render(<TranscriptMessageCard message={message} />);
 
@@ -176,13 +165,9 @@ describe('TranscriptMessageCard', () => {
     ];
 
     it('highlights matching crux text', () => {
-      const message = createMessage({
-        content: 'This is a test message. More content follows.',
-      });
+      const message = createMessage({ content: 'This is a test message. More content follows.' });
 
-      const { container } = render(
-        <TranscriptMessageCard message={message} cruxes={cruxes} />
-      );
+      const { container } = render(<TranscriptMessageCard message={message} cruxes={cruxes} />);
 
       // Should have a highlighted span
       const highlighted = container.querySelector('.bg-acid-yellow\\/20');
@@ -190,13 +175,9 @@ describe('TranscriptMessageCard', () => {
     });
 
     it('shows CRUX label on hover', () => {
-      const message = createMessage({
-        content: 'This is a test message. More content.',
-      });
+      const message = createMessage({ content: 'This is a test message. More content.' });
 
-      const { container } = render(
-        <TranscriptMessageCard message={message} cruxes={cruxes} />
-      );
+      const { container } = render(<TranscriptMessageCard message={message} cruxes={cruxes} />);
 
       // Check for CRUX label element
       const cruxLabel = container.querySelector('span.absolute');
@@ -204,13 +185,9 @@ describe('TranscriptMessageCard', () => {
     });
 
     it('shows crux title on highlighted text', () => {
-      const message = createMessage({
-        content: 'This is a test message. More content.',
-      });
+      const message = createMessage({ content: 'This is a test message. More content.' });
 
-      const { container } = render(
-        <TranscriptMessageCard message={message} cruxes={cruxes} />
-      );
+      const { container } = render(<TranscriptMessageCard message={message} cruxes={cruxes} />);
 
       const highlighted = container.querySelector('[title^="Crux:"]');
       expect(highlighted).toBeInTheDocument();
@@ -219,9 +196,7 @@ describe('TranscriptMessageCard', () => {
     it('renders normally when no cruxes provided', () => {
       const message = createMessage({ content: 'Normal message' });
 
-      const { container } = render(
-        <TranscriptMessageCard message={message} />
-      );
+      const { container } = render(<TranscriptMessageCard message={message} />);
 
       expect(screen.getByText('Normal message')).toBeInTheDocument();
       expect(container.querySelector('.bg-acid-yellow\\/20')).not.toBeInTheDocument();
@@ -230,9 +205,7 @@ describe('TranscriptMessageCard', () => {
     it('renders normally when cruxes array is empty', () => {
       const message = createMessage({ content: 'Normal message' });
 
-      const { container } = render(
-        <TranscriptMessageCard message={message} cruxes={[]} />
-      );
+      const { container } = render(<TranscriptMessageCard message={message} cruxes={[]} />);
 
       expect(container.querySelector('.bg-acid-yellow\\/20')).not.toBeInTheDocument();
     });
@@ -240,15 +213,11 @@ describe('TranscriptMessageCard', () => {
     it('does not highlight when crux does not match content', () => {
       const message = createMessage({ content: 'Completely different text' });
       const nonMatchingCruxes: CruxClaim[] = [
-        {
-          claim_id: 'crux-2',
-          statement: 'This text does not appear',
-          author: 'gpt-4',
-        },
+        { claim_id: 'crux-2', statement: 'This text does not appear', author: 'gpt-4' },
       ];
 
       const { container } = render(
-        <TranscriptMessageCard message={message} cruxes={nonMatchingCruxes} />
+        <TranscriptMessageCard message={message} cruxes={nonMatchingCruxes} />,
       );
 
       expect(container.querySelector('.bg-acid-yellow\\/20')).not.toBeInTheDocument();
@@ -262,16 +231,14 @@ describe('TranscriptMessageCard', () => {
         <TranscriptMessageCard
           message={createMessage({ agent: 'claude', content: 'Claim to challenge' })}
           onChallenge={onChallenge}
-        />
+        />,
       );
 
       expect(screen.getByText('[CHALLENGE]')).toBeInTheDocument();
     });
 
     it('does not render challenge button when onChallenge not provided', () => {
-      render(
-        <TranscriptMessageCard message={createMessage()} />
-      );
+      render(<TranscriptMessageCard message={createMessage()} />);
 
       expect(screen.queryByText('[CHALLENGE]')).not.toBeInTheDocument();
     });
@@ -280,9 +247,12 @@ describe('TranscriptMessageCard', () => {
       const onChallenge = jest.fn();
       render(
         <TranscriptMessageCard
-          message={createMessage({ agent: 'gpt-4', content: 'This is a bold claim that needs challenging' })}
+          message={createMessage({
+            agent: 'gpt-4',
+            content: 'This is a bold claim that needs challenging',
+          })}
           onChallenge={onChallenge}
-        />
+        />,
       );
 
       fireEvent.click(screen.getByText('[CHALLENGE]'));
@@ -290,7 +260,7 @@ describe('TranscriptMessageCard', () => {
       expect(onChallenge).toHaveBeenCalledTimes(1);
       expect(onChallenge).toHaveBeenCalledWith(
         expect.stringContaining('This is a bold claim'),
-        'gpt-4'
+        'gpt-4',
       );
     });
 
@@ -300,7 +270,7 @@ describe('TranscriptMessageCard', () => {
         <TranscriptMessageCard
           message={createMessage({ role: 'synthesis', content: 'Final conclusion' })}
           onChallenge={onChallenge}
-        />
+        />,
       );
 
       expect(screen.queryByText('[CHALLENGE]')).not.toBeInTheDocument();
@@ -327,9 +297,7 @@ describe('TranscriptMessageCard', () => {
     });
 
     it('preserves whitespace in content', () => {
-      const message = createMessage({
-        content: 'Line 1\n\nLine 3\n  Indented',
-      });
+      const message = createMessage({ content: 'Line 1\n\nLine 3\n  Indented' });
 
       const { container } = render(<TranscriptMessageCard message={message} />);
 

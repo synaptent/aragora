@@ -66,7 +66,7 @@ function resolveRequestUrl(endpoint: string): string {
  */
 export function useAuthenticatedFetch<T>(
   endpoint: string,
-  options: UseAuthenticatedFetchOptions<T> = {}
+  options: UseAuthenticatedFetchOptions<T> = {},
 ): FetchState<T> & { refetch: () => Promise<void> } {
   const {
     requireAuth = true,
@@ -96,21 +96,14 @@ export function useAuthenticatedFetch<T>(
 
     // Skip if auth required but not authenticated
     if (requireAuth && (!isAuthenticated || !tokens?.access_token)) {
-      setState({
-        data: defaultData,
-        loading: false,
-        error: null,
-        skipped: true,
-      });
+      setState({ data: defaultData, loading: false, error: null, skipped: true });
       return;
     }
 
-    setState(prev => ({ ...prev, loading: true, error: null, skipped: false }));
+    setState((prev) => ({ ...prev, loading: true, error: null, skipped: false }));
 
     const makeRequest = async (token?: string): Promise<Response> => {
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
@@ -148,12 +141,7 @@ export function useAuthenticatedFetch<T>(
             // Refresh failed - user will be logged out by AuthContext
             logger.warn(`[useAuthenticatedFetch] Token refresh failed for ${endpoint}`);
             if (mountedRef.current) {
-              setState({
-                data: defaultData,
-                loading: false,
-                error: null,
-                skipped: true,
-              });
+              setState({ data: defaultData, loading: false, error: null, skipped: true });
             }
             return;
           }
@@ -166,12 +154,7 @@ export function useAuthenticatedFetch<T>(
         // Handle auth errors silently when requireAuth is true (after refresh attempt)
         if (response.status === 401 && requireAuth) {
           if (mountedRef.current) {
-            setState({
-              data: defaultData,
-              loading: false,
-              error: null,
-              skipped: true,
-            });
+            setState({ data: defaultData, loading: false, error: null, skipped: true });
           }
           return;
         }
@@ -182,12 +165,7 @@ export function useAuthenticatedFetch<T>(
       const data = await response.json();
 
       if (mountedRef.current) {
-        setState({
-          data,
-          loading: false,
-          error: null,
-          skipped: false,
-        });
+        setState({ data, loading: false, error: null, skipped: false });
         onSuccess?.(data);
       }
     } catch (err) {
@@ -195,12 +173,7 @@ export function useAuthenticatedFetch<T>(
       const canRetry = isRetryableError(error);
 
       if (mountedRef.current) {
-        setState(prev => ({
-          ...prev,
-          loading: false,
-          error: error.message,
-          skipped: false,
-        }));
+        setState((prev) => ({ ...prev, loading: false, error: error.message, skipped: false }));
         onError?.(error);
 
         // Log retryable errors at debug level since they may auto-resolve
@@ -209,8 +182,16 @@ export function useAuthenticatedFetch<T>(
         }
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, tokens?.access_token, isAuthenticated, authLoading, requireAuth, refreshToken, ...deps]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    endpoint,
+    tokens?.access_token,
+    isAuthenticated,
+    authLoading,
+    requireAuth,
+    refreshToken,
+    ...deps,
+  ]);
 
   // Auto-fetch on mount (unless manual)
   useEffect(() => {
@@ -225,10 +206,7 @@ export function useAuthenticatedFetch<T>(
     };
   }, [fetchData, manual]);
 
-  return {
-    ...state,
-    refetch: fetchData,
-  };
+  return { ...state, refetch: fetchData };
 }
 
 /**
@@ -252,10 +230,7 @@ export function useAuthFetch() {
   const isRefreshingRef = useRef(false);
 
   const authFetch = useCallback(
-    async <T>(
-      endpoint: string,
-      init: RequestInit = {}
-    ): Promise<T | null> => {
+    async <T>(endpoint: string, init: RequestInit = {}): Promise<T | null> => {
       if (!isAuthenticated || !tokens?.access_token) {
         logger.warn(`[useAuthFetch] Skipped ${endpoint} - not authenticated`);
         return null;
@@ -264,7 +239,7 @@ export function useAuthFetch() {
       const makeRequest = async (token: string): Promise<Response> => {
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           ...init.headers,
         };
 
@@ -312,24 +287,17 @@ export function useAuthFetch() {
 
       return response.json();
     },
-    [tokens?.access_token, isAuthenticated, refreshToken]
+    [tokens?.access_token, isAuthenticated, refreshToken],
   );
 
   const getAuthHeaders = useCallback((): HeadersInit => {
     return {
       'Content-Type': 'application/json',
-      ...(tokens?.access_token && {
-        'Authorization': `Bearer ${tokens.access_token}`,
-      }),
+      ...(tokens?.access_token && { Authorization: `Bearer ${tokens.access_token}` }),
     };
   }, [tokens?.access_token]);
 
-  return {
-    authFetch,
-    getAuthHeaders,
-    isAuthenticated,
-    isLoading,
-  };
+  return { authFetch, getAuthHeaders, isAuthenticated, isLoading };
 }
 
 export default useAuthenticatedFetch;

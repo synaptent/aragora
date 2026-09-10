@@ -23,7 +23,11 @@ interface AlertsPanelProps {
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string }> = {
   info: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/30' },
-  low: { bg: 'bg-[var(--accent)]/10', text: 'text-[var(--accent)]', border: 'border-[var(--accent)]/30' },
+  low: {
+    bg: 'bg-[var(--accent)]/10',
+    text: 'text-[var(--accent)]',
+    border: 'border-[var(--accent)]/30',
+  },
   medium: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', border: 'border-yellow-500/30' },
   high: { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30' },
   critical: { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/30' },
@@ -73,9 +77,7 @@ export function AlertsPanel({ apiBase }: AlertsPanelProps) {
   const handleResolve = async (alertId: string) => {
     try {
       setActionLoading(alertId);
-      await apiFetch(`${apiBase}/autonomous/alerts/${alertId}/resolve`, {
-        method: 'POST',
-      });
+      await apiFetch(`${apiBase}/autonomous/alerts/${alertId}/resolve`, { method: 'POST' });
       await fetchAlerts();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to resolve');
@@ -92,7 +94,9 @@ export function AlertsPanel({ apiBase }: AlertsPanelProps) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500/30 rounded text-red-400">
         {error}
-        <button onClick={fetchAlerts} className="ml-4 text-sm underline">Retry</button>
+        <button onClick={fetchAlerts} className="ml-4 text-sm underline">
+          Retry
+        </button>
       </div>
     );
   }
@@ -109,8 +113,10 @@ export function AlertsPanel({ apiBase }: AlertsPanelProps) {
   // Sort by severity
   const sortedAlerts = [...alerts].sort((a, b) => {
     const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-    return (severityOrder[a.severity as keyof typeof severityOrder] ?? 5) -
-           (severityOrder[b.severity as keyof typeof severityOrder] ?? 5);
+    return (
+      (severityOrder[a.severity as keyof typeof severityOrder] ?? 5) -
+      (severityOrder[b.severity as keyof typeof severityOrder] ?? 5)
+    );
   });
 
   return (
@@ -134,15 +140,14 @@ export function AlertsPanel({ apiBase }: AlertsPanelProps) {
           const style = SEVERITY_STYLES[alert.severity] ?? SEVERITY_STYLES.medium;
 
           return (
-            <div
-              key={alert.id}
-              className={`border rounded-lg p-4 ${style.border} ${style.bg}`}
-            >
+            <div key={alert.id} className={`border rounded-lg p-4 ${style.border} ${style.bg}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`font-medium ${style.text}`}>{alert.title}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-xs uppercase ${style.bg} ${style.text}`}>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-xs uppercase ${style.bg} ${style.text}`}
+                    >
                       {alert.severity}
                     </span>
                     {alert.acknowledged && (

@@ -13,24 +13,10 @@ const mockAnalyticsData = {
   summary: {
     total_memories: 1250,
     active_memories: 890,
-    tier_distribution: {
-      fast: 150,
-      medium: 400,
-      slow: 500,
-      glacial: 200,
-    },
+    tier_distribution: { fast: 150, medium: 400, slow: 500, glacial: 200 },
   },
-  promotions: {
-    fast_to_medium: 45,
-    medium_to_slow: 30,
-    slow_to_glacial: 15,
-    promotion_rate: 0.72,
-  },
-  learning_velocity: {
-    current: 3.5,
-    trend: 'increasing',
-    percentile_7d: 85,
-  },
+  promotions: { fast_to_medium: 45, medium_to_slow: 30, slow_to_glacial: 15, promotion_rate: 0.72 },
+  learning_velocity: { current: 3.5, trend: 'increasing', percentile_7d: 85 },
   retrieval_stats: {
     avg_latency_ms: 12.5,
     hit_rate: 0.92,
@@ -42,11 +28,7 @@ const mockAnalyticsData = {
       message: 'Consider promoting high-access slow tier memories',
       priority: 'medium',
     },
-    {
-      type: 'cleanup',
-      message: 'Archive 50 low-access glacial memories',
-      priority: 'low',
-    },
+    { type: 'cleanup', message: 'Archive 50 low-access glacial memories', priority: 'low' },
   ],
 };
 
@@ -86,10 +68,7 @@ describe('MemoryAnalyticsPanel', () => {
   });
 
   it('renders header badge and icon', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAnalyticsData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockAnalyticsData) });
 
     render(<MemoryAnalyticsPanel />);
 
@@ -101,10 +80,7 @@ describe('MemoryAnalyticsPanel', () => {
   });
 
   it('renders tier distribution and key metrics', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAnalyticsData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockAnalyticsData) });
 
     render(<MemoryAnalyticsPanel />);
 
@@ -124,10 +100,7 @@ describe('MemoryAnalyticsPanel', () => {
   });
 
   it('renders retrieval stats and topics', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAnalyticsData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockAnalyticsData) });
 
     render(<MemoryAnalyticsPanel />);
 
@@ -151,10 +124,7 @@ describe('MemoryAnalyticsPanel', () => {
 
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        ...mockAnalyticsData,
-        recommendations: manyRecommendations,
-      }),
+      json: () => Promise.resolve({ ...mockAnalyticsData, recommendations: manyRecommendations }),
     });
 
     render(<MemoryAnalyticsPanel />);
@@ -170,10 +140,7 @@ describe('MemoryAnalyticsPanel', () => {
   });
 
   it('shows the summary footer', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAnalyticsData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockAnalyticsData) });
 
     render(<MemoryAnalyticsPanel />);
 
@@ -184,10 +151,7 @@ describe('MemoryAnalyticsPanel', () => {
   });
 
   it('refetches data when refresh is clicked', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAnalyticsData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockAnalyticsData) });
 
     render(<MemoryAnalyticsPanel />);
 
@@ -209,16 +173,13 @@ describe('MemoryAnalyticsPanel', () => {
   });
 
   it('uses custom API base when provided', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockAnalyticsData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockAnalyticsData) });
 
     render(<MemoryAnalyticsPanel apiBase="https://custom-api.example.com" />);
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('https://custom-api.example.com/api/memory/analytics?days=30')
+        expect.stringContaining('https://custom-api.example.com/api/memory/analytics?days=30'),
       );
     });
   });

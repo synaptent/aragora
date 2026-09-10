@@ -1,9 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 // Mock config
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'http://localhost:8000',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'http://localhost:8000' }));
 
 // Mock AudioDownloadSection
 jest.mock('../AudioDownloadSection', () => ({
@@ -75,7 +73,7 @@ describe('DownloadSection', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining(`/api/debates/${debateId}/export/json`)
+          expect.stringContaining(`/api/debates/${debateId}/export/json`),
         );
       });
     });
@@ -85,7 +83,7 @@ describe('DownloadSection', () => {
       mockFetch.mockReturnValueOnce(
         new Promise((resolve) => {
           resolvePromise = resolve;
-        })
+        }),
       );
 
       render(<DownloadSection debateId={debateId} />);
@@ -93,10 +91,7 @@ describe('DownloadSection', () => {
 
       expect(screen.getByText('[CSV...]')).toBeInTheDocument();
 
-      resolvePromise!({
-        ok: true,
-        text: () => Promise.resolve('data'),
-      });
+      resolvePromise!({ ok: true, text: () => Promise.resolve('data') });
 
       await waitFor(() => {
         expect(screen.getByText('[CSV]')).toBeInTheDocument();

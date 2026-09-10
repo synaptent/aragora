@@ -37,7 +37,8 @@ export function ControlPlaneVisualization() {
       <div className="container mx-auto px-4">
         <SectionHeader title="PLATFORM ARCHITECTURE" />
         <p className="text-text-muted font-theme-data text-xs text-center mb-8 max-w-xl mx-auto">
-          How Aragora connects your data sources, debates your questions, and delivers decisions to your channels.
+          How Aragora connects your data sources, debates your questions, and delivers decisions to
+          your channels.
         </p>
 
         {/* Main Flow Visualization */}
@@ -54,15 +55,21 @@ export function ControlPlaneVisualization() {
                   {DATA_SOURCES.map((source) => (
                     <div key={source.label} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <span className="text-[var(--acid-cyan)] font-theme-data text-xs">{source.icon}</span>
+                        <span className="text-[var(--acid-cyan)] font-theme-data text-xs">
+                          {source.icon}
+                        </span>
                         <span className="text-text text-xs font-theme-data">{source.label}</span>
                       </div>
-                      <span className="text-text-muted text-[10px] font-theme-data">{source.count}</span>
+                      <span className="text-text-muted text-[10px] font-theme-data">
+                        {source.count}
+                      </span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 pt-3 border-t border-border/50 text-center">
-                  <span className="text-[var(--acid-cyan)] font-theme-data text-lg font-bold">25+</span>
+                  <span className="text-[var(--acid-cyan)] font-theme-data text-lg font-bold">
+                    25+
+                  </span>
                   <div className="text-text-muted text-[10px] font-theme-data">formats</div>
                 </div>
               </div>
@@ -82,7 +89,9 @@ export function ControlPlaneVisualization() {
 
                 {/* Orchestration */}
                 <div className="bg-surface/50 rounded p-2 mb-2">
-                  <div className="text-[var(--accent)] font-theme-data text-[10px] mb-1">ORCHESTRATION</div>
+                  <div className="text-[var(--accent)] font-theme-data text-[10px] mb-1">
+                    ORCHESTRATION
+                  </div>
                   <div className="text-text-muted text-[10px] font-theme-data">
                     Route tasks to optimal models
                   </div>
@@ -90,7 +99,9 @@ export function ControlPlaneVisualization() {
 
                 {/* Governance */}
                 <div className="bg-surface/50 rounded p-2 mb-2">
-                  <div className="text-[var(--acid-yellow)] font-theme-data text-[10px] mb-1">GOVERNANCE</div>
+                  <div className="text-[var(--acid-yellow)] font-theme-data text-[10px] mb-1">
+                    GOVERNANCE
+                  </div>
                   <div className="text-text-muted text-[10px] font-theme-data">
                     Enforce policies &amp; compliance
                   </div>
@@ -98,7 +109,9 @@ export function ControlPlaneVisualization() {
 
                 {/* Memory */}
                 <div className="bg-surface/50 rounded p-2">
-                  <div className="text-[var(--acid-cyan)] font-theme-data text-[10px] mb-1">MEMORY</div>
+                  <div className="text-[var(--acid-cyan)] font-theme-data text-[10px] mb-1">
+                    MEMORY
+                  </div>
                   <div className="text-text-muted text-[10px] font-theme-data">
                     4-tier learning continuum
                   </div>
@@ -120,13 +133,17 @@ export function ControlPlaneVisualization() {
                 <div className="space-y-1 mb-3">
                   {MODELS.map((model) => (
                     <div key={model.name} className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full ${model.color.replace('text-', 'bg-')}`} />
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${model.color.replace('text-', 'bg-')}`}
+                      />
                       <span className={`text-xs font-theme-data ${model.color}`}>{model.name}</span>
                     </div>
                   ))}
                 </div>
                 <div className="pt-3 border-t border-border/50 text-center">
-                  <span className="text-[var(--acid-yellow)] font-theme-data text-lg font-bold">15+</span>
+                  <span className="text-[var(--acid-yellow)] font-theme-data text-lg font-bold">
+                    15+
+                  </span>
                   <div className="text-text-muted text-[10px] font-theme-data">models</div>
                 </div>
               </div>
@@ -146,13 +163,17 @@ export function ControlPlaneVisualization() {
                 <div className="space-y-2">
                   {CHANNELS.map((channel) => (
                     <div key={channel.label} className="flex items-center gap-2">
-                      <span className="text-[var(--acid-magenta)] font-theme-data text-xs">{channel.icon}</span>
+                      <span className="text-[var(--acid-magenta)] font-theme-data text-xs">
+                        {channel.icon}
+                      </span>
                       <span className="text-text text-xs font-theme-data">{channel.label}</span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 pt-3 border-t border-border/50 text-center">
-                  <span className="text-[var(--acid-magenta)] font-theme-data text-lg font-bold">24+</span>
+                  <span className="text-[var(--acid-magenta)] font-theme-data text-lg font-bold">
+                    24+
+                  </span>
                   <div className="text-text-muted text-[10px] font-theme-data">integrations</div>
                 </div>
               </div>
@@ -163,10 +184,14 @@ export function ControlPlaneVisualization() {
           <div className="md:hidden space-y-4">
             {/* Sources */}
             <div className="border border-[var(--acid-cyan)]/40 rounded-lg p-4 bg-surface/30">
-              <div className="text-[var(--acid-cyan)] font-theme-data text-xs font-bold mb-2">[SOURCES] 25+ formats</div>
+              <div className="text-[var(--acid-cyan)] font-theme-data text-xs font-bold mb-2">
+                [SOURCES] 25+ formats
+              </div>
               <div className="flex flex-wrap gap-2">
                 {DATA_SOURCES.map((s) => (
-                  <span key={s.label} className="text-xs font-theme-data text-text-muted">{s.label}</span>
+                  <span key={s.label} className="text-xs font-theme-data text-text-muted">
+                    {s.label}
+                  </span>
                 ))}
               </div>
             </div>
@@ -175,7 +200,9 @@ export function ControlPlaneVisualization() {
 
             {/* Control Plane */}
             <div className="border-2 border-[var(--accent)]/60 rounded-lg p-4 bg-[var(--accent)]/5">
-              <div className="text-[var(--accent)] font-theme-data text-xs font-bold mb-2">[PLATFORM]</div>
+              <div className="text-[var(--accent)] font-theme-data text-xs font-bold mb-2">
+                [PLATFORM]
+              </div>
               <div className="flex flex-wrap gap-2 text-xs font-theme-data text-text-muted">
                 <span>Orchestration</span>
                 <span>|</span>
@@ -189,10 +216,14 @@ export function ControlPlaneVisualization() {
 
             {/* AI Debate */}
             <div className="border border-acid-yellow/40 rounded-lg p-4 bg-surface/30">
-              <div className="text-[var(--acid-yellow)] font-theme-data text-xs font-bold mb-2">[AI DEBATE] 15+ models</div>
+              <div className="text-[var(--acid-yellow)] font-theme-data text-xs font-bold mb-2">
+                [AI DEBATE] 15+ models
+              </div>
               <div className="flex flex-wrap gap-2">
                 {MODELS.slice(0, 4).map((m) => (
-                  <span key={m.name} className={`text-xs font-theme-data ${m.color}`}>{m.name}</span>
+                  <span key={m.name} className={`text-xs font-theme-data ${m.color}`}>
+                    {m.name}
+                  </span>
                 ))}
               </div>
             </div>
@@ -201,10 +232,14 @@ export function ControlPlaneVisualization() {
 
             {/* Channels */}
             <div className="border border-acid-magenta/40 rounded-lg p-4 bg-surface/30">
-              <div className="text-[var(--acid-magenta)] font-theme-data text-xs font-bold mb-2">[CHANNELS] 24+ integrations</div>
+              <div className="text-[var(--acid-magenta)] font-theme-data text-xs font-bold mb-2">
+                [CHANNELS] 24+ integrations
+              </div>
               <div className="flex flex-wrap gap-2">
                 {CHANNELS.slice(0, 4).map((c) => (
-                  <span key={c.label} className="text-xs font-theme-data text-text-muted">{c.label}</span>
+                  <span key={c.label} className="text-xs font-theme-data text-text-muted">
+                    {c.label}
+                  </span>
                 ))}
               </div>
             </div>
@@ -213,7 +248,9 @@ export function ControlPlaneVisualization() {
           {/* Output: Decision Receipt */}
           <div className="mt-6 border border-[var(--accent)]/40 rounded-lg p-4 bg-surface/30 max-w-md mx-auto">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[var(--accent)] font-theme-data text-xs font-bold">[OUTPUT] DECISION RECEIPT</div>
+              <div className="text-[var(--accent)] font-theme-data text-xs font-bold">
+                [OUTPUT] DECISION RECEIPT
+              </div>
               <span className="px-2 py-0.5 text-[10px] font-theme-data bg-[var(--accent)]/20 text-[var(--accent)] rounded">
                 AUDIT-READY
               </span>

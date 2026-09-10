@@ -24,14 +24,17 @@ interface ProbeResult {
   vulnerabilities_found: number;
   vulnerability_rate: number;
   elo_penalty: number;
-  by_type: Record<string, Array<{
-    probe_id: string;
-    type: string;
-    passed: boolean;
-    severity: string | null;
-    description: string;
-    details: string;
-  }>>;
+  by_type: Record<
+    string,
+    Array<{
+      probe_id: string;
+      type: string;
+      passed: boolean;
+      severity: string | null;
+      description: string;
+      details: string;
+    }>
+  >;
   summary: {
     total: number;
     passed: number;
@@ -55,11 +58,19 @@ const DEFAULT_API_BASE = API_BASE_URL;
 
 // Probe types for standalone agent analysis (maps to ProbeType enum in backend)
 const PROBE_TYPES = [
-  { value: 'contradiction', label: 'Contradiction', description: 'Test for self-contradictory statements' },
+  {
+    value: 'contradiction',
+    label: 'Contradiction',
+    description: 'Test for self-contradictory statements',
+  },
   { value: 'hallucination', label: 'Hallucination', description: 'Detect fabricated information' },
   { value: 'sycophancy', label: 'Sycophancy', description: 'Check for excessive agreement' },
   { value: 'persistence', label: 'Persistence', description: 'Test reasoning stability' },
-  { value: 'confidence_calibration', label: 'Confidence', description: 'Verify confidence matches accuracy' },
+  {
+    value: 'confidence_calibration',
+    label: 'Confidence',
+    description: 'Verify confidence matches accuracy',
+  },
   { value: 'edge_case', label: 'Edge Cases', description: 'Test boundary conditions' },
 ];
 
@@ -67,7 +78,11 @@ const PROBE_TYPES = [
 const ATTACK_TYPES = [
   { value: 'logical_fallacy', label: 'Logical Fallacy', description: 'Test for flawed reasoning' },
   { value: 'edge_case', label: 'Edge Cases', description: 'Find boundary condition issues' },
-  { value: 'unstated_assumption', label: 'Unstated Assumptions', description: 'Expose hidden assumptions' },
+  {
+    value: 'unstated_assumption',
+    label: 'Unstated Assumptions',
+    description: 'Expose hidden assumptions',
+  },
   { value: 'counterexample', label: 'Counterexamples', description: 'Find contradicting cases' },
   { value: 'scalability', label: 'Scalability', description: 'Test at scale limitations' },
   { value: 'security', label: 'Security', description: 'Security vulnerability analysis' },
@@ -84,9 +99,11 @@ const AVAILABLE_AGENTS = [
 ];
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400',
+  critical:
+    'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400',
   high: 'bg-orange-100 dark:bg-orange-900/30 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400',
-  medium: 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400',
+  medium:
+    'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-400',
   low: 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400',
   info: 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400',
 };
@@ -98,8 +115,15 @@ export function RedTeamAnalysisPanel({
 }: RedTeamAnalysisPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true); // Start expanded for better UX
   const [mode, setMode] = useState<'debate' | 'standalone'>(debateId ? 'debate' : 'standalone');
-  const [selectedAttacks, setSelectedAttacks] = useState<string[]>(['logical_fallacy', 'edge_case']);
-  const [selectedProbes, setSelectedProbes] = useState<string[]>(['contradiction', 'hallucination', 'sycophancy']);
+  const [selectedAttacks, setSelectedAttacks] = useState<string[]>([
+    'logical_fallacy',
+    'edge_case',
+  ]);
+  const [selectedProbes, setSelectedProbes] = useState<string[]>([
+    'contradiction',
+    'hallucination',
+    'sycophancy',
+  ]);
   const [selectedAgent, setSelectedAgent] = useState('anthropic-api');
   const [probesPerType, setProbesPerType] = useState(3);
   const [maxRounds, setMaxRounds] = useState(3);
@@ -111,13 +135,13 @@ export function RedTeamAnalysisPanel({
 
   const toggleAttackType = (type: string) => {
     setSelectedAttacks((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
     );
   };
 
   const toggleProbeType = (type: string) => {
     setSelectedProbes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
     );
   };
 
@@ -175,7 +199,18 @@ export function RedTeamAnalysisPanel({
     } finally {
       setLoading(false);
     }
-  }, [mode, debateId, selectedAttacks, selectedProbes, selectedAgent, probesPerType, maxRounds, focusProposal, apiBase, onComplete]);
+  }, [
+    mode,
+    debateId,
+    selectedAttacks,
+    selectedProbes,
+    selectedAgent,
+    probesPerType,
+    maxRounds,
+    focusProposal,
+    apiBase,
+    onComplete,
+  ]);
 
   const getRobustnessColor = (score: number) => {
     if (score >= 0.8) return 'text-green-400';
@@ -185,20 +220,19 @@ export function RedTeamAnalysisPanel({
   };
 
   const hasResult = result || probeResult;
-  const robustnessScore = result?.robustness_score ?? (probeResult ? 1 - probeResult.vulnerability_rate : null);
+  const robustnessScore =
+    result?.robustness_score ?? (probeResult ? 1 - probeResult.vulnerability_rate : null);
   const findingsCount = result?.findings?.length ?? probeResult?.vulnerabilities_found ?? 0;
 
   // Collapsed view
   if (!isExpanded) {
     return (
-      <div
-        className="panel panel-compact cursor-pointer"
-        onClick={() => setIsExpanded(true)}
-      >
+      <div className="panel panel-compact cursor-pointer" onClick={() => setIsExpanded(true)}>
         <div className="flex items-center justify-between">
           <h3 className="panel-title-sm flex items-center gap-2">
             <span className="text-accent">{'>'}</span>
-            RED_TEAM_ANALYSIS {robustnessScore !== null ? `[${Math.round(robustnessScore * 100)}% robust]` : ''}
+            RED_TEAM_ANALYSIS{' '}
+            {robustnessScore !== null ? `[${Math.round(robustnessScore * 100)}% robust]` : ''}
           </h3>
           <div className="flex items-center gap-2">
             {hasResult && (
@@ -219,10 +253,7 @@ export function RedTeamAnalysisPanel({
         <h3 className="panel-title-sm flex items-center gap-2">
           <span>🛡️</span> RED_TEAM_ANALYSIS
         </h3>
-        <button
-          onClick={() => setIsExpanded(false)}
-          className="panel-toggle hover:text-accent"
-        >
+        <button onClick={() => setIsExpanded(false)} className="panel-toggle hover:text-accent">
           [COLLAPSE]
         </button>
       </div>
@@ -255,14 +286,18 @@ export function RedTeamAnalysisPanel({
       {/* Configuration - Standalone Mode */}
       {mode === 'standalone' && (
         <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 mb-4">
-          <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">Target Agent</h4>
+          <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">
+            Target Agent
+          </h4>
           <select
             value={selectedAgent}
             onChange={(e) => setSelectedAgent(e.target.value)}
             className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded px-3 py-2 text-zinc-700 dark:text-zinc-300 mb-4"
           >
             {AVAILABLE_AGENTS.map((agent) => (
-              <option key={agent} value={agent}>{agent}</option>
+              <option key={agent} value={agent}>
+                {agent}
+              </option>
             ))}
           </select>
 
@@ -285,13 +320,17 @@ export function RedTeamAnalysisPanel({
           </div>
 
           <div>
-            <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">Probes Per Type (1-10)</label>
+            <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">
+              Probes Per Type (1-10)
+            </label>
             <input
               type="number"
               min={1}
               max={10}
               value={probesPerType}
-              onChange={(e) => setProbesPerType(Math.min(10, Math.max(1, parseInt(e.target.value) || 3)))}
+              onChange={(e) =>
+                setProbesPerType(Math.min(10, Math.max(1, parseInt(e.target.value) || 3)))
+              }
               className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded px-3 py-2 text-zinc-700 dark:text-zinc-300"
             />
           </div>
@@ -301,7 +340,9 @@ export function RedTeamAnalysisPanel({
       {/* Configuration - Debate Mode */}
       {mode === 'debate' && (
         <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 mb-4">
-          <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">Attack Types</h4>
+          <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">
+            Attack Types
+          </h4>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
             {ATTACK_TYPES.map((attack) => (
               <button
@@ -321,18 +362,24 @@ export function RedTeamAnalysisPanel({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">Max Rounds</label>
+              <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">
+                Max Rounds
+              </label>
               <input
                 type="number"
                 min={1}
                 max={5}
                 value={maxRounds}
-                onChange={(e) => setMaxRounds(Math.min(5, Math.max(1, parseInt(e.target.value) || 1)))}
+                onChange={(e) =>
+                  setMaxRounds(Math.min(5, Math.max(1, parseInt(e.target.value) || 1)))
+                }
                 className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded px-3 py-2 text-zinc-700 dark:text-zinc-300"
               />
             </div>
             <div>
-              <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">Focus Proposal (optional)</label>
+              <label className="block text-sm text-zinc-500 dark:text-zinc-400 mb-1">
+                Focus Proposal (optional)
+              </label>
               <input
                 type="text"
                 value={focusProposal}
@@ -348,10 +395,17 @@ export function RedTeamAnalysisPanel({
       {/* Run Button */}
       <button
         onClick={runAnalysis}
-        disabled={loading || (mode === 'standalone' ? selectedProbes.length === 0 : selectedAttacks.length === 0)}
+        disabled={
+          loading ||
+          (mode === 'standalone' ? selectedProbes.length === 0 : selectedAttacks.length === 0)
+        }
         className="w-full py-3 bg-warning hover:bg-warning/80 disabled:opacity-50 text-black rounded-lg font-medium mb-4"
       >
-        {loading ? 'Running Analysis...' : mode === 'standalone' ? 'Run Capability Probe' : 'Run Red Team Analysis'}
+        {loading
+          ? 'Running Analysis...'
+          : mode === 'standalone'
+            ? 'Run Capability Probe'
+            : 'Run Red Team Analysis'}
       </button>
 
       {/* Error Display */}
@@ -378,8 +432,8 @@ export function RedTeamAnalysisPanel({
                   result.robustness_score >= 0.8
                     ? 'bg-green-500'
                     : result.robustness_score >= 0.5
-                    ? 'bg-yellow-500'
-                    : 'bg-red-500'
+                      ? 'bg-yellow-500'
+                      : 'bg-red-500'
                 }`}
                 style={{ width: `${result.robustness_score * 100}%` }}
               />
@@ -406,24 +460,18 @@ export function RedTeamAnalysisPanel({
                     </div>
                     <p className="text-sm opacity-90">{finding.description}</p>
                     {finding.recommendation && (
-                      <p className="text-xs mt-2 opacity-70">
-                        💡 {finding.recommendation}
-                      </p>
+                      <p className="text-xs mt-2 opacity-70">💡 {finding.recommendation}</p>
                     )}
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-zinc-500 text-center py-4">
-                No vulnerabilities found
-              </div>
+              <div className="text-zinc-500 text-center py-4">No vulnerabilities found</div>
             )}
           </div>
 
           {/* Session Info */}
-          <div className="text-xs text-zinc-500 text-center">
-            Session ID: {result.session_id}
-          </div>
+          <div className="text-xs text-zinc-500 text-center">Session ID: {result.session_id}</div>
         </div>
       )}
 
@@ -435,7 +483,9 @@ export function RedTeamAnalysisPanel({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div className="text-center">
                 <span className="text-zinc-500 dark:text-zinc-400 text-xs">Probes Run</span>
-                <p className="text-2xl font-bold text-[var(--acid-cyan)]">{probeResult.probes_run}</p>
+                <p className="text-2xl font-bold text-[var(--acid-cyan)]">
+                  {probeResult.probes_run}
+                </p>
               </div>
               <div className="text-center">
                 <span className="text-zinc-500 dark:text-zinc-400 text-xs">Passed</span>
@@ -443,12 +493,17 @@ export function RedTeamAnalysisPanel({
               </div>
               <div className="text-center">
                 <span className="text-zinc-500 dark:text-zinc-400 text-xs">Vulnerabilities</span>
-                <p className="text-2xl font-bold text-red-500">{probeResult.vulnerabilities_found}</p>
+                <p className="text-2xl font-bold text-red-500">
+                  {probeResult.vulnerabilities_found}
+                </p>
               </div>
               <div className="text-center">
                 <span className="text-zinc-500 dark:text-zinc-400 text-xs">ELO Penalty</span>
-                <p className={`text-2xl font-bold ${probeResult.elo_penalty > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                  {probeResult.elo_penalty > 0 ? '-' : ''}{Math.abs(probeResult.elo_penalty).toFixed(0)}
+                <p
+                  className={`text-2xl font-bold ${probeResult.elo_penalty > 0 ? 'text-red-500' : 'text-green-500'}`}
+                >
+                  {probeResult.elo_penalty > 0 ? '-' : ''}
+                  {Math.abs(probeResult.elo_penalty).toFixed(0)}
                 </p>
               </div>
             </div>
@@ -456,7 +511,9 @@ export function RedTeamAnalysisPanel({
             {/* Pass Rate Bar */}
             <div className="flex items-center justify-between mb-1">
               <span className="text-zinc-500 dark:text-zinc-400 text-xs">Pass Rate</span>
-              <span className={`text-sm font-bold ${getRobustnessColor(probeResult.summary.pass_rate)}`}>
+              <span
+                className={`text-sm font-bold ${getRobustnessColor(probeResult.summary.pass_rate)}`}
+              >
                 {(probeResult.summary.pass_rate * 100).toFixed(0)}%
               </span>
             </div>
@@ -466,8 +523,8 @@ export function RedTeamAnalysisPanel({
                   probeResult.summary.pass_rate >= 0.8
                     ? 'bg-green-500'
                     : probeResult.summary.pass_rate >= 0.5
-                    ? 'bg-yellow-500'
-                    : 'bg-red-500'
+                      ? 'bg-yellow-500'
+                      : 'bg-red-500'
                 }`}
                 style={{ width: `${probeResult.summary.pass_rate * 100}%` }}
               />
@@ -476,7 +533,9 @@ export function RedTeamAnalysisPanel({
 
           {/* Severity Breakdown */}
           <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">Severity Breakdown</h4>
+            <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">
+              Severity Breakdown
+            </h4>
             <div className="grid grid-cols-4 gap-2">
               <div className="p-2 rounded bg-red-900/20 border border-red-800 text-center">
                 <span className="text-red-400 text-xs">Critical</span>
@@ -499,13 +558,17 @@ export function RedTeamAnalysisPanel({
 
           {/* Results by Type */}
           <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">Results by Probe Type</h4>
+            <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">
+              Results by Probe Type
+            </h4>
             {Object.entries(probeResult.by_type).map(([probeType, results]) => (
               <div key={probeType} className="mb-4 last:mb-0">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-sm capitalize">{probeType.replace('_', ' ')}</span>
+                  <span className="font-medium text-sm capitalize">
+                    {probeType.replace('_', ' ')}
+                  </span>
                   <span className="text-xs text-zinc-500">
-                    {results.filter(r => r.passed).length}/{results.length} passed
+                    {results.filter((r) => r.passed).length}/{results.length} passed
                   </span>
                 </div>
                 <div className="space-y-1">
@@ -519,7 +582,9 @@ export function RedTeamAnalysisPanel({
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span>{r.passed ? '✓ Passed' : `✗ ${r.severity?.toUpperCase() || 'FAILED'}`}</span>
+                        <span>
+                          {r.passed ? '✓ Passed' : `✗ ${r.severity?.toUpperCase() || 'FAILED'}`}
+                        </span>
                       </div>
                       {r.description && !r.passed && (
                         <p className="mt-1 opacity-80">{r.description}</p>
@@ -534,10 +599,15 @@ export function RedTeamAnalysisPanel({
           {/* Recommendations */}
           {probeResult.recommendations && probeResult.recommendations.length > 0 && (
             <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">Recommendations</h4>
+              <h4 className="text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-3">
+                Recommendations
+              </h4>
               <ul className="space-y-2">
                 {probeResult.recommendations.map((rec, idx) => (
-                  <li key={idx} className="text-sm text-zinc-600 dark:text-zinc-400 flex items-start gap-2">
+                  <li
+                    key={idx}
+                    className="text-sm text-zinc-600 dark:text-zinc-400 flex items-start gap-2"
+                  >
                     <span className="text-warning">{'>'}</span>
                     {rec}
                   </li>

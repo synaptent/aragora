@@ -76,14 +76,8 @@ export interface ObservabilityDashboardData {
     consensus_rate: number;
     available: boolean;
   };
-  agent_rankings: {
-    top_agents: ObservabilityAgentRanking[];
-    available: boolean;
-  };
-  circuit_breakers: {
-    breakers: ObservabilityCircuitBreaker[];
-    available: boolean;
-  };
+  agent_rankings: { top_agents: ObservabilityAgentRanking[]; available: boolean };
+  circuit_breakers: { breakers: ObservabilityCircuitBreaker[]; available: boolean };
   self_improve: {
     total_cycles: number;
     successful: number;
@@ -111,32 +105,23 @@ export interface ObservabilityDashboardData {
  * Shared observability dashboard hook for operational telemetry surfaces.
  */
 export function useObservabilityDashboard(
-  options?: UseSWRFetchOptions<ObservabilityDashboardData>
+  options?: UseSWRFetchOptions<ObservabilityDashboardData>,
 ) {
-  const result = useSWRFetch<ObservabilityDashboardData>(
-    '/api/v1/observability/dashboard',
-    {
-      refreshInterval: 10000,
-      ...options,
-    }
-  );
+  const result = useSWRFetch<ObservabilityDashboardData>('/api/v1/observability/dashboard', {
+    refreshInterval: 10000,
+    ...options,
+  });
 
-  return {
-    ...result,
-    dashboard: result.data ?? null,
-  };
+  return { ...result, dashboard: result.data ?? null };
 }
 
 /**
  * Compact settlement/oracle telemetry hook for non-admin surfaces.
  */
 export function useSettlementOracleTelemetry(
-  options?: UseSWRFetchOptions<ObservabilityDashboardData>
+  options?: UseSWRFetchOptions<ObservabilityDashboardData>,
 ) {
-  const { dashboard, ...rest } = useObservabilityDashboard({
-    refreshInterval: 30000,
-    ...options,
-  });
+  const { dashboard, ...rest } = useObservabilityDashboard({ refreshInterval: 30000, ...options });
 
   return {
     ...rest,

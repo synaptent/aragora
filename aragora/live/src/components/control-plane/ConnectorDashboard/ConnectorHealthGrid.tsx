@@ -115,9 +115,7 @@ export function ConnectorHealthGrid({
       </div>
 
       {connectors.length === 0 && (
-        <div className="text-center py-8 text-text-muted">
-          No connectors configured
-        </div>
+        <div className="text-center py-8 text-text-muted">No connectors configured</div>
       )}
     </div>
   );
@@ -174,9 +172,7 @@ function ConnectorHealthCard({ connector, onClick }: ConnectorHealthCardProps) {
     >
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-lg">
-            {connectorIcon[connector.connectorType] || '?'}
-          </span>
+          <span className="text-lg">{connectorIcon[connector.connectorType] || '?'}</span>
           <div>
             <div className="font-medium text-sm">{connector.connectorName}</div>
             <div className="text-xs text-text-muted">{statusText[connector.status]}</div>

@@ -58,7 +58,10 @@ export function CostBreakdown({ breakdown, loading = false }: CostBreakdownProps
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="space-y-1">
               <div className="h-3 bg-[var(--border)] rounded w-24" />
-              <div className="h-5 bg-[var(--border)] rounded" style={{ width: `${90 - i * 15}%` }} />
+              <div
+                className="h-5 bg-[var(--border)] rounded"
+                style={{ width: `${90 - i * 15}%` }}
+              />
             </div>
           ))}
         </div>

@@ -31,7 +31,7 @@ export interface EvidenceSource {
 
 export interface StreamingMessage {
   agent: string;
-  taskId: string;  // Task ID for composite React key support
+  taskId: string; // Task ID for composite React key support
   content: string;
   isComplete: boolean;
   startTime: number;
@@ -177,59 +177,51 @@ export const useDebateStore = create<DebateStore>()(
       _lastSeq: 0,
 
       // Connection actions
-      setDebateId: (id) => set(
-        (state) => ({ current: { ...state.current, debateId: id } }),
-        false,
-        'setDebateId'
-      ),
+      setDebateId: (id) =>
+        set((state) => ({ current: { ...state.current, debateId: id } }), false, 'setDebateId'),
 
-      setConnectionStatus: (status) => set(
-        (state) => ({ current: { ...state.current, connectionStatus: status } }),
-        false,
-        'setConnectionStatus'
-      ),
+      setConnectionStatus: (status) =>
+        set(
+          (state) => ({ current: { ...state.current, connectionStatus: status } }),
+          false,
+          'setConnectionStatus',
+        ),
 
-      setError: (error) => set(
-        (state) => ({ current: { ...state.current, error } }),
-        false,
-        'setError'
-      ),
+      setError: (error) =>
+        set((state) => ({ current: { ...state.current, error } }), false, 'setError'),
 
-      incrementReconnectAttempt: () => set(
-        (state) => ({
-          current: { ...state.current, reconnectAttempt: state.current.reconnectAttempt + 1 }
-        }),
-        false,
-        'incrementReconnectAttempt'
-      ),
+      incrementReconnectAttempt: () =>
+        set(
+          (state) => ({
+            current: { ...state.current, reconnectAttempt: state.current.reconnectAttempt + 1 },
+          }),
+          false,
+          'incrementReconnectAttempt',
+        ),
 
-      resetReconnectAttempt: () => set(
-        (state) => ({ current: { ...state.current, reconnectAttempt: 0 } }),
-        false,
-        'resetReconnectAttempt'
-      ),
+      resetReconnectAttempt: () =>
+        set(
+          (state) => ({ current: { ...state.current, reconnectAttempt: 0 } }),
+          false,
+          'resetReconnectAttempt',
+        ),
 
       // Debate data actions
-      setTask: (task) => set(
-        (state) => ({ current: { ...state.current, task } }),
-        false,
-        'setTask'
-      ),
+      setTask: (task) =>
+        set((state) => ({ current: { ...state.current, task } }), false, 'setTask'),
 
-      setAgents: (agents) => set(
-        (state) => ({ current: { ...state.current, agents } }),
-        false,
-        'setAgents'
-      ),
+      setAgents: (agents) =>
+        set((state) => ({ current: { ...state.current, agents } }), false, 'setAgents'),
 
-      addAgent: (agent) => set(
-        (state) => {
-          if (state.current.agents.includes(agent)) return state;
-          return { current: { ...state.current, agents: [...state.current.agents, agent] } };
-        },
-        false,
-        'addAgent'
-      ),
+      addAgent: (agent) =>
+        set(
+          (state) => {
+            if (state.current.agents.includes(agent)) return state;
+            return { current: { ...state.current, agents: [...state.current.agents, agent] } };
+          },
+          false,
+          'addAgent',
+        ),
 
       // Message actions with deduplication
       addMessage: (message) => {
@@ -242,111 +234,115 @@ export const useDebateStore = create<DebateStore>()(
           return false;
         }
 
-        set((s) => {
-          const newSeen = new Set(s._seenMessages);
-          newSeen.add(msgKey);
-          return {
-            current: { ...s.current, messages: [...s.current.messages, message] },
-            _seenMessages: newSeen,
-          };
-        }, false, 'addMessage');
+        set(
+          (s) => {
+            const newSeen = new Set(s._seenMessages);
+            newSeen.add(msgKey);
+            return {
+              current: { ...s.current, messages: [...s.current.messages, message] },
+              _seenMessages: newSeen,
+            };
+          },
+          false,
+          'addMessage',
+        );
 
         return true;
       },
 
-      clearMessages: () => set(
-        (state) => ({
-          current: { ...state.current, messages: [] },
-          _seenMessages: new Set<string>(),
-        }),
-        false,
-        'clearMessages'
-      ),
+      clearMessages: () =>
+        set(
+          (state) => ({
+            current: { ...state.current, messages: [] },
+            _seenMessages: new Set<string>(),
+          }),
+          false,
+          'clearMessages',
+        ),
 
       // Streaming actions
-      startStream: (agent, taskId = '') => set(
-        (state) => {
-          const updated = new Map(state.current.streamingMessages);
-          // Use composite key if taskId provided, otherwise just agent
-          const key = taskId ? `${agent}:${taskId}` : agent;
-          updated.set(key, {
-            agent,
-            taskId,
-            content: '',
-            isComplete: false,
-            startTime: Date.now(),
-            expectedSeq: 1,
-            pendingTokens: new Map(),
-            reasoning: [],
-            evidence: [],
-            confidence: null,
-          });
-          return { current: { ...state.current, streamingMessages: updated } };
-        },
-        false,
-        'startStream'
-      ),
-
-      appendStreamToken: (agent, token, agentSeq, taskId = '') => set(
-        (state) => {
-          const updated = new Map(state.current.streamingMessages);
-          // Use composite key if taskId provided, otherwise just agent
-          const key = taskId ? `${agent}:${taskId}` : agent;
-          const existing = updated.get(key);
-
-          if (existing) {
-            if (agentSeq && agentSeq > 0) {
-              // Sequence-based ordering
-              if (agentSeq === existing.expectedSeq) {
-                let newContent = existing.content + token;
-                let nextExpected = agentSeq + 1;
-                const pending = new Map(existing.pendingTokens);
-
-                while (pending.has(nextExpected)) {
-                  newContent += pending.get(nextExpected)!;
-                  pending.delete(nextExpected);
-                  nextExpected++;
-                }
-
-                updated.set(key, {
-                  ...existing,
-                  content: newContent,
-                  expectedSeq: nextExpected,
-                  pendingTokens: pending,
-                });
-              } else if (agentSeq > existing.expectedSeq) {
-                const pending = new Map(existing.pendingTokens);
-                pending.set(agentSeq, token);
-                updated.set(key, { ...existing, pendingTokens: pending });
-              }
-            } else {
-              // Simple append (no sequence)
-              updated.set(key, {
-                ...existing,
-                content: existing.content + token,
-              });
-            }
-          } else {
-            // New stream without token_start
+      startStream: (agent, taskId = '') =>
+        set(
+          (state) => {
+            const updated = new Map(state.current.streamingMessages);
+            // Use composite key if taskId provided, otherwise just agent
+            const key = taskId ? `${agent}:${taskId}` : agent;
             updated.set(key, {
               agent,
               taskId,
-              content: token,
+              content: '',
               isComplete: false,
               startTime: Date.now(),
-              expectedSeq: agentSeq && agentSeq > 0 ? agentSeq + 1 : 1,
+              expectedSeq: 1,
               pendingTokens: new Map(),
               reasoning: [],
               evidence: [],
               confidence: null,
             });
-          }
+            return { current: { ...state.current, streamingMessages: updated } };
+          },
+          false,
+          'startStream',
+        ),
 
-          return { current: { ...state.current, streamingMessages: updated } };
-        },
-        false,
-        'appendStreamToken'
-      ),
+      appendStreamToken: (agent, token, agentSeq, taskId = '') =>
+        set(
+          (state) => {
+            const updated = new Map(state.current.streamingMessages);
+            // Use composite key if taskId provided, otherwise just agent
+            const key = taskId ? `${agent}:${taskId}` : agent;
+            const existing = updated.get(key);
+
+            if (existing) {
+              if (agentSeq && agentSeq > 0) {
+                // Sequence-based ordering
+                if (agentSeq === existing.expectedSeq) {
+                  let newContent = existing.content + token;
+                  let nextExpected = agentSeq + 1;
+                  const pending = new Map(existing.pendingTokens);
+
+                  while (pending.has(nextExpected)) {
+                    newContent += pending.get(nextExpected)!;
+                    pending.delete(nextExpected);
+                    nextExpected++;
+                  }
+
+                  updated.set(key, {
+                    ...existing,
+                    content: newContent,
+                    expectedSeq: nextExpected,
+                    pendingTokens: pending,
+                  });
+                } else if (agentSeq > existing.expectedSeq) {
+                  const pending = new Map(existing.pendingTokens);
+                  pending.set(agentSeq, token);
+                  updated.set(key, { ...existing, pendingTokens: pending });
+                }
+              } else {
+                // Simple append (no sequence)
+                updated.set(key, { ...existing, content: existing.content + token });
+              }
+            } else {
+              // New stream without token_start
+              updated.set(key, {
+                agent,
+                taskId,
+                content: token,
+                isComplete: false,
+                startTime: Date.now(),
+                expectedSeq: agentSeq && agentSeq > 0 ? agentSeq + 1 : 1,
+                pendingTokens: new Map(),
+                reasoning: [],
+                evidence: [],
+                confidence: null,
+              });
+            }
+
+            return { current: { ...state.current, streamingMessages: updated } };
+          },
+          false,
+          'appendStreamToken',
+        ),
 
       endStream: (agent, taskId = '') => {
         const state = get();
@@ -367,7 +363,7 @@ export const useDebateStore = create<DebateStore>()(
           // Add as completed message
           if (finalContent) {
             const msg: TranscriptMessage = {
-              agent: existing.agent,  // Use agent from existing, not the key
+              agent: existing.agent, // Use agent from existing, not the key
               content: finalContent,
               timestamp: Date.now() / 1000,
             };
@@ -376,113 +372,112 @@ export const useDebateStore = create<DebateStore>()(
         }
 
         // Remove from streaming
-        set((s) => {
-          const updated = new Map(s.current.streamingMessages);
-          updated.delete(key);
-          return { current: { ...s.current, streamingMessages: updated } };
-        }, false, 'endStream');
+        set(
+          (s) => {
+            const updated = new Map(s.current.streamingMessages);
+            updated.delete(key);
+            return { current: { ...s.current, streamingMessages: updated } };
+          },
+          false,
+          'endStream',
+        );
       },
 
-      cleanupOrphanedStreams: (timeoutMs) => set(
-        (state) => {
-          const now = Date.now();
-          const updated = new Map(state.current.streamingMessages);
-          let changed = false;
-          const messagesToAdd: TranscriptMessage[] = [];
+      cleanupOrphanedStreams: (timeoutMs) =>
+        set(
+          (state) => {
+            const now = Date.now();
+            const updated = new Map(state.current.streamingMessages);
+            let changed = false;
+            const messagesToAdd: TranscriptMessage[] = [];
 
-          for (const [agent, msg] of Array.from(updated.entries())) {
-            if (now - msg.startTime > timeoutMs) {
-              if (msg.content) {
-                messagesToAdd.push({
-                  agent: msg.agent,
-                  content: msg.content + ' [stream timed out]',
-                  timestamp: Date.now() / 1000,
-                });
+            for (const [agent, msg] of Array.from(updated.entries())) {
+              if (now - msg.startTime > timeoutMs) {
+                if (msg.content) {
+                  messagesToAdd.push({
+                    agent: msg.agent,
+                    content: msg.content + ' [stream timed out]',
+                    timestamp: Date.now() / 1000,
+                  });
+                }
+                updated.delete(agent);
+                changed = true;
               }
-              updated.delete(agent);
-              changed = true;
             }
-          }
 
-          if (!changed) return state;
+            if (!changed) return state;
 
-          // Add timed out messages
-          const newSeen = new Set(state._seenMessages);
-          const newMessages = [...state.current.messages];
+            // Add timed out messages
+            const newSeen = new Set(state._seenMessages);
+            const newMessages = [...state.current.messages];
 
-          for (const msg of messagesToAdd) {
-            const msgKey = `${msg.agent}-${msg.timestamp}-${msg.content.slice(0, 50)}`;
-            if (!newSeen.has(msgKey)) {
-              newSeen.add(msgKey);
-              newMessages.push(msg);
+            for (const msg of messagesToAdd) {
+              const msgKey = `${msg.agent}-${msg.timestamp}-${msg.content.slice(0, 50)}`;
+              if (!newSeen.has(msgKey)) {
+                newSeen.add(msgKey);
+                newMessages.push(msg);
+              }
             }
-          }
 
-          return {
-            current: { ...state.current, streamingMessages: updated, messages: newMessages },
-            _seenMessages: newSeen,
-          };
-        },
-        false,
-        'cleanupOrphanedStreams'
-      ),
+            return {
+              current: { ...state.current, streamingMessages: updated, messages: newMessages },
+              _seenMessages: newSeen,
+            };
+          },
+          false,
+          'cleanupOrphanedStreams',
+        ),
 
       // Stream events
-      addStreamEvent: (event) => set(
-        (state) => {
-          const events = [...state.current.streamEvents, event];
-          return {
-            current: {
-              ...state.current,
-              streamEvents: events.length > MAX_STREAM_EVENTS
-                ? events.slice(-MAX_STREAM_EVENTS)
-                : events,
-            },
-          };
-        },
-        false,
-        'addStreamEvent'
-      ),
+      addStreamEvent: (event) =>
+        set(
+          (state) => {
+            const events = [...state.current.streamEvents, event];
+            return {
+              current: {
+                ...state.current,
+                streamEvents:
+                  events.length > MAX_STREAM_EVENTS ? events.slice(-MAX_STREAM_EVENTS) : events,
+              },
+            };
+          },
+          false,
+          'addStreamEvent',
+        ),
 
-      clearStreamEvents: () => set(
-        (state) => ({ current: { ...state.current, streamEvents: [] } }),
-        false,
-        'clearStreamEvents'
-      ),
+      clearStreamEvents: () =>
+        set(
+          (state) => ({ current: { ...state.current, streamEvents: [] } }),
+          false,
+          'clearStreamEvents',
+        ),
 
-      setHasCitations: (has) => set(
-        (state) => ({ current: { ...state.current, hasCitations: has } }),
-        false,
-        'setHasCitations'
-      ),
+      setHasCitations: (has) =>
+        set(
+          (state) => ({ current: { ...state.current, hasCitations: has } }),
+          false,
+          'setHasCitations',
+        ),
 
       // Artifact actions
       setArtifact: (artifact) => set({ artifact }, false, 'setArtifact'),
 
       // UI actions
-      setShowParticipation: (show) => set(
-        (state) => ({ ui: { ...state.ui, showParticipation: show } }),
-        false,
-        'setShowParticipation'
-      ),
+      setShowParticipation: (show) =>
+        set(
+          (state) => ({ ui: { ...state.ui, showParticipation: show } }),
+          false,
+          'setShowParticipation',
+        ),
 
-      setShowCitations: (show) => set(
-        (state) => ({ ui: { ...state.ui, showCitations: show } }),
-        false,
-        'setShowCitations'
-      ),
+      setShowCitations: (show) =>
+        set((state) => ({ ui: { ...state.ui, showCitations: show } }), false, 'setShowCitations'),
 
-      setUserScrolled: (scrolled) => set(
-        (state) => ({ ui: { ...state.ui, userScrolled: scrolled } }),
-        false,
-        'setUserScrolled'
-      ),
+      setUserScrolled: (scrolled) =>
+        set((state) => ({ ui: { ...state.ui, userScrolled: scrolled } }), false, 'setUserScrolled'),
 
-      setAutoScroll: (auto) => set(
-        (state) => ({ ui: { ...state.ui, autoScroll: auto } }),
-        false,
-        'setAutoScroll'
-      ),
+      setAutoScroll: (auto) =>
+        set((state) => ({ ui: { ...state.ui, autoScroll: auto } }), false, 'setAutoScroll'),
 
       // Sequence tracking
       updateSequence: (seq) => {
@@ -498,30 +493,32 @@ export const useDebateStore = create<DebateStore>()(
       },
 
       // Reset
-      resetCurrent: () => set(
-        {
-          current: { ...initialCurrentState, streamingMessages: new Map() },
-          _seenMessages: new Set<string>(),
-          _lastSeq: 0,
-        },
-        false,
-        'resetCurrent'
-      ),
+      resetCurrent: () =>
+        set(
+          {
+            current: { ...initialCurrentState, streamingMessages: new Map() },
+            _seenMessages: new Set<string>(),
+            _lastSeq: 0,
+          },
+          false,
+          'resetCurrent',
+        ),
 
-      resetAll: () => set(
-        {
-          current: { ...initialCurrentState, streamingMessages: new Map() },
-          artifact: null,
-          ui: { ...initialUIState },
-          _seenMessages: new Set<string>(),
-          _lastSeq: 0,
-        },
-        false,
-        'resetAll'
-      ),
+      resetAll: () =>
+        set(
+          {
+            current: { ...initialCurrentState, streamingMessages: new Map() },
+            artifact: null,
+            ui: { ...initialUIState },
+            _seenMessages: new Set<string>(),
+            _lastSeq: 0,
+          },
+          false,
+          'resetAll',
+        ),
     })),
-    { name: 'debate-store' }
-  )
+    { name: 'debate-store' },
+  ),
 );
 
 // ============================================================================

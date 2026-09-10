@@ -12,7 +12,10 @@
  */
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { ModelSelector, type AvailableModel } from '../src/components/control-plane/FineTuning/ModelSelector';
+import {
+  ModelSelector,
+  type AvailableModel,
+} from '../src/components/control-plane/FineTuning/ModelSelector';
 
 describe('ModelSelector', () => {
   const mockOnSelectModel = jest.fn();
@@ -172,11 +175,7 @@ describe('ModelSelector', () => {
       });
 
       expect(mockOnSelectModel).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'legal-bert',
-          name: 'Legal BERT',
-          vertical: 'legal',
-        })
+        expect.objectContaining({ id: 'legal-bert', name: 'Legal BERT', vertical: 'legal' }),
       );
     });
 
@@ -192,12 +191,7 @@ describe('ModelSelector', () => {
         huggingFaceId: 'nlpaueb/legal-bert-base-uncased',
       };
 
-      render(
-        <ModelSelector
-          selectedModel={selectedModel}
-          onSelectModel={mockOnSelectModel}
-        />
-      );
+      render(<ModelSelector selectedModel={selectedModel} onSelectModel={mockOnSelectModel} />);
 
       // The selected model should have different styling (accent border)
       const legalBertCard = screen.getByText('Legal BERT').closest('div[class*="border"]');
@@ -216,12 +210,7 @@ describe('ModelSelector', () => {
         huggingFaceId: 'nlpaueb/legal-bert-base-uncased',
       };
 
-      render(
-        <ModelSelector
-          selectedModel={selectedModel}
-          onSelectModel={mockOnSelectModel}
-        />
-      );
+      render(<ModelSelector selectedModel={selectedModel} onSelectModel={mockOnSelectModel} />);
 
       expect(screen.getByText('nlpaueb/legal-bert-base-uncased')).toBeInTheDocument();
     });
@@ -229,12 +218,7 @@ describe('ModelSelector', () => {
 
   describe('Show All Models Mode', () => {
     it('shows HuggingFace IDs for all models when showAllModels is true', () => {
-      render(
-        <ModelSelector
-          showAllModels
-          onSelectModel={mockOnSelectModel}
-        />
-      );
+      render(<ModelSelector showAllModels onSelectModel={mockOnSelectModel} />);
 
       // Should show HF IDs for all displayed models
       expect(screen.getByText('codellama/CodeLlama-34b-Instruct-hf')).toBeInTheDocument();

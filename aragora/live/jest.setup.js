@@ -37,18 +37,14 @@ Object.defineProperty(window, 'matchMedia', {
 });
 
 // Mock ResizeObserver for components that use it
-global.ResizeObserver = jest.fn().mockImplementation(() => ({
-  observe: jest.fn(),
-  unobserve: jest.fn(),
-  disconnect: jest.fn(),
-}));
+global.ResizeObserver = jest
+  .fn()
+  .mockImplementation(() => ({ observe: jest.fn(), unobserve: jest.fn(), disconnect: jest.fn() }));
 
 // Mock IntersectionObserver for lazy loading components
-global.IntersectionObserver = jest.fn().mockImplementation(() => ({
-  observe: jest.fn(),
-  unobserve: jest.fn(),
-  disconnect: jest.fn(),
-}));
+global.IntersectionObserver = jest
+  .fn()
+  .mockImplementation(() => ({ observe: jest.fn(), unobserve: jest.fn(), disconnect: jest.fn() }));
 
 // Mock scrollTo for components that use window scrolling
 window.scrollTo = jest.fn();

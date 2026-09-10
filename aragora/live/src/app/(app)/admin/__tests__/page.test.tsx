@@ -9,13 +9,7 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch as typeof fetch;
 
 jest.mock('next/link', () => {
-  return function MockLink({
-    children,
-    href,
-  }: {
-    children: React.ReactNode;
-    href: string;
-  }) {
+  return function MockLink({ children, href }: { children: React.ReactNode; href: string }) {
     return <a href={href}>{children}</a>;
   };
 });
@@ -51,20 +45,14 @@ jest.mock('@/components/BackendSelector', () => ({
 }));
 
 jest.mock('@/hooks/useAragoraClient', () => ({
-  useAragoraClient: () => ({
-    admin: {
-      stats: jest.fn(),
-    },
-  }),
+  useAragoraClient: () => ({ admin: { stats: jest.fn() } }),
 }));
 
 function jsonResponse(data: unknown): Response {
   return {
     ok: true,
     status: 200,
-    headers: {
-      get: () => 'application/json',
-    },
+    headers: { get: () => 'application/json' },
     json: async () => data,
   } as Response;
 }

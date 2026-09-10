@@ -11,11 +11,7 @@ interface ForkVisualizerProps {
   onForkSelect?: (fork: ForkNode) => void;
 }
 
-export function ForkVisualizer({
-  debateId,
-  messageCount = 0,
-  onForkSelect,
-}: ForkVisualizerProps) {
+export function ForkVisualizer({ debateId, messageCount = 0, onForkSelect }: ForkVisualizerProps) {
   const fork = useDebateFork(debateId);
   const { loadForks } = fork;
   const [activeTab, setActiveTab] = useState<'tree' | 'compare'>('tree');
@@ -27,16 +23,22 @@ export function ForkVisualizer({
     loadForks();
   }, [loadForks]);
 
-  const handleNodeSelect = useCallback((node: ForkNode) => {
-    onForkSelect?.(node);
-  }, [onForkSelect]);
+  const handleNodeSelect = useCallback(
+    (node: ForkNode) => {
+      onForkSelect?.(node);
+    },
+    [onForkSelect],
+  );
 
-  const handleCompareSelect = useCallback((node: ForkNode, slot: 0 | 1) => {
-    fork.selectForComparison(node, slot);
-    if (fork.selectedNodes[0] && fork.selectedNodes[1]) {
-      setActiveTab('compare');
-    }
-  }, [fork]);
+  const handleCompareSelect = useCallback(
+    (node: ForkNode, slot: 0 | 1) => {
+      fork.selectForComparison(node, slot);
+      if (fork.selectedNodes[0] && fork.selectedNodes[1]) {
+        setActiveTab('compare');
+      }
+    },
+    [fork],
+  );
 
   const handleCreateFork = useCallback(async () => {
     const result = await fork.createFork(branchPoint, modifiedContext || undefined);
@@ -82,7 +84,9 @@ export function ForkVisualizer({
           <div className="text-xs font-theme-data text-text-muted">CREATE COUNTERFACTUAL FORK</div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Branch Point (Round)</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Branch Point (Round)
+              </label>
               <input
                 type="number"
                 min={0}
@@ -93,7 +97,9 @@ export function ForkVisualizer({
               />
             </div>
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Modified Context</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Modified Context
+              </label>
               <input
                 type="text"
                 value={modifiedContext}
@@ -104,8 +110,17 @@ export function ForkVisualizer({
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setShowCreateForm(false)} className="px-3 py-1 text-xs font-theme-data text-text-muted hover:text-text">[CANCEL]</button>
-            <button onClick={handleCreateFork} disabled={fork.forking} className="px-3 py-1 text-xs font-theme-data bg-[var(--accent)]/10 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)]/20 disabled:opacity-50">
+            <button
+              onClick={() => setShowCreateForm(false)}
+              className="px-3 py-1 text-xs font-theme-data text-text-muted hover:text-text"
+            >
+              [CANCEL]
+            </button>
+            <button
+              onClick={handleCreateFork}
+              disabled={fork.forking}
+              className="px-3 py-1 text-xs font-theme-data bg-[var(--accent)]/10 border border-[var(--accent)] text-[var(--accent)] hover:bg-[var(--accent)]/20 disabled:opacity-50"
+            >
               {fork.forking ? 'CREATING...' : 'CREATE FORK'}
             </button>
           </div>
@@ -129,24 +144,35 @@ export function ForkVisualizer({
 
       {fork.error && (
         <div className="px-4 py-2 border-b border-acid-red/30">
-          <div className="p-2 text-xs font-theme-data text-acid-red bg-acid-red/10 border border-acid-red/30">{'>'} {fork.error}</div>
+          <div className="p-2 text-xs font-theme-data text-acid-red bg-acid-red/10 border border-acid-red/30">
+            {'>'} {fork.error}
+          </div>
         </div>
       )}
 
       <div className="p-4">
         {fork.loading && !fork.hasForks ? (
-          <div className="text-center py-8 text-xs font-theme-data text-text-muted animate-pulse">Loading forks...</div>
+          <div className="text-center py-8 text-xs font-theme-data text-text-muted animate-pulse">
+            Loading forks...
+          </div>
         ) : !fork.hasForks ? (
           <div className="text-center py-8 text-xs font-theme-data text-text-muted">
             <p>No forks yet for this debate.</p>
             <p className="mt-2">Click [+ FORK] to create a counterfactual branch.</p>
           </div>
         ) : activeTab === 'tree' ? (
-          <ForkTreeView tree={fork.forkTree} onNodeSelect={handleNodeSelect} onCompareSelect={handleCompareSelect} selectedNodes={fork.selectedNodes} />
+          <ForkTreeView
+            tree={fork.forkTree}
+            onNodeSelect={handleNodeSelect}
+            onCompareSelect={handleCompareSelect}
+            selectedNodes={fork.selectedNodes}
+          />
         ) : fork.comparisonData ? (
           <ForkComparisonPanel comparison={fork.comparisonData} onClear={fork.clearSelection} />
         ) : (
-          <div className="text-center py-8 text-xs font-theme-data text-text-muted">Select two forks to compare.</div>
+          <div className="text-center py-8 text-xs font-theme-data text-text-muted">
+            Select two forks to compare.
+          </div>
         )}
       </div>
     </div>

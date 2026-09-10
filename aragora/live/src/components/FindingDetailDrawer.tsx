@@ -102,9 +102,7 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
     try {
       const response = await fetch(
         `${backendConfig.api}/api/audit/findings/${finding.id}/history`,
-        {
-          headers: { 'Authorization': `Bearer ${tokens?.access_token || ''}` },
-        }
+        { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
       );
       if (response.ok) {
         const data = await response.json();
@@ -125,18 +123,15 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
     if (!finding) return;
     setUpdating(true);
     try {
-      const response = await fetch(
-        `${backendConfig.api}/api/audit/findings/${finding.id}/status`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${tokens?.access_token || ''}`,
-            'X-User-ID': user?.id || 'anonymous',
-          },
-          body: JSON.stringify({ status: newStatus }),
-        }
-      );
+      const response = await fetch(`${backendConfig.api}/api/audit/findings/${finding.id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokens?.access_token || ''}`,
+          'X-User-ID': user?.id || 'anonymous',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
       if (response.ok) {
         fetchWorkflow();
         onUpdate?.();
@@ -158,11 +153,11 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${tokens?.access_token || ''}`,
+            Authorization: `Bearer ${tokens?.access_token || ''}`,
             'X-User-ID': user?.id || 'anonymous',
           },
           body: JSON.stringify({ comment: newComment }),
-        }
+        },
       );
       if (response.ok) {
         setNewComment('');
@@ -179,18 +174,15 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
     if (!finding || !assignUserId.trim()) return;
     setUpdating(true);
     try {
-      const response = await fetch(
-        `${backendConfig.api}/api/audit/findings/${finding.id}/assign`,
-        {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${tokens?.access_token || ''}`,
-            'X-User-ID': user?.id || 'anonymous',
-          },
-          body: JSON.stringify({ user_id: assignUserId }),
-        }
-      );
+      const response = await fetch(`${backendConfig.api}/api/audit/findings/${finding.id}/assign`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokens?.access_token || ''}`,
+          'X-User-ID': user?.id || 'anonymous',
+        },
+        body: JSON.stringify({ user_id: assignUserId }),
+      });
       if (response.ok) {
         setAssignUserId('');
         setShowAssign(false);
@@ -214,11 +206,11 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${tokens?.access_token || ''}`,
+            Authorization: `Bearer ${tokens?.access_token || ''}`,
             'X-User-ID': user?.id || 'anonymous',
           },
           body: JSON.stringify({ priority }),
-        }
+        },
       );
       if (response.ok) {
         fetchWorkflow();
@@ -239,10 +231,7 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
   return (
     <>
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50" onClick={onClose} />
 
       {/* Drawer */}
       <div className="fixed right-0 top-0 h-full w-full max-w-2xl bg-background border-l border-border z-50 overflow-y-auto">
@@ -250,19 +239,22 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
         <div className="sticky top-0 bg-surface border-b border-border p-4 flex items-start justify-between">
           <div className="flex-1 min-w-0 pr-4">
             <div className="flex items-center gap-2 mb-1">
-              <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${SEVERITY_COLORS[finding?.severity || 'info']}`}>
+              <span
+                className={`px-2 py-0.5 text-xs font-theme-data rounded border ${SEVERITY_COLORS[finding?.severity || 'info']}`}
+              >
                 {finding?.severity?.toUpperCase()}
               </span>
-              <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${STATUS_COLORS[currentState]}`}>
+              <span
+                className={`px-2 py-0.5 text-xs font-theme-data rounded ${STATUS_COLORS[currentState]}`}
+              >
                 {currentState.toUpperCase().replace('_', ' ')}
               </span>
             </div>
-            <h2 className="font-theme-data text-lg truncate">{finding?.title || 'Finding Details'}</h2>
+            <h2 className="font-theme-data text-lg truncate">
+              {finding?.title || 'Finding Details'}
+            </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-muted hover:text-foreground text-xl"
-          >
+          <button onClick={onClose} className="text-muted hover:text-foreground text-xl">
             ✕
           </button>
         </div>
@@ -351,10 +343,7 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
                     >
                       Assign
                     </button>
-                    <button
-                      onClick={() => setShowAssign(false)}
-                      className="btn btn-sm btn-ghost"
-                    >
+                    <button onClick={() => setShowAssign(false)} className="btn btn-sm btn-ghost">
                       Cancel
                     </button>
                   </div>
@@ -433,28 +422,29 @@ export function FindingDetailDrawer({ finding, isOpen, onClose, onUpdate }: Prop
                 {workflow?.history?.length === 0 && (
                   <div className="text-sm text-muted text-center py-4">No activity yet</div>
                 )}
-                {workflow?.history?.slice().reverse().map((event) => (
-                  <div key={event.id} className="text-sm border-l-2 border-border pl-3">
-                    <div className="flex items-center gap-2 text-muted">
-                      <span className="font-theme-data">{event.user_name || event.user_id}</span>
-                      <span>•</span>
-                      <span>{new Date(event.timestamp).toLocaleString()}</span>
-                    </div>
-                    {event.event_type === 'state_change' && (
-                      <div>
-                        Changed status from{' '}
-                        <span className="font-theme-data">{event.from_state}</span> to{' '}
-                        <span className="font-theme-data">{event.to_state}</span>
+                {workflow?.history
+                  ?.slice()
+                  .reverse()
+                  .map((event) => (
+                    <div key={event.id} className="text-sm border-l-2 border-border pl-3">
+                      <div className="flex items-center gap-2 text-muted">
+                        <span className="font-theme-data">{event.user_name || event.user_id}</span>
+                        <span>•</span>
+                        <span>{new Date(event.timestamp).toLocaleString()}</span>
                       </div>
-                    )}
-                    {event.event_type === 'comment' && (
-                      <div className="mt-1">{event.comment}</div>
-                    )}
-                    {event.event_type === 'assignment' && (
-                      <div>Assigned to {event.user_id}</div>
-                    )}
-                  </div>
-                ))}
+                      {event.event_type === 'state_change' && (
+                        <div>
+                          Changed status from{' '}
+                          <span className="font-theme-data">{event.from_state}</span> to{' '}
+                          <span className="font-theme-data">{event.to_state}</span>
+                        </div>
+                      )}
+                      {event.event_type === 'comment' && (
+                        <div className="mt-1">{event.comment}</div>
+                      )}
+                      {event.event_type === 'assignment' && <div>Assigned to {event.user_id}</div>}
+                    </div>
+                  ))}
               </div>
             </section>
           </div>

@@ -28,10 +28,10 @@ interface PhaseInfo {
 }
 
 const PHASES: PhaseInfo[] = [
-  { key: 'reflex',    label: 'REFLEX',    desc: 'Quick response',       icon: '\u26A1' },
-  { key: 'deep',      label: 'DEEP',      desc: 'Detailed analysis',    icon: '\u{1F9E0}' },
-  { key: 'tentacles', label: 'DEBATE', desc: 'Multi-agent debate',  icon: '\u{1F419}' },
-  { key: 'synthesis', label: 'SYNTHESIS', desc: 'Convergence',         icon: '\u{1F52E}' },
+  { key: 'reflex', label: 'REFLEX', desc: 'Quick response', icon: '\u26A1' },
+  { key: 'deep', label: 'DEEP', desc: 'Detailed analysis', icon: '\u{1F9E0}' },
+  { key: 'tentacles', label: 'DEBATE', desc: 'Multi-agent debate', icon: '\u{1F419}' },
+  { key: 'synthesis', label: 'SYNTHESIS', desc: 'Convergence', icon: '\u{1F52E}' },
 ];
 
 const PHASE_ORDER: OraclePhase[] = PHASES.map((p) => p.key);
@@ -104,9 +104,7 @@ export function OraclePhaseProgress({ currentPhase }: OraclePhaseProgressProps) 
                 <span
                   className={[
                     'text-[8px] transition-colors duration-500',
-                    isActive
-                      ? 'text-[var(--text-muted)]/70'
-                      : 'text-[var(--text-muted)]/40',
+                    isActive ? 'text-[var(--text-muted)]/70' : 'text-[var(--text-muted)]/40',
                   ].join(' ')}
                 >
                   {phase.desc}
@@ -118,9 +116,7 @@ export function OraclePhaseProgress({ currentPhase }: OraclePhaseProgressProps) 
                 <div
                   className={[
                     'h-[2px] flex-1 mx-1 transition-all duration-700',
-                    isComplete
-                      ? 'bg-[var(--acid-green)]/60'
-                      : 'bg-[var(--border)]/30',
+                    isComplete ? 'bg-[var(--acid-green)]/60' : 'bg-[var(--border)]/30',
                   ].join(' ')}
                 />
               )}

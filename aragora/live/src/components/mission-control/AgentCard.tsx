@@ -26,7 +26,11 @@ export interface AgentCardProps {
 const STATUS_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
   pending: { bg: 'bg-gray-500/10', text: 'text-gray-400', dot: 'bg-gray-400' },
   executing: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400 animate-pulse' },
-  awaiting_approval: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400 animate-pulse' },
+  awaiting_approval: {
+    bg: 'bg-amber-500/10',
+    text: 'text-amber-400',
+    dot: 'bg-amber-400 animate-pulse',
+  },
   completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
   failed: { bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-400' },
 };
@@ -60,7 +64,9 @@ export const AgentCard = memo(function AgentCard({ agent, onApprove, onReject }:
         <span className="text-sm">{icon}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-theme-data font-bold text-[var(--text)] truncate">{agent.name}</span>
+            <span className="text-xs font-theme-data font-bold text-[var(--text)] truncate">
+              {agent.name}
+            </span>
             <span className={`w-1.5 h-1.5 rounded-full ${style.dot}`} />
           </div>
           {agent.currentTask && (
@@ -85,7 +91,9 @@ export const AgentCard = memo(function AgentCard({ agent, onApprove, onReject }:
                 style={{ width: `${Math.min(100, agent.progress)}%` }}
               />
             </div>
-            <span className="text-[10px] font-theme-data text-[var(--text-muted)]">{agent.progress}%</span>
+            <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
+              {agent.progress}%
+            </span>
           </div>
         </div>
       )}
@@ -105,7 +113,9 @@ export const AgentCard = memo(function AgentCard({ agent, onApprove, onReject }:
             </div>
           )}
           {agent.error && (
-            <div className="text-xs font-theme-data text-red-400 bg-red-500/10 rounded p-2">{agent.error}</div>
+            <div className="text-xs font-theme-data text-red-400 bg-red-500/10 rounded p-2">
+              {agent.error}
+            </div>
           )}
           {agent.diffPreview && <DiffPreview diff={agent.diffPreview} />}
 
