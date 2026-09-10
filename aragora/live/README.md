@@ -185,9 +185,55 @@ variables in a server environment. Unset values use these defaults; `true` or
 
 ## Observability
 
-M6 placeholder: env-gated Sentry, OpenTelemetry, PostHog and structured server
-logging will be documented here when implemented. No telemetry keys are
-required for the current quality gates.
+Sentry and PostHog are **off by default**. With their keys unset, their SDKs
+are not imported or initialized. Public values are baked into the client:
+restart the dev server or rebuild after changing them.
+
+| Variable                   | Purpose                                                                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SENTRY_DSN`   | Enables browser error reporting.                                                                                                    |
+| `SENTRY_DSN`               | Enables server/edge error reporting and the Sentry build wrapper.                                                                   |
+| `SENTRY_AUTH_TOKEN`        | Optional secret for source-map upload, disabled when unset; requires the build wrapper. Never use a public variable for this token. |
+| `SENTRY_ENVIRONMENT`       | Optional server/edge environment override; otherwise `NODE_ENV`. Browser events use `NODE_ENV`.                                     |
+| `NEXT_PUBLIC_BUILD_SHA`    | Sentry release, falling back to the package version when unavailable. Next config normally supplies Git HEAD.                       |
+| `NEXT_PUBLIC_POSTHOG_KEY`  | Enables PostHog pageviews and `capture(event, props)` from `src/lib/analytics.ts`.                                                  |
+| `NEXT_PUBLIC_POSTHOG_HOST` | Optional ingestion host, default `https://us.i.posthog.com`; does not enable analytics by itself.                                   |
+
+Analytics capture drops keys matching
+`/email|password|token|secret|authorization|cookie|apikey/i`, including nested
+objects and arrays, without modifying the original properties. Do not put
+personal information in event names, URLs or nonsensitive property names.
+Autocapture and session recording are disabled; Sentry default PII collection
+is disabled. Errors still use the app's existing local crash reporter.
+
+To test browser error delivery against a local capture endpoint:
+
+```sh
+NEXT_PUBLIC_SENTRY_DSN=http://public@localhost:3141/1 npm run dev -- --port 3120
+```
+
+Visit <http://localhost:3120/debug/sentry-test/?boom=1>. After hydration, this
+throws `Aragora Live Sentry test error` into the existing app error boundary.
+The fallback offers retry, refresh and home controls. Without a public DSN
+the test page does not throw. The envelope should arrive within 10 seconds
+with a build SHA/package version release and the Next environment.
+
+For a local analytics capture endpoint, start with
+`NEXT_PUBLIC_POSTHOG_KEY=phc_test NEXT_PUBLIC_POSTHOG_HOST=http://localhost:3142`
+and visit <http://localhost:3120/landing/>. A `$pageview` should arrive within
+15 seconds. These examples require capture servers on the specified ports;
+they do not send to real projects. Real vendor verification requires real keys.
+
+Run the isolated telemetry tests without the global coverage floors:
+
+```sh
+npx jest --coverage=false src/lib/__tests__/analytics.test.ts --maxWorkers=4
+npx jest --coverage=false src/lib/__tests__/instrumentation.test.ts --maxWorkers=4
+npx jest --coverage=false src/app/__tests__/error.test.tsx --maxWorkers=4
+```
+
+The full coverage command in Test still enforces all four floors.
+OpenTelemetry and structured server logging are added separately.
 
 ## Health
 

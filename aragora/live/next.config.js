@@ -65,4 +65,14 @@ const nextConfig = {
       }),
 };
 
-module.exports = withBundleAnalyzer(nextConfig);
+const config = withBundleAnalyzer(nextConfig);
+if (process.env.SENTRY_DSN) {
+  const { withSentryConfig } = require('@sentry/nextjs');
+  module.exports = withSentryConfig(config, {
+    silent: true,
+    sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+    authToken: process.env.SENTRY_AUTH_TOKEN,
+  });
+} else {
+  module.exports = config;
+}

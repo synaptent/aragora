@@ -15,6 +15,13 @@ export default function Error({
 
   useEffect(() => {
     console.error('App error:', error);
+    if (process.env.NEXT_PUBLIC_SENTRY_DSN) {
+      void import('@sentry/nextjs')
+        .then((Sentry) => Sentry.captureException(error))
+        .catch(() => {
+          // Keep the recovery UI usable even if the optional SDK cannot load.
+        });
+    }
     const reporter = getCrashReporter();
     const accepted = reporter.capture(error, { componentName: 'next-app-error-boundary' });
     if (accepted) {
