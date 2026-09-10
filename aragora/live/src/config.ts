@@ -9,6 +9,7 @@
  */
 
 import { getRuntimeBackendConfig } from '@/lib/runtimeBackend';
+import { flags } from '@/lib/flags';
 
 // === API Configuration ===
 const _API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -266,8 +267,10 @@ export const CACHE_TTL_DEBATES = 2 * 60 * 1000; // 2 minutes
 export const CACHE_TTL_AGENT = 10 * 60 * 1000; // 10 minutes
 
 // === Feature Flags ===
-export const ENABLE_STREAMING = process.env.NEXT_PUBLIC_ENABLE_STREAMING !== 'false';
-export const ENABLE_AUDIENCE = process.env.NEXT_PUBLIC_ENABLE_AUDIENCE !== 'false';
+export const ENABLE_STREAMING =
+  !flags.disableStreaming && process.env.NEXT_PUBLIC_ENABLE_STREAMING !== 'false';
+export const ENABLE_AUDIENCE =
+  !flags.disableAudience && process.env.NEXT_PUBLIC_ENABLE_AUDIENCE !== 'false';
 
 // === Validation ===
 export const MAX_QUESTION_LENGTH = 10000;

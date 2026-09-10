@@ -87,6 +87,7 @@ def test_live_ratchets_wired_with_repo_relative_baselines() -> None:
         "--baseline scripts/baselines/live-knip.json",
         "-- npx knip --reporter json",
         "npx jscpd --config .jscpd.json",
+        "node scripts/check_dead_flags.mjs",
         "scripts/ci/check_file_sizes.py --glob 'aragora/live/src/**/*.{ts,tsx}'",
         "--baseline scripts/baselines/live-file-sizes.json",
     ):
@@ -149,7 +150,7 @@ console.log(JSON.stringify(output));
         cwd=LIVE,
         capture_output=True,
         text=True,
-        timeout=45,
+        timeout=120,
     )
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)

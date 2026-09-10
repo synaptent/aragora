@@ -67,6 +67,12 @@ cp -R public .next/standalone/
 PORT=3120 node .next/standalone/server.js
 ```
 
+For loopback-only local development, use this variant of the same command:
+
+```sh
+HOSTNAME=127.0.0.1 PORT=3120 node .next/standalone/server.js
+```
+
 Open <http://localhost:3120/healthz/> for the local liveness document.
 If a different tracing root nests `server.js`, use that generated path and
 copy the assets beside it instead.
@@ -111,6 +117,7 @@ npm run format:check
 
 From the repository root, `make readiness-lint-live` additionally checks knip
 through the shared shrink-only baseline, jscpd at 6%, and source file sizes.
+It also runs `node scripts/check_dead_flags.mjs` (`npm run check:flags`).
 `make readiness-typecheck-live` runs TypeScript. `npm run format` formats code.
 See [ratchet maintenance](../../docs/RATCHETS.md) for baseline regeneration and
 ESLint suppression pruning. Plain `npx knip` still reports adopted debt.
@@ -147,8 +154,10 @@ can override some runtime connection and feature choices.
 | `NEXT_PUBLIC_ORACLE_FIRST_TOKEN_TIMEOUT_MS` | `15000` milliseconds.                                                                                                                                                                                                                                                                                                                                                                              |
 | `NEXT_PUBLIC_ORACLE_ACTIVITY_TIMEOUT_MS`    | `20000` milliseconds.                                                                                                                                                                                                                                                                                                                                                                              |
 | `NEXT_PUBLIC_DEFAULT_PAGE_SIZE`             | `20`.                                                                                                                                                                                                                                                                                                                                                                                              |
-| `NEXT_PUBLIC_ENABLE_STREAMING`              | Enabled unless exactly `false`.                                                                                                                                                                                                                                                                                                                                                                    |
-| `NEXT_PUBLIC_ENABLE_AUDIENCE`               | Enabled unless exactly `false`.                                                                                                                                                                                                                                                                                                                                                                    |
+| `NEXT_PUBLIC_ENABLE_STREAMING`              | Enabled unless exactly `false` or `flags.disableStreaming` is true.                                                                                                                                                                                                                                                                                                                                |
+| `NEXT_PUBLIC_ENABLE_AUDIENCE`               | Enabled unless exactly `false` or `flags.disableAudience` is true.                                                                                                                                                                                                                                                                                                                                 |
+| `NEXT_PUBLIC_FLAG_DISABLE_STREAMING`        | `false`; exactly `true` opts out of streaming through `src/lib/flags.ts`.                                                                                                                                                                                                                                                                                                                          |
+| `NEXT_PUBLIC_FLAG_DISABLE_AUDIENCE`         | `false`; exactly `true` opts out of audience participation through `src/lib/flags.ts`.                                                                                                                                                                                                                                                                                                             |
 | `NEXT_PUBLIC_BUILD_SHA`                     | Git HEAD, or `unknown` outside Git; embedded by Next config.                                                                                                                                                                                                                                                                                                                                       |
 | `NEXT_PUBLIC_BUILD_TIME`                    | Current ISO timestamp at config evaluation; embedded by Next config.                                                                                                                                                                                                                                                                                                                               |
 | `LIVE_DEPLOY_MODE`                          | `runtime`; `static-export` selects export when no output override is set.                                                                                                                                                                                                                                                                                                                          |
@@ -186,7 +195,8 @@ variables in a server environment. Unset values use these defaults; `true` or
 Optional telemetry uses `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`,
 `SENTRY_AUTH_TOKEN`, `SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_POSTHOG_KEY`,
 `NEXT_PUBLIC_POSTHOG_HOST` and `OTEL_EXPORTER_OTLP_ENDPOINT`. The keys and
-OTLP endpoint are unset by default. See
+OTLP endpoint are unset by default. `LOG_LEVEL` controls local JSON logging
+(default `info`, no remote export). `NEXT_PUBLIC_FLAG_*` flags default off. See
 [Observability](#observability) for their defaults and enablement rules.
 
 ## Observability
@@ -198,16 +208,18 @@ restart the dev server or rebuild after changing them.
 Next config explicitly inlines empty public keys so default production builds
 also exclude the disabled SDK chunks.
 
-| Variable                      | Purpose                                                                                                                             |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SENTRY_DSN`      | Enables browser error reporting.                                                                                                    |
-| `SENTRY_DSN`                  | Enables server/edge error reporting and the Sentry build wrapper.                                                                   |
-| `SENTRY_AUTH_TOKEN`           | Optional secret for source-map upload, disabled when unset; requires the build wrapper. Never use a public variable for this token. |
-| `SENTRY_ENVIRONMENT`          | Optional server/edge environment override; otherwise `NODE_ENV`. Browser events use `NODE_ENV`.                                     |
-| `NEXT_PUBLIC_BUILD_SHA`       | Sentry release, falling back to the package version when unavailable. Next config normally supplies Git HEAD.                       |
-| `NEXT_PUBLIC_POSTHOG_KEY`     | Enables PostHog pageviews and `capture(event, props)` from `src/lib/analytics.ts`.                                                  |
-| `NEXT_PUBLIC_POSTHOG_HOST`    | Optional ingestion host, default `https://us.i.posthog.com`; does not enable analytics by itself.                                   |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Enables server traces through `@vercel/otel` with service name `aragora-live`; independent of Sentry.                               |
+| Variable                      | Purpose                                                                                                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SENTRY_DSN`      | Unset: browser error reporting is off, no SDK initialization or network. A non-empty DSN enables it.                                                       |
+| `SENTRY_DSN`                  | Unset: server/edge error reporting and the Sentry build wrapper are off. A non-empty DSN enables them.                                                     |
+| `SENTRY_AUTH_TOKEN`           | Optional secret for source-map upload only, disabled when unset; requires the build wrapper. Never use a public variable for this token.                   |
+| `SENTRY_ENVIRONMENT`          | Optional server/edge environment override; otherwise `NODE_ENV`. Browser events use `NODE_ENV`.                                                            |
+| `NEXT_PUBLIC_BUILD_SHA`       | Sentry release, falling back to the package version when unavailable. Next config normally supplies Git HEAD.                                              |
+| `NEXT_PUBLIC_POSTHOG_KEY`     | Unset: analytics is off and `capture(event, props)` from `src/lib/analytics.ts` is a no-op. A key enables pageviews and capture.                           |
+| `NEXT_PUBLIC_POSTHOG_HOST`    | Optional ingestion host, default `https://us.i.posthog.com` only when a key enables analytics; otherwise no network, even if this host is set.             |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Unset: tracing is off, no SDK import or export. An endpoint enables `@vercel/otel` traces with service name `aragora-live`, independent of Sentry.         |
+| `LOG_LEVEL`                   | Unset/empty: local JSON stdout at `info`, not silent; no remote export. `debug` includes debug records, `silent` disables logs.                            |
+| `NEXT_PUBLIC_FLAG_*`          | Unset: flags are off (`false`), leaving existing behavior unchanged. Only the exact string `true` enables a flag; public build-time values, never secrets. |
 
 Analytics capture drops keys matching
 `/email|password|token|secret|authorization|cookie|apikey/i`, including nested
@@ -252,22 +264,73 @@ Run the isolated telemetry tests without the global coverage floors:
 npx jest --coverage=false src/lib/__tests__/analytics.test.ts --maxWorkers=4
 npx jest --coverage=false src/lib/__tests__/instrumentation.test.ts --maxWorkers=4
 npx jest --coverage=false src/app/__tests__/error.test.tsx --maxWorkers=4
+npx jest --coverage=false src/lib/__tests__/logger.test.ts --maxWorkers=4
+npx jest --coverage=false src/lib/__tests__/flags.test.ts --maxWorkers=4
+npx jest --coverage=false src/lib/__tests__/deadFlags.test.ts --maxWorkers=4
 ```
 
 The full coverage command in Test still enforces all four floors.
-Structured server logging is added separately.
+
+### Structured logs
+
+`src/lib/logger.ts` exports the server-only pino `logger`; Next externalizes
+`pino`. Import it only in Node server code, never client code or the edge proxy.
+Logs are newline-delimited JSON on stdout with numeric `level` (20 debug,
+30 info), `msg`, `time` (Unix milliseconds), `pid` and `hostname`.
+Request logs carry the path in `req.url`, for example:
+
+<!-- prettier-ignore -->
+```json
+{"level":30,"msg":"request","req":{"url":"/healthz/"}}
+```
+
+The `/healthz/` route handler emits one record per dev-server request.
+It deliberately logs only the fixed path, not query strings, headers or cookies.
+Production pre-renders this force-static route, so that log runs at build time,
+not for each request to the cached document. This is not edge middleware logging.
+
+The configured redaction paths are `authorization`, `cookie`, `*.password`,
+`*.token` and `*.apiKey`, with the exact censor string **`[REDACTED]`**.
+Wildcard paths cover one object level, not arbitrarily nested data. Redaction
+does not sanitize free-text messages or other fields; never log secrets or PII.
+
+### Feature flags
+
+Import `{ flags }` from `@/lib/flags`. It is an `as const` object with readonly,
+typed boolean properties and literal env reads that Next can inline:
+
+| Property                 | Variable                             | Default / effect when true                |
+| ------------------------ | ------------------------------------ | ----------------------------------------- |
+| `flags.disableStreaming` | `NEXT_PUBLIC_FLAG_DISABLE_STREAMING` | `false`; disables streaming.              |
+| `flags.disableAudience`  | `NEXT_PUBLIC_FLAG_DISABLE_AUDIENCE`  | `false`; disables audience participation. |
+
+These opt-outs feed `src/config.ts` without changing the legacy
+`NEXT_PUBLIC_ENABLE_*` controls: an explicit legacy `false` still disables
+the feature. Rebuild after changing flags; they are not runtime user settings
+and are separate from the legacy `featureFlags.ts`/localStorage helper.
+
+Declare new flags as explicit properties in `src/lib/flags.ts` and reference
+them using imported `flags.name` or `flags['name']` (import aliases work).
+`node scripts/check_dead_flags.mjs` scans JS/TS in `src/`, excluding the
+declaration file, `.d.ts`, `__tests__/`, `*.test.*` and `*.spec.*`; comments and
+strings are not references. Destructuring/dynamic-key reads are not supported.
+Exit 0 means all flags are referenced, 1 lists unreferenced flags, and 2 is an
+input/parse error. `--src-dir PATH` supports fixture directories; `--help`
+prints usage. The check runs in `readiness-lint-live`.
 
 ## Health
 
-`GET /healthz/` returns HTTP 200 with compact JSON and `Cache-Control: no-store`:
+`GET /healthz/` returns HTTP 200 with compact JSON and `Cache-Control: no-store`.
+Shape (the placeholders below are replaced with build values):
 
+<!-- prettier-ignore -->
 ```json
-{ "status": "ok", "app": "aragora-live", "version": "2.9.0", "commit": "unknown" }
+{"status":"ok","app":"aragora-live","version":"<package.json version>","commit":"<build SHA>"}
 ```
 
-`version` comes from this app's `package.json` at build time. `commit` is the
-build-time `NEXT_PUBLIC_BUILD_SHA` (Next config defaults to Git HEAD, then
-`unknown` outside Git). `/healthz` redirects with HTTP 308 to `/healthz/`
+`version` tracks this app's `package.json` at build time. `commit` is the
+build-time `NEXT_PUBLIC_BUILD_SHA` (defaults to `git rev-parse HEAD` inside a
+checkout; `unknown` only outside one). `/healthz` redirects with HTTP 308 to `/healthz/`
 because `trailingSlash` is enabled.
 
 This is a local Next route, not an `/api` proxy or backend readiness check.

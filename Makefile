@@ -539,7 +539,7 @@ readiness-lint-live:
 	command -v python3 >/dev/null 2>&1 || { echo "SKIP live: python3 not found"; exit 0; }; \
 	command -v git >/dev/null 2>&1 || { echo "SKIP live: git not found"; exit 0; }; \
 	[ -d aragora/live/node_modules ] || { echo "SKIP live: node_modules missing (npm ci in aragora/live)"; exit 0; }; \
-	(cd aragora/live && npm run lint && npm run format:check) && \
+	(cd aragora/live && npm run lint && npm run format:check && node scripts/check_dead_flags.mjs) && \
 	python3 scripts/ci/check_tool_baseline.py --tool knip --cwd aragora/live \
 		--baseline scripts/baselines/live-knip.json \
 		--report-json "$(READINESS_REPORT_DIR)/live-knip.report.json" \

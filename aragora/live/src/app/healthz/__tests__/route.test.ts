@@ -2,6 +2,9 @@
 
 import packageInfo from '../../../../package.json';
 import { dynamic, GET } from '../route';
+import { logger } from '@/lib/logger';
+
+jest.mock('@/lib/logger', () => ({ logger: { info: jest.fn() } }));
 
 describe('GET /healthz/', () => {
   const { version } = packageInfo;
@@ -49,5 +52,12 @@ describe('GET /healthz/', () => {
 
   it('opts into static generation for export builds', () => {
     expect(dynamic).toBe('force-static');
+  });
+
+  it('logs exactly one structured request record without request secrets', () => {
+    jest.mocked(logger.info).mockClear();
+    GET();
+    expect(logger.info).toHaveBeenCalledTimes(1);
+    expect(logger.info).toHaveBeenCalledWith({ req: { url: '/healthz/' } }, 'request');
   });
 });

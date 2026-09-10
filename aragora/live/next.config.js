@@ -35,6 +35,7 @@ const nextConfig = {
     return buildSha.slice(0, 12) || 'build';
   },
   trailingSlash: true,
+  serverExternalPackages: ['pino'],
   images: { unoptimized: true },
   env: {
     NEXT_PUBLIC_BUILD_SHA: buildSha,
