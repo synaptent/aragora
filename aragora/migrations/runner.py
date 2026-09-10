@@ -41,6 +41,14 @@ from aragora.storage.backends import (
 
 logger = logging.getLogger(__name__)
 
+DATABASE_ERRORS: tuple[type[Exception], ...] = (sqlite3.Error,)
+try:
+    from psycopg2 import Error as PostgreSQLError
+except ImportError:
+    pass
+else:
+    DATABASE_ERRORS += (PostgreSQLError,)
+
 # Advisory lock ID for migration coordination (hash of 'aragora_migration')
 MIGRATION_LOCK_ID = 2089872453
 
@@ -257,9 +265,14 @@ class MigrationRunner:
     def _init_rollback_history_table(self) -> None:
         """Create the rollback history table if it doesn't exist."""
         version_type = "BIGINT" if isinstance(self._backend, PostgreSQLBackend) else "INTEGER"
+        id_type = (
+            "SERIAL PRIMARY KEY"
+            if isinstance(self._backend, PostgreSQLBackend)
+            else "INTEGER PRIMARY KEY AUTOINCREMENT"
+        )
         sql = f"""
             CREATE TABLE IF NOT EXISTS {self.ROLLBACK_HISTORY_TABLE} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {id_type},
                 version {version_type} NOT NULL,
                 name TEXT NOT NULL,
                 rolled_back_at TIMESTAMP NOT NULL,
@@ -269,7 +282,7 @@ class MigrationRunner:
         """
         try:
             self._backend.execute_write(sql)
-        except (sqlite3.Error, OSError, RuntimeError, ValueError) as e:
+        except (*DATABASE_ERRORS, OSError, RuntimeError, ValueError) as e:
             # Non-fatal: rollback history is optional audit functionality
             logger.debug("Could not create rollback history table: %s", e)
 
