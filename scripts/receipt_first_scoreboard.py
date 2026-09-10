@@ -141,10 +141,10 @@ def release_assets(tag: str) -> list[str]:
     return [a["name"] for a in release_view(tag).get("assets", [])]
 
 
-def commit_date(sha: Any, fallback: str) -> str:
-    if not sha:
+def commit_date(ref: Any, fallback: str) -> str:
+    if not ref:
         return fallback
-    c = run_cmd(["gh", "api", f"repos/{REPO}/commits/{sha}", "--jq", ".commit.committer.date"])
+    c = run_cmd(["gh", "api", f"repos/{REPO}/commits/{ref}", "--jq", ".commit.committer.date"])
     return c.out.strip() if c.ok and c.out.strip() else fallback
 
 
@@ -270,7 +270,8 @@ def metric_6(ctx: Any) -> Row:
     r.update(atlas_upper_bound(ctx))
     live = False
     if ctx.offline or not ctx.network_ok:
-        r["reason"] = "offline" if ctx.offline else "pypi.org pre-probe failed"
+        why = "offline" if ctx.offline else "pypi.org pre-probe failed"
+        r["reason"] = "; ".join(filter(None, (r.get("reason"), why)))
     else:
         try:
             r["marker_comments"], live = marker_comments(), True
@@ -296,17 +297,20 @@ def metric_7(ctx: Any) -> Row:
 
 def metric_8(ctx: Any) -> Row:
     rel = [x for x in releases() if x["tagName"].startswith("receipts-")]
-    newest = max(rel, key=lambda x: x.get("publishedAt", ""), default=None)
+    newest = max(rel, key=lambda x: x.get("publishedAt") or "", default=None)
     views = {x["tagName"]: release_view(x["tagName"], "assets,targetCommitish") for x in rel}
     odr = lambda v: sum(a["name"].endswith(".odr.json") for a in v.get("assets", []))
     per_tag = {t: odr(v) for t, v in views.items()}
     total, run_url = sum(per_tag.values()), None
     # A run dispatched after the M4 merge but before the release exists must still count, so the
     # threshold is the release's target commit date, not the moment the release was published.
+    # target_commitish may be a branch name (a release created without --target records "main"),
+    # which the commits API would resolve to that branch's CURRENT tip; the tag names the commit.
+    # An empty threshold (draft release, lookups failed) admits every successful run.
     since = ""
     if newest is not None:
-        published = newest.get("publishedAt", "")
-        since = commit_date(views[newest["tagName"]].get("targetCommitish"), published)
+        tag, target = newest["tagName"], str(views[newest["tagName"]].get("targetCommitish") or "")
+        since = commit_date(target if HEX40.match(target) else tag, newest.get("publishedAt") or "")
     argv = f"gh run list -R {REPO} --workflow metrics-drift.yml --status success".split()
     argv += ["--limit", "10", "--json", "databaseId,createdAt,url"]
     c = run_cmd(argv) if total >= 3 else None
@@ -548,9 +552,10 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError):
         cache = {}
     args.network_ok, args.atlas_v1_assets, args.generated_at = True, None, utc_stamp()
-    # Guardrails (worktree and origin/main) run alongside the rows to keep --offline under 10 s.
+    # Guardrails (worktree and origin/main) run alongside the rows to keep --offline under 10 s;
+    # the origin/main measurement is local (archive of the local ref) and only fetches online.
     with ThreadPoolExecutor(max_workers=2) as pool:
-        main_future = pool.submit(measure_main, root, False)
+        main_future = pool.submit(measure_main, root, not args.offline)
         local_future = pool.submit(measure_guardrails, root)
         rows, new_cache = build_rows(args, cache, pending)
     if new_cache:

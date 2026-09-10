@@ -431,6 +431,8 @@ def test_row6_unavailable_without_atlas_even_when_count_is_live(fake, capsys, ro
     assert r[6]["status"] == "unavailable" and "no Atlas JSONL" in r[6]["reason"]
     assert r[6]["marker_comments"] == 3 and r[6]["ratio"] == 1.5 and "upper_bound" not in r[6]
     assert r[6]["now"] == "3 aragora-advisory-summary comments; upper bound ?"
+    _, r = rows(capsys, "--offline", "--cache", "/nonexistent/c.json")
+    assert r[6]["reason"].startswith("no Atlas JSONL") and r[6]["reason"].endswith("; offline")
 
 
 def test_markdown_row6_baseline_cell_unchanged_and_informational_ratio(fake, capsys, root):
@@ -467,6 +469,23 @@ def test_row8_first_hour_threshold_uses_target_commit_date(fake, capsys):
     _, r = rows(capsys)
     assert r[8]["first_hour_since"] == "2026-10-01T12:00:00Z" and r[8]["first_hour_run_ok"] is False
     assert r[8]["first_hour_run_url"] is None and r[8]["status"] == "fail"
+
+
+def test_row8_branch_target_commitish_resolves_through_the_tag(fake, capsys):
+    tag = "receipts-2026-10-01"
+    fake.on("gh release list", out=json.dumps([{"tagName": tag, "publishedAt": "2026-10-01"}]))
+    view = {"assets": [{"name": f"pr{i}.odr.json"} for i in range(3)], "targetCommitish": "main"}
+    fake.on(f"gh release view {tag}", out=json.dumps(view))
+    fake.on(f"gh api repos/synaptent/aragora/commits/{tag}", out="2026-09-30T00:00:00Z\n")
+    fake.on("gh api repos/synaptent/aragora/commits/main", out="2026-12-31T00:00:00Z\n")
+    fake.on("gh run list", out="[]")
+    _, r = rows(capsys)
+    assert r[8]["first_hour_since"] == "2026-09-30T00:00:00Z"
+    assert fake.matching("gh api repos/synaptent/aragora/commits/main") == []
+    fake.on("gh release list", out=json.dumps([{"tagName": tag, "publishedAt": None}]))
+    fake.on(f"gh api repos/synaptent/aragora/commits/{tag}", rc=1, err="HTTP 404")
+    _, r = rows(capsys)
+    assert r[8]["first_hour_since"] is None and r[8]["status"] == "fail" and "reason" not in r[8]
 
 
 def regen(**over: int) -> str:
