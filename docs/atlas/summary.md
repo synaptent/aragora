@@ -136,6 +136,8 @@ python3 scripts/build_disagreement_atlas.py build --cache-dir /tmp/atlas-cache -
 python3 scripts/build_disagreement_atlas.py summary --dataset /tmp/atlas-build/atlas-v1.jsonl --out /tmp/atlas-build/summary.md
 ```
 
+A from-scratch collect costs about three API calls per indexed PR plus the index pages (thousands of calls and tens of minutes for the full window); use `--prs 8802 8811 8824` for a bounded smoke run.
+
 An identical collect reuses cached files without rewriting them. Use `--refresh-index` to discover new PRs and `--refresh` to refetch per-PR responses; `--prs 8802 8811 8824` restricts collection for a smoke run. Build and summary run offline; identical cache and checkout inputs produce byte-identical JSONL. Cache files stay outside the tree.
 
 These commands build from the current cache and checkout, not the frozen release. To reproduce this page's tables, download `atlas-v1.jsonl` and `manifest.json` from the `atlas-v1` release and run summary with that dataset. See [README.md](README.md) for download and `verify --require-dataset` commands.

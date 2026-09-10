@@ -139,6 +139,8 @@ still enumerates the index). An identical collect leaves the cache files untouch
 `--refresh` refetches per-PR responses and `--refresh-index` discovers new PRs.
 `build` and `summary` need no network. Keep the cache outside the checkout.
 
+A from-scratch collect costs about three API calls per indexed PR plus the index pages (thousands of calls and tens of minutes for the full window); use `--prs 8802 8811 8824` for a bounded smoke run.
+
 ## Verify
 
 ```bash
