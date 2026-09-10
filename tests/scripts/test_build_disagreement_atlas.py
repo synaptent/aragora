@@ -10,8 +10,11 @@ parsers read. Nothing here touches ``gh`` or the network.
 from __future__ import annotations
 
 import importlib.util
+import copy
 import json
+import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -304,6 +307,145 @@ def test_summary_numbers_regenerate_from_records(built, tmp_path: Path) -> None:
         assert heading in text
 
 
+def _table(text: str, heading: str) -> list[list[str]]:
+    section = text.split(heading, 1)[1].split("\n## ", 1)[0]
+    return [
+        [cell.strip() for cell in line.strip("|").split("|")]
+        for line in section.splitlines()
+        if line.startswith("| ")
+    ]
+
+
+def test_summary_pairwise_agreement_uses_latest_counting_verdicts(built) -> None:
+    template = built[0][0]
+    records = []
+    # A split with two agreeing PASS families, a clean pair, and a re-gate flip.
+    rounds = [
+        [("claude", "pass"), ("openai", "pass"), ("grok", "changes_requested")],
+        [("claude", "pass"), ("openai", "pass")],
+        [("claude", "pass"), ("openai", "changes_requested"), ("openai", "pass")],
+        [("claude", "pass"), ("grok", "changes_requested"), ("openai", "unknown")],
+    ]
+    for n, verdicts in enumerate(rounds, 1):
+        for i, (family, verdict) in enumerate([*verdicts, ("gemini", "changes_requested")]):
+            record = copy.deepcopy(template)
+            record.update(head_sha=f"{n:040x}", round=n, verdict=verdict, source_id=str(i))
+            record["posted_at"] = f"2026-07-01T00:00:0{i}Z"
+            record["reviewer"].update(family=family, counting_class=atlas._counting_class(family))
+            records.append(record)
+    jsonschema = pytest.importorskip("jsonschema")
+    for record in records:
+        jsonschema.validate(record, json.loads(SCHEMA.read_text()))
+    text = atlas.render_summary(records, None)
+    rows = _table(text, "## Pairwise agreement by family pair")
+    assert rows == [
+        ["Family A", "Family B", "Rounds compared", "Agreements", "Agreement rate (%)"],
+        ["claude", "grok", "2", "0", "0.0%"],
+        ["claude", "openai", "3", "3", "100.0%"],
+        ["grok", "openai", "1", "0", "0.0%"],
+        ["**all pairs**", "", "6", "3", "50.0%"],
+    ]
+    assert rows == _table(
+        atlas.render_summary(list(reversed(records)), None),
+        "## Pairwise agreement by family pair",
+    )
+
+
+@pytest.mark.parametrize("empty", [False, True])
+def test_summary_four_totals_and_regenerate_block(built, empty: bool) -> None:
+    records = [] if empty else built[0]
+    text = atlas.render_summary(records, None)
+    assert len(re.findall(r"^\| \*\*all( pairs)?\*\* \|", text, re.MULTILINE)) == 4
+    headings = [
+        "## 1. Split verdicts",
+        "## Pairwise agreement by family pair",
+        "## 2. False negatives by taxonomy class and family",
+        "## 3. Rounds to a clean pass",
+        "## Adjudication mechanisms",
+    ]
+    assert [text.index(h) for h in headings] == sorted(text.index(h) for h in headings)
+    taxonomy = _table(text, headings[2])
+    assert taxonomy[-1][0] == "**all**"
+    for col in range(1, len(taxonomy[0])):
+        assert int(taxonomy[-1][col]) == sum(int(row[col]) for row in taxonomy[1:-1])
+    distribution = _table(text, headings[3])
+    reached = int(distribution[1][1])
+    assert distribution[-1] == ["**all**", str(reached)]
+    start = distribution.index(["Rounds", "PRs"]) + 1
+    assert sum(int(row[1]) for row in distribution[start:-1]) == reached
+    block = text.split("## How to regenerate", 1)[1].split("```bash\n", 1)[1].split("```", 1)[0]
+    commands = block.replace("\\\n", "").splitlines()
+    for command, name in zip(commands, ("collect", "build", "summary"), strict=True):
+        assert command.startswith(f"python3 scripts/build_disagreement_atlas.py {name} ")
+        args = atlas.build_parser().parse_args(command.split()[2:])
+        assert args.command == name
+    assert "--since" in commands[0] and "--cache-dir" in commands[0]
+
+
+def test_build_refreshes_existing_sample_after_dataset_shrinks(tmp_path: Path) -> None:
+    records, _manifest, out = _build(tmp_path)
+    sample_path = out.with_suffix(".sample.jsonl")
+    atlas.write_jsonl(records * 2, sample_path)
+    records, manifest, _out = _build(tmp_path)
+    assert atlas.read_jsonl(sample_path) == atlas.select_sample(records, atlas.SAMPLE_SIZE)
+    assert manifest["sample"]["sha256"] == atlas._sha256(sample_path.read_bytes())
+
+
+@pytest.mark.parametrize("status,error", [(403, PermissionError), (404, LookupError)])
+def test_collect_http_access_errors_do_not_backoff(tmp_path, monkeypatch, status, error) -> None:
+    client = atlas.GitHubClient(tmp_path)
+    response = subprocess.CompletedProcess(
+        [], 1, stdout=f'HTTP/2.0 {status}\n\n{{"message":"unavailable"}}', stderr=f"HTTP {status}"
+    )
+    monkeypatch.setattr(atlas.subprocess, "run", lambda *a, **kw: response)
+    monkeypatch.setattr(atlas.time, "sleep", lambda *a: pytest.fail("must not back off"))
+    with pytest.raises(error):
+        client.api("repos/o/r/pulls/42")
+    assert client.calls == 1
+
+
+@pytest.mark.parametrize("status", [403, 429])
+def test_collect_rate_limit_still_retries(tmp_path, monkeypatch, status) -> None:
+    client = atlas.GitHubClient(tmp_path)
+    responses = iter(
+        [
+            subprocess.CompletedProcess(
+                [],
+                1,
+                stdout=f"HTTP/2.0 {status}\nx-ratelimit-remaining: 0\n\n{{}}",
+                stderr=f"HTTP {status}",
+            ),
+            subprocess.CompletedProcess([], 0, stdout="[]"),
+        ]
+    )
+    waits = []
+    monkeypatch.setattr(atlas.subprocess, "run", lambda *a, **kw: next(responses))
+    monkeypatch.setattr(client, "_sleep_until_reset", lambda **kw: waits.append(kw))
+    assert client.api("repos/o/r/pulls/42") == []
+    assert client.calls == 2 and len(waits) == 1
+
+
+@pytest.mark.parametrize("error", [LookupError, PermissionError])
+def test_collect_skips_inaccessible_pr_and_continues(tmp_path, monkeypatch, capsys, error) -> None:
+    shutil.copytree(FIXTURE, tmp_path / "cache")
+    seen = []
+    original = atlas.GitHubClient.cached
+
+    def cached(self, rel, path, **kwargs):
+        seen.append(path)
+        if "/8802/comments" in path:
+            raise error("inaccessible")
+        return original(self, rel, path, **kwargs)
+
+    monkeypatch.setattr(atlas.GitHubClient, "cached", cached)
+    assert (
+        atlas.main(["collect", "--cache-dir", str(tmp_path / "cache"), "--since", "2026-01-01"])
+        == 0
+    )
+    assert any("/8824/comments" in path for path in seen)
+    assert "[collect] warning: skipping PR #8802" in capsys.readouterr().err
+
+
 # ---------------------------------------------------------------------------
 # Parser reuse on a synthetic evidence comment
 # ---------------------------------------------------------------------------
@@ -458,11 +600,9 @@ def test_failure_classes_attach_only_to_the_dissenting_verdict(built) -> None:
     records, _manifest, _out = built
     claude_pass = _find(records, 8802, "21a4ac4", "claude")
     assert claude_pass["verdict"] == "pass"
-    assert claude_pass["adjudication"]["source"] == "labeled"
+    assert claude_pass["adjudication"]["source"] == "inferred"
     assert claude_pass["taxonomy_classes"] == []
-    assert claude_pass["adjudication"]["ground_truth"]["taxonomy_classes"] == [
-        "out_of_scope_carousel"
-    ]
+    assert claude_pass["adjudication"]["ground_truth"] is None
     for r in records:
         if r["verdict"] == "pass":
             assert set(r["taxonomy_classes"]) <= {"control"}, r["record_id"]
@@ -522,6 +662,19 @@ def test_verify_skips_an_absent_dataset_when_the_sample_is_present(built, tmp_pa
     assert ok, lines
     assert any(line.startswith("dataset SKIPPED") for line in lines)
     assert any("sample sha256 ok" in line for line in lines)
+    assert (
+        atlas.main(
+            [
+                "verify",
+                "--manifest",
+                str(manifest_path),
+                "--repo-root",
+                str(root),
+                "--require-dataset",
+            ]
+        )
+        == 1
+    )
     (root / "docs" / "atlas" / "atlas-v1.sample.jsonl").unlink()
     ok, lines = atlas.verify_manifest(manifest_path, base=root)
     assert not ok

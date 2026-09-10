@@ -37,7 +37,7 @@ Posted verdicts skew to PASS: Tier 3-4 PRs run the collector prepare-only, so th
 
 ## 1. Split verdicts: was the minority later vindicated?
 
-| Family | Split rounds as minority |   as lone dissenter | Vindicated | Share | Dissents vindicated | Share |
+| Family | Split rounds as minority |   on dissenting minority side | Vindicated | Share | Dissents vindicated | Share |
 |---|---|---|---|---|---|---|
 | claude | 4 | 4 | 3 | 75.0% | 3 | 75.0% |
 | gemini | 0 | 0 | 0 | n/a | 0 | n/a |
@@ -46,7 +46,22 @@ Posted verdicts skew to PASS: Tier 3-4 PRs run the collector prepare-only, so th
 | openai | 25 | 25 | 19 | 76.0% | 19 | 76.0% |
 | **all** | 29 | 29 | 22 | 75.9% | 22 | 75.9% |
 
+A minority side can contain multiple families; **all** counts distinct split rounds, not family appearances.
+
 Rounds with ≥2 counting families: **635**; of those, split: **29** (4.6%). Agreement is therefore 95.4%.
+
+## Pairwise agreement by family pair
+
+Each pair is compared once per (PR, head) with a known counting verdict from both families, using the latest PASS/CHANGES-REQUESTED per family. Agreements include pairs on the same side of a split round; unknown and advisory-only verdicts are excluded. The total is weighted by pair-round comparisons, not unique rounds.
+
+| Family A | Family B | Rounds compared | Agreements | Agreement rate (%) |
+|---|---|---|---|---|
+| claude | grok | 20 | 20 | 100.0% |
+| claude | mistral | 2 | 2 | 100.0% |
+| claude | openai | 578 | 551 | 95.3% |
+| grok | mistral | 2 | 2 | 100.0% |
+| grok | openai | 39 | 37 | 94.9% |
+| **all pairs** |  | 641 | 612 | 95.5% |
 
 ## 2. False negatives by taxonomy class and family
 
@@ -62,6 +77,9 @@ A *false negative* is a CHANGES-REQUESTED verdict whose finding was not valid (h
 | cross_family_contradiction | 0 | 0 | 0 | 0 | 0 | 0 |
 | control | 0 | 0 | 0 | 0 | 0 | 0 |
 | *(unlabelled) dissent merged over at same head* | 1 | 0 | 0 | 0 | 6 | 7 |
+| **all** | 7 | 0 | 0 | 0 | 13 | 20 |
+
+Totals count class memberships; a multi-labelled dissent can contribute more than once.
 
 Hand-labelled dissents: **9** invalid (false negatives), **5** valid (true positives). Labels come from `tests/governance/fixtures/adjudicator_eval_cases.json`; everything else is inferred.
 
@@ -82,6 +100,7 @@ Hand-labelled dissents: **9** invalid (false negatives), **5** valid (true posit
 | 2 | 15 |
 | 3 | 2 |
 | 4 | 1 |
+| **all** | 682 |
 
 ## Adjudication mechanisms (dissent records only)
 
@@ -106,3 +125,17 @@ Dissents with a follow-up issue reference: **10**; dissents at a head that merge
 - **Vindicated**: a dissenting minority is vindicated when the PR's head advanced before merge (the demand for change was followed by change) or the PR closed unmerged; a passing minority is vindicated when the PR merged at that exact head. This is a mechanical proxy — heads also advance for main-merges — so read it as an upper bound on dissent validity.
 - **Clean pass**: the first round where every counting verdict is PASS and at least one is from a western-frontier family (claude/openai) — the Tier 1-2 settlement bar.
 - **Mechanism** (controlled vocabulary, see `schema.json`): hand labels win where present; otherwise inferred from thread facts — PASS→`none_required`; closed PR→`closed_unmerged`; same-head later PASS→`evidence_post`/`premise_self_expiry`/`re_gate_flip`; head advanced→`revision`; merged at this head with a settlement signal→`operator_adjudication`; merged at this head on [P2]/[P3]-only dissent→`severity_gating`; otherwise `unresolved`.
+
+## How to regenerate
+
+From the repository root (Python 3.11 and authenticated `gh` for collect):
+
+```bash
+python3 scripts/build_disagreement_atlas.py collect --cache-dir /tmp/atlas-cache --since 2026-06-26T21:04:36Z
+python3 scripts/build_disagreement_atlas.py build --cache-dir /tmp/atlas-cache --out /tmp/atlas-build/atlas-v1.jsonl --manifest /tmp/atlas-build/manifest.json --schema docs/atlas/schema.json
+python3 scripts/build_disagreement_atlas.py summary --dataset /tmp/atlas-build/atlas-v1.jsonl --out /tmp/atlas-build/summary.md
+```
+
+An identical collect reuses cached files without rewriting them. Use `--refresh-index` to discover new PRs and `--refresh` to refetch per-PR responses; `--prs 8802 8811 8824` restricts collection for a smoke run. Build and summary run offline; identical cache and checkout inputs produce byte-identical JSONL. Cache files stay outside the tree.
+
+These commands build from the current cache and checkout, not the frozen release. To reproduce this page's tables, download `atlas-v1.jsonl` and `manifest.json` from the `atlas-v1` release and run summary with that dataset. See [README.md](README.md) for download and `verify --require-dataset` commands.

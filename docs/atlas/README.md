@@ -24,7 +24,7 @@ Successor to [#8860](https://github.com/synaptent/aragora/issues/8860).
 
 | File | Purpose |
 |---|---|
-| `atlas-v1.jsonl` | The dataset: one JSON object per line, sorted by PR, round, head, family. Committed when ≤ 5 MB; otherwise only `atlas-v1.sample.jsonl` (200 records) is committed and the full file ships as a release asset (see *Release asset*). |
+| `atlas-v1.jsonl` | The dataset: one JSON object per line, sorted by PR, round, head, family. Always gitignored and published as a release asset; `atlas-v1.sample.jsonl` is the committed sample (see *Release asset*). |
 | `schema.json` | JSON Schema (draft 2020-12) for a record, including the controlled vocabularies. |
 | `manifest.json` | JCS-canonical manifest: SHA-256 and byte length of the dataset, record and PR counts, source window, vocabularies, `content_digest`, and a `signatures[]` array in the ODR detached-signature shape. |
 | `summary.md` | Headline tables — regenerated, never hand-edited. |
@@ -86,7 +86,7 @@ See `schema.json` for the full contract. The load-bearing fields:
   merge), `re_gate_flip` (same head, same family, later PASS with no recorded
   refutation), `none_required` (PASS), `closed_unmerged`, `unresolved` (blocking
   dissent at the merged head with no recorded adjudication), `not_applicable`.
-- `adjudication.source` — `labeled` when the (PR, head) is in the eval fixture
+- `adjudication.source` — `labeled` for a dissent when the (PR, head) is in the eval fixture
   (hand labels win; the inferred mechanism is kept as a secondary), else
   `inferred` from thread facts: PASS → `none_required`; PR closed →
   `closed_unmerged`; same-head later PASS → `evidence_post` / `premise_self_expiry`
@@ -129,21 +129,33 @@ added or edited; the manifest's `receipt_inputs.files` pins the SHA-256 of every
 receipt file the records cite so `verify` reports that case as a receipt-input
 mismatch rather than a dataset mismatch.
 
+The same generator revision is also required: parser or adjudication fixes can
+change a rebuild. In particular, new builds attach `ground_truth` only to
+CHANGES-REQUESTED records; the frozen `atlas-v1` asset still includes those labels
+on PASS records from labelled rounds. Its manifest and sample remain unchanged.
+
+`collect --prs 8802 8811 8824` limits per-PR fetches for a smoke run (the first run
+still enumerates the index). An identical collect leaves the cache files untouched;
+`--refresh` refetches per-PR responses and `--refresh-index` discovers new PRs.
+`build` and `summary` need no network. Keep the cache outside the checkout.
+
 ## Verify
 
 ```bash
 # The full dataset is a release asset, not a tracked file (see *Release asset*).
 gh release download atlas-v1 -R synaptent/aragora -p atlas-v1.jsonl -D docs/atlas
-python3 scripts/build_disagreement_atlas.py verify --manifest docs/atlas/manifest.json
+python3 scripts/build_disagreement_atlas.py verify --manifest docs/atlas/manifest.json --require-dataset
 ```
 
 recomputes the dataset SHA-256, byte length and record count, the `schema.json`
 hash, and `content_digest = SHA-256(JCS(manifest minus content_digest and
 signatures))` using the ODR reference canonicaliser
 (`aragora.gauntlet.odr_export.jcs_canonicalize`). Exit code 0 and the word
-`VERIFIED` mean every check passed. Without the download, `verify` still checks
-the sample, the schema hash and the content digest, and reports the dataset line
-as `SKIPPED` (with the expected SHA-256) rather than failing.
+`VERIFIED` with `--require-dataset` mean every check passed, including the full
+dataset. Without the download, that command fails. Omit `--require-dataset` only
+for a sample-only checkout check: it reports the dataset line as `SKIPPED` (with
+the expected SHA-256), and exit 0 does not verify the missing full dataset.
+Release and weekly-regeneration checks must use `--require-dataset`.
 
 The manifest carries the same detached-signature shape as an ODR receipt. To
 sign, pass `--sign-key <ed25519.pem>` to `build` (this calls
@@ -156,12 +168,14 @@ equivalent and shares its digest algorithm.
 
 ## Release asset
 
-If `atlas-v1.jsonl` exceeds 5 MB it is **not** committed. `build` then also
-writes `atlas-v1.sample.jsonl` (all hand-labelled records plus an evenly spaced
-selection, 200 records) which is committed with `manifest.json` (whose
-`dataset.sha256` still covers the full file) and `summary.md`. The full file is
-attached to the GitHub release tagged `atlas-v1` as `atlas-v1.jsonl`; download
-it next to `manifest.json` and run `verify`.
+The full `atlas-v1.jsonl` is **never** committed, regardless of size.
+Above 5 MB (or with `--force-sample`), `build` also writes
+`atlas-v1.sample.jsonl` (up to 200 records, prioritising hand-labelled records).
+An existing sample is regenerated even if the dataset shrinks below 5 MB.
+The sample is committed with `manifest.json` (whose `dataset.sha256` covers the
+full file) and `summary.md`. The full file is attached to the GitHub release
+tagged `atlas-v1` as `atlas-v1.jsonl`; download it next to `manifest.json` and run
+`verify --require-dataset`.
 
 ## Limitations — read before citing
 
