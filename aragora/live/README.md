@@ -56,18 +56,27 @@ without opening a port. Heavy work is not part of the three readiness aggregates
 | `npm run export`           | Static `out/` with the caller's API/WS settings.                                                                                                                                                   |
 | `npm run build:ci`         | Cleans `.next`, validates env, then webpack builds `.next/` with the configured output mode.                                                                                                       |
 
-To run the standalone server, copy static assets beside its generated `server.js`
-(Next does not copy these automatically). Next may nest this file under its
-tracing root, so discover it rather than assume a checkout path:
+The standalone build emits `.next/standalone/server.js` in this checkout.
+Copy static assets beside it to serve the UI (Next does not copy these
+automatically), then start on port 3120:
 
 ```sh
-server="$(find .next/standalone -name server.js -not -path '*/node_modules/*' -print)"
-server_dir="$(dirname "$server")"
-mkdir -p "$server_dir/.next"
-cp -R .next/static "$server_dir/.next/"
-cp -R public "$server_dir/"
-HOSTNAME=127.0.0.1 PORT=3120 node "$server"
+mkdir -p .next/standalone/.next
+cp -R .next/static .next/standalone/.next/
+cp -R public .next/standalone/
+PORT=3120 node .next/standalone/server.js
 ```
+
+Open <http://localhost:3120/healthz/> for the local liveness document.
+If a different tracing root nests `server.js`, use that generated path and
+copy the assets beside it instead.
+
+Static-export verification currently stops at the existing
+`/autonomous/bridge/[run_id]` page, which lacks `generateStaticParams()`.
+`NEXT_OUTPUT=export npx next build --webpack` exits non-zero before writing
+`out/healthz*`, so `/healthz/` is not part of static-export output today.
+The health handler itself opts into static generation, but the export scripts
+above remain blocked by that pre-existing page.
 
 Public environment values are baked into the client build. Rebuild after
 changing them. Output overrides (`NEXT_OUTPUT` or `ARAGORA_NEXT_OUTPUT`) also
@@ -182,6 +191,25 @@ required for the current quality gates.
 
 ## Health
 
-The planned frontend liveness endpoint is `/healthz/` (trailing slash matches
-Next routing). The separate M5 health-route change supplies its JSON identity
-and cache behavior. This quality-gate change does not add that route.
+`GET /healthz/` returns HTTP 200 with compact JSON and `Cache-Control: no-store`:
+
+```json
+{ "status": "ok", "app": "aragora-live", "version": "2.9.0", "commit": "unknown" }
+```
+
+`version` comes from this app's `package.json` at build time. `commit` is the
+build-time `NEXT_PUBLIC_BUILD_SHA` (Next config defaults to Git HEAD, then
+`unknown` outside Git). `/healthz` redirects with HTTP 308 to `/healthz/`
+because `trailingSlash` is enabled.
+
+This is a local Next route, not an `/api` proxy or backend readiness check.
+It stays healthy with the backend stopped or `NEXT_PUBLIC_API_URL` pointing
+at an unreachable host. Production builds pre-render the document with
+`dynamic = 'force-static'`; it describes the frontend build, not live backend
+dependencies.
+
+```sh
+curl -si http://localhost:3120/healthz/
+curl -si http://localhost:3120/healthz
+npx jest --ci --maxWorkers=4 --collectCoverageFrom=src/app/healthz/route.ts src/app/healthz/__tests__/route.test.ts
+```

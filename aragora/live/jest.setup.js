@@ -22,19 +22,21 @@ jest.mock('react-markdown', () => {
 global.fetch = jest.fn();
 
 // Mock window.matchMedia for components that use it (e.g., ThemeToggle)
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: jest.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(), // deprecated
-    removeListener: jest.fn(), // deprecated
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: jest.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(), // deprecated
+      removeListener: jest.fn(), // deprecated
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
+  });
+}
 
 // Mock ResizeObserver for components that use it
 global.ResizeObserver = jest
@@ -47,7 +49,9 @@ global.IntersectionObserver = jest
   .mockImplementation(() => ({ observe: jest.fn(), unobserve: jest.fn(), disconnect: jest.fn() }));
 
 // Mock scrollTo for components that use window scrolling
-window.scrollTo = jest.fn();
+if (typeof window !== 'undefined') {
+  window.scrollTo = jest.fn();
+}
 
 // Reset mocks between tests
 beforeEach(() => {
