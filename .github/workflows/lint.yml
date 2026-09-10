@@ -69,6 +69,7 @@ jobs:
     timeout-minutes: 3
     outputs:
       python: ${{ steps.scope.outputs.lint_python }}
+      frontend: ${{ steps.scope.outputs.frontend }}
     steps:
       - uses: actions/checkout@v4
 
@@ -675,7 +676,8 @@ jobs:
   frontend-lint:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name != 'pull_request'
+    needs: [changes]
+    if: (github.event_name != 'pull_request' || (!github.event.pull_request.draft && needs.changes.outputs.frontend == 'true'))
 
     defaults:
       run:
@@ -683,7 +685,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify checkout integrity
         shell: bash
@@ -719,7 +723,7 @@ jobs:
           fi
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: ./.github/actions/setup-node-safe
         with:
           node-version: "24.18.0"
           cache: "npm"
@@ -728,9 +732,54 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ESLint
-        run: npm run lint
-        # Phase 12: ESLint now blocking (was continue-on-error: true)
+      - name: Set up Python for the shared ratchets
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+
+      - name: Run live lint, format, dead code, duplication and file sizes
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-lint-live READINESS_REPORT_DIR=readiness-reports | tee live-lint.log
+          ! grep -q '^SKIP live:' live-lint.log
+
+      - name: Run live typecheck
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-typecheck-live | tee live-typecheck.log
+          ! grep -q '^SKIP live:' live-typecheck.log
+
+      - name: Run live Jest with coverage and junit
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-test-live | tee live-test.log
+          ! grep -q '^SKIP live:' live-test.log
+
+      - name: Build live standalone and enforce bundle budgets
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-heavy-live | tee live-build.log
+          ! grep -q '^SKIP live:' live-build.log
+
+      - name: Upload live quality reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: live-quality-reports
+          path: |
+            aragora/live/junit.xml
+            aragora/live/coverage/
+            readiness-reports/
+            live-*.log
+          if-no-files-found: warn
 
       - name: Check API types are in sync
         continue-on-error: true  # Types are generated from spec; drift is expected during rapid development

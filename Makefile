@@ -395,6 +395,7 @@ READINESS_DONE = echo "[readiness] $@ ok ($$(( $$(date +%s) - start ))s)"
 .PHONY: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
 .PHONY: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
 .PHONY: readiness-test-root readiness-test-debate readiness-test-verify readiness-test-live readiness-test-docs readiness-test-vscode readiness-test-operator
+.PHONY: readiness-heavy-live
 
 readiness-lint: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
 readiness-typecheck: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
@@ -559,7 +560,15 @@ readiness-test-live:
 	@$(READINESS_T0); \
 	command -v npx >/dev/null 2>&1 || { echo "SKIP live: npx not found"; exit 0; }; \
 	[ -d aragora/live/node_modules ] || { echo "SKIP live: node_modules missing (npm ci in aragora/live)"; exit 0; }; \
-	cd aragora/live && npx jest --ci --silent --maxWorkers=4 && \
+	cd aragora/live && npx jest --ci --coverage --maxWorkers=4 --silent && \
+	$(READINESS_DONE)
+
+readiness-heavy-live:
+	@$(READINESS_T0); \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP live: npm not found"; exit 0; }; \
+	command -v npx >/dev/null 2>&1 || { echo "SKIP live: npx not found"; exit 0; }; \
+	[ -d aragora/live/node_modules ] || { echo "SKIP live: node_modules missing (npm ci in aragora/live)"; exit 0; }; \
+	cd aragora/live && npm run build:local && npx size-limit && \
 	$(READINESS_DONE)
 
 # --- docs (docs-site, Docusaurus) -------------------------------------------
