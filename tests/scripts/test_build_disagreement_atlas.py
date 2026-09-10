@@ -426,24 +426,29 @@ def test_collect_rate_limit_still_retries(tmp_path, monkeypatch, status) -> None
 
 
 @pytest.mark.parametrize("error", [LookupError, PermissionError])
-def test_collect_skips_inaccessible_pr_and_continues(tmp_path, monkeypatch, capsys, error) -> None:
+@pytest.mark.parametrize("all_skipped", [False, True])
+def test_collect_skips_inaccessible_pr_and_continues(
+    tmp_path, monkeypatch, capsys, error, all_skipped
+) -> None:
     shutil.copytree(FIXTURE, tmp_path / "cache")
     seen = []
     original = atlas.GitHubClient.cached
 
     def cached(self, rel, path, **kwargs):
         seen.append(path)
-        if "/8802/comments" in path:
+        if "/8802/comments" in path or all_skipped:
             raise error("inaccessible")
         return original(self, rel, path, **kwargs)
 
     monkeypatch.setattr(atlas.GitHubClient, "cached", cached)
     assert (
         atlas.main(["collect", "--cache-dir", str(tmp_path / "cache"), "--since", "2026-01-01"])
-        == 0
+        == 1
     )
     assert any("/8824/comments" in path for path in seen)
-    assert "[collect] warning: skipping PR #8802" in capsys.readouterr().err
+    output = capsys.readouterr().err
+    assert "[collect] warning: skipping PR #8802" in output
+    assert f"{3 if all_skipped else 1} PRs skipped" in output
 
 
 # ---------------------------------------------------------------------------

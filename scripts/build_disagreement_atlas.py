@@ -476,6 +476,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
         numbers = numbers[: args.max_prs]
 
     with_verdicts = 0
+    skipped = 0
     for position, number in enumerate(numbers, start=1):
         base = f"prs/{number}"
         pr_path = args.cache_dir / base / "pr.json"
@@ -502,6 +503,7 @@ def cmd_collect(args: argparse.Namespace) -> int:
                     f"repos/{repo}/commits/{head_sha}/statuses?per_page=100",
                 )
         except (LookupError, PermissionError) as exc:
+            skipped += 1
             _log(f"[collect] warning: skipping PR #{number}: {exc}")
             continue
         with_verdicts += 1
@@ -512,9 +514,10 @@ def cmd_collect(args: argparse.Namespace) -> int:
             )
     _log(
         f"[collect] done: {len(numbers)} PRs, {with_verdicts} review threads, "
-        f"{client.calls} API calls this run, {client.total_logged_calls()} logged in total"
+        f"{client.calls} API calls this run, {client.total_logged_calls()} logged in total, "
+        f"{skipped} PRs skipped"
     )
-    return 0
+    return int(skipped > 0)
 
 
 # ---------------------------------------------------------------------------

@@ -138,6 +138,9 @@ on PASS records from labelled rounds. Its manifest and sample remain unchanged.
 still enumerates the index). An identical collect leaves the cache files untouched;
 `--refresh` refetches per-PR responses and `--refresh-index` discovers new PRs.
 `build` and `summary` need no network. Keep the cache outside the checkout.
+Inaccessible PRs are warned about and skipped while other PRs continue; the final
+line counts skipped PRs and collect exits 1 if any were skipped, so automation
+must stop before building or publishing an incomplete collection.
 
 A from-scratch collect costs about three API calls per indexed PR plus the index pages (thousands of calls and tens of minutes for the full window); use `--prs 8802 8811 8824` for a bounded smoke run.
 
