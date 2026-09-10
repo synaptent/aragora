@@ -461,7 +461,8 @@ def _execute_concurrent_index(backend: DatabaseBackend, statement: str) -> None:
             with connection.cursor() as cursor:
                 cursor.execute(statement)
         finally:
-            connection.autocommit = autocommit
+            if not connection.closed:
+                connection.autocommit = autocommit
 
 
 def safe_create_index(

@@ -6,12 +6,12 @@ import os
 import sqlite3
 import subprocess
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
 from aragora.migrations import __main__ as cli
-from aragora.migrations.runner import MigrationRunner
+from aragora.migrations.runner import Migration, MigrationRunner
 from aragora.storage.backends import PostgreSQLBackend, SQLiteBackend
 
 
@@ -49,7 +49,7 @@ def test_sqlite_rollback_history_error_is_still_logged(caplog):
     assert "Could not create rollback history table: read only" in caplog.text
 
 
-@pytest.mark.parametrize("command", ["upgrade", "status"])
+@pytest.mark.parametrize("command", ["upgrade", "status", "downgrade", "rollback_history"])
 @pytest.mark.parametrize("phase", ["connect", "execute"])
 def test_cli_reports_postgres_errors_and_resets_runner(command, phase, capsys):
     psycopg2 = pytest.importorskip("psycopg2")
@@ -62,7 +62,8 @@ def test_cli_reports_postgres_errors_and_resets_runner(command, phase, capsys):
         if phase == "connect":
             get_runner.side_effect = error
         else:
-            getattr(get_runner.return_value, command).side_effect = error
+            method = "get_rollback_history" if command == "rollback_history" else command
+            getattr(get_runner.return_value, method).side_effect = error
         assert getattr(cli, f"cmd_{command}")(args) == 1
         reset.assert_called_once_with()
     captured = capsys.readouterr()
@@ -81,6 +82,7 @@ def test_concurrent_indexes_restore_connection_autocommit(operation, fails):
     backend.backend_type = "postgresql"
     connection = backend.connection.return_value.__enter__.return_value
     connection.autocommit = False
+    connection.closed = False
     cursor = connection.cursor.return_value.__enter__.return_value
 
     def execute(statement):
@@ -105,6 +107,42 @@ def test_concurrent_indexes_restore_connection_autocommit(operation, fails):
     cursor.execute.assert_called_once()
     backend.execute_write.assert_not_called()
     assert connection.autocommit is False
+
+
+@pytest.mark.parametrize("operation", ["upgrade", "downgrade"])
+def test_database_failure_logs_migration_version(operation, caplog):
+    psycopg2 = pytest.importorskip("psycopg2")
+    runner = MigrationRunner(backend=MagicMock(spec=SQLiteBackend))
+    fail = MagicMock(side_effect=psycopg2.Error("migration failure"))
+    runner.register(Migration(version=123, name="failing", up_fn=fail, down_fn=fail))
+    applied = [123] if operation == "downgrade" else []
+    with patch.object(runner, "get_applied_versions", return_value=applied):
+        with pytest.raises(psycopg2.Error, match="migration failure"):
+            getattr(runner, operation)()
+    action = "apply" if operation == "upgrade" else "rollback"
+    assert f"Failed to {action} migration 123: migration failure" in caplog.text
+
+
+def test_concurrent_index_does_not_restore_closed_connection():
+    psycopg2 = pytest.importorskip("psycopg2")
+    from aragora.migrations.patterns import safe_drop_index
+
+    backend = MagicMock(spec=PostgreSQLBackend)
+    connection = backend.connection.return_value.__enter__.return_value
+    autocommit = PropertyMock(
+        side_effect=[False, None, psycopg2.InterfaceError("connection already closed")]
+    )
+    type(connection).autocommit = autocommit
+    connection.closed = False
+
+    def disconnect(statement):
+        connection.closed = True
+        raise psycopg2.OperationalError("server closed during index operation")
+
+    connection.cursor.return_value.__enter__.return_value.execute.side_effect = disconnect
+    with pytest.raises(psycopg2.OperationalError, match="server closed during index operation"):
+        safe_drop_index(backend, "test_idx")
+    assert autocommit.call_count == 2
 
 
 def test_sqlite_cli_works_without_psycopg2(tmp_path):

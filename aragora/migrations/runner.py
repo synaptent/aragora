@@ -534,7 +534,7 @@ class MigrationRunner:
                     applied.append(migration)
                     logger.info("Applied migration %s", migration.version)
 
-                except (RuntimeError, OSError, ValueError) as e:
+                except DATABASE_ERRORS + (RuntimeError, OSError, ValueError) as e:
                     logger.error("Failed to apply migration %s: %s", migration.version, e)
                     raise
         finally:
@@ -655,7 +655,7 @@ class MigrationRunner:
                     rolled_back.append(migration)
                     logger.info("Rolled back migration %s", migration.version)
 
-                except (RuntimeError, OSError, ValueError) as e:
+                except DATABASE_ERRORS + (RuntimeError, OSError, ValueError) as e:
                     logger.error("Failed to rollback migration %s: %s", migration.version, e)
                     raise
         finally:

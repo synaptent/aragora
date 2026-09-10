@@ -1,4 +1,4 @@
-"""Opt-in PostgreSQL CLI tests; the test role must have CREATEDB permission."""
+"""Opt-in PostgreSQL 13+ CLI tests; the test role must have CREATEDB permission."""
 
 import importlib
 import os
@@ -36,7 +36,9 @@ def isolated_database(postgres_dsn):
             try:
                 yield make_dsn(postgres_dsn, dbname=database)
             finally:
-                cursor.execute(sql.SQL("DROP DATABASE {}").format(sql.Identifier(database)))
+                cursor.execute(
+                    sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(database))
+                )
 
 
 def run_cli(command, dsn):
@@ -105,8 +107,22 @@ def test_wrong_password_reports_authentication_without_traceback(postgres_dsn):
     from psycopg2.extensions import make_dsn
 
     wrong_dsn = make_dsn(postgres_dsn, password="wrong-" + uuid.uuid4().hex)
-    for command in ("upgrade", "status"):
+    for command in ("upgrade", "status", "downgrade", "rollback-history"):
         result = run_cli(command, wrong_dsn)
         assert result.returncode != 0
         assert "authentication" in result.stderr.lower()
         assert "Traceback" not in result.stdout + result.stderr
+
+
+def test_database_cleanup_terminates_lingering_connection(postgres_dsn):
+    import psycopg2
+
+    database = isolated_database.__wrapped__(postgres_dsn)
+    with closing(psycopg2.connect(next(database))) as lingering:
+        name = lingering.info.dbname
+        with pytest.raises(StopIteration):
+            next(database)
+    with closing(psycopg2.connect(postgres_dsn)) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
+            assert cursor.fetchone() is None
