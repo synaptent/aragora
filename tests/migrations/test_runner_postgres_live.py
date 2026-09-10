@@ -10,14 +10,16 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("ARAGORA_TEST_DATABASE_URL"),
+    reason="set ARAGORA_TEST_DATABASE_URL to run live PostgreSQL tests",
+)
+
 
 @pytest.fixture
 def postgres_dsn():
-    dsn = os.environ.get("ARAGORA_TEST_DATABASE_URL")
-    if not dsn:
-        pytest.skip("set ARAGORA_TEST_DATABASE_URL to run live PostgreSQL tests")
     pytest.importorskip("psycopg2")
-    return dsn
+    return os.environ["ARAGORA_TEST_DATABASE_URL"]
 
 
 @pytest.fixture
