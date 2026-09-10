@@ -126,3 +126,24 @@ def test_database_cleanup_terminates_lingering_connection(postgres_dsn):
         with conn.cursor() as cursor:
             cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
             assert cursor.fetchone() is None
+
+
+def test_rollback_succeeds_without_optional_history_table(isolated_database, caplog):
+    from aragora.migrations.runner import Migration, MigrationRunner
+    from aragora.storage.backends import PostgreSQLBackend
+
+    with closing(PostgreSQLBackend(isolated_database, pool_size=1, pool_max_overflow=0)) as backend:
+        runner = MigrationRunner(backend=backend)
+        migration = Migration(
+            version=123,
+            name="rollback_test",
+            up_sql="CREATE TABLE rollback_test (id INTEGER)",
+            down_sql="DROP TABLE rollback_test",
+        )
+        runner.register(migration)
+        assert runner.upgrade() == [migration]
+        backend.execute_write("DROP TABLE _aragora_rollback_history")
+        assert runner.downgrade() == [migration]
+        assert runner.get_applied_versions() == set()
+        assert backend.fetch_one("SELECT to_regclass('rollback_test')")[0] is None
+        assert "Failed to record rollback history for v123:" in caplog.text

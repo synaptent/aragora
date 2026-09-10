@@ -311,7 +311,7 @@ class MigrationRunner:
                     reason,
                 ),
             )
-        except (sqlite3.Error, OSError, RuntimeError, ValueError) as e:
+        except DATABASE_ERRORS + (OSError, RuntimeError, ValueError) as e:
             # Non-fatal: don't let history tracking failures block rollback
             logger.warning("Failed to record rollback history for v%s: %s", migration.version, e)
 

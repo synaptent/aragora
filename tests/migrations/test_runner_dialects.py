@@ -123,6 +123,15 @@ def test_database_failure_logs_migration_version(operation, caplog):
     assert f"Failed to {action} migration 123: migration failure" in caplog.text
 
 
+def test_postgres_rollback_history_insert_failure_is_nonfatal(caplog):
+    psycopg2 = pytest.importorskip("psycopg2")
+    backend = MagicMock(spec=PostgreSQLBackend)
+    runner = MigrationRunner(backend=backend)
+    backend.execute_write.side_effect = psycopg2.Error("audit table unavailable")
+    runner._record_rollback(Migration(version=123, name="rolled_back", up_sql="SELECT 1"))
+    assert "Failed to record rollback history for v123: audit table unavailable" in caplog.text
+
+
 def test_concurrent_index_does_not_restore_closed_connection():
     psycopg2 = pytest.importorskip("psycopg2")
     from aragora.migrations.patterns import safe_drop_index
