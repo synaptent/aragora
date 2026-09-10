@@ -78,7 +78,11 @@ describe('telemetry instrumentation', () => {
     await telemetryReady;
     expect(mockPosthogInit).toHaveBeenCalledWith(
       'phc_test',
-      expect.objectContaining({ api_host: 'http://localhost:3142', capture_pageview: true }),
+      expect.objectContaining({
+        api_host: 'http://localhost:3142',
+        capture_pageview: true,
+        disable_compression: true,
+      }),
     );
     expect(mockLoadSentry).not.toHaveBeenCalled();
   });
