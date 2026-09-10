@@ -282,7 +282,7 @@ class MigrationRunner:
         """
         try:
             self._backend.execute_write(sql)
-        except (*DATABASE_ERRORS, OSError, RuntimeError, ValueError) as e:
+        except DATABASE_ERRORS + (OSError, RuntimeError, ValueError) as e:
             # Non-fatal: rollback history is optional audit functionality
             logger.debug("Could not create rollback history table: %s", e)
 

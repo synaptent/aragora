@@ -39,7 +39,7 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
         else:
             print("No pending migrations.")
         return 0
-    except (*DATABASE_ERRORS, RuntimeError, OSError, ValueError) as e:
+    except DATABASE_ERRORS + (RuntimeError, OSError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     finally:
@@ -163,7 +163,7 @@ def cmd_status(args: argparse.Namespace) -> int:
                 print(f"  - {v}")
 
         return 0
-    except (*DATABASE_ERRORS, RuntimeError, OSError, ValueError, KeyError) as e:
+    except DATABASE_ERRORS + (RuntimeError, OSError, ValueError, KeyError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     finally:
