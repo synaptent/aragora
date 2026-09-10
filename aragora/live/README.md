@@ -184,27 +184,30 @@ variables in a server environment. Unset values use these defaults; `true` or
 | `NEXT_PUBLIC_FEATURE_AGENT_BRIDGE`        | `false` |
 
 Optional telemetry uses `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_DSN`,
-`SENTRY_AUTH_TOKEN`, `SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_POSTHOG_KEY` and
-`NEXT_PUBLIC_POSTHOG_HOST`. The keys are unset by default. See
+`SENTRY_AUTH_TOKEN`, `SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_POSTHOG_KEY`,
+`NEXT_PUBLIC_POSTHOG_HOST` and `OTEL_EXPORTER_OTLP_ENDPOINT`. The keys and
+OTLP endpoint are unset by default. See
 [Observability](#observability) for their defaults and enablement rules.
 
 ## Observability
 
-Sentry and PostHog are **off by default**. With their keys unset, their SDKs
-are not imported or initialized. Public values are baked into the client:
+Sentry, PostHog and OpenTelemetry are **off by default**. With their keys and
+OTLP endpoint unset, their SDKs are not imported or initialized.
+Public values are baked into the client:
 restart the dev server or rebuild after changing them.
 Next config explicitly inlines empty public keys so default production builds
 also exclude the disabled SDK chunks.
 
-| Variable                   | Purpose                                                                                                                             |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SENTRY_DSN`   | Enables browser error reporting.                                                                                                    |
-| `SENTRY_DSN`               | Enables server/edge error reporting and the Sentry build wrapper.                                                                   |
-| `SENTRY_AUTH_TOKEN`        | Optional secret for source-map upload, disabled when unset; requires the build wrapper. Never use a public variable for this token. |
-| `SENTRY_ENVIRONMENT`       | Optional server/edge environment override; otherwise `NODE_ENV`. Browser events use `NODE_ENV`.                                     |
-| `NEXT_PUBLIC_BUILD_SHA`    | Sentry release, falling back to the package version when unavailable. Next config normally supplies Git HEAD.                       |
-| `NEXT_PUBLIC_POSTHOG_KEY`  | Enables PostHog pageviews and `capture(event, props)` from `src/lib/analytics.ts`.                                                  |
-| `NEXT_PUBLIC_POSTHOG_HOST` | Optional ingestion host, default `https://us.i.posthog.com`; does not enable analytics by itself.                                   |
+| Variable                      | Purpose                                                                                                                             |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SENTRY_DSN`      | Enables browser error reporting.                                                                                                    |
+| `SENTRY_DSN`                  | Enables server/edge error reporting and the Sentry build wrapper.                                                                   |
+| `SENTRY_AUTH_TOKEN`           | Optional secret for source-map upload, disabled when unset; requires the build wrapper. Never use a public variable for this token. |
+| `SENTRY_ENVIRONMENT`          | Optional server/edge environment override; otherwise `NODE_ENV`. Browser events use `NODE_ENV`.                                     |
+| `NEXT_PUBLIC_BUILD_SHA`       | Sentry release, falling back to the package version when unavailable. Next config normally supplies Git HEAD.                       |
+| `NEXT_PUBLIC_POSTHOG_KEY`     | Enables PostHog pageviews and `capture(event, props)` from `src/lib/analytics.ts`.                                                  |
+| `NEXT_PUBLIC_POSTHOG_HOST`    | Optional ingestion host, default `https://us.i.posthog.com`; does not enable analytics by itself.                                   |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Enables server traces through `@vercel/otel` with service name `aragora-live`; independent of Sentry.                               |
 
 Analytics capture drops keys matching
 `/email|password|token|secret|authorization|cookie|apikey/i`, including nested
@@ -234,6 +237,15 @@ PostHog filters bots, including headless browsers and `navigator.webdriver`;
 automated delivery tests must simulate a normal browser, not disable that
 filter in production. Event compression is disabled for inspectable payloads.
 
+With an OTLP HTTP collector listening locally, enable server traces:
+
+```sh
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 npm run dev -- --port 3120
+```
+
+Request <http://localhost:3120/healthz/> and inspect the collector for
+`service.name=aragora-live`. Restart without the endpoint to disable tracing.
+
 Run the isolated telemetry tests without the global coverage floors:
 
 ```sh
@@ -243,7 +255,7 @@ npx jest --coverage=false src/app/__tests__/error.test.tsx --maxWorkers=4
 ```
 
 The full coverage command in Test still enforces all four floors.
-OpenTelemetry and structured server logging are added separately.
+Structured server logging is added separately.
 
 ## Health
 

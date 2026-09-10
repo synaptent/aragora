@@ -6,6 +6,12 @@ const mockSentryInit = jest.fn();
 const mockPosthogInit = jest.fn();
 const mockLoadSentry = jest.fn();
 const mockLoadPosthog = jest.fn();
+const mockLoadOtel = jest.fn();
+const mockRegisterOTel = jest.fn();
+jest.mock('@vercel/otel', () => {
+  mockLoadOtel();
+  return { registerOTel: mockRegisterOTel };
+});
 jest.mock('@sentry/nextjs', () => {
   mockLoadSentry();
   return { init: mockSentryInit };
@@ -29,6 +35,8 @@ describe('telemetry instrumentation', () => {
       'NEXT_PUBLIC_BUILD_SHA',
       'NEXT_PUBLIC_POSTHOG_KEY',
       'NEXT_PUBLIC_POSTHOG_HOST',
+      'OTEL_EXPORTER_OTLP_ENDPOINT',
+      'NEXT_RUNTIME',
     ]) {
       delete process.env[key];
     }
@@ -95,6 +103,40 @@ describe('telemetry instrumentation', () => {
     expect(mockSentryInit).not.toHaveBeenCalled();
   });
 
+  it.each([undefined, ''])('register skips the OTel import with endpoint %s', async (endpoint) => {
+    if (endpoint !== undefined) process.env.OTEL_EXPORTER_OTLP_ENDPOINT = endpoint;
+    const { register } = await import('../../../instrumentation');
+    await register();
+    expect(mockLoadOtel).not.toHaveBeenCalled();
+    expect(mockRegisterOTel).not.toHaveBeenCalled();
+  });
+
+  it.each(['nodejs', 'edge'])(
+    'register enables OTel alone in %s with an endpoint',
+    async (runtime) => {
+      process.env.NEXT_RUNTIME = runtime;
+      process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4318';
+      const { register } = await import('../../../instrumentation');
+      expect(mockLoadOtel).not.toHaveBeenCalled();
+      await register();
+      expect(mockLoadOtel).toHaveBeenCalledTimes(1);
+      expect(mockRegisterOTel).toHaveBeenCalledTimes(1);
+      expect(mockRegisterOTel).toHaveBeenCalledWith({ serviceName: 'aragora-live' });
+      expect(mockLoadSentry).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['nodejs', 'edge'])('register enables both SDKs independently in %s', async (runtime) => {
+    process.env.NEXT_RUNTIME = runtime;
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'http://localhost:4318';
+    process.env.SENTRY_DSN = 'http://public@localhost:3141/1';
+    const { register } = await import('../../../instrumentation');
+    await register();
+    expect(mockRegisterOTel).toHaveBeenCalledTimes(1);
+    expect(mockRegisterOTel).toHaveBeenCalledWith({ serviceName: 'aragora-live' });
+    expect(mockSentryInit).toHaveBeenCalledTimes(1);
+  });
+
   it('server and edge configs are safe to import directly without a DSN', async () => {
     await (
       await import('../../../sentry.server.config')
@@ -112,6 +154,8 @@ describe('telemetry instrumentation', () => {
     process.env.SENTRY_ENVIRONMENT = 'staging';
     const { register } = await import('../../../instrumentation');
     await register();
+    expect(mockLoadOtel).not.toHaveBeenCalled();
+    expect(mockRegisterOTel).not.toHaveBeenCalled();
     expect(mockSentryInit).toHaveBeenCalledTimes(1);
     expect(mockSentryInit).toHaveBeenCalledWith(
       expect.objectContaining({
