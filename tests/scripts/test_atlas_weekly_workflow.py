@@ -51,7 +51,14 @@ def shell_env(tmp_path: Path) -> dict[str, str]:
     (out / "manifest.json").write_text(json.dumps(manifest))
     (out / "atlas-v1.jsonl").write_bytes((ROOT / "docs/atlas/atlas-v1.sample.jsonl").read_bytes())
     (out / "summary.md").write_bytes((ROOT / "docs/atlas/summary.md").read_bytes())
-    executable(bin_dir / "date", "print('2026-09-10')\n")
+    executable(
+        bin_dir / "date",
+        """import os, pathlib
+p = pathlib.Path(os.environ["DATE_CALLS"])
+p.write_text(p.read_text() + "date\\n" if p.exists() else "date\\n")
+print("2026-09-10" if len(p.read_text().splitlines()) == 1 else "2026-09-11")
+""",
+    )
     executable(
         bin_dir / "gh",
         """import json, os, pathlib, sys
@@ -94,6 +101,7 @@ else:
         "ATLAS_CACHE": str(tmp_path / "cache"),
         "GH_REPO": "synaptent/aragora",
         "CALLS": str(tmp_path / "calls.jsonl"),
+        "DATE_CALLS": str(tmp_path / "date-calls"),
         "GITHUB_OUTPUT": str(tmp_path / "outputs"),
     }
 
@@ -104,7 +112,12 @@ def test_job_is_weekly_or_manual_with_branch_artifacts_and_main_only_releases() 
     assert job["if"] == (
         "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
     )
-    assert job["permissions"] == {"contents": "write", "issues": "read", "pull-requests": "read"}
+    assert job["permissions"] == {
+        "contents": "write",
+        "issues": "read",
+        "pull-requests": "read",
+        "statuses": "read",
+    }
     assert job["env"]["GH_TOKEN"] == "${{ github.token }}"
     assert job["timeout-minutes"] >= 90
     assert step("Publish dated Atlas release")["if"] == "github.ref == 'refs/heads/main'"
@@ -132,6 +145,10 @@ def test_cache_advances_per_run_and_index_refresh_discovers_new_prs() -> None:
     assert restore["with"]["restore-keys"]
     assert save["with"]["path"] == restore["with"]["path"]
     assert save["with"]["key"] == "${{ steps.atlas_cache.outputs.cache-primary-key }}"
+    assert save["if"] == "always() && steps.atlas_cache.outcome == 'success'"
+    collect_step = step("Collect Atlas incrementally")
+    assert collect_step["id"] == "atlas_collect"
+    assert collect_step["timeout-minutes"] < atlas_job()["timeout-minutes"]
     collect = step("Collect Atlas incrementally")["run"]
     assert "--refresh-index" in collect
     assert "--refresh " not in collect
@@ -152,6 +169,7 @@ def test_release_skips_or_publishes_three_assets(shell_env: dict[str, str], mode
     calls = [json.loads(line) for line in Path(shell_env["CALLS"]).read_text().splitlines()]
     created = [args for args in calls if args[1] == "create"]
     assert bool(created) == (mode in {"changed", "first"})
+    assert Path(shell_env["DATE_CALLS"]).read_text() == "date\n"
     if mode == "exists":
         assert len(calls) == 1
         assert "already exists; no release" in result.stdout

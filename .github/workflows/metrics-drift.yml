@@ -155,6 +155,7 @@ jobs:
       contents: write
       issues: read
       pull-requests: read
+      statuses: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -188,6 +189,9 @@ jobs:
             atlas-fetch-v1-${{ runner.os }}-
 
       - name: Collect Atlas incrementally
+        id: atlas_collect
+        # Leave time to persist partial fetches even if collection exhausts its budget.
+        timeout-minutes: 300
         shell: bash
         run: |
           set -euo pipefail
@@ -195,6 +199,7 @@ jobs:
             --repo "$GH_REPO" --refresh-index
 
       - name: Save Atlas fetch cache
+        if: always() && steps.atlas_cache.outcome == 'success'
         uses: actions/cache/save@v4
         with:
           path: ${{ env.ATLAS_CACHE }}
@@ -236,7 +241,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "atlas-$(date -u +%F)" > /dev/null 2> "$RUNNER_TEMP/atlas-release-view.err"; then
+          today=$(date -u +%F)
+          if gh release view "atlas-$today" > /dev/null 2> "$RUNNER_TEMP/atlas-release-view.err"; then
             echo "atlas: dated release already exists; no release"
             exit 0
           elif ! grep -q 'release not found' "$RUNNER_TEMP/atlas-release-view.err"; then
@@ -255,7 +261,7 @@ jobs:
               exit 0
             fi
           fi
-          gh release create "atlas-$(date -u +%F)" \
+          gh release create "atlas-$today" \
             "$ATLAS_OUT/atlas-v1.jsonl" "$ATLAS_OUT/manifest.json" "$ATLAS_OUT/summary.md" \
-            --target main --latest=false --title "Disagreement Atlas $(date -u +%F)" \
+            --target main --latest=false --title "Disagreement Atlas $today" \
             --notes "Weekly Atlas regeneration. Dataset SHA-256: $sha"
