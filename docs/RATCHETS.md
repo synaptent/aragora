@@ -211,6 +211,7 @@ appends its baselines here, one row per file:
 | `scripts/baselines/root-mypy-full.json` | `bash scripts/test_tiers.sh typecheck` (required `typecheck`) | `python scripts/ci/mypy_with_baseline.py --baseline scripts/baselines/root-mypy-full.json --update -- aragora/ --config-file=pyproject.toml --ignore-missing-imports --show-error-codes --no-pretty --no-color-output --python-version=3.11 --platform=linux --no-site-packages` |
 | `scripts/baselines/root-todo.json` | `readiness-lint-root` | `python scripts/ci/check_todo_ratchet.py --baseline scripts/baselines/root-todo.json --update` |
 | `scripts/baselines/file_size_baseline.json` (legacy format) | `readiness-lint-root` | `python scripts/ci/check_file_sizes.py --baseline scripts/baselines/file_size_baseline.json --freeze` |
+| `aragora/live/eslint-suppressions.json` (ESLint native format) | `readiness-lint-live` | `cd aragora/live && npx eslint . --prune-suppressions` |
 
 The convention for every row: the regeneration command is the wired check
 command plus `--update`, run from the repository root, e.g.
@@ -236,15 +237,22 @@ command), where the count is `len(findings)`.
 
 ## Related mechanisms
 
-Two entries below are intentionally placeholders: the mechanism is designed but
-lands in a later feature, which replaces the marked comment in place.
-
-- **ESLint bulk suppressions (M5) — placeholder, filled by `m5-frontend-quality`.**
-  <!-- PLACEHOLDER (m5-frontend-quality): the JS apps use
-  ESLint's native `eslint-suppressions.json` (`eslint --suppress-all` to create,
-  `eslint --prune-suppressions` to shrink) for `naming-convention` and `complexity`
-  instead of this runner; document the files, the prune command, and the
-  shrink-only expectation here. -->
+- **ESLint bulk suppressions.** `aragora/live/eslint-suppressions.json` is
+  generated and auto-loaded by ESLint, not the shared runner. Initial adoption
+  used `cd aragora/live && npx eslint . --suppress-all`, recording only existing
+  `@typescript-eslint/naming-convention` and `complexity` errors. Naming covers
+  variables (camelCase, UPPER_CASE, PascalCase), functions and types; complexity
+  has maximum 15. `npm run lint` keeps `--max-warnings 0`; warnings and the
+  `boundaries/dependencies` rule are not baselined.
+  After fixing a violation, run `cd aragora/live && npx eslint . --prune-suppressions`
+  and commit the shrunken file with the fix. Pruning at an unchanged HEAD must
+  leave it byte-identical. Do not rerun `--suppress-all` to absorb new errors.
+  ESLint counts per file/rule rather than by symbol, so same-count replacements
+  inside a file require review. Growth requires explicit review and a dated
+  `growth_log` reason in `docs/TECH_DEBT.md` alongside the generated diff; do
+  not add metadata to the native JSON format or hand-edit it.
+  `src/lib/**` cannot depend on `src/app/**`, including relative paths, the
+  TypeScript `@/` alias, re-exports, and dynamic imports.
 - **mypy module-exemption ratchet.** `scripts/ci/check_mypy_overrides.py`
   uses the shared runner's comparison and update logic with tool
   `mypy-overrides`. Each distinct module exempted from `disallow_untyped_defs`

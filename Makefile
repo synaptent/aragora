@@ -533,16 +533,16 @@ readiness-test-verify:
 # --- live (aragora/live, Next.js) -------------------------------------------
 readiness-lint-live:
 	@$(READINESS_T0); \
-	command -v npx >/dev/null 2>&1 || { echo "SKIP live: npx not found"; exit 0; }; \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP live: npm not found"; exit 0; }; \
 	[ -d aragora/live/node_modules ] || { echo "SKIP live: node_modules missing (npm ci in aragora/live)"; exit 0; }; \
-	cd aragora/live && npx eslint . --max-warnings 0 && \
+	cd aragora/live && npm run lint && npm run format:check && \
 	$(READINESS_DONE)
 
 readiness-typecheck-live:
 	@$(READINESS_T0); \
-	command -v npx >/dev/null 2>&1 || { echo "SKIP live: npx not found"; exit 0; }; \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP live: npm not found"; exit 0; }; \
 	[ -d aragora/live/node_modules ] || { echo "SKIP live: node_modules missing (npm ci in aragora/live)"; exit 0; }; \
-	cd aragora/live && npx tsc --noEmit -p tsconfig.json && \
+	cd aragora/live && npm run typecheck && \
 	$(READINESS_DONE)
 
 readiness-test-live:
