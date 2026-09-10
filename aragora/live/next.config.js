@@ -36,7 +36,13 @@ const nextConfig = {
   },
   trailingSlash: true,
   images: { unoptimized: true },
-  env: { NEXT_PUBLIC_BUILD_SHA: buildSha, NEXT_PUBLIC_BUILD_TIME: buildTime },
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: buildSha,
+    NEXT_PUBLIC_BUILD_TIME: buildTime,
+    // Explicit empty defaults let bundlers remove disabled telemetry SDK chunks.
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN || '',
+    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY || '',
+  },
   // redirects and rewrites are not supported with output: 'export'.
   // When exporting statically, these are handled by the hosting platform
   // (e.g. Cloudflare Pages _redirects file, Vercel vercel.json, etc.)
