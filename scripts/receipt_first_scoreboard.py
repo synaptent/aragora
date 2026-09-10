@@ -254,7 +254,12 @@ def atlas_upper_bound(ctx: Any) -> Row:
 
 
 def metric_6(ctx: Any) -> Row:
-    """Post-M2 rule: the marker count is the measurement; the Atlas figures stay an upper bound."""
+    """Post-M2 rule: the live marker count decides ok/fail against --quorum-runs.
+
+    The Atlas figures are the row's upper bound, and the metric definition leaves the row
+    ``unavailable`` (never decided) when that bound is missing, exactly as for an offline or
+    failed count: a decided status always carries both numbers.
+    """
     n: Any = ctx.quorum_runs
     r: Row = {"quorum_runs": n, "marker_comments": None}
     r["note"] = (

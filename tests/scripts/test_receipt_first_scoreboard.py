@@ -424,6 +424,15 @@ def test_row6_network_failure_and_ledger_line_never_pending_operator(fake, capsy
     assert r[6]["marker_comments"] == 3 and r[6]["cached_at"] and "pending_ref" not in r[6]
 
 
+def test_row6_unavailable_without_atlas_even_when_count_is_live(fake, capsys, root):
+    markers(fake, root)
+    (root / "docs/atlas/atlas-v1.jsonl").unlink()
+    _, r = rows(capsys, "--quorum-runs", "2")
+    assert r[6]["status"] == "unavailable" and "no Atlas JSONL" in r[6]["reason"]
+    assert r[6]["marker_comments"] == 3 and r[6]["ratio"] == 1.5 and "upper_bound" not in r[6]
+    assert r[6]["now"] == "3 aragora-advisory-summary comments; upper bound ?"
+
+
 def test_markdown_row6_baseline_cell_unchanged_and_informational_ratio(fake, capsys, root):
     markers(fake, root)
     row6 = lambda md: next(line for line in md.splitlines() if line.startswith("| 6 |"))
