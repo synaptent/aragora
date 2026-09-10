@@ -104,6 +104,7 @@ VULTURE_OUT = (FIXTURES / "vulture.txt").read_text(encoding="utf-8")
 DEPTRY_OUT = (FIXTURES / "deptry.json").read_text(encoding="utf-8")
 JSCPD_OUT = (FIXTURES / "jscpd.json").read_text(encoding="utf-8")
 ESLINT_OUT = (FIXTURES / "eslint.json").read_text(encoding="utf-8")
+KNIP_OUT = (FIXTURES / "knip.json").read_text(encoding="utf-8")
 GOLANGCI_OUT = (FIXTURES / "golangci-lint.txt").read_text(encoding="utf-8")
 
 # The eslint fixture was captured on macOS, where /tmp resolves to /private/tmp.
@@ -367,12 +368,64 @@ def test_every_registered_parser_returns_empty_on_empty_stdout():
         assert spec.description and spec.example_command, name
 
 
-def test_all_eight_m1_parsers_are_registered():
+def test_parse_knip_json_fixture_preserves_files_dependencies_and_symbol_groups():
+    findings = parsers.parse_knip(KNIP_OUT)
+    assert [(f.path, f.symbol, f.rule) for f in findings] == [
+        ("unused.ts", "file", "files"),
+        ("package.json", "left-pad", "dependencies"),
+        ("shared.ts", "default, used", "duplicates"),
+        ("shared.ts", "unused", "exports"),
+        ("shared.ts", "default", "exports"),
+        ("shared.ts", "UnusedType", "types"),
+    ]
+    assert "unused file" in findings[0].message
+    assert "unused dependency" in findings[1].message
+    assert findings[3].line == 2
+    assert parsers.parse_knip('{"issues": []}') == []
+    assert parsers.parse_knip('{"issues": [null, {"file": ""}]}') == []
+    assert parsers.PARSERS["knip"].symbol_from_line is False
+
+
+@pytest.mark.parametrize(
+    "rule",
+    [
+        "binaries",
+        "catalog",
+        "catalogReferences",
+        "devDependencies",
+        "enumMembers",
+        "namespaceMembers",
+        "nsExports",
+        "nsTypes",
+        "optionalPeerDependencies",
+        "unlisted",
+        "unresolved",
+    ],
+)
+def test_parse_knip_all_symbol_categories_and_namespace(rule: str):
+    out = json.dumps(
+        {
+            "issues": [
+                {
+                    "file": "src/a.ts",
+                    "owners": [{"name": "@team"}],
+                    rule: [{"name": "member", "namespace": "Parent", "line": 12}],
+                }
+            ]
+        }
+    )
+    (finding,) = parsers.parse_knip(out)
+    assert finding.key() == f"src/a.ts::Parent.member::{rule}"
+    assert finding.line == 12
+
+
+def test_all_m1_parsers_and_knip_are_registered():
     assert parsers.supported_tools() == [
         "deptry",
         "eslint",
         "golangci-lint",
         "jscpd",
+        "knip",
         "mypy",
         "ruff",
         "todo",
@@ -390,6 +443,7 @@ def test_all_eight_m1_parsers_are_registered():
         ("deptry", "deptry.json"),
         ("jscpd", "jscpd.json"),
         ("eslint", "eslint.json"),
+        ("knip", "knip.json"),
         ("golangci-lint", "golangci-lint.txt"),
     ],
 )
@@ -464,6 +518,7 @@ def test_symbol_keyed_parsers_do_not_depend_on_line_numbers(fx: Path):
         ("vulture", VULTURE_OUT, lambda s: s.replace("pkg/mod.py:3:", "pkg/mod.py:9:")),
         ("deptry", DEPTRY_OUT, lambda s: s.replace('"line": 3', '"line": 30')),
         ("jscpd", JSCPD_OUT, lambda s: s.replace('"start": 1,', '"start": 8,')),
+        ("knip", KNIP_OUT, lambda s: s.replace('"line":2,', '"line":20,')),
     ):
         spec = parsers.PARSERS[tool]
         assert shift(out) != out, tool
@@ -591,9 +646,10 @@ def test_partial_output_crash_exits_3_and_never_shrinks_baseline(fx: Path, capsy
         ("deptry", DEPTRY_OUT, 1),
         ("jscpd", JSCPD_OUT, 0),
         ("eslint", ESLINT_OUT, 1),
+        ("knip", KNIP_OUT, 1),
         ("golangci-lint", GOLANGCI_OUT, 1),
     ],
-    ids=["ruff", "mypy", "todo", "vulture", "deptry", "jscpd", "eslint", "golangci-lint"],
+    ids=["ruff", "mypy", "todo", "vulture", "deptry", "jscpd", "eslint", "knip", "golangci-lint"],
 )
 def test_each_tool_enforces_its_finding_exit_codes(fx: Path, tool, out, rc):
     spec = parsers.PARSERS[tool]
@@ -755,6 +811,28 @@ def test_golangci_lint_v2_json_with_stats_trailer_baselined_and_new_issue_exits_
 
 
 # --- --update: shrink-only / subset rule ------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("path", "rule", "symbol"),
+    [("scratch.ts", "files", "scratch.ts"), ("package.json", "dependencies", "new-unused-dep")],
+)
+def test_knip_new_file_or_dependency_fails_and_update_refuses_growth(
+    fx: Path, capsys, path: str, rule: str, symbol: str
+):
+    baseline = fx / "knip.json"
+    assert _run("knip", baseline, fx, _fake_tool(fx, KNIP_OUT, rc=1), "--update") == 0
+    before = baseline.read_bytes()
+    assert _run("knip", baseline, fx, _fake_tool(fx, KNIP_OUT, rc=1)) == 0
+    data = json.loads(KNIP_OUT)
+    data["issues"].append({"file": path, rule: [{"name": symbol}]})
+    command = _fake_tool(fx, json.dumps(data), rc=1)
+    assert _run("knip", baseline, fx, command) == 1
+    assert _run("knip", baseline, fx, command, "--update") == 1
+    assert path in capsys.readouterr().out
+    assert baseline.read_bytes() == before
+    assert _run("knip", baseline, fx, _fake_tool(fx, "", rc=1)) == 3
+    assert _run("knip", baseline, fx, _fake_tool(fx, '{"issues":[]}', rc=0)) == 0
 
 
 def test_update_is_shrink_only_and_refuses_growth_without_allow_grow(fx: Path, capsys):
@@ -959,7 +1037,7 @@ def test_help_documents_every_flag_and_exit_codes(capsys):
         "-- <command",
     ):
         assert flag in out, flag
-    for name in ("ruff", "vulture", "deptry", "jscpd", "mypy", "eslint", "golangci-lint", "todo"):
+    for name in parsers.supported_tools():
         assert name in out, name
     assert "exit codes" in out and "3 tool failed" in out
 

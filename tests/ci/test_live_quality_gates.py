@@ -50,6 +50,50 @@ def test_native_suppressions_are_scoped_and_documented() -> None:
         text = (ROOT / "docs" / doc).read_text()
         assert "aragora/live/eslint-suppressions.json" in text
         assert "npx eslint . --prune-suppressions" in text
+    table = (ROOT / "docs/TECH_DEBT.md").read_text().split("### ESLint", 1)[0]
+    row = next(
+        line for line in table.splitlines() if "`aragora/live/eslint-suppressions.json`" in line
+    )
+    assert int(row.split("|")[3].strip()) == sum(len(rules) for rules in data.values())
+
+
+def test_live_dead_code_and_duplication_configs() -> None:
+    knip = json.loads((LIVE / "knip.json").read_text())
+    assert knip["project"] == ["**/*.{js,jsx,ts,tsx,cjs,mjs,css}"]
+    assert not any(key.startswith("ignore") for key in knip)
+    assert "rules" not in knip and "include" not in knip and "exclude" not in knip
+    jscpd = json.loads((LIVE / ".jscpd.json").read_text())
+    assert jscpd["path"] == ["src"]
+    assert jscpd["threshold"] == 6
+    assert jscpd["minTokens"] == 50
+    assert not jscpd.get("ignore")
+    deps = json.loads((LIVE / "package.json").read_text())["devDependencies"]
+    assert deps["knip"] == "6.34.0"
+    assert deps["jscpd"] == "5.1.1"
+
+
+def test_live_ratchets_wired_with_repo_relative_baselines() -> None:
+    result = subprocess.run(
+        ["make", "-n", "readiness-lint-live"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    for command in (
+        "scripts/ci/check_tool_baseline.py --tool knip",
+        "--cwd aragora/live",
+        "--baseline scripts/baselines/live-knip.json",
+        "-- npx knip --reporter json",
+        "npx jscpd --config .jscpd.json",
+        "scripts/ci/check_file_sizes.py --glob 'aragora/live/src/**/*.{ts,tsx}'",
+        "--baseline scripts/baselines/live-file-sizes.json",
+    ):
+        assert command in result.stdout
+    for filename in ("live-knip.json", "live-file-sizes.json"):
+        for doc in ("TECH_DEBT.md", "RATCHETS.md"):
+            assert f"scripts/baselines/{filename}" in (ROOT / "docs" / doc).read_text()
 
 
 @pytest.fixture(scope="module")

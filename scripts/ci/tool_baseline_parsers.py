@@ -451,6 +451,68 @@ def parse_eslint(stdout: str) -> list[Finding]:
     return findings
 
 
+# --- knip (JSON) --------------------------------------------------------------
+
+# ``knip --reporter json`` (exit 1 with findings) groups issue arrays by file.
+# Each item has a name and optional namespace/line; duplicates and cycles are
+# arrays of symbol groups. Keep each group as one finding, not one per alias.
+# Knip 6 reports unused files in the row's ``files`` array too.
+
+
+@register(
+    "knip",
+    description="knip --reporter json; key = symbol or symbol group, rule = issue category",
+    example_command="npx knip --reporter json",
+    clean_exit_codes={0},
+    finding_exit_codes={1},
+)
+def parse_knip(stdout: str) -> list[Finding]:
+    data = _load_json_prefix(stdout)
+    if not isinstance(data, dict) or not isinstance(data.get("issues"), list):
+        return []
+
+    def symbol(item: object) -> str:
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            return ""
+        namespace = item.get("namespace")
+        return f"{namespace}.{item['name']}" if namespace else item["name"]
+
+    findings: list[Finding] = []
+    for row in data["issues"]:
+        if not isinstance(row, dict):
+            continue
+        path = row.get("file")
+        if not isinstance(path, str) or not path:
+            continue
+        for rule, items in row.items():
+            if rule in {"file", "owners"} or not isinstance(items, list):
+                continue
+            for item in items:
+                if isinstance(item, list):
+                    name = ", ".join(sorted(filter(None, (symbol(member) for member in item))))
+                    line = None
+                else:
+                    name = symbol(item)
+                    line = _int_or_none(item.get("line")) if isinstance(item, dict) else None
+                if not name:
+                    continue
+                label = {
+                    "files": "unused file",
+                    "dependencies": "unused dependency",
+                    "devDependencies": "unused dev dependency",
+                }.get(rule, rule)
+                findings.append(
+                    Finding(
+                        path=path,
+                        rule=rule,
+                        symbol="file" if rule == "files" else name,
+                        line=line,
+                        message=f"{label}: {name}",
+                    )
+                )
+    return findings
+
+
 # --- golangci-lint (v2 JSON) ----------------------------------------------------
 
 # ``golangci-lint run --output.json.path stdout --show-stats=false ./...`` (v2

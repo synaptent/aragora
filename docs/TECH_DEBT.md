@@ -30,7 +30,10 @@ counts and the number of files are recorded separately below.
 | Debate file size (2,000 lines) | `scripts/baselines/debate-file-sizes.json` | 0 | Debate package maintainers | `python scripts/ci/check_file_sizes.py --glob 'aragora-debate/src/**/*.py' --baseline scripts/baselines/debate-file-sizes.json --freeze` |
 | Verify Vulture (confidence 80) | `scripts/baselines/verify-vulture.json` | 0 | Verify package maintainers | `python scripts/ci/check_tool_baseline.py --tool vulture --baseline scripts/baselines/verify-vulture.json --update -- vulture aragora-verify/src --min-confidence 80` |
 | Verify file size (2,000 lines) | `scripts/baselines/verify-file-sizes.json` | 0 | Verify package maintainers | `python scripts/ci/check_file_sizes.py --glob 'aragora-verify/src/**/*.py' --baseline scripts/baselines/verify-file-sizes.json --freeze` |
-| Live ESLint naming and complexity (max 15) | `aragora/live/eslint-suppressions.json` | 339 | Live frontend maintainers | `cd aragora/live && npx eslint . --prune-suppressions` |
+| Live ESLint naming and complexity (max 15, native suppression file) | `aragora/live/eslint-suppressions.json` | 339 | Live frontend maintainers | `cd aragora/live && npx eslint . --prune-suppressions` |
+| Live knip (unused files, dependencies, exports and types) | `scripts/baselines/live-knip.json` | 2475 | Live frontend maintainers | `python scripts/ci/check_tool_baseline.py --tool knip --cwd aragora/live --baseline scripts/baselines/live-knip.json --update -- npx knip --reporter json` |
+| Live file size (2,000 lines) | `scripts/baselines/live-file-sizes.json` | 3 | Live frontend maintainers | `python scripts/ci/check_file_sizes.py --glob 'aragora/live/src/**/*.{ts,tsx}' --baseline scripts/baselines/live-file-sizes.json --freeze` |
+| Live jscpd (50 minimum tokens, hard 6% line threshold) | `aragora/live/.jscpd.json`, threshold-only | 5.3496% lines | Live frontend maintainers | `cd aragora/live && npx jscpd --config .jscpd.json` (measure, no baseline regeneration) |
 
 ### ESLint suppression growth_log
 
@@ -41,6 +44,25 @@ counts and the number of files are recorded separately below.
 Future suppression growth needs a reviewed reason here in the same commit;
 normal maintenance only prunes resolved violations. ESLint's JSON is tool-owned
 and contains no custom metadata.
+
+Live gates run through `make readiness-lint-live`. Knip uses its Next.js,
+Jest and Playwright entry-point discovery and scans JS, TS and CSS without
+dependency ignores or disabled issue categories. CSS stays in the graph so
+font imports count as dependency uses. The initial census contains 2,475 keys
+and occurrences: 187 files, 4 dependencies, 5 dev dependencies, 1,055 exports,
+913 types and 311 duplicate-export groups. Plain `npx knip` still reports
+this debt; only the shared baseline comparison makes the gate green.
+New unused dependencies fail even before installation.
+
+Live's file-size census includes `Oracle.tsx` (2,256 lines),
+`lib/aragora-client.ts` (3,191) and generated `types/api.generated.ts`
+(187,459). The source glob includes generated types, tests, and untracked
+sources; no large-file exemptions were added. Initial adoption freezes
+these existing files, rather than splitting product code in a gate change.
+The duplication check likewise scans all of `src/`, including generated
+types and tests: 1,397 sources, 1,625 clones, 21,918 duplicated lines out of
+409,710. It uses the pinned app dependency and writes an ignored
+`.jscpd-report/jscpd-report.json` in `aragora/live`.
 
 
 Package gates run through `make readiness-lint-debate readiness-lint-verify`.

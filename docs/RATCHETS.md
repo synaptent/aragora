@@ -5,7 +5,7 @@ down. It lets a gate land on a codebase with existing debt without turning
 `main` red: every pre-existing finding is recorded in a committed baseline,
 new findings fail the check, and the baseline can only shrink. This is the
 Layer 1 mechanism of the readiness architecture; every later per-app gate
-(ruff naming/complexity, vulture, deptry, jscpd, mypy, ESLint, golangci-lint,
+(ruff naming/complexity, vulture, deptry, jscpd, mypy, ESLint, knip, golangci-lint,
 TODO/FIXME) is wired through it. **Do not invent a second baseline mechanism.**
 
 ## The runner: `scripts/ci/check_tool_baseline.py`
@@ -141,7 +141,7 @@ Parsers live in `scripts/ci/tool_baseline_parsers.py`. Each is a pure function
 adding a parser is a one-function change and the runner's `--help`, this list,
 and `docs/TECH_DEBT.md` follow.
 
-The eight M1 parsers (`python scripts/ci/check_tool_baseline.py --help` lists
+The eight M1 parsers plus knip (`python scripts/ci/check_tool_baseline.py --help` lists
 the same names). The command column is what the runner expects to find on the
 tool's **stdout**; run it from `--cwd` so reported paths stay relative.
 
@@ -153,6 +153,7 @@ tool's **stdout**; run it from `--cwd` so reported paths stay relative.
 | `jscpd` | `sh -c 'jscpd --reporters json --output DIR --silent . >/dev/null; cat DIR/jscpd-report.json'` — the `json` reporter only writes `DIR/jscpd-report.json`, never stdout, so the wired command must `cat` it; scan `.` from `--cwd` so `firstFile.name` is relative | path = `firstFile.name`; symbol = hash of the duplicated `fragment`; rule = `clone`. A third copy of the same fragment raises the count | `0` | `0` (the wrapper's final `cat` exit) |
 | `mypy` | `mypy [--ignore-missing-imports] <paths>` (text output; `error`/`warning` lines, notes ignored) | symbol = line-content hash; rule = `[code]` (`arg-type`, `return-value`) | `0` | `1` |
 | `eslint` | `eslint -f json <paths>` (`filePath` is absolute; the runner makes it relative to `--cwd`) | symbol = line-content hash; rule = `ruleId` (a fatal parse error with `ruleId: null` is `fatal`) | `0` | `1` |
+| `knip` | `npx knip --reporter json` (Knip 6: `issues` rows grouped by `file`) | symbol = name (including namespace), sorted symbol group for duplicate exports/cycles, or `file` for unused files; rule = issue category, including `dependencies` and `devDependencies` | `0` | `1` |
 | `golangci-lint` | `golangci-lint run --output.json.path stdout --show-stats=false ./...` (v2 JSON schema: `{"Issues":[{"FromLinter","Text","SourceLines","Pos":{"Filename","Line"}}],"Report":…}`; without `--show-stats=false` a text stats block follows the JSON on stdout and only the first JSON object is read) | symbol = line-content hash (taken from `SourceLines[0]`, or read from the file when absent); rule = `FromLinter` (`errcheck`, `revive`) | `0` | `1` |
 | `todo` | `grep -rn --include='*.py' -E 'TODO\|FIXME' .` | symbol = matched-line hash; rule = the marker word (`TODO`, `FIXME`, `XXX`, `HACK`) | `0`, `1` (no matches) | `0` |
 
@@ -169,7 +170,7 @@ Two key families follow from the table:
   reports a line number and the runner hashes that source line's stripped
   content from `--cwd`, so two findings of the same rule in one function keep
   distinct keys and a pure line shift changes nothing.
-- **Symbol-keyed tools** (`vulture`, `deptry`, `jscpd`, `todo`): the tool's own
+- **Symbol-keyed tools** (`vulture`, `deptry`, `jscpd`, `knip`, `todo`): the tool's own
   output already names the thing (a dead symbol, an unused module, a duplicated
   fragment, a matched comment line), so the parser fills the symbol itself and
   the runner never opens the source file.
@@ -177,7 +178,7 @@ Two key families follow from the table:
 Every parser has a captured real-output fixture under
 `tests/ci/fixtures/tool_baseline/` and at least one test id naming it in
 `tests/ci/test_check_tool_baseline.py`; a later milestone that adds a parser
-(e.g. `knip`) must add both.
+must add both.
 
 ## Contributor flow
 
@@ -212,6 +213,8 @@ appends its baselines here, one row per file:
 | `scripts/baselines/root-todo.json` | `readiness-lint-root` | `python scripts/ci/check_todo_ratchet.py --baseline scripts/baselines/root-todo.json --update` |
 | `scripts/baselines/file_size_baseline.json` (legacy format) | `readiness-lint-root` | `python scripts/ci/check_file_sizes.py --baseline scripts/baselines/file_size_baseline.json --freeze` |
 | `aragora/live/eslint-suppressions.json` (ESLint native format) | `readiness-lint-live` | `cd aragora/live && npx eslint . --prune-suppressions` |
+| `scripts/baselines/live-knip.json` | `readiness-lint-live` | `python scripts/ci/check_tool_baseline.py --tool knip --cwd aragora/live --baseline scripts/baselines/live-knip.json --update -- npx knip --reporter json` |
+| `scripts/baselines/live-file-sizes.json` (file-size census format) | `readiness-lint-live` | `python scripts/ci/check_file_sizes.py --glob 'aragora/live/src/**/*.{ts,tsx}' --baseline scripts/baselines/live-file-sizes.json --freeze` |
 
 The convention for every row: the regeneration command is the wired check
 command plus `--update`, run from the repository root, e.g.
@@ -237,6 +240,14 @@ command), where the count is `len(findings)`.
 
 ## Related mechanisms
 
+- **Live dead code and duplication.** `aragora/live/knip.json` relies on
+  framework entry-point discovery while keeping all JS, TS and CSS sources
+  in scope. It has no dependency ignores; unused dependencies, files, exports
+  and types remain visible in `npx knip` and are compared to the shared
+  baseline by Make. `aragora/live/.jscpd.json` is threshold-only, not a clone
+  baseline: `cd aragora/live && npx jscpd --config .jscpd.json` scans `src/`
+  at 50 minimum tokens and fails above 6% duplicated lines. Both checks run
+  alongside lint, formatting and file sizes in `make readiness-lint-live`.
 - **ESLint bulk suppressions.** `aragora/live/eslint-suppressions.json` is
   generated and auto-loaded by ESLint, not the shared runner. Initial adoption
   used `cd aragora/live && npx eslint . --suppress-all`, recording only existing
