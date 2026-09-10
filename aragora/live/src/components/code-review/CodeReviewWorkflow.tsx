@@ -174,8 +174,8 @@ export function CodeReviewWorkflow() {
           runMockReview();
         }
       }, 120000);
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- runMockReview and transformApiResult are stable
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runMockReview and transformApiResult are stable
     [step],
   );
 

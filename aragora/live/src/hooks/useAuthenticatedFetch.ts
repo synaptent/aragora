@@ -190,6 +190,7 @@ export function useAuthenticatedFetch<T>(
     authLoading,
     requireAuth,
     refreshToken,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- caller supplies additional dependencies
     ...deps,
   ]);
 

@@ -220,8 +220,8 @@ export function VoiceInput({
           logger.warn('Voice warning:', data.message);
           break;
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [onTranscript, autoSubmitSuggestion, sendSuggestion, onTTSStart],
   );
 

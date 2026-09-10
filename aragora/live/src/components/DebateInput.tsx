@@ -666,8 +666,8 @@ export function DebateInput({
         clearTimeout(timeoutId);
         setIsSubmitting(false);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedVertical changes are handled separately
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedVertical changes are handled separately
     [
       question,
       placeholder,
