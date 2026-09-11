@@ -36,6 +36,38 @@ def test_compose_uses_secret_file_and_real_migration_cli() -> None:
     assert services["app"]["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
 
 
+def test_app_service_sets_no_entrypoint_only_variables() -> None:
+    dockerfile = (ROOT / "deploy/Dockerfile.backend").read_text()
+    assert "ENTRYPOINT" not in dockerfile
+    services = yaml.safe_load((ROOT / "deploy/hetzner/docker-compose.yml").read_text())["services"]
+    assert "SKIP_MIGRATIONS" not in services["app"]["environment"]
+
+
+def test_backup_reports_success_only_after_pg_dump_succeeds() -> None:
+    services = yaml.safe_load((ROOT / "deploy/hetzner/docker-compose.yml").read_text())["services"]
+    # Compose turns the file's ``$$`` escapes into ``$`` before the shell sees them.
+    script = services["backup"]["entrypoint"][-1].replace("$$", "$")
+    assert "| gzip" not in script
+    dump = re.search(r"if PGPASSWORD=.* pg_dump .*-Z \d+ -f \"\$F\.part\" aragora; then", script)
+    assert dump is not None
+    assert script.index('mv "$F.part" "$F" && echo "[backup] wrote') > dump.start()
+    assert script.index('rm -f "$F.part"') < script.index("[backup] FAILED")
+
+
+def test_readme_restores_dump_into_a_fresh_database_before_migrating() -> None:
+    readme = (ROOT / "deploy/hetzner/README.md").read_text()
+    order = [
+        "docker compose stop app",
+        "DROP DATABASE aragora WITH (FORCE)",
+        "psql -v ON_ERROR_STOP=1 -U aragora -d aragora",
+        "docker compose run --rm migrate",
+        "docker compose up -d app",
+    ]
+    positions = [readme.index(step) for step in order]
+    assert positions == sorted(positions)
+    assert readme.count("psql -v ON_ERROR_STOP=1") == 2
+
+
 def test_secret_template_is_empty_and_required_keys_are_checked() -> None:
     template = (ROOT / "deploy/hetzner/secrets.env.template").read_text()
     values = dict(line.split("=", 1) for line in template.splitlines() if re.match(r"^\w+=", line))

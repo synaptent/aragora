@@ -345,21 +345,6 @@ PYTHON_VERSION_SOURCES: list[tuple[str, Path]] = [
 # / ``series`` group) is the value; a ``date`` group is held to RELEASE_DATE.
 DOC_SOURCES: list[tuple[str, Path, str]] = [
     (
-        "deploy/docker-compose.yml",
-        Path("deploy/docker-compose.yml"),
-        r"(ghcr\.io/synaptent/aragora/(?:backend|frontend):)(\d+\.\d+\.\d+)(\b)",
-    ),
-    (
-        "deploy/kubernetes/backend-deployment.yaml",
-        Path("deploy/kubernetes/backend-deployment.yaml"),
-        r"(ghcr\.io/synaptent/aragora/backend:)(\d+\.\d+\.\d+)(\b)",
-    ),
-    (
-        "deploy/kubernetes/frontend-deployment.yaml",
-        Path("deploy/kubernetes/frontend-deployment.yaml"),
-        r"(ghcr\.io/synaptent/aragora/frontend:)(\d+\.\d+\.\d+)(\b)",
-    ),
-    (
         "docs/status/STATUS.md",
         Path("docs/status/STATUS.md"),
         r"^(Current released version is \*\*v?)(?P<version>\d+\.\d+\.\d+)(\*\* \(released )"

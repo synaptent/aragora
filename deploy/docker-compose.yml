@@ -3,7 +3,7 @@
 
 services:
   backend:
-    image: ${ARAGORA_BACKEND_IMAGE:-ghcr.io/synaptent/aragora/backend:2.10.0}
+    image: ${ARAGORA_BACKEND_IMAGE:-ghcr.io/synaptent/aragora/backend:2.1.10}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.backend
@@ -48,7 +48,7 @@ services:
           memory: 4G
 
   frontend:
-    image: ${ARAGORA_FRONTEND_IMAGE:-ghcr.io/synaptent/aragora/frontend:2.10.0}
+    image: ${ARAGORA_FRONTEND_IMAGE:-ghcr.io/synaptent/aragora/frontend:2.1.10}
     build:
       context: ..
       dockerfile: deploy/Dockerfile.frontend

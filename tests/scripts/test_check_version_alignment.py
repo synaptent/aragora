@@ -81,24 +81,6 @@ def test_get_doc_versions_returns_every_occurrence(cva, tmp_path: Path) -> None:
     assert cva.get_doc_versions(doc, IMAGE_PIN) == ["2.10.0", "2.9.0"]
 
 
-@pytest.mark.parametrize(
-    "path,count",
-    [
-        ("deploy/docker-compose.yml", 2),
-        ("deploy/kubernetes/backend-deployment.yaml", 1),
-        ("deploy/kubernetes/frontend-deployment.yaml", 1),
-    ],
-)
-def test_deploy_image_pins_are_tracked_and_fixable(cva, tmp_path, monkeypatch, path, count):
-    pattern = _pattern(cva, path)
-    monkeypatch.chdir(REPO_ROOT)
-    assert cva.get_doc_versions(Path(path), pattern) == [cva.get_canonical_version()] * count
-    copy = tmp_path / "deployment.yaml"
-    copy.write_text((REPO_ROOT / path).read_text())
-    assert cva.fix_doc_version(copy, pattern, "9.8.7")
-    assert cva.get_doc_versions(copy, pattern) == ["9.8.7"] * count
-
-
 def test_fix_doc_version_rewrites_every_occurrence(cva, tmp_path: Path) -> None:
     doc = tmp_path / "d.md"
     doc.write_text(

@@ -97,13 +97,25 @@ endpoint. Everything binds to `127.0.0.1` — still unreachable from outside.
 
 ## Step 5 — (Only if you found a dump) restore the data
 
-Do this **after** step 4 and **before** the tunnel goes live.
+Do this **after** step 4 and **before** the tunnel goes live. Step 4 already
+created the schema, so loading a plain-SQL dump on top of it collides with the
+existing tables, and `psql` would keep going past those errors and leave a
+partial restore that looks like success. Restore into an empty database and
+let the migrate service bring the dump's schema forward:
 
 ```bash
+docker compose stop app
+docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U aragora -d postgres \
+  -c 'DROP DATABASE aragora WITH (FORCE)' -c 'CREATE DATABASE aragora'
 gunzip -c /path/to/dump.sql.gz | docker compose exec -T postgres \
-  psql -U aragora -d aragora
-docker compose restart app
+  psql -v ON_ERROR_STOP=1 -U aragora -d aragora
+docker compose run --rm migrate
+docker compose up -d app
 ```
+
+`ON_ERROR_STOP=1` makes the restore fail loudly on the first error instead of
+continuing; if it stops, nothing in `secrets.env` needs to change — fix the
+dump and rerun from the `DROP DATABASE` line.
 
 ## Step 6 — Point the tunnel at it
 
