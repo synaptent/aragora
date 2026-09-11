@@ -815,14 +815,23 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
                 content = receipt.to_csv()
             else:
                 content = receipt.to_json()
-        except (ImportError, AttributeError, KeyError, ValueError, TypeError):
-            # Fallback to simple formatter
+        except (ImportError, AttributeError, KeyError, ValueError, TypeError) as exc:
+            # A fallback must still produce the requested artifact format.
             if output_format == "html":
                 content = receipt_to_html(data)
             elif output_format in ("md", "markdown"):
                 content = receipt_to_markdown(data)
             else:
-                content = json.dumps(data, indent=2, default=str)
+                print(
+                    f"Error: Could not export receipt as {output_format.upper()}", file=sys.stderr
+                )
+                if output_format == "pdf" and isinstance(exc, ImportError):
+                    print(
+                        "PDF export requires weasyprint and its system dependencies; "
+                        "check that they are installed in this environment.",
+                        file=sys.stderr,
+                    )
+                sys.exit(1)
 
     if output_path:
         if isinstance(content, bytes):
