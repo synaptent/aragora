@@ -336,6 +336,31 @@ def test_exclusion_path_violation_reports_arch_context(tmp_path: Path) -> None:
     assert result.proposed_violations[0].authority_ids == ["ARCH-029"]
 
 
+def test_repository_server_exclusion_is_scoped_to_retired_homes() -> None:
+    charter_path = Path(__file__).resolve().parents[2] / "docs/architecture/charters.yaml"
+    handler_diff = """diff --git a/aragora/server/handlers/tasks/execution.py b/aragora/server/handlers/tasks/execution.py
+--- a/aragora/server/handlers/tasks/execution.py
++++ b/aragora/server/handlers/tasks/execution.py
+@@ -0,0 +1 @@
++class TaskRouter: pass
+"""
+
+    handler_result = checker.check_diff(handler_diff, charter_path=charter_path)
+
+    assert all(violation.entry_id != "CHR-E-004" for violation in handler_result.violations)
+
+    retired_home_diff = """diff --git a/aragora/server/metrics.py b/aragora/server/metrics.py
+--- /dev/null
++++ b/aragora/server/metrics.py
+@@ -0,0 +1 @@
++def record_metric(name: str) -> None: pass
+"""
+    retired_home_result = checker.check_diff(retired_home_diff, charter_path=charter_path)
+
+    assert retired_home_result.ok is False
+    assert "CHR-E-004" in {violation.entry_id for violation in retired_home_result.violations}
+
+
 def test_cli_json_exits_nonzero_with_citable_ids(tmp_path: Path, capsys: Any) -> None:
     charter_path = _write_charters(tmp_path, _charters_payload())
     diff_path = tmp_path / "diff.patch"
