@@ -452,6 +452,19 @@ def safe_set_not_null(
     logger.info("Set %s.%s to NOT NULL", table, column)
 
 
+def _execute_concurrent_index(backend: DatabaseBackend, statement: str) -> None:
+    """Run PostgreSQL concurrent DDL outside a transaction, then restore pool state."""
+    with backend.connection() as connection:
+        autocommit = connection.autocommit
+        try:
+            connection.autocommit = True
+            with connection.cursor() as cursor:
+                cursor.execute(statement)
+        finally:
+            if not connection.closed:
+                connection.autocommit = autocommit
+
+
 def safe_create_index(
     backend: DatabaseBackend,
     index_name: str,
@@ -481,8 +494,9 @@ def safe_create_index(
     if is_postgresql(backend) and concurrently:
         # PostgreSQL: CREATE INDEX CONCURRENTLY doesn't block writes
         # Note: Cannot be run inside a transaction
-        backend.execute_write(
-            f"CREATE {unique_str}INDEX CONCURRENTLY IF NOT EXISTS {qi} ON {qt} ({columns_str})"
+        _execute_concurrent_index(
+            backend,
+            f"CREATE {unique_str}INDEX CONCURRENTLY IF NOT EXISTS {qi} ON {qt} ({columns_str})",
         )
     else:
         backend.execute_write(
@@ -507,7 +521,7 @@ def safe_drop_index(
     qi = quote_identifier(index_name, "index_name")
 
     if is_postgresql(backend) and concurrently:
-        backend.execute_write(f"DROP INDEX CONCURRENTLY IF EXISTS {qi}")
+        _execute_concurrent_index(backend, f"DROP INDEX CONCURRENTLY IF EXISTS {qi}")
     else:
         backend.execute_write(f"DROP INDEX IF EXISTS {qi}")
 
