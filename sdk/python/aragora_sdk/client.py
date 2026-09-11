@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import timezone
+from email.utils import parsedate_to_datetime
+from math import ceil
+from threading import TIMEOUT_MAX
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
 from urllib.parse import urljoin
 
@@ -25,6 +29,27 @@ from .exceptions import (
     ServerError,
     ValidationError,
 )
+
+
+def _parse_retry_after(value: str | None) -> int | None:
+    """Return an HTTP retry hint representable by the platform's timeout machinery."""
+    if value is None:
+        return None
+    value = value.strip()
+    try:
+        if value.isascii() and value.isdecimal():
+            delay = int(value)
+        else:
+            retry_at = parsedate_to_datetime(value)
+            # The obsolete HTTP asctime form has no timezone but always means UTC.
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            delay = max(0, ceil(retry_at.timestamp() - time.time()))
+        # This is a representability check, not a retry-policy delay cap. Avoid
+        # losing RateLimitError to an overflow in sleep on an unusable hint.
+        return delay if delay <= TIMEOUT_MAX else None
+    except (ValueError, TypeError, OverflowError, OSError):
+        return None
 
 
 class AragoraClient:
@@ -646,7 +671,11 @@ class AragoraClient:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     # Use server-specified retry delay if available
-                    delay = e.retry_after if e.retry_after else self.retry_delay * (2**attempt)
+                    delay = (
+                        e.retry_after
+                        if e.retry_after is not None
+                        else self.retry_delay * (2**attempt)
+                    )
                     time.sleep(delay)
                     continue
                 raise
@@ -698,7 +727,7 @@ class AragoraClient:
             retry_after = response.headers.get("Retry-After")
             raise RateLimitError(
                 message,
-                retry_after=int(retry_after) if retry_after else None,
+                retry_after=_parse_retry_after(retry_after),
                 error_code=error_code,
                 trace_id=trace_id,
                 response_body=body,
@@ -1318,7 +1347,11 @@ class AragoraAsyncClient:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     # Use server-specified retry delay if available
-                    delay = e.retry_after if e.retry_after else self.retry_delay * (2**attempt)
+                    delay = (
+                        e.retry_after
+                        if e.retry_after is not None
+                        else self.retry_delay * (2**attempt)
+                    )
                     await asyncio.sleep(delay)
                     continue
                 raise
@@ -1370,7 +1403,7 @@ class AragoraAsyncClient:
             retry_after = response.headers.get("Retry-After")
             raise RateLimitError(
                 message,
-                retry_after=int(retry_after) if retry_after else None,
+                retry_after=_parse_retry_after(retry_after),
                 error_code=error_code,
                 trace_id=trace_id,
                 response_body=body,
