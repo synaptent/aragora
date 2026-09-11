@@ -194,13 +194,12 @@ def _load_receipt_json(path: Path) -> dict[str, Any] | None:
 
     Returns the parsed dict, or None on error (with message printed).
     """
-    if not path.exists():
-        print(f"Error: File not found: {path}", file=sys.stderr)
-        return None
-
     try:
+        if not path.exists():
+            print(f"Error: File not found: {path}", file=sys.stderr)
+            return None
         raw = path.read_text(encoding="utf-8")
-    except OSError as e:
+    except (OSError, UnicodeDecodeError) as e:
         print(f"Error: Cannot read file: {e}", file=sys.stderr)
         return None
 
@@ -705,8 +704,12 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
 def _resolve_receipt_data(receipt_ref: str) -> dict[str, Any] | None:
     """Resolve a receipt argument that may be a file path or a stored receipt ID."""
     path = Path(receipt_ref)
-    if path.exists():
-        return _load_receipt_json(path)
+    try:
+        if path.exists():
+            return _load_receipt_json(path)
+    except OSError as e:
+        print(f"Error: Cannot read file: {e}", file=sys.stderr)
+        return None
 
     # Not a file on disk — try the durable store, then the legacy store.
     # Store access errors are surfaced (not silently treated as "not found")
