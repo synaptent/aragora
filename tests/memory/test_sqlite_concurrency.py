@@ -222,15 +222,17 @@ class TestCritiqueStoreConcurrency:
             assert mode.lower() == "wal", f"CritiqueStore not using WAL: {mode}"
 
     def test_concurrent_reputation_updates(self, temp_db):
-        """Test concurrent reputation updates don't cause deadlocks."""
+        """Successful concurrent updates must match the persisted reputation totals."""
         store = CritiqueStore(temp_db)
 
         errors = []
         success_count = [0]
         lock = threading.Lock()
+        start = threading.Barrier(10)
 
         def update_reputation(agent_name):
             try:
+                start.wait(timeout=5)
                 store.update_reputation(
                     agent_name=agent_name,
                     proposal_accepted=True,
@@ -249,11 +251,27 @@ class TestCritiqueStoreConcurrency:
 
         for t in threads:
             t.start()
+        deadline = time.monotonic() + 30
         for t in threads:
-            t.join(timeout=30)
+            t.join(timeout=max(0, deadline - time.monotonic()))
 
+        assert not any(t.is_alive() for t in threads), "Reputation workers did not finish"
+        assert success_count[0] + len(errors) == len(threads)
         # Most updates should succeed with WAL mode
         assert success_count[0] >= 5, f"Too many failures: {len(errors)} errors"
+
+        # Read committed state on a fresh connection, not the cached reputation getter.
+        conn = sqlite3.connect(temp_db)
+        try:
+            row = conn.execute(
+                "SELECT proposals_made, proposals_accepted, critiques_given, critiques_valuable "
+                "FROM agent_reputation WHERE agent_name = ?",
+                ("test-agent",),
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row is not None, "Successful calls did not persist a reputation row"
+        assert row == (0, success_count[0], 0, success_count[0])
 
 
 class TestContinuumMemoryConcurrency:
