@@ -413,6 +413,7 @@ class SecretManager:
         self._aws_clients: dict[str, Any] = {}
         self._last_aws_load_succeeded = False
         self._last_aws_load_transient_failure = False
+        self._last_aws_load_authoritative_failure = False
         self._managed_sources_healthy = False
         self._cached_secrets: dict[str, str] = {}
         self._cached_secret_sources: dict[str, str] = {}
@@ -561,6 +562,7 @@ class SecretManager:
             self.config.use_aws
             and self._last_aws_load_transient_failure
             and not self._last_aws_load_succeeded
+            and not self._last_aws_load_authoritative_failure
         ):
             aws_secrets = {
                 name: value
@@ -695,6 +697,7 @@ class SecretManager:
         """Load secrets from AWS Secrets Manager."""
         self._last_aws_load_succeeded = False
         self._last_aws_load_transient_failure = False
+        self._last_aws_load_authoritative_failure = False
         if not self.config.use_aws:
             return {}
 
@@ -709,6 +712,7 @@ class SecretManager:
                 continue
             try:
                 response = client.get_secret_value(SecretId=self.config.secret_name)
+                self._last_aws_load_authoritative_failure = True
                 secret_string = response.get("SecretString")
                 if not isinstance(secret_string, str):
                     logger.error("AWS secret payload is not textual JSON (region=%s)", region)
@@ -728,6 +732,7 @@ class SecretManager:
                 )
                 self._last_aws_load_succeeded = True
                 self._last_aws_load_transient_failure = False
+                self._last_aws_load_authoritative_failure = False
                 return secrets
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse secrets JSON from AWS (region=%s): %s", region, e)
@@ -738,6 +743,7 @@ class SecretManager:
                 if hasattr(e, "response"):
                     error_code = e.response.get("Error", {}).get("Code", "")
                     if error_code == "ResourceNotFoundException":
+                        self._last_aws_load_authoritative_failure = True
                         logger.warning(
                             "Secret '%s' not found in AWS (region=%s)",
                             self.config.secret_name,
@@ -1147,7 +1153,9 @@ def hydrate_env_from_secrets(
         with manager._lock:
             cached_secrets = dict(manager._cached_secrets)
             cached_sources = dict(manager._cached_secret_sources)
-            managed_sources_healthy = manager._managed_sources_healthy
+            clear_unmanaged_env = manager._managed_sources_healthy or (
+                manager.config.use_aws and manager._last_aws_load_authoritative_failure
+            )
         use_strict = is_strict_mode()
         for name in target_names:
             if (
@@ -1163,7 +1171,7 @@ def hydrate_env_from_secrets(
                 manager._log_access(name, f"hydrate_{source}", True)
             elif use_strict and is_critical_secret(name):
                 manager._log_access(name, "hydrate_env_blocked", False)
-                if name in os.environ and managed_sources_healthy:
+                if name in os.environ and clear_unmanaged_env:
                     logger.warning(
                         "SECURITY: Removing critical secret '%s' from the process environment "
                         "because strict managed custody is enabled.",

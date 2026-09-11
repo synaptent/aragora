@@ -29,7 +29,7 @@ pip install aragora-sdk
 
 `aragora-sdk` on PyPI follows a **decoupled release cadence**: the repository's
 `sdk/python/` may be ahead of the latest published wheel between releases
-(e.g. the repo can declare 2.9.0 while PyPI serves 2.8.0). This is intentional —
+(e.g. the repo can declare 2.10.0 while PyPI serves 2.8.0). This is intentional —
 releases are operator-gated and cut deliberately, not on every merge.
 Compatibility expectation: the published PyPI version always targets the
 `/api/v1` surface of the same or newer server release, and published versions
@@ -355,9 +355,6 @@ replays = client.replays.list(limit=10)
 replay = client.replays.get(replays[0].replay_id)
 for event in replay.events:
     print(f"[{event.timestamp}] {event.event_type}: {event.content[:50]}...")
-
-# Export to JSON/CSV
-data = client.replays.export(replay.replay_id, format="json")
 
 # Delete replay
 client.replays.delete(replay.replay_id)

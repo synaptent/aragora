@@ -271,3 +271,70 @@ from aragora.triage import (
 The library is also useful from notebooks or from a future Arena-backed
 integration: feed in your own panel + generator and you get the same
 receipt shape.
+
+## Mechanical triage pass (2026-07-29)
+
+Separate from the calibration tool above, a one-off **mechanical** pass was run
+against the full open backlog. It is recorded here so the rules are auditable
+and repeatable.
+
+### Why it was needed
+
+`gh issue list --limit 500` reports "500+" and silently truncates. The real
+open count was **1,379**, and the largest cohort — 770 issues created in
+2026-04, 56% of the backlog — sat entirely behind that cap. Any triage driven
+by the capped query is reasoning about the visible tail, not the backlog.
+
+### Disposition labels
+
+| Label | Meaning |
+|---|---|
+| `triage:superseded` | Work verified already present on `main`; closed |
+| `triage:duplicate` | Duplicate of a rolling anchor issue; closed |
+| `triage:verified-real` | Verified still outstanding on `main`; keep |
+| `triage:protected` | Load-bearing; never auto-close |
+| `triage:defer-salvage` | Live branch with an unmerged delta; belongs to a branch-salvage pass |
+| `triage:unverified` | No mechanical verdict available; needs a human read |
+
+### Rules that produced them
+
+1. **Protect first.** Never close: named load-bearing issues (#274, #509 pentest /
+   SOC 2; #9391 P0 outage; #8858 outsider verification), anything human-authored,
+   and anything labelled `epic`, `program:execution-2026`, `priority:critical`,
+   or `priority:high`.
+2. **Superseded requires proof on `main`, not title similarity.** For exception-
+   handling issues, the named file must contain no broad `except Exception` /
+   bare `except:` outside a documented `# noqa: BLE001`. For "add unit tests for
+   X" issues, `test_X.py` must exist.
+3. **Ambiguity yields no verdict.** If a basename resolves to more than one file,
+   or the issue names a directory path that the found test file does not mirror,
+   the issue is left `triage:unverified` rather than closed.
+4. **Branch survival is not evidence either way.** Dispatch rows ("Open a PR
+   for …") were checked against the remote: of 6 surviving branches sampled, 6
+   carried real unmerged deltas vs `main`. They are deferred, not closed.
+
+### What the sampling caught
+
+The rules were validated before applying, and the validation changed them twice:
+
+- A first-cut classifier ran the exception check on *every* issue naming a
+  `.py` file, so "Add unit tests for `approvals.py`" was being marked superseded
+  because that file had no broad `except`. Gating the check on the issue's own
+  subject cut the close set from 338 to 88.
+- Cohorts are roughly half-done, not uniformly stale: of 209 exception issues,
+  **115 cleared and 69 were still real**; of 137 unit-test issues, **68 existed
+  and 45 were missing**. Age predicted nothing. A blanket close by age or by
+  cohort would have destroyed the real half.
+
+### Result
+
+1,379 open → 1,250 open, all labelled. 128 closed (88 verified-superseded,
+40 duplicate run-logs), each with a comment citing the `main` commit and the
+specific file checked, and each inviting reopen.
+
+### Known gap
+
+The `stale-close` rule is **not** implemented as applied. It was authorized at a
+120-day inactivity threshold, but the candidate cohort's maximum inactivity is
+111 days, so the rule matched zero issues. Thresholds that would bite:
+>90d → 303 issues, >105d → 257. Re-run with a lower threshold to enable it.

@@ -23,7 +23,7 @@ This document provides a comprehensive inventory of Aragora's features organized
 | [Self-Improvement](#9-self-improvement--nomic-loop) | 18+ | Stable |
 
 <!-- metrics:begin feature-discovery-total -->
-**Total**: 230+ features | 4,312 Python files | 226,110 tests | 3,205 API operations across 2,912 paths
+**Total**: 230+ features | 4,330 Python files | 226,585 tests | 3,205 API operations across 2,912 paths
 <!-- metrics:end -->
 
 ---

@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -43,6 +44,7 @@ from aragora.swarm.drain_policy import DrainAction, DrainPolicy
 
 # Single-sourced from boss_drain so the proxy gate and the repair prompt can't drift.
 _REQUIRED = set(REQUIRED_CHECK_NAMES)
+_FULL_HEAD_SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _gh_json(args: list[str], timeout: int = 40) -> Any:
@@ -114,7 +116,13 @@ def _proxy_authorized(view: dict[str, Any]) -> tuple[bool, int]:
     return (required_ok and quorum_ok, 0)
 
 
-def _settle_authorized(repo: str, number: int) -> bool:
+def _settle_authorized(repo: str, number: int) -> str | None:
+    """Return the exact authorized head from the settlement snapshot.
+
+    Settlement authority and the head it covered are one provenance record.  A
+    missing or malformed head therefore invalidates the authorization instead
+    of permitting a later lookup to select a different PR head.
+    """
     try:
         out = subprocess.run(
             ["python3", "scripts/settle_one_pr.py", "--pr", str(number), "--repo", repo, "--json"],
@@ -123,9 +131,18 @@ def _settle_authorized(repo: str, number: int) -> bool:
             timeout=120,
         )
         rep = json.loads(out.stdout) if out.stdout.strip() else {}
-        return rep.get("status") == "packet_authorized_dry_run" and not rep.get("blockers")
+        head = rep.get("head_sha")
+        if (
+            out.returncode == 0
+            and rep.get("status") == "packet_authorized_dry_run"
+            and not rep.get("blockers")
+            and isinstance(head, str)
+            and _FULL_HEAD_SHA.fullmatch(head)
+        ):
+            return head
+        return None
     except Exception:  # noqa: BLE001
-        return False
+        return None
 
 
 def dispatch_repair(repo: str, pr: int, *, dry_run: bool, enable_repair: bool, agent: str) -> bool:
@@ -226,12 +243,23 @@ def make_execute_fn(
         if dry_run:
             return True  # plan only
         if action is DrainAction.MERGE:
-            if not _settle_authorized(repo, pr):  # re-confirm authority at apply time
+            # The settlement report's exact head is both the authorization
+            # subject and the merge precondition.  Never resolve it again here:
+            # a second lookup could pair a newer head with an older gate result.
+            head = _settle_authorized(repo, pr)
+            if head is None:  # missing/malformed provenance fails closed
                 return False
-            head = (view_pr(repo, pr) or {}).get("headRefOid", "")
-            cmd = ["gh", "pr", "merge", str(pr), "--repo", repo, "--squash"]
-            if head:
-                cmd += ["--match-head-commit", head]
+            cmd = [
+                "gh",
+                "pr",
+                "merge",
+                str(pr),
+                "--repo",
+                repo,
+                "--squash",
+                "--match-head-commit",
+                head,
+            ]
             return subprocess.run(cmd, capture_output=True, text=True, timeout=120).returncode == 0
         if action is DrainAction.CLOSE_SUPERSEDED:
             return (

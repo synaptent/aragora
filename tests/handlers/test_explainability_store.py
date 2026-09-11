@@ -801,11 +801,11 @@ class TestGetBatchJobStore:
                 create=True,
             ),
             patch(
-                "aragora.server.redis_config.get_redis_client",
+                "aragora.utils.redis_config.get_redis_client",
                 return_value=mock_redis,
             ),
             patch(
-                "aragora.server.redis_config.is_redis_available",
+                "aragora.utils.redis_config.is_redis_available",
                 return_value=True,
             ),
         ):
@@ -818,11 +818,11 @@ class TestGetBatchJobStore:
         monkeypatch.setenv("ARAGORA_EXPLAINABILITY_DB", str(tmp_path / "fallback.db"))
         with (
             patch(
-                "aragora.server.redis_config.is_redis_available",
+                "aragora.utils.redis_config.is_redis_available",
                 return_value=False,
             ),
             patch(
-                "aragora.server.redis_config.get_redis_client",
+                "aragora.utils.redis_config.get_redis_client",
                 return_value=None,
             ),
         ):
@@ -885,11 +885,11 @@ class TestGetBatchJobStore:
         monkeypatch.setenv("ARAGORA_EXPLAINABILITY_DB", str(tmp_path / "auto.db"))
         with (
             patch(
-                "aragora.server.redis_config.is_redis_available",
+                "aragora.utils.redis_config.is_redis_available",
                 return_value=False,
             ),
             patch(
-                "aragora.server.redis_config.get_redis_client",
+                "aragora.utils.redis_config.get_redis_client",
                 return_value=None,
             ),
         ):
@@ -904,7 +904,7 @@ class TestGetBatchJobStore:
         monkeypatch.setenv("ARAGORA_EXPLAINABILITY_DB", str(tmp_path / "auto2.db"))
         with patch.dict(
             "sys.modules",
-            {"aragora.server.redis_config": None},
+            {"aragora.utils.redis_config": None},
         ):
             store = get_batch_job_store()
             assert store is not None

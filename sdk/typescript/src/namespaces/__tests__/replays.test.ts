@@ -114,15 +114,6 @@ describe('ReplaysAPI Namespace', () => {
       expect(result.events).toHaveLength(2);
     });
 
-    it('should get replay from debate', async () => {
-      const mockReplay = { id: 'rp_1', debate_id: 'd_123' };
-      mockClient.request.mockResolvedValue(mockReplay);
-
-      const result = await api.getFromDebate('d_123');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/debates/d_123/replay');
-      expect(result.debate_id).toBe('d_123');
-    });
   });
 
   // ===========================================================================
@@ -276,32 +267,6 @@ describe('ReplaysAPI Namespace', () => {
       expect(result).toContain('<html>');
     });
 
-    it('should export replay', async () => {
-      const mockExport = {
-        data: '{"id":"rp_1","events":[]}',
-        format: 'json',
-        download_url: 'https://storage.example.com/exports/rp_1.json',
-      };
-      mockClient.request.mockResolvedValue(mockExport);
-
-      const result = await api.export('rp_1', { format: 'json' });
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/export', {
-        params: { format: 'json' },
-      });
-      expect(result.format).toBe('json');
-    });
-
-    it('should export as markdown', async () => {
-      const mockExport = { data: '# Replay\n...', format: 'markdown' };
-      mockClient.request.mockResolvedValue(mockExport);
-
-      await api.export('rp_1', { format: 'markdown' });
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/export', {
-        params: { format: 'markdown' },
-      });
-    });
   });
 
   // ===========================================================================
@@ -309,31 +274,6 @@ describe('ReplaysAPI Namespace', () => {
   // ===========================================================================
 
   describe('Summary and Analysis', () => {
-    it('should get replay summary', async () => {
-      const mockSummary = {
-        replay_id: 'rp_1',
-        task: 'Microservices adoption',
-        total_rounds: 5,
-        total_events: 50,
-        duration_ms: 180000,
-        result: 'consensus',
-        key_moments: [
-          { event_id: 'e_10', type: 'proposal', description: 'Initial architecture proposal', timestamp: 5000 },
-          { event_id: 'e_45', type: 'consensus_reached', description: 'Consensus on gradual adoption', timestamp: 175000 },
-        ],
-        agent_participation: {
-          claude: { proposals: 3, critiques: 5, votes: 5 },
-          'gpt-4': { proposals: 2, critiques: 6, votes: 5 },
-        },
-      };
-      mockClient.request.mockResolvedValue(mockSummary);
-
-      const result = await api.getSummary('rp_1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/summary');
-      expect(result.key_moments).toHaveLength(2);
-    });
-
     it('should compare replays', async () => {
       const mockComparison = {
         replay_1: { id: 'rp_1', task: 'Microservices', result: 'consensus' },

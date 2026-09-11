@@ -2589,7 +2589,17 @@ def _build_packet(
             check_surfaces=check_surfaces,
         )
     required_pr_check_gate_satisfied = False
-    if not settlement_state_block and not checks_unavailable and (has_failures or has_pending):
+    non_required_non_green_count = 0
+    self_check_excluded = any(
+        _is_current_merge_quorum_self_check(check)
+        for check in _latest_status_check_rollup(pr.get("statusCheckRollup") or [])
+        if isinstance(check, dict)
+    )
+    if (
+        not settlement_state_block
+        and not checks_unavailable
+        and (has_failures or has_pending or self_check_excluded)
+    ):
         required_surface = _fetch_required_pr_check_surface(number, repo_override)
         required_pr_checks = [
             item for item in required_surface.get("checks") or [] if isinstance(item, dict)
@@ -2675,6 +2685,9 @@ def _build_packet(
             required_checks=required_pr_checks if required_available else None,
         )
         check_surfaces["pr_rollup"].update(rollup_required_diagnostics)
+        non_required_non_green_count = rollup_required_diagnostics.get(
+            "non_required_non_green_count", 0
+        )
 
         gate_blocked_reason = ""
         if not required_available:
@@ -2744,8 +2757,12 @@ def _build_packet(
                 "summary": checks_summary,
             }
             check_surfaces["diagnosis"] = (
-                "The PR check rollup includes non-required non-green checks, "
-                "but GitHub reports every branch-protection required check green; "
+                (
+                    "The PR check rollup includes non-required non-green checks, but "
+                    if non_required_non_green_count
+                    else ""
+                )
+                + "GitHub reports every effective branch-protection required check green; "
                 "merge-packet uses the required PR checks gate."
             )
             check_surfaces["remediation_prompt"] = (
@@ -2763,8 +2780,12 @@ def _build_packet(
                 "summary": checks_summary,
             }
             check_surfaces["diagnosis"] = (
-                "The PR check rollup includes non-required non-green checks, "
-                "and GitHub reports every non-quorum branch-protection required "
+                (
+                    "The PR check rollup includes non-required non-green checks, and "
+                    if non_required_non_green_count
+                    else ""
+                )
+                + "GitHub reports every non-quorum branch-protection required "
                 "check green; merge-packet leaves aragora-merge-quorum to the "
                 "model quorum evidence gate."
             )
@@ -2774,8 +2795,7 @@ def _build_packet(
             )
         elif gate_blocked_reason:
             check_surfaces["diagnosis"] = (
-                "The PR check rollup is non-green and merge-packet did not select "
-                f"the required PR checks gate: {gate_blocked_reason}"
+                f"merge-packet did not select the required PR checks gate: {gate_blocked_reason}"
             )
             check_surfaces["remediation_prompt"] = (
                 "Keep the PR blocked or authorize a bounded check-surface repair; "
@@ -2849,7 +2869,11 @@ def _build_packet(
     if has_failures:
         risk_flags.append(f"checks failing ({checks_summary})")
     required_pr_check_surface = check_surfaces.get("required_pr_checks") or {}
-    if required_pr_check_gate_satisfied and required_pr_check_surface:
+    if (
+        required_pr_check_gate_satisfied
+        and required_pr_check_surface
+        and non_required_non_green_count
+    ):
         risk_flags.append(
             "non-required PR checks are non-green; "
             "effective gate uses branch-protection required checks"
@@ -2890,9 +2914,11 @@ def _build_packet(
     else:
         recommendation = "approve_candidate"
         if required_pr_check_gate_satisfied:
-            recommendation_reason = (
-                "branch-protection required checks green; non-required PR checks are non-green"
-            )
+            recommendation_reason = "branch-protection required checks green"
+            if non_required_non_green_count:
+                recommendation_reason += "; non-required PR checks are non-green"
+        elif required_pr_check_surface.get("gate_blocked_reason"):
+            recommendation_reason = required_pr_check_surface["gate_blocked_reason"]
         elif direct_check_fallback_satisfied and direct_summary.get("non_green_count", 0):
             recommendation_reason = (
                 "branch-protection required contexts green via direct check-run fallback; "
@@ -3074,6 +3100,20 @@ def _build_merge_authorization_packet(
                 model_quorum_admin_squash_allowed and not admin_squash_gate_blockers
             ),
             "model_quorum_admin_squash_allowed": model_quorum_admin_squash_allowed,
+            # Non-admin-lane eligibility is the model-level verdict itself
+            # (model-quorum satisfied + all effective REQUIRED contexts green +
+            # zero unresolved dissent + tier settlement recorded where
+            # required). It is deliberately independent of admin-squash-lane
+            # live-gate state: it stays True in blocked_by_live_gate shapes,
+            # under an operator-review-required label hold, and when
+            # mergeStateStatus is unavailable. Those holds remain visible and
+            # controlling via the sibling operator_review_required /
+            # admin_squash_allowed / admin_squash_gate_blockers keys; a
+            # label-ANDed variant would read False for every parked draft at
+            # packet time, which is exactly when settlement Decisions consume
+            # it. Decisions cite this field for the model-level verdict and
+            # must still honor the sibling hold keys.
+            "non_admin_merge_eligible": model_quorum_admin_squash_allowed,
             "admin_squash_gate_blockers": admin_squash_gate_blockers,
             "merge_state_status": packet.merge_state_status,
             "unstable_non_required_contexts_ignored": (
@@ -3197,14 +3237,28 @@ def _explicit_merged_pr_merge_packet_entry(
         "status": "already_merged",
         "verdict": "already_merged_noop",
         "admin_squash_allowed": False,
+        "non_admin_merge_eligible": False,
         "requires_human_risk_settlement": False,
         "unresolved_dissent": False,
         "reviewer_signals": [],
         "dogfood_evidence": [],
         "counted_reviewer_ids": [],
         "counted_model_families": [],
+        # tier/tier_name/counted_* above are noop placeholders — this entry
+        # deliberately skips quorum hydration, so zero values here are not
+        # computed results. Authoritative post-merge tier/families live in the
+        # merged head's quorum collector JSON artifact.
+        "noop_placeholder_fields": [
+            "tier",
+            "tier_name",
+            "counted_reviewer_ids",
+            "counted_model_families",
+        ],
         "reasons": [
             "PR is already merged; merge-packet readiness is obsolete",
+            "tier=0 and empty counted_* values are noop placeholders, not "
+            "computed results; authoritative tier/families live in the "
+            "collector JSON artifact for the merged head",
         ],
     }
 

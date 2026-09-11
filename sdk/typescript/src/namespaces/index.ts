@@ -1794,8 +1794,6 @@ export {
   type SearchOptions as IndexSearchOptions,
   type SearchIndexOptions,
   type CreateIndexOptions,
-  type IndexDocument,
-  type UpdateDocumentOptions,
 } from './vector-index';
 
 // Benchmarks

@@ -694,11 +694,11 @@ class TestRedisHealth:
                 create=True,
             ) as _,
         ):
-            # The method imports from aragora.server.redis_config inside, so patch that module
+            # The method imports from aragora.utils.redis_config inside, so patch that module
             mock_redis_config = MagicMock()
             mock_redis_config.is_redis_available.return_value = True
             mock_redis_config.get_redis_client.return_value = mock_client
-            with patch.dict("sys.modules", {"aragora.server.redis_config": mock_redis_config}):
+            with patch.dict("sys.modules", {"aragora.utils.redis_config": mock_redis_config}):
                 result = handler._check_redis_health()
 
         assert result.status == ServiceStatus.OPERATIONAL
@@ -707,7 +707,7 @@ class TestRedisHealth:
     def test_redis_not_available(self, handler):
         mock_redis_config = MagicMock()
         mock_redis_config.is_redis_available.return_value = False
-        with patch.dict("sys.modules", {"aragora.server.redis_config": mock_redis_config}):
+        with patch.dict("sys.modules", {"aragora.utils.redis_config": mock_redis_config}):
             result = handler._check_redis_health()
         assert result.status == ServiceStatus.DEGRADED
         assert "unavailable" in result.message
@@ -716,7 +716,7 @@ class TestRedisHealth:
         mock_redis_config = MagicMock()
         mock_redis_config.is_redis_available.return_value = True
         mock_redis_config.get_redis_client.return_value = None
-        with patch.dict("sys.modules", {"aragora.server.redis_config": mock_redis_config}):
+        with patch.dict("sys.modules", {"aragora.utils.redis_config": mock_redis_config}):
             result = handler._check_redis_health()
         assert result.status == ServiceStatus.DEGRADED
 
@@ -724,7 +724,7 @@ class TestRedisHealth:
         # Remove the module so import fails
         import sys
 
-        saved = sys.modules.pop("aragora.server.redis_config", None)
+        saved = sys.modules.pop("aragora.utils.redis_config", None)
         try:
             import builtins
 
@@ -740,7 +740,7 @@ class TestRedisHealth:
             assert result.status == ServiceStatus.DEGRADED
         finally:
             if saved is not None:
-                sys.modules["aragora.server.redis_config"] = saved
+                sys.modules["aragora.utils.redis_config"] = saved
 
     def test_redis_ping_connection_error(self, handler):
         mock_client = MagicMock()
@@ -749,7 +749,7 @@ class TestRedisHealth:
         mock_redis_config = MagicMock()
         mock_redis_config.is_redis_available.return_value = True
         mock_redis_config.get_redis_client.return_value = mock_client
-        with patch.dict("sys.modules", {"aragora.server.redis_config": mock_redis_config}):
+        with patch.dict("sys.modules", {"aragora.utils.redis_config": mock_redis_config}):
             result = handler._check_redis_health()
         assert result.status == ServiceStatus.DEGRADED
 

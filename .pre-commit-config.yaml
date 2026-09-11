@@ -68,20 +68,7 @@ repos:
           targets_file="$(mktemp)";
           plan_file="$(mktemp)";
           trap "rm -f \"$targets_file\" \"$plan_file\"" EXIT;
-          plan_files=();
-          for path in "$@"; do
-            plan_files+=("$path");
-          done;
-          if git rev-parse --verify origin/main >/dev/null 2>&1; then
-            while IFS= read -r deleted_path; do
-              case "$deleted_path" in
-                aragora/*.py) plan_files+=("$deleted_path") ;;
-              esac;
-            done < <(git diff --name-only --diff-filter=D origin/main...HEAD -- aragora/ 2>/dev/null || true);
-          else
-            echo "warning: origin/main is unavailable; deleted aragora Python files cannot be inferred locally" >&2;
-          fi;
-          python scripts/run_typecheck_gate.py --repo-root . --files "${plan_files[@]}" --targets-file "$targets_file" --json > "$plan_file";
+          python scripts/run_typecheck_gate.py --repo-root . --base-ref main --head-ref HEAD --targets-file "$targets_file" --json > "$plan_file";
           mode="$(python -c "import json, sys; print(json.load(open(sys.argv[1]))[\"mode\"])" "$plan_file")";
           if [[ "$mode" == "full" ]]; then
             venv_bin="$(python -c "import os, sys; print(os.path.dirname(sys.executable))")";
@@ -117,7 +104,7 @@ repos:
         # plan as CI, including deleted aragora Python files and nested
         # requirements files, instead of trusting pre-commit's existing-file
         # list alone.
-        pass_filenames: true
+        pass_filenames: false
         always_run: true
         files: ^(aragora/.*\.py|pyproject\.toml|uv\.lock|\.pre-commit-config\.yaml|\.github/workflows/lint\.yml|scripts/run_typecheck_gate\.py|scripts/test_tiers\.sh|(.*/)?requirements[^/]*\.txt|\.github/actions/pr-scope-classifier/.*)$
         # Run on pre-push to catch type errors before they hit CI.
@@ -164,7 +151,7 @@ repos:
     hooks:
       - id: tsc-check
         name: TypeScript type check (frontend)
-        entry: bash -c 'cd aragora/live && npx tsc --noEmit'
+        entry: bash scripts/tsc_check_hook.sh
         language: system
         pass_filenames: false
         files: ^aragora/live/src/.*\.(ts|tsx)$

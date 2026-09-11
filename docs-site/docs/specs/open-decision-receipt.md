@@ -237,6 +237,24 @@ ODR intentionally defines **no envelope**. Deployment guidance:
 - **in-toto:** the ODR document can serve as the predicate of an attestation
   whose subject duplicates `subject.digest`.
 
+**Published custody record:** Receipt-First mission key `ed25519-44c316618e9a0f58`,
+generated 2026-09-03 for validation (not a production trust anchor), is published as
+[`aragora-odr-signing-ed25519-44c316618e9a0f58.pub.pem`](https://github.com/synaptent/aragora/blob/main/docs/specs/keys/aragora-odr-signing-ed25519-44c316618e9a0f58.pub.pem).
+The operator holds its private half in `~/.aragora/odr-signing/mission-ed25519.pem`
+(0600); CI and deployment configuration do not provision it. It is distinct from
+`examples/example-signed.pubkey.pem` and the public deterministic test seed.
+A server explicitly configured with the matching private key serves its public half at
+`/.well-known/aragora-odr-signing-key` and `/api/v2/receipts/signing-key`.
+Pin through a trusted channel, not the key routes alone. This record makes no
+validity-period guarantee: offline verification does not discover revocation.
+On compromise, the operator must revoke the key in a reviewed update here and notify
+consumers to remove their pins; rotation publishes a replacement record and updates
+consumer pins through that same trusted channel before signing resumes.
+Unusable configured file custody fails closed: producers exit 1 without output,
+both key routes return 404, and readiness remains independent (200).
+On POSIX, the loader rejects a key file writable by group or other and warns on
+one readable by group or other (strict mode rejects it).
+
 ## 7. Compliance mapping — EU AI Act Art. 14 / NIST AI 600-1
 
 ODR fields are designed to be the machine-readable evidence behind human

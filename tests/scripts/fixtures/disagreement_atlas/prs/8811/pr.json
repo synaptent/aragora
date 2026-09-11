@@ -1,0 +1,22 @@
+{
+ "number": 8811,
+ "title": "feat(evidence): observe adjudicator on review stalls",
+ "state": "closed",
+ "draft": false,
+ "user": {
+  "login": "an0mium"
+ },
+ "labels": [],
+ "created_at": "2026-07-02T23:59:41Z",
+ "updated_at": "2026-07-04T08:05:32Z",
+ "closed_at": "2026-07-04T08:05:30Z",
+ "merged_at": "2026-07-04T08:05:30Z",
+ "merge_commit_sha": "49485726a5ca1683e422870588a9eff27e974156",
+ "head": {
+  "sha": "15e87b1c1af65d745b4f64790f6069be0632acb4"
+ },
+ "base": {
+  "ref": "main"
+ },
+ "html_url": "https://github.com/synaptent/aragora/pull/8811"
+}

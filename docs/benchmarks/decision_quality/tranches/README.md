@@ -99,12 +99,13 @@ Science/forecasting holdout tranche:
 - corpus: `503a5cc94a26fcd38f8c0bb264413ac82b2ae7a3489da8d22e6d646254702ed6`
 - outcome sidecar: `9d93b2f085b1c8586f67ee73538219bc1a98888ef0d4b3d11f196b9976b4e7d4`
 
-These tranches are construction inputs, not frozen benchmark artifacts. This
-PR checks JSON structure, corpus/outcome case and option bindings, information
-cutoffs, source hashes, answer-key balance, and canonical digests. The
-automated decision-quality validator is not yet available on `origin/main`.
-Counted inference remains prohibited until a merged freeze contract and
-validator reproduce these checks across the assembled 24-case corpus.
+These tranches are construction inputs, not frozen benchmark artifacts. Run
+`python3 scripts/validate_outcome_backed_corpus.py --json` to check JSON
+structure, corpus/outcome case and option bindings, information cutoffs,
+source hashes, answer-key balance, canonical digests, and outcome leakage
+across the assembled 24-case corpus. Counted inference remains prohibited
+until a merged freeze contract also binds the scoring contract, prompts,
+roster, and aggregate corpus digests.
 
 Together the eight tranches provide all 24 planned cases: four development and
 two holdout cases in each required domain.

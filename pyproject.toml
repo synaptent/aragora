@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aragora"
-version = "2.9.0"
+version = "2.10.0"
 description = "Auditable execution control plane for AI-assisted decisions: multi-model review in, a verifiable Decision Receipt out"
 readme = {text = """
 # Aragora

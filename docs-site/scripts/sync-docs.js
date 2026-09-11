@@ -211,7 +211,6 @@ const DOC_MAP = {
   'STREAMING_DEPLOYMENT.md': 'deployment/streaming.md',
   'deployment/ASYNC_GATEWAY.md': 'deployment/async-gateway.md',
   'deployment/CONTAINER_VOLUMES.md': 'deployment/container-volumes.md',
-  'deployment/DOCKER.md': 'deployment/docker.md',
   'PRODUCTION_DEPLOYMENT.md': 'deployment/production-deployment.md',
   'DATABASE_SETUP.md': 'deployment/database-setup.md',
   'DATABASE.md': 'deployment/database.md',

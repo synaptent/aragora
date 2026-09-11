@@ -941,9 +941,9 @@ class TestSingletonManagement:
         mock_redis_client = MagicMock()
 
         with patch.dict(os.environ, {"ARAGORA_EXPLAINABILITY_STORE_BACKEND": "redis"}):
-            with patch("aragora.server.redis_config.is_redis_available", return_value=True):
+            with patch("aragora.utils.redis_config.is_redis_available", return_value=True):
                 with patch(
-                    "aragora.server.redis_config.get_redis_client", return_value=mock_redis_client
+                    "aragora.utils.redis_config.get_redis_client", return_value=mock_redis_client
                 ):
                     store = get_batch_job_store()
 
@@ -960,7 +960,7 @@ class TestSingletonManagement:
                 "ARAGORA_EXPLAINABILITY_DB": db_path,
             },
         ):
-            with patch("aragora.server.redis_config.is_redis_available", return_value=False):
+            with patch("aragora.utils.redis_config.is_redis_available", return_value=False):
                 with patch("aragora.storage.production_guards.require_distributed_store"):
                     store = get_batch_job_store()
 
@@ -1023,9 +1023,9 @@ class TestSingletonManagement:
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ARAGORA_EXPLAINABILITY_STORE_BACKEND", None)
 
-            with patch("aragora.server.redis_config.is_redis_available", return_value=True):
+            with patch("aragora.utils.redis_config.is_redis_available", return_value=True):
                 with patch(
-                    "aragora.server.redis_config.get_redis_client", return_value=mock_redis_client
+                    "aragora.utils.redis_config.get_redis_client", return_value=mock_redis_client
                 ):
                     store = get_batch_job_store()
 

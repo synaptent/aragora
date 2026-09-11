@@ -265,7 +265,8 @@ class TestDropboxAuthentication:
         mock_session = AsyncMock()
         mock_session.post = MagicMock(
             return_value=AsyncMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -292,7 +293,8 @@ class TestDropboxAuthentication:
         mock_session = AsyncMock()
         mock_session.post = MagicMock(
             return_value=AsyncMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -324,7 +326,8 @@ class TestDropboxAuthentication:
         mock_session = AsyncMock()
         mock_session.post = MagicMock(
             return_value=AsyncMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -354,7 +357,8 @@ class TestDropboxAuthentication:
         mock_session = AsyncMock()
         mock_session.post = MagicMock(
             return_value=AsyncMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 

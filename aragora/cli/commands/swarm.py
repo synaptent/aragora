@@ -1328,7 +1328,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 if failure_terminal_text:
                     print(f"failure_terminal_class={failure_terminal_text}")
             else:
-                print("swarm preflight: ok")
+                preflight_passed = bool(payload.get("passed", False))
+                print(f"swarm preflight: {'ok' if preflight_passed else 'blocked'}")
                 print(f"repo_root={payload['repo_root']}")
                 print(f"agent={payload['agent']}")
                 print(f"base_ref={payload['base_ref']}")
@@ -1338,6 +1339,8 @@ def cmd_swarm(args: argparse.Namespace) -> None:
                 if checksum:
                     print(f"worker_contract_checksum={checksum}")
         if contract_arg and payload["admission_gate"]["verdict"] != "pass":
+            raise SystemExit(2)
+        if not contract_arg and not bool(payload.get("passed", False)):
             raise SystemExit(2)
         return
 

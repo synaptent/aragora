@@ -714,7 +714,7 @@ class TestRedisPersistence:
         enforcer._redis_checked = False  # Reset for test
 
         # After calling _get_redis (will fail without actual Redis)
-        with patch("aragora.server.redis_config.get_redis_client", return_value=None):
+        with patch("aragora.utils.redis_config.get_redis_client", return_value=None):
             result = enforcer._get_redis()
 
         assert enforcer._redis_checked is True

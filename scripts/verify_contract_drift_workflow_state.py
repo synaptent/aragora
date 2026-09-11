@@ -28,6 +28,11 @@ LIVE_CHECK_NAMES = (
     "contract-drift-main-receipt",
     "contract-drift-program-trajectory",
 )
+# The finalizer dispatch runs as its own `actions: write` job so the receipt
+# job stays read-only. It is not a live check: it only ever executes on a
+# historical-backfill dispatch and must appear skipped on routine main runs.
+HISTORICAL_DISPATCH_JOB_NAME = "contract-drift-historical-backfill-dispatch"
+EXPECTED_WORKFLOW_JOB_NAMES = frozenset(LIVE_CHECK_NAMES) | {HISTORICAL_DISPATCH_JOB_NAME}
 PRE_CUTOVER_REQUIRED_CHECKS = (
     ("lint", 15368),
     ("typecheck", 15368),
@@ -243,7 +248,7 @@ def _canonical_workflow(
     if workflow.get("state") != "active":
         raise VerificationError("canonical workflow must be active")
     source = reader.get_bytes(f"repos/{repo}/contents/{CANONICAL_WORKFLOW_PATH}?ref=main")
-    if _workflow_job_names(source) != set(LIVE_CHECK_NAMES):
+    if _workflow_job_names(source) != EXPECTED_WORKFLOW_JOB_NAMES:
         raise VerificationError("canonical workflow does not expose the exact three live checks")
     return workflow, endpoints
 
@@ -350,7 +355,11 @@ def _run_key(run: Mapping[str, Any]) -> tuple[str, int, int]:
 
 
 def _selected_main_run(
-    runs: Iterable[dict[str, Any]], *, workflow_id: int, main_sha: str
+    runs: Iterable[dict[str, Any]],
+    *,
+    workflow_id: int,
+    main_sha: str,
+    is_historical_backfill: Callable[[dict[str, Any]], bool],
 ) -> dict[str, Any]:
     eligible = [
         run
@@ -360,6 +369,7 @@ def _selected_main_run(
         and run.get("head_branch") == "main"
         and run.get("head_sha") == main_sha
         and run.get("event") in {"push", "schedule", "workflow_dispatch"}
+        and not is_historical_backfill(run)
     ]
     if not eligible:
         raise VerificationError("no canonical main workflow execution matches current main")
@@ -427,9 +437,9 @@ def _attempts(reader: ApiReader, *, repo: str, run: dict[str, Any]) -> list[dict
         names = [job.get("name") for job in jobs]
         if len(names) != len(set(names)):
             raise VerificationError("attempt jobs contain duplicate names")
-        if set(names) != set(LIVE_CHECK_NAMES):
+        if set(names) != EXPECTED_WORKFLOW_JOB_NAMES:
             raise VerificationError("attempt jobs do not expose the exact three live checks")
-        checks = {
+        summaries = {
             str(job["name"]): _check_summary(
                 reader,
                 repo=repo,
@@ -440,7 +450,24 @@ def _attempts(reader: ApiReader, *, repo: str, run: dict[str, Any]) -> list[dict
             )
             for job in jobs
         }
-        result.append({"attempt": attempt, "jobs_endpoint": endpoint, "checks": checks})
+        checks = {name: summaries[name] for name in LIVE_CHECK_NAMES}
+        dispatch = summaries[HISTORICAL_DISPATCH_JOB_NAME]
+        # Selected runs are push/schedule/dispatch executions on main; the
+        # historical-backfill path never produces a routine receipt, so the
+        # write-scoped dispatch job must have been skipped, never executed.
+        if dispatch.get("status") != "completed" or dispatch.get("conclusion") != "skipped":
+            raise VerificationError(
+                "historical-backfill dispatch job did not skip on the selected main execution"
+            )
+        auxiliary_jobs = {HISTORICAL_DISPATCH_JOB_NAME: str(dispatch.get("conclusion"))}
+        result.append(
+            {
+                "attempt": attempt,
+                "jobs_endpoint": endpoint,
+                "checks": checks,
+                "auxiliary_jobs": auxiliary_jobs,
+            }
+        )
     return result
 
 
@@ -577,14 +604,46 @@ class _Snapshot:
         }
 
 
+def _is_historical_backfill_dispatch(reader: ApiReader, *, repo: str, run: dict[str, Any]) -> bool:
+    # Run listings never expose dispatch inputs, so the historical-backfill
+    # input is recovered from the attempt topology: program-trajectory is the
+    # one job whose `if` is false exactly on a historical-backfill dispatch.
+    if run.get("event") != "workflow_dispatch":
+        return False
+    run_id = _require_int(run.get("id"), "run ID", minimum=1)
+    attempt = attempt_numbers(run)[-1]
+    endpoint = f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs"
+    jobs, _ = _paginate_collection(
+        reader,
+        endpoint,
+        collection_key="jobs",
+        identity=lambda job: job.get("id"),
+        label=f"attempt {attempt} jobs",
+    )
+    trajectory = [job for job in jobs if job.get("name") == "contract-drift-program-trajectory"]
+    if len(trajectory) != 1:
+        raise VerificationError("dispatch execution does not expose the program-trajectory job")
+    summary = _check_summary(
+        reader, repo=repo, endpoint=endpoint, job=trajectory[0], run=run, attempt=attempt
+    )
+    return summary.get("conclusion") == "skipped"
+
+
 def _snapshot(reader: ApiReader, *, repo: str, workflow_id: int) -> tuple[_Snapshot, list[str]]:
     main_sha = _main_sha(reader, repo)
     runs, endpoints = _workflow_runs(reader, repo=repo, workflow_id=workflow_id)
-    run = _selected_main_run(runs, workflow_id=workflow_id, main_sha=main_sha)
+    run = _selected_main_run(
+        runs,
+        workflow_id=workflow_id,
+        main_sha=main_sha,
+        is_historical_backfill=lambda candidate: _is_historical_backfill_dispatch(
+            reader, repo=repo, run=candidate
+        ),
+    )
     source = reader.get_bytes(
         f"repos/{repo}/contents/{CANONICAL_WORKFLOW_PATH}?ref={run['head_sha']}"
     )
-    if _workflow_job_names(source) != set(LIVE_CHECK_NAMES):
+    if _workflow_job_names(source) != EXPECTED_WORKFLOW_JOB_NAMES:
         raise VerificationError("selected run workflow source does not expose exact live checks")
     return _Snapshot(main_sha=main_sha, run=run), endpoints
 

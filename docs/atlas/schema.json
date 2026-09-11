@@ -1,0 +1,562 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/synaptent/aragora/docs/atlas/schema.json",
+  "title": "Disagreement Atlas record (disagreement_atlas.record.v1)",
+  "description": "One reviewer verdict at one exact head SHA of one pull request, with the gate's parsed severity/findings, the verbatim body, and the adjudication that resolved it. Produced by scripts/build_disagreement_atlas.py; controlled vocabularies come from docs/artifacts/2026-07-reviewer-failure-taxonomy.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "atlas_version",
+    "record_id",
+    "repo",
+    "pr",
+    "head_sha",
+    "head_sha_short",
+    "head_committed_at",
+    "head_resolution",
+    "round",
+    "rounds_total",
+    "reviewer",
+    "verdict",
+    "verdict_basis",
+    "highest_blocking_severity",
+    "findings",
+    "dissent_text",
+    "body",
+    "source",
+    "source_id",
+    "source_url",
+    "posted_at",
+    "poster_login",
+    "posted_to_thread",
+    "fixture_id",
+    "taxonomy_classes",
+    "adjudication",
+    "follow_up_issues",
+    "receipt_refs"
+  ],
+  "$defs": {
+    "sha40": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "shaPrefix": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "nullableTimestamp": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/timestamp"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "family": {
+      "type": "string",
+      "enum": [
+        "claude",
+        "openai",
+        "gemini",
+        "grok",
+        "mistral",
+        "deepseek",
+        "qwen",
+        "kimi",
+        "yi",
+        "glm",
+        "minimax",
+        "tencent",
+        "bytedance",
+        "hermes"
+      ]
+    },
+    "failureClass": {
+      "type": "string",
+      "enum": [
+        "diff_blind_grounding",
+        "stale_external_world",
+        "temporal_reasoning",
+        "verbatim_repeat_dissent",
+        "out_of_scope_carousel",
+        "cross_family_contradiction",
+        "control"
+      ]
+    },
+    "mechanism": {
+      "type": "string",
+      "enum": [
+        "evidence_post",
+        "premise_removal",
+        "premise_self_expiry",
+        "severity_gating",
+        "operator_adjudication",
+        "re_filing",
+        "grounding_fix",
+        "revision",
+        "re_gate_flip",
+        "none_required",
+        "closed_unmerged",
+        "unresolved",
+        "not_applicable"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "pattern": "^P[0-9]$"
+    }
+  },
+  "properties": {
+    "schema": {
+      "const": "disagreement_atlas.record.v1"
+    },
+    "atlas_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "record_id": {
+      "type": "string",
+      "description": "pr<number>:<head12>:<family>:<source>:<source_id> — unique within the dataset.",
+      "pattern": "^pr\\d+:[0-9a-f]{7,12}:[a-z]+:(pr_comment|pr_review|eval_fixture):.+$"
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[\\w.-]+/[\\w.-]+$"
+    },
+    "pr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "title",
+        "author_login",
+        "labels",
+        "created_at",
+        "closed_at",
+        "merged_at",
+        "outcome",
+        "merge_commit_sha",
+        "final_head_sha",
+        "tier",
+        "url"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "author_login": {
+          "type": "string",
+          "description": "Public GitHub login of the PR author (already public on the PR)."
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "created_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "closed_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "merged_at": {
+          "$ref": "#/$defs/nullableTimestamp"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "merged",
+            "closed"
+          ]
+        },
+        "merge_commit_sha": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha40"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "final_head_sha": {
+          "$ref": "#/$defs/sha40"
+        },
+        "tier": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Settlement tier when the public record states it (human-settlement status description or a Tier-4 settlement marker); otherwise null."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "head_sha": {
+      "$ref": "#/$defs/shaPrefix",
+      "description": "Exact head the verdict was grounded on. 40 hex characters unless head_resolution is prefix_only."
+    },
+    "head_sha_short": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7}$"
+    },
+    "head_committed_at": {
+      "$ref": "#/$defs/nullableTimestamp"
+    },
+    "head_resolution": {
+      "type": "string",
+      "enum": [
+        "comment_full",
+        "commits_list",
+        "body_full",
+        "prefix_only",
+        "review_commit_id",
+        "fixture"
+      ],
+      "description": "How the head SHA was established: the evidence comment's Head line (comment_full), a 7-char prefix resolved against the PR's commit list (commits_list), a full SHA elsewhere in the body (body_full), an unresolvable prefix (prefix_only), a GitHub review object's commit_id, or the committed eval fixture."
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "1-based index of this head among the PR's heads that carry at least one verdict, ordered by head commit time then first verdict time."
+    },
+    "rounds_total": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "display",
+        "provider",
+        "counting_class",
+        "harness",
+        "model_id",
+        "identity_source"
+      ],
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/family"
+        },
+        "display": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "counting_class": {
+          "type": "string",
+          "enum": [
+            "western_frontier",
+            "western",
+            "chinese_routed",
+            "advisory_only",
+            "unrecognized"
+          ]
+        },
+        "harness": {
+          "type": "string",
+          "description": "Reviewer transport as disclosed in the evidence comment (e.g. 'Codex CLI OpenAI harness'); empty when undisclosed."
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "identity_source": {
+          "type": "string"
+        }
+      }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "changes_requested",
+        "unknown"
+      ]
+    },
+    "verdict_basis": {
+      "type": "string",
+      "enum": [
+        "verdict_line",
+        "negative_marker",
+        "non_negative_signal",
+        "review_state",
+        "fixture",
+        "unparsed"
+      ],
+      "description": "How the verdict was derived, mirroring the gate: an explicit Verdict token; a blocking finding / negative label without a parseable token; a verdict line the gate does not read as negative (counted as support by its comment-signal path); a GitHub review state; the eval fixture; or nothing parseable."
+    },
+    "highest_blocking_severity": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "P0",
+            "P1"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The gate's blocking severity for this body ([P0]/[P1] only; [P2]/[P3] are advisory under the severity gate)."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "severity",
+          "text"
+        ],
+        "properties": {
+          "severity": {
+            "$ref": "#/$defs/severity"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dissent_text": {
+      "type": "string",
+      "description": "Verbatim reviewer body when verdict is changes_requested; empty otherwise."
+    },
+    "body": {
+      "type": "string",
+      "description": "Verbatim reviewer body (comment, review object, or fixture item)."
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "pr_comment",
+        "pr_review",
+        "eval_fixture"
+      ]
+    },
+    "source_id": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "posted_at": {
+      "$ref": "#/$defs/nullableTimestamp"
+    },
+    "poster_login": {
+      "type": "string",
+      "description": "Public GitHub login that posted the evidence (empty for fixture-only records)."
+    },
+    "posted_to_thread": {
+      "type": "boolean"
+    },
+    "fixture_id": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "taxonomy_classes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/failureClass"
+      },
+      "description": "Hand-labelled reviewer failure classes for this (PR, head); empty when unlabelled."
+    },
+    "adjudication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "mechanism",
+        "mechanisms_secondary",
+        "blocking_under_severity_gate",
+        "same_head_later_pass",
+        "same_family_later_pass",
+        "head_advanced_after_verdict",
+        "merged_at_this_head",
+        "human_settlement_status",
+        "ground_truth"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "labeled",
+            "inferred"
+          ]
+        },
+        "mechanism": {
+          "$ref": "#/$defs/mechanism"
+        },
+        "mechanisms_secondary": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mechanism"
+          }
+        },
+        "blocking_under_severity_gate": {
+          "type": "boolean"
+        },
+        "same_head_later_pass": {
+          "type": "boolean"
+        },
+        "same_family_later_pass": {
+          "type": "boolean"
+        },
+        "head_advanced_after_verdict": {
+          "type": "boolean"
+        },
+        "merged_at_this_head": {
+          "type": "boolean"
+        },
+        "human_settlement_status": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "state",
+                "created_at",
+                "creator_login",
+                "description"
+              ],
+              "properties": {
+                "state": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string"
+                },
+                "creator_login": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            }
+          ]
+        },
+        "ground_truth": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "fixture_id",
+                "taxonomy_classes",
+                "disposition",
+                "findings_valid",
+                "mechanism_text",
+                "mechanisms",
+                "note",
+                "receipts"
+              ],
+              "properties": {
+                "fixture_id": {
+                  "type": "string"
+                },
+                "taxonomy_classes": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/failureClass"
+                  }
+                },
+                "disposition": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "settle",
+                        "block",
+                        "escalate"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "findings_valid": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "mechanism_text": {
+                  "type": "string"
+                },
+                "mechanisms": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/mechanism"
+                  }
+                },
+                "note": {
+                  "type": "string"
+                },
+                "receipts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "follow_up_issues": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "description": "Issue numbers referenced as filed/tracked follow-ups in operator comments after this verdict (numbers known to be PRs in the window are excluded)."
+    },
+    "receipt_refs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Committed receipt/settlement-packet files under docs/ that mention this PR."
+    }
+  }
+}

@@ -224,6 +224,76 @@ def _branch_from_payload(payload: dict[str, Any]) -> str:
     return ""
 
 
+NON_HANDOFF_REPORT_DISPOSITION = "non_handoff_report"
+
+
+def _has_requested_action_contract(payload: Mapping[str, Any]) -> bool:
+    requested_action = payload.get("requested_action")
+    if isinstance(requested_action, str):
+        return bool(requested_action.strip())
+    if _mapping_from_action(requested_action) is not None:
+        return True
+    return False
+
+
+def _looks_like_non_handoff_report(payload: Mapping[str, Any]) -> bool:
+    preservation_markers = {
+        "branch",
+        "constraints",
+        "desired_head",
+        "desired_head_sha",
+        "commit",
+        "head",
+        "head_sha",
+        "local_evidence",
+        "requested_action",
+        "worktree",
+        "worktree_path",
+    }
+    if any(key in payload for key in preservation_markers):
+        return False
+
+    report_markers = {
+        "candidate_notes",
+        "cycle_dir",
+        "main_required_check_state",
+        "required_contexts",
+        "rows",
+        "verified_8992",
+    }
+    report_identity_markers = {
+        "candidate_notes",
+        "cycle_dir",
+        "main_required_check_state",
+        "verified_8992",
+    }
+    return sum(1 for key in report_markers if key in payload) >= 2 and any(
+        key in payload for key in report_identity_markers
+    )
+
+
+def _non_handoff_report_terminal_info(payload: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Return terminal metadata for branchless report artifacts, if recognized."""
+    idem = str(payload.get("idempotency_key") or "").strip()
+    if not idem:
+        return None
+    if _branch_from_payload(dict(payload)):
+        return None
+    if _has_requested_action_contract(payload):
+        return None
+    if not _looks_like_non_handoff_report(payload):
+        return None
+    return {
+        "archived_by": "scripts/reconcile_automation_outbox.py",
+        "disposition": NON_HANDOFF_REPORT_DISPOSITION,
+        "idempotency_key": idem,
+        "reason": (
+            "branchless conductor report artifact is not an automation handoff; "
+            "archived through supported non-handoff report path"
+        ),
+    }
+
+
 def _head_from_payload(payload: dict[str, Any]) -> str:
     """Extract the branch head SHA from outbox payloads when present."""
     for local_evidence in _local_evidence_mappings(payload.get("local_evidence")):
@@ -1615,6 +1685,7 @@ def main(argv: list[str] | None = None) -> int:
         "missing_branch": 0,
         "blocked_missing_branch_open_pr_unknown": 0,
         "blocked_missing_branch_remote_unknown": 0,
+        "non_handoff_report": 0,
         "skipped_unparseable": 0,
     }
 
@@ -1632,6 +1703,22 @@ def main(argv: list[str] | None = None) -> int:
         branch = _branch_from_payload(payload)
 
         if not idem or not branch:
+            terminal_info = _non_handoff_report_terminal_info(payload)
+            if terminal_info is not None:
+                counts["non_handoff_report"] += 1
+                actions.append(
+                    {
+                        "path": str(path),
+                        "branch": "",
+                        "decision": "archive_report",
+                        "reason": terminal_info["reason"],
+                        "terminal_disposition": terminal_info,
+                        "synthetic_receipt": False,
+                    }
+                )
+                if args.apply:
+                    _archive_with_terminal_disposition(path, archive_dir, payload, terminal_info)
+                continue
             counts["skipped_unparseable"] += 1
             continue
 
@@ -2102,7 +2189,7 @@ def main(argv: list[str] | None = None) -> int:
     emit("\n--- summary ---")
     for k, v in counts.items():
         emit(f"  {k:>40}: {v}")
-    archived = sum(1 for a in actions if a["decision"] == "archive")
+    archived = sum(1 for a in actions if a["decision"] in {"archive", "archive_report"})
     kept = sum(1 for a in actions if a["decision"] == "keep")
     reason_counts: dict[str, int] = {}
     for action in actions:

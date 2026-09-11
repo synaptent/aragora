@@ -202,7 +202,7 @@ class TestCreateLabel:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, label_data))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             label = await labels_mixin.create_label("New Label")
@@ -220,7 +220,7 @@ class TestCreateLabel:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, label_data))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             await labels_mixin.create_label("Test")
@@ -269,7 +269,7 @@ class TestModifyMessage:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, response_data))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             result = await labels_mixin.modify_message(
@@ -291,7 +291,7 @@ class TestModifyMessage:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, response_data))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             result = await labels_mixin.modify_message(
@@ -317,7 +317,7 @@ class TestModifyMessage:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=error_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             with pytest.raises(RuntimeError, match="Failed to modify message"):
@@ -333,7 +333,7 @@ class TestModifyMessage:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=error_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             with pytest.raises(RuntimeError):
@@ -349,7 +349,7 @@ class TestModifyMessage:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, response_data))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             await labels_mixin.modify_message("msg_123", add_labels=["STARRED"])
@@ -391,7 +391,7 @@ class TestTrashMessage:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, {}))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             result = await labels_mixin.trash_message("msg_123")
@@ -413,7 +413,7 @@ class TestTrashMessage:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, {}))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             result = await labels_mixin.untrash_message("msg_123")
@@ -431,7 +431,7 @@ class TestTrashMessage:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=error_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             with pytest.raises(RuntimeError):
@@ -646,7 +646,7 @@ class TestBatchModify:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             result = await labels_mixin.batch_modify(
@@ -667,7 +667,7 @@ class TestBatchModify:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             await labels_mixin.batch_modify(
@@ -698,7 +698,7 @@ class TestBatchModify:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=error_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             with pytest.raises(RuntimeError):
@@ -748,7 +748,7 @@ class TestBatchTrash:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             result = await labels_mixin.batch_trash(["msg_1", "msg_2"])
@@ -765,7 +765,7 @@ class TestBatchTrash:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             await labels_mixin.batch_trash(["msg_1", "msg_2"])
@@ -791,7 +791,7 @@ class TestBatchTrash:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             await labels_mixin.batch_trash(["msg_1"])
@@ -813,7 +813,7 @@ class TestConnectionErrorHandling:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(side_effect=ConnectionError("Network error"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             with pytest.raises(ConnectionError):
@@ -827,7 +827,7 @@ class TestConnectionErrorHandling:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(side_effect=OSError("Connection refused"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             with pytest.raises(OSError):
@@ -841,7 +841,7 @@ class TestConnectionErrorHandling:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(side_effect=ConnectionError("Network error"))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(labels_mixin, "_get_client", return_value=mock_client):
             with pytest.raises(ConnectionError):

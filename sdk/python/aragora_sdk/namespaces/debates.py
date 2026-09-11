@@ -4,8 +4,7 @@ Debates Namespace API
 Provides methods for creating, managing, and analyzing debates.
 
 Note: A number of methods below (get_rounds, get_agents, get_votes,
-get_notes, get_metadata, get_timeline, get_tags, find_similar, the
-per-debate analytics/batch extras, ...) target routes that no server
+get_metadata, get_timeline, get_tags, ...) target routes that no server
 handler dispatches. Because ``DebatesHandler.can_handle`` claims all of
 ``/api/debates/*``, such requests do not 404 cleanly at the router: the
 dispatcher matches DebatesHandler, finds no route branch, and falls
@@ -918,33 +917,6 @@ class DebatesAPI:
         """Resume a paused debate."""
         return self._client.request("POST", f"/api/v1/debates/{debate_id}/resume")
 
-    def restore(self, debate_id: str) -> dict[str, Any]:
-        """Restore an archived debate.
-
-        DEPRECATED: POST /api/v1/debates/{id}/restore is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use update(debate_id, status="active") instead.
-        """
-        _warn_deprecated(
-            "debates.restore() targets an unserved route (404 via slug "
-            "fallback); use update(debate_id, status='active')."
-        )
-        return self._client.request("POST", f"/api/v1/debates/{debate_id}/restore")
-
-    def make_permanent(self, debate_id: str) -> dict[str, Any]:
-        """Make a debate permanent.
-
-        DEPRECATED: POST /api/v1/debates/{id}/make-permanent is not
-        dispatched by any server handler; the request falls into the debate
-        slug lookup and returns 404. Completed debates are persisted
-        automatically; there is no server-side equivalent.
-        """
-        _warn_deprecated(
-            "debates.make_permanent() targets an unserved route (404 via "
-            "slug fallback); debates are persisted automatically."
-        )
-        return self._client.request("POST", f"/api/v1/debates/{debate_id}/make-permanent")
-
     def clone(self, debate_id: str, **options: Any) -> dict[str, Any]:
         """Clone a debate with fresh state."""
         return self._client.request("POST", f"/api/v1/debates/{debate_id}/clone", json=options)
@@ -1041,21 +1013,6 @@ class DebatesAPI:
         )
         return self._client.request("GET", f"/api/v1/debates/{debate_id}/tags")
 
-    def find_similar(self, debate_id: str, limit: int = 5) -> dict[str, Any]:
-        """Find debates similar to this one.
-
-        DEPRECATED: GET /api/v1/debates/{id}/similar is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use search() with the debate task text instead.
-        """
-        _warn_deprecated(
-            "debates.find_similar() targets an unserved route (404 via "
-            "slug fallback); use search()."
-        )
-        return self._client.request(
-            "GET", f"/api/v1/debates/{debate_id}/similar", params={"limit": limit}
-        )
-
     # ========== Graph & Matrix ==========
 
     def get_graph(self, debate_id: str) -> dict[str, Any]:
@@ -1118,20 +1075,6 @@ class DebatesAPI:
         """Get meta-level critique of the debate."""
         return self._client.request("GET", f"/api/v1/debate/{debate_id}/meta-critique")
 
-    def get_quality(self, debate_id: str) -> dict[str, Any]:
-        """Get argument quality analysis.
-
-        DEPRECATED: GET /api/v1/debates/{id}/quality is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use get_verification_report() or
-        get_explainability() instead.
-        """
-        _warn_deprecated(
-            "debates.get_quality() targets an unserved route (404 via slug "
-            "fallback); use get_verification_report()."
-        )
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/quality")
-
     def verify_claim(
         self, debate_id: str, claim_id: str, evidence: str | None = None
     ) -> dict[str, Any]:
@@ -1140,124 +1083,6 @@ class DebatesAPI:
         if evidence is not None:
             data["evidence"] = evidence
         return self._client.request("POST", f"/api/v1/debates/{debate_id}/verify", json=data)
-
-    # ========== Notes ==========
-
-    def get_notes(self, debate_id: str) -> dict[str, Any]:
-        """Get notes attached to a debate.
-
-        DEPRECATED: the server has no debate-notes feature; GET
-        /api/v1/debates/{id}/notes is not dispatched by any handler and
-        returns 404 via the debate slug lookup. There is no replacement.
-        """
-        _warn_deprecated(
-            "debates.get_notes() targets an unserved route (404 via slug "
-            "fallback); the server has no debate-notes feature."
-        )
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/notes")
-
-    def add_note(self, debate_id: str, content: str) -> dict[str, Any]:
-        """Add a note to a debate.
-
-        DEPRECATED: the server has no debate-notes feature; POST
-        /api/v1/debates/{id}/notes is not dispatched by any handler and
-        returns 404 via the debate slug lookup. There is no replacement.
-        """
-        _warn_deprecated(
-            "debates.add_note() targets an unserved route (404 via slug "
-            "fallback); the server has no debate-notes feature."
-        )
-        return self._client.request(
-            "POST", f"/api/v1/debates/{debate_id}/notes", json={"content": content}
-        )
-
-    def delete_note(self, debate_id: str, note_id: str) -> dict[str, Any]:
-        """Delete a note from a debate.
-
-        DEPRECATED: the server has no debate-notes feature; DELETE
-        /api/v1/debates/{id}/notes/{note_id} is not dispatched by any
-        handler and returns 404 via the debate slug lookup. There is no
-        replacement.
-        """
-        _warn_deprecated(
-            "debates.delete_note() targets an unserved route (404 via slug "
-            "fallback); the server has no debate-notes feature."
-        )
-        return self._client.request("DELETE", f"/api/v1/debates/{debate_id}/notes/{note_id}")
-
-    # ========== Batch Results ==========
-
-    def get_batch_results(self, batch_id: str) -> dict[str, Any]:
-        """Get results of a batch job.
-
-        DEPRECATED: GET /api/v1/debates/batch/{id}/results is not
-        dispatched by any server handler; the request falls into the
-        debate slug lookup and returns 404. Use get_batch_status() --
-        its response includes per-job results.
-        """
-        _warn_deprecated(
-            "debates.get_batch_results() targets an unserved route (404 "
-            "via slug fallback); use get_batch_status()."
-        )
-        return self._client.request("GET", f"/api/v1/debates/batch/{batch_id}/results")
-
-    def cancel_batch(self, batch_id: str) -> dict[str, Any]:
-        """Cancel a batch job.
-
-        DEPRECATED: the server has no batch-cancel endpoint. This POST is
-        mis-dispatched into the single-debate cancel branch with the
-        literal id "batch" and always fails with 404. There is no
-        replacement.
-        """
-        _warn_deprecated(
-            "debates.cancel_batch() targets an unserved route (mis-"
-            "dispatched, always 404); the server has no batch cancel."
-        )
-        return self._client.request("POST", f"/api/v1/debates/batch/{batch_id}/cancel")
-
-    def retry_batch(self, batch_id: str) -> dict[str, Any]:
-        """Retry failed jobs in a batch.
-
-        DEPRECATED: POST /api/v1/debates/batch/{id}/retry is not
-        dispatched by any server handler; the request falls into the
-        debate slug lookup and returns 404. Re-submit failed jobs with
-        submit_batch() instead.
-        """
-        _warn_deprecated(
-            "debates.retry_batch() targets an unserved route (404 via slug "
-            "fallback); re-submit failed jobs with submit_batch()."
-        )
-        return self._client.request("POST", f"/api/v1/debates/batch/{batch_id}/retry")
-
-    # ========== Agent & Debate Health ==========
-
-    def get_agent_statistics(self, debate_id: str) -> dict[str, Any]:
-        """Get per-agent statistics for a debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/agent-statistics is not
-        dispatched by any server handler; the request falls into the
-        debate slug lookup and returns 404. Use get_agent_stats() for
-        global per-agent statistics.
-        """
-        _warn_deprecated(
-            "debates.get_agent_statistics() targets an unserved route (404 "
-            "via slug fallback); use get_agent_stats()."
-        )
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/agent-statistics")
-
-    def get_debate_health(self, debate_id: str) -> dict[str, Any]:
-        """Get health status for a specific debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/health is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use get_health() for system health or get() for
-        a debate's status.
-        """
-        _warn_deprecated(
-            "debates.get_debate_health() targets an unserved route (404 "
-            "via slug fallback); use get_health() or get()."
-        )
-        return self._client.request("GET", f"/api/v1/debates/{debate_id}/health")
 
     # ========== Intervention ==========
 
@@ -2109,33 +1934,6 @@ class AsyncDebatesAPI:
         """Resume a paused debate."""
         return await self._client.request("POST", f"/api/v1/debates/{debate_id}/resume")
 
-    async def restore(self, debate_id: str) -> dict[str, Any]:
-        """Restore an archived debate.
-
-        DEPRECATED: POST /api/v1/debates/{id}/restore is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use update(debate_id, status="active") instead.
-        """
-        _warn_deprecated(
-            "debates.restore() targets an unserved route (404 via slug "
-            "fallback); use update(debate_id, status='active')."
-        )
-        return await self._client.request("POST", f"/api/v1/debates/{debate_id}/restore")
-
-    async def make_permanent(self, debate_id: str) -> dict[str, Any]:
-        """Make a debate permanent.
-
-        DEPRECATED: POST /api/v1/debates/{id}/make-permanent is not
-        dispatched by any server handler; the request falls into the debate
-        slug lookup and returns 404. Completed debates are persisted
-        automatically; there is no server-side equivalent.
-        """
-        _warn_deprecated(
-            "debates.make_permanent() targets an unserved route (404 via "
-            "slug fallback); debates are persisted automatically."
-        )
-        return await self._client.request("POST", f"/api/v1/debates/{debate_id}/make-permanent")
-
     async def clone(self, debate_id: str, **options: Any) -> dict[str, Any]:
         """Clone a debate with fresh state."""
         return await self._client.request(
@@ -2234,21 +2032,6 @@ class AsyncDebatesAPI:
         )
         return await self._client.request("GET", f"/api/v1/debates/{debate_id}/tags")
 
-    async def find_similar(self, debate_id: str, limit: int = 5) -> dict[str, Any]:
-        """Find debates similar to this one.
-
-        DEPRECATED: GET /api/v1/debates/{id}/similar is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use search() with the debate task text instead.
-        """
-        _warn_deprecated(
-            "debates.find_similar() targets an unserved route (404 via "
-            "slug fallback); use search()."
-        )
-        return await self._client.request(
-            "GET", f"/api/v1/debates/{debate_id}/similar", params={"limit": limit}
-        )
-
     # ========== Graph & Matrix ==========
 
     async def get_graph(self, debate_id: str) -> dict[str, Any]:
@@ -2319,20 +2102,6 @@ class AsyncDebatesAPI:
         """Get meta-level critique of the debate."""
         return await self._client.request("GET", f"/api/v1/debate/{debate_id}/meta-critique")
 
-    async def get_quality(self, debate_id: str) -> dict[str, Any]:
-        """Get argument quality analysis.
-
-        DEPRECATED: GET /api/v1/debates/{id}/quality is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use get_verification_report() or
-        get_explainability() instead.
-        """
-        _warn_deprecated(
-            "debates.get_quality() targets an unserved route (404 via slug "
-            "fallback); use get_verification_report()."
-        )
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/quality")
-
     async def verify_claim(
         self, debate_id: str, claim_id: str, evidence: str | None = None
     ) -> dict[str, Any]:
@@ -2341,124 +2110,6 @@ class AsyncDebatesAPI:
         if evidence is not None:
             data["evidence"] = evidence
         return await self._client.request("POST", f"/api/v1/debates/{debate_id}/verify", json=data)
-
-    # ========== Notes ==========
-
-    async def get_notes(self, debate_id: str) -> dict[str, Any]:
-        """Get notes attached to a debate.
-
-        DEPRECATED: the server has no debate-notes feature; GET
-        /api/v1/debates/{id}/notes is not dispatched by any handler and
-        returns 404 via the debate slug lookup. There is no replacement.
-        """
-        _warn_deprecated(
-            "debates.get_notes() targets an unserved route (404 via slug "
-            "fallback); the server has no debate-notes feature."
-        )
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/notes")
-
-    async def add_note(self, debate_id: str, content: str) -> dict[str, Any]:
-        """Add a note to a debate.
-
-        DEPRECATED: the server has no debate-notes feature; POST
-        /api/v1/debates/{id}/notes is not dispatched by any handler and
-        returns 404 via the debate slug lookup. There is no replacement.
-        """
-        _warn_deprecated(
-            "debates.add_note() targets an unserved route (404 via slug "
-            "fallback); the server has no debate-notes feature."
-        )
-        return await self._client.request(
-            "POST", f"/api/v1/debates/{debate_id}/notes", json={"content": content}
-        )
-
-    async def delete_note(self, debate_id: str, note_id: str) -> dict[str, Any]:
-        """Delete a note from a debate.
-
-        DEPRECATED: the server has no debate-notes feature; DELETE
-        /api/v1/debates/{id}/notes/{note_id} is not dispatched by any
-        handler and returns 404 via the debate slug lookup. There is no
-        replacement.
-        """
-        _warn_deprecated(
-            "debates.delete_note() targets an unserved route (404 via slug "
-            "fallback); the server has no debate-notes feature."
-        )
-        return await self._client.request("DELETE", f"/api/v1/debates/{debate_id}/notes/{note_id}")
-
-    # ========== Batch Results ==========
-
-    async def get_batch_results(self, batch_id: str) -> dict[str, Any]:
-        """Get results of a batch job.
-
-        DEPRECATED: GET /api/v1/debates/batch/{id}/results is not
-        dispatched by any server handler; the request falls into the
-        debate slug lookup and returns 404. Use get_batch_status() --
-        its response includes per-job results.
-        """
-        _warn_deprecated(
-            "debates.get_batch_results() targets an unserved route (404 "
-            "via slug fallback); use get_batch_status()."
-        )
-        return await self._client.request("GET", f"/api/v1/debates/batch/{batch_id}/results")
-
-    async def cancel_batch(self, batch_id: str) -> dict[str, Any]:
-        """Cancel a batch job.
-
-        DEPRECATED: the server has no batch-cancel endpoint. This POST is
-        mis-dispatched into the single-debate cancel branch with the
-        literal id "batch" and always fails with 404. There is no
-        replacement.
-        """
-        _warn_deprecated(
-            "debates.cancel_batch() targets an unserved route (mis-"
-            "dispatched, always 404); the server has no batch cancel."
-        )
-        return await self._client.request("POST", f"/api/v1/debates/batch/{batch_id}/cancel")
-
-    async def retry_batch(self, batch_id: str) -> dict[str, Any]:
-        """Retry failed jobs in a batch.
-
-        DEPRECATED: POST /api/v1/debates/batch/{id}/retry is not
-        dispatched by any server handler; the request falls into the
-        debate slug lookup and returns 404. Re-submit failed jobs with
-        submit_batch() instead.
-        """
-        _warn_deprecated(
-            "debates.retry_batch() targets an unserved route (404 via slug "
-            "fallback); re-submit failed jobs with submit_batch()."
-        )
-        return await self._client.request("POST", f"/api/v1/debates/batch/{batch_id}/retry")
-
-    # ========== Agent & Debate Health ==========
-
-    async def get_agent_statistics(self, debate_id: str) -> dict[str, Any]:
-        """Get per-agent statistics for a debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/agent-statistics is not
-        dispatched by any server handler; the request falls into the
-        debate slug lookup and returns 404. Use get_agent_stats() for
-        global per-agent statistics.
-        """
-        _warn_deprecated(
-            "debates.get_agent_statistics() targets an unserved route (404 "
-            "via slug fallback); use get_agent_stats()."
-        )
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/agent-statistics")
-
-    async def get_debate_health(self, debate_id: str) -> dict[str, Any]:
-        """Get health status for a specific debate.
-
-        DEPRECATED: GET /api/v1/debates/{id}/health is not dispatched by
-        any server handler; the request falls into the debate slug lookup
-        and returns 404. Use get_health() for system health or get() for
-        a debate's status.
-        """
-        _warn_deprecated(
-            "debates.get_debate_health() targets an unserved route (404 "
-            "via slug fallback); use get_health() or get()."
-        )
-        return await self._client.request("GET", f"/api/v1/debates/{debate_id}/health")
 
     # ========== Intervention ==========
 

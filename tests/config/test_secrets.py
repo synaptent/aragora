@@ -492,9 +492,12 @@ class TestSecretManagerMountedFiles:
         with patch.dict(os.environ, {}, clear=True):
             assert manager.get("UNMANAGED_SECRET", strict=False) is None
 
-    def test_strict_hydration_removes_env_when_managed_cache_value_is_blank(self, tmp_path):
+    @pytest.mark.parametrize("blank_value", ["", "   "])
+    def test_strict_hydration_removes_env_when_managed_cache_value_is_blank(
+        self, tmp_path, blank_value
+    ):
         manager = SecretManager(SecretsConfig(secrets_dir=str(tmp_path)))
-        manager._cached_secrets = {"OPENAI_API_KEY": ""}
+        manager._cached_secrets = {"OPENAI_API_KEY": blank_value}
         manager._cached_secret_sources = {"OPENAI_API_KEY": "mounted_file"}
         manager._cache_timestamp = time.time()
         manager._initialized = True
@@ -707,6 +710,106 @@ class TestSecretManagerAWS:
             manager.refresh()
 
         assert manager.get("OPENAI_API_KEY", strict=False) is None
+
+    @pytest.mark.parametrize("earlier_transient_failure", [False, True])
+    @pytest.mark.parametrize(
+        "response_kind", ["missing", "invalid-json", "non-text", "non-map", "non-string", "empty"]
+    )
+    def test_authoritative_refresh_removes_hydrated_credentials(
+        self, response_kind, earlier_transient_failure
+    ):
+        regions = ["primary", "secondary"] if earlier_transient_failure else ["secondary"]
+        manager = SecretManager(SecretsConfig(use_aws=True, aws_regions=regions))
+        primary, secondary = MagicMock(), MagicMock()
+        for client in (primary, secondary):
+            client.get_secret_value.return_value = {
+                "SecretString": json.dumps({"OPENAI_API_KEY": "revoked-value"})
+            }
+
+        with (
+            patch.object(
+                manager,
+                "_get_aws_client",
+                side_effect=lambda region: primary if region == "primary" else secondary,
+            ),
+            patch("aragora.config.secrets._manager", manager),
+            patch.dict(os.environ, {"ARAGORA_SECRETS_STRICT": "true"}, clear=True),
+        ):
+            assert hydrate_env_from_secrets(["OPENAI_API_KEY"], overwrite=True) == {
+                "OPENAI_API_KEY": "revoked-value"
+            }
+            primary.get_secret_value.side_effect = OSError("temporary network outage")
+            if response_kind == "missing":
+                secondary.get_secret_value.side_effect = ClientError(
+                    {"Error": {"Code": "ResourceNotFoundException", "Message": "missing"}},
+                    "GetSecretValue",
+                )
+            else:
+                secondary.get_secret_value.return_value = {
+                    "SecretString": {
+                        "invalid-json": "not-json",
+                        "non-text": None,
+                        "non-map": "[]",
+                        "non-string": '{"OPENAI_API_KEY": 123}',
+                        "empty": "{}",
+                    }[response_kind]
+                }
+            manager.refresh()
+            assert hydrate_env_from_secrets(["OPENAI_API_KEY"], overwrite=True) == {}
+            assert "OPENAI_API_KEY" not in manager._cached_secrets
+            assert "OPENAI_API_KEY" not in os.environ
+
+    def test_transient_refresh_retains_hydrated_credentials(self):
+        manager = SecretManager(SecretsConfig(use_aws=True))
+        client = MagicMock()
+        client.get_secret_value.return_value = {
+            "SecretString": json.dumps({"OPENAI_API_KEY": "last-known-value"})
+        }
+        with (
+            patch.object(manager, "_get_aws_client", return_value=client),
+            patch("aragora.config.secrets._manager", manager),
+            patch.dict(os.environ, {"ARAGORA_SECRETS_STRICT": "true"}, clear=True),
+        ):
+            hydrate_env_from_secrets(["OPENAI_API_KEY"], overwrite=True)
+            client.get_secret_value.side_effect = OSError("temporary network outage")
+            manager.refresh()
+            assert hydrate_env_from_secrets(["OPENAI_API_KEY"], overwrite=True) == {
+                "OPENAI_API_KEY": "last-known-value"
+            }
+            assert os.environ["OPENAI_API_KEY"] == "last-known-value"
+
+    def test_successful_failover_clears_authoritative_failure(self):
+        manager = SecretManager(SecretsConfig(use_aws=True, aws_regions=["primary", "secondary"]))
+        primary, secondary = MagicMock(), MagicMock()
+        primary.get_secret_value.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException", "Message": "missing"}},
+            "GetSecretValue",
+        )
+        secondary.get_secret_value.return_value = {
+            "SecretString": json.dumps({"OPENAI_API_KEY": "fresh-value"})
+        }
+        with (
+            patch.object(
+                manager,
+                "_get_aws_client",
+                side_effect=lambda region: primary if region == "primary" else secondary,
+            ),
+            patch("aragora.config.secrets._manager", manager),
+            patch.dict(os.environ, {"ARAGORA_SECRETS_STRICT": "true"}, clear=True),
+        ):
+            assert hydrate_env_from_secrets(["OPENAI_API_KEY"], overwrite=True) == {
+                "OPENAI_API_KEY": "fresh-value"
+            }
+            assert manager._managed_sources_healthy is True
+            assert manager._last_aws_load_authoritative_failure is False
+            for client in (primary, secondary):
+                client.get_secret_value.side_effect = OSError("temporary network outage")
+            manager.refresh()
+            assert hydrate_env_from_secrets(["OPENAI_API_KEY"], overwrite=True) == {
+                "OPENAI_API_KEY": "fresh-value"
+            }
+            assert manager._managed_sources_healthy is False
+            assert manager._last_aws_load_authoritative_failure is False
 
     def test_successful_empty_aws_refresh_replaces_stale_cache(self):
         manager = SecretManager(SecretsConfig(use_aws=True))

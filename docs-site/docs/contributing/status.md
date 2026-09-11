@@ -158,8 +158,8 @@ For the full current-status narrative, use the canonical doc:
 
 ### Codebase Metrics (generated from `docs/METRICS.md`)
 <!-- metrics:begin status-codebase-metrics -->
-- **Python files (`aragora/`)**: 4,312
-- **Tests**: 226,110 across 5,553 test files
+- **Python files (`aragora/`)**: 4,330
+- **Tests**: 226,585 across 5,588 test files
 - **KM adapters**: 41 registered adapter specs
 - **API operations**: 3,205 across 2,912 paths
 <!-- metrics:end -->
@@ -168,7 +168,7 @@ Manually maintained:
 - **HTTP handlers**: 700+
 - **Agent types**: 43
 - **RBAC permissions**: 420+
-- **Version**: v2.9.0
+- **Version**: v2.10.0
 
 ---
 
@@ -572,7 +572,7 @@ Independent verification found substantial launch-ready infrastructure, but Arag
 
 ## Current Release
 
-Current released version is **v2.9.0**.
+Current released version is **v2.10.0** (released 2026-09-04).
 
 ### v2.5.0 - Type Safety & SDK Expansion (January 2026)
 

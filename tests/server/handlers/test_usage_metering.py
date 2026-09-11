@@ -10,6 +10,7 @@ Tests coverage for:
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -412,6 +413,17 @@ class TestQuotaIncreaseRequest:
             "a\x80b",
             "a\x9bb",
             "a\x9fb",
+            # Cf format chars: bidi overrides and zero-width joiners are not
+            # control chars but reorder or hide text, visually spoofing the
+            # audit line.
+            "a\u202eb",
+            "a\u200db",
+            "a\ufeffb",
+            # Cs lone surrogates arrive over the wire as pure-ASCII JSON
+            # \ud800 escapes (json.dumps ensure_ascii re-emits them here); a
+            # utf-8 log handler cannot encode the decoded value.
+            "a\ud800b",
+            "a\udfffb",
         ],
     )
     @pytest.mark.asyncio
@@ -461,6 +473,68 @@ class TestQuotaIncreaseRequest:
         assert result.status_code == 400
         body = parse_handler_response(result)
         assert "resource" in body.get("error", "").lower()
+
+    @pytest.mark.asyncio
+    async def test_post_request_increase_overlong_resource_rejects_on_length_before_scan(
+        self, metering_handler, mock_http_handler
+    ):
+        """An oversized resource of scan-rejected chars fails on the LENGTH
+        message: the O(1) cap runs before the per-char category scan."""
+        mock_http = mock_http_handler(method="POST", body={"resource": "\x9b" * 300})
+        with patch("aragora.server.handlers.usage_metering._usage_limiter") as mock_limiter:
+            mock_limiter.is_allowed.return_value = True
+            result = await metering_handler.handle(
+                self.REQUEST_INCREASE_PATH, {}, mock_http, "POST"
+            )
+        assert result.status_code == 400
+        body = parse_handler_response(result)
+        assert "maximum length" in body.get("error", "")
+
+    @pytest.mark.asyncio
+    async def test_post_request_increase_surrogate_escape_never_reaches_log_handler(
+        self, metering_handler, tmp_path
+    ):
+        """A wire-level JSON \\ud800 escape (pure-ASCII bytes) is rejected
+        before the audit log call: a utf-8 log handler cannot encode the
+        decoded lone surrogate and would silently drop the audit line."""
+        raw = b'{"resource": "a\\ud800b", "requested_limit": 5}'
+        mock_http = MagicMock()
+        mock_http.command = "POST"
+        mock_http.client_address = ("127.0.0.1", 12345)
+        mock_http.body = None
+        mock_http.request = None
+        mock_http.headers = {"Content-Length": str(len(raw))}
+        mock_http.rfile.read.return_value = raw
+
+        log_file = tmp_path / "audit.log"
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.INFO)
+        module_logger = logging.getLogger("aragora.server.handlers.usage_metering")
+        previous_level = module_logger.level
+        module_logger.addHandler(file_handler)
+        module_logger.setLevel(logging.INFO)
+        try:
+            # emit() swallows UnicodeEncodeError into handleError; spying on
+            # it makes the silent-drop failure mode observable.
+            with (
+                patch.object(file_handler, "handleError") as mock_handle_error,
+                patch("aragora.server.handlers.usage_metering._usage_limiter") as mock_limiter,
+            ):
+                mock_limiter.is_allowed.return_value = True
+                result = await metering_handler.handle(
+                    self.REQUEST_INCREASE_PATH, {}, mock_http, "POST"
+                )
+        finally:
+            module_logger.removeHandler(file_handler)
+            module_logger.setLevel(previous_level)
+            file_handler.close()
+
+        assert result.status_code == 400
+        body = parse_handler_response(result)
+        assert "resource" in body.get("error", "").lower()
+        mock_handle_error.assert_not_called()
+        logged = log_file.read_text(encoding="utf-8")
+        assert "Quota increase request" not in logged
 
     @pytest.mark.asyncio
     async def test_post_request_increase_rejects_overlong_reason(

@@ -4,9 +4,8 @@
  * Provides access to media assets including audio files and podcast episodes.
  *
  * Features:
- * - Audio file metadata retrieval and management
  * - Direct audio URL generation
- * - Audio upload
+ * - Audio file listing and upload
  * - Podcast episode management
  * - RSS feed access
  *
@@ -14,8 +13,8 @@
  * ```typescript
  * const client = createClient({ baseUrl: 'https://api.aragora.ai', apiKey: 'your-key' });
  *
- * // Get audio metadata
- * const audio = await client.media.getAudio('audio_123');
+ * // Build a direct playback URL for a debate's audio
+ * const url = client.media.getAudioUrl('debate_456');
  *
  * // List podcast episodes
  * const { episodes } = await client.media.listPodcastEpisodes({ limit: 10 });
@@ -163,7 +162,7 @@ interface MediaClientInterface {
  * Media API namespace.
  *
  * Provides methods for media asset management:
- * - Get, list, upload, and delete audio files
+ * - Direct audio URLs, audio listing and upload
  * - Podcast episode management
  * - RSS feed access
  *
@@ -171,11 +170,11 @@ interface MediaClientInterface {
  * ```typescript
  * const client = createClient({ baseUrl: 'https://api.aragora.ai', apiKey: 'your-key' });
  *
- * // Get audio metadata
- * const audio = await client.media.getAudio('audio_123');
+ * // Build a direct playback URL for a debate's audio
+ * const url = client.media.getAudioUrl('debate_456');
  *
- * // List audio files for a debate
- * const { audio_files } = await client.media.listAudio({ debateId: 'debate_456' });
+ * // Browse podcast episodes
+ * const { episodes } = await client.media.listPodcastEpisodes({ limit: 10 });
  * ```
  */
 export class MediaAPI {
@@ -184,22 +183,6 @@ export class MediaAPI {
   // =========================================================================
   // Audio Files
   // =========================================================================
-
-  /**
-   * Get audio file metadata by ID.
-   *
-   * @param audioId - The audio file identifier
-   * @returns Audio file metadata including format, duration, size, and URL
-   *
-   * @example
-   * ```typescript
-   * const audio = await client.media.getAudio('audio_123');
-   * console.log(`Duration: ${audio.duration_seconds}s, Format: ${audio.format}`);
-   * ```
-   */
-  async getAudio(audioId: string): Promise<AudioFile> {
-    return this.client.request('GET', `/api/v1/media/audio/${audioId}`);
-  }
 
   /**
    * Get the direct audio file URL for a debate or audio file.
@@ -281,22 +264,6 @@ export class MediaAPI {
     if (params.metadata !== undefined) json.metadata = params.metadata;
 
     return this.client.request('POST', '/api/v1/media/audio', { json });
-  }
-
-  /**
-   * Delete an audio file.
-   *
-   * @param audioId - The audio file identifier
-   * @returns Confirmation of deletion
-   *
-   * @example
-   * ```typescript
-   * const result = await client.media.deleteAudio('audio_123');
-   * console.log(result.message); // "Audio file deleted"
-   * ```
-   */
-  async deleteAudio(audioId: string): Promise<{ deleted: boolean; message: string }> {
-    return this.client.request('DELETE', `/api/v1/media/audio/${audioId}`);
   }
 
   // =========================================================================

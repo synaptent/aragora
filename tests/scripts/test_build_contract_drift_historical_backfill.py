@@ -67,6 +67,7 @@ def _authority_manifest() -> dict[str, Any]:
                 SOURCE_SHA,
             ],
             cwd=ROOT,
+            env=backfill._git_env(),
         )
     )
 
@@ -1125,6 +1126,45 @@ def test_builder_isolates_every_git_subprocess(
         assert env["GIT_CONFIG_NOSYSTEM"] == "1"
         assert env["GIT_NO_REPLACE_OBJECTS"] == "1"
         assert env["LC_ALL"] == "C"
+
+
+def test_builder_payload_bytes_are_environment_independent(
+    assets: dict[str, bytes],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # core.autocrlf reaches `git archive` inside the authority-manifest
+    # generator when the ambient git environment leaks into that subprocess,
+    # which is exactly the channel that made fixed-ref rebuilds session-
+    # dependent; the rebuild below must stay byte-identical anyway.
+    hostile_home = tmp_path / "hostile-home"
+    hostile_home.mkdir()
+    (hostile_home / ".gitconfig").write_text(
+        "[core]\n"
+        "\tautocrlf = true\n"
+        "\tquotepath = false\n"
+        "[diff]\n"
+        "\talgorithm = histogram\n"
+        "[log]\n"
+        "\tshowSignature = true\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(hostile_home))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.delenv("GIT_CONFIG_GLOBAL", raising=False)
+    monkeypatch.delenv("GIT_CONFIG_NOSYSTEM", raising=False)
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.autocrlf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "Hostile Session")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "hostile@example.invalid")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "Hostile Session")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "hostile@example.invalid")
+    rebuilt = backfill.build_payload(
+        repo_root=ROOT,
+        input_document=_input_document(),
+    )
+    assert backfill.build_capsule_bytes(rebuilt) == assets
 
 
 def test_builder_cli_is_supported_from_outside_the_repository(tmp_path: Path) -> None:

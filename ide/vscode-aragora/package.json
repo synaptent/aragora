@@ -2,7 +2,7 @@
   "name": "aragora",
   "displayName": "Aragora",
   "description": "Control plane for multi-agent vetted decisionmaking - VS Code integration with rich code analysis",
-  "version": "2.9.0",
+  "version": "2.10.0",
   "publisher": "aragora",
   "engines": {
     "vscode": "^1.85.0",
