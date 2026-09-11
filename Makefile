@@ -572,15 +572,36 @@ readiness-heavy-live:
 	$(READINESS_DONE)
 
 # --- docs (docs-site, Docusaurus) -------------------------------------------
-# docs-site has no ESLint config, no tsconfig.json and no test suite until M7.
 readiness-lint-docs:
-	@echo "SKIP docs: no eslint config until M7"
+	@$(READINESS_T0); \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP docs: npm not found"; exit 0; }; \
+	command -v npx >/dev/null 2>&1 || { echo "SKIP docs: npx not found"; exit 0; }; \
+	command -v python3 >/dev/null 2>&1 || { echo "SKIP docs: python3 not found"; exit 0; }; \
+	command -v git >/dev/null 2>&1 || { echo "SKIP docs: git not found"; exit 0; }; \
+	[ -d docs-site/node_modules ] || { echo "SKIP docs: node_modules missing (npm ci in docs-site)"; exit 0; }; \
+	(cd docs-site && npm run lint && npm run format:check) && \
+	python3 scripts/ci/check_tool_baseline.py --tool knip --cwd docs-site \
+		--baseline scripts/baselines/docs-knip.json \
+		--report-json "$(READINESS_REPORT_DIR)/docs-knip.report.json" \
+		-- npx knip --reporter json && \
+	(cd docs-site && npx jscpd --config .jscpd.json) && \
+	python3 scripts/ci/check_file_sizes.py --glob 'docs-site/src/**/*.{js,ts,tsx}' \
+		--baseline scripts/baselines/docs-file-sizes.json && \
+	$(READINESS_DONE)
 
 readiness-typecheck-docs:
-	@echo "SKIP docs: no tsconfig.json until M7"
+	@$(READINESS_T0); \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP docs: npm not found"; exit 0; }; \
+	[ -d docs-site/node_modules ] || { echo "SKIP docs: node_modules missing (npm ci in docs-site)"; exit 0; }; \
+	cd docs-site && npm run typecheck && \
+	$(READINESS_DONE)
 
 readiness-test-docs:
-	@echo "SKIP docs: no test suite until M7"
+	@$(READINESS_T0); \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP docs: npm not found"; exit 0; }; \
+	[ -d docs-site/node_modules ] || { echo "SKIP docs: node_modules missing (npm ci in docs-site)"; exit 0; }; \
+	cd docs-site && npm test && \
+	$(READINESS_DONE)
 
 # --- vscode (ide/vscode-aragora + webview-ui) -------------------------------
 # The extension root has no ESLint config until M8 (`npm run lint` exits 2),

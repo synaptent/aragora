@@ -215,6 +215,8 @@ appends its baselines here, one row per file:
 | `aragora/live/eslint-suppressions.json` (ESLint native format) | `readiness-lint-live` | `cd aragora/live && npx eslint . --prune-suppressions` |
 | `scripts/baselines/live-knip.json` | `readiness-lint-live` | `python scripts/ci/check_tool_baseline.py --tool knip --cwd aragora/live --baseline scripts/baselines/live-knip.json --update -- npx knip --reporter json` |
 | `scripts/baselines/live-file-sizes.json` (file-size census format) | `readiness-lint-live` | `python scripts/ci/check_file_sizes.py --glob 'aragora/live/src/**/*.{ts,tsx}' --baseline scripts/baselines/live-file-sizes.json --freeze` |
+| `scripts/baselines/docs-knip.json` | `readiness-lint-docs` | `python scripts/ci/check_tool_baseline.py --tool knip --cwd docs-site --baseline scripts/baselines/docs-knip.json --update -- npx knip --reporter json` |
+| `scripts/baselines/docs-file-sizes.json` (file-size census format) | `readiness-lint-docs` | `python scripts/ci/check_file_sizes.py --glob 'docs-site/src/**/*.{js,ts,tsx}' --baseline scripts/baselines/docs-file-sizes.json --freeze` |
 
 The convention for every row: the regeneration command is the wired check
 command plus `--update`, run from the repository root, e.g.
