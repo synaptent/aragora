@@ -29,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: backend
-          image: ghcr.io/synaptent/aragora/backend:2.1.10
+          image: ghcr.io/synaptent/aragora/backend:2.10.0
           imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false

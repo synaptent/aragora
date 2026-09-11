@@ -5,7 +5,7 @@
 # no public IP, and no load balancer. That is what replaces the terminated AWS
 # edge without touching DNS.
 #
-# Secrets arrive as a mounted file, never as values in this file or in git.
+# Secrets are loaded from env_file, never interpolated from the invoking shell.
 
 name: aragora-prod
 
@@ -15,15 +15,15 @@ services:
     restart: unless-stopped
     env_file: [./secrets.env]
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-aragora}
-      POSTGRES_USER: ${POSTGRES_USER:-aragora}
+      POSTGRES_DB: aragora
+      POSTGRES_USER: aragora
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./backups:/backups
     ports: ["127.0.0.1:5432:5432"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aragora} -d ${POSTGRES_DB:-aragora}"]
+      test: ["CMD", "pg_isready", "-U", "aragora", "-d", "aragora"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -46,10 +46,7 @@ services:
     build: {context: ../.., dockerfile: deploy/Dockerfile.backend}
     restart: "no"
     env_file: [./secrets.env]
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-aragora}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aragora}
-      ARAGORA_POSTGRES_DSN: postgresql://${POSTGRES_USER:-aragora}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aragora}
-    command: ["python", "-m", "aragora.migrations.cli", "upgrade"]
+    command: ["python", "-m", "aragora.migrations", "upgrade"]
     depends_on:
       postgres: {condition: service_healthy}
 
@@ -61,8 +58,6 @@ services:
       ARAGORA_ENV: production
       ARAGORA_SINGLE_INSTANCE: "true"
       SKIP_MIGRATIONS: "1"            # the migrate service owns this
-      DATABASE_URL: postgresql://${POSTGRES_USER:-aragora}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aragora}
-      ARAGORA_POSTGRES_DSN: postgresql://${POSTGRES_USER:-aragora}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-aragora}
       REDIS_URL: redis://redis:6379/0
     ports:
       - "127.0.0.1:8080:8080"         # HTTP  — tunnel ingress
@@ -72,9 +67,7 @@ services:
       redis: {condition: service_healthy}
       migrate: {condition: service_completed_successfully}
     healthcheck:
-      # 127.0.0.1, not $HOSTNAME: the server binds loopback, and busybox wget
-      # prefers ::1, which fails against an IPv4-only listener.
-      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=5)\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/readyz',timeout=5)\""]
       interval: 20s
       timeout: 8s
       retries: 6
@@ -95,7 +88,7 @@ services:
         while true; do
           sleep 86400
           F=/backups/aragora-$$(date +%Y%m%d_%H%M%S).sql.gz
-          PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h postgres -U "$${POSTGRES_USER:-aragora}" "$${POSTGRES_DB:-aragora}" | gzip > "$$F" \
+          PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h postgres -U aragora aragora | gzip > "$$F" \
             && echo "[backup] wrote $$F" \
             || echo "[backup] FAILED - investigate immediately"
           find /backups -name '*.sql.gz' -mtime +14 -delete

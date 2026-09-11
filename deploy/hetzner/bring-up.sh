@@ -11,7 +11,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 
 # Refuse to start with an unset critical value rather than booting a server that
 # silently has no auth token — the failure mode this whole migration exists to remove.
-for k in POSTGRES_PASSWORD ARAGORA_API_TOKEN; do
+for k in ARAGORA_ENCRYPTION_KEY ARAGORA_JWT_SECRET POSTGRES_PASSWORD ARAGORA_API_TOKEN DATABASE_URL; do
   v="$(grep -E "^${k}=" secrets.env | cut -d= -f2- || true)"
   [[ -n "${v// /}" ]] || fail "$k is empty in secrets.env"
 done
@@ -32,5 +32,5 @@ for i in $(seq 1 40); do
 done
 
 echo "==> local origin check"
-curl -fsS --max-time 10 http://127.0.0.1:8080/health && echo
+curl -fsS --max-time 10 http://127.0.0.1:8080/readyz && echo
 echo "Origin is up. Next: start cloudflared so api.aragora.ai reaches it."

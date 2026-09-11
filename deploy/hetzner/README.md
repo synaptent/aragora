@@ -68,16 +68,23 @@ chmod 600 secrets.env
 nano secrets.env
 ```
 
-Generate the two you invent yourself:
+Generate four independent secrets:
 
 ```bash
-openssl rand -base64 32   # POSTGRES_PASSWORD
+openssl rand -hex 32      # POSTGRES_PASSWORD (URL-safe)
 openssl rand -hex 32      # ARAGORA_API_TOKEN
+openssl rand -hex 32      # ARAGORA_ENCRYPTION_KEY
+openssl rand -hex 32      # ARAGORA_JWT_SECRET
 ```
 
-`ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are reissued in each provider's console.
-`bring-up.sh` refuses to start if either required value is blank, so a
-half-filled file fails loudly instead of booting a server with no auth.
+Set `DATABASE_URL` to `postgresql://aragora:<POSTGRES_PASSWORD>@postgres:5432/aragora`,
+using the same password as `POSTGRES_PASSWORD`. Compose loads this literal DSN
+through `env_file`; it does not interpolate values from `secrets.env`.
+Do not add a competing `ARAGORA_POSTGRES_DSN`.
+`bring-up.sh` refuses to start if any of these five values is blank.
+For live debates, the operator also adds freshly issued provider keys such as
+`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to `secrets.env`. Provider setup, canary
+bring-up and monitoring require separate operator authorization.
 
 ## Step 4 — Start the origin
 
@@ -131,15 +138,15 @@ sudo systemctl enable --now cloudflared
 Run these from your laptop, not the host — the point is to test the public path.
 
 ```bash
-curl -sS https://api.aragora.ai/health
-curl -s -o /dev/null -w '%{http_code}\n' https://api.aragora.ai/health
+curl -sS https://api.aragora.ai/readyz
+curl -s -o /dev/null -w '%{http_code}\n' https://api.aragora.ai/readyz
 ```
 
-You want `{"status": "ok"}` and `200`. Then confirm it survives a restart:
+You want `{"status": "ready"}` and `200`. Then confirm it survives a restart:
 
 ```bash
 ssh <hetzner-host> 'cd ~/aragora/deploy/hetzner && docker compose restart app'
-sleep 30 && curl -sS https://api.aragora.ai/health
+sleep 30 && curl -sS https://api.aragora.ai/readyz
 ```
 
 ---

@@ -52,11 +52,12 @@ fi
 if [ "${SKIP_MIGRATIONS}" != "1" ]; then
     if [ -n "${DATABASE_URL}" ] || [ -n "${ARAGORA_POSTGRES_DSN}" ]; then
         echo "[entrypoint] Running database migrations..."
-        python -m aragora.migrations upgrade 2>&1 || {
+        if python -m aragora.migrations upgrade 2>&1; then
+            echo "[entrypoint] Migrations complete."
+        else
             echo "[entrypoint] WARNING: Migration failed. Server will start but may use degraded mode."
             echo "[entrypoint] Check DATABASE_URL and database connectivity."
-        }
-        echo "[entrypoint] Migrations complete."
+        fi
     else
         echo "[entrypoint] No DATABASE_URL set, skipping migrations (using SQLite)."
     fi
