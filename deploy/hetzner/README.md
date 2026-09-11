@@ -104,13 +104,13 @@ partial restore that looks like success. Restore into an empty database and
 let the migrate service bring the dump's schema forward:
 
 ```bash
-docker compose stop app
+docker compose stop app backup
 docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U aragora -d postgres \
   -c 'DROP DATABASE aragora WITH (FORCE)' -c 'CREATE DATABASE aragora'
 gunzip -c /path/to/dump.sql.gz | docker compose exec -T postgres \
   psql -v ON_ERROR_STOP=1 -U aragora -d aragora
 docker compose run --rm migrate
-docker compose up -d app
+docker compose up -d app backup
 ```
 
 `ON_ERROR_STOP=1` makes the restore fail loudly on the first error instead of

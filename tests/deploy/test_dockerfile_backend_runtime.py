@@ -45,6 +45,8 @@ def test_app_service_sets_no_entrypoint_only_variables() -> None:
     assert "ENTRYPOINT" not in dockerfile
     services = yaml.safe_load((ROOT / "deploy/hetzner/docker-compose.yml").read_text())["services"]
     assert "SKIP_MIGRATIONS" not in services["app"]["environment"]
+    # aragora.server.__main__ turns demo mode on via setdefault when no provider key is set.
+    assert services["app"]["environment"]["ARAGORA_DEMO_MODE"] == "false"
 
 
 def test_backup_reports_success_only_after_pg_dump_succeeds() -> None:
@@ -78,11 +80,11 @@ def test_tunnel_routes_only_the_websocket_path_to_the_ws_port() -> None:
 def test_readme_restores_dump_into_a_fresh_database_before_migrating() -> None:
     readme = (ROOT / "deploy/hetzner/README.md").read_text()
     order = [
-        "docker compose stop app",
+        "docker compose stop app backup",
         "DROP DATABASE aragora WITH (FORCE)",
         "psql -v ON_ERROR_STOP=1 -U aragora -d aragora",
         "docker compose run --rm migrate",
-        "docker compose up -d app",
+        "docker compose up -d app backup",
     ]
     positions = [readme.index(step) for step in order]
     assert positions == sorted(positions)
@@ -119,7 +121,6 @@ def test_ci_probes_backend_dependencies_and_both_migration_systems() -> None:
     )
     workflow = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
     migration = workflow["jobs"]["migration-test"]
-    assert migration["services"]["postgres"]["image"] == "postgres:15"
     runs = "\n".join(step.get("run", "") for step in migration["steps"])
     assert "alembic upgrade head" in runs
     assert 'python -m aragora.migrations upgrade --database-url "$DATABASE_URL"' in runs

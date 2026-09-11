@@ -60,6 +60,7 @@ services:
       ARAGORA_ENV: production
       ARAGORA_SINGLE_INSTANCE: "true"
       ARAGORA_DB_BACKEND: postgres
+      ARAGORA_DEMO_MODE: "false"      # no provider key must never mean demo data in production
       REDIS_URL: redis://redis:6379/0
     ports:
       - "127.0.0.1:8080:8080"         # HTTP  — tunnel ingress
