@@ -7,6 +7,7 @@ Main HTTP client for interacting with the Aragora platform.
 from __future__ import annotations
 
 import os
+import re
 import time
 from datetime import timezone
 from email.utils import parsedate_to_datetime
@@ -30,16 +31,30 @@ from .exceptions import (
     ValidationError,
 )
 
+# RFC 9110 section 5.6.7: accept the complete three HTTP-date forms, not
+# arbitrary email dates or a valid prefix followed by unsupported content.
+_HTTP_DAY = r"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)"
+_HTTP_MONTH = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+_HTTP_TIME = r"[0-9]{2}:[0-9]{2}:[0-9]{2}"
+_HTTP_DATE = re.compile(
+    rf"(?:{_HTTP_DAY}, [0-9]{{2}} {_HTTP_MONTH} [0-9]{{4}} {_HTTP_TIME} GMT|"
+    rf"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), "
+    rf"[0-9]{{2}}-{_HTTP_MONTH}-[0-9]{{2}} {_HTTP_TIME} GMT|"
+    rf"{_HTTP_DAY} {_HTTP_MONTH} (?:[0-9]{{2}}| [0-9]) {_HTTP_TIME} [0-9]{{4}})"
+)
+
 
 def _parse_retry_after(value: str | None) -> int | None:
     """Return an HTTP retry hint representable by the platform's timeout machinery."""
     if value is None:
         return None
-    value = value.strip()
+    value = value.strip(" \t")
     try:
         if value.isascii() and value.isdecimal():
             delay = int(value)
         else:
+            if not _HTTP_DATE.fullmatch(value):
+                return None
             retry_at = parsedate_to_datetime(value)
             # The obsolete HTTP asctime form has no timezone but always means UTC.
             if retry_at.tzinfo is None:

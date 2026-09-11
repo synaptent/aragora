@@ -12,6 +12,9 @@ Future dates use the local UTC clock and round the remaining delay up to whole
 seconds; past dates yield zero. Keep the client machine's clock synchronized.
 Malformed, negative, missing, or platform-timer-unrepresentable hints yield
 `None`, without hiding the original rate-limit diagnostics.
+Date hints must match a complete HTTP-date form (including the obsolete RFC 850
+and asctime forms). Unknown zones, missing required components, trailing content,
+or multiple coalesced hints are unavailable; a valid-looking prefix is not enough.
 
 Within the existing attempt budget, a usable hint is the delay before the next
 attempt. **Zero means no delay**, not exponential backoff. Unavailable hints keep
