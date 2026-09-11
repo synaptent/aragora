@@ -135,6 +135,28 @@ class APIAgent(CritiqueMixin, Agent):
         self._total_tokens_out += tokens_out
         self._record_budget_spend(tokens_in, tokens_out)
 
+    @property
+    def billing_model(self) -> str:
+        """Model id this call's token usage should be PRICED against.
+
+        Normally ``self.model``. When the provider answered with a different
+        model -- Anthropic's server-side refusal fallback, on by default for
+        Fable 5.1 / Opus 5 -- the tokens were produced by, and billed by the
+        provider at, the SERVED model's rate. Pricing them at the requested
+        model's rate mis-states the spend in both directions depending on
+        which is dearer (finding C-P3 on #9989); today a Fable request
+        answered by Opus 4.8 is over-charged 2x.
+
+        Subclasses that can observe the served model expose it as
+        ``last_served_model`` (set only when it genuinely DIFFERS from the
+        requested model, per the catalog). Anything else -- an agent that
+        cannot tell, or a call the server answered without naming a model --
+        falls back to ``self.model``, so the estimate is never worse than
+        before this existed.
+        """
+        served = getattr(self, "last_served_model", None)
+        return served if isinstance(served, str) and served else self.model
+
     def _record_budget_spend(self, tokens_in: int, tokens_out: int) -> None:
         """Debit this call's estimated USD cost against the monthly budget guard.
 
@@ -142,6 +164,8 @@ class APIAgent(CritiqueMixin, Agent):
         is set, and it never raises (metering must not break a call). Unknown
         providers fall back to OpenRouter pricing in ``calculate_token_cost``,
         which is conservative (it will not under-count cheap providers).
+        Priced against :attr:`billing_model`, so a call a server-side fallback
+        answered is debited at the model that actually produced the tokens.
         """
         try:
             from aragora.billing import budget_guard
@@ -151,7 +175,7 @@ class APIAgent(CritiqueMixin, Agent):
             from aragora.billing.usage import calculate_token_cost
 
             provider = getattr(self, "provider", None) or self.agent_type or "openrouter"
-            cost = calculate_token_cost(str(provider), self.model, tokens_in, tokens_out)
+            cost = calculate_token_cost(str(provider), self.billing_model, tokens_in, tokens_out)
             budget_guard.record_spend(float(cost))
         except Exception:  # noqa: BLE001 - budget metering must never crash the agent
             logger.debug("budget_guard spend recording skipped", exc_info=True)

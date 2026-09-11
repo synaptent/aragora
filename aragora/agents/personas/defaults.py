@@ -68,17 +68,6 @@ DEFAULT_PERSONAS = {
         },
         temperature=0.7,
     ),
-    "yi": Persona(
-        agent_name="yi",
-        description="Balanced reasoning with cross-cultural perspective",
-        traits=["diplomatic", "thorough", "collaborative"],
-        expertise={
-            "architecture": 0.6,
-            "documentation": 0.7,
-            "api_design": 0.6,
-        },
-        temperature=0.7,
-    ),
     "deepseek": Persona(
         agent_name="deepseek",
         description="Efficient problem solver with cost-conscious approach",

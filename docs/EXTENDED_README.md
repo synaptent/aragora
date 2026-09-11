@@ -337,7 +337,7 @@ aragora/
 ```
 
 <!-- metrics:begin extended-readme-scale -->
-**Scale:** 4,310 tracked Python files | 145 top-level modules | 226,053 test functions across 5,551 test files | canonical counts in [METRICS.md](METRICS.md)
+**Scale:** 4,331 tracked Python files | 145 top-level modules | 226,797 test functions across 5,595 test files | canonical counts in [METRICS.md](METRICS.md)
 <!-- metrics:end -->
 
 ---

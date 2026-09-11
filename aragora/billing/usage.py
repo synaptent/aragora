@@ -11,12 +11,15 @@ import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
+from collections.abc import Iterable
 from decimal import Decimal
 from enum import Enum
 from pathlib import Path
 from typing import Any
 from collections.abc import Generator
 from uuid import uuid4
+
+from aragora.models.pricing_mirror import dec, usage_rows
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +34,7 @@ class UsageEventType(Enum):
 
 
 # Provider pricing per 1M tokens.
-PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
+_LEGACY_PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
     "anthropic": {
         "claude-fable-5": Decimal("10.00"),  # live catalog 2026-07-16
         "claude-fable-5-output": Decimal("50.00"),
@@ -105,8 +108,10 @@ PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
         "grok-4-output": Decimal("15.00"),
     },
     "mistral": {
-        "mistral-large-3": Decimal("2.00"),
-        "mistral-large-3-output": Decimal("6.00"),
+        # Live catalog 2026-09-04 (frontier-model-refresh): mistral-large is
+        # $0.50/$1.50 per MTok, not the pre-refresh $2.00/$6.00 legacy price.
+        "mistral-large-3": Decimal("0.50"),
+        "mistral-large-3-output": Decimal("1.50"),
     },
     "openrouter": {
         "default": Decimal("2.00"),
@@ -121,8 +126,8 @@ PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
         "qwen/qwen3.7-max-output": Decimal("4.425"),
         "moonshotai/kimi-k3": Decimal("3.00"),
         "moonshotai/kimi-k3-output": Decimal("15.00"),
-        "moonshotai/kimi-k2.7-code": Decimal("0.71"),
-        "moonshotai/kimi-k2.7-code-output": Decimal("3.50"),
+        "moonshotai/kimi-k2.7-code": Decimal("0.66"),
+        "moonshotai/kimi-k2.7-code-output": Decimal("3.40"),
         "x-ai/grok-4.5": Decimal("2.00"),
         "x-ai/grok-4.5-output": Decimal("6.00"),
         "x-ai/grok-4.3": Decimal("1.25"),
@@ -167,6 +172,176 @@ PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
     },
 }
 
+# Catalog-generated rows win on a key collision with the legacy hand-written
+# dict above (aragora.models.pricing_mirror is the single source of truth
+# for catalog-known models); hand rows for models the catalog doesn't know
+# about (e.g. legacy gpt-4o/gemini-pro spellings) are preserved unchanged.
+PROVIDER_PRICING: dict[str, dict[str, Decimal]] = {
+    prov: {**_LEGACY_PROVIDER_PRICING.get(prov, {}), **rows}
+    for prov, rows in {
+        **{p: {} for p in _LEGACY_PROVIDER_PRICING},
+        **usage_rows(),
+    }.items()
+}
+
+# Per-provider fallbacks, not model spellings: a caller's ``extra_prices``
+# is still allowed to supply its own, which is the whole point of step 5 of
+# the resolution ladder below.
+_DEFAULT_ROW_KEYS = frozenset({"default", "default-output"})
+
+# Every MODEL spelling the shared table above prices at all. A caller's
+# ``extra_prices`` may ADD spellings this table has never heard of; it may
+# not RESTATE one it already prices. ``services.usage_metering`` carried
+# ``deepseek-v3`` at 0.14/0.28 against this table's 0.28/0.42 and, because
+# ``extra_prices`` won an exact same-provider hit, the tenant-billing path
+# billed that spelling at a rate no other caller used (2026-09-05 merge-gate
+# addendum on #9989). One spelling, one price -- see
+# ``tests/billing/test_usage.py::TestCrossBucketPriceConsistency``.
+_SHARED_PRICED_SPELLINGS: frozenset[str] = (
+    frozenset(key for rows in PROVIDER_PRICING.values() for key in rows) - _DEFAULT_ROW_KEYS
+)
+
+
+def _caller_model_price(caller_prices: "dict[str, Decimal]", key: str) -> "Decimal | None":
+    """A caller's ``extra_prices`` rate for one MODEL spelling.
+
+    ``None`` when the shared ``PROVIDER_PRICING`` table already prices that
+    spelling: the shared table wins, so the two can never disagree about
+    the same key. Default rows are unaffected (see ``_DEFAULT_ROW_KEYS``).
+    """
+    if key in _SHARED_PRICED_SPELLINGS:
+        return None
+    return caller_prices.get(key)
+
+
+def _catalog_token_price(model: str, prompt_tokens: int = 0) -> tuple[Decimal, Decimal] | None:
+    """Rate pair for ``model``'s OWN catalog spelling, or ``None``.
+
+    Resolution is EXACT (canonical/direct/openrouter/alias via
+    ``spec_or_none``), including a RETIRED row at its own historical rate --
+    "retired rows stay priced" is a hard invariant of this module's
+    generated tables.
+
+    It deliberately carries NO upgrade leg. An earlier cut fell through to
+    ``resolve_model_id`` when the exact spelling missed, which priced an
+    uncataloged legacy spelling at its SUCCESSOR's rate -- never a correct
+    answer for a receipt, which records what was actually charged for the
+    model that actually ran. ``mistral-large-2411`` was the empirical case
+    (2.00 against a true 8.00 before it got its own row); the same leg also
+    over-priced ``gpt-4o`` at ``gpt-6-astra``'s rate and under-priced
+    ``grok-4`` at ``grok-4.6``'s, both of which have correct rows in the
+    generated buckets that ``calculate_token_cost`` now reaches instead.
+
+    Tier-aware: ``spec.rates_for(prompt_tokens)`` applies a documented
+    long-context tier (xAI's, and ``gpt-6-astra``'s) for a prompt at or above
+    the row's threshold. The generated buckets are flat and cannot express
+    that (finding O-P2b on #9989), which is why this path is consulted first.
+    ``prompt_tokens`` is the FULL prompt the request sends -- fresh plus
+    cached input -- since that is what a provider tiers on.
+    """
+    from aragora.models.catalog import spec_or_none
+
+    spec = spec_or_none(model)
+    if spec is None:
+        return None
+    input_rate, output_rate = spec.rates_for(prompt_tokens)
+    return dec(input_rate), dec(output_rate)
+
+
+def _any_bucket_token_price(
+    model: str, tables: "Iterable[dict[str, Decimal]] | None" = None
+) -> tuple[Decimal | None, Decimal | None]:
+    """First ``(input, output)`` price found for the EXACT ``model``
+    spelling under ANY bucket of ``tables`` (default: every
+    ``PROVIDER_PRICING`` bucket).
+
+    A spelling has ONE price, and which provider LABEL a caller happens to
+    pass is not information about that price: ``CLIAgent`` never sets
+    ``agent_type`` (so every CLI agent bills as ``"unknown"``), and several
+    API agents bill under a label naming neither their model's catalog
+    provider nor its family. Buckets are emitted per label precisely so a
+    legitimate label finds the row, so consulting the others on a miss
+    cannot introduce a conflicting rate --
+    ``tests/billing/test_usage.py::TestCrossBucketPriceConsistency`` asserts
+    no spelling is priced two different ways across buckets.
+    """
+    in_price: Decimal | None = None
+    out_price: Decimal | None = None
+    output_key = f"{model}-output"
+    for table in PROVIDER_PRICING.values() if tables is None else tables:
+        if in_price is None:
+            in_price = table.get(model)
+        if out_price is None:
+            out_price = table.get(output_key)
+        if in_price is not None and out_price is not None:
+            break
+    return in_price, out_price
+
+
+# Suffix of the generated cache-read column in ``PROVIDER_PRICING`` (see
+# ``pricing_mirror.usage_rows``): "<spelling>-cache-read" carries the rate
+# the provider DOCUMENTS for a cached prompt token, for the rows that
+# publish one.
+_CACHE_READ_SUFFIX = "-cache-read"
+
+# Share of the input rate charged for a cached prompt token when NOTHING
+# documents a real cache-read rate for the spelling. A rule of thumb, not a
+# price: it is right for some rows by coincidence (gpt-6-astra's documented
+# $1.00 is exactly 10% of its $10.00 input rate) and wrong for others
+# (claude-fable-5-1 documents $0.25 against a $10.00 input rate, so the
+# heuristic over-billed cached Fable 4x -- finding O-P2a on #9989).
+_CACHE_READ_HEURISTIC = Decimal("0.1")
+
+
+def _cache_read_price(
+    model: str,
+    caller_prices: "dict[str, Decimal]",
+    provider_prices: "dict[str, Decimal]",
+    extra_prices: "dict[str, dict[str, Decimal]] | None",
+) -> "Decimal | None":
+    """The DOCUMENTED cache-read rate for ``model``, or ``None``.
+
+    ``None`` means "nobody publishes one for this spelling", which is the
+    only case where ``calculate_token_cost`` falls back to
+    ``_CACHE_READ_HEURISTIC``.
+
+    Same resolution order as the input rate, for the same reasons: the
+    model's OWN catalog row first (the canonical, most recently verified
+    source, and the one that resolves alias/direct/openrouter spellings),
+    then the ``-cache-read`` column of the caller's label bucket, then any
+    other bucket -- one rate per spelling, independent of the label the
+    caller passed -- then the caller's ``extra_prices``, which may document
+    a cache-read rate for a spelling the shared tables have never heard of.
+
+    Unlike the input rate this is deliberately NOT tier-aware: a catalog row
+    carries exactly ONE documented cache-read rate and no ``*_long``
+    counterpart, so a long-context request bills its cached tokens at the
+    published rate rather than at a rate this module would have to invent.
+    A provider that publishes a tiered cache-read rate needs a
+    ``cache_read_per_mtok_long`` field on ``ModelSpec`` first.
+    """
+    from aragora.models.catalog import spec_or_none
+
+    spec = spec_or_none(model)
+    if spec is not None and spec.cache_read_per_mtok is not None:
+        return dec(spec.cache_read_per_mtok)
+
+    key = f"{model}{_CACHE_READ_SUFFIX}"
+    price = _caller_model_price(caller_prices, key)
+    if price is None:
+        price = provider_prices.get(key)
+    if price is None:
+        for table in PROVIDER_PRICING.values():
+            price = table.get(key)
+            if price is not None:
+                break
+    if price is None and extra_prices and key not in _SHARED_PRICED_SPELLINGS:
+        for table in extra_prices.values():
+            price = table.get(key)
+            if price is not None:
+                break
+    return price
+
 
 def calculate_token_cost(
     provider: str,
@@ -174,6 +349,8 @@ def calculate_token_cost(
     tokens_in: int,
     tokens_out: int,
     tokens_cached: int = 0,
+    *,
+    extra_prices: "dict[str, dict[str, Decimal]] | None" = None,
 ) -> Decimal:
     """
     Calculate cost for token usage.
@@ -183,29 +360,109 @@ def calculate_token_cost(
         model: Model name
         tokens_in: Input tokens (non-cached)
         tokens_out: Output tokens
-        tokens_cached: Cached input tokens (charged at 10% of input price)
+        tokens_cached: Cached input tokens. Billed at the rate the
+            provider DOCUMENTS for a cache read when the spelling
+            resolves to one (``ModelSpec.cache_read_per_mtok``, or a
+            bucket's ``-cache-read`` row); at ``_CACHE_READ_HEURISTIC``
+            times the input rate only when nothing documents one.
+        extra_prices: An additional ``PROVIDER_PRICING``-shaped table this
+            caller owns. It may ADD model spellings the shared table has
+            never heard of, and supplies the per-provider ``default`` row
+            before the global $2/$8 -- but it can no longer RESTATE a
+            spelling the shared table already prices (see
+            ``_caller_model_price``), so the two cannot disagree about one
+            key and bill it differently per caller. Exists so
+            ``services.usage_metering`` -- which carries historical rows
+            ``PROVIDER_PRICING`` never had (``o1``, ``claude-haiku-4``,
+            ``codestral``, per-provider defaults) -- can keep pricing them
+            without maintaining a SECOND implementation of this resolution
+            ladder (2026-09-05 wave-2 re-review). Data, not logic.
 
     Returns:
         Cost in USD
     """
     provider_prices = PROVIDER_PRICING.get(provider, PROVIDER_PRICING["openrouter"])
+    caller_prices = (extra_prices or {}).get(provider, {})
 
-    # Get input price
-    input_key = model if model in provider_prices else "default"
-    input_price = provider_prices.get(input_key, Decimal("2.00"))
-
-    # Get output price
-    output_key = f"{model}-output" if f"{model}-output" in provider_prices else "default-output"
-    output_price = provider_prices.get(output_key, Decimal("8.00"))
+    # Resolution order (#9989 merge-gate, round 2 -- findings O-P2b and the
+    # scoped re-review's Important #1):
+    #
+    #   1. the model's OWN catalog row, TIER-AWARE. First because it is the
+    #      only source that can price a long-context request correctly: the
+    #      generated buckets are flat two-key rows and cannot express a
+    #      documented tier. A retired row prices at its own historical rate.
+    #   2. the caller's label bucket;
+    #   3. any OTHER bucket carrying the exact spelling -- one price per
+    #      spelling, independent of the label the caller passed (a CLI agent
+    #      passes "unknown", several API agents pass a label matching neither
+    #      their model's provider nor its family);
+    #   4. the same two steps over ``extra_prices``, when the caller supplied
+    #      one (see the argument's docstring);
+    #   5. the caller's per-provider default row, then this table's, then
+    #      the $2/$8 default.
+    #
+    # ``extra_prices``' own provider bucket is consulted BEFORE step 2 for a
+    # spelling this table does NOT price: a caller that ships its own table
+    # has the more specific knowledge of what it bills. For a spelling this
+    # table DOES price, the shared row wins -- otherwise the same spelling
+    # bills two ways depending on which caller priced it, which is exactly
+    # what "deepseek-v3" did (see ``_SHARED_PRICED_SPELLINGS``).
+    #
+    # There is deliberately NO upgrade leg anywhere in this order: see
+    # ``_catalog_token_price``. Steps 1 and 2 cannot disagree today -- every
+    # cataloged spelling's bucket rows are GENERATED from the same row -- so
+    # putting the catalog first changes no flat-priced answer; it only makes
+    # the tiered ones right.
+    input_price: Decimal | None
+    output_price: Decimal | None
+    # The tier threshold is evaluated against the FULL prompt -- fresh plus
+    # cached input -- because that is what providers tier on: a cache hit
+    # changes the RATE a token is billed at, not whether the request counts
+    # as long context. Passing tokens_in alone let a mostly-cached
+    # long-context request drop back to the flat rate (2026-09-05 wave-2
+    # re-review). Rates are still applied per token class below.
+    catalog_price = _catalog_token_price(model, tokens_in + tokens_cached)
+    if catalog_price is not None:
+        input_price, output_price = catalog_price
+    else:
+        output_key = f"{model}-output"
+        input_price = _caller_model_price(caller_prices, model)
+        if input_price is None:
+            input_price = provider_prices.get(model)
+        output_price = _caller_model_price(caller_prices, output_key)
+        if output_price is None:
+            output_price = provider_prices.get(output_key)
+        if input_price is None or output_price is None:
+            any_in, any_out = _any_bucket_token_price(model)
+            input_price = any_in if input_price is None else input_price
+            output_price = any_out if output_price is None else output_price
+        if (input_price is None or output_price is None) and extra_prices:
+            any_in, any_out = _any_bucket_token_price(model, extra_prices.values())
+            if input_price is None and model not in _SHARED_PRICED_SPELLINGS:
+                input_price = any_in
+            if output_price is None and output_key not in _SHARED_PRICED_SPELLINGS:
+                output_price = any_out
+        if input_price is None:
+            input_price = caller_prices.get(
+                "default", provider_prices.get("default", Decimal("2.00"))
+            )
+        if output_price is None:
+            output_price = caller_prices.get(
+                "default-output", provider_prices.get("default-output", Decimal("8.00"))
+            )
 
     # Calculate cost (prices are per 1M tokens)
     input_cost = (Decimal(tokens_in) / Decimal("1000000")) * input_price
     output_cost = (Decimal(tokens_out) / Decimal("1000000")) * output_price
 
-    # Cached tokens charged at 10% of input price
+    # Cached tokens charged at the DOCUMENTED cache-read rate where one
+    # exists, and only otherwise at a share of the input rate.
     cache_cost = Decimal("0")
     if tokens_cached > 0:
-        cache_cost = (Decimal(tokens_cached) / Decimal("1000000")) * input_price * Decimal("0.1")
+        cache_price = _cache_read_price(model, caller_prices, provider_prices, extra_prices)
+        if cache_price is None:
+            cache_price = input_price * _CACHE_READ_HEURISTIC
+        cache_cost = (Decimal(tokens_cached) / Decimal("1000000")) * cache_price
 
     return input_cost + output_cost + cache_cost
 

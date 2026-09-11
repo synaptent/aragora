@@ -61,6 +61,13 @@ from aragora.agents.api_agents.common import (
     handle_agent_errors,
 )
 from aragora.agents.fallback import QuotaFallbackMixin
+from aragora.config.model_pins import GPT56_TERRA_VIA_OPENROUTER
+from aragora.models.catalog import spec_or_none
+from aragora.models.compat import (
+    max_tokens_param,
+    reasoning_effort_default,
+    rejects_sampling_params,
+)
 from aragora.observability.metrics.agents import (
     ErrorType,
     record_circuit_breaker_rejection,
@@ -71,6 +78,20 @@ from aragora.observability.metrics.agents import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Default OpenRouter fallback target for OpenAI-compatible agents that don't
+# override DEFAULT_FALLBACK_MODEL themselves (2026-09-04 frontier-model
+# refresh): the cheap/bulk-route OpenAI sibling.
+DEFAULT_FALLBACK_MODEL = GPT56_TERRA_VIA_OPENROUTER
+
+# The historical flat output-token default this mixin has always shipped. Also
+# the sentinel for "the caller never asked for a specific cap": a subclass or
+# instance that sets any other value is honoured verbatim.
+_INHERITED_DEFAULT_MAX_TOKENS = 4096
+# Default cap for a model that will be sent ``reasoning_effort`` and has no
+# explicit caller value: min(catalog max_output_tokens, this). Mirrors
+# ``AnthropicAPIAgent._resolve_max_tokens``' non-streaming cap.
+_REASONING_DEFAULT_MAX_TOKENS = 16_000
 
 
 class OpenAICompatibleMixin(QuotaFallbackMixin):
@@ -92,10 +113,12 @@ class OpenAICompatibleMixin(QuotaFallbackMixin):
 
     # Subclasses should define these
     OPENROUTER_MODEL_MAP: dict[str, str] = {}
-    DEFAULT_FALLBACK_MODEL: str = "openai/gpt-5.3"
+    DEFAULT_FALLBACK_MODEL: str = DEFAULT_FALLBACK_MODEL
 
-    # Default max tokens (can be overridden)
-    max_tokens: int = 4096
+    # Default max tokens (can be overridden). Left at the historical 4096 so a
+    # non-reasoning model's request shape is byte-identical to before; a
+    # reasoning model resolves a larger default through _resolve_max_tokens().
+    max_tokens: int = _INHERITED_DEFAULT_MAX_TOKENS
 
     # Expected from base class (APIAgent) - declared for type checking
     api_key: str | None
@@ -169,23 +192,79 @@ class OpenAICompatibleMixin(QuotaFallbackMixin):
             messages.insert(0, {"role": "system", "content": self.system_prompt})
         return messages
 
+    def _resolve_reasoning_effort(self) -> str | None:
+        """The ``reasoning_effort`` this request will send, or ``None``.
+
+        An explicit instance override wins over the catalog default; a model
+        whose catalog row documents no default (or that the catalog does not
+        know) sends nothing, exactly as before.
+        """
+        override = getattr(self, "reasoning_effort", None)
+        if override:
+            return str(override)
+        return reasoning_effort_default(self.model)
+
+    def _resolve_max_tokens(self, *, effort: str | None) -> int:
+        """Resolve the output-token cap for this request.
+
+        Mirrors ``AnthropicAPIAgent._resolve_max_tokens``. On OpenAI reasoning
+        models the reasoning tokens are billed and capped *inside*
+        ``max_completion_tokens``, so the inherited flat 4096 is not a 4096
+        answer budget — at ``reasoning_effort: "high"`` a large fraction of
+        calls exhaust it on reasoning and come back ``finish_reason:
+        "length"`` with empty ``content``. Resolution:
+
+        * Caller set an explicit cap (any value other than the inherited
+          default, set on the instance or by a subclass): respected verbatim.
+        * No explicit cap and this request sends ``reasoning_effort``:
+          ``min(catalog max_output_tokens, 16_000)``, or a flat 16_000 when
+          the id has no catalog row.
+        * Otherwise: the inherited 4096, unchanged.
+        """
+        configured = getattr(self, "max_tokens", None)
+        if configured is not None and int(configured) != _INHERITED_DEFAULT_MAX_TOKENS:
+            return int(configured)
+        if not effort:
+            return _INHERITED_DEFAULT_MAX_TOKENS
+        spec = spec_or_none(self.model)
+        if spec is None:
+            return _REASONING_DEFAULT_MAX_TOKENS
+        return min(spec.max_output_tokens, _REASONING_DEFAULT_MAX_TOKENS)
+
     def _build_payload(self, messages: list[dict], stream: bool = False) -> dict:
-        """Build request payload. Override to add provider-specific fields."""
-        payload = {
+        """Build request payload. Override to add provider-specific fields.
+
+        Catalog-driven (Task 7, frontier-model-refresh): the output-token cap
+        uses whichever field name the model's catalog row declares
+        (``max_tokens`` or ``max_completion_tokens``, e.g. GPT-6 Astra) and,
+        for a reasoning model with no explicit caller cap, a reasoning-safe
+        value instead of the inherited 4096 (see ``_resolve_max_tokens``);
+        sampling params (temperature/top_p/frequency_penalty) are omitted
+        entirely for a model whose catalog row rejects them, and
+        ``reasoning_effort`` is populated from an explicit instance override
+        or the catalog default when the model documents one.
+        """
+        effort = self._resolve_reasoning_effort()
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "max_tokens": self.max_tokens,
+            max_tokens_param(self.model): self._resolve_max_tokens(effort=effort),
         }
         if stream:
             payload["stream"] = True
 
-        # Apply generation parameters from persona if set (from APIAgent)
-        if hasattr(self, "temperature") and self.temperature is not None:
-            payload["temperature"] = self.temperature
-        if hasattr(self, "top_p") and self.top_p is not None:
-            payload["top_p"] = self.top_p
-        if hasattr(self, "frequency_penalty") and self.frequency_penalty is not None:
-            payload["frequency_penalty"] = self.frequency_penalty
+        # Apply generation parameters from persona if set (from APIAgent),
+        # unless this model's catalog row rejects sampling params entirely.
+        if not rejects_sampling_params(self.model):
+            if hasattr(self, "temperature") and self.temperature is not None:
+                payload["temperature"] = self.temperature
+            if hasattr(self, "top_p") and self.top_p is not None:
+                payload["top_p"] = self.top_p
+            if hasattr(self, "frequency_penalty") and self.frequency_penalty is not None:
+                payload["frequency_penalty"] = self.frequency_penalty
+
+        if effort:
+            payload["reasoning_effort"] = effort
 
         extra = self._build_extra_payload()
         if extra:

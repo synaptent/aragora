@@ -227,6 +227,17 @@ class TestAgentDisplayNames:
         names = handler._collect_display_names(["unknown-agent-x"])
         assert names["unknown-agent-x"] == "Unknown Agent X"
 
+    def test_retired_agent_types_are_not_offered(self):
+        """C-P3 (#9989 merge-gate, round 2): the frontier refresh removed the
+        ``YiAgent`` registration (01.AI Yi Large is off the live OpenRouter
+        catalog), but this map still offered "Yi Large" as a display option,
+        so the UI could present an agent type the server now rejects at
+        construction."""
+        assert "yi" not in AGENT_DISPLAY_NAMES
+        handler = _make_handler()
+        result = handler.handle("/api/v1/platform/config", {}, MagicMock())
+        assert "yi" not in _get_data(result)["agent_display_names"]
+
     def test_display_names_is_dict(self):
         handler = _make_handler()
         result = handler.handle("/api/v1/platform/config", {}, MagicMock())

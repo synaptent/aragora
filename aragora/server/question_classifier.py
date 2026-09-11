@@ -160,7 +160,6 @@ PERSONA_TO_AGENT = {
     "grok": "grok",
     "qwen": "qwen",  # Registered in openrouter.py with default model
     "qwen-max": "qwen-max",  # Registered in openrouter.py
-    "yi": "yi",  # Registered in openrouter.py
     "deepseek": "deepseek",  # Registered in openrouter.py
     "deepseek-r1": "deepseek-r1",  # Registered in openrouter.py
     "kimi": "kimi",  # Registered in openrouter.py

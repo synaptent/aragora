@@ -665,6 +665,15 @@ class TestHeterodoxKeyWiring:
 _VALID_MODELS_BY_PROVIDER: dict[str, frozenset[str]] = {
     "anthropic": frozenset(
         {
+            # Current frontier (frontier-model-refresh, 2026-09-04): the id
+            # aragora/models/catalog.py carries as the anthropic flagship and
+            # aragora/agents/api_agents/anthropic.py already ships as its
+            # DEFAULT_MODEL. Added when CLAUDE_MODEL_DEFAULT stopped pinning
+            # "claude-sonnet-4-6", an UPGRADES key the agent silently
+            # rewrote at construction (finding C-P3 on #9989).
+            "claude-fable-5-1",
+            "claude-opus-5",
+            "claude-opus-4-8",
             "claude-opus-4-7",
             "claude-opus-4-6",
             "claude-opus-4",
@@ -675,6 +684,13 @@ _VALID_MODELS_BY_PROVIDER: dict[str, frozenset[str]] = {
     ),
     "openai": frozenset(
         {
+            # Current frontier (frontier-model-refresh, 2026-09-04): the
+            # id aragora/models/catalog.py carries as the openai flagship
+            # and aragora/agents/api_agents/openai.py already ships as its
+            # DEFAULT_MODEL. Added when OPENAI_MODEL_DEFAULT stopped
+            # pinning the retired "gpt-5.5" (finding C-P2 on #9989).
+            "gpt-6-astra",
+            "gpt-5.6-terra",
             "gpt-5.4",
             "gpt-5.4-pro",
             "gpt-5.5",
@@ -722,6 +738,11 @@ _VALID_MODELS_BY_PROVIDER: dict[str, frozenset[str]] = {
     ),
     "deepseek": frozenset(
         {
+            # Current OpenRouter slug (catalog row deepseek-v4-pro-0813).
+            "deepseek/deepseek-v4-pro-0813",
+            # Legacy spelling kept accepted for stored configs that pin it;
+            # it is an UPGRADES key and OPENROUTER_FALLBACK_MODELS routes it
+            # to the row above.
             "deepseek/deepseek-v4-pro",
         }
     ),
@@ -741,6 +762,11 @@ _VALID_MODELS_BY_PROVIDER: dict[str, frozenset[str]] = {
     ),
     "qwen": frozenset(
         {
+            "qwen/qwen3.8-2.4t-a95b",
+            # Legacy id kept as an accepted alias (same keep-legacy principle
+            # as OPENROUTER_FALLBACK_MODELS in this PR): qwen3.8-max is
+            # superseded by qwen3.8-2.4t-a95b (frontier-model-refresh,
+            # 2026-09-04) but stored configs may still pin it.
             "qwen/qwen3.8-max",
             "qwen/qwen3-235b-a22b",
             "qwen/qwen3.7-max",
@@ -780,6 +806,25 @@ class TestModelDefaultsAreValid:
     def test_claude_default_is_valid(self) -> None:
         assert CLAUDE_MODEL_DEFAULT in _VALID_MODELS_BY_PROVIDER["anthropic"]
 
+    def test_claude_default_does_not_depend_on_a_construction_time_upgrade(self) -> None:
+        """The slot must name the model it actually runs.
+
+        ``claude-sonnet-4-6`` is an ``UPGRADES`` key: pinning it here made
+        AnthropicAPIAgent rewrite the slot at construction, so the model the
+        PDB Claude slot really used -- and the rate it billed -- came from
+        that rewrite rather than from this constant (finding C-P3 on #9989).
+        """
+        from aragora.config.model_pins import FABLE_51_DIRECT
+        from aragora.models.catalog import spec_or_none
+        from aragora.models.upgrade_map import UPGRADES, resolve_model_id
+
+        assert CLAUDE_MODEL_DEFAULT == FABLE_51_DIRECT
+        assert CLAUDE_MODEL_DEFAULT not in UPGRADES
+        spec = spec_or_none(CLAUDE_MODEL_DEFAULT)
+        assert spec is not None and not spec.retired
+        # Reachable without resolve_model_id: the raw spelling IS the row.
+        assert resolve_model_id(CLAUDE_MODEL_DEFAULT) == spec.canonical_id
+
     def test_openai_default_is_valid(self) -> None:
         assert OPENAI_MODEL_DEFAULT in _VALID_MODELS_BY_PROVIDER["openai"]
 
@@ -804,5 +849,19 @@ class TestModelDefaultsAreValid:
 
         assert GROK_MODEL_DEFAULT in _PRICE_PER_MTOK, (
             f"{GROK_MODEL_DEFAULT!r} missing from _PRICE_PER_MTOK; "
+            "estimate_cost_usd would record $0.00 for every call."
+        )
+
+    def test_qwen_default_has_price_entry(self) -> None:
+        """QWEN_MODEL_DEFAULT pins CATALOG["qwen3.8-2.4t-a95b"].openrouter_id
+        ("qwen/qwen3.8-2.4t-a95b"), but _PRICE_PER_MTOK's hand-written rows
+        only ever carried the bare legacy "qwen3.8-max" spelling -- never
+        this one, and never the new canonical id. Without the catalog
+        mirror (aragora.models.pricing_mirror.pdb_rows), every qwen default
+        call would have silently recorded cost=0.0."""
+        from aragora.pdb.real_invoker import _PRICE_PER_MTOK
+
+        assert QWEN_MODEL_DEFAULT in _PRICE_PER_MTOK, (
+            f"{QWEN_MODEL_DEFAULT!r} missing from _PRICE_PER_MTOK; "
             "estimate_cost_usd would record $0.00 for every call."
         )

@@ -60,6 +60,14 @@ from aragora.pulse.ingestor import (
     RedditIngestor,
     TwitterIngestor,
 )
+from aragora.config.model_pins import (
+    FABLE_51_VIA_OPENROUTER,
+    GEMINI_38_FLASH_VIA_OPENROUTER,
+    GPT6_ASTRA_VIA_OPENROUTER,
+    GPT56_TERRA_VIA_OPENROUTER,
+    GROK_46_VIA_OPENROUTER,
+    MISTRAL_MEDIUM_VIA_OPENROUTER,
+)
 from aragora.server.stream.events import StreamEvent, StreamEventType
 from aragora.server.stream.state_manager import (
     get_active_debates,
@@ -73,14 +81,19 @@ _active_debates = get_active_debates()
 _active_debates_lock = get_active_debates_lock()
 
 _ENV_VAR_RE = re.compile(r"[A-Z][A-Z0-9_]+")
+# Per-provider OpenRouter fallback targets. Derived from aragora.config.
+# model_pins (frontier-model-refresh, 2026-09-04) rather than hand-written
+# slugs: the previous literals had drifted to retired/nonexistent spellings
+# (openai/gpt-5.3, google/gemini-3-flash-preview, x-ai/grok-4.1-fast) that a
+# live fallback would 404 on, and nothing here failed loudly when they did.
 _OPENROUTER_FALLBACK_MODELS = {
-    "anthropic-api": "anthropic/claude-opus-5",
-    "openai-api": "openai/gpt-5.3",
-    "gemini": "google/gemini-3-flash-preview",
-    "grok": "x-ai/grok-4.1-fast",
-    "mistral-api": "mistralai/mistral-large-2512",
+    "anthropic-api": FABLE_51_VIA_OPENROUTER,
+    "openai-api": GPT6_ASTRA_VIA_OPENROUTER,
+    "gemini": GEMINI_38_FLASH_VIA_OPENROUTER,
+    "grok": GROK_46_VIA_OPENROUTER,
+    "mistral-api": MISTRAL_MEDIUM_VIA_OPENROUTER,
 }
-_OPENROUTER_GENERIC_FALLBACK_MODEL = "openai/gpt-5.3-chat"
+_OPENROUTER_GENERIC_FALLBACK_MODEL = GPT56_TERRA_VIA_OPENROUTER
 
 
 def _missing_required_env_vars(env_vars: str) -> list[str]:

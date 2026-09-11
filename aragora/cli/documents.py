@@ -16,6 +16,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from aragora.config.model_pins import GEMINI_38_FLASH_DIRECT
+
 
 def create_documents_parser(subparsers: Any) -> None:
     """Create the documents subcommand parser."""
@@ -93,8 +95,8 @@ def create_documents_parser(subparsers: Any) -> None:
     upload_parser.add_argument(
         "--filter-model",
         type=str,
-        default="gemini-2.0-flash",
-        help="Model to use for agent filtering (default: gemini-2.0-flash)",
+        default=GEMINI_38_FLASH_DIRECT,
+        help=f"Model to use for agent filtering (default: {GEMINI_38_FLASH_DIRECT})",
     )
     upload_parser.add_argument(
         "--dry-run",

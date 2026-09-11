@@ -26,7 +26,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 from aragora.utils.async_utils import run_async
@@ -57,41 +57,58 @@ def _FieldStub(*args: Any, **kwargs: Any) -> Any:
     return kwargs.get("default", None)
 
 
-# LangChain imports with fallback
-try:
-    try:
-        from langchain_core.tools import BaseTool as _LCBaseTool
-    except ImportError:
-        from langchain.tools import BaseTool as _LCBaseTool
-    try:
-        from langchain_core.callbacks.manager import (
-            AsyncCallbackManagerForToolRun as _LCAsyncCBManager,
-            CallbackManagerForToolRun as _LCCBManager,
-        )
-    except ImportError:
-        from langchain.callbacks.manager import (  # type: ignore[no-redef]
-            AsyncCallbackManagerForToolRun as _LCAsyncCBManager,
-            CallbackManagerForToolRun as _LCCBManager,
-        )
-    from pydantic import BaseModel as _PydanticBaseModel, Field as _PydanticField
-
-    BaseTool = _LCBaseTool
-    BaseModel = _PydanticBaseModel
-    Field = _PydanticField
-    AsyncCallbackManagerForToolRun = _LCAsyncCBManager
-    CallbackManagerForToolRun = _LCCBManager
-    LANGCHAIN_AVAILABLE = True
-except ImportError:
-    LANGCHAIN_AVAILABLE = False
-
-    # Stubs replace LangChain/pydantic types when the optional dependency is not
-    # installed. The type mismatches are unavoidable since stubs are not subclasses
-    # of the real library types.
-    BaseTool = _BaseToolStub  # type: ignore[misc,assignment]
-    BaseModel = _BaseModelStub  # type: ignore[misc,assignment]
+# LangChain imports with fallback.
+#
+# ``BaseTool`` and ``BaseModel`` are used as BASE CLASSES and in annotations
+# below. A module-level name assigned in more than one branch is a
+# *variable* to mypy, not a type alias, so every such use reported
+# "Variable ... is not valid as a type" / "Invalid base class" (8 errors,
+# none of them baselined). Binding each name exactly once under
+# ``TYPE_CHECKING`` -- to the local stub, whose shape the subclasses below
+# are written against -- makes them real type aliases for static analysis
+# while leaving the runtime binding (the ``else`` branch) untouched.
+if TYPE_CHECKING:
+    BaseTool = _BaseToolStub
+    BaseModel = _BaseModelStub
     Field = _FieldStub
-    AsyncCallbackManagerForToolRun = None  # type: ignore[misc,assignment]
-    CallbackManagerForToolRun = None  # type: ignore[misc,assignment]
+    AsyncCallbackManagerForToolRun = Any
+    CallbackManagerForToolRun = Any
+    LANGCHAIN_AVAILABLE = True
+else:
+    try:
+        try:
+            from langchain_core.tools import BaseTool as _LCBaseTool
+        except ImportError:
+            from langchain.tools import BaseTool as _LCBaseTool
+        try:
+            from langchain_core.callbacks.manager import (
+                AsyncCallbackManagerForToolRun as _LCAsyncCBManager,
+                CallbackManagerForToolRun as _LCCBManager,
+            )
+        except ImportError:
+            from langchain.callbacks.manager import (
+                AsyncCallbackManagerForToolRun as _LCAsyncCBManager,
+                CallbackManagerForToolRun as _LCCBManager,
+            )
+        from pydantic import BaseModel as _PydanticBaseModel, Field as _PydanticField
+
+        BaseTool = _LCBaseTool
+        BaseModel = _PydanticBaseModel
+        Field = _PydanticField
+        AsyncCallbackManagerForToolRun = _LCAsyncCBManager
+        CallbackManagerForToolRun = _LCCBManager
+        LANGCHAIN_AVAILABLE = True
+    except ImportError:
+        LANGCHAIN_AVAILABLE = False
+
+        # Stubs replace LangChain/pydantic types when the optional dependency
+        # is not installed. The type mismatches are unavoidable since stubs
+        # are not subclasses of the real library types.
+        BaseTool = _BaseToolStub
+        BaseModel = _BaseModelStub
+        Field = _FieldStub
+        AsyncCallbackManagerForToolRun = None
+        CallbackManagerForToolRun = None
 
 
 def get_langchain_version() -> str | None:

@@ -192,10 +192,12 @@ class TestModelDowngradeAnalyzer:
 
     def test_runtime_claude_model_ids_have_optimizer_tiers(self):
         """Runtime Claude IDs must hit optimizer tiers instead of being skipped."""
+        # claude-opus-4-8 is a live catalog row, so the CATALOG band wins the
+        # collision with the hand-curated one (wave-6 ruling, tables).
         assert MODEL_TIERS["claude-opus-4-8"] == {
             "tier": 1,
             "provider": "anthropic",
-            "quality": 1.0,
+            "quality": 0.9,
         }
         assert MODEL_TIERS["claude-opus-4-7"] == {
             "tier": 1,
@@ -227,10 +229,11 @@ class TestModelDowngradeAnalyzer:
             "provider": "anthropic",
             "quality": 0.65,
         }
+        # Same: a live catalog row, so its own "value" band wins.
         assert MODEL_TIERS["claude-haiku-4-5-20251001"] == {
             "tier": 3,
             "provider": "anthropic",
-            "quality": 0.65,
+            "quality": 0.72,
         }
 
     def test_analyze_uses_runtime_opus_model_for_downgrade(self):
@@ -580,3 +583,101 @@ class TestUsagePattern:
         assert pattern.model == "claude-sonnet-4"
         assert pattern.count == 100
         assert pattern.avg_tokens_in == 5000.0
+
+
+class TestCatalogDerivedTiers:
+    """MODEL_TIERS gained a row per active catalog model (2026-09-04
+    wave-3 ruling): before this the downgrade analyzer could only ever
+    recommend the 2024-era roster it shipped with."""
+
+    def test_every_active_catalog_model_has_a_tier_row(self):
+        from aragora.models.catalog import CATALOG
+
+        for spec in CATALOG.values():
+            if spec.retired:
+                continue
+            assert spec.canonical_id in MODEL_TIERS, spec.canonical_id
+            row = MODEL_TIERS[spec.canonical_id]
+            assert row["provider"] == spec.provider
+            assert row["tier"] in (1, 2, 3)
+            assert 0.0 < row["quality"] <= 1.0
+
+    def test_only_canonical_ids_are_emitted_so_one_model_is_one_candidate(self):
+        """``_find_alternatives`` enumerates this table as a candidate list,
+        so an alias row would let one model occupy several downgrade slots."""
+        from aragora.models.catalog import CATALOG
+
+        for spec in CATALOG.values():
+            if spec.retired:
+                continue
+            aliases = set(spec.all_ids()) - {spec.canonical_id}
+            for alias in aliases:
+                # An alias may only appear if a HAND-curated legacy row put
+                # it there on purpose.
+                if alias in MODEL_TIERS:
+                    from aragora.billing.optimizer import _LEGACY_MODEL_TIERS
+
+                    assert alias in _LEGACY_MODEL_TIERS, alias
+
+    def test_catalog_rows_win_a_key_collision(self):
+        """A legacy key that is (or has been renamed onto) a LIVE catalog id
+        resolves to the catalog's tier and provider, not to the hand-written
+        snapshot of what that model used to be (wave-6 ruling, tables,
+        on #9989).
+
+        The legacy layer still answers every spelling the catalog does not
+        carry -- aliases, retired ids, the 2024-era roster -- which is the
+        only reason it is kept.
+        """
+        from aragora.billing.optimizer import _catalog_tier_rows, _LEGACY_MODEL_TIERS
+
+        catalog_rows = _catalog_tier_rows()
+        shadowed = sorted(set(catalog_rows) & set(_LEGACY_MODEL_TIERS))
+        assert shadowed, "no collision left to prove the precedence with"
+        for model in shadowed:
+            assert MODEL_TIERS[model] == catalog_rows[model], model
+        for model, row in _LEGACY_MODEL_TIERS.items():
+            if model not in catalog_rows:
+                assert MODEL_TIERS[model] == row, model
+
+    def test_a_legacy_row_renamed_onto_a_live_id_follows_the_catalog(self):
+        """The renaming case the ruling names, exercised end to end: point a
+        hand-curated key at a live catalog id and the merged table must report
+        the catalog's band and provider for it."""
+        from aragora.billing import optimizer
+
+        live = "gpt-5.6-terra"
+        catalog_row = optimizer._catalog_tier_rows()[live]
+        stale = {"tier": 1, "provider": "openai", "quality": 0.99}
+        assert catalog_row != stale
+
+        merged = {**{live: stale}, **optimizer._catalog_tier_rows()}
+        assert merged[live] == catalog_row
+        assert MODEL_TIERS[live] == catalog_row
+
+    def test_frontier_flagships_are_top_band_and_value_skus_are_cheap_band(self):
+        assert MODEL_TIERS["gpt-6-astra"]["tier"] == 1
+        assert MODEL_TIERS["claude-fable-5-1"]["tier"] == 1
+        assert MODEL_TIERS["gemini-3.8-flash"]["tier"] == 3
+        assert MODEL_TIERS["gpt-5.6-terra"]["tier"] == 3
+
+    def test_a_frontier_flagship_can_now_be_downgraded(self):
+        """Traffic on the current OpenAI flagship used to be skipped
+        entirely -- the analyzer had no tier row for it."""
+        analyzer = ModelDowngradeAnalyzer()
+        recommendations = analyzer.analyze(
+            [
+                UsagePattern(
+                    model="gpt-6-astra",
+                    provider="openai",
+                    operation="summarize",
+                    count=100,
+                    total_tokens_in=500000,
+                    total_tokens_out=100000,
+                    total_cost=Decimal("50.00"),
+                ),
+            ],
+            "ws-123",
+        )
+        assert recommendations
+        assert recommendations[0].projected_cost_usd < recommendations[0].current_cost_usd

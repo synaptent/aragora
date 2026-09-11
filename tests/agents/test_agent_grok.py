@@ -32,9 +32,14 @@ class TestGrokAgentInitialization:
 
     def test_custom_initialization(self):
         """Test agent with custom parameters."""
+        # grok-4.6 is the only ACTIVE xAI catalog row, so a genuinely custom
+        # id here has to be one the catalog does not know yet -- which also
+        # pins the pass-through half of the construction-time upgrade rule
+        # (a retired "grok-2" would now be rewritten to the frontier; see
+        # tests/agents/test_retired_model_id_upgrade.py).
         agent = GrokAgent(
             name="my-grok",
-            model="grok-2",
+            model="grok-5-preview",
             role="critic",
             timeout=60,
             api_key="custom-key",
@@ -42,7 +47,7 @@ class TestGrokAgentInitialization:
         )
 
         assert agent.name == "my-grok"
-        assert agent.model == "grok-2"
+        assert agent.model == "grok-5-preview"
         assert agent.role == "critic"
         assert agent.timeout == 60
         assert agent.enable_fallback is False
@@ -250,16 +255,23 @@ REASONING: Test reasoning"""
 
 
 class TestGrokModelMapping:
-    """Tests for OpenRouter model mapping."""
+    """Tests for OpenRouter model mapping.
+
+    GrokAgent no longer carries a static OPENROUTER_MODEL_MAP:
+    get_fallback_model() (QuotaFallbackMixin) resolves the current model
+    through the catalog and upgrade map instead (frontier-model-refresh,
+    2026-09-04 review fix round 1, item 3).
+    """
 
     def test_model_mapping_exists(self):
-        """Test model mapping dictionary exists and has entries."""
-        agent = GrokAgent(api_key="test-key")
-        assert len(agent.OPENROUTER_MODEL_MAP) > 0
-        assert "grok-3" in agent.OPENROUTER_MODEL_MAP
+        """A legacy model spelling resolves to the current frontier."""
+        agent = GrokAgent(api_key="test-key", model="grok-3")
+        assert agent.get_fallback_model() == "x-ai/grok-4.6"
 
     def test_fallback_uses_correct_model(self):
-        """Test fallback agent uses mapped model via mixin."""
+        """A model with neither a catalog row nor an upgrade-map entry
+        (e.g. "grok-beta") falls back to DEFAULT_FALLBACK_MODEL, the
+        current frontier."""
         agent = GrokAgent(
             api_key="test-key",
             model="grok-beta",
@@ -267,7 +279,7 @@ class TestGrokModelMapping:
 
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "router-key"}):
             fallback = agent._get_cached_fallback_agent()
-            assert fallback.model == "x-ai/grok-beta"
+            assert fallback.model == "x-ai/grok-4.6"
 
 
 if __name__ == "__main__":

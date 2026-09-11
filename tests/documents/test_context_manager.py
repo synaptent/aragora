@@ -20,8 +20,10 @@ class TestContextConfig:
 
     def test_default_config(self):
         """Test default configuration values."""
+        from aragora.config.model_pins import GPT6_ASTRA_DIRECT
+
         config = ContextConfig()
-        assert config.model == "gpt-4-turbo"
+        assert config.model == GPT6_ASTRA_DIRECT
         assert config.max_tokens is None
         assert config.strategy is None
         assert config.rag_top_k == 20
@@ -319,3 +321,29 @@ class TestGlobalContextManager:
         assert hasattr(manager, "build_context")
         assert hasattr(manager, "select_strategy")
         assert hasattr(manager, "recommend_model")
+
+
+class TestDefaultModelIsLiveWithoutAnUpgrade:
+    """The config's default must name an active catalog row directly.
+
+    "gpt-4-turbo" is an UPGRADES key: the default depended on the upgrade
+    map to name anything live at all, and carried gpt-4-turbo's 128K
+    context limit into every window this config sized (2026-09-05
+    merge-gate addendum on #9989).
+    """
+
+    def test_default_model_is_an_active_catalog_row(self):
+        from aragora.models.catalog import spec_or_none
+        from aragora.models.upgrade_map import UPGRADES
+
+        model = ContextConfig().model
+        assert model not in UPGRADES
+        spec = spec_or_none(model)
+        assert spec is not None and not spec.retired
+
+    def test_default_model_context_window_is_the_frontier_one(self):
+        from aragora.models.catalog import spec_or_none
+
+        spec = spec_or_none(ContextConfig().model)
+        assert spec is not None
+        assert spec.context_window >= 1_000_000

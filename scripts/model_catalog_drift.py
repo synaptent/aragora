@@ -4,8 +4,18 @@
 NEVER wired into required CI (required checks validate offline against the
 committed snapshot). Run manually or from a scheduled ADVISORY job:
 
-    python3 scripts/model_catalog_drift.py            # report drift, exit 1 if any
-    python3 scripts/model_catalog_drift.py --refresh  # rewrite the snapshot from live
+    python3 scripts/model_catalog_drift.py              # report drift, exit 1 if any
+    python3 scripts/model_catalog_drift.py --refresh    # rewrite the snapshot from live
+    python3 scripts/model_catalog_drift.py --add-missing  # capture only NEW catalog rows
+
+``--add-missing`` exists because ``--refresh`` is whole-file: a PR that adds
+one catalog row would otherwise have to absorb every unrelated live reprice
+and delisting that accumulated since the last capture, in the same commit
+that reviewers are reading for the new row. ``--add-missing`` writes the
+snapshot with the SAME generator, from the SAME live fetch, but touches only
+the ids the snapshot has no row for -- existing rows stay byte-identical, so
+genuine drift keeps being reported by the default (advisory) mode where it
+can be adjudicated on its own.
 
 Provider reprices are real and frequent: three were caught by adversarial
 review in a single week (gpt-5.5 2.50/10 -> 5/30; qwen3.7-max 1.25/3.75 ->
@@ -50,12 +60,19 @@ def fetch_live() -> dict[str, dict[str, float | int | None]]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Catalog snapshot drift (advisory)")
     parser.add_argument("--refresh", action="store_true", help="rewrite the snapshot from live")
+    parser.add_argument(
+        "--add-missing",
+        action="store_true",
+        help="add only catalog rows the snapshot lacks; leave existing rows untouched",
+    )
     args = parser.parse_args(argv)
 
     live = fetch_live()
     missing = [s.openrouter_id for s in CATALOG.values() if s.openrouter_id not in live]
-    if args.refresh:
-        snapshot = {
+    if args.refresh or args.add_missing:
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        existing = json.loads(snapshot_path().read_text(encoding="utf-8"))
+        snapshot: dict[str, object] = {
             "_comment": [
                 "Committed capture of the live OpenRouter catalog for OFFLINE catalog",
                 "validation (required CI never calls the network). Refresh with:",
@@ -63,12 +80,34 @@ def main(argv: list[str] | None = None) -> int:
                 "and commit the diff; the scheduled advisory drift job reports when",
                 "this snapshot disagrees with the live catalog.",
             ],
-            "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "source": LIVE_URL,
-            "models": live,
         }
+        if args.add_missing:
+            models = dict(existing.get("models", {}))
+            added = sorted(k for k in live if k not in models)
+            for or_id in added:
+                models[or_id] = live[or_id]
+            # ``captured_at`` describes the last WHOLE-FILE capture and must
+            # not advance here: the untouched rows were not re-verified, and
+            # claiming they were would hide exactly the drift the default
+            # (advisory) mode exists to report. Each partial capture records
+            # its own timestamp and ids instead.
+            snapshot["captured_at"] = existing.get("captured_at", now)
+            partials = list(existing.get("partial_captures", []))
+            if added:
+                partials.append({"captured_at": now, "ids": added})
+            if partials:
+                snapshot["partial_captures"] = partials
+        else:
+            models = live
+            added = []
+            snapshot["captured_at"] = now
+        snapshot["models"] = models
         snapshot_path().write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
-        print(f"snapshot refreshed: {len(live)} models -> {snapshot_path()}")
+        if args.add_missing:
+            print(f"snapshot rows added: {added or 'none'} -> {snapshot_path()}")
+        else:
+            print(f"snapshot refreshed: {len(models)} models -> {snapshot_path()}")
         if missing:
             print(f"WARNING: not in live catalog (dead slugs?): {missing}", file=sys.stderr)
         return 0

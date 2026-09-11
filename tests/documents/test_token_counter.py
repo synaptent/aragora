@@ -187,3 +187,35 @@ class TestApproximateCounter:
         long = counter.count("Hello " * 100, model="claude-3")
 
         assert short < medium < long
+
+
+class TestDefaultModelIsLiveWithoutAnUpgrade:
+    """``TokenCounter``'s default must name an active catalog row directly.
+
+    "gpt-4" is an UPGRADES key, so the counter's default depended on the
+    upgrade map to reach a live model, and it selected ``cl100k_base`` when
+    every current OpenAI model tokenizes with ``o200k_base`` -- counts were
+    measured against the wrong tokenizer (2026-09-05 merge-gate addendum on
+    #9989).
+    """
+
+    def test_default_model_is_an_active_catalog_row(self):
+        from aragora.models.catalog import spec_or_none
+        from aragora.models.upgrade_map import UPGRADES
+
+        model = TokenCounter().default_model
+        assert model not in UPGRADES
+        spec = spec_or_none(model)
+        assert spec is not None and not spec.retired
+
+    def test_default_model_selects_the_current_openai_encoding(self):
+        from aragora.documents.chunking.token_counter import MODEL_ENCODINGS
+
+        model = TokenCounter().default_model
+        assert MODEL_ENCODINGS[model] == "o200k_base"
+
+    def test_module_level_count_tokens_shares_the_default(self):
+        from aragora.config.model_pins import GPT6_ASTRA_DIRECT
+
+        assert TokenCounter().default_model == GPT6_ASTRA_DIRECT
+        assert count_tokens("hello world") == TokenCounter().count("hello world")

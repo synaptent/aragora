@@ -48,6 +48,7 @@ from collections.abc import Callable
 from aragora.config import DEFAULT_ROUNDS
 from aragora.config.settings import get_settings
 from aragora.events.types import StreamEventType
+from aragora.models.pricing_mirror import per_1k_rows
 from aragora.workflow.engine import WorkflowEngine
 from aragora.workflow.types import (
     ExecutionPattern,
@@ -62,8 +63,13 @@ from aragora.workflow.step import WorkflowContext, WorkflowStep
 
 logger = logging.getLogger(__name__)
 
-# Model pricing (approximate, per 1K tokens)
-MODEL_PRICING = {
+# Model pricing, USD per 1K tokens. Hand-written HISTORICAL rows (kept
+# verbatim: a stored workflow record naming ``gpt-4o`` must keep pricing at
+# gpt-4o's rate, and the family labels are what ``add_tokens`` receives as
+# ``agent_type``) plus one generated row per spelling of every active
+# catalog row, so a live frontier call no longer falls through to
+# ``default``. See aragora/workflow/resource_tracker.py for the same merge.
+_LEGACY_MODEL_PRICING: dict[str, dict[str, float]] = {
     # Anthropic
     "claude-3-opus": {"input": 0.015, "output": 0.075},
     "claude-3-sonnet": {"input": 0.003, "output": 0.015},
@@ -87,6 +93,8 @@ MODEL_PRICING = {
     # Default
     "default": {"input": 0.003, "output": 0.015},
 }
+
+MODEL_PRICING: dict[str, dict[str, float]] = {**_LEGACY_MODEL_PRICING, **per_1k_rows()}
 
 
 class ResourceExhaustedError(Exception):
@@ -231,6 +239,10 @@ class EnhancedWorkflowEngine(WorkflowEngine):
         self._metrics_callback = metrics_callback
         self._start_time: float | None = None
         self._parallel_semaphore: asyncio.Semaphore | None = None
+        # Declared here (not only reset in execute()) so its element type is
+        # inferable: mypy cannot type an attribute whose first and only
+        # assignment is an empty list literal.
+        self._results: list[StepResult] = []
 
     @property
     def limits(self) -> ResourceLimits:

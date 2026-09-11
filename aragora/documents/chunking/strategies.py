@@ -729,18 +729,30 @@ class FixedSizeChunking(ChunkingStrategy):
         return overlap
 
 
-# RLM availability check (use factory for consistent initialization)
-# Pre-declare types for optional import
-get_compressor: Any = None
-RLMConfig: Any = None
-AbstractionLevel: Any = None
-
+# RLM availability check (use factory for consistent initialization).
+#
+# The optional import binds these three names, so pre-declaring them at
+# module scope AND importing them under the same names is a redefinition
+# mypy rejects ([no-redef], x3). Import under private aliases and bind each
+# public name exactly once, in one expression, so the fallback stays a plain
+# ``None`` at runtime and the names keep their ``Any`` type statically.
 try:
-    from aragora.rlm import get_compressor, RLMConfig, AbstractionLevel
+    from aragora.rlm import (
+        AbstractionLevel as _AbstractionLevel,
+        RLMConfig as _RLMConfig,
+        get_compressor as _get_compressor,
+    )
 
     HAS_RLM = True
 except ImportError:
+    _get_compressor = None  # type: ignore[assignment]
+    _RLMConfig = None  # type: ignore[assignment,misc]
+    _AbstractionLevel = None  # type: ignore[assignment,misc]
     HAS_RLM = False
+
+get_compressor: Any = _get_compressor
+RLMConfig: Any = _RLMConfig
+AbstractionLevel: Any = _AbstractionLevel
 
 
 class RLMChunking(ChunkingStrategy):

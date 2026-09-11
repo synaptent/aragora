@@ -410,13 +410,21 @@ class TestEstimateCostHandler:
         assert data["pricing"]["output_per_1m"] == 25.00
 
     @pytest.mark.asyncio
-    async def test_estimate_unknown_provider(self, handler, mock_request):
-        """Unknown provider uses openrouter default pricing."""
+    async def test_estimate_unknown_provider_and_model(self, handler, mock_request):
+        """The openrouter $2/$8 default is reached when the MODEL has no row
+        anywhere, not merely when the provider label is unrecognised.
+
+        This test used to omit ``model`` and so exercised the default
+        ``claude-opus-4``, whose real $5/M row ``calculate_token_cost`` finds
+        by exact spelling under any label -- the reported $2/M contradicted
+        the cost the same response quoted (2026-09-05 wave-2 re-review).
+        """
         mock_request.json = AsyncMock(
             return_value={
                 "tokens_input": 1_000_000,
                 "tokens_output": 0,
                 "provider": "some_new_provider",
+                "model": "totally-unknown-model-v0",
             }
         )
 
@@ -424,6 +432,7 @@ class TestEstimateCostHandler:
 
         data = json.loads(response.body)
         assert data["pricing"]["input_per_1m"] == 2.00
+        assert data["estimated_cost_usd"] == 2.00
 
     @pytest.mark.asyncio
     async def test_estimate_zero_tokens(self, handler, mock_request):

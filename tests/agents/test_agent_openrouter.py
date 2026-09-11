@@ -320,7 +320,8 @@ class TestDeepSeekReasonerAgent:
             agent = DeepSeekReasonerAgent()
 
         assert "deepseek" in agent.model.lower()
-        assert agent.model == "deepseek/deepseek-v4-pro"
+        # frontier-model-refresh, 2026-09-04: deepseek-v4-pro is superseded.
+        assert agent.model == "deepseek/deepseek-v4-pro-0813"
         assert agent.agent_type == "deepseek-r1"
 
 
@@ -332,7 +333,9 @@ class TestLlamaAgent:
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
             agent = LlamaAgent()
 
-        assert "llama" in agent.model.lower()
+        # LlamaAgent now routes to Meta Muse Spark 1.3, which supersedes the
+        # retired Llama 3.3/4 lines (frontier-model-refresh, 2026-09-04).
+        assert agent.model == "meta/muse-spark-1.3"
         assert agent.agent_type == "llama"
 
     def test_custom_model(self):

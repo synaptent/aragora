@@ -32,6 +32,7 @@ from enum import Enum
 from typing import Any
 
 from aragora.agents.vertical_personas import Vertical
+from aragora.models.catalog import CATALOG
 
 
 class ModelCapability(Enum):
@@ -102,9 +103,12 @@ class ModelProfile:
 # Model profiles for major providers
 MODEL_PROFILES: dict[str, ModelProfile] = {
     # Anthropic
+    # frontier-model-refresh, 2026-09-04: "claude" and "claude-opus" both
+    # point at the Fable 5.1 flagship row (the brief's explicit mapping for
+    # both keys); "claude-opus-4-8" below stays a distinct fallback-tier row.
     "claude": ModelProfile(
-        model_id="claude-sonnet-4-6",
-        display_name="Claude Sonnet 4.6",
+        model_id=CATALOG["claude-fable-5-1"].direct_id,
+        display_name="Claude Fable 5.1",
         provider="anthropic",
         capabilities={
             ModelCapability.REASONING: 0.97,
@@ -118,17 +122,17 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.98,
             ModelCapability.FACTUAL_ACCURACY: 0.95,
         },
-        max_context_tokens=200000,
-        max_output_tokens=64000,
-        cost_input_per_1k=0.003,
-        cost_output_per_1k=0.015,
+        max_context_tokens=CATALOG["claude-fable-5-1"].context_window,
+        max_output_tokens=CATALOG["claude-fable-5-1"].max_output_tokens,
+        cost_input_per_1k=CATALOG["claude-fable-5-1"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["claude-fable-5-1"].output_per_mtok / 1000,
         avg_latency_ms=700,
         reliability_score=0.98,
         supports_vision=True,
     ),
     "claude-opus": ModelProfile(
-        model_id="claude-opus-5",
-        display_name="Claude Opus 5",
+        model_id=CATALOG["claude-fable-5-1"].direct_id,
+        display_name="Claude Fable 5.1",
         provider="anthropic",
         capabilities={
             ModelCapability.REASONING: 0.99,
@@ -142,10 +146,10 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.99,
             ModelCapability.FACTUAL_ACCURACY: 0.98,
         },
-        max_context_tokens=1000000,
-        max_output_tokens=128000,
-        cost_input_per_1k=0.005,
-        cost_output_per_1k=0.025,
+        max_context_tokens=CATALOG["claude-fable-5-1"].context_window,
+        max_output_tokens=CATALOG["claude-fable-5-1"].max_output_tokens,
+        cost_input_per_1k=CATALOG["claude-fable-5-1"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["claude-fable-5-1"].output_per_mtok / 1000,
         avg_latency_ms=1200,
         reliability_score=0.97,
         supports_vision=True,
@@ -154,7 +158,7 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
     # still Active upstream and is Opus 5's documented fallback target for
     # cyber-classifier refusals.
     "claude-opus-4-8": ModelProfile(
-        model_id="claude-opus-4-8",
+        model_id=CATALOG["claude-opus-4-8"].direct_id,
         display_name="Claude Opus 4.8",
         provider="anthropic",
         capabilities={
@@ -169,42 +173,81 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.99,
             ModelCapability.FACTUAL_ACCURACY: 0.98,
         },
-        max_context_tokens=1000000,
-        max_output_tokens=128000,
-        cost_input_per_1k=0.005,
-        cost_output_per_1k=0.025,
+        max_context_tokens=CATALOG["claude-opus-4-8"].context_window,
+        max_output_tokens=CATALOG["claude-opus-4-8"].max_output_tokens,
+        cost_input_per_1k=CATALOG["claude-opus-4-8"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["claude-opus-4-8"].output_per_mtok / 1000,
         avg_latency_ms=1200,
         reliability_score=0.97,
         supports_vision=True,
     ),
+    # Anthropic value tier. Both rows are ENFORCED catalog models, so the
+    # selector can offer a cheap Anthropic option instead of routing every
+    # Anthropic request to the $10/$50 flagship -- which is what happened
+    # while "claude-haiku" was removed on the (since corrected) grounds that
+    # the catalog carried no cheap Anthropic row. Capability scores are
+    # derived the same way as the other value-tier profiles here (the
+    # gemini/gemini-flash and gpt4/gpt-4o pairs): a few points under the
+    # family flagship, LONG_CONTEXT tracking the row's own context window,
+    # and a markedly lower latency. Each profile has its OWN model id --
+    # never two profiles on one id with different scores (#9990).
+    "claude-sonnet": ModelProfile(
+        model_id=CATALOG["claude-sonnet-5"].direct_id,
+        display_name="Claude Sonnet 5",
+        provider="anthropic",
+        capabilities={
+            ModelCapability.REASONING: 0.92,
+            ModelCapability.CODING: 0.93,
+            ModelCapability.LEGAL: 0.88,
+            ModelCapability.MEDICAL: 0.85,
+            ModelCapability.FINANCIAL: 0.88,
+            ModelCapability.CREATIVE: 0.87,
+            ModelCapability.MATH: 0.89,
+            ModelCapability.LONG_CONTEXT: 0.96,  # 1M context, as the flagship
+            ModelCapability.INSTRUCTION_FOLLOWING: 0.94,
+            ModelCapability.FACTUAL_ACCURACY: 0.90,
+        },
+        max_context_tokens=CATALOG["claude-sonnet-5"].context_window,
+        max_output_tokens=CATALOG["claude-sonnet-5"].max_output_tokens,
+        cost_input_per_1k=CATALOG["claude-sonnet-5"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["claude-sonnet-5"].output_per_mtok / 1000,
+        avg_latency_ms=500,
+        reliability_score=0.97,
+        supports_vision=True,
+    ),
     "claude-haiku": ModelProfile(
-        model_id="claude-haiku-4-5-20251001",
+        model_id=CATALOG["claude-haiku-4-5-20251001"].direct_id,
         display_name="Claude Haiku 4.5",
         provider="anthropic",
         capabilities={
-            ModelCapability.REASONING: 0.82,
-            ModelCapability.CODING: 0.85,
-            ModelCapability.LEGAL: 0.75,
-            ModelCapability.MEDICAL: 0.72,
-            ModelCapability.FINANCIAL: 0.75,
-            ModelCapability.CREATIVE: 0.78,
-            ModelCapability.MATH: 0.78,
-            ModelCapability.LONG_CONTEXT: 0.90,
-            ModelCapability.INSTRUCTION_FOLLOWING: 0.88,
-            ModelCapability.FACTUAL_ACCURACY: 0.80,
+            ModelCapability.REASONING: 0.85,
+            ModelCapability.CODING: 0.86,
+            ModelCapability.LEGAL: 0.80,
+            ModelCapability.MEDICAL: 0.77,
+            ModelCapability.FINANCIAL: 0.80,
+            ModelCapability.CREATIVE: 0.82,
+            ModelCapability.MATH: 0.82,
+            ModelCapability.LONG_CONTEXT: 0.88,  # 200k context
+            ModelCapability.INSTRUCTION_FOLLOWING: 0.89,
+            ModelCapability.FACTUAL_ACCURACY: 0.84,
         },
-        max_context_tokens=200000,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.0008,
-        cost_output_per_1k=0.004,
-        avg_latency_ms=300,
-        reliability_score=0.98,
+        max_context_tokens=CATALOG["claude-haiku-4-5-20251001"].context_window,
+        max_output_tokens=CATALOG["claude-haiku-4-5-20251001"].max_output_tokens,
+        cost_input_per_1k=CATALOG["claude-haiku-4-5-20251001"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["claude-haiku-4-5-20251001"].output_per_mtok / 1000,
+        avg_latency_ms=250,
+        reliability_score=0.97,
         supports_vision=True,
     ),
     # OpenAI
+    # frontier-model-refresh, 2026-09-04: gpt-5.5 is retired; "gpt4" now
+    # points at the OpenAI flagship frontier (gpt-6-astra), which IS in
+    # aragora/models/catalog.py's ENFORCED_MODELS, so this profile is
+    # mirror-enforced by tests/models/test_catalog.py exactly as the old
+    # gpt-5.5 row was.
     "gpt4": ModelProfile(
-        model_id="gpt-5.5",
-        display_name="GPT-5.5",
+        model_id=CATALOG["gpt-6-astra"].direct_id,
+        display_name="GPT-6 Astra",
         provider="openai",
         capabilities={
             ModelCapability.REASONING: 0.94,
@@ -218,19 +261,19 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.95,
             ModelCapability.FACTUAL_ACCURACY: 0.91,
         },
-        max_context_tokens=1000000,
-        max_output_tokens=32768,
-        # Provider repriced ~2026-07-14; must match aragora/models/catalog.py
-        # ($5/$30 per MTok) — enforced by tests/models/test_catalog.py.
-        cost_input_per_1k=0.005,
-        cost_output_per_1k=0.030,
+        max_context_tokens=CATALOG["gpt-6-astra"].context_window,
+        max_output_tokens=CATALOG["gpt-6-astra"].max_output_tokens,
+        cost_input_per_1k=CATALOG["gpt-6-astra"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["gpt-6-astra"].output_per_mtok / 1000,
         avg_latency_ms=900,
         reliability_score=0.97,
         supports_vision=True,
     ),
+    # "gpt-4o" now points at the value-tier frontier sibling (gpt-5.6-terra)
+    # instead of the retired gpt-4o id (frontier-model-refresh, 2026-09-04).
     "gpt-4o": ModelProfile(
-        model_id="gpt-4o",
-        display_name="GPT-4o",
+        model_id=CATALOG["gpt-5.6-terra"].direct_id,
+        display_name="GPT-5.6 Terra",
         provider="openai",
         capabilities={
             ModelCapability.REASONING: 0.90,
@@ -244,17 +287,21 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.90,
             ModelCapability.FACTUAL_ACCURACY: 0.85,
         },
-        max_context_tokens=128000,
-        max_output_tokens=16384,
-        cost_input_per_1k=0.0025,
-        cost_output_per_1k=0.01,
+        max_context_tokens=CATALOG["gpt-5.6-terra"].context_window,
+        max_output_tokens=CATALOG["gpt-5.6-terra"].max_output_tokens,
+        cost_input_per_1k=CATALOG["gpt-5.6-terra"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["gpt-5.6-terra"].output_per_mtok / 1000,
         avg_latency_ms=800,
         reliability_score=0.97,
         supports_vision=True,
     ),
+    # gpt-5.4 is a retired legacy spelling with no catalog row; "gpt-5.4"
+    # now points at the value-tier frontier (gpt-5.6-terra), the same
+    # target as the "gpt-4o" profile (frontier-model-refresh, 2026-09-04
+    # review fix round 1, item 4).
     "gpt-5.4": ModelProfile(
-        model_id="gpt-5.4",
-        display_name="GPT-4.1 Mini",
+        model_id=CATALOG["gpt-5.6-terra"].direct_id,
+        display_name="GPT-5.6 Terra",
         provider="openai",
         capabilities={
             ModelCapability.REASONING: 0.85,
@@ -268,17 +315,17 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.88,
             ModelCapability.FACTUAL_ACCURACY: 0.83,
         },
-        max_context_tokens=1000000,
-        max_output_tokens=32768,
-        cost_input_per_1k=0.0004,
-        cost_output_per_1k=0.0016,
+        max_context_tokens=CATALOG["gpt-5.6-terra"].context_window,
+        max_output_tokens=CATALOG["gpt-5.6-terra"].max_output_tokens,
+        cost_input_per_1k=CATALOG["gpt-5.6-terra"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["gpt-5.6-terra"].output_per_mtok / 1000,
         avg_latency_ms=400,
         reliability_score=0.97,
         supports_vision=True,
     ),
     # Google
     "gemini": ModelProfile(
-        model_id="gemini-3.1-pro-preview",
+        model_id=CATALOG["gemini-3.1-pro-preview"].direct_id,
         display_name="Gemini 3.1 Pro",
         provider="google",
         capabilities={
@@ -293,17 +340,20 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.94,
             ModelCapability.FACTUAL_ACCURACY: 0.92,
         },
-        max_context_tokens=1000000,
-        max_output_tokens=64000,
-        cost_input_per_1k=0.002,
-        cost_output_per_1k=0.012,
+        max_context_tokens=CATALOG["gemini-3.1-pro-preview"].context_window,
+        max_output_tokens=CATALOG["gemini-3.1-pro-preview"].max_output_tokens,
+        cost_input_per_1k=CATALOG["gemini-3.1-pro-preview"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["gemini-3.1-pro-preview"].output_per_mtok / 1000,
         avg_latency_ms=900,
         reliability_score=0.96,
         supports_vision=True,
     ),
+    # gemini-3-flash-preview is retired/uncataloged; "gemini-flash" now
+    # points at the Gemini 3.8 Flash value tier (frontier-model-refresh,
+    # 2026-09-04).
     "gemini-flash": ModelProfile(
-        model_id="gemini-3-flash-preview",
-        display_name="Gemini 3 Flash",
+        model_id=CATALOG["gemini-3.8-flash"].direct_id,
+        display_name="Gemini 3.8 Flash",
         provider="google",
         capabilities={
             ModelCapability.REASONING: 0.90,
@@ -317,18 +367,20 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.89,
             ModelCapability.FACTUAL_ACCURACY: 0.85,
         },
-        max_context_tokens=1000000,
-        max_output_tokens=65536,
-        cost_input_per_1k=0.0005,
-        cost_output_per_1k=0.003,
+        max_context_tokens=CATALOG["gemini-3.8-flash"].context_window,
+        max_output_tokens=CATALOG["gemini-3.8-flash"].max_output_tokens,
+        cost_input_per_1k=CATALOG["gemini-3.8-flash"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["gemini-3.8-flash"].output_per_mtok / 1000,
         avg_latency_ms=350,
         reliability_score=0.96,
         supports_vision=True,
     ),
-    # Mistral
+    # Mistral. "mistral" now points at the mistral-medium-2604 flagship
+    # (mistral-large-2512 is tier="fallback"; frontier-model-refresh,
+    # 2026-09-04).
     "mistral": ModelProfile(
-        model_id="mistral-large-2512",
-        display_name="Mistral Large 3",
+        model_id=CATALOG["mistral-medium-2604"].direct_id,
+        display_name="Mistral Medium 2604",
         provider="mistral",
         capabilities={
             ModelCapability.REASONING: 0.91,
@@ -343,18 +395,20 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.91,
             ModelCapability.FACTUAL_ACCURACY: 0.86,
         },
-        max_context_tokens=256000,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.002,
-        cost_output_per_1k=0.006,
+        max_context_tokens=CATALOG["mistral-medium-2604"].context_window,
+        max_output_tokens=CATALOG["mistral-medium-2604"].max_output_tokens,
+        cost_input_per_1k=CATALOG["mistral-medium-2604"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["mistral-medium-2604"].output_per_mtok / 1000,
         avg_latency_ms=650,
         reliability_score=0.95,
         supports_vision=True,
     ),
-    # DeepSeek
+    # DeepSeek. "deepseek"/"deepseek-r1" now point at the fully-cataloged
+    # deepseek-v4-pro-0813 row (deepseek-v4-pro was an uncataloged legacy
+    # spelling; frontier-model-refresh, 2026-09-04).
     "deepseek": ModelProfile(
-        model_id="deepseek-v4-pro",
-        display_name="DeepSeek V4 Pro",
+        model_id=CATALOG["deepseek-v4-pro-0813"].direct_id,
+        display_name="DeepSeek V4 Pro (0813)",
         provider="deepseek",
         capabilities={
             ModelCapability.REASONING: 0.92,
@@ -368,16 +422,16 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.88,
             ModelCapability.FACTUAL_ACCURACY: 0.82,
         },
-        max_context_tokens=1048576,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.00174,
-        cost_output_per_1k=0.00348,
+        max_context_tokens=CATALOG["deepseek-v4-pro-0813"].context_window,
+        max_output_tokens=CATALOG["deepseek-v4-pro-0813"].max_output_tokens,
+        cost_input_per_1k=CATALOG["deepseek-v4-pro-0813"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["deepseek-v4-pro-0813"].output_per_mtok / 1000,
         avg_latency_ms=500,
         reliability_score=0.92,
     ),
     "deepseek-r1": ModelProfile(
-        model_id="deepseek-v4-pro",
-        display_name="DeepSeek V4 Pro",
+        model_id=CATALOG["deepseek-v4-pro-0813"].direct_id,
+        display_name="DeepSeek V4 Pro (0813)",
         provider="deepseek",
         capabilities={
             ModelCapability.REASONING: 0.96,
@@ -391,17 +445,18 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.90,
             ModelCapability.FACTUAL_ACCURACY: 0.87,
         },
-        max_context_tokens=1048576,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.00174,
-        cost_output_per_1k=0.00348,
+        max_context_tokens=CATALOG["deepseek-v4-pro-0813"].context_window,
+        max_output_tokens=CATALOG["deepseek-v4-pro-0813"].max_output_tokens,
+        cost_input_per_1k=CATALOG["deepseek-v4-pro-0813"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["deepseek-v4-pro-0813"].output_per_mtok / 1000,
         avg_latency_ms=1800,  # Slower due to reasoning
         reliability_score=0.92,
     ),
-    # Grok
+    # Grok. "grok-4-latest" is retired; "grok" now points at the current
+    # frontier (frontier-model-refresh, 2026-09-04).
     "grok": ModelProfile(
-        model_id="grok-4-latest",
-        display_name="Grok 4",
+        model_id=CATALOG["grok-4.6"].direct_id,
+        display_name="Grok 4.6",
         provider="xai",
         capabilities={
             ModelCapability.REASONING: 0.94,
@@ -415,18 +470,23 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.92,
             ModelCapability.FACTUAL_ACCURACY: 0.88,
         },
-        max_context_tokens=256000,
-        max_output_tokens=16384,
-        cost_input_per_1k=0.003,
-        cost_output_per_1k=0.015,
+        max_context_tokens=CATALOG["grok-4.6"].context_window,
+        max_output_tokens=CATALOG["grok-4.6"].max_output_tokens,
+        cost_input_per_1k=CATALOG["grok-4.6"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["grok-4.6"].output_per_mtok / 1000,
         avg_latency_ms=800,
         reliability_score=0.95,
         supports_vision=True,
     ),
-    # Qwen
+    # Qwen. "qwen3.8-max" is superseded by qwen3.8-2.4t-a95b (kept as a
+    # catalog alias, so it still resolves); "qwen" now reads the canonical
+    # id directly (frontier-model-refresh, 2026-09-04). "qwen-3.5" (Qwen3.5
+    # Plus) is removed: it is superseded with no distinct successor tier
+    # (see aragora/agents/api_agents/openrouter.py's matching removal of
+    # Qwen35PlusAgent).
     "qwen": ModelProfile(
-        model_id="qwen3.8-max",
-        display_name="Qwen 3.8 Max",
+        model_id=CATALOG["qwen3.8-2.4t-a95b"].direct_id,
+        display_name="Qwen 3.8",
         provider="alibaba",
         capabilities={
             ModelCapability.REASONING: 0.92,
@@ -441,41 +501,16 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.90,
             ModelCapability.FACTUAL_ACCURACY: 0.84,
         },
-        max_context_tokens=1_000_000,
-        max_output_tokens=131_072,
-        cost_input_per_1k=0.002,
-        cost_output_per_1k=0.006,
+        max_context_tokens=CATALOG["qwen3.8-2.4t-a95b"].context_window,
+        max_output_tokens=CATALOG["qwen3.8-2.4t-a95b"].max_output_tokens,
+        cost_input_per_1k=CATALOG["qwen3.8-2.4t-a95b"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["qwen3.8-2.4t-a95b"].output_per_mtok / 1000,
         avg_latency_ms=700,
         reliability_score=0.93,
     ),
-    "qwen-3.5": ModelProfile(
-        model_id="qwen3.5-plus",
-        display_name="Qwen3.5 Plus",
-        provider="alibaba",
-        capabilities={
-            ModelCapability.REASONING: 0.94,
-            ModelCapability.CODING: 0.94,
-            ModelCapability.LEGAL: 0.84,
-            ModelCapability.MEDICAL: 0.80,
-            ModelCapability.FINANCIAL: 0.84,
-            ModelCapability.CREATIVE: 0.87,
-            ModelCapability.MATH: 0.94,
-            ModelCapability.MULTILINGUAL: 0.96,
-            ModelCapability.LONG_CONTEXT: 0.97,  # 1M context hosted
-            ModelCapability.INSTRUCTION_FOLLOWING: 0.92,
-            ModelCapability.FACTUAL_ACCURACY: 0.86,
-        },
-        max_context_tokens=1000000,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.0036,
-        cost_output_per_1k=0.0036,
-        avg_latency_ms=650,
-        reliability_score=0.93,
-        supports_vision=True,
-    ),
     # Kimi (Moonshot AI)
     "kimi": ModelProfile(
-        model_id="kimi-k3",
+        model_id=CATALOG["kimi-k3"].direct_id,
         display_name="Kimi K3",
         provider="moonshot",
         capabilities={
@@ -491,18 +526,19 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.90,
             ModelCapability.FACTUAL_ACCURACY: 0.82,
         },
-        max_context_tokens=1_048_576,
-        max_output_tokens=32_768,
-        cost_input_per_1k=0.003,
-        cost_output_per_1k=0.015,
+        max_context_tokens=CATALOG["kimi-k3"].context_window,
+        max_output_tokens=CATALOG["kimi-k3"].max_output_tokens,
+        cost_input_per_1k=CATALOG["kimi-k3"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["kimi-k3"].output_per_mtok / 1000,
         avg_latency_ms=800,
         reliability_score=0.91,
         supports_vision=True,
     ),
-    # Llama 4
+    # Llama 4 Maverick is retired; "llama4-maverick" now points at Meta
+    # Muse Spark 1.3, its successor (frontier-model-refresh, 2026-09-04).
     "llama4-maverick": ModelProfile(
-        model_id="llama-4-maverick",
-        display_name="Llama 4 Maverick",
+        model_id=CATALOG["muse-spark-1.3"].direct_id,
+        display_name="Meta Muse Spark 1.3",
         provider="meta",
         capabilities={
             ModelCapability.REASONING: 0.90,
@@ -517,10 +553,10 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
             ModelCapability.INSTRUCTION_FOLLOWING: 0.88,
             ModelCapability.FACTUAL_ACCURACY: 0.83,
         },
-        max_context_tokens=1000000,
-        max_output_tokens=8192,
-        cost_input_per_1k=0.0005,
-        cost_output_per_1k=0.002,
+        max_context_tokens=CATALOG["muse-spark-1.3"].context_window,
+        max_output_tokens=CATALOG["muse-spark-1.3"].max_output_tokens,
+        cost_input_per_1k=CATALOG["muse-spark-1.3"].input_per_mtok / 1000,
+        cost_output_per_1k=CATALOG["muse-spark-1.3"].output_per_mtok / 1000,
         avg_latency_ms=600,
         reliability_score=0.92,
         supports_vision=True,

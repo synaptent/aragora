@@ -37,9 +37,12 @@ class TestOpenAIAgentInitialization:
 
     def test_custom_initialization(self):
         """Test agent with custom parameters."""
+        # An ACTIVE non-default catalog id: a retired one (the old
+        # "gpt-4-turbo") is now upgraded at construction time, its own
+        # behaviour (tests/agents/test_retired_model_id_upgrade.py).
         agent = OpenAIAPIAgent(
             name="my-gpt",
-            model="gpt-4-turbo",
+            model="gpt-5.6-terra",
             role="critic",
             timeout=60,
             api_key="custom-key",
@@ -47,7 +50,7 @@ class TestOpenAIAgentInitialization:
         )
 
         assert agent.name == "my-gpt"
-        assert agent.model == "gpt-4-turbo"
+        assert agent.model == "gpt-5.6-terra"
         assert agent.role == "critic"
         assert agent.timeout == 60
         assert agent.enable_fallback is False
@@ -381,16 +384,24 @@ REASONING: Test reasoning"""
 
 
 class TestOpenAIModelMapping:
-    """Tests for OpenRouter model mapping."""
+    """Tests for OpenRouter model mapping.
+
+    OpenAIAPIAgent no longer carries a static OPENROUTER_MODEL_MAP:
+    get_fallback_model() (QuotaFallbackMixin) resolves the current model
+    through the catalog and upgrade map instead (frontier-model-refresh,
+    2026-09-04 review fix round 1, item 3).
+    """
 
     def test_model_mapping_exists(self):
-        """Test model mapping dictionary exists and has entries."""
-        agent = OpenAIAPIAgent(api_key="test-key")
-        assert len(agent.OPENROUTER_MODEL_MAP) > 0
-        assert "gpt-4o" in agent.OPENROUTER_MODEL_MAP
+        """A legacy model spelling resolves to the current row of its own
+        TIER: gpt-4o is value tier by price, so it lands on Terra."""
+        agent = OpenAIAPIAgent(api_key="test-key", model="gpt-4o")
+        assert agent.get_fallback_model() == "openai/gpt-5.6-terra"
+        flagship = OpenAIAPIAgent(api_key="test-key", model="gpt-5.5")
+        assert flagship.get_fallback_model() == "openai/gpt-6-astra"
 
     def test_fallback_uses_correct_model(self):
-        """Test fallback agent uses mapped model via mixin."""
+        """Test fallback agent uses the resolved model via the mixin."""
         agent = OpenAIAPIAgent(
             api_key="test-key",
             model="gpt-4o",
@@ -398,7 +409,7 @@ class TestOpenAIModelMapping:
 
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "router-key"}):
             fallback = agent._get_cached_fallback_agent()
-            assert fallback.model == "openai/gpt-5.5"
+            assert fallback.model == "openai/gpt-5.6-terra"
 
     def test_unknown_model_defaults_to_gpt4o(self):
         """Test unknown model falls back to the current OpenAI default."""
@@ -409,7 +420,7 @@ class TestOpenAIModelMapping:
 
         with patch.dict("os.environ", {"OPENROUTER_API_KEY": "router-key"}):
             fallback = agent._get_cached_fallback_agent()
-            assert fallback.model == "openai/gpt-5.5"
+            assert fallback.model == "openai/gpt-6-astra"
 
 
 class TestOpenAIFallbackDisabled:
