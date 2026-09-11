@@ -534,18 +534,21 @@ class TestThreadSafety:
         assert len(results) == 20
 
     def test_concurrent_gets(self, embedding_cache):
-        """Test concurrent get operations are thread-safe."""
-        # Prepopulate cache
-        for i in range(5):
-            embedding_cache.put(f"text_{i}", np.array([float(i)], dtype=np.float32))
+        """Concurrent readers receive the exact vector for their requested key."""
+        expected = [np.array([i, i + 0.5, -i], dtype=np.float32) for i in range(5)]
+        # All keys fit: a missing result cannot be explained by eviction.
+        for i, embedding in enumerate(expected):
+            embedding_cache.put(f"text_{i}", embedding.copy())
 
         errors = []
         results = []
+        start = threading.Barrier(50)
 
         def get_item(i: int):
             try:
+                start.wait(timeout=10)
                 result = embedding_cache.get(f"text_{i % 5}")
-                results.append(result)
+                results.append((i, result))
             except Exception as e:
                 errors.append(e)
 
@@ -558,8 +561,12 @@ class TestThreadSafety:
         for t in threads:
             t.join()
 
-        assert len(errors) == 0
+        assert not errors, f"Worker errors: {errors}"
         assert len(results) == 50
+        assert {i for i, _ in results} == set(range(50))
+        for i, result in results:
+            assert result is not None, f"Missing cached vector for text_{i % 5}"
+            np.testing.assert_array_equal(result, expected[i % 5])
 
     def test_concurrent_put_get(self, embedding_cache):
         """Test concurrent put and get operations."""
