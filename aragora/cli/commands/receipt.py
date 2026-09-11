@@ -430,14 +430,24 @@ def _cmd_view(args: argparse.Namespace) -> None:
     file_path = Path(receipt_path)
     no_browser = getattr(args, "no_browser", False)
 
-    if not file_path.exists():
+    try:
+        file_exists = file_path.exists()
+    except OSError as e:
+        print(f"Error: Cannot read file: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not file_exists:
         print(f"Error: File not found: {file_path}", file=sys.stderr)
         sys.exit(1)
 
     # If already HTML, open directly
     if file_path.suffix.lower() in (".html", ".htm"):
         if no_browser:
-            print(file_path.read_text(encoding="utf-8"))
+            try:
+                html = file_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as e:
+                print(f"Error: Cannot read file: {e}", file=sys.stderr)
+                sys.exit(1)
+            print(html)
         else:
             webbrowser.open(f"file://{file_path.resolve()}")
             print(f"Opened {file_path} in browser.")
