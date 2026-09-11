@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[2]
 LIVE = ROOT / "aragora/live"
 NAMING = "@typescript-eslint/naming-convention"
 BOUNDARY = "boundaries/dependencies"
+OBSERVABILITY_SECTION = re.compile(r"^## Observability$(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
+OBSERVABILITY_TABLE_VAR = re.compile(r"\|\s*`([A-Z][A-Z0-9_]*)`\s*\|")
+TEMPLATE_VAR = re.compile(r"^\s*(?:#\s*)?([A-Z][A-Z0-9_]*)=", re.MULTILINE)
 
 
 def test_live_scripts_and_strict_typing() -> None:
@@ -95,6 +99,19 @@ def test_live_ratchets_wired_with_repo_relative_baselines() -> None:
     for filename in ("live-knip.json", "live-file-sizes.json"):
         for doc in ("TECH_DEBT.md", "RATCHETS.md"):
             assert f"scripts/baselines/{filename}" in (ROOT / "docs" / doc).read_text()
+
+
+def test_live_observability_template_parity() -> None:
+    section = OBSERVABILITY_SECTION.search((LIVE / "README.md").read_text())
+    assert section, "README has no `## Observability` section"
+    documented = set(OBSERVABILITY_TABLE_VAR.findall(section.group(1)))
+    # The `NEXT_PUBLIC_FLAG_*` family row never matches the variable regex,
+    # but exclude it explicitly: only concrete flags belong in the template.
+    documented -= {"NEXT_PUBLIC_FLAG_"}
+    assert documented, "README Observability table lists no variables"
+    templated = set(TEMPLATE_VAR.findall((LIVE / ".env.local.example").read_text()))
+    missing = sorted(documented - templated)
+    assert not missing, f"documented in README but absent from .env.local.example: {missing}"
 
 
 @pytest.fixture(scope="module")
