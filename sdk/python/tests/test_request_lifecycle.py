@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from email.utils import format_datetime
+from math import ceil
 from threading import TIMEOUT_MAX
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
@@ -26,6 +29,18 @@ HINTS = [
     pytest.param("Friday, 11-Sep-26 12:00:02 GMT", 2, id="rfc850-date"),
     pytest.param("Fri Sep 11 12:00:02 2026", 2, id="asctime-utc"),
     pytest.param("Fri, 11 Sep 2026 12:00:00 GMT", 0, id="past-date"),
+    pytest.param("Mon, 11 Sep 2026 12:00:00 GMT", None, id="imf-wrong-weekday"),
+    pytest.param("Monday, 11-Sep-26 12:00:00 GMT", None, id="rfc850-wrong-weekday"),
+    pytest.param("Mon Sep 11 12:00:00 2026", None, id="asctime-wrong-weekday"),
+    pytest.param("Fri, 11 Sep 0026 12:00:02 GMT", None, id="imf-low-year"),
+    pytest.param("Fri Sep 11 12:00:02 0026", None, id="asctime-low-year"),
+    pytest.param("Mon, 11 Sep 1899 12:00:02 GMT", None, id="year-before-1900"),
+    pytest.param("Thursday, 11-Sep-70 12:00:02 GMT", 1388534402, id="rfc850-2070"),
+    pytest.param("Thu, 11 Sep 2070 12:00:02 GMT", 1388534402, id="imf-2070"),
+    pytest.param("Fri, 29 Feb 2100 12:00:02 GMT", None, id="non-leap-century"),
+    pytest.param("Fri, 11 Sep 2026 24:00:02 GMT", None, id="invalid-hour"),
+    pytest.param("Fri, 11 Sep 2026 12:60:02 GMT", None, id="invalid-minute"),
+    pytest.param("Fri, 11 Sep 2026 12:00:61 GMT", None, id="invalid-second"),
     pytest.param("nonsense", None, id="malformed"),
     pytest.param("Fri, 11 Sep 2026 12:00:00 BOGUS", None, id="unknown-zone"),
     pytest.param("Fri, 11 Sep 2026 12:00:00 GMT trailing", None, id="date-trailing-garbage"),
@@ -153,3 +168,56 @@ def test_non_json_429_retains_status(client_type: type) -> None:
     assert raised.value.response_body is None
     assert raised.value.error_code is None
     assert raised.value.trace_id is None
+
+
+@pytest.mark.parametrize("client_type", [AragoraClient, AragoraAsyncClient])
+@pytest.mark.parametrize(
+    "now,resolved",
+    [
+        ("2026-09-11T12:00:00", "2076-09-11T12:00:00"),  # Exactly fifty years.
+        ("2026-09-11T12:00:00", "1976-09-11T12:00:01"),  # One second beyond.
+        ("2026-09-11T12:00:00.250000", "2076-09-11T12:00:00"),
+        ("2026-09-11T12:00:00.250000", "1976-09-11T12:00:01"),
+        ("2099-12-31T23:59:59", "2100-01-01T00:00:00"),
+        ("2099-12-31T23:59:59", "2099-01-01T00:00:00"),
+        ("2049-03-01T00:00:00", "2000-02-29T00:00:00"),
+        ("2024-02-29T12:00:00", "2074-02-28T12:00:00"),
+        ("2024-02-29T12:00:00", "1974-03-01T00:00:00"),
+        ("1900-01-01T00:00:00", "1900-01-01T00:00:00"),
+    ],
+)
+def test_rfc850_rolling_boundary(client_type: type, now: str, resolved: str) -> None:
+    current = datetime.fromisoformat(now).replace(tzinfo=timezone.utc)
+    target = datetime.fromisoformat(resolved).replace(tzinfo=timezone.utc)
+    canonical = format_datetime(target, usegmt=True)
+    _, day, month, year, clock, _ = canonical.split()
+    weekdays = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+    obsolete = f"{weekdays[target.weekday()]}, {day}-{month}-{year[-2:]} {clock} GMT"
+    client = client_type(demo=True)
+    for header in (canonical, obsolete):
+        with (
+            patch("aragora_sdk.client.time.time", return_value=current.timestamp()) as clock_read,
+            pytest.raises(RateLimitError) as raised,
+        ):
+            client._handle_error_response(limited(header))
+        assert_diagnostics(raised.value, max(0, ceil((target - current).total_seconds())))
+        clock_read.assert_called_once()
+
+
+@pytest.mark.parametrize("client_type", [AragoraClient, AragoraAsyncClient])
+@pytest.mark.parametrize(
+    "header",
+    [
+        "Sat, 31 Dec 2016 23:59:60 GMT",
+        "Saturday, 31-Dec-16 23:59:60 GMT",
+        "Sat Dec 31 23:59:60 2016",
+    ],
+)
+def test_http_leap_second_preserves_original_weekday(client_type: type, header: str) -> None:
+    now = datetime(2016, 12, 31, 23, 59, 59, 250000, tzinfo=timezone.utc).timestamp()
+    with (
+        patch("aragora_sdk.client.time.time", return_value=now),
+        pytest.raises(RateLimitError) as raised,
+    ):
+        client_type(demo=True)._handle_error_response(limited(header))
+    assert_diagnostics(raised.value, 1)

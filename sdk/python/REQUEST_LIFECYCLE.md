@@ -15,6 +15,11 @@ Malformed, negative, missing, or platform-timer-unrepresentable hints yield
 Date hints must match a complete HTTP-date form (including the obsolete RFC 850
 and asctime forms). Unknown zones, missing required components, trailing content,
 or multiple coalesced hints are unavailable; a valid-looking prefix is not enough.
+Calendar fields and the weekday must agree, and the resolved year must be at
+least 1900. Four-digit years are literal, never expanded as two-digit years.
+Obsolete RFC 850 two-digit years use the HTTP rolling fifty-calendar-year rule,
+including the boundary time of day, rather than an email parser's fixed pivot.
+The same captured UTC clock is used for century selection and the remaining delay.
 
 Within the existing attempt budget, a usable hint is the delay before the next
 attempt. **Zero means no delay**, not exponential backoff. Unavailable hints keep

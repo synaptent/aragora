@@ -9,8 +9,7 @@ from __future__ import annotations
 import os
 import re
 import time
-from datetime import timezone
-from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 from math import ceil
 from threading import TIMEOUT_MAX
 from typing import TYPE_CHECKING, Any, Literal, cast, overload
@@ -33,8 +32,10 @@ from .exceptions import (
 
 # RFC 9110 section 5.6.7: accept the complete three HTTP-date forms, not
 # arbitrary email dates or a valid prefix followed by unsupported content.
-_HTTP_DAY = r"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)"
-_HTTP_MONTH = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+_HTTP_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_HTTP_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_HTTP_DAY = "(?:" + "|".join(_HTTP_WEEKDAYS) + ")"
+_HTTP_MONTH = "(?:" + "|".join(_HTTP_MONTHS) + ")"
 _HTTP_TIME = r"[0-9]{2}:[0-9]{2}:[0-9]{2}"
 _HTTP_DATE = re.compile(
     rf"(?:{_HTTP_DAY}, [0-9]{{2}} {_HTTP_MONTH} [0-9]{{4}} {_HTTP_TIME} GMT|"
@@ -55,11 +56,50 @@ def _parse_retry_after(value: str | None) -> int | None:
         else:
             if not _HTTP_DATE.fullmatch(value):
                 return None
-            retry_at = parsedate_to_datetime(value)
-            # The obsolete HTTP asctime form has no timezone but always means UTC.
-            if retry_at.tzinfo is None:
-                retry_at = retry_at.replace(tzinfo=timezone.utc)
-            delay = max(0, ceil(retry_at.timestamp() - time.time()))
+            # Extract literal components: email parsers reinterpret small years
+            # and use a fixed century pivot, neither of which is HTTP semantics.
+            if value[3:4] == ",":
+                weekday, day, month, year, clock, _ = value.split()
+            elif "," in value:
+                weekday, date, clock, _ = value.split()
+                day, month, year = date.split("-")
+            else:
+                weekday, month, day, clock, year = value.split()
+            now = time.time()
+            year_number = int(year)
+            month_number = _HTTP_MONTHS.index(month) + 1
+            day_number = int(day)
+            hour, minute, second = map(int, clock.split(":"))
+            if len(year) == 2:
+                current = datetime.fromtimestamp(now, timezone.utc)
+                # RFC 9110 section 5.6.7: the latest matching year no more
+                # than fifty calendar years ahead, including the time of day.
+                year_number += ((current.year + 50) // 100) * 100
+                if (year_number, month_number, day_number, hour, minute, second) > (
+                    current.year + 50,
+                    current.month,
+                    current.day,
+                    current.hour,
+                    current.minute,
+                    current.second,
+                ):
+                    year_number -= 100
+            if year_number < 1900 or not 0 <= second <= 60:
+                return None
+            # datetime validates calendar/hour/minute components. HTTP allows
+            # leap-second :60; represent it as the instant after :59.
+            retry_at = datetime(
+                year_number,
+                month_number,
+                day_number,
+                hour,
+                minute,
+                min(second, 59),
+                tzinfo=timezone.utc,
+            )
+            if _HTTP_WEEKDAYS[retry_at.weekday()] != weekday[:3]:
+                return None
+            delay = max(0, ceil(retry_at.timestamp() + (second == 60) - now))
         # This is a representability check, not a retry-policy delay cap. Avoid
         # losing RateLimitError to an overflow in sleep on an unusable hint.
         return delay if delay <= TIMEOUT_MAX else None
