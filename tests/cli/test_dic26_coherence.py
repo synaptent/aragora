@@ -141,10 +141,20 @@ _CONTRADICTING = [
     {"belief_id": "bL", "subject": "auth.gateway", "confidence": 0.04, "status": "fail"},
 ]
 _WARNING_ONLY = [
-    {"belief_id": "w1", "subject": "cache.hit", "confidence": 0.40, "status": "pass",
-     "evidence_paths": ["docs/cache.md"]},
-    {"belief_id": "w2", "subject": "cache.miss", "confidence": 0.60, "status": "fail",
-     "evidence_paths": ["docs/cache.md"]},
+    {
+        "belief_id": "w1",
+        "subject": "cache.hit",
+        "confidence": 0.40,
+        "status": "pass",
+        "evidence_paths": ["docs/cache.md"],
+    },
+    {
+        "belief_id": "w2",
+        "subject": "cache.miss",
+        "confidence": 0.60,
+        "status": "fail",
+        "evidence_paths": ["docs/cache.md"],
+    },
 ]
 
 
@@ -166,9 +176,7 @@ class TestEmitFollowupFlag:
         """--emit-followup is set but ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED is off."""
         monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
         monkeypatch.delenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", raising=False)
-        rc = cmd_coherence_scan(
-            _args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True)
-        )
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True))
         assert rc == 0
         out = capsys.readouterr().out
         # The --emit-followup section is printed but proposals list is empty
@@ -181,9 +189,7 @@ class TestEmitFollowupFlag:
         """Both flags set: text output shows follow-up proposals section."""
         monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
         monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
-        rc = cmd_coherence_scan(
-            _args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True)
-        )
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _CONTRADICTING)), emit_followup=True))
         assert rc == 0
         out = capsys.readouterr().out
         assert "follow-up proposals" in out
@@ -209,9 +215,7 @@ class TestEmitFollowupFlag:
         """Warning-severity evidence conflicts must never produce proposals."""
         monkeypatch.setenv("ARAGORA_COHERENCE_MONITOR_ENABLED", "1")
         monkeypatch.setenv("ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED", "1")
-        rc = cmd_coherence_scan(
-            _args(str(_write(tmp_path, _WARNING_ONLY)), emit_followup=True)
-        )
+        rc = cmd_coherence_scan(_args(str(_write(tmp_path, _WARNING_ONLY)), emit_followup=True))
         assert rc == 0
         out = capsys.readouterr().out
         assert "follow-up proposals" not in out
