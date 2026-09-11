@@ -46,6 +46,8 @@ services:
     build: {context: ../.., dockerfile: deploy/Dockerfile.backend}
     restart: "no"
     env_file: [./secrets.env]
+    environment:
+      ARAGORA_DB_BACKEND: postgres
     command: ["python", "-m", "aragora.migrations", "upgrade"]
     depends_on:
       postgres: {condition: service_healthy}
@@ -57,6 +59,7 @@ services:
     environment:
       ARAGORA_ENV: production
       ARAGORA_SINGLE_INSTANCE: "true"
+      ARAGORA_DB_BACKEND: postgres
       REDIS_URL: redis://redis:6379/0
     ports:
       - "127.0.0.1:8080:8080"         # HTTP  — tunnel ingress
@@ -85,16 +88,16 @@ services:
       - -c
       - |
         while true; do
-          sleep 86400
           F=/backups/aragora-$$(date +%Y%m%d_%H%M%S).sql.gz
           rm -f /backups/*.sql.gz.part
           if PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h postgres -U aragora -Z 6 -f "$$F.part" aragora; then
             mv "$$F.part" "$$F" && echo "[backup] wrote $$F"
+            find /backups -name '*.sql.gz' -mtime +14 -delete
           else
             rm -f "$$F.part"
             echo "[backup] FAILED - investigate immediately"
           fi
-          find /backups -name '*.sql.gz' -mtime +14 -delete
+          sleep 86400
         done
     depends_on:
       postgres: {condition: service_healthy}

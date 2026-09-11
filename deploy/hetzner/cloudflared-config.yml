@@ -15,9 +15,11 @@ originRequest:
 
 ingress:
   # WebSocket first: the more specific path must precede the catch-all host
-  # rule, or every /ws request is served by the HTTP origin instead.
+  # rule, or every /ws request is served by the HTTP origin instead. The path
+  # is an unanchored regular expression, so anchor it or any HTTP path that
+  # merely contains "/ws" would be sent to the WebSocket port too.
   - hostname: api.aragora.ai
-    path: /ws
+    path: ^/ws(/|$)
     service: http://127.0.0.1:8765
   - hostname: api.aragora.ai
     service: http://127.0.0.1:8080

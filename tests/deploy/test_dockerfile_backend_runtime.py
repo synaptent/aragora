@@ -34,6 +34,10 @@ def test_compose_uses_secret_file_and_real_migration_cli() -> None:
         assert "DATABASE_URL" not in services[name].get("environment", {})
     assert services["migrate"]["command"] == ["python", "-m", "aragora.migrations", "upgrade"]
     assert services["app"]["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
+    # get_storage_backend() and the debate-origin store only pick Postgres when told so
+    # explicitly; DATABASE_URL alone leaves them on SQLite.
+    for name in ("migrate", "app"):
+        assert services[name]["environment"]["ARAGORA_DB_BACKEND"] == "postgres"
 
 
 def test_app_service_sets_no_entrypoint_only_variables() -> None:
@@ -50,8 +54,25 @@ def test_backup_reports_success_only_after_pg_dump_succeeds() -> None:
     assert "| gzip" not in script
     dump = re.search(r"if PGPASSWORD=.* pg_dump .*-Z \d+ -f \"\$F\.part\" aragora; then", script)
     assert dump is not None
-    assert script.index('mv "$F.part" "$F" && echo "[backup] wrote') > dump.start()
+    wrote = script.index('mv "$F.part" "$F" && echo "[backup] wrote')
+    prune = script.index("find /backups -name '*.sql.gz' -mtime +14 -delete")
+    assert dump.start() < wrote < prune < script.index("else")
     assert script.index('rm -f "$F.part"') < script.index("[backup] FAILED")
+    # Dump first, sleep last: a container restart must not postpone the next dump by a day.
+    assert script.index("sleep 86400") > script.index("fi")
+
+
+def test_tunnel_routes_only_the_websocket_path_to_the_ws_port() -> None:
+    ingress = yaml.safe_load((ROOT / "deploy/hetzner/cloudflared-config.yml").read_text())[
+        "ingress"
+    ]
+    ws, http, fallback = ingress
+    assert ws["service"] == "http://127.0.0.1:8765"
+    pattern = re.compile(ws["path"])
+    assert all(pattern.search(p) for p in ("/ws", "/ws/spectate", "/ws/voice/abc"))
+    assert not any(pattern.search(p) for p in ("/api/v1/debates/ws", "/wsgi", "/readyz"))
+    assert http == {"hostname": "api.aragora.ai", "service": "http://127.0.0.1:8080"}
+    assert fallback == {"service": "http_status:404"}
 
 
 def test_readme_restores_dump_into_a_fresh_database_before_migrating() -> None:
