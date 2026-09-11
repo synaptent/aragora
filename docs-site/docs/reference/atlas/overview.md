@@ -1,3 +1,8 @@
+---
+title: Disagreement Atlas v1
+description: Disagreement Atlas v1
+---
+
 # Disagreement Atlas v1
 
 **What it is.** A dataset of every reviewer verdict posted at an exact head SHA
@@ -7,14 +12,14 @@ that merged or closed since the tiered merge gate landed
 together with the ground-truth adjudication that resolved each disagreement:
 what the PR did next, how the operator settled it, and — for the rounds
 hand-labelled in the
-[reviewer-failure taxonomy](../artifacts/2026-07-reviewer-failure-taxonomy.md) —
+[reviewer-failure taxonomy](https://github.com/synaptent/aragora/blob/main/docs/artifacts/2026-07-reviewer-failure-taxonomy.md) —
 which failure class the reviewer exhibited and whether its finding was valid.
 
 The record is one **(PR, head SHA, reviewer family, round)** tuple. Every number
-in [`summary.md`](summary.md) regenerates from `atlas-v1.jsonl` (a release
-asset, see *Release asset*) with one command; the JCS-canonical [`manifest.json`](manifest.json) pins the
+in [`summary.md`](./summary) regenerates from `atlas-v1.jsonl` (a release
+asset, see *Release asset*) with one command; the JCS-canonical [`manifest.json`](https://github.com/synaptent/aragora/blob/main/docs/atlas/manifest.json) pins the
 dataset hash and record count the same way an
-[Open Decision Receipt](../specs/OPEN_DECISION_RECEIPT.md#5-canonicalization-and-hashing--rfc-8785-jcs)
+[Open Decision Receipt](../../specs/open-decision-receipt#5-canonicalization-and-hashing--rfc-8785-jcs)
 pins its content.
 
 Tracking issue: [#9950](https://github.com/synaptent/aragora/issues/9950).
@@ -38,11 +43,11 @@ secret is read; the only credential is a read-scope `gh` login.
 
 | Source | REST endpoint / path | What it contributes |
 |---|---|---|
-| PR list | `GET repos/{repo}/pulls?state=closed&sort=updated` | Every PR with `closed_at ≥ since` (merged **and** closed-unmerged). |
-| Evidence comments | `GET repos/{repo}/issues/{pr}/comments` | The reviewer verdicts. Each is an "independent model review" comment composed by `scripts/collect_quorum_evidence.py`: heading, `Model family:` disclosure, `Head: <7> (<40>), committed <ts>`, `Verdict:` line, `[Pn]` findings. Operator park/settlement comments in the same thread drive the adjudication inference. |
-| Review objects | `GET repos/{repo}/pulls/{pr}/reviews` | Mirrored model reviews posted as GitHub reviews (`commit_id` is the exact head). Human reviews without a disclosed model family are not records. |
-| Commits | `GET repos/{repo}/pulls/{pr}/commits` | Resolves 7-char head prefixes to full SHAs and supplies commit times for round ordering. |
-| Statuses | `GET repos/{repo}/commits/{head}/statuses` | The `aragora/human-settlement` commit status on the final head (Tier 3-4 human risk acceptance). |
+| PR list | `GET repos/\{repo\}/pulls?state=closed&sort=updated` | Every PR with `closed_at ≥ since` (merged **and** closed-unmerged). |
+| Evidence comments | `GET repos/\{repo\}/issues/\{pr\}/comments` | The reviewer verdicts. Each is an "independent model review" comment composed by `scripts/collect_quorum_evidence.py`: heading, `Model family:` disclosure, `Head: &lt;7> (&lt;40>), committed <ts>`, `Verdict:` line, `[Pn]` findings. Operator park/settlement comments in the same thread drive the adjudication inference. |
+| Review objects | `GET repos/\{repo\}/pulls/\{pr\}/reviews` | Mirrored model reviews posted as GitHub reviews (`commit_id` is the exact head). Human reviews without a disclosed model family are not records. |
+| Commits | `GET repos/\{repo\}/pulls/\{pr\}/commits` | Resolves 7-char head prefixes to full SHAs and supplies commit times for round ordering. |
+| Statuses | `GET repos/\{repo\}/commits/\{head\}/statuses` | The `aragora/human-settlement` commit status on the final head (Tier 3-4 human risk acceptance). |
 | Eval fixture | `tests/governance/fixtures/adjudicator_eval_cases.json` | Verbatim reviewer bodies from prepare-only rounds (recorded by the collector at the exact head but not posted), plus the hand-labelled ground truth: failure classes, `findings_valid`, disposition, resolution mechanism. |
 | Receipts | `docs/receipts/**`, `docs/elves/receipts/**`, `docs/status/settlement-packets/**` | Committed settlement receipts that mention a PR are attached as `receipt_refs`. |
 
@@ -75,7 +80,7 @@ See `schema.json` for the full contract. The load-bearing fields:
   `non_negative_signal` for pre-gate phrasings such as `Verdict: approve` that the
   gate's comment-signal path counts as support; `review_state`; `fixture`);
   `P0`/`P1` when the body carries a real blocking
-  finding (the [severity gate](../specs/MODEL_DISSENT_SEVERITY_GATE.md) treats
+  finding (the [severity gate](../../specs/model-dissent-severity-gate) treats
   `[P2]`/`[P3]` as advisory); every `[Pn]` finding line with its text.
 - `body`, `dissent_text` — the verbatim reviewer body; `dissent_text` repeats it
   for `changes_requested` verdicts and is empty otherwise.
@@ -213,6 +218,6 @@ a reviewer body quotes them), and the GitHub logins of PR authors and evidence
 posters. No email addresses, tokens or other secret material are present; the
 tests assert schema conformance and the build reads no secrets.
 
-Released under the repository's [MIT License](../../LICENSE), like the code that
+Released under the repository's [MIT License](https://github.com/synaptent/aragora/blob/main/LICENSE), like the code that
 generates it. Publication outside the repository was approved by the founder on
 2026-09-01 (operator decision on #9950).
