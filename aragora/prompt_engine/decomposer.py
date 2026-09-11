@@ -15,7 +15,7 @@ import logging
 from collections import OrderedDict
 from typing import Any
 
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 from aragora.prompt_engine.processing import (
     append_context_block,
     format_km_context,
@@ -95,7 +95,7 @@ class PromptDecomposer:
 
         # Fallback to OpenRouter if available
         try:
-            if get_secret_presence("OPENROUTER_API_KEY").source in {"aws", "env"}:
+            if is_secret_presence_available(get_secret_presence("OPENROUTER_API_KEY")):
                 from aragora.agents.api_agents.openrouter import OpenRouterAgent
 
                 self._agent = OpenRouterAgent(

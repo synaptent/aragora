@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 
 
 class SetupError(Exception):
@@ -46,25 +46,17 @@ _PROVIDER_SECRET_NAMES = (
 )
 
 
-def _aws_provider_key_present() -> bool:
-    """Return True if any provider key is resolvable via AWS Secrets Manager.
+def _managed_secret_present(name: str) -> bool:
+    try:
+        presence = get_secret_presence(name)
+        return is_secret_presence_available(presence) and presence.source != "env"
+    except Exception:  # noqa: BLE001 - presence probe must never fail setup
+        return False
 
-    Presence-only probe: it inspects the secrets layer's *source* classification
-    and never reads or logs a secret value. It never raises -- if boto3/AWS is
-    unavailable or the probe fails for any reason, it reports ``False`` so the
-    caller falls back to env/.env detection. The canonical local posture keeps
-    provider keys in AWS Secrets Manager (not os.environ or .env), so this
-    prevents non-interactive setup from failing when keys live only in AWS.
-    """
-    for name in _PROVIDER_SECRET_NAMES:
-        try:
-            if get_secret_presence(name).source == "aws":
-                return True
-        except Exception:  # noqa: BLE001 - presence probe must never fail setup
-            # AWS/boto3 unavailable or probe error: treat as "not present here"
-            # and let env/.env detection decide.
-            continue
-    return False
+
+def _managed_provider_key_present() -> bool:
+    """Return True if any provider key is resolvable from managed custody."""
+    return any(_managed_secret_present(name) for name in _PROVIDER_SECRET_NAMES)
 
 
 def _prompt(message: str, default: str | None = None, secret: bool = False) -> str:
@@ -483,8 +475,8 @@ def run_setup(
             config["anthropic_key"] = existing_anthropic
         else:
             config["anthropic_key"] = _prompt("  Anthropic API Key", secret=True)
-    elif get_secret_presence("ANTHROPIC_API_KEY").source == "aws":
-        print("  ANTHROPIC_API_KEY is configured via AWS Secrets Manager; not copying to .env.")
+    elif _managed_secret_present("ANTHROPIC_API_KEY"):
+        print("  ANTHROPIC_API_KEY is configured via managed custody; not copying to .env.")
         config["anthropic_key"] = ""
     else:
         config["anthropic_key"] = (
@@ -499,8 +491,8 @@ def run_setup(
             config["openai_key"] = existing_openai
         else:
             config["openai_key"] = _prompt("  OpenAI API Key", secret=True)
-    elif get_secret_presence("OPENAI_API_KEY").source == "aws":
-        print("  OPENAI_API_KEY is configured via AWS Secrets Manager; not copying to .env.")
+    elif _managed_secret_present("OPENAI_API_KEY"):
+        print("  OPENAI_API_KEY is configured via managed custody; not copying to .env.")
         config["openai_key"] = ""
     else:
         config["openai_key"] = (
@@ -534,10 +526,9 @@ def run_setup(
             "xai_key",
         )
     )
-    # A provider key may also be resolvable via AWS Secrets Manager (the
-    # canonical local posture), in which case it is NOT written to .env but
-    # still counts as "configured" so setup must not fail.
-    key_resolvable = has_any_key or _aws_provider_key_present()
+    # A provider key may also be resolvable through managed custody, in which
+    # case it is NOT written to .env but still counts as configured.
+    key_resolvable = has_any_key or _managed_provider_key_present()
 
     if not key_resolvable:
         print("\n  Warning: No API keys configured. Aragora requires at least one.")

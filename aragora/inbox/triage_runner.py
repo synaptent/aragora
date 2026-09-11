@@ -26,7 +26,7 @@ from contextlib import contextmanager, nullcontext, suppress
 from dataclasses import dataclass
 from typing import Any
 
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 from aragora.inbox.auto_approval import AutoApprovalPolicy
 from aragora.inbox.trust_wedge import (
     ActionIntent,
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 def _has_api_key(*names: str) -> bool:
     """Return API-key availability without exposing secret values."""
-    return any(get_secret_presence(name).source in {"aws", "env"} for name in names)
+    return any(is_secret_presence_available(get_secret_presence(name)) for name in names)
 
 
 _SUPPORTED_TRIAGE_PROFILES = {"baseline", "staged_v1"}

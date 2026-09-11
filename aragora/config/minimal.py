@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from aragora.config import resolve_db_path
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ MINIMAL_MODE_VALUE = "minimal"
 
 def _secret_available(*names: str) -> bool:
     """Return true when any secret is usable without exposing values."""
-    return any(get_secret_presence(name).source in {"aws", "env"} for name in names)
+    return any(is_secret_presence_available(get_secret_presence(name)) for name in names)
 
 
 @dataclass

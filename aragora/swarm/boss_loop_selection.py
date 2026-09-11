@@ -13,7 +13,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, cast
 
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import get_secret_presence, is_secret_presence_available
 
 if TYPE_CHECKING:
     from aragora.swarm.boss_loop import GitHubIssue
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def _has_api_key(*names: str) -> bool:
-    return any(get_secret_presence(name).source in {"aws", "env"} for name in names)
+    return any(is_secret_presence_available(get_secret_presence(name)) for name in names)
 
 
 def semantic_dedup_issues(issues: list[GitHubIssue]) -> list[GitHubIssue]:

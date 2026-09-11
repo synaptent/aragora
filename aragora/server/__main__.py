@@ -18,6 +18,30 @@ from aragora.server.unified_server import run_unified_server
 # Default to localhost for security; use ARAGORA_BIND_HOST=0.0.0.0 for external access
 DEFAULT_BIND_HOST = os.environ.get("ARAGORA_BIND_HOST", "127.0.0.1")
 LOCAL_DEMO_HANDLER_TIERS = "core,extended,optional"
+_PROVIDER_API_KEYS = (
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "MISTRAL_API_KEY",
+    "GEMINI_API_KEY",
+    "XAI_API_KEY",
+)
+
+
+def _hydrate_runtime_secrets() -> None:
+    from aragora.config.secrets import hydrate_env_from_secrets
+
+    hydrate_env_from_secrets(overwrite=True)
+
+
+def _detect_api_keys() -> list[str]:
+    from aragora.config.secrets import get_secret_presence, is_secret_presence_available
+
+    return [
+        name
+        for name in _PROVIDER_API_KEYS
+        if is_secret_presence_available(get_secret_presence(name))
+    ]
 
 
 def _configure_logging() -> None:
@@ -178,18 +202,8 @@ Production deployment with multiple workers:
     import logging
 
     _logger = logging.getLogger(__name__)
-    _api_keys = [
-        k
-        for k in (
-            "ANTHROPIC_API_KEY",
-            "OPENAI_API_KEY",
-            "OPENROUTER_API_KEY",
-            "MISTRAL_API_KEY",
-            "GEMINI_API_KEY",
-            "XAI_API_KEY",
-        )
-        if os.environ.get(k, "").strip()
-    ]
+    _hydrate_runtime_secrets()
+    _api_keys = _detect_api_keys()
 
     # Apply runtime defaults before starting any workers.
     _configure_runtime_environment(args.offline, _api_keys, _logger)
