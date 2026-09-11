@@ -509,29 +509,41 @@ class TestPersistence:
 class TestThreadSafety:
     """Tests for thread safety."""
 
-    def test_concurrent_puts(self, embedding_cache):
-        """Test concurrent put operations are thread-safe."""
+    def test_concurrent_puts(self):
+        """Every concurrent write survives when all keys fit in the cache."""
+        from aragora.debate.cache.embeddings_lru import EmbeddingCache
+
+        expected = [np.array([i, i + 0.5, -i], dtype=np.float32) for i in range(20)]
+        cache = EmbeddingCache(max_size=len(expected), persist=False)
+        start = threading.Barrier(len(expected))
         errors = []
         results = []
 
         def put_item(i: int):
             try:
-                embedding_cache.put(f"text_{i}", np.array([float(i)], dtype=np.float32))
+                start.wait(timeout=10)
+                cache.put(f"text_{i}", expected[i].copy())
                 results.append(i)
             except Exception as e:
                 errors.append(e)
 
         threads = []
-        for i in range(20):
-            t = threading.Thread(target=put_item, args=(i,))
+        for i in range(len(expected)):
+            t = threading.Thread(target=put_item, args=(i,), daemon=True)
             threads.append(t)
             t.start()
 
+        deadline = time.monotonic() + 10
         for t in threads:
-            t.join()
+            t.join(timeout=max(0, deadline - time.monotonic()))
 
-        assert len(errors) == 0
-        assert len(results) == 20
+        assert not any(t.is_alive() for t in threads), "Writers did not finish"
+        assert not errors, f"Worker errors: {errors}"
+        assert sorted(results) == list(range(len(expected)))
+        for i, embedding in enumerate(expected):
+            result = cache.get(f"text_{i}")
+            assert result is not None, f"Missing cached vector for text_{i}"
+            np.testing.assert_array_equal(result, embedding)
 
     def test_concurrent_gets(self, embedding_cache):
         """Concurrent readers receive the exact vector for their requested key."""
@@ -568,35 +580,63 @@ class TestThreadSafety:
             assert result is not None, f"Missing cached vector for text_{i % 5}"
             np.testing.assert_array_equal(result, expected[i % 5])
 
-    def test_concurrent_put_get(self, embedding_cache):
-        """Test concurrent put and get operations."""
-        errors = []
+    def test_concurrent_put_get(self):
+        """Readers see written versions, and every writer's final value survives."""
+        from aragora.debate.cache.embeddings_lru import EmbeddingCache
 
-        def writer():
+        cache = EmbeddingCache(max_size=10, persist=False)
+        expected = [
+            [np.array([i, version, -i], dtype=np.float32) for version in range(-1, 100)]
+            for i in range(5)
+        ]
+        # One writer per key; all keys remain resident throughout the race.
+        for i, versions in enumerate(expected):
+            cache.put(f"text_{i}", versions[0].copy())
+        start = threading.Barrier(10)
+        errors = []
+        writers_done = []
+        results = [[] for _ in expected]
+
+        def writer(i: int):
             try:
-                for i in range(100):
-                    embedding_cache.put(f"text_{i}", np.array([float(i)], dtype=np.float32))
+                start.wait(timeout=10)
+                for embedding in expected[i][1:]:
+                    cache.put(f"text_{i}", embedding.copy())
+                writers_done.append(i)
             except Exception as e:
                 errors.append(e)
 
-        def reader():
+        def reader(i: int):
             try:
-                for i in range(100):
-                    embedding_cache.get(f"text_{i}")
+                start.wait(timeout=10)
+                for _ in range(100):
+                    result = cache.get(f"text_{i}")
+                    results[i].append(result.copy() if result is not None else None)
             except Exception as e:
                 errors.append(e)
 
         threads = []
-        for _ in range(5):
-            threads.append(threading.Thread(target=writer))
-            threads.append(threading.Thread(target=reader))
+        for i in range(len(expected)):
+            threads.append(threading.Thread(target=writer, args=(i,), daemon=True))
+            threads.append(threading.Thread(target=reader, args=(i,), daemon=True))
 
         for t in threads:
             t.start()
+        deadline = time.monotonic() + 10
         for t in threads:
-            t.join()
+            t.join(timeout=max(0, deadline - time.monotonic()))
 
-        assert len(errors) == 0
+        assert not any(t.is_alive() for t in threads), "Readers/writers did not finish"
+        assert not errors, f"Worker errors: {errors}"
+        assert sorted(writers_done) == list(range(len(expected)))
+        for i, reads in enumerate(results):
+            assert len(reads) == 100
+            for result in reads:
+                assert result is not None, f"Missing cached vector for text_{i}"
+                assert any(np.array_equal(result, value) for value in expected[i]), (
+                    f"Unexpected vector for text_{i}: {result}"
+                )
+            np.testing.assert_array_equal(cache.get(f"text_{i}"), expected[i][-1])
 
     def test_concurrent_eviction(self, small_cache):
         """Test that concurrent evictions don't cause errors."""
