@@ -165,7 +165,7 @@ class TestConnectionRouter:
         mock_conn = MagicMock()
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
         mock_pool.get_size.return_value = 5
 
         router._primary_pool = mock_pool
@@ -183,7 +183,7 @@ class TestConnectionRouter:
         mock_conn = MagicMock()
         mock_replica_pool = MagicMock()
         mock_replica_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_replica_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_replica_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_primary_pool = MagicMock()
         mock_primary_pool.get_size.return_value = 5
@@ -211,7 +211,7 @@ class TestConnectionRouter:
         mock_primary_pool.acquire.return_value.__aenter__ = AsyncMock(
             return_value=mock_primary_conn
         )
-        mock_primary_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_primary_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         router._primary_pool = mock_primary_pool
         router._replica_pools = [mock_replica_pool]
@@ -229,12 +229,12 @@ class TestConnectionRouter:
         mock_conn = MagicMock()
         mock_transaction = MagicMock()
         mock_transaction.__aenter__ = AsyncMock()
-        mock_transaction.__aexit__ = AsyncMock()
+        mock_transaction.__aexit__ = AsyncMock(return_value=False)
         mock_conn.transaction.return_value = mock_transaction
 
         mock_pool = MagicMock()
         mock_pool.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         router._primary_pool = mock_pool
         router._replica_pools = [MagicMock()]  # Has replicas
@@ -379,11 +379,11 @@ class TestRouterIntegration:
 
         mock_pool1 = MagicMock()
         mock_pool1.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn1)
-        mock_pool1.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool1.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_pool2 = MagicMock()
         mock_pool2.acquire.return_value.__aenter__ = AsyncMock(return_value=mock_conn2)
-        mock_pool2.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool2.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         mock_primary = MagicMock()
 

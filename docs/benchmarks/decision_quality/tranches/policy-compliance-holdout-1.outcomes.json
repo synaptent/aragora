@@ -1,0 +1,81 @@
+{
+  "schema_version": "decision-quality-outcomes/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "corpus_sha256": "318c209ccfc5d24b82f6083f284334fb89f752a9dfc6a8ab0ee68d6f5a5dbd4d",
+  "outcomes": [
+    {
+      "case_id": "policy-holdout-ftc-noncompete-rule-2024",
+      "resolved_at": "2024-05-07T00:00:00Z",
+      "correct_option_id": "prepare_for_may_2024_rule",
+      "resolution_summary": "The FTC published the final Non-Compete Clause Rule on 2024-05-07, within the benchmark's May 2024 publication horizon, making bounded readiness the outcome-aligned action for this timing question.",
+      "authoritative_sources": [
+        {
+          "source_id": "ftc-noncompete-final-2024-05-07",
+          "title": "Non-Compete Clause Rule - Final Rule",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2024-05-07/pdf/2024-09171.pdf",
+          "published_at": "2024-05-07T00:00:00Z",
+          "content_sha256": "6059e0245c85d0d70ffef048b32bd3def7cd9889c1d5b0d0bb92d8cf1e5e495b"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "ftc_rulemaking_authority",
+          "description": "Whether the Commission would maintain its asserted authority to issue a generally applicable non-compete rule through final adoption.",
+          "aliases": ["FTC statutory authority", "rulemaking authority"]
+        },
+        {
+          "crux_id": "comment_record_processing",
+          "description": "Whether the Commission could process the rulemaking record and revise the proposal without pushing publication beyond May 2024.",
+          "aliases": ["public comment volume", "record review timing"]
+        },
+        {
+          "crux_id": "final_rule_scope",
+          "description": "Whether exemptions, treatment of existing agreements, and notice obligations could be bounded enough for a final vote.",
+          "aliases": ["rule scope revisions", "senior executive treatment"]
+        },
+        {
+          "crux_id": "commission_adoption_schedule",
+          "description": "Whether the Commission would place and approve the rule on a schedule that supported publication by the benchmark deadline.",
+          "aliases": ["commission vote timing", "publication schedule"]
+        }
+      ]
+    },
+    {
+      "case_id": "policy-holdout-dol-independent-contractor-2023",
+      "resolved_at": "2024-01-10T00:00:00Z",
+      "correct_option_id": "defer_binding_rollout_to_2024",
+      "resolution_summary": "The Department of Labor published the final independent-contractor rule on 2024-01-10, after the benchmark's 2023 deadline, so deferring the binding rollout to 2024 was the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "dol-independent-contractor-final-2024-01-10",
+          "title": "Employee or Independent Contractor Classification Under the Fair Labor Standards Act - Final Rule",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2024-01-10/pdf/2024-00067.pdf",
+          "published_at": "2024-01-10T00:00:00Z",
+          "content_sha256": "e41e1ce14d83576a0fc5d81fa902bd8ff94299dac459e10e1716f155f9203330"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "economic_reality_test_design",
+          "description": "Whether the Department could finalize a totality-of-the-circumstances test that reconciled judicial precedent with the proposed regulatory text.",
+          "aliases": ["classification test design", "factor weighting"]
+        },
+        {
+          "crux_id": "2021_rule_baseline",
+          "description": "Whether litigation and enforcement surrounding the 2021 rule would complicate replacement-rule timing.",
+          "aliases": ["existing rule litigation", "regulatory baseline"]
+        },
+        {
+          "crux_id": "stakeholder_comment_resolution",
+          "description": "Whether the Department could resolve comments from workers and businesses without extending finalization beyond 2023.",
+          "aliases": ["comment review", "stakeholder objections"]
+        },
+        {
+          "crux_id": "department_publication_schedule",
+          "description": "Whether the Department's rulemaking and Federal Register schedule would support publication before the end of 2023.",
+          "aliases": ["regulatory agenda timing", "Federal Register schedule"]
+        }
+      ]
+    }
+  ]
+}

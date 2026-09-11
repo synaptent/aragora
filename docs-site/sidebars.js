@@ -60,7 +60,7 @@ const sidebars = {
       type: 'category',
       label: 'Deployment',
       items: [
-        'deployment/docker',
+        'deployment/overview',
         'deployment/kubernetes',
         'deployment/scaling',
         'deployment/security',

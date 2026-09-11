@@ -155,12 +155,12 @@ class TestOpenClawSandbox:
                 }
             )
             mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_response.__aexit__ = AsyncMock()
+            mock_response.__aexit__ = AsyncMock(return_value=False)
 
             mock_session_instance = MagicMock()
             mock_session_instance.post = MagicMock(return_value=mock_response)
             mock_session_instance.__aenter__ = AsyncMock(return_value=mock_session_instance)
-            mock_session_instance.__aexit__ = AsyncMock()
+            mock_session_instance.__aexit__ = AsyncMock(return_value=False)
             mock_session.return_value = mock_session_instance
 
             result = await sandbox.execute(simple_task)

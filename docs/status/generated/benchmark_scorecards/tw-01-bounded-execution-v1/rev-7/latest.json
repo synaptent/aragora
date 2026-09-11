@@ -1,10 +1,4 @@
 {
-  "evidence_scope": {
-    "fresh_revision_execution": false,
-    "kind": "historical_bootstrap",
-    "normalization_receipt": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/normalization-receipt.json",
-    "note": "Proxy successes belong to the retained historical verified cohort. The five in-progress outcomes predate normalization; no revision-7 execution success is claimed."
-  },
   "corpus": {
     "corpus_id": "tw-01-bounded-execution-v1",
     "issue_count": 10,
@@ -37,19 +31,19 @@
   "deltas": {
     "merged_only_rate": 0.0,
     "no_rescue_truth_success_rate": 0.0,
-    "proxy_no_rescue_success_rate": 0.0,
+    "proxy_no_rescue_success_rate": -0.5,
     "truth_success_rate": 0.0,
     "unique_issues_attempted": 0.0
   },
   "failure_class_distribution": {
     "blocked_not_dispatch_bounded": 5,
-    "blocked_validation_target_missing": 5
+    "rescue_worker_crash": 1
   },
-  "generated_at": "2026-08-19T15:19:55Z",
-  "metrics_file": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/bootstrap-metrics.jsonl",
+  "generated_at": "2026-09-01T13:38:29Z",
+  "metrics_file": ".aragora/overnight/boss_metrics.jsonl",
   "previous_artifact": {
-    "generated_at": "2026-08-19T14:53:21Z",
-    "path": "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260819T145321Z.json"
+    "generated_at": "2026-08-19T15:19:55Z",
+    "path": "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260819T151955Z.json"
   },
   "proxy_metrics": {
     "corpus": {
@@ -69,31 +63,33 @@
     },
     "failure_classes": {
       "blocked_not_dispatch_bounded": 5,
-      "blocked_validation_target_missing": 5
+      "rescue_worker_crash": 1
     },
-    "mean_elapsed_seconds": 328.2,
-    "median_elapsed_seconds": 216.3,
-    "neutral_classes": {},
-    "no_rescue_success_rate": 0.5,
+    "mean_elapsed_seconds": 227.1,
+    "median_elapsed_seconds": 424.3,
+    "neutral_classes": {
+      "issue_already_resolved": 5
+    },
+    "no_rescue_success_rate": 0.0,
     "status": "active",
-    "success_classes": {
-      "deliverable_pr_created": 5
-    },
+    "success_classes": {},
     "terminal_class_distribution": {
       "blocked_not_dispatch_bounded": 5,
-      "blocked_validation_target_missing": 5,
-      "deliverable_pr_created": 5
+      "issue_already_resolved": 5,
+      "rescue_worker_crash": 1
     },
-    "tick_success_rate": 0.333,
-    "total_ticks": 15,
+    "tick_success_rate": 0.0,
+    "total_ticks": 11,
     "unique_issues_attempted": 10,
     "unique_issues_failed": 5,
-    "unique_issues_neutral": 0,
-    "unique_issues_succeeded": 5
+    "unique_issues_neutral": 5,
+    "unique_issues_succeeded": 0
   },
-  "rescue_counts_by_type": {},
-  "truth_artifact_generated_at": "2026-08-19T15:19:45Z",
-  "truth_artifact_path": "docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/truth-20260819T151945Z.json",
+  "rescue_counts_by_type": {
+    "rescue_worker_crash": 1
+  },
+  "truth_artifact_generated_at": "2026-09-01T13:38:18Z",
+  "truth_artifact_path": "docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/truth-20260901T133818Z.json",
   "truth_metrics": {
     "merged_only_rate": 0.5,
     "no_rescue_truth_success_rate": 0.5,

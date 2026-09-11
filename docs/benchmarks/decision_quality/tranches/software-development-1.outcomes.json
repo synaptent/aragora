@@ -1,0 +1,135 @@
+{
+  "schema_version": "decision-quality-outcomes/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "corpus_sha256": "e9ec5a9a62b6d2d9a6cd9664989d3be6e45b7cc7cbfe0d57919a4238e0770b27",
+  "outcomes": [
+    {
+      "case_id": "se-dev-k8s-dockershim-1-24",
+      "resolved_at": "2022-05-03T00:00:00Z",
+      "correct_option_id": "migrate_runtime_before_1_24",
+      "resolution_summary": "Kubernetes 1.24 shipped with dockershim removed from kubelet, requiring a CRI-compatible runtime or an external adapter for Docker Engine.",
+      "authoritative_sources": [
+        {
+          "source_id": "k8s-1-24-release-2022-05-03",
+          "title": "Kubernetes 1.24: Stargazer release announcement",
+          "url": "https://raw.githubusercontent.com/kubernetes/website/147fd1c21bb2838d0aca5cff6cb4a2c887c3f369/content/en/blog/_posts/2022/kubernetes-release-1.24.md",
+          "published_at": "2022-05-03T00:00:00Z",
+          "content_sha256": "893189a25ee629211b84c2b60a2813b114cc906b658d5aa88e78e9c61ae848ef"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "removal_schedule_credibility",
+          "description": "Whether Kubernetes maintainers would follow through on the announced 1.24 removal schedule rather than postpone it again.",
+          "aliases": ["dockershim removal timing", "release schedule credibility"]
+        },
+        {
+          "crux_id": "replacement_runtime_readiness",
+          "description": "Whether containerd, CRI-O, or cri-dockerd provided a viable migration target before Kubernetes 1.24.",
+          "aliases": ["CRI runtime readiness", "migration alternative availability"]
+        },
+        {
+          "crux_id": "uncontrolled_docker_dependencies",
+          "description": "Whether node tooling and workloads depended on Docker Engine behavior beyond the kubelet integration.",
+          "aliases": ["Docker socket dependencies", "ecosystem migration blockers"]
+        }
+      ]
+    },
+    {
+      "case_id": "se-dev-pep703-acceptance",
+      "resolved_at": "2023-10-24T00:00:00Z",
+      "correct_option_id": "prepare_for_acceptance",
+      "resolution_summary": "The Python Steering Council accepted PEP 703 with a gradual, reversible rollout, targeting an optional no-GIL build for Python 3.13.",
+      "authoritative_sources": [
+        {
+          "source_id": "pep703-accepted-2023-10-28",
+          "title": "PEP 703 marked Accepted",
+          "url": "https://raw.githubusercontent.com/python/peps/1d09abe70138f530d7dd3307e5cbc053a929b923/peps/pep-0703.rst",
+          "published_at": "2023-10-28T23:23:10Z",
+          "content_sha256": "9ca62cc097c11a0ca33b7e5cddb074133bbbe2217a27ddaf9edad29b83b170c9"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "steering_council_risk_tolerance",
+          "description": "Whether the Steering Council would accept the implementation risk if rollout could remain optional and reversible.",
+          "aliases": ["acceptance appetite", "reversibility proviso"]
+        },
+        {
+          "crux_id": "single_thread_performance",
+          "description": "Whether the proposal's single-threaded performance cost was small enough for a gradual CPython roadmap.",
+          "aliases": ["performance regression", "nogil overhead"]
+        },
+        {
+          "crux_id": "extension_compatibility",
+          "description": "Whether the C-extension ecosystem could transition without making the proposal operationally untenable.",
+          "aliases": ["C API compatibility", "extension migration cost"]
+        }
+      ]
+    },
+    {
+      "case_id": "se-dev-node16-eol",
+      "resolved_at": "2023-09-11T00:00:00Z",
+      "correct_option_id": "upgrade_before_eol",
+      "resolution_summary": "The official Node.js schedule retained 2023-09-11 as the Node.js 16 end-of-life date; the line was not extended beyond that date.",
+      "authoritative_sources": [
+        {
+          "source_id": "node-release-schedule-2023-10-24",
+          "title": "Node.js release schedule after Node.js 16 end-of-life",
+          "url": "https://raw.githubusercontent.com/nodejs/Release/2562cb2310658085f3042a5b2f745d8ee015c447/schedule.json",
+          "published_at": "2023-10-24T15:02:59Z",
+          "content_sha256": "d4f6de8e87616401d217aab5a190f06d99e4da16ad08c80133a41f2c14c8de83"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "openssl_support_deadline",
+          "description": "Whether OpenSSL 1.1.1 support constraints made the accelerated Node.js 16 end date difficult to extend.",
+          "aliases": ["OpenSSL dependency", "security support deadline"]
+        },
+        {
+          "crux_id": "release_schedule_followthrough",
+          "description": "Whether Node.js release governance would preserve the revised date after publicly updating the schedule.",
+          "aliases": ["schedule credibility", "EOL follow-through"]
+        },
+        {
+          "crux_id": "successor_lts_availability",
+          "description": "Whether a supported successor LTS line was available early enough to make migration practical.",
+          "aliases": ["Node.js 18 readiness", "upgrade path availability"]
+        }
+      ]
+    },
+    {
+      "case_id": "se-dev-python312-distutils-removal",
+      "resolved_at": "2023-10-02T00:00:00Z",
+      "correct_option_id": "migrate_before_python312",
+      "resolution_summary": "Python 3.12 removed distutils from the standard library and directed projects that still needed it to install setuptools separately.",
+      "authoritative_sources": [
+        {
+          "source_id": "python312-whatsnew-distutils-2023-10-02",
+          "title": "What's New In Python 3.12",
+          "url": "https://raw.githubusercontent.com/python/cpython/v3.12.0/Doc/whatsnew/3.12.rst",
+          "published_at": "2023-10-02T00:00:00Z",
+          "content_sha256": "4a0da7af729f2ba5d6f34d257f440d1700245531aad9cb2bf18bb78af24cfab9"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "setuptools_replacement_viability",
+          "description": "Whether setuptools and maintained packaging interfaces covered the practical distutils migration path.",
+          "aliases": ["packaging replacement", "setuptools compatibility"]
+        },
+        {
+          "crux_id": "cpython_build_decoupling",
+          "description": "Whether CPython could remove its own build-time dependence on distutils before Python 3.12.",
+          "aliases": ["CPython bootstrap dependency", "stdlib removal feasibility"]
+        },
+        {
+          "crux_id": "ecosystem_migration_cost",
+          "description": "Whether downstream packages could update imports before removal without prohibitive disruption.",
+          "aliases": ["downstream compatibility", "package migration burden"]
+        }
+      ]
+    }
+  ]
+}

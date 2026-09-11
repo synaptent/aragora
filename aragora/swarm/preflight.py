@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import sys
 import time
@@ -21,6 +22,7 @@ from aragora.swarm.terminal_truth import TerminalClass, classify_preflight_failu
 from aragora.swarm.worker_contract import WorkerContract, checksum_contract_payload
 from aragora.swarm.worker_launcher import LaunchConfig, WorkerLauncher, WorkerProcess
 from aragora.utils.async_utils import run_async
+from aragora.utils.error_sanitizer import sanitize_error
 
 _PREFLIGHT_RECEIPT_SCHEMA_VERSION = 1
 _PREFLIGHT_TTL_SECONDS = {
@@ -48,6 +50,13 @@ class PreflightResult:
     checks: list[dict[str, Any]] = field(default_factory=list)
     duration_seconds: float = 0.0
     envelope: CredentialEnvelope | None = None
+    branch_lease_id: str = ""
+    branch_lease_owner_session_id: str = ""
+    branch_lease_work_id: str = ""
+    branch_lease_released: bool = False
+    publication_base_sha: str = ""
+    remote_branch_seeded: bool = False
+    cleanup_remote_branch_removed: bool = False
 
     @property
     def failure_terminal_class(self) -> TerminalClass | None:
@@ -75,6 +84,54 @@ class PreflightResult:
             "cleanup_branch_removed": self.cleanup_branch_removed,
             "dispatch_gate": dict(self.dispatch_gate),
             "worker": dict(self.worker),
+            "branch_lease_id": self.branch_lease_id,
+            "branch_lease_owner_session_id": self.branch_lease_owner_session_id,
+            "branch_lease_work_id": self.branch_lease_work_id,
+            "branch_lease_released": self.branch_lease_released,
+            "publication_base_sha": self.publication_base_sha,
+            "remote_branch_seeded": self.remote_branch_seeded,
+            "cleanup_remote_branch_removed": self.cleanup_remote_branch_removed,
+        }
+
+
+@dataclass(slots=True)
+class _BranchWriteLease:
+    store: Any
+    lease_id: str
+    owner_session_id: str
+    work_id: str
+
+
+class PreflightOperationError(RuntimeError):
+    """Structured failure for an expected preflight infrastructure operation."""
+
+    def __init__(
+        self,
+        *,
+        stage: str,
+        detail: str,
+        command: list[str] | None = None,
+        returncode: int | None = None,
+        stdout: str = "",
+        stderr: str = "",
+    ) -> None:
+        super().__init__(detail)
+        self.stage = stage
+        self.detail = detail
+        self.command = list(command or [])
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+    def to_check(self) -> dict[str, Any]:
+        return {
+            "name": self.stage,
+            "passed": False,
+            "detail": self.detail,
+            "command": list(self.command),
+            "returncode": self.returncode,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
         }
 
 
@@ -487,19 +544,209 @@ def _find_open_pr_by_branch(
     return None, ""
 
 
+def _command_stage(cmd: list[str]) -> str:
+    if cmd[:3] == ["git", "worktree", "add"]:
+        return "git_worktree_add"
+    if cmd[:3] == ["git", "push", "origin"]:
+        return "git_push"
+    if cmd[:3] == ["gh", "pr", "create"]:
+        return "gh_pr_create"
+    if cmd[:3] == ["gh", "pr", "close"]:
+        return "gh_pr_close"
+    if cmd[:4] == ["gh", "api", "--method", "POST"] and any(
+        part.endswith("/git/refs") for part in cmd
+    ):
+        return "gh_remote_branch_seed"
+    if cmd[:4] == ["gh", "api", "--method", "DELETE"] and any(
+        "/git/refs/heads/" in part for part in cmd
+    ):
+        return "gh_remote_branch_delete"
+    return "_".join(cmd[:2]) if cmd else "preflight_command"
+
+
+def _operation_failure_detail(
+    *,
+    cmd: list[str],
+    returncode: int | None,
+    stdout: str,
+    stderr: str,
+) -> tuple[str, str, str]:
+    sanitized_stdout = sanitize_error((stdout or "").strip(), max_length=2000)
+    sanitized_stderr = sanitize_error((stderr or "").strip(), max_length=2000)
+    parts = [f"command={' '.join(cmd)}"]
+    if returncode is not None:
+        parts.append(f"returncode={returncode}")
+    if sanitized_stdout:
+        parts.append(f"stdout:\n{sanitized_stdout}")
+    if sanitized_stderr:
+        parts.append(f"stderr:\n{sanitized_stderr}")
+    detail = "\n".join(parts)
+    return detail, sanitized_stdout, sanitized_stderr
+
+
 def _run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
-    result = subprocess.run(
-        cmd,
-        cwd=str(cwd),
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(cwd),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        detail, stdout, stderr = _operation_failure_detail(
+            cmd=cmd,
+            returncode=None,
+            stdout="",
+            stderr=str(exc),
+        )
+        raise PreflightOperationError(
+            stage=_command_stage(cmd),
+            detail=detail,
+            command=cmd,
+            stdout=stdout,
+            stderr=stderr,
+        ) from exc
     if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip()
-        raise RuntimeError(detail or f"Command failed: {' '.join(cmd)}")
+        detail, stdout, stderr = _operation_failure_detail(
+            cmd=cmd,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
+        raise PreflightOperationError(
+            stage=_command_stage(cmd),
+            detail=detail,
+            command=cmd,
+            returncode=result.returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+
+def _resolve_ref_sha(repo_root: Path, ref: str) -> str:
+    cmd = ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"]
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(repo_root),
+            env=git_safe_env(),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise PreflightOperationError(
+            stage="git_base_ref_resolve",
+            detail=sanitize_error(str(exc), max_length=4000),
+            command=cmd,
+        ) from exc
+    sha = (result.stdout or "").strip()
+    if result.returncode != 0 or re.fullmatch(r"[0-9a-fA-F]{40,64}", sha) is None:
+        detail, stdout, stderr = _operation_failure_detail(
+            cmd=cmd,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+        )
+        raise PreflightOperationError(
+            stage="git_base_ref_resolve",
+            detail=detail,
+            command=cmd,
+            returncode=result.returncode,
+            stdout=stdout,
+            stderr=stderr,
+        )
+    return sha.lower()
+
+
+def _seed_remote_branch_at_base(repo_root: Path, branch: str, base_sha: str) -> None:
+    _run(
+        [
+            "gh",
+            "api",
+            "--method",
+            "POST",
+            "repos/synaptent/aragora/git/refs",
+            "-f",
+            f"ref=refs/heads/{branch}",
+            "-f",
+            f"sha={base_sha}",
+        ],
+        cwd=repo_root,
+    )
+
+
+def _delete_seeded_remote_branch(repo_root: Path, branch: str) -> None:
+    _run(
+        [
+            "gh",
+            "api",
+            "--method",
+            "DELETE",
+            f"repos/synaptent/aragora/git/refs/heads/{branch}",
+        ],
+        cwd=repo_root,
+    )
+
+
+def _claim_branch_write_lease(
+    *,
+    repo_root: Path,
+    branch: str,
+    worktree_path: Path,
+    agent: str,
+) -> _BranchWriteLease:
+    from aragora.nomic.dev_coordination import DevCoordinationStore
+
+    owner_session_id = str(os.environ.get("ARAGORA_SESSION_ID") or "").strip()
+    if not owner_session_id:
+        owner_session_id = f"swarm-preflight:{os.getpid()}:{branch}"
+    work_id = f"branch:{branch}"
+    try:
+        store = DevCoordinationStore(repo_root=repo_root)
+        lease = store.claim_lease(
+            task_id=work_id,
+            title=f"Remote publication preflight for {branch}",
+            owner_agent=f"swarm-preflight:{agent}",
+            owner_session_id=owner_session_id,
+            branch=branch,
+            worktree_path=str(worktree_path),
+            allowed_globs=[f".aragora/branch-locks/{branch}"],
+            claimed_paths=[],
+            expected_tests=[],
+            ttl_hours=1.0,
+            metadata={
+                "claimed_via": "swarm_preflight",
+                "work_id": work_id,
+            },
+        )
+    except (OSError, RuntimeError, sqlite3.Error, ValueError) as exc:
+        detail = sanitize_error(str(exc), max_length=4000)
+        raise PreflightOperationError(
+            stage="branch_write_lease_claim",
+            detail=detail or f"Failed to claim branch write lease for {branch}",
+        ) from exc
+    return _BranchWriteLease(
+        store=store,
+        lease_id=lease.lease_id,
+        owner_session_id=owner_session_id,
+        work_id=work_id,
+    )
+
+
+def _release_branch_write_lease(claim: _BranchWriteLease) -> None:
+    try:
+        claim.store.release_lease(claim.lease_id)
+    except (OSError, RuntimeError, sqlite3.Error, ValueError, KeyError) as exc:
+        detail = sanitize_error(str(exc), max_length=4000)
+        raise PreflightOperationError(
+            stage="branch_write_lease_release",
+            detail=detail or f"Failed to release branch write lease {claim.lease_id}",
+        ) from exc
 
 
 def _check_git_clean(repo_root: Path) -> dict[str, Any]:
@@ -1120,6 +1367,13 @@ def _save_contract_preflight_receipt(
             for item in list((result.worker or {}).get("commit_shas") or [])
             if str(item).strip()
         ],
+        "branch_lease_id": str(result.branch_lease_id or "").strip(),
+        "branch_lease_owner_session_id": str(result.branch_lease_owner_session_id or "").strip(),
+        "branch_lease_work_id": str(result.branch_lease_work_id or "").strip(),
+        "branch_lease_released": bool(result.branch_lease_released),
+        "publication_base_sha": str(result.publication_base_sha or "").strip(),
+        "remote_branch_seeded": bool(result.remote_branch_seeded),
+        "cleanup_remote_branch_removed": bool(result.cleanup_remote_branch_removed),
     }
     receipt = _finalize_preflight_receipt(
         repo_root=resolved_repo_root,
@@ -1213,6 +1467,12 @@ def run_contract_preflight_receipt(
                     for item in list((result.worker or {}).get("commit_shas") or [])
                     if str(item).strip()
                 ],
+                "branch_lease_id": str(result.branch_lease_id or "").strip(),
+                "branch_lease_owner_session_id": str(
+                    result.branch_lease_owner_session_id or ""
+                ).strip(),
+                "branch_lease_work_id": str(result.branch_lease_work_id or "").strip(),
+                "branch_lease_released": bool(result.branch_lease_released),
             }
         )
 
@@ -1725,8 +1985,17 @@ def run_preflight(
     cleanup_worktree_removed = False
     cleanup_branch_removed = False
     dispatch_gate: dict[str, Any] = {}
+    branch_lease: _BranchWriteLease | None = None
+    branch_lease_released = False
+    operation_failure: PreflightOperationError | None = None
+    cleanup_failure: PreflightOperationError | None = None
+    publication_base_sha = ""
+    remote_branch_seeded = False
+    cleanup_remote_branch_removed = False
 
     try:
+        if not skip_publication:
+            publication_base_sha = _resolve_ref_sha(resolved_repo_root, normalized_base_ref)
         _run(
             ["git", "worktree", "add", "-b", branch, str(worktree_path), normalized_base_ref],
             cwd=resolved_repo_root,
@@ -1754,13 +2023,43 @@ def run_preflight(
             raise RuntimeError("Preflight worker did not produce a commit.")
 
         if not skip_publication:
+            branch_lease = _claim_branch_write_lease(
+                repo_root=resolved_repo_root,
+                branch=branch,
+                worktree_path=worktree_path,
+                agent=normalized_agent,
+            )
+            _seed_remote_branch_at_base(
+                resolved_repo_root,
+                branch,
+                publication_base_sha,
+            )
+            remote_branch_seeded = True
             _run(["git", "push", "origin", "HEAD"], cwd=worktree_path, env=git_safe_env())
             published = True
             _create_pr(resolved_repo_root, branch, normalized_base_ref)
             pull_request_created = True
             _close_pr(resolved_repo_root, branch)
             pull_request_closed = True
+            cleanup_remote_branch_removed = True
+    except PreflightOperationError as exc:
+        operation_failure = exc
     finally:
+        if remote_branch_seeded and not published:
+            try:
+                _delete_seeded_remote_branch(resolved_repo_root, branch)
+            except PreflightOperationError as exc:
+                cleanup_failure = exc
+            else:
+                cleanup_remote_branch_removed = True
+        if branch_lease is not None:
+            try:
+                _release_branch_write_lease(branch_lease)
+            except PreflightOperationError as exc:
+                if operation_failure is None:
+                    operation_failure = exc
+            else:
+                branch_lease_released = True
         if worktree_created:
             worktree_remove = subprocess.run(
                 ["git", "worktree", "remove", "--force", str(worktree_path)],
@@ -1779,13 +2078,26 @@ def run_preflight(
             )
             cleanup_branch_removed = branch_remove.returncode == 0
 
+    checks: list[dict[str, Any]] = []
+    failures = [failure for failure in (operation_failure, cleanup_failure) if failure is not None]
+    if failures:
+        checks.extend(failure.to_check() for failure in failures)
+        failure_class = classify_preflight_failure(passed=False, checks=checks)
+        dispatch_gate = GateEvaluation(
+            gate_type=GateType.DISPATCH_READY.value,
+            verdict=GateVerdict.BLOCKED.value,
+            failure_classes=[(failure_class or TerminalClass.BLOCKED_NOT_DISPATCH_BOUNDED).value],
+            required_evidence=["preflight_receipt"],
+            notes=f"Preflight operation failed at {failures[0].stage}.",
+        ).to_dict()
+
     passed = False
-    if dispatch_gate:
+    if dispatch_gate and not failures:
         passed = str(dispatch_gate.get("verdict", "")).strip() == GateVerdict.PASS.value
     duration = time.monotonic() - start
     result = PreflightResult(
         passed=passed,
-        checks=[],
+        checks=checks,
         duration_seconds=duration,
         envelope=None,
         repo_root=str(resolved_repo_root),
@@ -1800,6 +2112,15 @@ def run_preflight(
         cleanup_branch_removed=cleanup_branch_removed,
         dispatch_gate=dispatch_gate,
         worker=worker.to_dict() if worker is not None else {},
+        branch_lease_id=branch_lease.lease_id if branch_lease is not None else "",
+        branch_lease_owner_session_id=(
+            branch_lease.owner_session_id if branch_lease is not None else ""
+        ),
+        branch_lease_work_id=branch_lease.work_id if branch_lease is not None else "",
+        branch_lease_released=branch_lease_released,
+        publication_base_sha=publication_base_sha,
+        remote_branch_seeded=remote_branch_seeded,
+        cleanup_remote_branch_removed=cleanup_remote_branch_removed,
     )
     if normalized_contract_path is not None:
         envelope_for_receipt = CredentialEnvelope.from_environment(os.environ)
@@ -1870,10 +2191,17 @@ def main() -> int:
     if args.json:
         _write_stdout_line(json.dumps(result.to_dict(), indent=2))
     else:
-        _write_stdout_line("preflight=ok")
+        _write_stdout_line(f"preflight={'ok' if result.passed else 'blocked'}")
         _write_stdout_line(f"agent={result.agent}")
         _write_stdout_line(f"base_ref={result.base_ref}")
         _write_stdout_line(f"branch={result.branch}")
+        if not result.passed:
+            failed_check = next(
+                (item for item in result.checks if not bool(item.get("passed", False))),
+                None,
+            )
+            if failed_check is not None:
+                _write_stdout_line(f"failed_check={failed_check.get('name', 'preflight')}")
         checksum = str(result.worker.get("worker_contract_checksum", "")).strip()
         if checksum:
             _write_stdout_line(f"worker_contract_checksum={checksum}")
@@ -1882,7 +2210,7 @@ def main() -> int:
         ]
         if commit_shas:
             _write_stdout_line(f"commit_shas={','.join(commit_shas)}")
-    return 0
+    return 0 if result.passed else 2
 
 
 if __name__ == "__main__":

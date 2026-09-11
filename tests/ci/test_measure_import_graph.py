@@ -124,6 +124,45 @@ def test_freeze_adopt_writes_current_value(tmp_path, monkeypatch):
     assert written["exclude_type_checking_imports"] is True
 
 
+def test_list_cycles_returns_sorted_pairs():
+    pairs = mig.list_mutual_cycles(_synthetic_graph())
+    assert pairs == [["aragora.a", "aragora.b"]]
+    assert len(pairs) == mig.count_mutual_cycles(_synthetic_graph())
+
+
+def test_list_cycles_pairs_are_ordered_and_unique():
+    graph = grimp.ImportGraph()
+    for module in ("aragora", "aragora.z", "aragora.y", "aragora.m", "aragora.n"):
+        graph.add_module(module)
+    graph.add_import(importer="aragora.z", imported="aragora.y")
+    graph.add_import(importer="aragora.y", imported="aragora.z")
+    graph.add_import(importer="aragora.n", imported="aragora.m")
+    graph.add_import(importer="aragora.m", imported="aragora.n")
+    graph.add_import(importer="aragora.z", imported="aragora.m")  # one-way: not a cycle
+    pairs = mig.list_mutual_cycles(graph)
+    assert pairs == [["aragora.m", "aragora.n"], ["aragora.y", "aragora.z"]]
+    assert all(a < b for a, b in pairs)
+    assert pairs == sorted(pairs)
+
+
+def test_list_cycles_cli_prints_json_matching_count(monkeypatch, capsys):
+    monkeypatch.setattr(mig, "build_aragora_graph", lambda *a, **k: _synthetic_graph())
+    assert mig.main(["--list-cycles"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["cycles"] == [["aragora.a", "aragora.b"]]
+    assert out["exclude_type_checking_imports"] is True
+    assert len(out["cycles"]) == mig.count_mutual_cycles(_synthetic_graph())
+
+
+def test_list_cycles_flag_is_documented_alongside_existing_flags(capsys):
+    with pytest.raises(SystemExit) as exc:
+        mig.main(["--help"])
+    assert exc.value.code == 0
+    text = capsys.readouterr().out
+    for flag in ("--list-cycles", "--check", "--freeze", "--adopt", "--baseline", "--json"):
+        assert flag in text
+
+
 def test_default_output_has_three_integer_metrics(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(mig, "build_aragora_graph", lambda *a, **k: _synthetic_graph())
     monkeypatch.setattr(mig, "count_handlers_flat_root", lambda *a, **k: 187)

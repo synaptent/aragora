@@ -740,15 +740,23 @@ class UsageMeteringHandler(SecureHandler):
         if not isinstance(resource, str) or not resource.strip():
             return error_response("Field 'resource' is required", 400)
         resource = resource.strip()
+        # O(1) length cap before the per-character category scan below, so an
+        # oversized value never pays for a full scan.
+        if len(resource) > 256:
+            return error_response("Field 'resource' exceeds maximum length of 256", 400)
         # The value feeds the audit log line below; control characters and
         # unicode line separators would allow forged log entries. Category Cc
         # covers C0, DEL, and C1 (e.g. U+009B bare CSI, a terminal-escape
-        # vector when logs are viewed in terminals); LS/PS are separators
-        # outside Cc.
-        if any(unicodedata.category(ch) == "Cc" or ch in "\u2028\u2029" for ch in resource):
+        # vector when logs are viewed in terminals); Cf covers format chars
+        # (e.g. U+202E RLO, zero-width joiners) that visually spoof the line;
+        # Cs covers lone surrogates (reachable via JSON \ud800 escapes) that
+        # a utf-8 log handler cannot encode, silently dropping the audit
+        # line; LS/PS are separators outside those categories.
+        if any(
+            unicodedata.category(ch) in ("Cc", "Cf", "Cs") or ch in "\u2028\u2029"
+            for ch in resource
+        ):
             return error_response("Field 'resource' contains invalid characters", 400)
-        if len(resource) > 256:
-            return error_response("Field 'resource' exceeds maximum length of 256", 400)
 
         requested_limit = body.get("requested_limit")
         # isfinite only applies to floats: converting an arbitrary-precision

@@ -29,6 +29,7 @@ from aragora.debate.phases.vote_collector import (
     RLM_EARLY_TERMINATION_THRESHOLD,
     RLM_MAJORITY_LEAD_THRESHOLD,
     VOTE_COLLECTION_TIMEOUT,
+    _VoteTaskOwner,
     VoteCollector,
     VoteCollectorConfig,
     create_vote_collector,
@@ -426,6 +427,156 @@ class TestTimeoutHandling:
         # agent1 vote should be returned, agent2 timed out
         assert len(votes) >= 0  # At least tried
 
+    @pytest.mark.asyncio
+    async def test_timeout_observes_late_task_failures(self, mock_governor):
+        """Timeout detaches every child and reports only late control flow."""
+
+        class VoteAbort(BaseException):
+            pass
+
+        release = asyncio.Event()
+        loop_contexts: list[dict[str, Any]] = []
+
+        async def delayed_failure(agent, proposals, task):
+            if agent.name == "agent0":
+                return make_vote(agent=agent.name)
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                await release.wait()
+            if agent.name == "agent1":
+                raise RuntimeError("late ordinary failure")
+            raise VoteAbort("late control flow")
+
+        collector = VoteCollector(
+            VoteCollectorConfig(
+                vote_with_agent=delayed_failure,
+                vote_collection_timeout=0.02,
+                enable_rlm_early_termination=False,
+            )
+        )
+        ctx = make_context(agents=[MockAgent(name=f"agent{i}") for i in range(3)])
+        loop = asyncio.get_running_loop()
+        old_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: loop_contexts.append(context))
+
+        try:
+            with patch(
+                "aragora.debate.phases.vote_collector.get_complexity_governor",
+                return_value=mock_governor,
+            ):
+                votes = await asyncio.wait_for(collector.collect_votes(ctx), timeout=0.2)
+
+            assert [vote.agent for vote in votes] == ["agent0"]
+            release.set()
+            await asyncio.sleep(0.02)
+            assert [type(context.get("exception")) for context in loop_contexts] == [VoteAbort]
+            assert all(
+                context.get("message") != "Task exception was never retrieved"
+                for context in loop_contexts
+            )
+        finally:
+            release.set()
+            await asyncio.sleep(0)
+            loop.set_exception_handler(old_handler)
+
+    @pytest.mark.asyncio
+    async def test_caller_cancellation_observes_owned_vote_tasks(self, mock_governor):
+        """Caller cancellation is prompt while child outcomes remain observed."""
+
+        class VoteAbort(BaseException):
+            pass
+
+        release = asyncio.Event()
+        all_started = asyncio.Event()
+        started = 0
+        loop_contexts: list[dict[str, Any]] = []
+
+        async def delayed_failure(agent, proposals, task):
+            nonlocal started
+            started += 1
+            if started == 2:
+                all_started.set()
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                await release.wait()
+            if agent.name == "agent0":
+                raise RuntimeError("late ordinary failure")
+            raise VoteAbort("late control flow")
+
+        collector = VoteCollector(
+            VoteCollectorConfig(
+                vote_with_agent=delayed_failure,
+                enable_rlm_early_termination=False,
+            )
+        )
+        ctx = make_context(agents=[MockAgent(name=f"agent{i}") for i in range(2)])
+        loop = asyncio.get_running_loop()
+        old_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: loop_contexts.append(context))
+
+        try:
+            with patch(
+                "aragora.debate.phases.vote_collector.get_complexity_governor",
+                return_value=mock_governor,
+            ):
+                collection = asyncio.create_task(collector.collect_votes(ctx))
+                await asyncio.wait_for(all_started.wait(), timeout=0.2)
+                collection.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await asyncio.wait_for(collection, timeout=0.2)
+
+            release.set()
+            await asyncio.sleep(0.02)
+            assert [type(context.get("exception")) for context in loop_contexts] == [VoteAbort]
+            assert all(
+                context.get("message") != "Task exception was never retrieved"
+                for context in loop_contexts
+            )
+        finally:
+            release.set()
+            await asyncio.sleep(0)
+            loop.set_exception_handler(old_handler)
+
+
+class TestVoteTaskOwnership:
+    """Exact-once lifecycle tests independent of vote semantics."""
+
+    @pytest.mark.asyncio
+    async def test_completion_winning_cancel_race_is_consumed_once(self):
+        """A task that completes while cancel loses is consumed, not detached."""
+        task = MagicMock(spec=asyncio.Task)
+        task.done.side_effect = [False, True]
+        task.cancel.return_value = False
+        consume = MagicMock()
+        owner = _VoteTaskOwner([task])
+
+        owner.settle(consume, propagate=True)
+        owner.settle(consume, propagate=True)
+
+        consume.assert_called_once_with(task)
+        task.add_done_callback.assert_not_called()
+        assert owner.classification(task) == "consumed"
+
+    @pytest.mark.asyncio
+    async def test_completed_control_flow_propagates(self):
+        """A completed control-flow failure is never downgraded to a skip."""
+
+        class VoteAbort(BaseException):
+            pass
+
+        async def abort():
+            raise VoteAbort("completed control flow")
+
+        task = asyncio.create_task(abort())
+        await asyncio.sleep(0)
+        owner = _VoteTaskOwner([task])
+
+        with pytest.raises(VoteAbort, match="completed control flow"):
+            owner.settle(lambda completed: completed.result(), propagate=True)
+        assert owner.classification(task) == "consumed"
+
 
 # =============================================================================
 # RLM Early Termination Tests
@@ -675,6 +826,65 @@ class TestRLMEarlyTermination:
         early_term_notifs = [n for n in notifications if n[0] == "rlm_early_termination"]
         assert len(early_term_notifs) == 1
 
+    @pytest.mark.asyncio
+    async def test_early_stop_observes_delayed_cancellation_cleanup(self):
+        """Early stop returns promptly and observes every detached voter."""
+
+        class VoteAbort(BaseException):
+            pass
+
+        release_cleanup = asyncio.Event()
+        loop_contexts: list[dict[str, Any]] = []
+        hook = MagicMock()
+
+        async def mock_vote(agent, proposals, task):
+            agent_number = int(agent.name.removeprefix("agent"))
+            if agent_number < 6:
+                return make_vote(agent=agent.name, choice="winner")
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await release_cleanup.wait()
+            if agent_number == 6:
+                return make_vote(agent=agent.name, choice="late")
+            if agent_number == 7:
+                raise RuntimeError("late cleanup")
+            if agent_number == 8:
+                raise VoteAbort("late control flow")
+            return None
+
+        collector = VoteCollector(
+            VoteCollectorConfig(
+                vote_with_agent=mock_vote,
+                hooks={"on_rlm_early_termination": hook},
+                enable_rlm_early_termination=True,
+                rlm_early_termination_threshold=0.5,
+                rlm_majority_lead_threshold=0.1,
+                vote_collection_timeout=1.0,
+            )
+        )
+        ctx = make_context(agents=[MockAgent(name=f"agent{i}") for i in range(10)])
+        loop = asyncio.get_running_loop()
+        old_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: loop_contexts.append(context))
+
+        try:
+            votes = await asyncio.wait_for(collector.collect_votes(ctx), timeout=0.2)
+            assert len(votes) == 6
+            hook.assert_called_once_with(leader="winner", votes_collected=6, total_agents=10)
+
+            release_cleanup.set()
+            await asyncio.sleep(0.02)
+            assert [type(context.get("exception")) for context in loop_contexts] == [VoteAbort]
+            assert all(
+                context.get("message") != "Task exception was never retrieved"
+                for context in loop_contexts
+            )
+        finally:
+            release_cleanup.set()
+            await asyncio.sleep(0)
+            loop.set_exception_handler(old_handler)
+
 
 # =============================================================================
 # Position Shuffling Tests
@@ -809,6 +1019,52 @@ class TestPositionShuffling:
 
         # Should timeout and return empty
         assert votes == []
+
+    @pytest.mark.asyncio
+    async def test_position_shuffling_timeout_observes_child_task(self, mock_governor):
+        """The outer shuffling timeout cannot orphan a permutation voter."""
+
+        class VoteAbort(BaseException):
+            pass
+
+        release = asyncio.Event()
+        loop_contexts: list[dict[str, Any]] = []
+
+        async def late_abort(agent, proposals, task):
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                await release.wait()
+            raise VoteAbort("late shuffled control flow")
+
+        collector = VoteCollector(
+            VoteCollectorConfig(
+                vote_with_agent=late_abort,
+                vote_collection_timeout=0.01,
+                enable_position_shuffling=True,
+                position_shuffling_permutations=1,
+            )
+        )
+        loop = asyncio.get_running_loop()
+        old_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: loop_contexts.append(context))
+
+        try:
+            with patch(
+                "aragora.debate.phases.vote_collector.get_complexity_governor",
+                return_value=mock_governor,
+            ):
+                assert await collector.collect_votes(make_context()) == []
+            release.set()
+            await asyncio.sleep(0.02)
+            assert [context.get("message") for context in loop_contexts] == [
+                "Detached vote task raised a control-flow exception",
+                "Detached vote task raised a control-flow exception",
+            ]
+        finally:
+            release.set()
+            await asyncio.sleep(0)
+            loop.set_exception_handler(old_handler)
 
 
 # =============================================================================
@@ -1113,6 +1369,53 @@ class TestCollectVotesWithErrors:
 
         # The slow agent should timeout
         assert errors >= 1
+
+    @pytest.mark.asyncio
+    async def test_unanimous_timeout_observes_late_control_flow(self, mock_governor):
+        """Unanimous timeout counts the missing vote and observes its task."""
+
+        class VoteAbort(BaseException):
+            pass
+
+        release = asyncio.Event()
+        loop_contexts: list[dict[str, Any]] = []
+
+        async def vote_or_abort(agent, proposals, task):
+            if agent.name == "agent0":
+                return make_vote(agent=agent.name)
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                await release.wait()
+            raise VoteAbort("late unanimous control flow")
+
+        collector = VoteCollector(
+            VoteCollectorConfig(
+                vote_with_agent=vote_or_abort,
+                vote_collection_timeout=0.01,
+            )
+        )
+        ctx = make_context(agents=[MockAgent(name=f"agent{i}") for i in range(2)])
+        loop = asyncio.get_running_loop()
+        old_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: loop_contexts.append(context))
+
+        try:
+            with patch(
+                "aragora.debate.phases.vote_collector.get_complexity_governor",
+                return_value=mock_governor,
+            ):
+                votes, errors = await collector.collect_votes_with_errors(ctx)
+            assert ([vote.agent for vote in votes], errors) == (["agent0"], 1)
+            release.set()
+            await asyncio.sleep(0.02)
+            assert [context.get("message") for context in loop_contexts] == [
+                "Detached vote task raised a control-flow exception"
+            ]
+        finally:
+            release.set()
+            await asyncio.sleep(0)
+            loop.set_exception_handler(old_handler)
 
 
 # =============================================================================

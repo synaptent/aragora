@@ -1,0 +1,71 @@
+{
+  "schema_version": "decision-quality-outcomes/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "corpus_sha256": "97da356b5d70618c332e5fc52a0510996e28c6723aa00111206e663dc581295e",
+  "outcomes": [
+    {
+      "case_id": "se-holdout-k8s-psp-removal-1-25",
+      "resolved_at": "2022-08-23T00:00:00Z",
+      "correct_option_id": "migrate_before_1_25",
+      "resolution_summary": "Kubernetes 1.25 removed the beta PodSecurityPolicy admission plugin and directed users to migrate before upgrading.",
+      "authoritative_sources": [
+        {
+          "source_id": "k8s-1-25-psp-removal-2022-08-23",
+          "title": "Kubernetes 1.25 changelog",
+          "url": "https://raw.githubusercontent.com/kubernetes/kubernetes/v1.25.0/CHANGELOG/CHANGELOG-1.25.md",
+          "published_at": "2022-08-23T00:00:00Z",
+          "content_sha256": "f9c6508923abc8fa7bf4a0a7ee61be571e083caad3c21522dff724c580f4c334"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "lifecycle_schedule_followthrough",
+          "description": "Whether Kubernetes maintainers would enforce the prerelease lifecycle metadata and remove PSP in 1.25 rather than postpone removal.",
+          "aliases": ["removal schedule credibility", "1.25 lifecycle follow-through"]
+        },
+        {
+          "crux_id": "replacement_policy_readiness",
+          "description": "Whether Pod Security Admission or external policy controllers would provide a usable migration path by Kubernetes 1.25.",
+          "aliases": ["PSA readiness", "policy replacement availability"]
+        },
+        {
+          "crux_id": "backward_compatibility_pressure",
+          "description": "Whether installed-base compatibility pressure would outweigh the project's beta API lifecycle policy.",
+          "aliases": ["PSP installed base", "compatibility-driven delay"]
+        }
+      ]
+    },
+    {
+      "case_id": "se-holdout-pep563-python310-default",
+      "resolved_at": "2021-09-25T15:53:47Z",
+      "correct_option_id": "preserve_behavior_until_confirmed",
+      "resolution_summary": "The authoritative PEP 563 text removed its Python 3.10 default-adoption claim and recorded that default behavior remained unresolved pending PEP 649.",
+      "authoritative_sources": [
+        {
+          "source_id": "pep563-python310-default-correction-2021-09-25",
+          "title": "PEP 563 correction removing Python 3.10 default adoption",
+          "url": "https://raw.githubusercontent.com/python/peps/b9b44c4eb7819553f293ff222a476f44c682714c/pep-0563.rst",
+          "published_at": "2021-09-25T15:53:47Z",
+          "content_sha256": "21122a48e4f04712826c039741f26c46b4dff103bdb7948a29fddcd5efe1652e"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "runtime_compatibility_risk",
+          "description": "Whether default stringized annotations would break enough runtime-introspection libraries to force a schedule change.",
+          "aliases": ["annotation compatibility", "runtime introspection breakage"]
+        },
+        {
+          "crux_id": "pep649_alternative_viability",
+          "description": "Whether PEP 649 offered a credible alternative with better runtime semantics before Python 3.10 finalized.",
+          "aliases": ["deferred annotation alternative", "PEP 649 competition"]
+        },
+        {
+          "crux_id": "steering_council_schedule_tolerance",
+          "description": "Whether Python governance would preserve the announced 3.10 schedule despite unresolved semantic and compatibility concerns.",
+          "aliases": ["release schedule rigidity", "governance willingness to defer"]
+        }
+      ]
+    }
+  ]
+}

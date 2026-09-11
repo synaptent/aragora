@@ -467,7 +467,7 @@ def get_batch_job_store() -> BatchJobStore:
     if backend_pref:
         if backend_pref == "redis":
             try:
-                from aragora.server.redis_config import get_redis_client, is_redis_available
+                from aragora.utils.redis_config import get_redis_client, is_redis_available
 
                 if is_redis_available():
                     redis_client = get_redis_client()
@@ -517,7 +517,7 @@ def get_batch_job_store() -> BatchJobStore:
 
     # Default behavior: try Redis first, then database backend
     try:
-        from aragora.server.redis_config import get_redis_client, is_redis_available
+        from aragora.utils.redis_config import get_redis_client, is_redis_available
 
         if is_redis_available():
             redis_client = get_redis_client()

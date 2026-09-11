@@ -29,7 +29,7 @@ Pre-built images are published to GitHub Container Registry on every push to `ma
 | Frontend | `docker pull ghcr.io/synaptent/aragora/frontend:latest` |
 | Operator | `docker pull ghcr.io/synaptent/aragora/operator:latest` |
 
-**Available tags:** `latest` (main branch HEAD), `2.9.0` (version from pyproject.toml), `v2.9.0` (git tag), `<major>.<minor>`, `<sha>`.
+**Available tags:** `latest` (main branch HEAD), `2.10.0` (version from pyproject.toml), `v2.10.0` (git tag), `<major>.<minor>`, `<sha>`.
 
 ## 2. Docker Compose (recommended for production)
 
@@ -40,6 +40,13 @@ docker compose up -d
 ```
 
 **Services started:** Backend (port 8080 + WS 8765), Redis, PostgreSQL (optional profile)
+
+**Docker deployment path:**
+
+- Zero-dependency local run: `docker compose -f docker-compose.simple.yml up` (SQLite, no Postgres or Redis).
+- Production hardening (TLS, secrets, resource limits): [PRODUCTION_DEPLOYMENT.md](deployment/PRODUCTION_DEPLOYMENT.md).
+- Persistent volumes and bind mounts: [CONTAINER_VOLUMES.md](deployment/CONTAINER_VOLUMES.md).
+- Database provisioning: [DATABASE_SETUP.md](guides/DATABASE_SETUP.md).
 
 **Environment variables:**
 
@@ -302,13 +309,13 @@ Pin to a specific version in `docker-compose.yml`:
 ```yaml
 services:
   aragora-backend:
-    image: ghcr.io/synaptent/aragora/backend:2.9.0  # Pin to known-good version
+    image: ghcr.io/synaptent/aragora/backend:2.10.0  # Pin to known-good version
 ```
 
 Or via environment variable:
 
 ```bash
-ARAGORA_BACKEND_IMAGE=ghcr.io/synaptent/aragora/backend:2.9.0 docker compose up -d
+ARAGORA_BACKEND_IMAGE=ghcr.io/synaptent/aragora/backend:2.10.0 docker compose up -d
 ```
 
 ### Pre-upgrade Checklist

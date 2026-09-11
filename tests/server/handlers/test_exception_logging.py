@@ -29,7 +29,7 @@ class TestIntegrationManagementLogging:
             mock_client.return_value.__aenter__ = AsyncMock(
                 side_effect=ConnectionError("Connection failed")
             )
-            mock_client.return_value.__aexit__ = AsyncMock()
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             with caplog.at_level(logging.WARNING):
                 result = await handler._check_slack_health(mock_workspace)
@@ -52,7 +52,7 @@ class TestIntegrationManagementLogging:
             mock_client.return_value.__aenter__ = AsyncMock(
                 side_effect=ConnectionError("Graph API error")
             )
-            mock_client.return_value.__aexit__ = AsyncMock()
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
             with caplog.at_level(logging.WARNING):
                 result = await handler._check_teams_health(mock_workspace)
@@ -74,7 +74,7 @@ class TestIntegrationManagementLogging:
                 mock_client.return_value.__aenter__ = AsyncMock(
                     side_effect=ConnectionError("Discord API error")
                 )
-                mock_client.return_value.__aexit__ = AsyncMock()
+                mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
 
                 with caplog.at_level(logging.WARNING):
                     result = await handler._check_discord_health()

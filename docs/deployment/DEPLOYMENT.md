@@ -29,6 +29,15 @@ docker compose up -d
 curl http://localhost:8080/api/health
 ```
 
+### Docker deployment path
+
+- Docker Compose is the quick-start path above; for a zero-dependency local run use
+  `docker compose -f docker-compose.simple.yml up` (SQLite, no Postgres or Redis).
+- Production hardening (TLS, secrets, resource limits) is covered in
+  [PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md).
+- Persistent volumes and bind mounts: [CONTAINER_VOLUMES.md](CONTAINER_VOLUMES.md).
+- Database provisioning: [DATABASE_SETUP.md](../guides/DATABASE_SETUP.md).
+
 ## Production Readiness Checklist
 
 Use this checklist before deploying to production:

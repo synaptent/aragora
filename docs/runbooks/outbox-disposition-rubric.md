@@ -39,6 +39,7 @@ python3 scripts/reconcile_automation_outbox.py --dry-run --json
 | `EXPIRED-ARCHIVE` | The item has expired or is skipped by publisher expiration logic, while reconcile still keeps it because branch work, open PR representation, or owner steering may still matter. | Preserve first. Archive only through the supported reconcile path after terminal proof, owner release, or explicit human/operator authorization. | Terminal proof or explicit owner/operator release. Expiration alone is not enough to delete or archive protected work. |
 | `ORPHANED-TARGET` | The item points to a branch, PR, issue, or receipt target that no longer exists or cannot be resolved, and no remote/local preservation proof is available. | Build a preservation packet, recover or prove absence of unique work, then archive or repair the handoff. | Human/operator authorization when preservation cannot be proven mechanically. |
 | `BLOCKED-ON-PARKED-PR` | The item points to a PR/head that is parked by no-treadmill policy, unresolved dissent, or an explicit conductor stop record. | Do not publish, post evidence, repair, settle, or merge through the parked path. Wait for a new head or explicit override. | Explicit operator authorization for a second repair/override, or a new head that invalidates the parked disposition. |
+| `NON-HANDOFF-REPORT` | The payload is valid JSON with a non-empty `idempotency_key`, no branch target, no `requested_action` handoff contract, no preservation-shaped fields, and multiple report-specific markers such as `candidate_notes`, `cycle_dir`, `main_required_check_state`, or `verified_8992`; generic `rows` or `required_contexts` alone are not enough. | Archive only through the supported `reconcile_automation_outbox.py --apply` path, which preserves the original payload and records `terminal_disposition.disposition=non_handoff_report`. Do not raw-move or delete the file. | Normal reconcile authority for report disposal after dry-run proves this exact disposition. |
 | `NEEDS-REPAIR` | The item is malformed, missing required handoff contract fields, has stale desired-head evidence, or otherwise cannot be safely interpreted by publisher/reconcile. | Repair the handoff contract or target representation in an isolated branch; rerun publisher/classifier/reconcile dry-runs before any outbox mutation. | Normal code/docs PR authority for additive tooling/docs, plus owner/operator authorization if target work would be changed or released. |
 
 ## Guardrails
@@ -49,6 +50,7 @@ python3 scripts/reconcile_automation_outbox.py --dry-run --json
   will skip the item and a terminal preservation decision is needed.
 - Do not use the outbox to store ad hoc reports unless the payload satisfies the
   documented handoff contract. Non-handoff reports should move to a report,
-  receipt, or conductor artifact path.
+  receipt, or conductor artifact path. If a historical report is already in the
+  outbox, dispose of it only through the `NON-HANDOFF-REPORT` reconcile path.
 - If a target is Tier 3/4, parked under current-head dissent, or governed by a
   human-settlement rule, the outbox disposition cannot bypass that rule.

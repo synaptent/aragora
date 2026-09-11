@@ -12,7 +12,6 @@ Tests complete flows across multiple subsystems:
 
 import asyncio
 import json
-import tempfile
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -83,11 +82,26 @@ class MockAgent(Agent):
         )
 
 
+@pytest.fixture(autouse=True)
+def isolated_aragora_data_dir(monkeypatch, tmp_path):
+    """Keep auto-created subsystem databases local to each test."""
+    data_dir = tmp_path / "aragora-data"
+    data_dir.mkdir()
+    monkeypatch.setenv("ARAGORA_DATA_DIR", str(data_dir))
+    return data_dir
+
+
 @pytest.fixture
-def temp_db():
+def temp_db(tmp_path):
     """Create a temporary database for testing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir) / "test.db"
+    return tmp_path / "test.db"
+
+
+def test_default_database_paths_are_test_local(isolated_aragora_data_dir):
+    """Auto-created subsystem databases must not leak across test workers."""
+    from aragora.persistence.db_config import DatabaseType, get_db_path
+
+    assert get_db_path(DatabaseType.CALIBRATION).parent == isolated_aragora_data_dir
 
 
 @pytest.fixture

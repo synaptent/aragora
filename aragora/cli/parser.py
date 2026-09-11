@@ -2247,52 +2247,16 @@ def _add_review_queue_parser(subparsers) -> None:
     )
     act_parser.set_defaults(func=_lazy("aragora.cli.commands.review_queue", "cmd_review_queue"))
 
-    record_parser = queue_subparsers.add_parser(
-        "record-settlement",
-        help="Record an already-authorized PR settlement without mutating GitHub",
+    # Route through the shared registration helper (argparse-only import) so
+    # this surface and the standalone review-queue CLI cannot drift apart:
+    # an inline copy here repeatedly lost flags the helper registers (e.g.
+    # --post-github-status), leaving documented commands unexecutable.
+    from aragora.cli.commands.review_queue_parsers import add_record_settlement_parser
+
+    add_record_settlement_parser(queue_subparsers)
+    queue_subparsers.choices["record-settlement"].set_defaults(
+        func=_lazy("aragora.cli.commands.review_queue", "cmd_review_queue")
     )
-    record_parser.add_argument("pr", help="PR number or URL")
-    record_parser.add_argument(
-        "--repo",
-        default=None,
-        help="GitHub repo slug override (owner/name). Defaults to current repo context.",
-    )
-    record_parser.add_argument(
-        "--head-sha",
-        required=True,
-        help="Exact PR head SHA that was externally settled.",
-    )
-    record_parser.add_argument(
-        "--action",
-        required=True,
-        choices=("approve", "request_changes", "comment", "admin_squash_merge"),
-        help="Externally observed settlement action to record.",
-    )
-    record_parser.add_argument(
-        "--reason",
-        required=True,
-        help="One-line operator reason or authorization reference.",
-    )
-    record_parser.add_argument(
-        "--review-queue-root",
-        default=None,
-        help="Override the review-queue root used for settlement receipts.",
-    )
-    record_parser.add_argument(
-        "--apply-post-merge-lane-audit",
-        action="store_true",
-        help=(
-            "For admin_squash_merge records, apply merged-PR lane supersession "
-            "using the live merge commit guard. Default is dry-run/report only."
-        ),
-    )
-    record_parser.add_argument(
-        "--json",
-        dest="json_output",
-        action="store_true",
-        help="Output local receipt as JSON.",
-    )
-    record_parser.set_defaults(func=_lazy("aragora.cli.commands.review_queue", "cmd_review_queue"))
 
     evidence_lint_parser = queue_subparsers.add_parser(
         "evidence-lint",

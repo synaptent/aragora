@@ -1,8 +1,11 @@
 """Tests for MetaPlanner - debate-driven goal prioritization."""
 
+from types import SimpleNamespace
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from aragora.core_types import DebateResult
 from aragora.nomic.meta_planner import (
     MetaPlanner,
     MetaPlannerConfig,
@@ -70,6 +73,23 @@ class TestPrioritizedGoal:
 
         assert goal.focus_areas == []
         assert goal.file_hints == []
+        assert goal.metadata == {}
+
+    def test_goal_serializes_additive_metadata(self):
+        goal = PrioritizedGoal(
+            id="goal_0",
+            track=Track.QA,
+            description="Preserve surviving proposal",
+            rationale="One proposer timed out",
+            estimated_impact="high",
+            priority=1,
+            metadata={"decision_source": "surviving_proposals", "degraded": True},
+        )
+
+        assert goal.to_dict()["metadata"] == {
+            "decision_source": "surviving_proposals",
+            "degraded": True,
+        }
 
 
 class TestPlanningContext:
@@ -110,6 +130,7 @@ class TestMetaPlannerConfig:
         assert config.debate_rounds == 2
         assert config.max_goals == 5
         assert config.consensus_threshold == 0.6
+        assert config.proposal_timeout_seconds is None
 
     def test_config_custom_values(self):
         """Should accept custom values."""
@@ -118,12 +139,14 @@ class TestMetaPlannerConfig:
             debate_rounds=3,
             max_goals=10,
             consensus_threshold=0.8,
+            proposal_timeout_seconds=480.0,
         )
 
         assert config.agents == ["claude"]
         assert config.debate_rounds == 3
         assert config.max_goals == 10
         assert config.consensus_threshold == 0.8
+        assert config.proposal_timeout_seconds == 480.0
 
 
 class TestMetaPlanner:
@@ -555,6 +578,273 @@ class TestParseGoalsFromDebate:
         )
 
         assert len(goals) <= 2
+
+    def test_preserves_survivor_and_records_sanitized_timeout(self):
+        planner = MetaPlanner()
+        result = SimpleNamespace(
+            consensus="1. Incorrect stale consensus",
+            final_response="",
+            responses=[],
+            participants=["claude", "codex"],
+            proposals={
+                "claude": "1. Close the truthful degradation contract",
+                "codex": "[Error generating proposal: timeout]",
+            },
+            agent_failures={
+                "codex": [
+                    {
+                        "phase": "proposal",
+                        "error_type": "timeout",
+                        "message": "timed out with token=secret-value",
+                    }
+                ]
+            },
+        )
+
+        goals = planner._parse_goals_from_debate(
+            result,
+            [Track.CORE],
+            "truthful degradation contract",
+            expected_proposers=["claude", "codex"],
+        )
+
+        assert [goal.description for goal in goals] == ["Close the truthful degradation contract"]
+        metadata = goals[0].metadata
+        assert metadata["decision_source"] == "surviving_proposals"
+        assert metadata["degraded"] is True
+        assert metadata["expected_proposers"] == ["claude", "codex"]
+        assert metadata["substantive_proposers"] == ["claude"]
+        assert metadata["failure_provenance"][0]["agent"] == "codex"
+        assert "secret-value" not in metadata["failure_provenance"][0]["message"]
+
+    def test_error_and_empty_placeholders_force_truthful_heuristic_fallback(self):
+        planner = MetaPlanner()
+        result = SimpleNamespace(
+            consensus="1. Incorrect stale consensus",
+            final_response="",
+            responses=[],
+            participants=["raises", "empty"],
+            proposals={
+                "raises": "[Error generating proposal: exploded]",
+                "empty": "",
+            },
+            agent_failures={
+                "raises": [{"phase": "proposal", "error_type": "exception", "message": "exploded"}],
+                "empty": [{"phase": "proposal", "error_type": "empty", "message": "empty output"}],
+            },
+        )
+
+        goals = planner._parse_goals_from_debate(
+            result,
+            [Track.CORE],
+            "truthful degradation",
+            expected_proposers=["raises", "empty"],
+        )
+
+        assert goals
+        assert goals[0].description != "Incorrect stale consensus"
+        assert goals[0].metadata["decision_source"] == "heuristic_fallback"
+        assert goals[0].metadata["substantive_proposers"] == []
+        assert [item["error_type"] for item in goals[0].metadata["failure_provenance"]] == [
+            "exception",
+            "empty",
+        ]
+
+    def test_surviving_proposals_are_ordered_and_description_deduplicated(self):
+        planner = MetaPlanner()
+        result = SimpleNamespace(
+            consensus="",
+            final_response="",
+            responses=[],
+            participants=["first", "failed", "second"],
+            proposals={
+                "second": "1. Add deterministic regression coverage\n2. Preserve receipts",
+                "failed": "[Error generating proposal: timeout]",
+                "first": "1. Add deterministic regression coverage!",
+            },
+            agent_failures={
+                "failed": [{"phase": "proposal", "error_type": "timeout", "message": "timed out"}]
+            },
+        )
+
+        goals = planner._parse_goals_from_debate(
+            result,
+            [Track.QA],
+            "deterministic coverage",
+            expected_proposers=["first", "failed", "second"],
+        )
+
+        assert [goal.description for goal in goals] == [
+            "Add deterministic regression coverage!",
+            "Preserve receipts",
+        ]
+        assert [goal.priority for goal in goals] == [1, 2]
+
+    def test_objective_fidelity_cannot_replace_a_surviving_proposal(self):
+        planner = MetaPlanner(MetaPlannerConfig(objective_fidelity_threshold=1.0))
+        result = SimpleNamespace(
+            consensus="",
+            final_response="",
+            responses=[],
+            participants=["survivor", "failed"],
+            proposals={
+                "survivor": "1. Preserve this substantive but differently worded plan",
+                "failed": "[Error generating proposal: timeout]",
+            },
+            agent_failures={
+                "failed": [{"phase": "proposal", "error_type": "timeout", "message": "timed out"}]
+            },
+        )
+
+        parsed = planner._parse_goals_from_debate(
+            result,
+            [Track.CORE],
+            "an unrelated objective vocabulary",
+            expected_proposers=["survivor", "failed"],
+        )
+        goals = planner._enforce_objective_fidelity(
+            "an unrelated objective vocabulary",
+            [Track.CORE],
+            parsed,
+        )
+
+        assert [goal.description for goal in goals] == [
+            "Preserve this substantive but differently worded plan"
+        ]
+        assert goals[0].metadata["decision_source"] == "surviving_proposals"
+
+    def test_healthy_consensus_stays_primary(self):
+        planner = MetaPlanner()
+        result = DebateResult(
+            final_answer="1. Consensus-selected goal",
+            participants=["first", "second"],
+            proposals={"first": "1. First idea", "second": "1. Second idea"},
+            agent_failures={},
+        )
+
+        goals = planner._parse_goals_from_debate(
+            result,
+            [Track.CORE],
+            "consensus-selected goal",
+            expected_proposers=["first", "second"],
+        )
+
+        assert [goal.description for goal in goals] == ["Consensus-selected goal"]
+        assert goals[0].metadata["decision_source"] == "debate_consensus"
+        assert goals[0].metadata["degraded"] is False
+
+    def test_objective_fidelity_preserves_all_failure_provenance(self):
+        planner = MetaPlanner(MetaPlannerConfig(objective_fidelity_threshold=1.0))
+        result = DebateResult(
+            final_answer="1. Incorrect stale consensus",
+            participants=["failed"],
+            proposals={"failed": "[Error generating proposal: timeout]"},
+            agent_failures={
+                "failed": [{"phase": "proposal", "error_type": "timeout", "message": "timed out"}]
+            },
+        )
+
+        parsed = planner._parse_goals_from_debate(
+            result,
+            [Track.CORE],
+            "unrelated objective vocabulary",
+            expected_proposers=["failed"],
+        )
+        goals = planner._enforce_objective_fidelity(
+            "unrelated objective vocabulary",
+            [Track.CORE],
+            parsed,
+        )
+
+        assert goals[0].metadata["decision_source"] == "heuristic_fallback"
+        assert goals[0].metadata["degraded"] is True
+        assert goals[0].metadata["substantive_proposers"] == []
+        assert goals[0].metadata["failure_provenance"][0]["agent"] == "failed"
+
+
+class TestMetaPlannerProposalDegradationIntegration:
+    @pytest.mark.asyncio
+    async def test_proposal_timeout_is_applied_only_to_proposal_phase(self):
+        planner = MetaPlanner(
+            MetaPlannerConfig(
+                agents=["fake"],
+                proposal_timeout_seconds=37.0,
+                enable_cross_cycle_learning=False,
+                enable_metrics_collection=False,
+                use_introspection_selection=False,
+                enable_receipts=False,
+                use_business_context=False,
+                explain_decisions=False,
+                enforce_objective_fidelity=False,
+            )
+        )
+        fake_agent = SimpleNamespace(name="fake", timeout=999.0)
+        result = SimpleNamespace(
+            consensus="1. Preserve proposal-only timeout",
+            final_response="",
+            responses=[],
+            participants=["fake"],
+            proposals={"fake": "1. Preserve proposal-only timeout"},
+            agent_failures={},
+        )
+        fake_arena = SimpleNamespace(
+            proposal_phase=SimpleNamespace(proposal_timeout_seconds=None),
+            run=AsyncMock(return_value=result),
+        )
+
+        with (
+            patch.object(planner, "_create_agent", return_value=fake_agent),
+            patch("aragora.debate.orchestrator.Arena", return_value=fake_arena),
+            patch(
+                "aragora.compat.openclaw.next_steps_runner.NextStepsRunner.scan",
+                new=AsyncMock(return_value=SimpleNamespace(steps=[])),
+            ),
+        ):
+            goals = await planner.prioritize_work(
+                objective="Preserve proposal-only timeout",
+                available_tracks=[Track.CORE],
+            )
+
+        assert goals[0].description == "Preserve proposal-only timeout"
+        assert fake_arena.proposal_phase.proposal_timeout_seconds == 37.0
+        assert fake_agent.timeout == 999.0
+
+    def test_receipt_reasoning_includes_only_sanitized_proposal_failures(self):
+        planner = MetaPlanner(MetaPlannerConfig(enable_receipts=True))
+        result = SimpleNamespace(
+            agent_failures={
+                "codex": [
+                    {
+                        "phase": "proposal",
+                        "error_type": "timeout",
+                        "message": "token=secret-value after 240s",
+                    }
+                ],
+                "claude": [
+                    {"phase": "critique", "error_type": "exception", "message": "ignore me"}
+                ],
+            }
+        )
+        receipt = SimpleNamespace(
+            receipt_id="receipt-1",
+            verdict="FAIL",
+            verdict_reasoning="No consensus reached",
+        )
+
+        with (
+            patch(
+                "aragora.gauntlet.receipt_models.DecisionReceipt.from_debate_result",
+                return_value=receipt,
+            ),
+            patch.object(planner, "_ingest_receipt_to_km") as ingest,
+        ):
+            planner._generate_receipt(result)
+
+        assert "codex timeout" in receipt.verdict_reasoning
+        assert "<REDACTED>" in receipt.verdict_reasoning
+        assert "secret-value" not in receipt.verdict_reasoning
+        assert "claude" not in receipt.verdict_reasoning
+        ingest.assert_called_once_with(receipt)
 
 
 class TestPrioritizeWorkAsync:

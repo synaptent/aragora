@@ -1,0 +1,160 @@
+{
+  "schema_version": "decision-quality-corpus/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "revision": "draft-business-operations-tranche-2",
+  "frozen_at": "2026-08-30T03:52:00Z",
+  "cases": [
+    {
+      "case_id": "biz-dev-twitter-merger-close",
+      "domain": "business_operations",
+      "split": "development",
+      "title": "Twitter acquisition transition staffing after termination notice",
+      "decision_prompt": "A business-operations lead supporting the announced Twitter acquisition must choose a primary staffing plan after the buyer purports to terminate and Twitter seeks specific performance. Choose the action that best fits whether the acquisition will still close by 2022-10-28.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain close readiness\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_close_readiness",
+      "options": [
+        {
+          "option_id": "demobilize_for_standalone",
+          "label": "Demobilize for standalone operations",
+          "description": "Demobilize transaction execution and make independent operating plans the primary allocation."
+        },
+        {
+          "option_id": "retain_close_readiness",
+          "label": "Retain close readiness",
+          "description": "Keep the transaction team staffed and maintain integration and closing readiness through 2022-10-28."
+        }
+      ],
+      "information_cutoff": "2022-07-13T23:59:59Z",
+      "sources": [
+        {
+          "source_id": "twitter-musk-termination-letter-2022-07-08",
+          "title": "Musk parties' notice purporting to terminate the Twitter merger agreement",
+          "url": "https://www.sec.gov/Archives/edgar/data/1418091/000110465922078413/tm2220599d1_ex99-p.htm",
+          "published_at": "2022-07-08T00:00:00Z",
+          "content_sha256": "f8c6a9f980cf2b552e3f68148e88c3641b38b19104b514ecb3fd3028a71f4ed4"
+        },
+        {
+          "source_id": "twitter-specific-performance-complaint-2022-07-12",
+          "title": "Twitter complaint seeking specific performance of the merger agreement",
+          "url": "https://www.sec.gov/Archives/edgar/data/1418091/000119312522192993/d381911dex991.htm",
+          "published_at": "2022-07-12T00:00:00Z",
+          "content_sha256": "b96f17ab629f6bc2a07aafa150334de2c0356e2be2d7a2eda3b421c32a6a5ff3"
+        }
+      ]
+    },
+    {
+      "case_id": "biz-dev-microsoft-activision-close",
+      "domain": "business_operations",
+      "split": "development",
+      "title": "Microsoft-Activision integration readiness after the FTC challenge",
+      "decision_prompt": "A business-operations lead supporting the Microsoft-Activision transaction must choose a primary staffing plan after the Federal Trade Commission moves to block the acquisition. Choose the action that best fits whether the transaction will close by 2023-10-18.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain close readiness\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_close_readiness",
+      "options": [
+        {
+          "option_id": "demobilize_for_standalone",
+          "label": "Demobilize for standalone operations",
+          "description": "Demobilize transaction execution and make independent operating plans the primary allocation."
+        },
+        {
+          "option_id": "retain_close_readiness",
+          "label": "Retain close readiness",
+          "description": "Keep the transaction team staffed and maintain integration and closing readiness through 2023-10-18."
+        }
+      ],
+      "information_cutoff": "2022-12-09T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "activision-microsoft-merger-agreement-2022-01-18",
+          "title": "Activision Blizzard filing for the Microsoft merger agreement",
+          "url": "https://www.sec.gov/Archives/edgar/data/718877/000110465922005156/tm223212d8_defa14a.htm",
+          "published_at": "2022-01-18T00:00:00Z",
+          "content_sha256": "44b5fb7c3c53aae9c372eaaa5a96fe949f74cdc26c78232f51ff77db32ba9d9b"
+        },
+        {
+          "source_id": "ftc-microsoft-activision-challenge-2022-12-08",
+          "title": "FTC administrative complaint challenging Microsoft's acquisition of Activision Blizzard",
+          "url": "https://www.ftc.gov/system/files/ftc_gov/pdf/D09412MicrosoftActivisionAdministrativeComplaintPublicVersionFinal.pdf",
+          "published_at": "2022-12-08T00:00:00Z",
+          "content_sha256": "580e0cfb2726facaedf5f896e80330702f4b45923b42053288068ef12fc3f18c"
+        }
+      ]
+    },
+    {
+      "case_id": "biz-dev-adobe-figma-close",
+      "domain": "business_operations",
+      "split": "development",
+      "title": "Adobe-Figma operating plan after UK phase-two referral",
+      "decision_prompt": "A business-operations lead supporting Adobe's planned acquisition of Figma must choose a primary staffing plan after the UK Competition and Markets Authority refers the deal for an in-depth investigation. Choose the action that best fits whether the acquisition will close by 2024-03-31.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain close readiness\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_close_readiness",
+      "options": [
+        {
+          "option_id": "demobilize_for_standalone",
+          "label": "Demobilize for standalone operations",
+          "description": "Demobilize transaction execution and make independent operating plans the primary allocation."
+        },
+        {
+          "option_id": "retain_close_readiness",
+          "label": "Retain close readiness",
+          "description": "Keep the transaction team staffed and maintain integration and closing readiness through 2024-03-31."
+        }
+      ],
+      "information_cutoff": "2023-07-14T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "adobe-figma-merger-agreement-2022-09-15",
+          "title": "Adobe filing for the Figma merger agreement",
+          "url": "https://www.sec.gov/Archives/edgar/data/796343/000114036122033413/ny20005310x2_8k.htm",
+          "published_at": "2022-09-15T00:00:00Z",
+          "content_sha256": "9fabd157d8ef34a41d5967bb83873f425f953fd10a679c39ff9bf1a12ce7f5de"
+        },
+        {
+          "source_id": "cma-adobe-figma-phase-two-referral-2023-07-13",
+          "title": "CMA decision to refer the Adobe-Figma acquisition for phase-two investigation",
+          "url": "https://assets.publishing.service.gov.uk/media/64aed1b4fe36e0000d6fa868/Decision_to_refer.pdf",
+          "published_at": "2023-07-13T00:00:00Z",
+          "content_sha256": "1104d3a28046c12a740ab92258a4a1f17c085d77c5cc5dc7cde50ef2a66f6219"
+        }
+      ]
+    },
+    {
+      "case_id": "biz-dev-jetblue-spirit-close",
+      "domain": "business_operations",
+      "split": "development",
+      "title": "JetBlue-Spirit operating plan after the DOJ challenge",
+      "decision_prompt": "A business-operations lead supporting JetBlue's planned acquisition of Spirit must choose a primary staffing plan after the US Department of Justice sues to block the deal. Choose the action that best fits whether the acquisition will close by the agreement's 2024-07-24 outside date.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain close readiness\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_close_readiness",
+      "options": [
+        {
+          "option_id": "demobilize_for_standalone",
+          "label": "Demobilize for standalone operations",
+          "description": "Demobilize transaction execution and make independent operating plans the primary allocation."
+        },
+        {
+          "option_id": "retain_close_readiness",
+          "label": "Retain close readiness",
+          "description": "Keep the transaction team staffed and maintain integration and closing readiness through 2024-07-24."
+        }
+      ],
+      "information_cutoff": "2023-03-08T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "jetblue-spirit-merger-agreement-2022-07-28",
+          "title": "JetBlue-Spirit merger agreement",
+          "url": "https://www.sec.gov/Archives/edgar/data/1158463/000119312522204208/d319514dex21.htm",
+          "published_at": "2022-07-28T00:00:00Z",
+          "content_sha256": "4b7fccbb74369429c2b8f2ceaebf15f976e5998da3a4878fd504911171c7f2c5"
+        },
+        {
+          "source_id": "doj-jetblue-spirit-complaint-2023-03-07",
+          "title": "US and plaintiff states complaint to block JetBlue's acquisition of Spirit",
+          "url": "https://www.justice.gov/atr/case-document/file/1573131/dl",
+          "published_at": "2023-03-07T00:00:00Z",
+          "content_sha256": "028f0dce195758644d1ce2d0b77d069cf065a97daf5cc2c26acaf9aa88f280bb"
+        }
+      ]
+    }
+  ]
+}

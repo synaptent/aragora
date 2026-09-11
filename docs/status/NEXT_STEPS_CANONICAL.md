@@ -30,6 +30,16 @@ ODR tranche state (checked 2026-07-20):
 
 Stage-Gate Conductor rule: ODR / m6 / external-proof-month work **is execution against the current gate, not drift**. Foreman-substrate work remains in scope only as "keep the proof loop truthful" maintenance under the background subsection below.
 
+Stage-Gate Conductor logging rule (**binding**): the recurring run log MUST be posted with
+`python scripts/stage_gate_drift.py log --repo synaptent/aragora --month YYYY-MM --body-file <summary> --apply`,
+which appends a comment to the single rolling monthly anchor `[automation] Stage-Gate Conductor Log (YYYY-MM)`.
+Never open the run log with a bare `gh issue create`. Drift findings go through
+`stage_gate_drift.py file --fingerprint <slug>`, which comments on the existing anchor for that finding class
+instead of opening a near-duplicate each cycle. Rationale: between 2026-04-17 and 2026-07-27 the Conductor
+opened **41 issues carrying the byte-identical title** `[automation] Stage-Gate Conductor Log`, because it
+called `gh issue create` directly and never used the dedup helper — which had already been written and tested
+for exactly this failure (see #9490). Those 41 were closed down to one anchor in the 2026-07-29 triage pass.
+
 ### Held open in the background — proof-loop must not regress (formerly the sole gate)
 
 The standing background obligation is operating the proof loop that already exists: keep recurring benchmark truth publication complete, fresh, and trustworthy on current `main`; keep `CS-01..03` narrower than measured proof; and do not expand the `B2` guard until repeated runs support it. The execution epics [#804](https://github.com/synaptent/aragora/issues/804), [#805](https://github.com/synaptent/aragora/issues/805), and [#806](https://github.com/synaptent/aragora/issues/806) are closed; the background obligation is operationalizing the proof-first loop, not adding new roadmap scope.

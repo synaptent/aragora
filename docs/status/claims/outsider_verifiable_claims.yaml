@@ -16,6 +16,9 @@ claims:
       - issue: 8223
       - pull_request: 8816
     freshness_sla_hours: 168
+    truth_status:
+      state: unsupported
+      note: "The outsider install-and-verify path was not rerun for this report-only migration."
     verification:
       kind: manual
       command: "In a fresh environment, install aragora-verify and run it against docs/specs/examples/example-decision-receipt.odr.json."
@@ -37,6 +40,9 @@ claims:
       - path: docs/artifacts/2026-07-decision-integrity-dogfooding.md
       - issue: 8856
     freshness_sla_hours: 168
+    truth_status:
+      state: aspirational
+      note: "A reproducible outsider rerun is still required before this public proof claim is live."
     verification:
       kind: manual
       command: "Re-run the GitHub queries and receipt verification commands embedded in docs/artifacts/2026-07-decision-integrity-dogfooding.md."
@@ -58,6 +64,10 @@ claims:
       - path: docs/strategy/2026-07-05-durable-strategy-capture.md
       - issue: 8856
     freshness_sla_hours: 720
+    truth_status:
+      state: live
+      last_verified_at: "2026-07-11T06:26:00Z"
+      note: "Rechecked with the manifest's repository-local non-empty document command."
     verification:
       kind: command
       command: "test -s docs/strategy/2026-07-05-durable-strategy-capture.md"
@@ -80,6 +90,9 @@ claims:
       - issue: 8815
       - issue: 8856
     freshness_sla_hours: 720
+    truth_status:
+      state: unsupported
+      note: "The linked issue and document discovery path was not manually rechecked in this migration."
     verification:
       kind: manual
       command: "Confirm #8815, #8856, and docs/strategy/2026-07-05-durable-strategy-capture.md still link the product-side and operator-side question batteries."

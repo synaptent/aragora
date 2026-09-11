@@ -1,0 +1,70 @@
+{
+  "schema_version": "decision-quality-corpus/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "revision": "draft-policy-compliance-holdout-tranche-2",
+  "frozen_at": "2026-08-30T03:52:00Z",
+  "cases": [
+    {
+      "case_id": "policy-holdout-ftc-noncompete-rule-2024",
+      "domain": "policy_compliance",
+      "split": "holdout",
+      "title": "FTC non-compete final-rule readiness by May 2024",
+      "decision_prompt": "A national employer is planning its 2024 employment-contract compliance program after the FTC proposed a rule governing non-compete clauses. Choose whether to fund bounded contract-inventory, notice, and policy-readiness work on the expectation that the FTC will publish a final Non-Compete Clause Rule by the end of May 2024, or defer that implementation work beyond the stated horizon.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Defer beyond May 2024\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "defer_beyond_may_2024",
+      "options": [
+        {
+          "option_id": "defer_beyond_may_2024",
+          "label": "Defer beyond May 2024",
+          "description": "Preserve monitoring but defer material implementation readiness beyond May 2024."
+        },
+        {
+          "option_id": "prepare_for_may_2024_rule",
+          "label": "Prepare for a rule by May 2024",
+          "description": "Fund bounded contract inventory, worker-notice, and policy readiness for a final rule published by the end of May 2024."
+        }
+      ],
+      "information_cutoff": "2023-01-20T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "ftc-noncompete-proposal-2023-01-19",
+          "title": "Non-Compete Clause Rule - Notice of Proposed Rulemaking",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2023-01-19/pdf/2023-00414.pdf",
+          "published_at": "2023-01-19T00:00:00Z",
+          "content_sha256": "eb6aa67a3da592cbbaba21282bf0e89308fb9cc6278590b84e705f672af587b3"
+        }
+      ]
+    },
+    {
+      "case_id": "policy-holdout-dol-independent-contractor-2023",
+      "domain": "policy_compliance",
+      "split": "holdout",
+      "title": "DOL independent-contractor final-rule timing through 2023",
+      "decision_prompt": "A multi-state business is planning worker-classification compliance after the Department of Labor proposed replacing the 2021 independent-contractor analysis under the Fair Labor Standards Act. Choose whether to treat a final replacement rule as a binding 2023 implementation baseline or preserve readiness while deferring the binding rollout until 2024.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Defer the binding rollout to 2024\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "defer_binding_rollout_to_2024",
+      "options": [
+        {
+          "option_id": "defer_binding_rollout_to_2024",
+          "label": "Defer the binding rollout to 2024",
+          "description": "Preserve classification-analysis readiness but do not treat the proposal as a final 2023 compliance baseline."
+        },
+        {
+          "option_id": "implement_as_2023_final",
+          "label": "Implement as a 2023 final rule",
+          "description": "Commit the worker-classification program to the proposed replacement on the assumption that the final rule will publish during 2023."
+        }
+      ],
+      "information_cutoff": "2022-10-14T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "dol-independent-contractor-proposal-2022-10-13",
+          "title": "Employee or Independent Contractor Classification Under the Fair Labor Standards Act - Proposed Rule",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2022-10-13/pdf/2022-21454.pdf",
+          "published_at": "2022-10-13T00:00:00Z",
+          "content_sha256": "fb2fa5404e1c154790411363415d149186f11c76907570d496a67291d68206f0"
+        }
+      ]
+    }
+  ]
+}

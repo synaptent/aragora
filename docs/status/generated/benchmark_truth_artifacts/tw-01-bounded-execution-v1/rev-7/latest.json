@@ -1,10 +1,4 @@
 {
-  "evidence_scope": {
-    "fresh_revision_execution": false,
-    "kind": "historical_bootstrap",
-    "normalization_receipt": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/normalization-receipt.json",
-    "note": "Verified truth reflects the retained historical control cohort. The five in-progress outcomes predate normalization; no revision-7 execution success is claimed."
-  },
   "corpus": {
     "corpus_id": "tw-01-bounded-execution-v1",
     "in_progress_expected_count": 5,
@@ -55,9 +49,9 @@
   },
   "failure_class_distribution": {
     "blocked_not_dispatch_bounded": 5,
-    "blocked_validation_target_missing": 5
+    "rescue_worker_crash": 1
   },
-  "generated_at": "2026-08-19T15:19:45Z",
+  "generated_at": "2026-09-01T13:38:18Z",
   "in_flight_metrics": {
     "in_progress_attempted_count": 5,
     "in_progress_expected_count": 5,
@@ -99,7 +93,7 @@
         }
       ],
       "no_rescue_truth_success": true,
-      "proxy_pr_signal": true,
+      "proxy_pr_signal": false,
       "stale_corpus_issue": false,
       "stale_corpus_reason": null,
       "truth_state": "merged_pr",
@@ -131,7 +125,7 @@
         }
       ],
       "no_rescue_truth_success": true,
-      "proxy_pr_signal": true,
+      "proxy_pr_signal": false,
       "stale_corpus_issue": false,
       "stale_corpus_reason": null,
       "truth_state": "merged_pr",
@@ -163,7 +157,7 @@
         }
       ],
       "no_rescue_truth_success": true,
-      "proxy_pr_signal": true,
+      "proxy_pr_signal": false,
       "stale_corpus_issue": false,
       "stale_corpus_reason": null,
       "truth_state": "merged_pr",
@@ -195,7 +189,7 @@
         }
       ],
       "no_rescue_truth_success": true,
-      "proxy_pr_signal": true,
+      "proxy_pr_signal": false,
       "stale_corpus_issue": false,
       "stale_corpus_reason": null,
       "truth_state": "merged_pr",
@@ -227,7 +221,7 @@
         }
       ],
       "no_rescue_truth_success": true,
-      "proxy_pr_signal": true,
+      "proxy_pr_signal": false,
       "stale_corpus_issue": false,
       "stale_corpus_reason": null,
       "truth_state": "merged_pr",
@@ -295,7 +289,7 @@
     },
     {
       "expected_status": "in_progress",
-      "had_rescue": false,
+      "had_rescue": true,
       "issue_closed_at": null,
       "issue_number": 5754,
       "issue_state": "OPEN",
@@ -334,7 +328,7 @@
       "truth_success": false
     }
   ],
-  "metrics_file": "docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/bootstrap-metrics.jsonl",
+  "metrics_file": ".aragora/overnight/boss_metrics.jsonl",
   "primary_metrics": {
     "merged_only_rate": 0.5,
     "no_rescue_truth_success_rate": 0.5,
@@ -344,10 +338,12 @@
   "proxy_metrics": {
     "attempted_issue_count": 10,
     "note": "Proxy metrics are secondary. Truth metrics remain mergeable_pr OR merged_pr.",
-    "proxy_pr_signal_issue_count": 5,
-    "proxy_pr_signal_issue_rate": 0.5
+    "proxy_pr_signal_issue_count": 0,
+    "proxy_pr_signal_issue_rate": 0.0
   },
   "repo": "synaptent/aragora",
-  "rescue_counts_by_type": {},
+  "rescue_counts_by_type": {
+    "rescue_worker_crash": 1
+  },
   "run_status": "complete"
 }

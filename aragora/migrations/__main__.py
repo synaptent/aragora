@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from aragora.migrations.runner import (
+    DATABASE_ERRORS,
     get_migration_runner,
     reset_runner,
 )
@@ -25,12 +26,11 @@ from aragora.migrations.runner import (
 
 def cmd_upgrade(args: argparse.Namespace) -> int:
     """Apply pending migrations."""
-    runner = get_migration_runner(
-        db_path=args.db_path,
-        database_url=args.database_url,
-    )
-
     try:
+        runner = get_migration_runner(
+            db_path=args.db_path,
+            database_url=args.database_url,
+        )
         applied = runner.upgrade(target_version=args.target)
         if applied:
             print(f"Applied {len(applied)} migration(s):")
@@ -39,7 +39,7 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
         else:
             print("No pending migrations.")
         return 0
-    except (RuntimeError, OSError, ValueError) as e:
+    except DATABASE_ERRORS + (RuntimeError, OSError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     finally:
@@ -48,17 +48,16 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
 
 def cmd_downgrade(args: argparse.Namespace) -> int:
     """Rollback migrations."""
-    runner = get_migration_runner(
-        db_path=args.db_path,
-        database_url=args.database_url,
-    )
-
     dry_run = getattr(args, "dry_run", False)
     steps = getattr(args, "steps", None)
     reason = getattr(args, "reason", None)
     use_stored = getattr(args, "use_stored_rollback", False)
 
     try:
+        runner = get_migration_runner(
+            db_path=args.db_path,
+            database_url=args.database_url,
+        )
         # Determine rollback mode
         if steps is not None:
             # Validate first
@@ -107,7 +106,7 @@ def cmd_downgrade(args: argparse.Namespace) -> int:
         else:
             print("No migrations to rollback.")
         return 0
-    except (RuntimeError, OSError, ValueError) as e:
+    except DATABASE_ERRORS + (RuntimeError, OSError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     finally:
@@ -116,12 +115,11 @@ def cmd_downgrade(args: argparse.Namespace) -> int:
 
 def cmd_rollback_history(args: argparse.Namespace) -> int:
     """Show rollback history."""
-    runner = get_migration_runner(
-        db_path=args.db_path,
-        database_url=args.database_url,
-    )
-
     try:
+        runner = get_migration_runner(
+            db_path=args.db_path,
+            database_url=args.database_url,
+        )
         history = runner.get_rollback_history()
         if not history:
             print("No rollback history found.")
@@ -135,7 +133,7 @@ def cmd_rollback_history(args: argparse.Namespace) -> int:
             print(f"    by: {record.rolled_back_by}{reason_text}")
             print()
         return 0
-    except (RuntimeError, OSError, ValueError) as e:
+    except DATABASE_ERRORS + (RuntimeError, OSError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     finally:
@@ -144,12 +142,11 @@ def cmd_rollback_history(args: argparse.Namespace) -> int:
 
 def cmd_status(args: argparse.Namespace) -> int:
     """Show migration status."""
-    runner = get_migration_runner(
-        db_path=args.db_path,
-        database_url=args.database_url,
-    )
-
     try:
+        runner = get_migration_runner(
+            db_path=args.db_path,
+            database_url=args.database_url,
+        )
         status = runner.status()
         print("Migration Status:")
         print(f"  Backend: {runner._backend.backend_type}")
@@ -164,7 +161,7 @@ def cmd_status(args: argparse.Namespace) -> int:
                 print(f"  - {v}")
 
         return 0
-    except (RuntimeError, OSError, ValueError, KeyError) as e:
+    except DATABASE_ERRORS + (RuntimeError, OSError, ValueError, KeyError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
     finally:

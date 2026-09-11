@@ -1,0 +1,81 @@
+{
+  "schema_version": "decision-quality-outcomes/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "corpus_sha256": "2036afb2a909e1ffd16d5764fefd1fbccbeb298dd29924222d6034ec30d7e855",
+  "outcomes": [
+    {
+      "case_id": "biz-holdout-737-max-us-ungrounding-2020",
+      "resolved_at": "2020-11-18T00:00:00Z",
+      "correct_option_id": "stage_q4_return_plan",
+      "resolution_summary": "The FAA rescinded the US 737 MAX grounding order during Q4 2020, and Boeing recorded that deliveries resumed in that quarter, making the staged Q4 return plan the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "boeing-2020-10k-max-us-ungrounding",
+          "title": "Boeing Form 10-K recording the FAA rescission and resumed deliveries",
+          "url": "https://www.sec.gov/Archives/edgar/data/12927/000001292721000011/ba-20201231.htm",
+          "published_at": "2021-02-01T00:00:00Z",
+          "content_sha256": "aecdb6b6d0b9d4e54d1d903c9f180b905c8f20b83553e1181b41bbe104d64911"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "faa_certification_completion",
+          "description": "Whether Boeing's design changes, documentation, and testing would satisfy the FAA before year-end.",
+          "aliases": ["FAA approval timing", "certification completion"]
+        },
+        {
+          "crux_id": "operator_training_readiness",
+          "description": "Whether required pilot training and airline program revisions could be approved quickly enough for a Q4 operating plan.",
+          "aliases": ["pilot training approval", "airline readiness"]
+        },
+        {
+          "crux_id": "parked_aircraft_maintenance",
+          "description": "Whether maintenance and modification work on parked aircraft could support a practical return after regulatory approval.",
+          "aliases": ["fleet maintenance readiness", "aircraft modification work"]
+        },
+        {
+          "crux_id": "pandemic_operational_disruption",
+          "description": "Whether pandemic-driven demand, staffing, and supply-chain disruption would make a Q4 return plan operationally impractical.",
+          "aliases": ["COVID operational risk", "demand and supply disruption"]
+        }
+      ]
+    },
+    {
+      "case_id": "biz-holdout-777x-first-delivery-2023",
+      "resolved_at": "2022-04-27T00:00:00Z",
+      "correct_option_id": "rebaseline_beyond_2023",
+      "resolution_summary": "Boeing revised the first 777X-9 delivery forecast from late 2023 to 2025, so rebaselining the operations plan beyond 2023 was the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "boeing-2022-q1-777x-delay-to-2025",
+          "title": "Boeing Form 10-Q delaying first 777X-9 delivery until 2025",
+          "url": "https://www.sec.gov/Archives/edgar/data/12927/000001292722000022/ba-20220331.htm",
+          "published_at": "2022-04-27T00:00:00Z",
+          "content_sha256": "5a5b8aa695adeff1974e1c22ce9c35c3bae2b578cc13b853dec964ab18ef381d"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "certification_schedule",
+          "description": "Whether the certification program would progress fast enough to support a first delivery in late 2023.",
+          "aliases": ["regulatory certification timing", "flight-test schedule"]
+        },
+        {
+          "crux_id": "design_change_scope",
+          "description": "Whether regulator-informed design modifications would remain bounded rather than cause another schedule reset.",
+          "aliases": ["required design modifications", "certification-driven rework"]
+        },
+        {
+          "crux_id": "production_system_readiness",
+          "description": "Whether Boeing and its suppliers could sustain the production and integration schedule required for a 2023 delivery.",
+          "aliases": ["supplier readiness", "production ramp"]
+        },
+        {
+          "crux_id": "market_and_customer_timing",
+          "description": "Whether pandemic-era market conditions and customer delivery discussions would preserve the late-2023 target.",
+          "aliases": ["customer schedule", "wide-body demand"]
+        }
+      ]
+    }
+  ]
+}

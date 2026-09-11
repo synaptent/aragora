@@ -39,6 +39,7 @@ from aragora.nomic.meta_planner_utils import (  # noqa: F401 — re-exported
     gather_file_excerpts,
     infer_track,
     parse_goals_from_debate,
+    proposal_failure_provenance,
 )
 from aragora.config.feature_flags import get_flag, is_enabled
 
@@ -79,6 +80,7 @@ class PrioritizedGoal:
     file_hints: list[str] = field(default_factory=list)
     criterion_scores: dict[str, float] = field(default_factory=dict)
     evidence_refs: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the additive planning-goal shape."""
@@ -93,6 +95,7 @@ class PrioritizedGoal:
             "file_hints": list(self.file_hints),
             "criterion_scores": dict(sorted(self.criterion_scores.items())),
             "evidence_refs": sorted(self.evidence_refs),
+            "metadata": dict(self.metadata),
         }
 
 
@@ -177,6 +180,8 @@ class MetaPlannerConfig:
     debate_rounds: int = 2
     max_goals: int = 5
     consensus_threshold: float = 0.6
+    # Optional proposal-only timeout; None preserves the Arena default.
+    proposal_timeout_seconds: float | None = None
     # Cross-cycle learning
     enable_cross_cycle_learning: bool = True
     max_similar_cycles: int = 5
@@ -727,13 +732,21 @@ class MetaPlanner:
             )
 
             arena = Arena(env, agents, protocol)
+            if self.config.proposal_timeout_seconds is not None:
+                arena.proposal_phase.proposal_timeout_seconds = self.config.proposal_timeout_seconds
             result = await arena.run()
 
             # Generate DecisionReceipt for audit trail
             self._generate_receipt(result)
 
             # Parse goals from debate result
-            goals = self._parse_goals_from_debate(result, available_tracks, objective)
+            expected_proposers = [agent.name for agent in agents]
+            goals = self._parse_goals_from_debate(
+                result,
+                available_tracks,
+                objective,
+                expected_proposers=expected_proposers,
+            )
 
             # Re-rank goals using business context
             if self.config.use_business_context:
@@ -823,12 +836,21 @@ class MetaPlanner:
     ) -> list[PrioritizedGoal]:
         if not objective or not goals or not self.config.enforce_objective_fidelity:
             return goals[: self.config.max_goals]
+        # A surviving substantive proposal must not be silently replaced by an
+        # unrelated heuristic after the degradation-aware parser preserved it.
+        if any(goal.metadata.get("decision_source") == "surviving_proposals" for goal in goals):
+            return goals[: self.config.max_goals]
 
         threshold = max(0.0, min(1.0, float(self.config.objective_fidelity_threshold)))
         scored = [(self._goal_fidelity_score(objective, goal.description), goal) for goal in goals]
         top_score = max(score for score, _goal in scored)
         if top_score >= threshold:
             return goals[: self.config.max_goals]
+
+        degradation_metadata = next(
+            (dict(goal.metadata) for goal in goals if goal.metadata.get("degraded")),
+            {},
+        )
 
         constrained_objective = (
             "Maintain strict objective fidelity. "
@@ -846,7 +868,10 @@ class MetaPlanner:
                 top_score,
                 recovered_top,
             )
-            return recovered[: self.config.max_goals]
+            recovered = recovered[: self.config.max_goals]
+            for goal in recovered:
+                goal.metadata = dict(degradation_metadata)
+            return recovered
 
         best_track = self._infer_track(objective, available_tracks)
         fallback_goal = PrioritizedGoal(
@@ -859,6 +884,7 @@ class MetaPlanner:
             ),
             estimated_impact="high",
             priority=1,
+            metadata=degradation_metadata,
         )
         logger.warning(
             "meta_planner_objective_fidelity_low score=%.2f threshold=%.2f objective=%s",
@@ -1447,6 +1473,15 @@ class MetaPlanner:
             from aragora.gauntlet.receipt_models import DecisionReceipt
 
             receipt = DecisionReceipt.from_debate_result(result)
+            failures = proposal_failure_provenance(result)
+            if failures:
+                details = "; ".join(
+                    f"{failure['agent']} {failure['error_type']}: {failure['message']}"
+                    for failure in failures
+                )
+                receipt.verdict_reasoning = (
+                    f"{receipt.verdict_reasoning}. Degraded proposal roster: {details}"
+                ).strip(". ")
             self.last_receipt = receipt
             logger.info(
                 "meta_planner_receipt_generated receipt_id=%s verdict=%s",
@@ -1788,6 +1823,7 @@ class MetaPlanner:
         debate_result: Any,
         available_tracks: list[Track],
         objective: str,
+        expected_proposers: list[str] | None = None,
     ) -> list[PrioritizedGoal]:
         """Parse prioritized goals from debate consensus."""
         return parse_goals_from_debate(
@@ -1796,6 +1832,7 @@ class MetaPlanner:
             objective,
             self.config.max_goals,
             self._heuristic_prioritize,
+            expected_proposers,
         )
 
     def _build_goal(

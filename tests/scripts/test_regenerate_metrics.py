@@ -102,6 +102,31 @@ def test_metric_above_lower_bound(snapshot, metric_key, min_value):
     )
 
 
+def test_rbac_permission_calls_command_reproduces_value(snapshot):
+    """The printed reproduction command must count the generator's file set.
+
+    Every METRICS.md row promises a cold auditor can reproduce the value by
+    running the row's command. For rbac_permission_calls the generator counts
+    tracked ``.py`` files only (decorator calls cannot exist elsewhere; README
+    and YAML mentions are not calls), so the printed command must apply the
+    same restriction or the auditor gets a different number.
+    """
+    metric = snapshot["rbac_permission_calls"]
+    result = subprocess.run(
+        ["bash", "-c", metric.command],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    reproduced = int(result.stdout.strip())
+    assert reproduced == metric.value, (
+        f"printed command reproduces {reproduced} but the generator computed "
+        f"{metric.value}; the command's file set must match "
+        f"_count_line_matches' file set"
+    )
+
+
 def test_markdown_has_no_timestamp_or_sha(snapshot):
     """Canonical doc must not embed generation timestamp or git SHA.
 

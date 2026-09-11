@@ -1291,6 +1291,14 @@ See [BOT_INTEGRATIONS.md](../integrations/BOT_INTEGRATIONS.md) for detailed setu
   `ARAGORA_SECRET_NAME` still falls back to `aragora/production` when Secrets Manager is enabled.
 - Use `python3 -m aragora.cli.main secrets health --json` to verify source status without printing secret values.
 
+### ODR Receipt Signing
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `ARAGORA_ODR_SIGNING_KEY_FILE` | Optional | Path to a PKCS#8 Ed25519 private-key PEM; empty means unset; unusable files fail closed. POSIX group/other-writable files are rejected; readable files warn. | - |
+| `ARAGORA_ODR_SIGNING_KEY_SECRET` | Optional | AWS Secrets Manager SecretId holding the signing PEM; used when no key file is configured. An explicit loader secret-name argument overrides the file. | `aragora/odr-signing-key` |
+| `ARAGORA_ODR_SIGNING_KEY_STRICT_MODE` | Optional | Reject POSIX group/other-readable key files instead of warning when true (`true`, `1`, `yes`, `on`, case-insensitive). | `false` |
+
 ## Knowledge System
 
 | Variable | Required | Description | Default |

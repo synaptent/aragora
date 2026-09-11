@@ -47,7 +47,7 @@ def _make_tracker(monthly_limit=100.0, current_spend=50.0, daily_costs=None):
     # Mock usage buffer for _get_daily_costs
     tracker._buffer_lock = AsyncMock()
     tracker._buffer_lock.__aenter__ = AsyncMock()
-    tracker._buffer_lock.__aexit__ = AsyncMock()
+    tracker._buffer_lock.__aexit__ = AsyncMock(return_value=False)
     tracker._usage_buffer = []
 
     return tracker

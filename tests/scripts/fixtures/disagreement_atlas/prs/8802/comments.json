@@ -1,0 +1,164 @@
+[
+ {
+  "id": 4871197557,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-02T23:10:52Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871197557",
+  "body": "**Revise lane — evidence round 1 fixes pushed (3d5bfb9e0f)**\n\nAddressed all three CHANGES-REQUESTED findings, nothing else:\n\n**1. [P2] Non-deterministic generator (ambient calibration DB)** — `scripts/generate_odr_fixture.py` no longer passes `calibration_provenance=calibration_provenance_for_receipt(receipt)`; the export is now a fixed-argument call with no ambient-state lookup, so the fixture always carries the honest `absent` calibration marker regardless of what ELO/calibration records exist on the generating machine. The export call is factored into `export_receipt_to_odr()` and the regression test (`test_fixture_matches_generator_receipt_content`) now imports and calls **that exact function** rather than a parallel reconstruction, so the test cannot drift from the generator. Added `test_generator_export_is_machine_independent` asserting the exported calibration block is `status: absent` and matches the checked-in fixture. Verified regeneration on this machine: native receipt byte-identical, ODR content (minus signatures) identical, same content digest `sha-256:1f76fa66…` — **checked-in fixture unchanged** (no regeneration needed).\n\n**2. [P3] CWD-relative test paths** — `tests/gauntlet/test_odr_walkthrough_fixture.py` now resolves everything from `REPO_ROOT = Path(__file__).resolve().parents[2]` (fixtures, generator, and the doc paths in `test_walkthrough_references_exist`). Verified: full file passes when pytest is invoked from a non-repo cwd (scratchpad) — 9 passed.\n\n**3. [P3] PyPI claim verified empirically** — `pip install aragora-verify==0.1.0` from real PyPI in a throwaway venv succeeds, and the installed CLI verifies the checked-in fixture: all checks PASS, exit 0, both expected weakening signals reported. Wording kept as-is. Added two CLI smoke tests that subprocess the real CLI built as a wheel from the in-repo `aragora-verify/` source (CI-deterministic, not the PyPI release): walkthrough §2 verify command exits 0 with VERIFIED; the §3 tampered-verdict demo exits 1.\n\n**Tests:** `tests/gauntlet/test_odr_walkthrough_fixture.py` 9/9 passed (from non-root cwd); `tests/gauntlet -k odr` 222 passed. Pre-commit clean on both changed files. Fence respected:"
+ },
+ {
+  "id": 4871290880,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-02T23:30:44Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871290880",
+  "body": "Evidence round 2 findings addressed at dabe5624: [P2] the PyPI-release claim now carries its verification record in the walkthrough (clean-venv pip install aragora-verify==0.1.0 from real PyPI verified this fixture, 2026-07-02) and notes the CI smoke tests exercise the same source; [P3] the CLI smoke tests now FAIL in CI (CI env var) instead of skipping when the wheel cannot build — skip remains only for local environments."
+ },
+ {
+  "id": 4871349915,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-02T23:44:30Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871349915",
+  "body": "Evidence round 3 findings addressed at 21a4ac4c — and the [P2] was a **real security bug, now fixed**: aragora-verify 0.1.0 reported VERIFIED for a cryptographically valid signature even when its recorded `key_id` had been relabeled (signatures[] is outside the signed digest, so the label was attacker-mutable). The standalone verifier now binds `key_id` to `compute_key_id(supplied key)` — a relabeled signer FAILs as tampering (mirrors the e0e7df74 engine fix; regression test `test_tampered_key_id_fails_signature`). Version bumped to 0.1.1; walkthrough documents the binding and the honest 0.1.0 caveat (PyPI publication of 0.1.1 is a pending operator action). [P3] hatchling added to dev extras so the CI CLI smoke builds are offline-deterministic."
+ },
+ {
+  "id": 4871373189,
+  "user": {
+   "login": "scarmani"
+  },
+  "created_at": "2026-07-02T23:49:52Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871373189",
+  "body": "**HARD PARK at attempt cap — operator settlement packet (head 21a4ac4c).**\n\nFour evidence rounds, four distinct findings, every in-scope one fixed and verified:\n- R1 (both families): fixture-generator nondeterminism via ambient calibration DB — **fixed** (generator export path pinned, machine-independence test added)\n- R2 (claude): PyPI-release provability — **fixed** (empirically verified install from real PyPI, verification record in the doc, CI smoke tests fail-not-skip)\n- R3 (openai): **real security bug** — standalone verifier accepted relabeled signer key_id — **fixed** in aragora-verify 0.1.1 with regression test\n- R4 (openai [P2]): in-repo odr_verify multi-signature parity — **out of this PR's reachable scope** (aragora/gauntlet/odr_verify.py is fenced to the #8765 lane); filed as #8810 scoped to that lane\n\nCurrent evidence at exact head: claude PASS (would_count=true, prepared); openai CHANGES-REQUESTED on the out-of-scope [P2] only. Stall shape: claude PASS / openai new-scope-per-round — the ESCALATE case the review adjudicator (#8748) exists for.\n\nOperator options: (a) advisory-settle — authorize posting the prepared evidence (M0a precedent, #8389), mark ready, land via executor, with #8810 carrying the residual finding; (b) hold until #8765/#8810 reconcile verifier parity, then one regate. Awaiting operator decision on the epic/here."
+ },
+ {
+  "id": 4871391615,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-02T23:54:15Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871391615",
+  "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 21a4ac4 (21a4ac4c04ace6634f9357c3ae4ec316a900755a), committed 2026-07-02T23:43:40Z.\nPR: #8802.\nModel family: claude\n\nVerdict: PASS\n\n- [P3] `aragora-verify/src/aragora_verify/verifier.py` (new `key_id == provided_key_id` guard, ~L217–231): the binding couples signature validity to Aragora's *specific* `key_id` scheme (`\"ed25519-\"+sha256(raw)[:16]`, from `compute_key_id`). The ODR spec (`docs/specs/OPEN_DECISION_RECEIPT.md` §6) does **not** normatively define `key_id` derivation and defers signatures entirely to #8225 (`signatures: []` mandated in v0.1). A cryptographically-valid receipt from any other conformant emitter that labels its key differently (JWK thumbprint, operator string, etc.) would be falsely rejected as \"signer-label tampering\" by a tool marketed on PyPI as a *general* ODR verifier. Impact today is nil (only Aragora's signer produces signed receipts, and it always matches), so this is a forward-looking interop note, and the \"tampering\" framing overstates the threat — the auditor already anchors trust in the pubkey they supply, so a relabeled-but-valid signature forges nothing.\n\n- [P3] `aragora-verify/src/aragora_verify/verifier.py` diverges from the canonical in-repo twin `aragora/gauntlet/odr_verify.py:598,620–641`: the in-repo verifier keeps a distinct `key_id_mismatch` flag (checked *after* `verified_any`, with a precise message), whereas the standalone folds the mismatch into `failed_matching` (checked *first*). Result: on a multi-signature doc containing one matching-and-valid signature plus a second valid-but-relabeled duplicate, the in-repo verifier returns PASS while the standalone returns FAIL — the two Aragora verifiers give different verdicts on the same document, and the standalone's generic \"signature check failed\" message is less precise than the in-repo \"signer identity not bound.\" Contrived case, but the regression tests exercise the in-repo path while the CLI smoke tests exercise the standalone, so the divergence is untested.\n\ndogfood: yes"
+ },
+ {
+  "id": 4871391696,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-02T23:54:16Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871391696",
+  "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 21a4ac4 (21a4ac4c04ace6634f9357c3ae4ec316a900755a), committed 2026-07-02T23:43:40Z.\nPR: #8802.\nModel family: openai\n\nVerdict: CHANGES-REQUESTED\n\n- [P2] `docs/compliance/ODR_VERIFICATION_WALKTHROUGH.md:101` The walkthrough claims signer-label tampering protection, but this PR only hardens `aragora-verify`; the in-repo `aragora.gauntlet.odr_verify` path used by server/internal verification is not updated and can still diverge on multi-signature cases. That creates inconsistent audit results between the advertised offline verifier and Aragora’s own verifier.\n\ndogfood: yes"
+ },
+ {
+  "id": 4871391778,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-02T23:54:17Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871391778",
+  "body": "**Operator advisory settlement (armand, 2026-07-02), per the hard-park packet above:** prepared round-4 evidence posted at exact head 21a4ac4c — claude PASS (counting western-frontier signal) and openai CHANGES-REQUESTED whose sole [P2] is out of this PR's reachable scope (aragora/gauntlet/odr_verify.py, fenced to the #8765 lane) and is tracked as #8810. Under severity-gated dissent (#8574) the [P2] is advisory (non-blocking, non-counting); Tier 2 settles on one western-frontier PASS (#8638). Four rounds produced four distinct real findings, all in-scope ones fixed — including the aragora-verify 0.1.1 signer-label security fix. Marking ready; lands via the armed executor once checks are green. M0a operator-approved posting precedent: #8389."
+ },
+ {
+  "id": 4871444118,
+  "user": {
+   "login": "github-actions[bot]"
+  },
+  "created_at": "2026-07-03T00:05:49Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871444118",
+  "body": "## Aragora Code Review\n\nAdvisory-only review. Findings are surfaced for follow-up and do not fail this workflow.\n\nI have reviewed the diff with a skeptical lens, taking the received critique seriously. Below is my revised proposal, which is effectively a renewed code review that incorporates the valid concern about the `_check_signatures` logic, along with other findings from the full diff.\n\n---\n\n### Revised Pull Request Review\n\n#### 1. Code Quality – Signature‑failure precedence (addressing the critique)\n\n**Issue:** In `verifier.py`, function `_check_signatures`, the detection of `failed_matching` (an invalid signature whose `key_id` matches the supplied key) causes an immediate `FAIL` return, even when another signature from the same key is valid (`verified_any`).  \n**Location:** `aragora-verify/src/aragora_verify/verifier.py`, lines 239-240 of the new diff (the `if failed_matching` block).  \n**Evidence:** The new tests `test_valid_bound_signature_wins_over_relabeled_extra` demonstrate that a correctly‑bound signature passes even when a relabeled copy exists, but that case relies on the extra entry having a *different* `key_id`. If the extra entry carried the same `key_id` but an invalid signature (e.g., corrupted during transit), the same code would still `FAIL` (**[EVID-1]**). The co\n- **Option A (documentation):** Keep the current logic but add a docstring or comment explaining that *any* invalid signature that matches the supplied key’s id is treated as evidence of tampering, so verification fails immediately. This would make the intent explicit.  \n#### 2. Security / Code Quality – PASS status may conceal key‑ID tampering in detail\n**Issue:** When there is a valid bound signature plus a relabeled extra entry, the `signature` check returns `PASS`, and the `detail` string includes `“signer-label tampering”`. A caller that inspects only the status (e.g., by checking `result.ok` or the check’s status) could miss the tampering evidence.  \n**Evidence:** The test `test_valid_bound_signature_wins_over_relabeled_extra` asserts `check.status == PASS` while also asserting `“signer-label tampering” in check.detail`. This is technically correct per the design, but it c"
+ },
+ {
+  "id": 4871603599,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T00:42:25Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871603599",
+  "body": "Head moved 21a4ac4c → 05d8ef98 for a required-gate fix only: uv.lock regenerated for the hatchling dev dependency (Python Security Scan's lockfile-freshness gate was failing — my omission in the round-3 commit). No source changes. The advisory settlement recorded above carries: fresh prepared evidence will be collected and posted at the new head under the same operator authorization once the current evidence lane frees up (lockfile-only diff; reviewed substance unchanged)."
+ },
+ {
+  "id": 4871658875,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T00:55:42Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871658875",
+  "body": "Evidence round 5 findings addressed at 23b59589: **[P2 claude]** signature precedence now mirrors the in-repo reference (separate key_id_mismatch flag, verified_any-wins) — one valid, correctly-bound signature establishes authenticity even with an extra relabeled entry (surfaced in detail), with a two-signature precedence regression test; the mismatch-only case still FAILs as tampering. **[P2 openai]** supplying --pubkey for an unsigned receipt now yields UNVERIFIED/exit 3, never VERIFIED (unsigned-without-key stays WARN per the #8388 [P2a] norm); walkthrough live-deployment paragraph and exit-code table aligned. claude's [P3] kid-derivation normativity noted on #8810. 55 verifier + 9 fixture tests green."
+ },
+ {
+  "id": 4871703661,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T01:05:27Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871703661",
+  "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 23b5958 (23b59589e47b8c2efb415f15d5539d9bc44ea557), committed 2026-07-03T00:55:21Z.\nPR: #8802.\nModel family: claude\n\nVerdict: CHANGES-REQUESTED\n\n- **[P2]** `aragora-verify/src/aragora_verify/verifier.py:191-197` — The WARN→SKIP change for \"no signatures present + public key supplied\" is applied **only** to the standalone verifier, not to the parallel server-side engine `aragora/gauntlet/odr_verify.py:575-578`, which still returns **WARN** for the same case. That engine's module docstring promises \"a receipt verifies identically whether checked here or by an external auditor with only the public key\" — this PR breaks that invariant. After merge, an unsigned receipt checked *with* `--pubkey` is `UNVERIFIED` (exit 3, `authenticity_unverified=True`) via the `aragora-verify` CLI but stays `WARN`/`ok` via `POST /api/receipts/verify`. The server endpoint therefore retains the exact \"unsigned receipt presented as authenticated when a key was supplied\" gap this PR closes for the CLI. Either apply the same SKIP fix to `odr_verify.py:577` (preferred — SKIP is the correct, fail-closed behavior) or explicitly document the asymmetry; also note the standalone module docstring at `verifier.py:3-5` claims to be \"the single library behind both the CLI and the server's `POST /api/receipts/verify` endpoint,\" which is inaccurate — the server uses `aragora.gauntlet.odr_verify`, so the two can now diverge.\n\nEverything else verified clean: key_id binding formula is identical across signing/both verifiers (`ed25519-` + `sha256(raw)[:16]`), the fixture's recorded key_id and Ed25519 signature both check out, `verified_any`-wins-over-`key_id_mismatch` ordering matches gauntlet, the WARN→SKIP direction is strictly more conservative, and the new tests cover the tamper/relabel/unsigned-with-key paths. The `key_id`-binding `\"\"`-vs-real mismatch for a signature missing `key_id` is fail-closed and mirrors gauntlet, so not a finding.\n\ndogfood: yes"
+ },
+ {
+  "id": 4871703734,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T01:05:28Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871703734",
+  "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 23b5958 (23b59589e47b8c2efb415f15d5539d9bc44ea557), committed 2026-07-03T00:55:21Z.\nPR: #8802.\nModel family: openai\n\nVerdict: PASS\n\nNo findings.\n\ndogfood: yes"
+ },
+ {
+  "id": 4871703797,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T01:05:29Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4871703797",
+  "body": "**Operator advisory settlement carried to head 23b59589** (per the standing authorization and the hard-park packet): round-6 evidence posted above — openai PASS (counting western-frontier signal; both its round-5 findings verified fixed), claude [P2] residual is the unsigned-with-key parity gap in aragora/gauntlet/odr_verify.py — the file fenced to the #8765 lane, out of this PR's reachable scope, now pinned on #8810. Six rounds, six distinct real findings, every in-scope one fixed and regression-tested. Severity-gated dissent (#8574): advisory, non-blocking; Tier 2 settles on one western-frontier PASS (#8638)."
+ },
+ {
+  "id": 4879351953,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T21:10:40Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4879351953",
+  "body": "Branch updated to current main at 787d1f55 (merge + module-tiers regen; uv.lock consistent) — prior reruns were evaluating stale merge commits that predated #8800/#8803/#8808 landing. Fresh CI now shows the true residual state. Standing advisory settlement carries; evidence re-gate follows once checks settle."
+ },
+ {
+  "id": 4879458963,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T21:40:16Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4879458963",
+  "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 787d1f5 (787d1f55ad276e475219f1b4654df42d03776f43), committed 2026-07-03T21:10:12Z.\nPR: #8802.\nModel family: claude\n\nVerdict: PASS\n\n- [P3] `aragora-verify/src/aragora_verify/cli.py:37-41` (and docstring `:5-9`) — regression introduced by this PR's new SKIP path. `verifier.py` now returns `signature=SKIP` for the *unsigned-receipt-with-`--pubkey`* case, which renders as `UNVERIFIED`. But `_render`'s hardcoded UNVERIFIED note still reads \"signatures are present but were NOT checked (no --pubkey)\". For `aragora-verify unsigned.odr.json --pubkey key.pem` this note is self-contradicting: no signatures are present and a pubkey *was* supplied — directly contradicted by the check line printed right below it (\"receipt carries no signatures; ... a public key was supplied\"). Verdict and exit code are correct; only the explanatory note (and the `cli.py` docstring's exit-3 description) are stale. Note the walkthrough doc §3 exit-code table *does* describe both cases correctly, so only the CLI text drifted.\n\n- [P3] `aragora-verify/src/aragora_verify/verifier.py` new `key_id_mismatch → FAIL \"signer-label tampering suspected\"` path vs. `schema.py:128-130` — the schema only requires `key_id` to be a non-empty string, but the signature check now hard-FAILs any cryptographically-valid signature whose `key_id` isn't exactly `compute_key_id(key)` (`ed25519-`+sha256[:16]). For Aragora-emitted receipts this is a non-issue (signer always uses that format), but a third-party/ODR receipt that is honestly signed with a different `key_id` convention now FAILs with a \"tampering suspected\" verdict even though nothing was altered — a false-positive/interop risk for a tool marketed as a general standalone verifier. Defensible per spec §6/#8225 (the format is normative) and matches the asserted `gauntlet.odr_verify` parity, but the two validation layers disagree on what `key_id` is allowed to be. (Parity with `aragora.gauntlet.odr_verify` is asserted by the comment/tests; that module isn't in this diff so I did not independ"
+ },
+ {
+  "id": 4879461357,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T21:40:48Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4879461357",
+  "body": "Evidence at fresh head 787d1f55: claude PASS posted (counting western-frontier signal; Tier 2 settles on one under #8638). openai's residual [P2] objects to the verified_any-wins signature precedence — the exact ordering claude's round-5 [P2] REQUIRED to match the in-repo reference verifier (aragora/gauntlet/odr_verify.py, separate key_id_mismatch flag checked after verified_any), implemented with a two-signature regression test and pinned as reference semantics on #8810. Two reviewers now hold opposite positions on one deliberate, documented design decision — a textbook ESCALATE specimen for the #8748/#8811 adjudicator, resolved here by reference-implementation parity. Remaining merge blockers are the two #8770-class shards (server-rest, storage); PR rides the executor when they clear."
+ },
+ {
+  "id": 4880146715,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T01:23:11Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4880146715",
+  "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 75e9193 (75e91939d4bd29d633cd76e6f8a557e87b34430c), committed 2026-07-03T23:44:58Z.\nPR: #8802.\nModel family: openai\n\nVerdict: PASS\n\nNo findings.\n\ndogfood: yes"
+ },
+ {
+  "id": 4880414049,
+  "user": {
+   "login": "scarmani"
+  },
+  "created_at": "2026-07-04T02:55:50Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8802#issuecomment-4880414049",
+  "body": "Tier-4 Human Settlement Authorization\n\nPR: #8802\nExact head: 75e91939d4bd29d633cd76e6f8a557e87b34430c\nAuthorized action: admin_squash_merge and branch_protection_reconcile, only if #8802 is non-draft and live exact-head checks/merge-packet remain otherwise green.\n\nHuman-risk settlement: I accept the Tier 4 risk for this PR."
+ }
+]
