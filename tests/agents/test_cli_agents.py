@@ -167,12 +167,12 @@ class TestCLIAgentFallback:
 
         agent = DummyCLIAgent(name="test-agent", model="claude", enable_fallback=True)
 
-        with patch("os.environ.get", return_value="test-api-key"):
-            with patch(
-                "aragora.agents.api_agents.openrouter.get_api_key",
-                return_value="test-api-key",
-            ):
-                fallback = agent._get_fallback_agent()
+        with patch.dict(
+            "os.environ",
+            {"ARAGORA_SECRETS_STRICT": "false", "OPENROUTER_API_KEY": "test-api-key"},
+            clear=True,
+        ):
+            fallback = agent._get_fallback_agent()
 
         assert fallback is not None
         assert "fallback" in fallback.name
