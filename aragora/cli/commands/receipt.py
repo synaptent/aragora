@@ -478,6 +478,13 @@ def _cmd_view(args: argparse.Namespace) -> None:
         print(f"Receipt opened in browser. Saved to {tmp_path}")
 
 
+def _escape_receipt_text(value: Any) -> str:
+    """Escape display text without truncating or changing verification inputs."""
+    encoding = sys.stdout.encoding or "utf-8"
+    text = str(value).encode(encoding, errors="backslashreplace").decode(encoding)
+    return "".join(char if char.isprintable() else json.dumps(char)[1:-1] for char in text)
+
+
 def cmd_receipt_verify(args: argparse.Namespace) -> None:
     """Verify a receipt's artifact hash and signature integrity."""
     receipt_path = getattr(args, "receipt", None)
@@ -495,7 +502,7 @@ def cmd_receipt_verify(args: argparse.Namespace) -> None:
     receipt_id = data.get("receipt_id", "unknown")
     stored_hash = data.get("artifact_hash", "")
 
-    print(f"\nReceipt Verification: {receipt_id}")
+    print(f"\nReceipt Verification: {_escape_receipt_text(receipt_id)}")
     print("=" * 60)
 
     checks_passed = 0
@@ -504,7 +511,7 @@ def cmd_receipt_verify(args: argparse.Namespace) -> None:
     # Check 1: artifact_hash present
     checks_total += 1
     if stored_hash:
-        print(f"  [PASS] artifact_hash present: {stored_hash[:16]}...")
+        print(f"  [PASS] artifact_hash present: {_escape_receipt_text(stored_hash[:16])}...")
         checks_passed += 1
     else:
         print("  [FAIL] artifact_hash is missing")
@@ -519,12 +526,14 @@ def cmd_receipt_verify(args: argparse.Namespace) -> None:
             detail = "integrity verified"
             if verbose:
                 detail += f" (stored={stored_hash[:16]}..., recomputed={receipt._calculate_hash()[:16]}...)"
-            print(f"  [PASS] {detail}")
+            print(f"  [PASS] {_escape_receipt_text(detail)}")
             checks_passed += 1
         else:
             expected = receipt._calculate_hash()
             print(
-                f"  [FAIL] hash mismatch: stored={stored_hash[:16]}..., expected={expected[:16]}..."
+                _escape_receipt_text(
+                    f"  [FAIL] hash mismatch: stored={stored_hash[:16]}..., expected={expected[:16]}..."
+                )
             )
     except ImportError:
         # Fallback: manual hash check
@@ -547,7 +556,9 @@ def cmd_receipt_verify(args: argparse.Namespace) -> None:
             checks_passed += 1
         else:
             print(
-                f"  [FAIL] hash mismatch: stored={stored_hash[:16]}..., expected={expected[:16]}..."
+                _escape_receipt_text(
+                    f"  [FAIL] hash mismatch: stored={stored_hash[:16]}..., expected={expected[:16]}..."
+                )
             )
 
     # Check 3: Required fields present
@@ -573,7 +584,7 @@ def cmd_receipt_verify(args: argparse.Namespace) -> None:
             else:
                 print("  [FAIL] cryptographic signature invalid")
         except (OSError, RuntimeError, ValueError) as e:
-            print(f"  [FAIL] signature verification error: {e}")
+            print(f"  [FAIL] signature verification error: {_escape_receipt_text(e)}")
 
     print("")
     if checks_passed == checks_total:
@@ -599,14 +610,13 @@ def _inspection_cosmetic(value: Any, field: str) -> str:
     try:
         if isinstance(value, str):
             value.encode(sys.stdout.encoding or "utf-8")
-            summary = "".join(
-                char if char.isprintable() else json.dumps(char)[1:-1] for char in value[:121]
-            )
+            summary = _escape_receipt_text(value[:121])
             return summary[:117] + "..." if len(summary) > 120 else summary
         if not isinstance(value, bool) and (
             isinstance(value, int) or isinstance(value, float) and math.isfinite(value)
         ):
-            return str(value)
+            summary = str(value)
+            return summary[:117] + "..." if len(summary) > 120 else summary
         if isinstance(value, (dict, list)):
             summary = json.dumps(value, separators=(",", ":"), allow_nan=False)
             return summary[:117] + "..." if len(summary) > 120 else summary

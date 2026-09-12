@@ -340,6 +340,8 @@ def test_numeric_risk_count_contract(value: Any, tmp_path: Path) -> None:
         "a\nb\r\t\x1b[31m\x07\x7f\x85\u202e",
         0,
         42.5,
+        pytest.param(10**2000, id="large-positive-int"),
+        pytest.param(-(10**3000), id="large-negative-int"),
         {},
         [],
         {"key": "x" * 140},
@@ -404,6 +406,15 @@ def test_cosmetic_cap_applies_after_escaping(length: int) -> None:
     assert _inspection_cosmetic(value, "signature") == (r"\n" * length)[:117] + "..."
     expected = "x" * length if length <= 120 else "x" * 117 + "..."
     assert _inspection_cosmetic("x" * length, "signature") == expected
+
+
+@pytest.mark.parametrize("length", [119, 120, 121, 3000])
+def test_numeric_display_cap_boundaries(length: int) -> None:
+    from aragora.cli.commands.receipt import _inspection_cosmetic
+
+    value = int("1" * length)
+    expected = str(value) if length <= 120 else "1" * 117 + "..."
+    assert _inspection_cosmetic(value, "numeric") == expected
 
 
 def test_escaped_cosmetics_through_cli(tmp_path: Path) -> None:
