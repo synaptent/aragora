@@ -585,6 +585,21 @@ def cmd_receipt_verify(args: argparse.Namespace) -> None:
     sys.exit(0 if checks_passed == checks_total else 1)
 
 
+def _inspection_consensus_reached(value: Any) -> bool:
+    """Decode explicit legacy flags, never arbitrary truthiness, for display."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        flag = value.strip().lower()
+        if flag in {"true", "1", "yes", "on"}:
+            return True
+        if flag in {"false", "0", "no", "off", ""}:
+            return False
+    raise ValueError("consensus_proof.reached must be a boolean or an explicit 0/1/true/false flag")
+
+
 def _validate_inspection_fields(data: dict[str, Any]) -> None:
     """Check display inputs without normalizing decisions or verifying signatures."""
 
@@ -624,7 +639,7 @@ def _validate_inspection_fields(data: dict[str, Any]) -> None:
     require(consensus, dict, "consensus_proof", nullable=True)
     if consensus:
         if "reached" in consensus:
-            require(consensus["reached"], bool, "consensus_proof.reached")
+            _inspection_consensus_reached(consensus["reached"])
         for field in ("supporting_agents", "dissenting_agents"):
             agents = consensus.get(field)
             require(agents, list, f"consensus_proof.{field}", nullable=True)
@@ -715,7 +730,8 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
     consensus = data.get("consensus_proof", {})
     if consensus:
         print("\n--- Consensus ---")
-        print(f"Reached:       {'Yes' if consensus.get('reached') else 'No'}")
+        reached = _inspection_consensus_reached(consensus.get("reached", False))
+        print(f"Reached:       {'Yes' if reached else 'No'}")
         print(f"Method:        {consensus.get('method', 'N/A')}")
         supporting = consensus.get("supporting_agents", [])
         dissenting = consensus.get("dissenting_agents", [])

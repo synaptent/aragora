@@ -62,7 +62,8 @@ def test_malformed_inspection_through_cli(data: dict[str, Any], field: str, tmp_
         ({"verdict": []}, "verdict"),
         ({"risk_summary": {"total": "many"}}, "risk_summary.total"),
         ({"consensus_proof": []}, "consensus_proof"),
-        ({"consensus_proof": {"reached": "false"}}, "consensus_proof.reached"),
+        ({"consensus_proof": {"reached": "undetermined"}}, "consensus_proof.reached"),
+        ({"consensus_proof": {"reached": 2}}, "consensus_proof.reached"),
         ({"consensus_proof": {"supporting_agents": "alice"}}, "supporting_agents"),
         ({"consensus_proof": {"dissenting_agents": [1]}}, "dissenting_agents[0]"),
         ({"signature": {}}, "signature"),
@@ -153,6 +154,30 @@ def test_missing_and_nullable_optional_fields_preserve_defaults(tmp_path: Path) 
     assert empty.stdout == nullable.stdout
     assert "? UNKNOWN" in empty.stdout
     assert "Confidence:    0.0%" in empty.stdout
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (0, "No"),
+        (1, "Yes"),
+        (False, "No"),
+        (True, "Yes"),
+        ("false", "No"),
+        ("true", "Yes"),
+        ("0", "No"),
+        ("1", "Yes"),
+        ("no", "No"),
+        ("yes", "Yes"),
+        ("off", "No"),
+        (" ON ", "Yes"),
+        ("", "No"),
+    ],
+)
+def test_legacy_consensus_boolean_forms(value: Any, expected: str, tmp_path: Path) -> None:
+    result = inspect_process({"consensus_proof": {"reached": value}}, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert f"Reached:       {expected}" in result.stdout
 
 
 def test_model_generated_receipt_remains_inspectable(tmp_path: Path) -> None:
