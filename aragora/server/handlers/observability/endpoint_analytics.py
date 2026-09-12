@@ -25,14 +25,14 @@ from urllib.parse import unquote
 
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     json_response,
     safe_error_message,
 )
-from .secure import SecureHandler, ForbiddenError, UnauthorizedError
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..secure import SecureHandler, ForbiddenError, UnauthorizedError
+from ..utils.rate_limit import RateLimiter, get_client_ip
 from aragora.server.validation.query_params import safe_query_float, safe_query_int
 
 logger = logging.getLogger(__name__)

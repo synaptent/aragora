@@ -25,14 +25,14 @@ from typing import Any
 from aragora.server.versioning.compat import strip_version_prefix
 from aragora.utils.async_utils import run_async
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     handle_errors,
     json_response,
 )
-from .secure import SecureHandler
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..secure import SecureHandler
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

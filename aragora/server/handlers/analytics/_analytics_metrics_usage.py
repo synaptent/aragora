@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from aragora.config import CACHE_TTL_ANALYTICS
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     handle_errors,

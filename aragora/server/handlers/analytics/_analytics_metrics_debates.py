@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from aragora.config import CACHE_TTL_ANALYTICS
 
-from .base import (
+from ..base import (
     HandlerResult,
     handle_errors,
     json_response,
@@ -163,7 +163,7 @@ class DebateAnalyticsMixin:
             # Get rounds from result
             result = debate.get("result", {})  # type: ignore[attr-defined]
             if isinstance(result, dict):
-                rounds = result.get("rounds_used", result.get("rounds", 0))
+                rounds: Any = result.get("rounds_used", result.get("rounds", 0))
                 total_rounds += rounds
                 confidence = result.get("confidence", 0.0)
                 if confidence > 0:
@@ -296,7 +296,8 @@ class DebateAnalyticsMixin:
             for d in debates_in_period:
                 result = d.get("result", {})
                 if isinstance(result, dict):
-                    total_rounds += result.get("rounds_used", result.get("rounds", 0))
+                    rounds: Any = result.get("rounds_used", result.get("rounds", 0))
+                    total_rounds += rounds
             avg_rounds = total_rounds / total if total > 0 else 0.0
 
             data_points.append(

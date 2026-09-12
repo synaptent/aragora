@@ -43,13 +43,17 @@ from aragora.server.validation.query_params import safe_query_int
 SCIMConfig: Any
 SCIMServer: Any
 try:
-    from aragora.auth.scim.server import SCIMConfig, SCIMServer
+    from aragora.auth.scim.server import SCIMConfig as _SCIMConfig
+    from aragora.auth.scim.server import SCIMServer as _SCIMServer
 
     SCIM_AVAILABLE = True
 except ImportError:
     SCIM_AVAILABLE = False
     SCIMConfig = None
     SCIMServer = None
+else:
+    SCIMConfig = _SCIMConfig
+    SCIMServer = _SCIMServer
 
 logger = logging.getLogger(__name__)
 

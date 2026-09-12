@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
         return _noop
 
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     handle_errors,
@@ -144,7 +144,7 @@ class DifferentiationHandler(BaseHandler):
         limit = min(int(query_params.get("limit", "20")), 50)
         receipts = receipt_store.list_receipts(limit=limit) if receipt_store else []
 
-        vetting_evidence = []
+        vetting_evidence: list[dict[str, Any]] = []
         for r in receipts:
             receipt_id = getattr(r, "id", None) or getattr(r, "receipt_id", "")
             dissenting = getattr(r, "dissenting_views", []) or []

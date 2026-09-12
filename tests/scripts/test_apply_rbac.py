@@ -28,7 +28,7 @@ EXPECTED_EXACT_EXCLUDED_FILES = {
     "auth/signup_handlers.py",
     "auth/sso_handlers.py",
     "_oauth/oidc.py",
-    "oauth_wizard.py",
+    "oauth/oauth_wizard.py",
     "webhook_management.py",
     "features/email_webhooks.py",
     "base.py",
