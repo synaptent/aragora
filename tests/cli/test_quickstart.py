@@ -560,6 +560,20 @@ def test_native_sync(outcome):
         policy.set_event_loop(previous)
 
 
+def test_offline_cli_ignores_unsearched_ancestor_env(tmp_path, monkeypatch):
+    ancestor_env = tmp_path / ".env"
+    contents = "RF_UNSEARCHED_ANCESTOR=sentinel\n"
+    ancestor_env.write_text(contents)
+    temporary_directory = tempfile.TemporaryDirectory
+
+    def owned_directory(*, prefix, dir):
+        return temporary_directory(prefix=prefix, dir=tmp_path)
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", owned_directory)
+    test_offline_cli()
+    assert ancestor_env.read_text() == contents
+
+
 def test_offline_cli():
     """Synthetic offline artifact proof, not hosted database durability."""
     root = Path(__file__).resolve().parents[2]
@@ -567,7 +581,8 @@ def test_offline_cli():
         scratch = Path(directory)
         cwd = scratch / "cwd"
         cwd.mkdir()
-        assert all(not (p / ".env").exists() for p in (cwd, *cwd.parents))
+        # Quickstart searches only cwd and its immediate parent, both owned here.
+        assert all(not (p / ".env").exists() for p in (cwd, scratch))
         env = {
             "HOME": str(scratch / "home"),
             "TMPDIR": str(scratch),
@@ -625,7 +640,7 @@ def test_offline_cli():
         assert saved["verdict"] == "approved"
         assert saved["receipt_id"] and saved["receipt_id"] == saved["receipt"]["id"]
         assert saved["artifact_hash"] == saved["receipt"]["artifact_hash"]
-        assert all(not (p / ".env").exists() for p in (cwd, *cwd.parents))
+        assert all(not (p / ".env").exists() for p in (cwd, scratch))
 
 
 # =============================================================================
