@@ -1275,12 +1275,13 @@ export class AragoraClient {
     const maxAttempts = this.config.retryEnabled ? this.config.maxRetries : 1;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      let response: Response;
       try {
         const controller = new AbortController();
         const timeout = options.timeout ?? this.config.timeout;
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        const response = await fetch(url.toString(), {
+        response = await fetch(url.toString(), {
           method,
           headers,
           body: options.body ? JSON.stringify(options.body) : undefined,
@@ -1293,21 +1294,6 @@ export class AragoraClient {
           const body = await response.json().catch(() => ({ error: response.statusText }));
           throw AragoraError.fromResponse(response.status, body);
         }
-
-        const text = await response.text();
-
-        // Text responses keep their contract even when the body is empty:
-        // '' is a valid string result, never coerced to {}.
-        if (options.responseType === 'text') {
-          return text as T;
-        }
-
-        // Handle empty JSON responses
-        if (!text) {
-          return {} as T;
-        }
-
-        return JSON.parse(text) as T;
       } catch (error) {
         lastError = error as Error;
 
@@ -1328,7 +1314,25 @@ export class AragoraClient {
         if (attempt < maxAttempts) {
           await this.sleep(Math.pow(2, attempt - 1) * 1000);
         }
+        continue;
       }
+
+      // A successful response may represent an operation already performed.
+      // Body/decoding errors must propagate unchanged, outside retry handling.
+      const text = await response.text();
+
+      // Text responses keep their contract even when the body is empty:
+      // '' is a valid string result, never coerced to {}.
+      if (options.responseType === 'text') {
+        return text as T;
+      }
+
+      // Handle empty JSON responses
+      if (!text) {
+        return {} as T;
+      }
+
+      return JSON.parse(text) as T;
     }
 
     // Check if lastError is a connection-type error
