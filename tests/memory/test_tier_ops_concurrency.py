@@ -20,6 +20,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from queue import Empty
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -413,10 +414,59 @@ def _worker_promote(db_path: str, entry_id: str, result_queue):
 class TestMultiProcessSimulation:
     """Tests simulating multi-process/multi-pod scenarios."""
 
-    @pytest.mark.skipif(
-        multiprocessing.get_start_method() == "fork",
-        reason="Fork may not be available on all platforms",
+    @pytest.mark.parametrize(
+        ("failure", "message"),
+        [
+            ("missing_result", "Missing worker result"),
+            ("worker_error", "Worker errors"),
+            ("invalid_status", "Worker errors"),
+            ("no_promotion", "Expected exactly one promotion"),
+            ("duplicate_promotion", "Expected exactly one promotion"),
+            ("crash", "Worker exit codes"),
+            ("hang", "Workers did not finish"),
+            ("not_persisted", "Promotion was not persisted"),
+        ],
     )
+    def test_multiprocess_rejects_false_success(
+        self, temp_db_path: str, monkeypatch: pytest.MonkeyPatch, failure: str, message: str
+    ) -> None:
+        results = [("success", MemoryTier.FAST), ("success", None), ("success", None)]
+        if failure == "missing_result":
+            results[-1] = Empty()
+        elif failure == "worker_error":
+            results[-1] = ("error", "worker failed")
+        elif failure == "invalid_status":
+            results[-1] = ("unknown", None)
+        elif failure == "no_promotion":
+            results[0] = ("success", None)
+        elif failure == "duplicate_promotion":
+            results[1] = ("success", MemoryTier.FAST)
+
+        context = MagicMock()
+        result_queue = context.Queue.return_value
+        result_queue.get.side_effect = results
+        processes = [MagicMock(exitcode=0) for _ in range(3)]
+        for process in processes:
+            process.is_alive.return_value = False
+        if failure == "crash":
+            processes[0].exitcode = 1
+        elif failure == "hang":
+            processes[0].is_alive.return_value = True
+        context.Process.side_effect = processes
+        get_context = MagicMock(return_value=context)
+        monkeypatch.setattr(multiprocessing, "get_context", get_context)
+
+        with pytest.raises(AssertionError, match=message):
+            self.test_multiprocess_promote_simulation(temp_db_path)
+
+        get_context.assert_called_once_with("spawn")
+        for process in processes:
+            process.close.assert_called_once()
+        if failure == "hang":
+            processes[0].terminate.assert_called_once()
+        result_queue.close.assert_called_once()
+        result_queue.join_thread.assert_called_once()
+
     def test_multiprocess_promote_simulation(self, temp_db_path: str) -> None:
         """Test that promotion is safe across multiple processes."""
         # Initialize database in main process
@@ -432,36 +482,59 @@ class TestMultiProcessSimulation:
             )
             conn.commit()
 
-        # Spawn multiple worker processes
-        result_queue = multiprocessing.Queue()
+        # Spawn avoids inheriting the parent's database connections on fork platforms.
+        context = multiprocessing.get_context("spawn")
+        result_queue = context.Queue()
         processes = []
+        try:
+            for _ in range(3):
+                process = context.Process(
+                    target=_worker_promote,
+                    args=(temp_db_path, "mp_test", result_queue),
+                )
+                process.start()
+                processes.append(process)
 
-        for _ in range(3):
-            p = multiprocessing.Process(
-                target=_worker_promote,
-                args=(temp_db_path, "mp_test", result_queue),
+            deadline = time.monotonic() + 15
+            results = []
+            for _ in processes:
+                try:
+                    results.append(result_queue.get(timeout=max(0, deadline - time.monotonic())))
+                except Empty as exc:
+                    raise AssertionError(
+                        f"Missing worker result: received {len(results)}/3"
+                    ) from exc
+
+            for process in processes:
+                process.join(timeout=max(0, deadline - time.monotonic()))
+            assert not any(p.is_alive() for p in processes), "Workers did not finish"
+            exit_codes = [p.exitcode for p in processes]
+            assert exit_codes == [0, 0, 0], f"Worker exit codes: {exit_codes}"
+            errors = [(status, result) for status, result in results if status != "success"]
+            assert not errors, f"Worker errors: {errors}"
+            successes = [result for _, result in results if result is not None]
+            assert successes == [MemoryTier.FAST], f"Expected exactly one promotion: {results}"
+
+            with cms.connection() as conn:
+                tier = conn.execute(
+                    "SELECT tier FROM continuum_memory WHERE id = ?", ("mp_test",)
+                ).fetchone()[0]
+                transitions = conn.execute(
+                    "SELECT from_tier, to_tier FROM tier_transitions WHERE memory_id = ?",
+                    ("mp_test",),
+                ).fetchall()
+            assert tier == "fast", "Promotion was not persisted"
+            assert [tuple(row) for row in transitions] == [("medium", "fast")], (
+                f"Unexpected transitions: {transitions}"
             )
-            processes.append(p)
-
-        for p in processes:
-            p.start()
-
-        for p in processes:
-            p.join(timeout=10)
-
-        # Collect results
-        results = []
-        while not result_queue.empty():
-            results.append(result_queue.get_nowait())
-
-        # Check results
-        successes = [r for status, r in results if status == "success" and r is not None]
-        errors = [r for status, r in results if status == "error"]
-
-        assert len(errors) == 0, f"Errors occurred: {errors}"
-
-        # At most one promotion should succeed due to cooldown
-        assert len(successes) <= 1, f"Multiple promotions succeeded: {successes}"
+        finally:
+            for process in processes:
+                if process.is_alive():
+                    process.terminate()
+                process.join(timeout=5)
+                process.close()
+            result_queue.close()
+            result_queue.join_thread()
 
 
 # ---------------------------------------------------------------------------
