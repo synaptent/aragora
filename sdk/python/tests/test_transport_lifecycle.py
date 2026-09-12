@@ -158,6 +158,7 @@ async def test_cancellation_propagates_without_retry_and_closes_owned_http(phase
     never = asyncio.Event()
     requests: list[httpx.Request] = []
     delays: list[float] = []
+    cancellations: list[tuple[object, ...]] = []
 
     async def handle(request: httpx.Request) -> httpx.Response:
         requests.append(request)
@@ -178,8 +179,13 @@ async def test_cancellation_propagates_without_retry_and_closes_owned_http(phase
     http = httpx.AsyncClient(transport=httpx.MockTransport(handle))
 
     async def operation() -> object:
-        async with AragoraAsyncClient(max_retries=3, retry_delay=0.125) as client:
-            return await client.request("POST", REQUESTS[0][1], json={"task": "local only"})
+        try:
+            async with AragoraAsyncClient(max_retries=3, retry_delay=0.125) as client:
+                return await client.request("POST", REQUESTS[0][1], json={"task": "local only"})
+        except asyncio.CancelledError as error:
+            # Observe SDK propagation before Python 3.10 wait_for drops the message.
+            cancellations.append(error.args)
+            raise
 
     with (
         patch("aragora_sdk.client.httpx.AsyncClient", return_value=http),
@@ -189,7 +195,7 @@ async def test_cancellation_propagates_without_retry_and_closes_owned_http(phase
         try:
             await asyncio.wait_for(entered.wait(), timeout=2)
             assert task.cancel("caller stopped")
-            with pytest.raises(asyncio.CancelledError, match="caller stopped"):
+            with pytest.raises(asyncio.CancelledError):
                 await asyncio.wait_for(task, timeout=2)
         finally:
             # Keep a broken implementation from leaking an in-flight fixture task.
@@ -197,6 +203,7 @@ async def test_cancellation_propagates_without_retry_and_closes_owned_http(phase
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
     assert task.cancelled()
+    assert cancellations == [("caller stopped",)]
     assert len(requests) == 1
     expected_delays = [] if phase == "request" else [1 if phase == "rate_limit" else 0.125]
     assert delays == expected_delays
