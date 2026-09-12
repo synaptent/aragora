@@ -230,10 +230,12 @@ jobs:
     # Cold caches may span several API-budget windows; the collector backs off itself.
     timeout-minutes: 360
     permissions:
-      contents: write
+      contents: read
       issues: read
       pull-requests: read
       statuses: read
+    outputs:
+      artifact-id: ${{ steps.atlas_upload.outputs.artifact-id }}
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -299,8 +301,8 @@ jobs:
         id: atlas_date
         run: echo "tag=atlas-$(date -u +%F)" >> "$GITHUB_OUTPUT"
 
-      - name: Upload branch Atlas
-        if: github.ref != 'refs/heads/main'
+      - name: Upload Atlas artifact
+        id: atlas_upload
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.atlas_date.outputs.tag }}
@@ -314,8 +316,41 @@ jobs:
         if: github.ref != 'refs/heads/main'
         run: 'echo "atlas: non-main ref; artifact uploaded; release skipped"'
 
+  publish-atlas:
+    name: Publish Disagreement Atlas
+    needs: atlas
+    if: >-
+      github.ref == 'refs/heads/main' && needs.atlas.result == 'success' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Require Atlas artifact
+        env:
+          ATLAS_ARTIFACT_ID: ${{ needs.atlas.outputs.artifact-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${ATLAS_ARTIFACT_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "atlas: successful build artifact ID missing or invalid" >&2
+            exit 1
+          fi
+          echo "ATLAS_OUT=$RUNNER_TEMP/atlas-output" >> "$GITHUB_ENV"
+
+      - name: Download this run's Atlas artifact
+        uses: actions/download-artifact@v4
+        with:
+          # No cross-run token or run-id override: consume only this run's upload.
+          artifact-ids: ${{ needs.atlas.outputs.artifact-id }}
+          path: ${{ env.ATLAS_OUT }}
+          merge-multiple: true
+
       - name: Publish dated Atlas release
-        if: github.ref == 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail

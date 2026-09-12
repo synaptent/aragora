@@ -21,13 +21,29 @@ def atlas_job() -> dict[str, Any]:
     return yaml.safe_load(WORKFLOW.read_text())["jobs"]["atlas"]
 
 
-def step(name: str) -> dict[str, Any]:
-    return next(s for s in atlas_job()["steps"] if s["name"] == name)
+def publish_job() -> dict[str, Any]:
+    return yaml.safe_load(WORKFLOW.read_text())["jobs"]["publish-atlas"]
 
 
-def run_step(name: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def step(name: str, *, publish: bool = False) -> dict[str, Any]:
+    job = publish_job() if publish else atlas_job()
+    return next(s for s in job["steps"] if s["name"] == name)
+
+
+def run_step(
+    name: str, env: dict[str, str], *, publish: bool = False
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", step(name)["run"]],
+        [
+            "bash",
+            "--noprofile",
+            "--norc",
+            "-e",
+            "-o",
+            "pipefail",
+            "-c",
+            step(name, publish=publish)["run"],
+        ],
         env=env,
         capture_output=True,
         text=True,
@@ -103,6 +119,7 @@ else:
         "CALLS": str(tmp_path / "calls.jsonl"),
         "DATE_CALLS": str(tmp_path / "date-calls"),
         "GITHUB_OUTPUT": str(tmp_path / "outputs"),
+        "GITHUB_ENV": str(tmp_path / "env"),
     }
 
 
@@ -113,16 +130,19 @@ def test_job_is_weekly_or_manual_with_branch_artifacts_and_main_only_releases() 
         "github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
     )
     assert job["permissions"] == {
-        "contents": "write",
+        "contents": "read",
         "issues": "read",
         "pull-requests": "read",
         "statuses": "read",
     }
     assert job["env"]["GH_TOKEN"] == "${{ github.token }}"
     assert job["timeout-minutes"] >= 90
-    assert step("Publish dated Atlas release")["if"] == "github.ref == 'refs/heads/main'"
-    upload = step("Upload branch Atlas")
-    assert upload["if"] == "github.ref != 'refs/heads/main'"
+    assert not job.get("continue-on-error", False)
+    assert all("gh release" not in s.get("run", "") for s in job["steps"])
+    upload = step("Upload Atlas artifact")
+    assert "if" not in upload
+    assert upload["id"] == "atlas_upload"
+    assert job["outputs"] == {"artifact-id": "${{ steps.atlas_upload.outputs.artifact-id }}"}
     assert upload["uses"].startswith("actions/upload-artifact@")
     assert upload["with"]["name"] == "${{ steps.atlas_date.outputs.tag }}"
     assert upload["with"]["if-no-files-found"] == "error"
@@ -133,6 +153,61 @@ def test_job_is_weekly_or_manual_with_branch_artifacts_and_main_only_releases() 
     }
     block = WORKFLOW.read_text().split("\n  atlas:\n")[1]
     assert not re.search(r"git (push|commit)|gh pr (create|merge)|docs/atlas/cache", block)
+
+
+def test_publisher_is_main_only_and_consumes_successful_same_run_artifact() -> None:
+    job = publish_job()
+    assert job["needs"] == "atlas"
+    assert job["if"] == (
+        "github.ref == 'refs/heads/main' && needs.atlas.result == 'success' && "
+        "(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')"
+    )
+    assert job["permissions"] == {"contents": "write"}
+    assert job["env"]["GH_TOKEN"] == "${{ github.token }}"
+    assert not job.get("continue-on-error", False)
+    assert 0 < job["timeout-minutes"] <= 15
+    assert all(not s.get("continue-on-error", False) for s in job["steps"])
+    assert all("if" not in s for s in job["steps"])
+    assert not any(s.get("uses", "").startswith("actions/checkout@") for s in job["steps"])
+    assert not any("scripts/" in s.get("run", "") for s in job["steps"])
+    validate = step("Require Atlas artifact", publish=True)
+    assert validate["env"]["ATLAS_ARTIFACT_ID"] == "${{ needs.atlas.outputs.artifact-id }}"
+    download = step("Download this run's Atlas artifact", publish=True)
+    assert download["uses"] == "actions/download-artifact@v4"
+    # No token, repository or run override: the action uses this run's artifact service.
+    assert download["with"] == {
+        "artifact-ids": "${{ needs.atlas.outputs.artifact-id }}",
+        "path": "${{ env.ATLAS_OUT }}",
+        "merge-multiple": True,
+    }
+    assert [s["name"] for s in job["steps"]] == [
+        "Require Atlas artifact",
+        "Download this run's Atlas artifact",
+        "Publish dated Atlas release",
+    ]
+
+
+@pytest.mark.parametrize("artifact_id", ["", "0", "invalid", "123,456", "-1"])
+def test_publisher_rejects_missing_or_invalid_artifact_id(
+    shell_env: dict[str, str], artifact_id: str
+) -> None:
+    result = run_step(
+        "Require Atlas artifact", {**shell_env, "ATLAS_ARTIFACT_ID": artifact_id}, publish=True
+    )
+    assert result.returncode != 0
+    assert "missing or invalid" in result.stderr
+    assert not Path(shell_env["GITHUB_ENV"]).exists()
+    assert not Path(shell_env["CALLS"]).exists()
+
+
+def test_publisher_accepts_exact_artifact_id(shell_env: dict[str, str]) -> None:
+    result = run_step(
+        "Require Atlas artifact", {**shell_env, "ATLAS_ARTIFACT_ID": "123456"}, publish=True
+    )
+    assert result.returncode == 0, result.stderr
+    assert Path(shell_env["GITHUB_ENV"]).read_text() == (
+        f"ATLAS_OUT={shell_env['RUNNER_TEMP']}/atlas-output\n"
+    )
 
 
 def test_cache_advances_per_run_and_index_refresh_discovers_new_prs() -> None:
@@ -164,7 +239,7 @@ def test_date_output_is_exact_dated_artifact_name(shell_env: dict[str, str]) -> 
 
 @pytest.mark.parametrize("mode", ["exists", "unchanged", "changed", "first"])
 def test_release_skips_or_publishes_three_assets(shell_env: dict[str, str], mode: str) -> None:
-    result = run_step("Publish dated Atlas release", {**shell_env, "MODE": mode})
+    result = run_step("Publish dated Atlas release", {**shell_env, "MODE": mode}, publish=True)
     assert result.returncode == 0, result.stderr
     calls = [json.loads(line) for line in Path(shell_env["CALLS"]).read_text().splitlines()]
     created = [args for args in calls if args[1] == "create"]
@@ -180,7 +255,7 @@ def test_release_skips_or_publishes_three_assets(shell_env: dict[str, str], mode
 
 @pytest.mark.parametrize("mode", ["view_error", "list_error", "download_error", "invalid"])
 def test_release_fails_closed_on_read_errors(shell_env: dict[str, str], mode: str) -> None:
-    result = run_step("Publish dated Atlas release", {**shell_env, "MODE": mode})
+    result = run_step("Publish dated Atlas release", {**shell_env, "MODE": mode}, publish=True)
     assert result.returncode != 0
     calls = [json.loads(line) for line in Path(shell_env["CALLS"]).read_text().splitlines()]
     assert all(args[1] != "create" for args in calls)
@@ -194,5 +269,9 @@ def test_collect_failure_stops_before_build_or_publish(shell_env: dict[str, str]
     steps = atlas_job()["steps"]
     names = [s["name"] for s in steps]
     assert names.index("Collect Atlas incrementally") < names.index("Build Atlas")
-    for name in ("Build Atlas", "Upload branch Atlas", "Publish dated Atlas release"):
+    for name in ("Build Atlas", "Upload Atlas artifact"):
         assert "always()" not in step(name).get("if", "")
+        assert not step(name).get("continue-on-error", False)
+    assert publish_job()["needs"] == "atlas"
+    assert "needs.atlas.result == 'success'" in publish_job()["if"]
+    assert "always()" not in publish_job()["if"]
