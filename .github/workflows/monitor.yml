@@ -43,6 +43,7 @@ jobs:
           fi
 
       - name: Check Frontend Critical Routes
+        id: frontend
         run: |
           FRONTEND_URL="${LIVE_FRONTEND_BASE_URL:-https://aragora.ai}"
           # Retry once on transient failure
@@ -60,11 +61,15 @@ jobs:
           exit 1
 
       - name: Check Production API (Lightsail)
+        id: production_api
         run: |
           # Use /api/health (public, load-balancer friendly)
-          response=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.aragora.ai/api/health" || echo "000")
-          if [ "$response" != "200" ]; then
-            echo "::error::Production API returned $response"
+          CURL_EXIT=0
+          response=$(curl -sf -o /dev/null -w "%{http_code}" "https://api.aragora.ai/api/health") || CURL_EXIT=$?
+          response=${response:-000}
+          echo "Production API: http_status=$response curl_exit=$CURL_EXIT"
+          if [ "$CURL_EXIT" -ne 0 ] || [ "$response" != "200" ]; then
+            echo "::error::Production API failed (http_status=$response curl_exit=$CURL_EXIT)"
             exit 1
           fi
           echo "Production API: OK ($response)"
@@ -94,13 +99,16 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          FRONTEND_OUTCOME: ${{ steps.frontend.outcome }}
+          PRODUCTION_API_OUTCOME: ${{ steps.production_api.outcome }}
         run: |
           echo "## Health Check Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend (Vercel/custom domain) | ${{ job.status == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Production API | ${{ job.status == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend (Vercel/custom domain) | ${FRONTEND_OUTCOME:-skipped} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Production API | ${PRODUCTION_API_OUTCOME:-skipped} |" >> $GITHUB_STEP_SUMMARY
           echo "| Timestamp | $(date -u) |" >> $GITHUB_STEP_SUMMARY
 
   notify-on-failure:
