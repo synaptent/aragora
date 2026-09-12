@@ -85,16 +85,48 @@ class AgentRegistrationRecord:
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> "AgentRegistrationRecord":
+        """Rebuild a record from :meth:`to_dict` output.
+
+        Persisted records are untrusted input: every field is validated and a
+        malformed record raises :class:`RegistrationError` instead of yielding
+        a half-formed identity.
+        """
+        if not isinstance(data, dict):
+            raise RegistrationError("record must be a mapping")
+
+        raw_id = data.get("agent_id")
+        if not isinstance(raw_id, str) or not raw_id.strip():
+            raise RegistrationError("agent_id must be a non-empty string")
+
         raw_caps = data.get("capabilities", [])
         if not isinstance(raw_caps, list):
             raise RegistrationError("capabilities must be a list")
+        if not raw_caps or not all(isinstance(c, str) and c.strip() for c in raw_caps):
+            raise RegistrationError("capabilities must be a non-empty list of non-empty strings")
+
         raw_ts = data.get("registered_at")
-        ts = datetime.fromisoformat(str(raw_ts)) if raw_ts else datetime.now(tz=UTC)
+        if not isinstance(raw_ts, str) or not raw_ts.strip():
+            raise RegistrationError("registered_at must be an ISO-8601 string")
+        try:
+            ts = datetime.fromisoformat(raw_ts)
+        except ValueError as exc:
+            raise RegistrationError(f"registered_at is not ISO-8601: {raw_ts!r}") from exc
+        if ts.tzinfo is None or ts.utcoffset() is None:
+            raise RegistrationError("registered_at must be timezone-aware")
+
+        def _optional_str(key: str) -> str | None:
+            value = data.get(key)
+            if value is None:
+                return None
+            if not isinstance(value, str) or not value.strip():
+                raise RegistrationError(f"{key} must be a non-empty string or null")
+            return value
+
         return cls(
-            agent_id=str(data["agent_id"]),
-            capabilities=frozenset(str(c) for c in raw_caps),
-            public_key=str(data["public_key"]) if data.get("public_key") else None,
-            endpoint_url=str(data["endpoint_url"]) if data.get("endpoint_url") else None,
+            agent_id=raw_id.strip(),
+            capabilities=frozenset(c.strip() for c in raw_caps),
+            public_key=_optional_str("public_key"),
+            endpoint_url=_optional_str("endpoint_url"),
             registered_at=ts,
         )
 

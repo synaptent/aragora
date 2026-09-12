@@ -260,3 +260,69 @@ class TestSerialization:
                     "capabilities": "not-a-list",
                 }
             )
+
+
+class TestFromDictValidation:
+    """Persisted records are untrusted; malformed ones must be rejected, not coerced."""
+
+    @staticmethod
+    def _valid() -> dict[str, object]:
+        return {
+            "agent_id": "val-1",
+            "capabilities": ["debate"],
+            "public_key": None,
+            "endpoint_url": None,
+            "registered_at": "2026-06-01T00:00:00+00:00",
+        }
+
+    def test_valid_record_round_trips(self):
+        rec = AgentRegistrationRecord.from_dict(self._valid())
+        assert rec.agent_id == "val-1"
+        assert rec.capabilities == frozenset({"debate"})
+        assert rec.registered_at.tzinfo is not None
+        assert AgentRegistrationRecord.from_dict(rec.to_dict()) == rec
+
+    @pytest.mark.parametrize("bad_id", [None, "", "   ", 42])
+    def test_bad_agent_id_raises(self, bad_id):
+        d = self._valid()
+        d["agent_id"] = bad_id
+        with pytest.raises(RegistrationError, match="agent_id"):
+            AgentRegistrationRecord.from_dict(d)
+
+    def test_missing_agent_id_raises(self):
+        d = self._valid()
+        del d["agent_id"]
+        with pytest.raises(RegistrationError, match="agent_id"):
+            AgentRegistrationRecord.from_dict(d)
+
+    @pytest.mark.parametrize("bad_caps", [[], [""], ["debate", "  "], [1], ["debate", None]])
+    def test_bad_capabilities_raise(self, bad_caps):
+        d = self._valid()
+        d["capabilities"] = bad_caps
+        with pytest.raises(RegistrationError, match="capabilities"):
+            AgentRegistrationRecord.from_dict(d)
+
+    @pytest.mark.parametrize("bad_ts", [None, "", "not-a-date", 1717200000, "2026-06-01T00:00:00"])
+    def test_bad_registered_at_raises(self, bad_ts):
+        d = self._valid()
+        d["registered_at"] = bad_ts
+        with pytest.raises(RegistrationError, match="registered_at"):
+            AgentRegistrationRecord.from_dict(d)
+
+    def test_missing_registered_at_raises(self):
+        d = self._valid()
+        del d["registered_at"]
+        with pytest.raises(RegistrationError, match="registered_at"):
+            AgentRegistrationRecord.from_dict(d)
+
+    @pytest.mark.parametrize("key", ["public_key", "endpoint_url"])
+    @pytest.mark.parametrize("bad", ["", "  ", 7, {"k": "v"}])
+    def test_bad_optional_strings_raise(self, key, bad):
+        d = self._valid()
+        d[key] = bad
+        with pytest.raises(RegistrationError, match=key):
+            AgentRegistrationRecord.from_dict(d)
+
+    def test_non_mapping_raises(self):
+        with pytest.raises(RegistrationError, match="mapping"):
+            AgentRegistrationRecord.from_dict(["agent_id"])  # type: ignore[arg-type]
