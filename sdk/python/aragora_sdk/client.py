@@ -24,9 +24,11 @@ from .exceptions import (
     AragoraError,
     AuthenticationError,
     AuthorizationError,
+    ConnectionError,
     NotFoundError,
     RateLimitError,
     ServerError,
+    TimeoutError,
     ValidationError,
 )
 
@@ -717,14 +719,14 @@ class AragoraClient:
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2**attempt))
                     continue
-                raise AragoraError("Request timed out") from e
+                raise TimeoutError("Request timed out") from e
 
             except httpx.ConnectError as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (2**attempt))
                     continue
-                raise AragoraError("Connection failed") from e
+                raise ConnectionError("Connection failed") from e
 
             except RateLimitError as e:
                 last_error = e
@@ -1395,14 +1397,14 @@ class AragoraAsyncClient:
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(self.retry_delay * (2**attempt))
                     continue
-                raise AragoraError("Request timed out") from e
+                raise TimeoutError("Request timed out") from e
 
             except httpx.ConnectError as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(self.retry_delay * (2**attempt))
                     continue
-                raise AragoraError("Connection failed") from e
+                raise ConnectionError("Connection failed") from e
 
             except RateLimitError as e:
                 last_error = e

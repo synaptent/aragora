@@ -48,3 +48,36 @@ with AragoraClient(base_url="http://localhost:8080", max_retries=1) as client:
 The same diagnostics are available with `async with AragoraAsyncClient(...)`
 and `await client.request(...)`. This contract does not add a global deadline,
 cancellation API, or new exception type.
+
+## Transport failures and cancellation
+
+After the existing attempt budget is exhausted, both clients raise the existing
+SDK `TimeoutError` for `httpx.TimeoutException` (including connect, read, write
+and pool timeouts), or SDK `ConnectionError` for `httpx.ConnectError`.
+Import these from `aragora_sdk`, not Python's built-in exception classes.
+Both remain subclasses of `AragoraError`, keep the messages `Request timed out`
+and `Connection failed`, and chain the final transport exception as `__cause__`.
+No HTTP status, error code, trace ID or response body is fabricated.
+
+The existing `max_retries` value is the maximum number of attempts, including
+the first request. Retry counts and exponential backoff are unchanged, as is
+successful recovery before exhaustion. This change does not newly wrap or retry
+other transport errors, response-decoding failures or arbitrary exceptions.
+
+```python
+from aragora_sdk import AragoraClient, ConnectionError, TimeoutError
+
+with AragoraClient(base_url="http://localhost:8080", max_retries=1) as client:
+    try:
+        result = client.request("GET", "/api/v1/debates")
+    except (TimeoutError, ConnectionError) as error:
+        # The configured attempt budget has already been consumed; do not retry blindly.
+        print(type(error).__name__, error.message)
+```
+
+Use `with AragoraClient(...)` or `async with AragoraAsyncClient(...)` to close
+the owned HTTP client after success or request failure. In asynchronous HTTP
+usage, caller cancellation during a request or retry backoff propagates as
+`asyncio.CancelledError` without another request attempt; context exit still
+closes the HTTP client. Cleanup is not shielded from further cancellation.
+This adds no cancellation API or total deadline and changes no WebSocket policy.
