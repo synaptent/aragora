@@ -728,6 +728,17 @@ def _add_coherence_scan_parser(subparsers) -> None:
         help="Minimum confidence threshold for rot detection (default: 0.3)",
     )
     p.add_argument("--json", action="store_true", help="Emit JSON instead of text")
+    p.add_argument(
+        "--emit-followup",
+        dest="emit_followup",
+        action="store_true",
+        default=False,
+        help=(
+            "DIC-17: forward error-severity issues to the follow-up proposal bridge. "
+            "Requires ARAGORA_EPISTEMIC_FOLLOWUP_ENABLED=1. "
+            "Proposals are printed but never filed (no live queue effect)."
+        ),
+    )
     p.set_defaults(func=_lazy("aragora.cli.commands.dic26_coherence", "cmd_coherence_scan"))
 
 
