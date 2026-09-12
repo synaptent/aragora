@@ -1034,11 +1034,21 @@ class TestPathParameterInjection:
             "agent_1",
             "CodexModel",
             "gemini-pro",
+            "gemini-3.1-pro-preview",  # dotted model version (#9994)
+            "claude-fable-5.1",
         ]
 
         for name in valid_names:
             is_valid, error = validate_agent_name(name)
             assert is_valid is True, f"Should accept: {name} (got: {error})"
+
+    def test_agent_name_slash_and_leading_dot_rejected(self):
+        """Provider-qualified slugs and dot-led tokens are not valid agent path segments."""
+        from aragora.server.handlers.base import validate_agent_name
+
+        for name in ["anthropic/claude-fable-5.1", ".hidden", "..", "../claude"]:
+            is_valid, _ = validate_agent_name(name)
+            assert is_valid is False, f"Should reject: {name}"
 
     def test_empty_values_rejected(self):
         """Empty values should be rejected."""

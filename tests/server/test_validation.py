@@ -666,11 +666,32 @@ class TestPatterns:
             "gemini-pro",
             "gpt_4",
             "agent123",
+            # dotted frontier model ids (#9994)
+            "gemini-3.1-pro-preview",
+            "claude-fable-5.1",
+            "qwen3.8-2.4t-a95b",
         ],
     )
     def test_safe_agent_pattern_valid(self, agent: str):
         """Test valid agent names match pattern."""
         assert SAFE_AGENT_PATTERN.match(agent), f"{agent} should match"
+
+    @pytest.mark.parametrize(
+        "agent",
+        [
+            "anthropic/claude-fable-5.1",  # provider-qualified slug: "/" is a path separator
+            "x-ai/grok-4.6",
+            ".hidden",  # leading dot
+            ".",
+            "..",
+            "../etc",
+            "claude fable",  # whitespace
+            "",
+        ],
+    )
+    def test_safe_agent_pattern_rejects_separators_and_leading_dot(self, agent: str):
+        """Dots are allowed inside a name, never as a path token; slashes never."""
+        assert not SAFE_AGENT_PATTERN.match(agent), f"{agent!r} should not match"
 
     @pytest.mark.parametrize(
         "agent,expected_match",
