@@ -29,12 +29,15 @@ modules just to construct a proposal shape).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import hashlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from aragora.epistemic.coherence import CoherenceIssue
+    from aragora.epistemic.repair import RepairSpec
     from aragora.reasoning.cruxset import Crux, CruxSet
     from aragora.reputation.types import (
         ReputationDelta,
@@ -46,6 +49,24 @@ if TYPE_CHECKING:
 DEFAULT_CRUX_LOAD_BEARING_THRESHOLD = 0.6
 DEFAULT_DELTA_LOSS_THRESHOLD = -10.0
 MAX_BODY_STATEMENT_CHARS = 800
+
+
+_BOSS_READY_LABEL = "boss-ready"
+
+
+def _is_boss_ready_label(label: object) -> bool:
+    """True when *label* spells ``boss-ready`` under any case or surrounding whitespace.
+
+    The queue-governance invariant is about the label GitHub would apply, and
+    GitHub label matching is case-insensitive, so ``"Boss-Ready"`` or
+    ``" boss-ready "`` must be treated exactly like the canonical spelling.
+    """
+    return str(label).strip().casefold() == _BOSS_READY_LABEL
+
+
+def _without_boss_ready(labels: Iterable[str]) -> tuple[str, ...]:
+    """Return *labels* sorted, with every ``boss-ready`` variant removed."""
+    return tuple(sorted(label for label in labels if not _is_boss_ready_label(label)))
 
 
 @dataclass(frozen=True)
@@ -72,7 +93,7 @@ class FollowupProposal:
     provenance: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.source_kind not in {"crux", "failed_claim", "coherence_issue"}:
+        if self.source_kind not in {"crux", "failed_claim", "coherence_issue", "repair_spec"}:
             raise ValueError(f"unsupported source_kind: {self.source_kind!r}")
         if not str(self.source_key).strip():
             raise ValueError("source_key must be non-empty")
@@ -80,7 +101,7 @@ class FollowupProposal:
             raise ValueError("title must be non-empty")
         if not str(self.body).strip():
             raise ValueError("body must be non-empty")
-        if "boss-ready" in self.labels:
+        if any(_is_boss_ready_label(label) for label in self.labels):
             raise ValueError(
                 "follow-up proposals must NOT carry boss-ready label (queue-governance invariant)"
             )
@@ -184,7 +205,7 @@ def propose_followup_for_crux(
         ]
     )
 
-    labels = tuple(sorted({"epistemic", "crux", *extra_labels} - {"boss-ready"}))
+    labels = _without_boss_ready({"epistemic", "crux", *extra_labels})
     source_key = _source_key("crux", f"{cruxset_id}|{crux.crux_id}" if cruxset_id else crux.crux_id)
 
     return FollowupProposal(
@@ -307,7 +328,7 @@ def propose_followup_for_failed_claim(
         ]
     )
 
-    labels = tuple(sorted({"epistemic", "failed-claim", *extra_labels} - {"boss-ready"}))
+    labels = _without_boss_ready({"epistemic", "failed-claim", *extra_labels})
     source_key = _source_key("failed_claim", delta.delta_id)
 
     return FollowupProposal(
@@ -401,7 +422,7 @@ def propose_followup_for_coherence_issue(
         ]
     )
 
-    labels = tuple(sorted({"epistemic", "coherence", kind_slug, *extra_labels} - {"boss-ready"}))
+    labels = _without_boss_ready({"epistemic", "coherence", kind_slug, *extra_labels})
     # Dedup key: stable hash of belief_ids (sorted) + kind so the same
     # incoherence produces the same source_key regardless of scan order.
     dedup_material = "|".join(sorted(str(b) for b in issue.belief_ids)) + f"|{issue.kind.value}"
@@ -422,6 +443,106 @@ def propose_followup_for_coherence_issue(
     )
 
 
+# ---------------------------------------------------------------------------
+# RepairSpec → proposal  (DIC-22 → DIC-17 bridge)
+# ---------------------------------------------------------------------------
+
+
+def propose_followup_for_repair_spec(
+    spec: "RepairSpec",
+    *,
+    extra_labels: tuple[str, ...] = (),
+) -> FollowupProposal | None:
+    """Propose exactly one bounded follow-up issue for a RepairSpec, or None.
+
+    Returns ``None`` for ``repair_kind='report_only'`` specs — advisory
+    report-only artifacts are self-contained and do not require a queued
+    follow-up issue.  ``'shadow_candidate'`` and ``'pr_candidate'`` specs
+    indicate work that should be tracked and therefore do produce proposals.
+
+    This implements the DIC-22 → DIC-17 bridge: a verified repair candidate
+    that has been validated by ``propose_repair()`` becomes a bounded,
+    queue-governance-compliant follow-up proposal.
+
+    The ``boss-ready`` label is always excluded.  The proof-first reconciler
+    strips it regardless; callers must not add it.
+    """
+    if spec.repair_kind == "report_only":
+        return None
+
+    title = f"[DIC-22] Review repair candidate: {spec.code_unit_id} ({spec.repair_kind})"
+    if len(title) > 140:
+        title = title[:139] + "…"
+
+    body_lines = [
+        "## Goal",
+        "Review and approve a bounded repair candidate produced by the DIC-22 "
+        "verified-replacement pipeline for a decayed proof-carrying code unit.",
+        "",
+        "## Repair spec",
+        f"- spec_id: {spec.spec_id}",
+        f"- code_unit_id: {spec.code_unit_id}",
+        f"- repair_kind: {spec.repair_kind}",
+        f"- integrity_score: {spec.decay_signal.integrity_score:.3f}",
+        f"- created_at: {spec.created_at}",
+    ]
+    if spec.linked_claims:
+        body_lines.extend(["", "## Linked claims"])
+        body_lines.extend(f"- {c}" for c in spec.linked_claims)
+    if spec.linked_crux_ids:
+        body_lines.extend(["", "## Linked cruxes"])
+        body_lines.extend(f"- {c}" for c in spec.linked_crux_ids)
+    if spec.validation_commands:
+        body_lines.extend(["", "## Validation commands"])
+        body_lines.extend(f"- `{cmd}`" for cmd in spec.validation_commands)
+    if spec.proposed_patch:
+        body_lines.extend(
+            [
+                "",
+                "## Proposed patch",
+                _truncate(spec.proposed_patch, MAX_BODY_STATEMENT_CHARS),
+            ]
+        )
+    body_lines.extend(
+        [
+            "",
+            "## Provenance",
+            "- source: DIC-22 repair pipeline → DIC-17 follow-up bridge",
+            f"- spec_id: {spec.spec_id}",
+            f"- provenance_hash: {spec.provenance_hash or '(report_only — no hash)'}",
+            "",
+            "## Queue policy",
+            "This issue is a DIC-17 proposal. It MUST NOT carry `boss-ready` unless the "
+            "current tranche in `docs/status/NEXT_STEPS_CANONICAL.md` explicitly permits "
+            "it. The proof-first reconciler in `scripts/reconcile_proof_first_queue.py` "
+            "will strip the label if it is added outside the permitted lane.",
+        ]
+    )
+
+    labels = _without_boss_ready({"epistemic", "repair-required", spec.repair_kind, *extra_labels})
+    source_key = _source_key("repair_spec", spec.spec_id)
+
+    return FollowupProposal(
+        source_kind="repair_spec",
+        source_key=source_key,
+        title=title,
+        body="\n".join(body_lines),
+        labels=labels,
+        rationale=(
+            f"repair_kind={spec.repair_kind!r} for {spec.code_unit_id} "
+            f"(integrity={spec.decay_signal.integrity_score:.3f})"
+        ),
+        provenance={
+            "spec_id": spec.spec_id,
+            "code_unit_id": spec.code_unit_id,
+            "repair_kind": spec.repair_kind,
+            "provenance_hash": spec.provenance_hash,
+            "linked_claims": list(spec.linked_claims),
+            "linked_crux_ids": list(spec.linked_crux_ids),
+        },
+    )
+
+
 __all__ = [
     "DEFAULT_CRUX_LOAD_BEARING_THRESHOLD",
     "DEFAULT_DELTA_LOSS_THRESHOLD",
@@ -431,4 +552,5 @@ __all__ = [
     "propose_followup_for_crux",
     "propose_followup_for_cruxset",
     "propose_followup_for_failed_claim",
+    "propose_followup_for_repair_spec",
 ]
