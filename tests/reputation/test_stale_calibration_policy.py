@@ -13,6 +13,8 @@ Reference: docs/plans/2026-04-29-agt-05-stale-claim-policy.md
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from aragora.reputation.stale_policy import (
@@ -116,6 +118,16 @@ class TestInputValidation:
     def test_negative_half_life_raises(self) -> None:
         with pytest.raises(ValueError, match="half_life_days"):
             resolve_stale_calibration(evidence_age_days=10.0, half_life_days=-5.0)
+
+    @pytest.mark.parametrize("age", [math.nan, math.inf, -math.inf])
+    def test_non_finite_age_raises(self, age: float) -> None:
+        with pytest.raises(ValueError, match="evidence_age_days must be finite"):
+            resolve_stale_calibration(evidence_age_days=age, half_life_days=HL)
+
+    @pytest.mark.parametrize("half_life", [math.nan, math.inf, -math.inf])
+    def test_non_finite_half_life_raises(self, half_life: float) -> None:
+        with pytest.raises(ValueError, match="half_life_days must be finite"):
+            resolve_stale_calibration(evidence_age_days=10.0, half_life_days=half_life)
 
 
 # ---------------------------------------------------------------------------

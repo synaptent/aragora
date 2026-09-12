@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -282,8 +283,15 @@ def resolve_stale_calibration(
         A :class:`StaleCalibrationDecision` with the advisory action.
 
     Raises:
-        ValueError: If ``evidence_age_days < 0`` or ``half_life_days <= 0``.
+        ValueError: If either input is NaN or infinite, if
+            ``evidence_age_days < 0``, or if ``half_life_days <= 0``.
     """
+    # NaN compares False against every bound and infinities collapse the band
+    # arithmetic, so both would silently route to a decision; reject them first.
+    if not math.isfinite(evidence_age_days):
+        raise ValueError(f"evidence_age_days must be finite; got {evidence_age_days!r}")
+    if not math.isfinite(half_life_days):
+        raise ValueError(f"half_life_days must be finite; got {half_life_days!r}")
     if evidence_age_days < 0:
         raise ValueError(f"evidence_age_days must be >= 0; got {evidence_age_days!r}")
     if half_life_days <= 0:
