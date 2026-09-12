@@ -173,6 +173,30 @@ class TestQueueGovernance:
         assert "boss-ready" in proposal.body
         assert "MUST NOT" in proposal.body
 
+    @pytest.mark.parametrize(
+        "variant", ["Boss-Ready", "BOSS-READY", " boss-ready ", "\tboss-ready\n"]
+    )
+    def test_boss_ready_case_and_whitespace_variants_are_stripped(self, variant: str) -> None:
+        spec = propose_repair(_signal(), repair_kind="pr_candidate")  # type: ignore[arg-type]
+        proposal = propose_followup_for_repair_spec(spec, extra_labels=(variant,))
+        assert proposal is not None
+        assert not any(label.strip().casefold() == "boss-ready" for label in proposal.labels)
+        assert "epistemic" in proposal.labels
+
+    @pytest.mark.parametrize("variant", ["Boss-Ready", "BOSS-READY", " boss-ready "])
+    def test_followup_proposal_rejects_boss_ready_variants_in_direct_construction(
+        self, variant: str
+    ) -> None:
+        with pytest.raises(ValueError, match="boss-ready"):
+            FollowupProposal(
+                source_kind="repair_spec",
+                source_key="rs_x",
+                title="t",
+                body="b",
+                labels=(variant,),
+                rationale="r",
+            )
+
     def test_followup_proposal_rejects_boss_ready_in_direct_construction(self) -> None:
         with pytest.raises(ValueError, match="boss-ready"):
             FollowupProposal(

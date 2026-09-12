@@ -29,6 +29,8 @@ modules just to construct a proposal shape).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import hashlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -47,6 +49,24 @@ if TYPE_CHECKING:
 DEFAULT_CRUX_LOAD_BEARING_THRESHOLD = 0.6
 DEFAULT_DELTA_LOSS_THRESHOLD = -10.0
 MAX_BODY_STATEMENT_CHARS = 800
+
+
+_BOSS_READY_LABEL = "boss-ready"
+
+
+def _is_boss_ready_label(label: object) -> bool:
+    """True when *label* spells ``boss-ready`` under any case or surrounding whitespace.
+
+    The queue-governance invariant is about the label GitHub would apply, and
+    GitHub label matching is case-insensitive, so ``"Boss-Ready"`` or
+    ``" boss-ready "`` must be treated exactly like the canonical spelling.
+    """
+    return str(label).strip().casefold() == _BOSS_READY_LABEL
+
+
+def _without_boss_ready(labels: Iterable[str]) -> tuple[str, ...]:
+    """Return *labels* sorted, with every ``boss-ready`` variant removed."""
+    return tuple(sorted(label for label in labels if not _is_boss_ready_label(label)))
 
 
 @dataclass(frozen=True)
@@ -81,7 +101,7 @@ class FollowupProposal:
             raise ValueError("title must be non-empty")
         if not str(self.body).strip():
             raise ValueError("body must be non-empty")
-        if "boss-ready" in self.labels:
+        if any(_is_boss_ready_label(label) for label in self.labels):
             raise ValueError(
                 "follow-up proposals must NOT carry boss-ready label (queue-governance invariant)"
             )
@@ -185,7 +205,7 @@ def propose_followup_for_crux(
         ]
     )
 
-    labels = tuple(sorted({"epistemic", "crux", *extra_labels} - {"boss-ready"}))
+    labels = _without_boss_ready({"epistemic", "crux", *extra_labels})
     source_key = _source_key("crux", f"{cruxset_id}|{crux.crux_id}" if cruxset_id else crux.crux_id)
 
     return FollowupProposal(
@@ -308,7 +328,7 @@ def propose_followup_for_failed_claim(
         ]
     )
 
-    labels = tuple(sorted({"epistemic", "failed-claim", *extra_labels} - {"boss-ready"}))
+    labels = _without_boss_ready({"epistemic", "failed-claim", *extra_labels})
     source_key = _source_key("failed_claim", delta.delta_id)
 
     return FollowupProposal(
@@ -402,7 +422,7 @@ def propose_followup_for_coherence_issue(
         ]
     )
 
-    labels = tuple(sorted({"epistemic", "coherence", kind_slug, *extra_labels} - {"boss-ready"}))
+    labels = _without_boss_ready({"epistemic", "coherence", kind_slug, *extra_labels})
     # Dedup key: stable hash of belief_ids (sorted) + kind so the same
     # incoherence produces the same source_key regardless of scan order.
     dedup_material = "|".join(sorted(str(b) for b in issue.belief_ids)) + f"|{issue.kind.value}"
@@ -499,9 +519,7 @@ def propose_followup_for_repair_spec(
         ]
     )
 
-    labels = tuple(
-        sorted({"epistemic", "repair-required", spec.repair_kind, *extra_labels} - {"boss-ready"})
-    )
+    labels = _without_boss_ready({"epistemic", "repair-required", spec.repair_kind, *extra_labels})
     source_key = _source_key("repair_spec", spec.spec_id)
 
     return FollowupProposal(
