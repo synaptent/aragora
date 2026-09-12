@@ -1899,6 +1899,55 @@ def test_collect_overall_timeout_fails_closed_and_ignores_late_results() -> None
     assert posted == []
 
 
+def test_collect_overall_timeout_records_adjudication_for_partial_stall(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aragora.swarm import review_adjudicator
+
+    monkeypatch.setenv("ARAGORA_ENABLE_REVIEW_ADJUDICATOR", "1")
+    fakes, posted = _fakes(tier=0)
+
+    def fake_adjudicate(items):
+        return SimpleNamespace(
+            to_receipt_dict=lambda: {
+                "kind": "review_adjudication.v1",
+                "verdict": "adjudicated_block",
+                "families": [item.family for item in items],
+            }
+        )
+
+    def runner(family: str, prompt: str) -> ReviewerResult:
+        if family == "claude":
+            return ReviewerResult(family, "Verdict: PASS from claude", True)
+        if family == "openai":
+            return ReviewerResult(family, "Verdict: CHANGES-REQUESTED\n- [P1] blocker", True)
+        time.sleep(1.5)
+        return ReviewerResult(family, "Verdict: PASS from grok", True)
+
+    monkeypatch.setattr(review_adjudicator, "adjudicate", fake_adjudicate)
+    fakes["reviewer_runner"] = runner
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["claude", "openai", "grok"],
+        author="me",
+        apply=True,
+        overall_timeout_seconds=0.2,
+        **fakes,
+    )
+
+    assert outcome.orchestration_timeout is True
+    assert outcome.action == "prepare"
+    assert outcome.supportive_families == ["claude"]
+    assert outcome.dissenting_families == ["openai"]
+    assert outcome.adjudication == {
+        "kind": "review_adjudication.v1",
+        "verdict": "adjudicated_block",
+        "families": ["claude", "openai"],
+    }
+    assert posted == []
+
+
 def test_collect_overall_timeout_does_not_wait_for_stuck_reviewer() -> None:
     # Verified under fork and forkserver (macOS); spawn-only platforms boot a
     # fresh interpreter per worker, which the tight deadline cannot absorb.
@@ -2277,6 +2326,55 @@ def test_collect_severity_gated_p2_only_dissent_is_advisory(
     assert sorted(outcome.supportive_families) == ["claude", "openai"]
     assert sorted(outcome.posted) == ["claude", "openai"]
     assert all("changes-requested" not in body.lower() for _repo, body in posted)
+
+
+def test_collect_severity_gated_advisory_dissent_stall_records_adjudication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from aragora.swarm import review_adjudicator
+
+    monkeypatch.setenv("ARAGORA_ENABLE_REVIEW_ADJUDICATOR", "1")
+    monkeypatch.setenv("ARAGORA_ENABLE_SEVERITY_GATED_DISSENT", "1")
+    fakes, posted = _fakes(tier=4)
+
+    def fake_adjudicate(items):
+        return SimpleNamespace(
+            to_receipt_dict=lambda: {
+                "kind": "review_adjudication.v1",
+                "verdict": "adjudicated_settle",
+                "families": [item.family for item in items],
+            }
+        )
+
+    def reviewer_runner(family: str, prompt: str) -> ReviewerResult:
+        if family == "grok":
+            return ReviewerResult(
+                "grok",
+                "Verdict: CHANGES-REQUESTED\n- [P2] Add a follow-up smoke test.",
+                True,
+            )
+        return ReviewerResult(family, f"Verdict: PASS from {family}", True)
+
+    monkeypatch.setattr(review_adjudicator, "adjudicate", fake_adjudicate)
+    fakes["reviewer_runner"] = reviewer_runner
+    outcome = collect_evidence(
+        repo="o/r",
+        pr=1,
+        families=["openai", "grok"],
+        author="me",
+        apply=True,
+        **fakes,
+    )
+
+    assert outcome.action == "prepare"
+    assert outcome.supportive_families == ["openai"]
+    assert outcome.dissenting_families == []
+    assert outcome.adjudication == {
+        "kind": "review_adjudication.v1",
+        "verdict": "adjudicated_settle",
+        "families": ["openai", "grok"],
+    }
+    assert posted == []
 
 
 def test_collect_severity_gated_finding_free_changes_requested_is_advisory(

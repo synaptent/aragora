@@ -2940,7 +2940,9 @@ def _record_review_adjudication_if_applicable(outcome: CollectOutcome) -> None:
         return
     if outcome.action != "prepare":
         return
-    if not outcome.supportive_families or not outcome.dissenting_families:
+    if not outcome.supportive_families:
+        return
+    if not any(item.verdict == "changes_requested" for item in outcome.items):
         return
 
     try:
