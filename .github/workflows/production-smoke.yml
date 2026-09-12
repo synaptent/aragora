@@ -1,8 +1,14 @@
 name: Production Smoke Test
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'  # Every 30 minutes
+  # Scheduled probes are PARKED (operator decision 2026-09-07, #9391 / #9966
+  # metric 7): api.aragora.ai has had no production origin since AWS was retired
+  # on 2026-08-19, so every 30-minute run failed by construction (~100 red runs a
+  # day). Re-enable the schedule in the same PR that lands the provider-neutral
+  # canary (#9851 / #9882) and restores a 200 on /readyz. Manual dispatch still
+  # works for a one-off probe.
+  # schedule:
+  #   - cron: '*/30 * * * *'
   workflow_dispatch:
 
 concurrency:
