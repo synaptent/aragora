@@ -63,27 +63,16 @@ def test_malformed_inspection_through_cli(data: dict[str, Any], field: str, tmp_
         ({"risk_summary": {"total": "many"}}, "risk_summary.total"),
         ({"consensus_proof": []}, "consensus_proof"),
         ({"consensus_proof": {"reached": "undetermined"}}, "consensus_proof.reached"),
-        ({"consensus_proof": {"reached": 2}}, "consensus_proof.reached"),
+        ({"consensus_proof": {"reached": []}}, "consensus_proof.reached"),
         ({"consensus_proof": {"supporting_agents": "alice"}}, "supporting_agents"),
         ({"consensus_proof": {"dissenting_agents": [1]}}, "dissenting_agents[0]"),
-        ({"signature": {}}, "signature"),
-        ({"artifact_hash": 42}, "artifact_hash"),
-        ({"input_hash": []}, "input_hash"),
-        ({"verdict_reasoning": {}}, "verdict_reasoning"),
         ({"agent_responses": {}}, "agent_responses"),
         ({"agent_responses": [{"content": None}]}, "agent_responses[0].content"),
         ({"agent_responses": [{"content": []}]}, "agent_responses[0].content"),
         ({"agent_responses": [{}] * 10 + [False]}, "agent_responses[10]"),
         ({"cost_summary": []}, "cost_summary"),
-        ({"cost_summary": {"total_cost": "oops"}}, "cost_summary.total_cost"),
-        ({"cost_summary": {"total": "NaN"}}, "cost_summary.total"),
-        ({"cost_summary": {"total_cost": True}}, "cost_summary.total_cost"),
         ({"config_used": {"critique_summaries": {}}}, "critique_summaries"),
         ({"config_used": {"critique_summaries": [None]}}, "critique_summaries[0]"),
-        (
-            {"config_used": {"critique_summaries": [{"severity": "high"}]}},
-            "critique_summaries[0].severity",
-        ),
         (
             {"config_used": {"critique_summaries": [{"issues": None}]}},
             "critique_summaries[0].issues",
@@ -142,14 +131,12 @@ def test_supported_receipt_inspection(verdict: str, tmp_path: Path) -> None:
     ):
         assert expected in result.stdout
     assert "VALID" not in result.stdout
-    assert "verified" not in result.stdout.lower()
+    assert "cryptographic signature verified" not in result.stdout.lower()
 
 
 def test_missing_and_nullable_optional_fields_preserve_defaults(tmp_path: Path) -> None:
     empty = inspect_process({}, tmp_path)
-    nullable = inspect_process(
-        {"consensus_proof": None, "cost_summary": None, "signature": None}, tmp_path
-    )
+    nullable = inspect_process({"consensus_proof": None, "cost_summary": None}, tmp_path)
     assert empty.returncode == nullable.returncode == 0
     assert empty.stdout == nullable.stdout
     assert "? UNKNOWN" in empty.stdout
@@ -172,6 +159,17 @@ def test_missing_and_nullable_optional_fields_preserve_defaults(tmp_path: Path) 
         ("off", "No"),
         (" ON ", "Yes"),
         ("", "No"),
+        (None, "No"),
+        (2, "Yes"),
+        (-1, "Yes"),
+        (0.0, "No"),
+        (-0.0, "No"),
+        (0.5, "Yes"),
+        (-0.5, "Yes"),
+        (float("inf"), "Yes"),
+        (float("nan"), "Yes"),
+        (" Y ", "Yes"),
+        (" N ", "No"),
     ],
 )
 def test_legacy_consensus_boolean_forms(value: Any, expected: str, tmp_path: Path) -> None:
@@ -202,3 +200,126 @@ def test_model_generated_receipt_remains_inspectable(tmp_path: Path) -> None:
     result = inspect_process(receipt.to_dict(), tmp_path)
     assert result.returncode == 0, result.stderr
     assert "native-1" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "flag", ["true", "1", "yes", "y", "on", "false", "0", "no", "n", "off", ""]
+)
+def test_strict_model_boolean_strings(flag: str) -> None:
+    from aragora.gauntlet.receipt_models import _normalize_receipt_boolean
+
+    for value in (flag, flag.upper(), f"  {flag.upper()}  "):
+        assert _normalize_receipt_boolean(value, strict=True) == _normalize_receipt_boolean(value)
+    assert _normalize_receipt_boolean(None, strict=True, default=True) is False
+    assert _normalize_receipt_boolean(None, default=True) is True
+
+
+@pytest.mark.parametrize("value", ["unknown", "2", "none", "false-ish", [], {}, [True]])
+def test_unknown_boolean_never_defaults(value: Any, tmp_path: Path) -> None:
+    from aragora.gauntlet.receipt_models import _normalize_receipt_boolean
+
+    with pytest.raises(ValueError):
+        _normalize_receipt_boolean(value, strict=True)
+    assert _normalize_receipt_boolean(value, default=True) is True
+    result = inspect_process({"consensus_proof": {"reached": value}}, tmp_path)
+    assert result.returncode == 1 and result.stdout == ""
+    assert "consensus_proof.reached" in result.stderr and "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "value", [0, 2.5, "0", " 2.5 ", "1e2", "NaN", "Infinity", "many", float("nan"), float("inf")]
+)
+def test_numeric_risk_count_contract(value: Any, tmp_path: Path) -> None:
+    import math
+
+    result = inspect_process({"risk_summary": {"total": value}}, tmp_path)
+    valid = value != "many" and math.isfinite(float(value))
+    assert result.returncode == (0 if valid else 1), result.stderr
+    if valid:
+        assert f"Total:         {value}" in result.stdout
+    else:
+        assert result.stdout == "" and "risk_summary.total" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "signature",
+        "artifact_hash",
+        "input_hash",
+        "verdict_reasoning",
+        "total_cost",
+        "total",
+        "severity",
+    ],
+)
+@pytest.mark.parametrize(
+    "value",
+    [
+        "legacy",
+        0,
+        42.5,
+        {},
+        [],
+        {"key": "x" * 140},
+        ["a\nb"],
+        float("inf"),
+        True,
+        None,
+        {"bad": float("nan")},
+        "\ud800",
+    ],
+)
+def test_cosmetic_values_are_display_only(
+    field: str, value: Any, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    data = {field: value}
+    if field in ("total_cost", "total"):
+        data = {"cost_summary": {field: value}}
+    elif field == "severity":
+        data = {"config_used": {"critique_summaries": [{field: value}]}}
+    source = tmp_path / "cosmetic.json"
+    source.write_text(json.dumps(data), encoding="utf-8")
+    cmd_receipt_inspect(argparse.Namespace(receipt=str(source)))
+    captured = capsys.readouterr()
+    if (
+        value == "\ud800"
+        or value is None
+        or value is True
+        or value == float("inf")
+        or isinstance(value, dict)
+        and "bad" in value
+    ):
+        assert "(unrenderable)" in captured.out
+        assert captured.err.count("Warning:") == 1
+    else:
+        expected = (
+            json.dumps(value, separators=(",", ":"))
+            if isinstance(value, (dict, list))
+            else str(value)
+        )
+        expected = (
+            expected[:117] + "..."
+            if isinstance(value, (dict, list)) and len(expected) > 120
+            else expected
+        )
+        labels = {
+            "signature": "Signature:     ",
+            "artifact_hash": "Artifact Hash: ",
+            "input_hash": "Input Hash:    ",
+            "verdict_reasoning": "  ",
+            "total_cost": "  Total: $",
+            "total": "  Total: $",
+            "severity": "severity: ",
+        }
+        assert labels[field] + expected in captured.out
+        assert captured.err == ""
+    assert "Traceback" not in captured.err and "[PASS]" not in captured.out
+
+
+def test_pre_validator_legacy_fixture(tmp_path: Path) -> None:
+    # Checked in on 2026-02-12, before this campaign's inspection validator.
+    data = json.loads((ROOT / "examples/sample_receipt.json").read_text())
+    result = inspect_process(data, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert data["receipt_id"] in result.stdout

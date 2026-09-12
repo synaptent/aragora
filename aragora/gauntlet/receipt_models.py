@@ -120,11 +120,12 @@ def _clamp_receipt_confidence(value: Any, *, default: float = 0.0) -> float:
     return numeric
 
 
-def _normalize_receipt_boolean(value: Any, *, default: bool = False) -> bool:
+def _normalize_receipt_boolean(value: Any, *, default: bool = False, strict: bool = False) -> bool:
+    """Decode legacy flags; strict consumers reject unknowns instead of defaulting."""
     if isinstance(value, bool):
         return value
     if value is None:
-        return default
+        return False if strict else default
     if isinstance(value, int | float):
         return value != 0
     if isinstance(value, str):
@@ -133,7 +134,8 @@ def _normalize_receipt_boolean(value: Any, *, default: bool = False) -> bool:
             return True
         if normalized in {"false", "0", "no", "n", "off", ""}:
             return False
-        return default
+    if strict:
+        raise ValueError("unrecognized receipt boolean")
     return default
 
 

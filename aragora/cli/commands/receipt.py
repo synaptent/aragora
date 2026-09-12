@@ -586,18 +586,31 @@ def cmd_receipt_verify(args: argparse.Namespace) -> None:
 
 
 def _inspection_consensus_reached(value: Any) -> bool:
-    """Decode explicit legacy flags, never arbitrary truthiness, for display."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int) and value in (0, 1):
-        return bool(value)
-    if isinstance(value, str):
-        flag = value.strip().lower()
-        if flag in {"true", "1", "yes", "on"}:
-            return True
-        if flag in {"false", "0", "no", "off", ""}:
-            return False
-    raise ValueError("consensus_proof.reached must be a boolean or an explicit 0/1/true/false flag")
+    from aragora.gauntlet.receipt_models import _normalize_receipt_boolean
+
+    try:
+        return _normalize_receipt_boolean(value, strict=True)
+    except ValueError:
+        raise ValueError("consensus_proof.reached is not a recognized boolean") from None
+
+
+def _inspection_cosmetic(value: Any, field: str) -> str:
+    """Display only: never interpret these fields as decisions or verification."""
+    try:
+        if isinstance(value, str):
+            value.encode(sys.stdout.encoding or "utf-8")
+            return value
+        if not isinstance(value, bool) and (
+            isinstance(value, int) or isinstance(value, float) and math.isfinite(value)
+        ):
+            return str(value)
+        if isinstance(value, (dict, list)):
+            summary = json.dumps(value, separators=(",", ":"), allow_nan=False)
+            return summary[:117] + "..." if len(summary) > 120 else summary
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        pass
+    print(f"Warning: Cannot render receipt field {field}", file=sys.stderr)
+    return "(unrenderable)"
 
 
 def _validate_inspection_fields(data: dict[str, Any]) -> None:
@@ -625,15 +638,12 @@ def _validate_inspection_fields(data: dict[str, Any]) -> None:
     for field in ("confidence", "robustness_score"):
         if not math.isfinite(number(data.get(field, 0), field) * 100):
             raise ValueError(f"{field} cannot be displayed as a finite percentage")
-    for field in ("signature", "artifact_hash", "input_hash", "verdict_reasoning"):
-        require(data.get(field), str, field, nullable=True)
-
     risk = data.get("risk_summary")
     require(risk, dict, "risk_summary", nullable=True)
     if risk:
         for field in ("critical", "high", "medium", "low", "total"):
             if field in risk:
-                number(risk[field], f"risk_summary.{field}")
+                number(risk[field], f"risk_summary.{field}", allow_string=True)
 
     consensus = data.get("consensus_proof")
     require(consensus, dict, "consensus_proof", nullable=True)
@@ -655,12 +665,6 @@ def _validate_inspection_fields(data: dict[str, Any]) -> None:
 
     cost = data.get("cost_summary")
     require(cost, dict, "cost_summary", nullable=True)
-    if cost:
-        field = "total_cost" if "total_cost" in cost else "total"
-        total = cost.get(field, 0)
-        # Older receipts can omit a cost or serialize it as a decimal string.
-        if total is not None and total != "":
-            number(total, f"cost_summary.{field}", allow_string=True)
 
     config = data.get("config_used", {})
     require(config, dict, "config_used")
@@ -669,7 +673,6 @@ def _validate_inspection_fields(data: dict[str, Any]) -> None:
     for i, critique in enumerate(critiques or []):
         prefix = f"config_used.critique_summaries[{i}]"
         require(critique, dict, prefix)
-        number(critique.get("severity", 0), f"{prefix}.severity")
         require(critique.get("issues", []), list, f"{prefix}.issues")
     require(data.get("dissenting_views"), list, "dissenting_views", nullable=True)
 
@@ -747,17 +750,18 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
     else:
         print("Signed:        No")
 
-    if data.get("artifact_hash"):
-        print(f"Artifact Hash: {data['artifact_hash'][:40]}...")
+    if "signature" in data:
+        print(f"Signature:     {_inspection_cosmetic(data['signature'], 'signature')}")
 
-    if data.get("input_hash"):
-        print(f"Input Hash:    {data['input_hash'][:40]}...")
+    for field, label in (("artifact_hash", "Artifact Hash"), ("input_hash", "Input Hash")):
+        if field in data:
+            print(f"{label + ':':15}{_inspection_cosmetic(data[field], field)}")
 
     # Verdict reasoning
     reasoning = data.get("verdict_reasoning", "")
-    if reasoning:
+    if "verdict_reasoning" in data:
         print("\n--- Verdict Reasoning ---")
-        print(f"  {reasoning[:500]}")
+        print(f"  {_inspection_cosmetic(reasoning, 'verdict_reasoning')}")
 
     # Agent responses
     agent_responses = data.get("agent_responses", [])
@@ -780,9 +784,9 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
     cost = data.get("cost_summary")
     if cost and isinstance(cost, dict):
         total = cost.get("total_cost", cost.get("total", 0))
-        if total:
+        if "total_cost" in cost or "total" in cost:
             print("\n--- Cost ---")
-            print(f"  Total: ${float(total):.4f}")
+            print(f"  Total: ${_inspection_cosmetic(total, 'cost_summary total')}")
 
     # Critique summaries (from config_used)
     config = data.get("config_used", {})
@@ -794,7 +798,7 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
             target = c.get("target", "")
             severity = c.get("severity", 0.0)
             issues = c.get("issues", [])
-            print(f"  {critic} → {target} (severity: {severity:.1f})")
+            print(f"  {critic} → {target} (severity: {_inspection_cosmetic(severity, 'severity')})")
             for issue in issues[:3]:
                 print(f"    - {str(issue)[:100]}")
 
