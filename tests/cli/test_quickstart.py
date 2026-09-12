@@ -8,11 +8,16 @@ import builtins
 import json
 import os
 import ssl
+import subprocess
+import sys
+import tempfile
+import threading
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import aragora.cli.commands.quickstart as quickstart
 from aragora.agents.base import create_agent as create_real_agent
 from aragora.cli.commands.receipt import cmd_receipt_verify
 from aragora.cli.commands.quickstart import (
@@ -296,26 +301,6 @@ class TestRunSync:
         assert len(calls) == 1
         assert seen["loop"].is_closed()
 
-    def test_run_sync_prefers_runner_when_available(self, monkeypatch):
-        if not hasattr(asyncio, "Runner"):
-            pytest.skip("asyncio.Runner unavailable on this interpreter")
-        calls: list[object] = []
-
-        def _unexpected_fallback(coro):
-            calls.append(coro)
-            return _run_sync_without_runner(coro)
-
-        monkeypatch.setattr(
-            "aragora.cli.commands.quickstart._run_sync_without_runner",
-            _unexpected_fallback,
-        )
-
-        async def _work() -> str:
-            return "runner"
-
-        assert _run_sync(_work()) == "runner"
-        assert calls == []
-
     def test_fallback_cleans_up_pending_tasks_and_asyncgens(self):
         cancelled: list[bool] = []
         closed: list[bool] = []
@@ -388,6 +373,259 @@ class TestRunSync:
         with pytest.raises(ValueError, match="boom"):
             _run_sync_without_runner(_boom())
         assert seen["loop"].is_closed()
+
+
+@pytest.mark.parametrize(
+    ("capability", "outcome"),
+    [(state, result) for state in ("absent", "none", "injected") for result in ("return", "error")],
+    ids=[f"{s}-{r}" for s in ("absent", "none", "injected") for r in ("return", "error")],
+)
+def test_runner_capability(monkeypatch, capability, outcome):
+    """Injected capability, not native Runner support on Python 3.10."""
+    events = []
+    loops = []
+    value, error = object(), ValueError("capability error")
+    factory = MagicMock(wraps=quickstart._quickstart_loop_factory)
+    fallback = MagicMock(wraps=_run_sync_without_runner)
+    monkeypatch.setattr(quickstart, "_quickstart_loop_factory", factory)
+    monkeypatch.setattr(quickstart, "_run_sync_without_runner", fallback)
+
+    class RecordingRunner:
+        def __init__(self, *, loop_factory):
+            assert loop_factory is factory
+            events.append("init")
+            self.loop = loop_factory()
+            loops.append(self.loop)
+
+        def __enter__(self):
+            events.append("enter")
+            return self
+
+        def run(self, received):
+            assert received is coro
+            events.append("run")
+            return self.loop.run_until_complete(received)
+
+        def __exit__(self, exc_type, exc, traceback):
+            events.append(("exit", exc_type, exc))
+            self.loop.close()
+            return False
+
+    if capability == "absent":
+        monkeypatch.delattr(asyncio, "Runner", raising=False)
+    else:
+        monkeypatch.setattr(
+            asyncio, "Runner", RecordingRunner if capability == "injected" else None, raising=False
+        )
+
+    async def work():
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        loop.call_soon(future.set_result, value)
+        assert await future is value
+        loops.append(loop)
+        if outcome == "error":
+            raise error
+        return value
+
+    coro = work()
+    try:
+        if outcome == "error":
+            with pytest.raises(ValueError) as caught:
+                _run_sync(coro)
+            assert caught.value is error
+        else:
+            assert _run_sync(coro) is value
+        factory.assert_called_once_with()
+        assert loops and all(loop.is_closed() for loop in loops)
+        if capability == "injected":
+            fallback.assert_not_called()
+            assert events == [
+                "init",
+                "enter",
+                "run",
+                (
+                    "exit",
+                    ValueError if outcome == "error" else None,
+                    error if outcome == "error" else None,
+                ),
+            ]
+        else:
+            fallback.assert_called_once_with(coro)
+            assert events == []
+    finally:
+        coro.close()
+        for loop in loops:
+            if not loop.is_closed():
+                loop.close()
+
+
+@pytest.mark.parametrize("outcome", ["result", "error"])
+def test_native_sync(outcome):
+    """Unpatched native dispatch, including real cancellation and executor shutdown."""
+    policy = asyncio.get_event_loop_policy()
+    try:
+        previous = policy.get_event_loop()
+    except RuntimeError:
+        previous = None
+    caller = asyncio.new_event_loop()
+    policy.set_event_loop(caller)
+    loops, tasks, generators, reported, finalized, executor_results = [], [], [], [], [], []
+    release, executor_done = threading.Event(), threading.Event()
+    primary, shutdown_error, value = (
+        ValueError("native primary"),
+        RuntimeError("shutdown"),
+        object(),
+    )
+
+    async def generator():
+        try:
+            yield value
+        finally:
+            finalized.append("generator")
+
+    async def background(started, fail):
+        try:
+            started.set()
+            await asyncio.Future()
+        finally:
+            finalized.append("shutdown-error" if fail else "task")
+            release.set()
+            if fail:
+                raise shutdown_error
+
+    async def work():
+        loop = asyncio.get_running_loop()
+        loops.append(loop)
+        loop.set_exception_handler(lambda _loop, context: reported.append(context))
+        resumed = loop.create_future()
+        loop.call_soon(resumed.set_result, value)
+        assert await resumed is value
+        gen = generator()
+        generators.append(gen)
+        assert await gen.__anext__() is value
+        for fail in (False, True):
+            started = asyncio.Event()
+            tasks.append(loop.create_task(background(started, fail)))
+            await started.wait()
+        thread_started = asyncio.Event()
+
+        def in_executor():
+            loop.call_soon_threadsafe(thread_started.set)
+            assert release.wait(5), "pending task never finalized"
+            executor_done.set()
+            return value
+
+        executor_results.append(loop.run_in_executor(None, in_executor))
+        await thread_started.wait()
+        assert not executor_done.is_set()
+        if outcome == "error":
+            raise primary
+        return value
+
+    coro = work()
+    try:
+        if outcome == "error":
+            with pytest.raises(ValueError) as caught:
+                _run_sync(coro)
+            assert caught.value is primary
+        else:
+            assert _run_sync(coro) is value
+        assert len(loops) == 1 and loops[0] is not caller and loops[0].is_closed()
+        assert sorted(finalized) == ["generator", "shutdown-error", "task"]
+        assert tasks[0].cancelled()
+        assert tasks[1].done() and tasks[1].exception() is shutdown_error
+        assert len(reported) == 1
+        assert reported[0]["exception"] is shutdown_error
+        assert reported[0]["task"] is tasks[1] and "shutdown" in reported[0]["message"]
+        assert executor_done.is_set() and executor_results[0].result() is value
+        assert policy.get_event_loop() is caller and not caller.is_closed()
+
+        async def still_usable():
+            return asyncio.get_running_loop()
+
+        assert caller.run_until_complete(still_usable()) is caller
+    finally:
+        release.set()
+        coro.close()
+        for loop in loops:
+            if not loop.is_closed():
+                for task in asyncio.all_tasks(loop):
+                    task.cancel()
+                loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+                loop.run_until_complete(loop.shutdown_asyncgens())
+                loop.run_until_complete(loop.shutdown_default_executor())
+                loop.close()
+        caller.close()
+        policy.set_event_loop(previous)
+
+
+def test_offline_cli():
+    """Synthetic offline artifact proof, not hosted database durability."""
+    root = Path(__file__).resolve().parents[2]
+    with tempfile.TemporaryDirectory(prefix="quickstart-cli-", dir="/tmp") as directory:
+        scratch = Path(directory)
+        cwd = scratch / "cwd"
+        cwd.mkdir()
+        assert all(not (p / ".env").exists() for p in (cwd, *cwd.parents))
+        env = {
+            "HOME": str(scratch / "home"),
+            "TMPDIR": str(scratch),
+            "PATH": "/usr/bin:/bin",
+            "PYTHONPATH": str(root),
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "XDG_CACHE_HOME": str(scratch / "cache"),
+            "ARAGORA_DATA_DIR": str(scratch / "data"),
+            "ARAGORA_LOG_DIR": str(scratch / "logs"),
+            "ARAGORA_DB_BACKEND": "sqlite",
+            "ARAGORA_SINGLE_INSTANCE": "true",
+            "ARAGORA_USE_SECRETS_MANAGER": "false",
+            "ARAGORA_SECRETS_STRICT": "false",
+            "ARAGORA_USE_DISTRIBUTED_RATE_LIMIT": "false",
+            "ARAGORA_ENV": "development",
+        }
+        Path(env["HOME"]).mkdir()
+        artifact = scratch / "receipt.json"
+        question = "Should we validate the offline runtime?"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "aragora.cli.main",
+                "quickstart",
+                "--demo",
+                "--no-browser",
+                "--json",
+                "--question",
+                question,
+                "--rounds",
+                "2",
+                "--output",
+                str(artifact),
+            ],
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+        assert result.returncode == 0, result.stderr
+        stdout, saved = json.loads(result.stdout), json.loads(artifact.read_text())
+        assert Path(stdout["artifact_path"]) == artifact.resolve()
+        assert stdout == {**saved, "artifact_path": str(artifact.resolve())}
+        assert saved["question"] == question and saved["rounds"] == 2
+        assert saved["mode"] == "demo" and saved["synthetic"] is True
+        assert saved["debate_status"] == "completed"
+        assert saved["debate_status_source"] == "synthetic"
+        assert any(
+            entry["event_type"] == "task" and entry["description"] == question
+            for entry in saved["provenance_chain"]
+        )
+        assert saved["verdict"] == "approved"
+        assert saved["receipt_id"] and saved["receipt_id"] == saved["receipt"]["id"]
+        assert saved["artifact_hash"] == saved["receipt"]["artifact_hash"]
+        assert all(not (p / ".env").exists() for p in (cwd, *cwd.parents))
 
 
 # =============================================================================
