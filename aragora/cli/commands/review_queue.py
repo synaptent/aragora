@@ -54,6 +54,7 @@ from aragora.cli.commands.review_queue_comment_verdicts import (
     has_blocking_or_negative_verdict as _has_blocking_or_negative_verdict,
     highest_blocking_severity as _highest_blocking_severity,
 )
+from aragora.cli.commands.review_queue_park_records import current_head_park_record
 from aragora.cli.commands.review_queue_transport import (
     _GhError,
     _gh_error_kind,
@@ -421,6 +422,7 @@ class ReviewPacket:
     model_review_quorum: dict[str, Any] = field(default_factory=dict)
     labels: list[str] = field(default_factory=list)
     merge_state_status: str = ""
+    park_record: dict[str, Any] = field(default_factory=dict)
     unstable_non_required_contexts_ignored: list[dict[str, Any]] = field(default_factory=list)
     advisory_only: bool = True
     settlement_note: str = ADVISORY_NOTE
@@ -3014,6 +3016,10 @@ def _build_packet(
         ),
         labels=labels,
         merge_state_status=str(pr.get("mergeStateStatus") or "").strip().upper(),
+        park_record=current_head_park_record(
+            pr.get("comments") or [],
+            head_sha=str(pr.get("headRefOid", "") or "").strip(),
+        ),
         unstable_non_required_contexts_ignored=unstable_cancellation_contexts,
     )
     packet.packet_sha = _packet_sha(packet)
@@ -3115,6 +3121,7 @@ def _build_merge_authorization_packet(
             # must still honor the sibling hold keys.
             "non_admin_merge_eligible": model_quorum_admin_squash_allowed,
             "admin_squash_gate_blockers": admin_squash_gate_blockers,
+            "park_record": packet.park_record,
             "merge_state_status": packet.merge_state_status,
             "unstable_non_required_contexts_ignored": (
                 packet.unstable_non_required_contexts_ignored
