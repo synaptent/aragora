@@ -43,4 +43,41 @@ describe('PostHog plugin gating', () => {
     process.env.POSTHOG_API_KEY = '';
     expect(posthogEntries(loadPlugins())).toEqual([]);
   });
+
+  it('adds exactly one posthog-docusaurus plugin carrying the key when POSTHOG_API_KEY is set', () => {
+    process.env.POSTHOG_API_KEY = 'phc_test';
+    const plugins = loadPlugins();
+    const entries = posthogEntries(plugins);
+    expect(entries).toHaveLength(1);
+    const [name, options] = entries[0] as [string, Record<string, unknown>];
+    expect(name).toBe(require.resolve('posthog-docusaurus'));
+    expect(options).toEqual({ apiKey: 'phc_test' });
+    // The gate adds to the plugin list; it never replaces the OpenAPI plugin.
+    expect(plugins.length).toBe(loadPluginsWithout().length + 1);
+  });
+
+  it('keeps the other plugins identical with and without the key', () => {
+    const without = loadPluginsWithout().map(pluginName);
+    process.env.POSTHOG_API_KEY = 'phc_test';
+    const withKey = loadPlugins()
+      .map(pluginName)
+      .filter((name) => !name.includes('posthog'));
+    expect(withKey).toEqual(without);
+  });
 });
+
+function loadPluginsWithout(): PluginEntry[] {
+  const saved = process.env.POSTHOG_API_KEY;
+  delete process.env.POSTHOG_API_KEY;
+  try {
+    return loadPlugins();
+  } finally {
+    if (saved !== undefined) {
+      process.env.POSTHOG_API_KEY = saved;
+    }
+  }
+}
+
+function pluginName(entry: PluginEntry): string {
+  return Array.isArray(entry) ? entry[0] : entry;
+}

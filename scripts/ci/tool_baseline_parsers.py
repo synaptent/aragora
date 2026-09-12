@@ -566,3 +566,62 @@ def parse_golangci_lint(stdout: str) -> list[Finding]:
             )
         )
     return findings
+
+
+# --- docs-links (Docusaurus broken-link report) ---------------------------------
+
+# ``docusaurus build`` with ``onBrokenLinks: 'warn'`` prints one report block
+# per run (``@docusaurus/core`` ``brokenLinks.js``, 3.x):
+#   Exhaustive list of all broken links found:
+#   - Broken link on source page path = /docs/guides/modes:
+#      -> linking to PIPELINE_GUIDE.md (resolved as: /docs/guides/PIPELINE_GUIDE.md)
+#      -> linking to /docs/x
+# Every ``-> linking to`` line under a page header is one finding. The page
+# route is the path (its leading ``/`` is dropped so the runner never treats a
+# site route as an absolute filesystem path); the symbol is the link exactly
+# as written in the source, so the same target on two pages stays two keys
+# and the same target twice on one page counts twice. The ``[WARNING] Markdown
+# link ... couldn't be resolved`` lines earlier in the log are a different,
+# duplicated view of the same links and are ignored. Broken anchors are a
+# separate Docusaurus report (``Broken anchor on source page``) and are not
+# counted either. The build itself exits 0 under ``warn``.
+_DOCS_LINKS_PAGE_RE = re.compile(r"^- Broken link on source page path = (?P<page>.+?):\s*$")
+_DOCS_LINKS_TARGET_RE = re.compile(
+    r"^\s+-> linking to (?P<link>.*?)(?: \(resolved as: (?P<resolved>.*)\))?\s*$"
+)
+
+
+@register(
+    "docs-links",
+    description="docusaurus build broken-link report; key = page route + link as written, rule = broken-link",
+    example_command="npx docusaurus build",
+    clean_exit_codes={0},
+    finding_exit_codes={0},
+)
+def parse_docs_links(stdout: str) -> list[Finding]:
+    findings: list[Finding] = []
+    page: str | None = None
+    for raw in stdout.splitlines():
+        header = _DOCS_LINKS_PAGE_RE.match(raw)
+        if header is not None:
+            # The site root route becomes "." (a bare "/" would be absolute).
+            page = header["page"].lstrip("/") or "."
+            continue
+        if page is None:
+            continue
+        target = _DOCS_LINKS_TARGET_RE.match(raw)
+        if target is None:
+            # A blank line, the [SUCCESS] trailer or an unrelated log line
+            # closes the current page; anchors use a different header.
+            page = None
+            continue
+        resolved = target["resolved"] or target["link"]
+        findings.append(
+            Finding(
+                path=page,
+                rule="broken-link",
+                symbol=target["link"],
+                message=f"broken link to {resolved}",
+            )
+        )
+    return findings

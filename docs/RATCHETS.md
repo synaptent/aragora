@@ -141,8 +141,8 @@ Parsers live in `scripts/ci/tool_baseline_parsers.py`. Each is a pure function
 adding a parser is a one-function change and the runner's `--help`, this list,
 and `docs/TECH_DEBT.md` follow.
 
-The eight M1 parsers plus knip (`python scripts/ci/check_tool_baseline.py --help` lists
-the same names). The command column is what the runner expects to find on the
+The eight M1 parsers plus knip and docs-links (`python scripts/ci/check_tool_baseline.py --help`
+lists the same names). The command column is what the runner expects to find on the
 tool's **stdout**; run it from `--cwd` so reported paths stay relative.
 
 | `--tool` | Command it expects (stdout) | Key form `<path>::<symbol>::<rule>` | `clean_exit_codes` | `finding_exit_codes` |
@@ -156,6 +156,7 @@ tool's **stdout**; run it from `--cwd` so reported paths stay relative.
 | `knip` | `npx knip --reporter json` (Knip 6: `issues` rows grouped by `file`) | symbol = name (including namespace), sorted symbol group for duplicate exports/cycles, or `file` for unused files; rule = issue category, including `dependencies` and `devDependencies` | `0` | `1` |
 | `golangci-lint` | `golangci-lint run --output.json.path stdout --show-stats=false ./...` (v2 JSON schema: `{"Issues":[{"FromLinter","Text","SourceLines","Pos":{"Filename","Line"}}],"Report":…}`; without `--show-stats=false` a text stats block follows the JSON on stdout and only the first JSON object is read) | symbol = line-content hash (taken from `SourceLines[0]`, or read from the file when absent); rule = `FromLinter` (`errcheck`, `revive`) | `0` | `1` |
 | `todo` | `grep -rn --include='*.py' -E 'TODO\|FIXME' .` | symbol = matched-line hash; rule = the marker word (`TODO`, `FIXME`, `XXX`, `HACK`) | `0`, `1` (no matches) | `0` |
+| `docs-links` | the `Exhaustive list of all broken links found:` block a Docusaurus 3 build prints under `onBrokenLinks: 'warn'` (`- Broken link on source page path = <route>:` headers, `   -> linking to <link> (resolved as: <path>)` targets). `docs-site/scripts/check_broken_links.mjs` runs the build (or reads `--log <file>`), extracts that block and feeds it through `cat`; the build itself exits 0 | path = page route without its leading `/` (`/` becomes `.`); symbol = the link exactly as written in the source; rule = `broken-link`. Broken anchors and the duplicated `[WARNING] Markdown link ... couldn't be resolved` lines are not counted | `0` | `0` |
 
 Finding exit codes were verified against the installed tools.
 For jscpd 5.1.1 (`JSCPD_VERSION` in the Makefile), a direct over-threshold run exits 1, but the documented
@@ -170,9 +171,9 @@ Two key families follow from the table:
   reports a line number and the runner hashes that source line's stripped
   content from `--cwd`, so two findings of the same rule in one function keep
   distinct keys and a pure line shift changes nothing.
-- **Symbol-keyed tools** (`vulture`, `deptry`, `jscpd`, `knip`, `todo`): the tool's own
+- **Symbol-keyed tools** (`vulture`, `deptry`, `jscpd`, `knip`, `todo`, `docs-links`): the tool's own
   output already names the thing (a dead symbol, an unused module, a duplicated
-  fragment, a matched comment line), so the parser fills the symbol itself and
+  fragment, a matched comment line, a broken link target), so the parser fills the symbol itself and
   the runner never opens the source file.
 
 Every parser has a captured real-output fixture under
@@ -217,6 +218,7 @@ appends its baselines here, one row per file:
 | `scripts/baselines/live-file-sizes.json` (file-size census format) | `readiness-lint-live` | `python scripts/ci/check_file_sizes.py --glob 'aragora/live/src/**/*.{ts,tsx}' --baseline scripts/baselines/live-file-sizes.json --freeze` |
 | `scripts/baselines/docs-knip.json` | `readiness-lint-docs` | `python scripts/ci/check_tool_baseline.py --tool knip --cwd docs-site --baseline scripts/baselines/docs-knip.json --update -- npx knip --reporter json` |
 | `scripts/baselines/docs-file-sizes.json` (file-size census format) | `readiness-lint-docs` | `python scripts/ci/check_file_sizes.py --glob 'docs-site/src/**/*.{js,ts,tsx}' --baseline scripts/baselines/docs-file-sizes.json --freeze` |
+| `scripts/baselines/docs-broken-links.json` | `readiness-heavy-docs` (build + link gate; never the three aggregates) | `node docs-site/scripts/check_broken_links.mjs --update` (runs `docusaurus build`; `--log <file>` reuses a saved build log; growth needs `--allow-grow --reason "<why>"`) |
 
 The convention for every row: the regeneration command is the wired check
 command plus `--update`, run from the repository root, e.g.

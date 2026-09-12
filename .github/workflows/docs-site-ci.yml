@@ -1,0 +1,88 @@
+name: Docs Site
+
+on:
+  pull_request:
+    paths:
+      - 'docs-site/**'
+      - 'Makefile'
+      - 'scripts/ci/check_tool_baseline.py'
+      - 'scripts/ci/tool_baseline_parsers.py'
+      - 'scripts/ci/check_file_sizes.py'
+      - 'scripts/baselines/docs-*.json'
+      - '.github/actions/setup-node-safe/**'
+      - '.github/actions/setup-python-safe/**'
+      - '.github/workflows/docs-site-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs-site/**'
+      - 'Makefile'
+      - 'scripts/ci/check_tool_baseline.py'
+      - 'scripts/ci/tool_baseline_parsers.py'
+      - 'scripts/ci/check_file_sizes.py'
+      - 'scripts/baselines/docs-*.json'
+      - '.github/actions/setup-node-safe/**'
+      - '.github/actions/setup-python-safe/**'
+      - '.github/workflows/docs-site-ci.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-site-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  docs-site:
+    name: Docs site quality gates and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: ./.github/actions/setup-node-safe
+        with:
+          node-version: "25.9.0"
+          cache: "npm"
+          cache-dependency-path: docs-site/package-lock.json
+      - name: Set up Python for the shared ratchets
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        working-directory: docs-site
+        run: npm ci
+      - name: Lint, format check, knip, jscpd and file sizes
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-lint-docs READINESS_REPORT_DIR=readiness-reports | tee docs-lint.log
+          ! grep -q '^SKIP docs:' docs-lint.log
+      - name: Typecheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-typecheck-docs | tee docs-typecheck.log
+          ! grep -q '^SKIP docs:' docs-typecheck.log
+      - name: Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-test-docs | tee docs-test.log
+          ! grep -q '^SKIP docs:' docs-test.log
+      - name: Build and ratchet broken links
+        shell: bash
+        run: |
+          set -euo pipefail
+          make readiness-heavy-docs READINESS_REPORT_DIR=readiness-reports | tee docs-heavy.log
+          ! grep -q '^SKIP docs:' docs-heavy.log
+      - name: Upload build log and ratchet reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: docs-site-reports
+          path: readiness-reports/
+          if-no-files-found: warn

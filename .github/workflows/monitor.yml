@@ -103,8 +103,28 @@ jobs:
           echo "| Production API | ${{ job.status == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Timestamp | $(date -u) |" >> $GITHUB_STEP_SUMMARY
 
+  docs-site-check:
+    runs-on: aragora
+    timeout-minutes: 5
+
+    steps:
+      - name: Check docs site (GitHub Pages)
+        run: |
+          for attempt in 1 2 3; do
+            if curl -sf -o /dev/null --connect-timeout 10 --max-time 30 "https://docs.aragora.ai/"; then
+              echo "Docs site: OK (attempt $attempt)"
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Docs site check failed on attempt $attempt, retrying in 10s..."
+              sleep 10
+            fi
+          done
+          echo "::error::Docs site https://docs.aragora.ai/ failed after 3 attempts"
+          exit 1
+
   notify-on-failure:
-    needs: health-check
+    needs: [health-check, docs-site-check]
     if: failure()
     runs-on: aragora
     timeout-minutes: 5
@@ -128,6 +148,7 @@ jobs:
             ### Services to Check
             - [ ] Frontend: https://aragora.ai
             - [ ] Production API: https://api.aragora.ai/api/health
+            - [ ] Docs site (GitHub Pages): https://docs.aragora.ai/
             - [ ] Lightsail instance status
 
             ### Quick Commands

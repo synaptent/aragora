@@ -395,7 +395,7 @@ READINESS_DONE = echo "[readiness] $@ ok ($$(( $$(date +%s) - start ))s)"
 .PHONY: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
 .PHONY: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
 .PHONY: readiness-test-root readiness-test-debate readiness-test-verify readiness-test-live readiness-test-docs readiness-test-vscode readiness-test-operator
-.PHONY: readiness-heavy-live
+.PHONY: readiness-heavy-live readiness-heavy-docs
 
 readiness-lint: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
 readiness-typecheck: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
@@ -601,6 +601,25 @@ readiness-test-docs:
 	command -v npm >/dev/null 2>&1 || { echo "SKIP docs: npm not found"; exit 0; }; \
 	[ -d docs-site/node_modules ] || { echo "SKIP docs: node_modules missing (npm ci in docs-site)"; exit 0; }; \
 	cd docs-site && npm test && \
+	$(READINESS_DONE)
+
+# Docusaurus build plus the broken-link ratchet. The build log is saved so the
+# gate reads the same output the build printed (no second build). POSIX sh:
+# the build status is taken from the subshell, not from a bash-only PIPESTATUS.
+readiness-heavy-docs:
+	@$(READINESS_T0); \
+	command -v npm >/dev/null 2>&1 || { echo "SKIP docs: npm not found"; exit 0; }; \
+	command -v node >/dev/null 2>&1 || { echo "SKIP docs: node not found"; exit 0; }; \
+	command -v python3 >/dev/null 2>&1 || { echo "SKIP docs: python3 not found"; exit 0; }; \
+	[ -d docs-site/node_modules ] || { echo "SKIP docs: node_modules missing (npm ci in docs-site)"; exit 0; }; \
+	mkdir -p "$(READINESS_REPORT_DIR)" || exit 1; \
+	log="$$(cd "$(READINESS_REPORT_DIR)" && pwd)/docs-build.log"; \
+	(cd docs-site && npm run build > "$$log" 2>&1); rc=$$?; cat "$$log"; \
+	[ "$$rc" -eq 0 ] || { echo "readiness-heavy-docs: npm run build exited $$rc"; exit "$$rc"; }; \
+	node docs-site/scripts/check_broken_links.mjs \
+		--log "$$log" \
+		--baseline scripts/baselines/docs-broken-links.json \
+		--report-json "$(READINESS_REPORT_DIR)/docs-broken-links.report.json" && \
 	$(READINESS_DONE)
 
 # --- vscode (ide/vscode-aragora + webview-ui) -------------------------------

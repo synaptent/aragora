@@ -201,6 +201,24 @@ repos:
         stages: [pre-push]
         verbose: true
 
+  # Docs site: same SKIP contract as `make readiness-typecheck-docs`; the
+  # pre-existing frontend typecheck hook above (aragora/live) stays as it is.
+  - repo: local
+    hooks:
+      - id: docs-site-typecheck
+        name: TypeScript type check (docs-site)
+        entry: >-
+          bash -c 'command -v npm >/dev/null 2>&1 || {
+          echo "SKIP docs: npm not found (install Node and put it on PATH)"; exit 0; };
+          [ -d docs-site/node_modules ] || {
+          echo "SKIP docs: node_modules missing (npm ci in docs-site)"; exit 0; };
+          cd docs-site && npm run typecheck'
+        language: system
+        pass_filenames: false
+        files: ^docs-site/.*\.(js|ts|tsx)$
+        stages: [pre-push]
+        verbose: true
+
   # Portability guard: block new hardcoded private/legacy references
   # (private home dirs, .venv/bin/python, an0mium/aragora slug). Baselined in
   # scripts/portability_baseline.json so it only fails on NEW violations.

@@ -42,7 +42,20 @@ npm run serve -- --port "${DOCS_PORT:-3130}" --no-open
 ```
 
 `onBrokenLinks` stays at `warn`: the build reports broken links but still
-succeeds, and the broken-link ratchet (not the build) enforces the count.
+succeeds, and the broken-link ratchet (not the build) enforces the count:
+
+```bash
+node scripts/check_broken_links.mjs --help          # arguments and exit codes
+node scripts/check_broken_links.mjs                 # builds, then compares with the baseline
+node scripts/check_broken_links.mjs --log build.log # reuses a saved build log
+```
+
+The baseline is `scripts/baselines/docs-broken-links.json` at the repository
+root (one key per page route and link as written). Exit 0 means no new broken
+links, 1 lists the new ones, 3 means the build failed or the log was unusable.
+Fixing links shrinks the baseline with `--update`; growth needs
+`--allow-grow --reason "<why>"`. From the repository root,
+`make readiness-heavy-docs` runs the build and this gate together.
 
 ## Test
 

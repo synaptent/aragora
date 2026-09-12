@@ -106,6 +106,7 @@ JSCPD_OUT = (FIXTURES / "jscpd.json").read_text(encoding="utf-8")
 ESLINT_OUT = (FIXTURES / "eslint.json").read_text(encoding="utf-8")
 KNIP_OUT = (FIXTURES / "knip.json").read_text(encoding="utf-8")
 GOLANGCI_OUT = (FIXTURES / "golangci-lint.txt").read_text(encoding="utf-8")
+DOCS_LINKS_OUT = (FIXTURES / "docs-links.txt").read_text(encoding="utf-8")
 
 # The eslint fixture was captured on macOS, where /tmp resolves to /private/tmp.
 ESLINT_CAPTURE_ROOT = "/private/tmp/aragora-readiness/parser-fx/js"
@@ -419,9 +420,64 @@ def test_parse_knip_all_symbol_categories_and_namespace(rule: str):
     assert finding.line == 12
 
 
+def test_parse_docs_links_fixture_keys_on_page_route_and_link_as_written():
+    findings = parsers.parse_docs_links(DOCS_LINKS_OUT)
+    # 13 "-> linking to" lines under 6 page headers; the duplicated
+    # "[WARNING] Markdown link ... couldn't be resolved" line is not counted.
+    assert len(findings) == 13
+    assert DOCS_LINKS_OUT.count("   -> linking to ") == 13
+    assert [(f.path, f.symbol) for f in findings[:2]] == [
+        ("docs/analysis/adr/", "017-backend-runtime-entrypoint-and-compatibility.md"),
+        ("docs/analysis/adr/", "018-self-hosted-worker-canonicalization.md"),
+    ]
+    assert {f.rule for f in findings} == {"broken-link"}
+    assert {f.path for f in findings} == {
+        "docs/analysis/adr/",
+        "docs/contributing/active-execution-issues",
+        "docs/contributing/aragora-evolution-roadmap",
+        "docs/guides/modes",
+        "docs/guides/sdk-quickstart",
+        "docs/security/eu-ai-act-guide",
+    }
+    # Routes lose their leading slash so the runner never relpath()s them
+    # against --cwd as if they were absolute filesystem paths.
+    assert not any(f.path.startswith("/") for f in findings)
+    modes = next(f for f in findings if f.path == "docs/guides/modes")
+    assert modes.key() == "docs/guides/modes::PIPELINE_GUIDE.md::broken-link"
+    assert modes.message == "broken link to /docs/guides/PIPELINE_GUIDE.md"
+    assert modes.line is None
+    spec = parsers.PARSERS["docs-links"]
+    assert spec.symbol_from_line is False
+    assert spec.clean_exit_codes == frozenset({0})
+    assert spec.finding_exit_codes == frozenset({0})
+
+
+def test_parse_docs_links_edge_cases():
+    # A target without "(resolved as: ...)" (link == resolved) is still a finding.
+    out = "- Broken link on source page path = /docs/a:\n   -> linking to /docs/missing\n"
+    (finding,) = parsers.parse_docs_links(out)
+    assert finding.key() == "docs/a::/docs/missing::broken-link"
+    assert finding.message == "broken link to /docs/missing"
+    # The same link twice on one page is two occurrences of one key.
+    twice = out + "   -> linking to /docs/missing\n"
+    assert [f.key() for f in parsers.parse_docs_links(twice)] == [finding.key()] * 2
+    # Anchor reports use a different header and are not counted.
+    anchors = "- Broken anchor on source page path = /docs/a:\n   -> linking to #nope\n"
+    assert parsers.parse_docs_links(anchors) == []
+    # Target lines outside a page block are ignored; a blank line closes the block.
+    stray = "   -> linking to /orphan\n" + out + "\n   -> linking to /after-blank\n"
+    assert [f.symbol for f in parsers.parse_docs_links(stray)] == ["/docs/missing"]
+    # The site root route keeps a non-empty, non-absolute path.
+    (root,) = parsers.parse_docs_links(
+        "- Broken link on source page path = /:\n   -> linking to /gone\n"
+    )
+    assert root.path == "."
+
+
 def test_all_m1_parsers_and_knip_are_registered():
     assert parsers.supported_tools() == [
         "deptry",
+        "docs-links",
         "eslint",
         "golangci-lint",
         "jscpd",
@@ -445,6 +501,7 @@ def test_all_m1_parsers_and_knip_are_registered():
         ("eslint", "eslint.json"),
         ("knip", "knip.json"),
         ("golangci-lint", "golangci-lint.txt"),
+        ("docs-links", "docs-links.txt"),
     ],
 )
 def test_fixture_is_ansi_free_and_parses_to_findings(tool: str, fixture: str):
@@ -648,8 +705,20 @@ def test_partial_output_crash_exits_3_and_never_shrinks_baseline(fx: Path, capsy
         ("eslint", ESLINT_OUT, 1),
         ("knip", KNIP_OUT, 1),
         ("golangci-lint", GOLANGCI_OUT, 1),
+        ("docs-links", DOCS_LINKS_OUT, 0),
     ],
-    ids=["ruff", "mypy", "todo", "vulture", "deptry", "jscpd", "eslint", "knip", "golangci-lint"],
+    ids=[
+        "ruff",
+        "mypy",
+        "todo",
+        "vulture",
+        "deptry",
+        "jscpd",
+        "eslint",
+        "knip",
+        "golangci-lint",
+        "docs-links",
+    ],
 )
 def test_each_tool_enforces_its_finding_exit_codes(fx: Path, tool, out, rc):
     spec = parsers.PARSERS[tool]
@@ -808,6 +877,52 @@ def test_golangci_lint_v2_json_with_stats_trailer_baselined_and_new_issue_exits_
         _run("golangci-lint", baseline, fx, _fake_tool(fx, '{"Issues":null}\n0 issues.\n', rc=0))
         == 0
     )
+
+
+def test_docs_links_build_output_baselined_and_new_link_exits_1_naming_it(fx: Path, capsys):
+    baseline = fx / "docs-links.json"
+    build = _fake_tool(fx, DOCS_LINKS_OUT, rc=0)
+    assert _run("docs-links", baseline, fx, build, "--update") == 0
+    data = json.loads(baseline.read_text())
+    assert data["tool"] == "docs-links"
+    assert len(data["findings"]) == 13 and sum(data["findings"].values()) == 13
+    assert all(not k.startswith("/") and k.endswith("::broken-link") for k in data["findings"])
+    assert list(data["findings"]) == sorted(data["findings"])
+    # The runner normalises the route like a path (trailing slash dropped).
+    assert (
+        "docs/analysis/adr::017-backend-runtime-entrypoint-and-compatibility.md::broken-link"
+        in (data["findings"])
+    )
+    assert _run("docs-links", baseline, fx, build) == 0
+    out = capsys.readouterr().out
+    assert "docs-links: 0 new findings (13 baselined, 0 resolved)" in out
+    assert "baseline 13 key(s) / 13 occurrence(s)" in out
+    # A scratch link to a missing doc on an existing page is a new key.
+    grown = DOCS_LINKS_OUT.replace(
+        "   -> linking to PIPELINE_GUIDE.md (resolved as: /docs/guides/PIPELINE_GUIDE.md)\n",
+        "   -> linking to PIPELINE_GUIDE.md (resolved as: /docs/guides/PIPELINE_GUIDE.md)\n"
+        "   -> linking to /docs/does-not-exist\n",
+    )
+    assert _run("docs-links", baseline, fx, _fake_tool(fx, grown, rc=0)) == 1
+    out = capsys.readouterr().out
+    assert "NEW docs/guides/modes::/docs/does-not-exist::broken-link" in out
+    assert "broken link to /docs/does-not-exist" in out
+    # A second copy of a baselined link on the same page raises its count.
+    doubled = DOCS_LINKS_OUT.replace(
+        "   -> linking to PIPELINE_GUIDE.md (resolved as: /docs/guides/PIPELINE_GUIDE.md)\n",
+        "   -> linking to PIPELINE_GUIDE.md (resolved as: /docs/guides/PIPELINE_GUIDE.md)\n" * 2,
+    )
+    assert _run("docs-links", baseline, fx, _fake_tool(fx, doubled, rc=0)) == 1
+    assert "[count 2 > baselined 1]" in capsys.readouterr().out
+    # A build with no broken-link report is zero findings, not a crash; a
+    # failed build (non-zero exit) is a tool failure and never touches the file.
+    before = baseline.read_bytes()
+    assert (
+        _run("docs-links", baseline, fx, _fake_tool(fx, "[SUCCESS] Generated static files.\n")) == 0
+    )
+    assert "docs-links: 0 new findings (13 baselined, 13 resolved)" in capsys.readouterr().out
+    assert _run("docs-links", baseline, fx, _fake_tool(fx, "", rc=1), "--update") == 3
+    assert baseline.read_bytes() == before
 
 
 # --- --update: shrink-only / subset rule ------------------------------------

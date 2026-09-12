@@ -2,6 +2,33 @@
 // Docusaurus Configuration for Aragora Documentation Portal
 // See: https://docusaurus.io/docs/configuration
 
+// Analytics is a build-time decision: without a PostHog project key the plugin
+// is not registered at all, so the emitted HTML carries no PostHog snippet.
+const posthogApiKey = process.env.POSTHOG_API_KEY;
+
+/** @type {import('@docusaurus/types').PluginConfig[]} */
+const plugins = [
+  // OpenAPI documentation plugin
+  [
+    'docusaurus-plugin-openapi-docs',
+    {
+      id: 'api',
+      docsPluginId: 'classic',
+      config: {
+        aragora: {
+          specPath: '../docs/api/openapi.json',
+          outputDir: 'docs/api-reference',
+          sidebarOptions: { groupPathsBy: 'tag' },
+        },
+      },
+    },
+  ],
+];
+
+if (posthogApiKey) {
+  plugins.push([require.resolve('posthog-docusaurus'), { apiKey: posthogApiKey }]);
+}
+
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Aragora Documentation',
@@ -44,23 +71,7 @@ const config = {
     ],
   ],
 
-  plugins: [
-    // OpenAPI documentation plugin
-    [
-      'docusaurus-plugin-openapi-docs',
-      {
-        id: 'api',
-        docsPluginId: 'classic',
-        config: {
-          aragora: {
-            specPath: '../docs/api/openapi.json',
-            outputDir: 'docs/api-reference',
-            sidebarOptions: { groupPathsBy: 'tag' },
-          },
-        },
-      },
-    ],
-  ],
+  plugins,
 
   themes: ['docusaurus-theme-openapi-docs'],
 

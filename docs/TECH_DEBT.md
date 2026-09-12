@@ -37,6 +37,7 @@ counts and the number of files are recorded separately below.
 | Docs knip (unused files, dependencies, exports and types; the unused `clsx` dependency and the `vercel` binary of the legacy deploy scripts) | `scripts/baselines/docs-knip.json` | 2 | Docs site maintainers | `python scripts/ci/check_tool_baseline.py --tool knip --cwd docs-site --baseline scripts/baselines/docs-knip.json --update -- npx knip --reporter json` |
 | Docs file size (2,000 lines) | `scripts/baselines/docs-file-sizes.json` | 0 | Docs site maintainers | `python scripts/ci/check_file_sizes.py --glob 'docs-site/src/**/*.{js,ts,tsx}' --baseline scripts/baselines/docs-file-sizes.json --freeze` |
 | Docs jscpd (50 minimum tokens, hard 1% line threshold over `src`, `scripts`, `tests`) | `docs-site/.jscpd.json`, threshold-only | 0.8070% lines | Docs site maintainers | `cd docs-site && npx jscpd --config .jscpd.json` (measure, no baseline regeneration) |
+| Docs broken links (Docusaurus `onBrokenLinks: 'warn'` report; one key per page route and link as written, 54 occurrences; the build stays green, this ratchet enforces) | `scripts/baselines/docs-broken-links.json` | 54 | Docs site maintainers | `node docs-site/scripts/check_broken_links.mjs --update` (runs `docusaurus build`; add `--log <file>` to reuse a saved build log) |
 
 ### ESLint suppression growth_log
 
