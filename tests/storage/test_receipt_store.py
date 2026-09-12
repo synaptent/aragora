@@ -892,6 +892,70 @@ class TestReceiptStoreSingleton:
 class TestReceiptStoreBackends:
     """Tests for backend configuration."""
 
+    @pytest.mark.parametrize("backend_type", ["sqlite", "postgresql"])
+    def test_schema_creates_table_then_migrates_then_indexes(self, backend_type):
+        store = ReceiptStore.__new__(ReceiptStore)
+        store.backend_type = backend_type
+        store._backend = MagicMock()
+        schema = getattr(store, f"SCHEMA_STATEMENTS_{backend_type.upper()}")
+        migrations = getattr(store, f"MIGRATION_STATEMENTS_{backend_type.upper()}")
+
+        store._init_schema()
+
+        statements = [call.args[0] for call in store._backend.execute_write.call_args_list]
+        assert statements == [schema[0], *migrations, *schema[1:]]
+
+    @pytest.mark.parametrize("backend_type", ["sqlite", "postgresql"])
+    def test_table_creation_failure_is_not_reported_as_initialized(self, backend_type):
+        store = ReceiptStore.__new__(ReceiptStore)
+        store.backend_type = backend_type
+        store._backend = MagicMock()
+        store._backend.execute_write.side_effect = RuntimeError("database unavailable")
+
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            store._init_schema()
+        assert store._backend.execute_write.call_count == 1
+
+    @pytest.mark.parametrize("legacy", [False, True])
+    def test_sqlite_bootstrap_and_reopen_preserve_receipt(
+        self, temp_db_path, sample_receipt_dict, legacy
+    ):
+        if legacy:
+            # The old schema predates timestamp and legal-hold columns/indexes.
+            old_schema = "\n".join(
+                line
+                for line in ReceiptStore.SCHEMA_STATEMENTS_SQLITE[0].splitlines()
+                if not line.strip().startswith(("timestamp_", "legal_hold"))
+            )
+            with sqlite3.connect(temp_db_path) as connection:
+                connection.execute(old_schema)
+                connection.execute(
+                    "INSERT INTO receipts (receipt_id, gauntlet_id, created_at, verdict, "
+                    "confidence, risk_level, checksum, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    ("old", "old-gauntlet", 1.0, "APPROVED", 0.8, "LOW", "old", "{}"),
+                )
+
+        store = ReceiptStore(db_path=temp_db_path, backend="sqlite", file_receipt_dirs=[])
+        try:
+            if legacy:
+                assert store.get("old") is not None
+            store.save(sample_receipt_dict)
+        finally:
+            store.close()
+
+        reopened = ReceiptStore(db_path=temp_db_path, backend="sqlite", file_receipt_dirs=[])
+        try:
+            receipt = reopened.get(sample_receipt_dict["receipt_id"])
+            assert receipt is not None
+            assert receipt.data["statement"] == sample_receipt_dict["statement"]
+            if legacy:
+                assert reopened.get("old") is not None
+            with sqlite3.connect(temp_db_path) as connection:
+                indexes = {row[1] for row in connection.execute("PRAGMA index_list(receipts)")}
+            assert "idx_receipts_legal_hold" in indexes
+        finally:
+            reopened.close()
+
     def test_sqlite_backend(self, temp_db_path):
         """Test SQLite backend initialization."""
         store = ReceiptStore(db_path=temp_db_path, backend="sqlite")
