@@ -704,10 +704,13 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
 
     # Basic info
     print("\n--- Basic Information ---")
-    print(f"Receipt ID:    {data.get('receipt_id', 'N/A')}")
-    print(f"Gauntlet ID:   {data.get('gauntlet_id', 'N/A')}")
-    print(f"Debate ID:     {data.get('debate_id', 'N/A')}")
-    print(f"Timestamp:     {data.get('timestamp', 'N/A')}")
+    for field, label in (
+        ("receipt_id", "Receipt ID"),
+        ("gauntlet_id", "Gauntlet ID"),
+        ("debate_id", "Debate ID"),
+        ("timestamp", "Timestamp"),
+    ):
+        print(f"{label + ':':15}{_inspection_cosmetic(data.get(field, 'N/A'), field)}")
 
     # Verdict
     print("\n--- Verdict ---")
@@ -718,7 +721,7 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
     verdict_icon = {"PASS": "\u2713", "FAIL": "\u2717", "CONDITIONAL": "\u26a0"}.get(
         verdict.upper(), "?"
     )
-    print(f"Verdict:       {verdict_icon} {verdict}")
+    print(f"Verdict:       {verdict_icon} {_inspection_cosmetic(verdict, 'verdict')}")
     print(f"Confidence:    {confidence:.1%}")
     print(f"Robustness:    {robustness:.1%}")
 
@@ -726,11 +729,9 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
     risk_summary = data.get("risk_summary", {})
     if risk_summary:
         print("\n--- Risk Summary ---")
-        print(f"Critical:      {risk_summary.get('critical', 0)}")
-        print(f"High:          {risk_summary.get('high', 0)}")
-        print(f"Medium:        {risk_summary.get('medium', 0)}")
-        print(f"Low:           {risk_summary.get('low', 0)}")
-        print(f"Total:         {risk_summary.get('total', 0)}")
+        for field in ("critical", "high", "medium", "low", "total"):
+            value = _inspection_cosmetic(risk_summary.get(field, 0), f"risk_summary.{field}")
+            print(f"{field.title() + ':':15}{value}")
 
     # Consensus
     consensus = data.get("consensus_proof", {})
@@ -738,18 +739,24 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
         print("\n--- Consensus ---")
         reached = _inspection_consensus_reached(consensus.get("reached", False))
         print(f"Reached:       {'Yes' if reached else 'No'}")
-        print(f"Method:        {consensus.get('method', 'N/A')}")
-        supporting = consensus.get("supporting_agents", [])
-        dissenting = consensus.get("dissenting_agents", [])
-        print(f"Supporting:    {', '.join(supporting) if supporting else 'None'}")
-        print(f"Dissenting:    {', '.join(dissenting) if dissenting else 'None'}")
+        print(f"Method:        {_inspection_cosmetic(consensus.get('method', 'N/A'), 'method')}")
+        for field, label in (
+            ("supporting_agents", "Supporting"),
+            ("dissenting_agents", "Dissenting"),
+        ):
+            agents = consensus.get(field) or []
+            rendered = [_inspection_cosmetic(agent, field) for agent in agents]
+            print(f"{label + ':':15}{', '.join(rendered) if agents else 'None'}")
 
     # Signature
     print("\n--- Cryptographic ---")
     if data.get("signature"):
         print("Signed:        Yes")
-        print(f"Algorithm:     {data.get('signature_algorithm', 'unknown')}")
-        print(f"Key ID:        {data.get('signature_key_id', 'N/A')}")
+        for field, label, default in (
+            ("signature_algorithm", "Algorithm", "unknown"),
+            ("signature_key_id", "Key ID", "N/A"),
+        ):
+            print(f"{label + ':':15}{_inspection_cosmetic(data.get(field, default), field)}")
     else:
         print("Signed:        No")
 
@@ -776,11 +783,11 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
             model = resp.get("llm_label", "")
             content = resp.get("content", "")
             length = len(content)
-            label = f"{name}"
+            label = _inspection_cosmetic(name, "agent_name")
             if model:
-                label += f" ({model})"
+                label += f" ({_inspection_cosmetic(model, 'llm_label')})"
             if role:
-                label += f" [{role}]"
+                label += f" [{_inspection_cosmetic(role, 'role')}]"
             print(f"  {label}: {length} chars")
 
     # Cost summary
@@ -797,20 +804,20 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
     if critiques:
         print(f"\n--- Critique Summaries ({len(critiques)}) ---")
         for c in critiques[:5]:
-            critic = c.get("critic", "unknown")
-            target = c.get("target", "")
+            critic = _inspection_cosmetic(c.get("critic", "unknown"), "critic")
+            target = _inspection_cosmetic(c.get("target", ""), "target")
             severity = c.get("severity", 0.0)
             issues = c.get("issues", [])
             print(f"  {critic} → {target} (severity: {_inspection_cosmetic(severity, 'severity')})")
             for issue in issues[:3]:
-                print(f"    - {str(issue)[:100]}")
+                print(f"    - {_inspection_cosmetic(issue, 'critique issue')}")
 
     # Dissenting views
     dissent = data.get("dissenting_views", [])
     if dissent:
         print(f"\n--- Dissenting Views ({len(dissent)}) ---")
         for view in dissent[:3]:
-            print(f"  - {str(view)[:200]}")
+            print(f"  - {_inspection_cosmetic(view, 'dissenting view')}")
 
     print("\n" + "=" * 60)
 

@@ -17,6 +17,71 @@ from aragora.cli.commands.receipt import cmd_receipt_inspect
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.parametrize("value", ["label\nSigned: Yes\u001b[2J\u009b\u202e", "x" * 121, "\ud800"])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "receipt_id",
+        "gauntlet_id",
+        "debate_id",
+        "timestamp",
+        "verdict",
+        "consensus_proof.method",
+        "consensus_proof.supporting_agents.0",
+        "consensus_proof.dissenting_agents.0",
+        "signature_algorithm",
+        "signature_key_id",
+        "agent_responses.0.agent_name",
+        "agent_responses.0.role",
+        "agent_responses.0.llm_label",
+        "config_used.critique_summaries.0.critic",
+        "config_used.critique_summaries.0.target",
+        "config_used.critique_summaries.0.issues.0",
+        "dissenting_views.0",
+    ],
+)
+def test_all_display_text_uses_escaped_capped_rendering(
+    field: str, value: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    data: dict[str, Any] = {"signature": "present"}
+    cursor: Any = data
+    parts = field.split(".")
+    for index, part in enumerate(parts[:-1]):
+        child: Any = [] if parts[index + 1].isdigit() else {}
+        if isinstance(cursor, list):
+            cursor.append(child)
+        else:
+            cursor[part] = child
+        cursor = child
+    if isinstance(cursor, list):
+        cursor.append(value)
+    else:
+        cursor[parts[-1]] = value
+    source = tmp_path / "receipt.json"
+    source.write_text(json.dumps(data), encoding="utf-8")
+    cmd_receipt_inspect(argparse.Namespace(receipt=str(source)))
+    captured = capsys.readouterr()
+    assert value not in captured.out
+    if value == "\ud800":
+        assert "(unrenderable)" in captured.out
+        assert captured.err.count("Warning:") == 1
+    else:
+        expected = (
+            "x" * 117 + "..."
+            if value.startswith("x")
+            else r"label\nSigned: Yes\u001b[2J\u009b\u202e"
+        )
+        assert expected in captured.out
+        assert captured.err == ""
+
+
+def test_numeric_risk_strings_escape_whitespace_in_real_cli(tmp_path: Path) -> None:
+    result = inspect_process({"risk_summary": {"high": "\n\t2\r"}}, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert r"High:          \n\t2\r" in result.stdout
+    assert "\n\t2\n" not in result.stdout
+
+
 def inspect_process(data: dict[str, Any], tmp_path: Path) -> subprocess.CompletedProcess[str]:
     source = tmp_path / "receipt.json"
     source.write_text(json.dumps(data), encoding="utf-8")
