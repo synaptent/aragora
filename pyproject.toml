@@ -93,6 +93,8 @@ test = [
     "PyYAML>=6.0.3,<7.0",
     "pytest>=9.1.1,<10.0",
     "pytest-asyncio>=1.4.0,<2.0",
+    "pytest-timeout>=2.4.0,<3.0",
+    "pytest-xdist>=3.8.0,<4.0",
     "twine>=6.2.0,<7.0",
 ]
 gateway = [
