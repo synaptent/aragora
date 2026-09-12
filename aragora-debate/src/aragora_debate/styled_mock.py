@@ -17,7 +17,7 @@ Usage::
 from __future__ import annotations
 
 import random
-from typing import Literal
+from typing import Any, Literal
 
 from aragora_debate.types import Agent, Critique, Message, Vote
 
@@ -192,7 +192,7 @@ class StyledMockAgent(Agent):
         proposal: str | None = None,
         vote_for: str = "",
         critique_issues: list[str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(name=name, model="mock", **kwargs)
         if style not in PROPOSALS:
