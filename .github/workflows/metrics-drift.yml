@@ -275,8 +275,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/build_disagreement_atlas.py collect --cache-dir "$ATLAS_CACHE" \
-            --repo "$GH_REPO" --refresh-index
+          # Retry once from saved per-PR responses; never publish an incomplete corpus.
+          for attempt in 1 2; do
+            log="$RUNNER_TEMP/atlas-collect-$attempt.log"
+            if python3 scripts/build_disagreement_atlas.py collect --cache-dir "$ATLAS_CACHE" \
+                --repo "$GH_REPO" --refresh-index 2>&1 | tail -n 200 | tail -c 16384 > "$log"; then
+              cat "$log"
+              exit 0
+            fi
+            cat "$log" >&2
+            if [ "$attempt" -eq 1 ]; then
+              echo "atlas: collection incomplete; retrying once from cache" >&2
+              sleep 10
+            fi
+          done
+          echo "::error::Atlas collection incomplete after two attempts; publication blocked. Inspect collection diagnostics and restore source access before retrying." >&2
+          exit 1
+
+      - name: Upload Atlas collection diagnostics
+        if: failure() && steps.atlas_collect.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlas-collection-errors-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/atlas-collect-*.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Save Atlas fetch cache
         if: always() && steps.atlas_cache.outcome == 'success'
@@ -292,10 +315,12 @@ jobs:
           mkdir -p "$ATLAS_OUT"
           python3 scripts/build_disagreement_atlas.py build --cache-dir "$ATLAS_CACHE" \
             --out "$ATLAS_OUT/atlas-v1.jsonl" --manifest "$ATLAS_OUT/manifest.json" \
-            --schema docs/atlas/schema.json --repo-root "$GITHUB_WORKSPACE"
+            --schema docs/atlas/schema.json --repo-root "$GITHUB_WORKSPACE" --force-sample
           python3 scripts/build_disagreement_atlas.py summary \
             --dataset "$ATLAS_OUT/atlas-v1.jsonl" --manifest "$ATLAS_OUT/manifest.json" \
             --out "$ATLAS_OUT/summary.md"
+          python3 scripts/build_disagreement_atlas.py verify \
+            --manifest "$ATLAS_OUT/manifest.json" --repo-root "$ATLAS_OUT" --require-dataset
 
       - name: Name Atlas artifact
         id: atlas_date
@@ -309,6 +334,7 @@ jobs:
           if-no-files-found: error
           path: |
             ${{ env.ATLAS_OUT }}/atlas-v1.jsonl
+            ${{ env.ATLAS_OUT }}/atlas-v1.sample.jsonl
             ${{ env.ATLAS_OUT }}/manifest.json
             ${{ env.ATLAS_OUT }}/summary.md
 
@@ -375,6 +401,7 @@ jobs:
             fi
           fi
           gh release create "atlas-$today" \
-            "$ATLAS_OUT/atlas-v1.jsonl" "$ATLAS_OUT/manifest.json" "$ATLAS_OUT/summary.md" \
+            "$ATLAS_OUT/atlas-v1.jsonl" "$ATLAS_OUT/atlas-v1.sample.jsonl" \
+            "$ATLAS_OUT/manifest.json" "$ATLAS_OUT/summary.md" \
             --target main --latest=false --title "Disagreement Atlas $today" \
             --notes "Weekly Atlas regeneration. Dataset SHA-256: $sha"

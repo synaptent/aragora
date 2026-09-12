@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 from typing import Any
@@ -45,6 +46,7 @@ def run_step(
             step(name, publish=publish)["run"],
         ],
         env=env,
+        cwd=ROOT,
         capture_output=True,
         text=True,
         timeout=10,
@@ -66,6 +68,9 @@ def shell_env(tmp_path: Path) -> dict[str, str]:
     manifest = json.loads((ROOT / "docs/atlas/manifest.json").read_text())
     (out / "manifest.json").write_text(json.dumps(manifest))
     (out / "atlas-v1.jsonl").write_bytes((ROOT / "docs/atlas/atlas-v1.sample.jsonl").read_bytes())
+    (out / "atlas-v1.sample.jsonl").write_bytes(
+        (ROOT / "docs/atlas/atlas-v1.sample.jsonl").read_bytes()
+    )
     (out / "summary.md").write_bytes((ROOT / "docs/atlas/summary.md").read_bytes())
     executable(
         bin_dir / "date",
@@ -102,7 +107,7 @@ elif operation == "download":
     (dest / "manifest.json").write_text("invalid" if mode == "invalid" else json.dumps(manifest))
 elif operation == "create":
     assert args[2] == "atlas-2026-09-10"
-    for name in ("atlas-v1.jsonl", "manifest.json", "summary.md"):
+    for name in ("atlas-v1.jsonl", "atlas-v1.sample.jsonl", "manifest.json", "summary.md"):
         assert str(pathlib.Path(os.environ["ATLAS_OUT"]) / name) in args
     assert args[args.index("--target") + 1] == "main"
 else:
@@ -148,6 +153,7 @@ def test_job_is_weekly_or_manual_with_branch_artifacts_and_main_only_releases() 
     assert upload["with"]["if-no-files-found"] == "error"
     assert set(Path(p).name for p in upload["with"]["path"].splitlines()) == {
         "atlas-v1.jsonl",
+        "atlas-v1.sample.jsonl",
         "manifest.json",
         "summary.md",
     }
@@ -238,7 +244,7 @@ def test_date_output_is_exact_dated_artifact_name(shell_env: dict[str, str]) -> 
 
 
 @pytest.mark.parametrize("mode", ["exists", "unchanged", "changed", "first"])
-def test_release_skips_or_publishes_three_assets(shell_env: dict[str, str], mode: str) -> None:
+def test_release_skips_or_publishes_complete_assets(shell_env: dict[str, str], mode: str) -> None:
     result = run_step("Publish dated Atlas release", {**shell_env, "MODE": mode}, publish=True)
     assert result.returncode == 0, result.stderr
     calls = [json.loads(line) for line in Path(shell_env["CALLS"]).read_text().splitlines()]
@@ -264,6 +270,7 @@ def test_release_fails_closed_on_read_errors(shell_env: dict[str, str], mode: st
 def test_collect_failure_stops_before_build_or_publish(shell_env: dict[str, str]) -> None:
     bin_dir = Path(shell_env["PATH"].split(os.pathsep)[0])
     executable(bin_dir / "python3", "import sys\nsys.exit(1)\n")
+    executable(bin_dir / "sleep", "pass\n")
     result = run_step("Collect Atlas incrementally", shell_env)
     assert result.returncode == 1
     steps = atlas_job()["steps"]
@@ -275,3 +282,118 @@ def test_collect_failure_stops_before_build_or_publish(shell_env: dict[str, str]
     assert publish_job()["needs"] == "atlas"
     assert "needs.atlas.result == 'success'" in publish_job()["if"]
     assert "always()" not in publish_job()["if"]
+
+
+@pytest.mark.parametrize("recover", [True, False])
+def test_collection_retries_once_from_cache_and_retains_bounded_diagnostics(
+    shell_env: dict[str, str], recover: bool
+) -> None:
+    bin_dir = Path(shell_env["PATH"].split(os.pathsep)[0])
+    executable(bin_dir / "sleep", "pass\n")
+    executable(
+        bin_dir / "python3",
+        """import os, pathlib, sys
+cache = pathlib.Path(os.environ["ATLAS_CACHE"])
+cache.mkdir(exist_ok=True)
+attempts = cache / "attempts"
+n = int(attempts.read_text()) + 1 if attempts.exists() else 1
+attempts.write_text(str(n))
+assert n <= 2
+assert "--refresh" not in sys.argv
+print("partial progress saved")
+for i in range(250):
+    print(f"diagnostic {i}", file=sys.stderr)
+print("PR #8802 inaccessible", file=sys.stderr)
+sys.exit(0 if n == 2 and os.environ["RECOVER"] == "yes" else 1)
+""",
+    )
+    result = run_step(
+        "Collect Atlas incrementally", {**shell_env, "RECOVER": "yes" if recover else "no"}
+    )
+    assert result.returncode == (0 if recover else 1), result.stderr
+    assert (Path(shell_env["ATLAS_CACHE"]) / "attempts").read_text() == "2"
+    for attempt in (1, 2):
+        log = Path(shell_env["RUNNER_TEMP"]) / f"atlas-collect-{attempt}.log"
+        assert log.stat().st_size <= 16384
+        assert len(log.read_text().splitlines()) <= 200
+        assert "PR #8802 inaccessible" in log.read_text()
+    diagnostic = step("Upload Atlas collection diagnostics")
+    assert diagnostic["if"] == "failure() && steps.atlas_collect.outcome == 'failure'"
+    assert diagnostic["with"]["retention-days"] <= 7
+    assert "atlas-collect-*.log" in diagnostic["with"]["path"]
+    if not recover:
+        assert "publication blocked" in result.stderr
+        assert "PR #8802 inaccessible" in result.stderr
+
+
+def test_successful_collection_is_not_retried(shell_env: dict[str, str]) -> None:
+    bin_dir = Path(shell_env["PATH"].split(os.pathsep)[0])
+    executable(
+        bin_dir / "python3",
+        """import os, pathlib
+marker = pathlib.Path(os.environ["RUNNER_TEMP"]) / "called"
+assert not marker.exists()
+marker.touch()
+print("collection complete")
+""",
+    )
+    result = run_step("Collect Atlas incrementally", shell_env)
+    assert result.returncode == 0, result.stderr
+    assert "collection complete" in result.stdout
+    assert not (Path(shell_env["RUNNER_TEMP"]) / "atlas-collect-2.log").exists()
+
+
+def test_workflow_bundle_round_trips_offline_and_rejects_missing_or_corrupt_assets(
+    shell_env: dict[str, str], tmp_path: Path
+) -> None:
+    bin_dir = Path(shell_env["PATH"].split(os.pathsep)[0])
+    (bin_dir / "python3").symlink_to(sys.executable)
+    cache = Path(shell_env["ATLAS_CACHE"])
+    shutil.copytree(ROOT / "tests/scripts/fixtures/disagreement_atlas", cache)
+    out = Path(shell_env["ATLAS_OUT"])
+    # Start empty, unlike the old fixture which substituted the committed manifest.
+    for path in out.iterdir():
+        path.unlink()
+    result = run_step("Build Atlas", {**shell_env, "GITHUB_WORKSPACE": str(ROOT)})
+    assert result.returncode == 0, result.stderr
+    manifest = json.loads((out / "manifest.json").read_text())
+    assert manifest["sample"]["path"] == "atlas-v1.sample.jsonl"
+    downloaded = tmp_path / "downloaded"
+    downloaded.mkdir()
+    for asset in step("Upload Atlas artifact")["with"]["path"].splitlines():
+        shutil.copy2(out / Path(asset).name, downloaded)
+    rebuilt = run_step("Build Atlas", {**shell_env, "GITHUB_WORKSPACE": str(ROOT)})
+    assert rebuilt.returncode == 0, rebuilt.stderr
+    assert all(path.read_bytes() == (out / path.name).read_bytes() for path in downloaded.iterdir())
+
+    def verify() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/build_disagreement_atlas.py"),
+                "verify",
+                "--manifest",
+                str(downloaded / "manifest.json"),
+                "--repo-root",
+                str(downloaded),
+                "--require-dataset",
+            ],
+            cwd=downloaded,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+    valid = verify()
+    assert valid.returncode == 0, valid.stdout + valid.stderr
+    assert "sample sha256 ok" in valid.stdout
+    for name in ("atlas-v1.jsonl", "atlas-v1.sample.jsonl"):
+        path = downloaded / name
+        payload = path.read_bytes()
+        path.unlink()
+        assert verify().returncode != 0
+        path.write_bytes(payload + b"corruption\n")
+        assert verify().returncode != 0
+        path.write_bytes(payload)
+    assert verify().returncode == 0
