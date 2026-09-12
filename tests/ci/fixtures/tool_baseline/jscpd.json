@@ -1,0 +1,70 @@
+{
+  "duplicates": [
+    {
+      "firstFile": {
+        "end": 11,
+        "endLoc": {
+          "column": 1,
+          "line": 11,
+          "position": 327
+        },
+        "name": "src/b.js",
+        "start": 1,
+        "startLoc": {
+          "column": 21,
+          "line": 1,
+          "position": 21
+        }
+      },
+      "format": "javascript",
+      "fragment": "export function first(list) {\n  const out = [];\n  for (const item of list) {\n    if (item.enabled && item.value > 10) {\n      out.push({ id: item.id, value: item.value * 2, label: `${item.name}-x` });\n    } else if (item.enabled) {\n      out.push({ id: item.id, value: item.value, label: item.name });\n    }\n  }\n  return out;\n}",
+      "isNew": false,
+      "lines": 11,
+      "secondFile": {
+        "end": 23,
+        "endLoc": {
+          "column": 1,
+          "line": 23,
+          "position": 657
+        },
+        "name": "src/b.js",
+        "start": 13,
+        "startLoc": {
+          "column": 22,
+          "line": 13,
+          "position": 351
+        }
+      },
+      "tokens": 100
+    }
+  ],
+  "statistics": {
+    "detectionDate": "2026-09-04T05:05:46.494Z",
+    "formats": {
+      "javascript": {
+        "clones": 1,
+        "duplicatedLines": 10,
+        "duplicatedTokens": 100,
+        "lines": 23,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 43.47826086956522,
+        "percentageTokens": 48.54368932038835,
+        "sources": 1,
+        "tokens": 206
+      }
+    },
+    "total": {
+      "clones": 1,
+      "duplicatedLines": 10,
+      "duplicatedTokens": 100,
+      "lines": 23,
+      "newClones": 0,
+      "newDuplicatedLines": 0,
+      "percentage": 43.47826086956522,
+      "percentageTokens": 48.54368932038835,
+      "sources": 1,
+      "tokens": 206
+    }
+  }
+}
