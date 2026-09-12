@@ -80,6 +80,7 @@ def test_required_scenarios_execute(suite, required, selection, tmp_path):
             "-k",
             selection,
             "-q",
+            "-ra",
             "-p",
             "no:cacheprovider",
             "--basetemp",
@@ -103,4 +104,7 @@ def test_required_scenarios_execute(suite, required, selection, tmp_path):
         if any(case.find(tag) is not None for tag in ("skipped", "failure", "error"))
     ]
     assert not bad, f"Unsuccessful semantic scenarios: {bad}\n{result.stdout}"
+    # Non-strict XPASS has a successful JUnit testcase and exit status.
+    xpasses = [line for line in result.stdout.splitlines() if line.startswith("XPASS ")]
+    assert not xpasses, f"XPASS semantic scenarios: {xpasses}\n{result.stdout}"
     assert result.returncode == 0, result.stdout + result.stderr
