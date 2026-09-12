@@ -1,6 +1,6 @@
 # AI Agent Coordination
 
-**Last updated:** 2026-04-28
+**Last updated:** 2026-09-12
 **Maintainer:** Update this file when starting/finishing work
 
 > **Operating Contract.** All coordinated work in this repo follows
@@ -31,7 +31,22 @@
 
 ### Currently Active
 
-*(No sessions currently claimed — update when starting work on a domain)*
+> Since 2026-09-03 the live execution spine is the Receipt-First Mission, epic
+> [#9966](https://github.com/synaptent/aragora/issues/9966) (declared the successor gate in
+> [`status/NEXT_STEPS_CANONICAL.md`](status/NEXT_STEPS_CANONICAL.md) on 2026-09-07). Mission
+> workers record parks, packets and rulings as comments on that epic; this table is the
+> cross-lane view for agents that are not mission workers.
+
+| Lane | Owner / agent | Branches | Open PRs | Touched paths |
+|------|---------------|----------|----------|---------------|
+| Receipt-First mission (M1–M3) | Codex / Factory workers via `scarmani` | `rf/*`, `codex/*` | [#9979](https://github.com/synaptent/aragora/pull/9979), [#9988](https://github.com/synaptent/aragora/pull/9988), [#10013](https://github.com/synaptent/aragora/pull/10013), [#10051](https://github.com/synaptent/aragora/pull/10051) (all Tier 4, awaiting repair/restack + settlement) | `aragora/gauntlet/`, `aragora-verify/`, `aragora/swarm/`, `scripts/baselines/`, `.github/workflows/metrics-drift.yml`, `deploy/` |
+| Reliable SDK consumption (Tier 3, parked drafts) | Codex via `scarmani` | `codex/*` | [#10014](https://github.com/synaptent/aragora/pull/10014), [#10015](https://github.com/synaptent/aragora/pull/10015), [#10056](https://github.com/synaptent/aragora/pull/10056) | `sdk/python/`, `sdk/typescript/` |
+| P4B handlers decomposition (batch 1 of 4) | Codex / Factory worker via `scarmani` | `structex/*` | [#10000](https://github.com/synaptent/aragora/pull/10000) (head `03ddc3dc`, needs a fresh quorum collection after the 2026-09-07 repair) | `aragora/server/handlers/` (moves behind `MOVED_MODULES` shim) |
+| Readiness mission M1–M7 (stacked drafts, operator review) | `scarmani` | `readiness/*` | [#9982](https://github.com/synaptent/aragora/pull/9982) (M1, grounded P2 on `uv.lock` cooldown), [#9997](https://github.com/synaptent/aragora/pull/9997), [#10005](https://github.com/synaptent/aragora/pull/10005), [#10027](https://github.com/synaptent/aragora/pull/10027), [#10049](https://github.com/synaptent/aragora/pull/10049) (M5, conflicts with `main`), [#10052](https://github.com/synaptent/aragora/pull/10052), [#10060](https://github.com/synaptent/aragora/pull/10060) | `.github/workflows/`, `Makefile`, `scripts/ci/`, `scripts/baselines/`, `aragora/live/`, `docs-site/` |
+| Frontier model refresh (Tier 4) | `scarmani` | `feat/frontier-model-refresh*` | [#9989](https://github.com/synaptent/aragora/pull/9989), [#9992](https://github.com/synaptent/aragora/pull/9992) | `aragora/agents/`, `aragora/config/`, model catalog |
+| Stage-Gate Conductor (2-hourly log) | Claude Code sessions via `an0mium` | none | log anchor [#9942](https://github.com/synaptent/aragora/issues/9942) | comments only |
+| Vision-tier incubator (deferred track, drafts) | Claude Code via `an0mium` | `vision-incubator/*`, `claude/*` | [#10006](https://github.com/synaptent/aragora/pull/10006), [#9956](https://github.com/synaptent/aragora/pull/9956), [#9953](https://github.com/synaptent/aragora/pull/9953), [#10038](https://github.com/synaptent/aragora/pull/10038), [#10040](https://github.com/synaptent/aragora/pull/10040), [#10054](https://github.com/synaptent/aragora/pull/10054), [#10057](https://github.com/synaptent/aragora/pull/10057) | `aragora/reasoning/`, `aragora/genesis/`, `aragora/epistemic/`, `aragora/protocols/a2a/`, `aragora/reputation/`, `aragora/cli/` |
+| Operator settlement session | Claude Code via `an0mium` | `claude/project-status-review-*`, `claude/park-*`, `claude/fix-*`, `claude/contract-drift-*` | this doc PR, [#10025](https://github.com/synaptent/aragora/pull/10025), [#10026](https://github.com/synaptent/aragora/pull/10026), [#10033](https://github.com/synaptent/aragora/pull/10033), [#10034](https://github.com/synaptent/aragora/pull/10034) | `docs/status/`, `docs/COORDINATION.md`, `.github/workflows/monitor.yml`, `.github/workflows/contract-drift-governance.yml`, `deploy/Dockerfile.backend`, `aragora/server/validation/entities.py` |
 
 ---
 
@@ -39,6 +54,21 @@
 
 | Date | Agent | Task | Issue | Commit |
 |------|-------|------|-------|--------|
+| 2026-09-11 | Codex via scarmani | Receipt CLI hardening: fail-closed export, no-traceback input errors | #9966 | 67ac6ba4, c30b897a |
+| 2026-09-11 | Codex via scarmani | Provider-neutral Hetzner production origin (deploy pack, M3) | #9391, #9966 | e3ce08bb |
+| 2026-09-11 | Codex via scarmani | Import-cycle ratchet as non-required check (M0/M2) | #9966 | 2d9b664c |
+| 2026-09-11 | Codex via scarmani | Cache/reputation regression signals recovered | - | d29df84e |
+| 2026-09-10 | Codex via scarmani | Live app dependency advisories (Next.js, sharp, postcss); dialect-aware migrations | - | 79b1be10, c3380f9e, 4c2aabb3 |
+| 2026-09-10 | Codex via scarmani | Atlas pairwise summary, Atlas docs-site pages, scoreboard rows 6/8 (M2) | #9966 | a93210f1, e8026c36, 78b3354b |
+| 2026-09-08 | Codex via scarmani | Packaging: cryptography in base deps, Python 3.10 quickstart (M1) | #9966 | 8919b620 |
+| 2026-09-07 | Codex via scarmani | Advisory dissent summaries + hardening (M2, ruling 11) | #9966 | 187024c8 |
+| 2026-09-06 | Codex via scarmani | Test hardening cluster: exact assertions replace blanket `except Exception` (#10002–#10009) | #9966 | 3ee6b445, 20cd29a9, ba72aa50, df1aef4a |
+| 2026-09-06 | Codex via scarmani | Dependency advisories patched (aragora/live, webview, docs-site) | - | 83b28699, 1c8307b2, 1b365c88 |
+| 2026-09-06 | an0mium | Time-aware truth report for claims | #9215 | df3256a7 |
+| 2026-09-05 | Codex via scarmani | ODR file-based signing keys, fail-closed (M1) | #9966 | 3885146d |
+| 2026-09-05 | Codex via scarmani | P4B handlers decomposition design doc | - | f64b3858 |
+| 2026-09-04 | scarmani | Release v2.10.0 (M0) | #9966 | be07ea5b |
+| 2026-09-03 | Codex via scarmani | Disagreement Atlas v1, receipt-first scoreboard, import-cycle repairs 144→138 (M0) | #9966 | b512e130, dd33d01b, f869a70b..eed97a23 |
 | 2026-02-16 | Claude Opus 4.7 | Working tree cleanup + worktree consolidation | - | db54711..fa10308 |
 | 2026-02-16 | Claude Opus 4.7 | Exception handler narrowing (debate, server, workflow) | - | 93edccef..47c7f89 |
 | 2026-02-16 | Claude Opus 4.7 | SDK cost estimation + TS features namespace | - | b301d86 |
@@ -66,7 +96,11 @@ Session 3 claims: tests/
 
 ---
 
-## Issue Priority by Track
+## Issue Priority by Track (historical, February 2026)
+
+> Superseded for execution priority by the Receipt-First Mission [#9966](https://github.com/synaptent/aragora/issues/9966) and
+> [`status/NEXT_STEPS_CANONICAL.md`](status/NEXT_STEPS_CANONICAL.md). Retained because the track
+> folders and starter prompts in [`AGENT_ASSIGNMENTS.md`](AGENT_ASSIGNMENTS.md) still reference these issues.
 
 ### P0 - Must Do (Blocking Release)
 
