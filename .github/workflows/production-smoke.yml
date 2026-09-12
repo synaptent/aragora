@@ -16,12 +16,14 @@ jobs:
     steps:
       - name: Check backend health
         run: |
+          CURL_EXIT=0
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 10 \
-            "${API_URL}/healthz" || echo "000")
-          echo "Health check status: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "::error::Backend health check failed (status=$STATUS)"
+            "${API_URL}/healthz") || CURL_EXIT=$?
+          STATUS=${STATUS:-000}
+          echo "Health check: http_status=$STATUS curl_exit=$CURL_EXIT"
+          if [ "$CURL_EXIT" -ne 0 ] || [ "$STATUS" != "200" ]; then
+            echo "::error::Backend health check failed (http_status=$STATUS curl_exit=$CURL_EXIT)"
             exit 1
           fi
         env:
@@ -29,12 +31,14 @@ jobs:
 
       - name: Check playground status endpoint
         run: |
+          CURL_EXIT=0
           STATUS=$(curl -sS -o /tmp/playground-status.json -w "%{http_code}" \
             --max-time 10 \
-            "${API_URL}/api/v1/playground/status" || echo "000")
-          echo "Playground status endpoint: $STATUS"
-          if [ "$STATUS" != "200" ]; then
-            echo "::error::Playground status endpoint failed (status=$STATUS)"
+            "${API_URL}/api/v1/playground/status") || CURL_EXIT=$?
+          STATUS=${STATUS:-000}
+          echo "Playground status endpoint: http_status=$STATUS curl_exit=$CURL_EXIT"
+          if [ "$CURL_EXIT" -ne 0 ] || [ "$STATUS" != "200" ]; then
+            echo "::error::Playground status endpoint failed (http_status=$STATUS curl_exit=$CURL_EXIT)"
             [ -f /tmp/playground-status.json ] && cat /tmp/playground-status.json
             exit 1
           fi
