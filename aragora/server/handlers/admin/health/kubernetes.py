@@ -171,15 +171,17 @@ def readiness_probe_fast(handler: Any) -> HandlerResult:
         checks["elo_initialized"] = False
         ready = False
 
-    # Quick Redis pool check (no network call - just check if pool exists)
+    # Quick Redis pool check (no network call - just check if pool exists).
+    # Deliberately NOT get_redis_pool(): that builds the pool and issues a
+    # blocking ping on first use, which can stall this probe for the socket
+    # timeout and latch Redis unavailable process-wide if it runs first.
     redis_url = os.environ.get("REDIS_URL") or os.environ.get("ARAGORA_REDIS_URL")
     if redis_url:
         try:
-            from aragora.cache.redis_cache import get_redis_pool
+            from aragora.utils.redis_config import redis_pool_initialized
 
-            pool = get_redis_pool()
-            checks["redis_pool"] = pool is not None
-        except (ImportError, RuntimeError):
+            checks["redis_pool"] = redis_pool_initialized()
+        except ImportError:
             checks["redis_pool"] = "not_configured"
     else:
         checks["redis_pool"] = "not_configured"

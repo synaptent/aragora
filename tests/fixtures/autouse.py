@@ -1641,9 +1641,11 @@ except ImportError:
     _GlobalAgent = None
     _global_real_agent_init = None
 
-_GLOBAL_OAUTH_IMPL_MODULE_NAME = "aragora.server.handlers._oauth_impl"
+_GLOBAL_OAUTH_IMPL_MODULE_NAME = "aragora.server.handlers.oauth._oauth_impl"
+# Pre-move flat path; the handlers package finder aliases it to the same object.
+_GLOBAL_OAUTH_IMPL_LEGACY_NAME = "aragora.server.handlers._oauth_impl"
 try:
-    import aragora.server.handlers._oauth_impl as _global_real_oauth_impl_module
+    import aragora.server.handlers.oauth._oauth_impl as _global_real_oauth_impl_module
 except ImportError:
     _global_real_oauth_impl_module = None
 
@@ -1761,9 +1763,10 @@ def _repair_global_mock_pollution(sys_module) -> None:
     # sys.modules. Restore the canonical module object between tests so later
     # re-export identity assertions see the original module again.
     if _global_real_oauth_impl_module is not None:
-        current = sys_module.modules.get(_GLOBAL_OAUTH_IMPL_MODULE_NAME)
-        if current is None:
-            sys_module.modules[_GLOBAL_OAUTH_IMPL_MODULE_NAME] = _global_real_oauth_impl_module
+        for _impl_key in (_GLOBAL_OAUTH_IMPL_MODULE_NAME, _GLOBAL_OAUTH_IMPL_LEGACY_NAME):
+            current = sys_module.modules.get(_impl_key)
+            if current is None:
+                sys_module.modules[_impl_key] = _global_real_oauth_impl_module
 
 
 @pytest.fixture(autouse=True)

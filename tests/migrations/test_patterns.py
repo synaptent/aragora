@@ -787,8 +787,11 @@ class TestPostgreSQLSpecificBehavior:
 
         safe_create_index(mock_backend, "idx_test", "users", ["email"], concurrently=True)
 
-        call_args = mock_backend.execute_write.call_args[0][0]
+        connection = mock_backend.connection.return_value.__enter__.return_value
+        cursor = connection.cursor.return_value.__enter__.return_value
+        call_args = cursor.execute.call_args[0][0]
         assert "CONCURRENTLY" in call_args
+        mock_backend.execute_write.assert_not_called()
 
     def test_drop_index_concurrently_pg(self):
         from aragora.migrations.patterns import safe_drop_index
@@ -798,8 +801,11 @@ class TestPostgreSQLSpecificBehavior:
 
         safe_drop_index(mock_backend, "idx_test", concurrently=True)
 
-        call_args = mock_backend.execute_write.call_args[0][0]
+        connection = mock_backend.connection.return_value.__enter__.return_value
+        cursor = connection.cursor.return_value.__enter__.return_value
+        call_args = cursor.execute.call_args[0][0]
         assert "CONCURRENTLY" in call_args
+        mock_backend.execute_write.assert_not_called()
 
     def test_drop_column_verifies_unused_pg(self):
         from aragora.migrations.patterns import safe_drop_column
