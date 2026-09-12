@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -81,12 +82,15 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
     commands: list[list[str]] = []
     cleanup_commands: list[list[str]] = []
     publication_events: list[str] = []
+    base_sha = "a" * 40
 
     async def fake_run_worker(**_: object) -> WorkerProcess:
         return _worker(branch=branch)
 
     def fake_run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None:
         commands.append(list(cmd))
+        if cmd[:4] == ["gh", "api", "--method", "POST"]:
+            publication_events.append("seed")
         if cmd[:3] == ["git", "push", "origin"]:
             publication_events.append("push")
 
@@ -97,6 +101,7 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
     monkeypatch.setattr(mod, "_branch_name", lambda: branch)
     monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
     monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_: base_sha)
     monkeypatch.setattr(mod.subprocess, "run", fake_subprocess_run)
     lease = mod._BranchWriteLease(
         store=object(),
@@ -133,10 +138,21 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
         str(expected_worktree),
         "origin/main",
     ]
-    assert commands[1] == ["git", "push", "origin", "HEAD"]
-    assert "--base" in commands[2]
-    assert commands[2][commands[2].index("--base") + 1] == "origin/main"
-    assert commands[3][:4] == ["gh", "pr", "close", "--repo"]
+    assert commands[1] == [
+        "gh",
+        "api",
+        "--method",
+        "POST",
+        "repos/synaptent/aragora/git/refs",
+        "-f",
+        f"ref=refs/heads/{branch}",
+        "-f",
+        f"sha={base_sha}",
+    ]
+    assert commands[2] == ["git", "push", "origin", "HEAD"]
+    assert "--base" in commands[3]
+    assert commands[3][commands[3].index("--base") + 1] == "origin/main"
+    assert commands[4][:4] == ["gh", "pr", "close", "--repo"]
     assert result.published is True
     assert result.pull_request_created is True
     assert result.pull_request_closed is True
@@ -147,10 +163,13 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
     assert result.worker["worker_contract_checksum"] == checksum_contract_payload(
         result.worker["worker_contract"]
     )
-    assert publication_events == ["claim", "push", "release"]
+    assert publication_events == ["claim", "seed", "push", "release"]
     assert result.branch_lease_id == "lease-preflight-1"
     assert result.branch_lease_work_id == f"branch:{branch}"
     assert result.branch_lease_released is True
+    assert result.publication_base_sha == base_sha
+    assert result.remote_branch_seeded is True
+    assert result.cleanup_remote_branch_removed is True
     assert cleanup_commands[0] == [
         "git",
         "worktree",
@@ -159,6 +178,141 @@ def test_run_preflight_returns_structured_result(monkeypatch, tmp_path: Path) ->
         str(expected_worktree),
     ]
     assert cleanup_commands[1] == ["git", "branch", "-D", branch]
+
+
+def test_run_preflight_new_branch_push_preserves_hook_and_scopes_to_base_delta(
+    monkeypatch, tmp_path: Path
+) -> None:
+    branch = "preflight/20260831-delta-scope"
+    repo_root = tmp_path / "repo"
+    origin = tmp_path / "origin.git"
+    hook_log = tmp_path / "pre-push-files.txt"
+
+    subprocess.run(["git", "init", "--bare", str(origin)], check=True, capture_output=True)
+    subprocess.run(["git", "init", "-b", "main", str(repo_root)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.email", "preflight@example.test"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "config", "user.name", "Preflight Test"], check=True
+    )
+    (repo_root / "README.md").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo_root), "add", "README.md"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo_root), "commit", "-m", "base"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "remote", "add", "origin", str(origin)], check=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo_root), "push", "origin", "main"],
+        check=True,
+        capture_output=True,
+    )
+    base_sha = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    hook = repo_root / ".git" / "hooks" / "pre-push"
+    hook.write_text(
+        "#!/bin/sh\n"
+        "read local_ref local_sha remote_ref remote_sha\n"
+        f"log={hook_log!s}\n"
+        'case "$remote_sha" in 0000000000000000000000000000000000000000) '
+        'echo ALL_ZERO > "$log"; exit 41 ;; esac\n'
+        'git diff --name-only "$remote_sha" "$local_sha" > "$log"\n'
+        'test "$(cat "$log")" = "scratch/preflight_worker_check.txt"\n',
+        encoding="utf-8",
+    )
+    hook.chmod(0o755)
+
+    async def fake_run_worker(**kwargs: object) -> WorkerProcess:
+        worktree_path = Path(str(kwargs["worktree_path"]))
+        scratch_file = worktree_path / "scratch" / "preflight_worker_check.txt"
+        scratch_file.parent.mkdir(parents=True, exist_ok=True)
+        scratch_file.write_text("worker delta\n", encoding="utf-8")
+        subprocess.run(
+            ["git", "-C", str(worktree_path), "add", "scratch/preflight_worker_check.txt"],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(worktree_path), "commit", "-m", "worker delta"],
+            check=True,
+            capture_output=True,
+        )
+        commit_sha = subprocess.run(
+            ["git", "-C", str(worktree_path), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        worker = _worker(branch=branch)
+        worker.worktree_path = str(worktree_path)
+        worker.commit_shas = [commit_sha]
+        return worker
+
+    def fake_seed(_: Path, actual_branch: str, actual_base_sha: str) -> None:
+        assert actual_branch == branch
+        assert actual_base_sha == base_sha
+        subprocess.run(
+            [
+                "git",
+                "--git-dir",
+                str(origin),
+                "update-ref",
+                f"refs/heads/{branch}",
+                actual_base_sha,
+            ],
+            check=True,
+        )
+
+    def fake_close(_: Path, actual_branch: str) -> None:
+        subprocess.run(
+            [
+                "git",
+                "--git-dir",
+                str(origin),
+                "update-ref",
+                "-d",
+                f"refs/heads/{actual_branch}",
+            ],
+            check=True,
+        )
+
+    lease = mod._BranchWriteLease(
+        store=object(),
+        lease_id="lease-delta-scope",
+        owner_session_id="session-delta-scope",
+        work_id=f"branch:{branch}",
+    )
+    monkeypatch.setattr(mod, "_branch_name", lambda: branch)
+    monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
+    monkeypatch.setattr(mod, "_seed_remote_branch_at_base", fake_seed)
+    monkeypatch.setattr(mod, "_create_pr", lambda *_: None)
+    monkeypatch.setattr(mod, "_close_pr", fake_close)
+    monkeypatch.setattr(mod, "_claim_branch_write_lease", lambda **_: lease)
+    monkeypatch.setattr(mod, "_release_branch_write_lease", lambda _: None)
+
+    result = mod.run_preflight(
+        repo_root=repo_root,
+        agent="codex",
+        base_ref="main",
+        skip_publication=False,
+    )
+
+    assert result.passed is True
+    assert result.publication_base_sha == base_sha
+    assert result.remote_branch_seeded is True
+    assert result.cleanup_remote_branch_removed is True
+    assert hook_log.read_text(encoding="utf-8").splitlines() == [
+        "scratch/preflight_worker_check.txt"
+    ]
 
 
 def test_main_reports_structured_failure_and_exits_nonzero(monkeypatch, capsys) -> None:
@@ -195,11 +349,15 @@ def test_contract_preflight_receipt_preserves_push_failure_and_releases_lease(
     contract_path = tmp_path / "worker_contract.json"
     contract_path.write_text(json.dumps(contract_payload), encoding="utf-8")
     publication_events: list[str] = []
+    base_sha = "b" * 40
 
     async def fake_run_worker(**_: object) -> WorkerProcess:
         return _worker(branch=branch)
 
     def fake_subprocess_run(cmd: list[str], **_: object) -> SimpleNamespace:
+        if cmd[:4] == ["gh", "api", "--method", "POST"]:
+            publication_events.append("seed")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
         if cmd[:3] == ["git", "push", "origin"]:
             publication_events.append("push")
             return SimpleNamespace(
@@ -209,6 +367,9 @@ def test_contract_preflight_receipt_preserves_push_failure_and_releases_lease(
                 ),
                 stderr="error: failed to push some refs to origin",
             )
+        if cmd[:4] == ["gh", "api", "--method", "DELETE"]:
+            publication_events.append("delete")
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     lease = mod._BranchWriteLease(
@@ -228,6 +389,7 @@ def test_contract_preflight_receipt_preserves_push_failure_and_releases_lease(
 
     monkeypatch.setattr(mod, "_branch_name", lambda: branch)
     monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_: base_sha)
     monkeypatch.setattr(mod.subprocess, "run", fake_subprocess_run)
     monkeypatch.setattr(mod, "_claim_branch_write_lease", fake_claim)
     monkeypatch.setattr(mod, "_release_branch_write_lease", fake_release)
@@ -241,7 +403,7 @@ def test_contract_preflight_receipt_preserves_push_failure_and_releases_lease(
         envelope=_envelope(),
     )
 
-    assert publication_events == ["claim", "push", "release"]
+    assert publication_events == ["claim", "seed", "push", "delete", "release"]
     assert receipt.passed is False
     assert receipt.failure_terminal_class == TerminalClass.BLOCKED_NOT_DISPATCH_BOUNDED
     assert receipt.artifacts["branch"] == branch
@@ -249,6 +411,9 @@ def test_contract_preflight_receipt_preserves_push_failure_and_releases_lease(
     assert receipt.artifacts["branch_lease_id"] == "lease-preflight-failure"
     assert receipt.artifacts["branch_lease_work_id"] == f"branch:{branch}"
     assert receipt.artifacts["branch_lease_released"] is True
+    assert receipt.artifacts["publication_base_sha"] == base_sha
+    assert receipt.artifacts["remote_branch_seeded"] is True
+    assert receipt.artifacts["cleanup_remote_branch_removed"] is True
     push_check = next(check for check in receipt.checks if check["name"] == "git_push")
     assert push_check["returncode"] == 1
     assert "branch write lease metadata is missing" in push_check["stdout"]
@@ -368,6 +533,7 @@ async def test_run_preflight_succeeds_inside_running_event_loop(
     monkeypatch.setattr(mod, "_branch_name", lambda: branch)
     monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
     monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_: "c" * 40)
     monkeypatch.setattr(mod.subprocess, "run", fake_subprocess_run)
 
     result = mod.run_preflight(
@@ -406,6 +572,7 @@ def test_run_preflight_fails_closed_on_contract_checksum_mismatch(
     monkeypatch.setattr(mod, "_branch_name", lambda: branch)
     monkeypatch.setattr(mod, "_run_worker", fake_run_worker)
     monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(mod, "_resolve_ref_sha", lambda *_: "c" * 40)
     monkeypatch.setattr(mod.subprocess, "run", fake_subprocess_run)
 
     with pytest.raises(RuntimeError, match="checksum"):

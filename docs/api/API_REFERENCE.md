@@ -1,6 +1,6 @@
 # Aragora API Reference
 
-> **Last Updated:** 2026-04-25 (v2.9.0 alignment with repo versions)
+> **Last Updated:** 2026-09-04 (v2.10.0 alignment with repo versions)
 
 This document describes the HTTP and WebSocket APIs for Aragora's control plane
 for multi-agent AI debate across organizational knowledge and channels.
@@ -9,8 +9,8 @@ for multi-agent AI debate across organizational knowledge and channels.
 
 | SDK | Version | Methods | Coverage |
 |-----|---------|---------|----------|
-| TypeScript (`@aragora/sdk`) | 2.9.0 | 380 async | Full API (79 namespaces) |
-| Python (`aragora`) | 2.9.0 | 220 async + 420 sync | Full API |
+| TypeScript (`@aragora/sdk`) | 2.10.0 | 380 async | Full API (79 namespaces) |
+| Python (`aragora`) | 2.10.0 | 220 async + 420 sync | Full API |
 
 Versions reflect the current repo tags (see `pyproject.toml` and
 `aragora/__version__.py`). If versions drift, run

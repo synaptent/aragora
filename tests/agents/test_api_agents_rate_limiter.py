@@ -20,6 +20,7 @@ from aragora.agents.api_agents.rate_limiter import (
     get_openrouter_limiter,
     set_openrouter_tier,
 )
+from aragora.services import ServiceRegistry
 
 
 # =============================================================================
@@ -50,41 +51,26 @@ def reset_global_limiter():
     """Reset global limiter state between tests.
 
     Also clears OPENROUTER_TIER env var to ensure default tier is used.
-    Clears both the legacy module-level variable and the ServiceRegistry
-    singleton (which is the actual backing store for get_openrouter_limiter).
+    The ServiceRegistry singleton is the sole backing store for
+    get_openrouter_limiter() (there is no module-level instance variable), so
+    unregistering the limiter there is the whole reset. ``unregister`` is
+    idempotent, and a failure here must surface rather than leak a stale
+    limiter into the next test.
     """
     import aragora.agents.api_agents.rate_limiter as module
+
+    def _clear_limiter() -> None:
+        # Hold the same lock get_openrouter_limiter() takes around its
+        # check-and-register so the reset cannot interleave with a creation.
+        with module._openrouter_limiter_lock:
+            ServiceRegistry.get().unregister(module.OpenRouterRateLimiter)
 
     # Clear environment variable to ensure default tier
     old_tier = os.environ.pop("OPENROUTER_TIER", None)
 
-    # Clear legacy module-level variable
-    with module._openrouter_limiter_lock:
-        module._openrouter_limiter = None
-
-    # Clear ServiceRegistry entry (the actual backing store)
-    try:
-        from aragora.services import ServiceRegistry
-
-        registry = ServiceRegistry.get()
-        if registry.has(module.OpenRouterRateLimiter):
-            registry.unregister(module.OpenRouterRateLimiter)
-    except Exception:
-        pass
-
+    _clear_limiter()
     yield
-
-    with module._openrouter_limiter_lock:
-        module._openrouter_limiter = None
-
-    try:
-        from aragora.services import ServiceRegistry
-
-        registry = ServiceRegistry.get()
-        if registry.has(module.OpenRouterRateLimiter):
-            registry.unregister(module.OpenRouterRateLimiter)
-    except Exception:
-        pass
+    _clear_limiter()
 
     # Restore original env var if it existed
     if old_tier is not None:

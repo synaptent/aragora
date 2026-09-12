@@ -341,7 +341,7 @@ class TestPostgresOriginStore:
         conn.execute = AsyncMock()
         conn.fetchrow = AsyncMock()
         pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
-        pool.acquire.return_value.__aexit__ = AsyncMock()
+        pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
         return pool, conn
 
     @pytest.fixture

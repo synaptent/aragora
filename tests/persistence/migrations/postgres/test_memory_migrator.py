@@ -296,7 +296,8 @@ class TestPostgresOperations:
         mock_connection.fetchrow.return_value = [True]
         mock_pool.acquire = MagicMock(
             return_value=AsyncMock(
-                __aenter__=AsyncMock(return_value=mock_connection), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_connection),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -308,7 +309,7 @@ class TestPostgresOperations:
             return mock_connection
 
         mock_pool.acquire.return_value.__aenter__ = async_ctx
-        mock_pool.acquire.return_value.__aexit__ = AsyncMock()
+        mock_pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
         result = await migrator._table_exists_pg(mock_pool, "debates")
         assert result is True
@@ -450,7 +451,7 @@ class TestMigrateTableAsync:
 
         mock_acquire = MagicMock()
         mock_acquire.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire.__aexit__ = AsyncMock()
+        mock_acquire.__aexit__ = AsyncMock(return_value=False)
         pool.acquire = MagicMock(return_value=mock_acquire)
         pool.close = AsyncMock()
 
@@ -602,7 +603,7 @@ class TestMigrateConsensusMemory:
 
         mock_acquire = MagicMock()
         mock_acquire.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire.__aexit__ = AsyncMock()
+        mock_acquire.__aexit__ = AsyncMock(return_value=False)
         pool.acquire = MagicMock(return_value=mock_acquire)
         pool.close = AsyncMock()
 
@@ -683,7 +684,7 @@ class TestMigrateCritiqueStore:
 
         mock_acquire = MagicMock()
         mock_acquire.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire.__aexit__ = AsyncMock()
+        mock_acquire.__aexit__ = AsyncMock(return_value=False)
         pool.acquire = MagicMock(return_value=mock_acquire)
         pool.close = AsyncMock()
 
@@ -749,7 +750,7 @@ class TestMigrateAll:
 
         mock_acquire = MagicMock()
         mock_acquire.__aenter__ = AsyncMock(return_value=mock_conn)
-        mock_acquire.__aexit__ = AsyncMock()
+        mock_acquire.__aexit__ = AsyncMock(return_value=False)
         pool.acquire = MagicMock(return_value=mock_acquire)
         pool.close = AsyncMock()
 
@@ -784,8 +785,10 @@ class TestMigrateAll:
         from aragora.persistence.migrations.postgres.memory_migrator import MemoryMigrator
 
         pool, conn = mock_pool_full
-        # Make executemany fail
-        conn.executemany = AsyncMock(side_effect=Exception("DB error"))
+        # Make executemany fail with a type migrate_table actually catches
+        # (OSError, ConnectionError, RuntimeError, ValueError); a bare
+        # Exception would propagate straight out of migrate_all().
+        conn.executemany = AsyncMock(side_effect=RuntimeError("DB error"))
 
         migrator = MemoryMigrator(
             sqlite_path=temp_full_db,
@@ -795,8 +798,10 @@ class TestMigrateAll:
 
         report = await migrator.migrate_all()
 
-        # Should still complete but with errors
+        # Should still complete but with errors recorded
         assert report.completed_at is not None
+        assert report.total_errors > 0
+        assert any("DB error" in e for t in report.tables for e in t.errors)
 
 
 # ===========================================================================
