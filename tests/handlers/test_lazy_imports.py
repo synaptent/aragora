@@ -884,12 +884,12 @@ class TestImportSafety:
                 pytest.fail(f"_lazy_imports should not define classes, found {name}")
 
     def test_lazy_imports_only_exports_expected_names(self):
-        """The module's public API should be exactly HANDLER_MODULES and ALL_HANDLER_NAMES."""
+        """The public API is HANDLER_MODULES, ALL_HANDLER_NAMES and the MOVED_MODULES shim table."""
         import aragora.server.handlers._lazy_imports as mod
 
         public_names = [name for name in dir(mod) if not name.startswith("_")]
         # Filter out standard module attrs
-        expected = {"HANDLER_MODULES", "ALL_HANDLER_NAMES"}
+        expected = {"HANDLER_MODULES", "ALL_HANDLER_NAMES", "MOVED_MODULES"}
         # Allow annotations and other standard things
         standard = {"annotations"}
         actual = set(public_names) - standard

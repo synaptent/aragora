@@ -157,7 +157,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "analytics_metrics",
         "metrics_endpoint",
         # Doc endpoints (public API docs)
-        "docs",
+        "admin/docs",
         # Template discovery (public browsing API, rate-limited, read-only)
         "template_discovery",
         # Debate sharing (public spectate endpoint; POST/DELETE use inline require_auth_or_error)
@@ -435,7 +435,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         # Debate diagnostics mixin (read-only debug info, mixed into RBAC-protected handler)
         "debates/diagnostics",
         # API documentation endpoints (public read-only, powers /api-docs page)
-        "api_docs",
+        "admin/api_docs",
         # Knowledge velocity dashboard (read-only metrics, rate-limited)
         "knowledge/velocity",
         # Observability package re-export (dashboard.py has RBAC via SecureHandler)

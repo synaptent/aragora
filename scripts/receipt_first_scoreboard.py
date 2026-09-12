@@ -26,6 +26,10 @@ ATLAS_DIR = Path.home() / ".aragora" / "receipt-first-atlas"
 API_PROBE = "https://api.aragora.ai/readyz"
 CANARY_PROBE = "https://api-canary.aragora.ai/readyz"
 CODE_SEARCH_QUERY = "synaptent/aragora@ -repo:synaptent/aragora"
+MARKER = "<!-- aragora-advisory-summary head="
+PR_LIST = (
+    f"gh pr list -R {REPO} --label receipt-first --state all --limit 500 --json number".split()
+)
 VECTORS = "tests/verify/test_odr_vectors.py"
 MANIFEST = "docs/atlas/manifest.json"
 PIN_RE = re.compile(r"synaptent/aragora@([0-9a-f]{7,40})")
@@ -53,9 +57,11 @@ MEASUREMENTS = {
     3: "sed -n 3p docs/specs/OPEN_DECISION_RECEIPT.md; test -f tests/verify/test_odr_vectors.py",
     4: "curl https://pypi.org/pypi/aragora-verify/json; ^version in aragora-verify/pyproject.toml",
     5: "docs/atlas/manifest.json .dataset.record_count; gh release view atlas-v1; gh pr view 9951",
-    6: "Atlas JSONL: verdict==changes_requested, posted_to_thread, distinct (pr, head_sha) rounds",
+    6: "gh: comments starting with <!-- aragora-advisory-summary head= over receipt-first PRs; "
+    "Atlas JSONL: changes_requested, posted_to_thread, distinct (pr.number, head_sha) rounds",
     7: f"curl -s -o /dev/null -w %{{http_code}} --max-time 15 {API_PROBE} (one probe per run)",
-    8: "receipts-* releases → *.odr.json assets; receipt-first-hour job (metrics-drift.yml, M4)",
+    8: "receipts-* releases → *.odr.json assets; receipt-first-hour job (metrics-drift.yml) run "
+    "since the newest release's target commit (committer date; fallback publishedAt)",
     9: "gh api search/code (paths under .github/workflows/); gh repo view aragora-receipt-demo",
     10: "check_contract_drift_ratchet.py --mode program --ref <40-hex> --json .current.total_items",
 }
@@ -87,8 +93,8 @@ def run_cmd(argv: list[str], *, timeout: float = 60, cwd: Any = None, env: Any =
     return Cmd(p.returncode, p.stdout, p.stderr)
 
 
-def json_cmd(argv: list[str], *, timeout: float = 60, cwd: Path | None = None) -> Any:
-    c = run_cmd(argv, timeout=timeout, cwd=cwd)
+def json_cmd(argv: list[str], *, timeout: float = 60, cwd: Any = None, env: Any = None) -> Any:
+    c = run_cmd(argv, timeout=timeout, cwd=cwd, env=env)
     if not c.ok or not c.out.strip():
         raise RuntimeError(c.err.strip() or f"empty output from {argv[0]}")
     return json.loads(c.out)
@@ -102,6 +108,7 @@ age_days = lambda s: (datetime.now(timezone.utc).date() - utc_dt(s).date()).days
 read_text = lambda p: p.read_text(errors="replace") if p.is_file() else ""
 is_number = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool)
 semver = lambda text: tuple(int(x) for x in re.findall(r"\d+", text)[:3])
+guardrail_limit = lambda ceiling, main: max(ceiling, main) if is_number(main) else ceiling
 RELEASE_LIST = f"gh release list -R {REPO} --limit 100 --json tagName,publishedAt".split()
 releases = lambda: json_cmd(RELEASE_LIST)
 
@@ -123,11 +130,22 @@ def pypi_newest(package: str) -> tuple[str, str]:
     return d["info"]["version"], newest
 
 
-def release_assets(tag: str) -> list[str]:
-    c = run_cmd(["gh", "release", "view", tag, "-R", REPO, "--json", "assets"])
+def release_view(tag: str, fields: str = "assets") -> Row:
+    c = run_cmd(["gh", "release", "view", tag, "-R", REPO, "--json", fields])
     if not c.ok and "not found" not in c.err.lower():
         raise RuntimeError(c.err.strip())
-    return [a["name"] for a in json.loads(c.out or "{}").get("assets", [])]
+    return json.loads(c.out or "{}")
+
+
+def release_assets(tag: str) -> list[str]:
+    return [a["name"] for a in release_view(tag).get("assets", [])]
+
+
+def commit_date(ref: Any, fallback: str) -> str:
+    if not ref:
+        return fallback
+    c = run_cmd(["gh", "api", f"repos/{REPO}/commits/{ref}", "--jq", ".commit.committer.date"])
+    return c.out.strip() if c.ok and c.out.strip() else fallback
 
 
 def metric_1(ctx: Any) -> Row:
@@ -207,23 +225,69 @@ def atlas_pr_number(rec: dict[str, Any]) -> Any:
     return pr.get("number") if isinstance(pr, dict) else pr
 
 
-def metric_6(ctx: Any) -> Row:
-    r: Row = {"now": None, "upper_bound": True, "quorum_runs": ctx.quorum_runs}
-    r["note"] = "upper bound from the Atlas JSONL; ok needs the post-M2 advisory-summary count"
-    r["status"] = "unavailable"
+def marker_comments() -> int:
+    """Advisory-summary marker comments over every receipt-first PR (REST, one call per PR)."""
+
+    def count(number: int) -> int:
+        url = f"repos/{REPO}/issues/{number}/comments?per_page=100"
+        pages = json_cmd(["gh", "api", url, "--paginate", "--slurp"], timeout=120)
+        return sum(str(c.get("body", "")).startswith(MARKER) for page in pages for c in page)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        return sum(pool.map(count, [pr["number"] for pr in json_cmd(PR_LIST)]))
+
+
+def atlas_upper_bound(ctx: Any) -> Row:
     if not ctx.offline and ctx.atlas_v1_assets and not list(ATLAS_DIR.glob("*.jsonl")):
         ATLAS_DIR.mkdir(parents=True, exist_ok=True)
         run_cmd(f"gh release download atlas-v1 -R {REPO} -p *.jsonl".split(), cwd=ATLAS_DIR)
     candidates = [ctx.root / "docs/atlas/atlas-v1.jsonl", *sorted(ATLAS_DIR.glob("*.jsonl"))]
     jsonl = next((p for p in candidates if p.is_file()), None)
     if jsonl is None:
-        return r | {"reason": "no Atlas JSONL (docs/atlas/atlas-v1.jsonl or atlas-v1 asset)"}
+        return {"reason": "no Atlas JSONL (docs/atlas/atlas-v1.jsonl or atlas-v1 asset)"}
     recs = [json.loads(line) for line in jsonl.read_text().splitlines() if line.strip()]
     cr = sum(x.get("verdict") == "changes_requested" for x in recs)
     posted = sum(bool(x.get("posted_to_thread")) for x in recs)
     rounds = len({(atlas_pr_number(x), x.get("head_sha")) for x in recs})
-    r.update(now=cr, posted=posted, rounds=rounds, records=len(recs), source=str(jsonl))
-    return r | {"ratio": round(posted / rounds, 3) if rounds else None, "status": "fail"}
+    r: Row = {"changes_requested": cr, "posted": posted, "rounds": rounds, "records": len(recs)}
+    return r | {"upper_bound": f"{cr} / {posted} / {rounds}", "source": str(jsonl)}
+
+
+def metric_6(ctx: Any) -> Row:
+    """Post-M2 rule: the live marker count decides ok/fail against --quorum-runs.
+
+    The Atlas figures are the row's upper bound, and the metric definition leaves the row
+    ``unavailable`` (never decided) when that bound is missing, exactly as for an offline or
+    failed count: a decided status always carries both numbers.
+    """
+    n: Any = ctx.quorum_runs
+    r: Row = {"quorum_runs": n, "marker_comments": None}
+    r["note"] = (
+        "now = PR comments starting with <!-- aragora-advisory-summary head= over receipt-first "
+        "PRs; changes_requested / posted / rounds from the Atlas JSONL is an upper bound; "
+        "ratio = marker_comments / --quorum-runs is informational"
+    )
+    r.update(atlas_upper_bound(ctx))
+    live = False
+    if ctx.offline or not ctx.network_ok:
+        why = "offline" if ctx.offline else "pypi.org pre-probe failed"
+        r["reason"] = "; ".join(filter(None, (r.get("reason"), why)))
+    else:
+        try:
+            r["marker_comments"], live = marker_comments(), True
+        except (RuntimeError, ValueError, KeyError, TypeError) as exc:
+            r["reason"] = f"{type(exc).__name__}: {exc}"
+    old = ctx.cached.get("6") or {}
+    if not live and old.get("marker_comments") is not None:
+        r.update(marker_comments=old["marker_comments"], cached_at=old.get("cached_at"))
+    count, bound = r["marker_comments"], r.get("upper_bound")
+    if is_number(count) and is_number(n) and n > 0:
+        r["ratio"] = round(count / n, 3)
+    shown = "?" if count is None else count
+    r["now"] = f"{shown} aragora-advisory-summary comments; upper bound {bound or '?'}"
+    if not live or bound is None:
+        return r | {"status": "unavailable"}
+    return r | {"status": "ok" if "ratio" in r and count >= n else "fail"}
 
 
 def metric_7(ctx: Any) -> Row:
@@ -233,20 +297,34 @@ def metric_7(ctx: Any) -> Row:
 
 def metric_8(ctx: Any) -> Row:
     rel = [x for x in releases() if x["tagName"].startswith("receipts-")]
-    tags = [x["tagName"] for x in rel]
-    per_tag = {t: sum(n.endswith(".odr.json") for n in release_assets(t)) for t in tags}
-    total, run_ok = sum(per_tag.values()), False
-    newest = max((x.get("publishedAt", "") for x in rel), default="")
+    newest = max(rel, key=lambda x: x.get("publishedAt") or "", default=None)
+    views = {x["tagName"]: release_view(x["tagName"], "assets,targetCommitish") for x in rel}
+    odr = lambda v: sum(a["name"].endswith(".odr.json") for a in v.get("assets", []))
+    per_tag = {t: odr(v) for t, v in views.items()}
+    total, run_url = sum(per_tag.values()), None
+    # A run dispatched after the M4 merge but before the release exists must still count, so the
+    # threshold is the release's target commit date, not the moment the release was published.
+    # target_commitish may be a branch name (a release created without --target records "main"),
+    # which the commits API would resolve to that branch's CURRENT tip; the tag names the commit.
+    # An empty threshold (draft release, lookups failed) admits every successful run.
+    since = ""
+    if newest is not None:
+        tag, target = newest["tagName"], str(views[newest["tagName"]].get("targetCommitish") or "")
+        since = commit_date(target if HEX40.match(target) else tag, newest.get("publishedAt") or "")
     argv = f"gh run list -R {REPO} --workflow metrics-drift.yml --status success".split()
-    c = run_cmd(argv + ["--limit", "10", "--json", "databaseId,createdAt"]) if total >= 3 else None
-    runs = [x for x in json.loads(c.out or "[]") if x.get("createdAt", "") >= newest] if c else []
+    argv += ["--limit", "10", "--json", "databaseId,createdAt,url"]
+    c = run_cmd(argv) if total >= 3 else None
+    runs = [x for x in json.loads(c.out or "[]") if x.get("createdAt", "") >= since] if c else []
     jq = '[.jobs[]|select(.name=="receipt-first-hour" and .conclusion=="success")]|length'
     for run in runs[:3]:
         url = f"repos/{REPO}/actions/runs/{run['databaseId']}/jobs"
         j = run_cmd(["gh", "api", url, "--jq", jq])
-        run_ok = run_ok or (j.ok and j.out.strip().isdigit() and int(j.out) > 0)
-    r: Row = {"now": total, "receipts_releases": per_tag, "first_hour_run_ok": run_ok}
-    return r | {"status": "ok" if total >= 3 and run_ok else "fail"}
+        if j.ok and j.out.strip().isdigit() and int(j.out) > 0:
+            run_url = run.get("url")
+            break
+    r: Row = {"now": total, "receipts_releases": per_tag, "first_hour_run_ok": run_url is not None}
+    r.update(first_hour_run_url=run_url, first_hour_since=since or None)
+    return r | {"status": "ok" if total >= 3 and run_url else "fail"}
 
 
 def metric_9(ctx: Any) -> Row:
@@ -280,21 +358,55 @@ def metric_10(ctx: Any) -> Row:
     return r | {"status": "ok" if ok else "fail"}
 
 
-def measure_guardrails(root: Path) -> Row:
-    graph = [sys.executable, "scripts/ci/measure_import_graph.py", "--json"]
-    regen = [sys.executable, "scripts/regenerate_metrics.py", "--json"]
-    g, m = json_cmd(graph, cwd=root, timeout=180), json_cmd(regen, cwd=root, timeout=180)
+GRAPH_CMD = [sys.executable, "scripts/ci/measure_import_graph.py", "--json"]
+REGEN_CMD = [sys.executable, "scripts/regenerate_metrics.py", "--json"]
+
+
+def guardrail_values(g: Row, m: Row) -> Row:
     vals = {x["key"]: x["value"] for x in m["metrics"]} if "metrics" in m else m
     r: Row = {"import_cycles": g.get("mutual_import_cycles")}
     r["handlers_flat_root"] = g.get("handlers_flat_root")
     return r | {gid: vals.get(gid) for gid, _, _, _ in GUARDRAILS[2:]}
 
 
-def guardrail_rows(values: Row) -> list[Row]:
+def measure_guardrails(root: Path, env: Any = None) -> Row:
+    g = json_cmd(GRAPH_CMD, cwd=root, timeout=180, env=env)
+    return guardrail_values(g, json_cmd(REGEN_CMD, cwd=root, timeout=180, env=env))
+
+
+def measure_main(root: Path, fetch: bool) -> tuple[str, Row]:
+    """Guardrail counts on origin/main, measured in an archived copy of the local ref."""
+    if fetch:
+        run_cmd(["git", "fetch", "origin", "main", "--quiet"], cwd=root, timeout=120)
+    sha = run_cmd(["git", "rev-parse", "origin/main"], cwd=root).out.strip()
+    gitdir = run_cmd(["git", "rev-parse", "--absolute-git-dir"], cwd=root).out.strip()
+    g: Row = {}
+    m: Row = {}
+    with tempfile.TemporaryDirectory(prefix="rf-scoreboard-main-") as tmp:
+        unpack = ["sh", "-c", f"git archive origin/main | tar -x -C '{tmp}'"]
+        if not run_cmd(unpack, cwd=root).ok:
+            return sha, {}
+        # regenerate_metrics.py counts tracked files with `git ls-files`, so the archive borrows an
+        # index of the same tree from the repo (a fresh `git init` would apply .gitignore instead).
+        env = {**os.environ, "PYTHONPATH": tmp, "GIT_DIR": gitdir, "GIT_WORK_TREE": tmp}
+        env["GIT_INDEX_FILE"] = f"{tmp}/.rf-index"
+        run_cmd(["git", "read-tree", sha], cwd=tmp, env=env)
+        try:
+            g = json_cmd(GRAPH_CMD, cwd=tmp, timeout=180, env=env)
+            m = json_cmd(REGEN_CMD, cwd=tmp, timeout=180, env=env)
+        except (RuntimeError, ValueError, KeyError, TypeError):
+            pass
+    return sha, guardrail_values(g, m)
+
+
+def guardrail_rows(values: Row, main: Row) -> list[Row]:
+    """Status is ``ok`` iff now ≤ max(ceiling, origin/main's own value), as bin/gate.sh does."""
     keys = ("id", "name", "ceiling", "baseline")
     rows: list[Row] = [dict(zip(keys, g), now=values.get(g[0])) for g in GUARDRAILS]
     for r in rows:
-        r["status"] = "ok" if is_number(r["now"]) and r["now"] <= r["ceiling"] else "over"
+        r["main"] = main.get(r["id"]) if is_number(main.get(r["id"])) else None
+        limit = guardrail_limit(r["ceiling"], r["main"])
+        r["status"] = "ok" if is_number(r["now"]) and r["now"] <= limit else "over"
     return rows
 
 
@@ -313,15 +425,8 @@ def read_parked(path: Path | None) -> tuple[dict[int, str], str]:
 
 
 def check_guardrails(root: Path, offline: bool) -> int:
-    if not offline:
-        run_cmd(["git", "fetch", "origin", "main", "--quiet"], cwd=root, timeout=120)
-    sha = run_cmd(["git", "rev-parse", "origin/main"], cwd=root).out.strip()
-    with tempfile.TemporaryDirectory(prefix="rf-scoreboard-main-") as tmp:
-        unpack = ["sh", "-c", f"git archive origin/main | tar -x -C '{tmp}'"]
-        argv = [sys.executable, "scripts/ci/measure_import_graph.py", "--json"]
-        env = {**os.environ, "PYTHONPATH": tmp}
-        g = run_cmd(argv, cwd=tmp, timeout=180, env=env) if run_cmd(unpack, cwd=root).ok else None
-    main_cycles = json.loads(g.out).get("mutual_import_cycles") if g and g.ok and g.out else None
+    sha, main = measure_main(root, fetch=not offline)
+    main_cycles = main.get("import_cycles")
     print(f"origin/main mutual_import_cycles: {main_cycles or 'unknown'} ({sha[:10]})")
     values = measure_guardrails(root)
     mypy = ["sh", "-c", "mypy aragora/ --ignore-missing-imports | tail -1"]
@@ -330,9 +435,10 @@ def check_guardrails(root: Path, offline: bool) -> int:
     errors = int(m.group(1)) if m else (0 if tail.startswith("Success") else None)
     wc = int(run_cmd(["sh", "-c", "wc -l < .mypy-baseline"], cwd=root).out.strip() or -1)
     print(f"mypy: {tail or 'no output'}")
-    limit = max(140, main_cycles) if isinstance(main_cycles, int) else 140
-    checks = [("mutual_import_cycles", values["import_cycles"], limit)]
-    checks += [(gid, values[gid], ceiling) for gid, _, ceiling, _ in GUARDRAILS[1:]]
+    # Count limits mirror bin/gate.sh (max of the fixed ceiling and origin/main); mypy stays fixed.
+    checks = [("mutual_import_cycles", values["import_cycles"], guardrail_limit(140, main_cycles))]
+    for gid, _, ceiling, _ in GUARDRAILS[1:]:
+        checks.append((gid, values[gid], guardrail_limit(ceiling, main.get(gid))))
     checks += [("mypy_errors", errors, 1744), ("mypy_baseline_lines", wc, 3115)]
     bad = [name for name, value, cap in checks if not (is_number(value) and 0 <= value <= cap)]
     for name, value, cap in checks:
@@ -343,6 +449,7 @@ def check_guardrails(root: Path, offline: bool) -> int:
 
 def build_rows(ctx: Any, cache: Row, pending: dict[int, str]) -> tuple[list[Row], Row]:
     cached, stamp = cache.get("metrics", {}), ctx.generated_at
+    ctx.cached = cached
     measured, failed = {}, {}
 
     def attempt(i: int) -> None:
@@ -367,6 +474,9 @@ def build_rows(ctx: Any, cache: Row, pending: dict[int, str]) -> tuple[list[Row]
             row.update(measured[mid])
             if mid in NETWORK_ROWS:
                 new_cache[str(mid)] = measured[mid] | {"cached_at": stamp}
+            elif mid == 6 and row.get("marker_comments") is not None and not row.get("cached_at"):
+                keep = {k: row.get(k) for k in ("marker_comments", "now", "upper_bound")}
+                new_cache["6"] = keep | {"cached_at": stamp}
         else:
             row.update(old or {"now": None}, status="unavailable", reason=failed[mid])
             row["cached_at"] = old.get("cached_at", cache.get("cached_at")) if old else None
@@ -377,7 +487,7 @@ def build_rows(ctx: Any, cache: Row, pending: dict[int, str]) -> tuple[list[Row]
             row["local_version"] = local
             row["local_ahead_of_pypi"] = bool(local and now and semver(local) > semver(str(now)))
         row.update(measurement=MEASUREMENTS[mid], delta=compute_delta(baseline, row.get("now")))
-        if row["status"] == "fail" and mid in pending:
+        if row["status"] == "fail" and mid in pending and mid != 6:
             row.update(status="pending-operator", pending_ref=pending[mid])
         rows.append(row)
     fresh = any(i in measured for i in NETWORK_ROWS)
@@ -393,12 +503,17 @@ def render_markdown(doc: Row, parked_given: bool) -> str:
         cached = r["status"] == "unavailable" and r.get("cached_at")
         parts = (r["status"], r.get("pending_ref"), cached and f"(cached {cached})")
         unit = {1: " d", 2: " d", 7: f" (canary {r.get('canary_code')})"}.get(r["id"], "")
+        if r["id"] == 6 and "ratio" in r:
+            unit = f" (informational {r['marker_comments']}/{r['quorum_runs']})"
+        elif r["id"] == 8 and r.get("first_hour_run_url"):
+            unit = f" ({r['first_hour_run_url']})"
         now = "null" if r.get("now") is None else f"{r['now']}{unit}"
         status = " ".join(filter(None, parts))
         out.append(line((r["id"], r["name"], r["baseline_cell"], now, r["delta"], status)))
-    keys = ("name", "ceiling", "baseline", "now", "status")
+    keys = ("name", "ceiling", "baseline", "now")
+    cell = lambda g: [*(g[k] for k in keys), f"{g['status']} (main {g.get('main')})"]
     out += ["", "## Guardrails", "", line(("Guardrail", "Ceiling", "Baseline", "Now", "Status"))]
-    out += ["|---" * 5 + "|"] + [line([g[k] for k in keys]) for g in doc["guardrails"]]
+    out += ["|---" * 5 + "|"] + [line(cell(g)) for g in doc["guardrails"]]
     if parked_given:
         out += ["", "## Parked", doc["parked"] or "(none yet)"]
     return "\n".join(out) + "\n"
@@ -437,15 +552,20 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, ValueError):
         cache = {}
     args.network_ok, args.atlas_v1_assets, args.generated_at = True, None, utc_stamp()
-    rows, new_cache = build_rows(args, cache, pending)
+    # Guardrails (worktree and origin/main) run alongside the rows to keep --offline under 10 s;
+    # the origin/main measurement is local (archive of the local ref) and only fetches online.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        main_future = pool.submit(measure_main, root, not args.offline)
+        local_future = pool.submit(measure_guardrails, root)
+        rows, new_cache = build_rows(args, cache, pending)
     if new_cache:
         args.cache.parent.mkdir(parents=True, exist_ok=True)
         args.cache.write_text(json.dumps(new_cache, indent=2, sort_keys=True) + "\n")
     try:
-        guardrails = guardrail_rows(measure_guardrails(root))
+        guardrails = guardrail_rows(local_future.result(), main_future.result()[1])
     except Exception as exc:
         print(f"warning: guardrail measurement failed: {exc}", file=sys.stderr)
-        guardrails = guardrail_rows({})
+        guardrails = guardrail_rows({}, {})
     doc: Row = {"baseline_ref": BASELINE_REF, "baseline_date": BASELINE_DATE, "ref": args.ref}
     doc.update(generated_at=args.generated_at, network_ok=args.network_ok, parked=parked_text)
     doc.update(cached_at=(new_cache or cache).get("cached_at"), metrics=rows, guardrails=guardrails)

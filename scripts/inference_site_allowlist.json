@@ -2,7 +2,7 @@
   "generated_by": "scripts/check_inference_site_allowlist.py --emit-template",
   "policy_note": "Template output defaults to direct-only; preserve reviewed classifications and rationales.",
   "schema_version": 1,
-  "transport_policy_consumers": ["aragora/agents/api_agents/openai.py", "aragora/agents/transports/claude_vibeproxy.py", "scripts/consult_claude.py", "scripts/vibeproxy_burnin_recorder.py"],
+  "transport_policy_consumers": ["aragora/agents/api_agents/openai.py", "aragora/agents/transports/claude_vibeproxy.py", "aragora/swarm/quorum_evidence.py", "scripts/consult_claude.py", "scripts/prepare_claude_code_vibeproxy_review.py", "scripts/vibeproxy_burnin_recorder.py"],
   "sites": [
     {"anchor":"AnthropicAPIAgent.__init__","classification":"direct-only","detectors":{"endpoint-literal":1},"path":"aragora/agents/api_agents/anthropic.py","protocol":"base","provider":"anthropic","rationale":"not yet routed through the central exact-match transport policy"},
     {"anchor":"AnthropicAPIAgent.generate","classification":"direct-only","detectors":{"http-inference-call":1},"path":"aragora/agents/api_agents/anthropic.py","protocol":"messages","provider":"anthropic","rationale":"not yet routed through the central exact-match transport policy"},

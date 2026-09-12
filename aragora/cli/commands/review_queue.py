@@ -2589,7 +2589,17 @@ def _build_packet(
             check_surfaces=check_surfaces,
         )
     required_pr_check_gate_satisfied = False
-    if not settlement_state_block and not checks_unavailable and (has_failures or has_pending):
+    non_required_non_green_count = 0
+    self_check_excluded = any(
+        _is_current_merge_quorum_self_check(check)
+        for check in _latest_status_check_rollup(pr.get("statusCheckRollup") or [])
+        if isinstance(check, dict)
+    )
+    if (
+        not settlement_state_block
+        and not checks_unavailable
+        and (has_failures or has_pending or self_check_excluded)
+    ):
         required_surface = _fetch_required_pr_check_surface(number, repo_override)
         required_pr_checks = [
             item for item in required_surface.get("checks") or [] if isinstance(item, dict)
@@ -2675,6 +2685,9 @@ def _build_packet(
             required_checks=required_pr_checks if required_available else None,
         )
         check_surfaces["pr_rollup"].update(rollup_required_diagnostics)
+        non_required_non_green_count = rollup_required_diagnostics.get(
+            "non_required_non_green_count", 0
+        )
 
         gate_blocked_reason = ""
         if not required_available:
@@ -2744,8 +2757,12 @@ def _build_packet(
                 "summary": checks_summary,
             }
             check_surfaces["diagnosis"] = (
-                "The PR check rollup includes non-required non-green checks, "
-                "but GitHub reports every branch-protection required check green; "
+                (
+                    "The PR check rollup includes non-required non-green checks, but "
+                    if non_required_non_green_count
+                    else ""
+                )
+                + "GitHub reports every effective branch-protection required check green; "
                 "merge-packet uses the required PR checks gate."
             )
             check_surfaces["remediation_prompt"] = (
@@ -2763,8 +2780,12 @@ def _build_packet(
                 "summary": checks_summary,
             }
             check_surfaces["diagnosis"] = (
-                "The PR check rollup includes non-required non-green checks, "
-                "and GitHub reports every non-quorum branch-protection required "
+                (
+                    "The PR check rollup includes non-required non-green checks, and "
+                    if non_required_non_green_count
+                    else ""
+                )
+                + "GitHub reports every non-quorum branch-protection required "
                 "check green; merge-packet leaves aragora-merge-quorum to the "
                 "model quorum evidence gate."
             )
@@ -2774,8 +2795,7 @@ def _build_packet(
             )
         elif gate_blocked_reason:
             check_surfaces["diagnosis"] = (
-                "The PR check rollup is non-green and merge-packet did not select "
-                f"the required PR checks gate: {gate_blocked_reason}"
+                f"merge-packet did not select the required PR checks gate: {gate_blocked_reason}"
             )
             check_surfaces["remediation_prompt"] = (
                 "Keep the PR blocked or authorize a bounded check-surface repair; "
@@ -2849,7 +2869,11 @@ def _build_packet(
     if has_failures:
         risk_flags.append(f"checks failing ({checks_summary})")
     required_pr_check_surface = check_surfaces.get("required_pr_checks") or {}
-    if required_pr_check_gate_satisfied and required_pr_check_surface:
+    if (
+        required_pr_check_gate_satisfied
+        and required_pr_check_surface
+        and non_required_non_green_count
+    ):
         risk_flags.append(
             "non-required PR checks are non-green; "
             "effective gate uses branch-protection required checks"
@@ -2890,9 +2914,11 @@ def _build_packet(
     else:
         recommendation = "approve_candidate"
         if required_pr_check_gate_satisfied:
-            recommendation_reason = (
-                "branch-protection required checks green; non-required PR checks are non-green"
-            )
+            recommendation_reason = "branch-protection required checks green"
+            if non_required_non_green_count:
+                recommendation_reason += "; non-required PR checks are non-green"
+        elif required_pr_check_surface.get("gate_blocked_reason"):
+            recommendation_reason = required_pr_check_surface["gate_blocked_reason"]
         elif direct_check_fallback_satisfied and direct_summary.get("non_green_count", 0):
             recommendation_reason = (
                 "branch-protection required contexts green via direct check-run fallback; "

@@ -43,7 +43,7 @@ def _status(result: object) -> int:
 # Import the module under test
 # ---------------------------------------------------------------------------
 
-import aragora.server.handlers._oauth_impl as _oauth_impl
+import aragora.server.handlers.oauth._oauth_impl as _oauth_impl
 
 
 # ============================================================================
@@ -597,9 +597,9 @@ class TestModuleIdentity:
     """Test that the module is properly registered in sys.modules."""
 
     def test_module_in_sys_modules(self):
-        assert "aragora.server.handlers._oauth_impl" in sys.modules
+        assert "aragora.server.handlers.oauth._oauth_impl" in sys.modules
 
     def test_module_logger_exists(self):
         """The module creates a logger named after itself."""
         assert hasattr(_oauth_impl, "_logger")
-        assert _oauth_impl._logger.name == "aragora.server.handlers._oauth_impl"
+        assert _oauth_impl._logger.name == "aragora.server.handlers.oauth._oauth_impl"

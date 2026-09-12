@@ -48,6 +48,7 @@ import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -269,10 +270,17 @@ class GitHubClient:
                 self._maybe_throttle(headers)
                 return json.loads(body or "null")
             err = (proc.stderr or "").strip() or body.strip()
-            lowered = err.lower()
-            if "404" in lowered and "not found" in lowered:
+            lowered = f"{err} {body}".lower()
+            status_match = re.match(r"HTTP/\S+\s+(\d{3})", proc.stdout or "")
+            status = int(status_match[1]) if status_match else None
+            if status == 404 or ("404" in lowered and "not found" in lowered):
                 raise LookupError(f"{path}: {err[:200]}")
-            if "rate limit" in lowered or "403" in lowered or "429" in lowered:
+            if (
+                status == 429
+                or "rate limit" in lowered
+                or _int_header(headers, "x-ratelimit-remaining") == 0
+                or "retry-after" in headers
+            ):
                 # Rate-limit waits never consume the retry budget: the cache makes
                 # a long pause strictly cheaper than a crash-and-rerun.
                 rate_limit_waits += 1
@@ -281,6 +289,8 @@ class GitHubClient:
                     raise RuntimeError(f"gh api {path}: still rate-limited after 12 waits")
                 self._sleep_until_reset(reason=err[:120], headers=headers)
                 continue
+            if status == 403 or "HTTP 403" in err:
+                raise PermissionError(f"{path}: {err[:200]}")
             if attempt >= attempts:
                 raise RuntimeError(f"gh api {path} failed after {attempts} attempts: {err[:300]}")
             time.sleep(min(60, 5 * attempt))
@@ -466,30 +476,37 @@ def cmd_collect(args: argparse.Namespace) -> int:
         numbers = numbers[: args.max_prs]
 
     with_verdicts = 0
+    skipped = 0
     for position, number in enumerate(numbers, start=1):
         base = f"prs/{number}"
         pr_path = args.cache_dir / base / "pr.json"
-        if not pr_path.exists():
-            client.cached(f"{base}/pr.json", f"repos/{repo}/pulls/{number}")
-        comments = client.cached(
-            f"{base}/comments.json", f"repos/{repo}/issues/{number}/comments", paginate=True
-        )
-        # Model verdicts may be mirrored only as GitHub review objects, so the
-        # review list is fetched before deciding whether the PR is a thread.
-        reviews = client.cached(
-            f"{base}/reviews.json", f"repos/{repo}/pulls/{number}/reviews", paginate=True
-        )
-        if not _looks_like_review_thread(comments, reviews):
+        try:
+            if not pr_path.exists() or args.refresh:
+                client.cached(f"{base}/pr.json", f"repos/{repo}/pulls/{number}")
+            comments = client.cached(
+                f"{base}/comments.json", f"repos/{repo}/issues/{number}/comments", paginate=True
+            )
+            # A model verdict can exist only as a review object.
+            reviews = client.cached(
+                f"{base}/reviews.json", f"repos/{repo}/pulls/{number}/reviews", paginate=True
+            )
+            if not _looks_like_review_thread(comments, reviews):
+                continue
+            pr = json.loads(pr_path.read_text(encoding="utf-8"))
+            client.cached(
+                f"{base}/commits.json", f"repos/{repo}/pulls/{number}/commits", paginate=True
+            )
+            head_sha = str((pr.get("head") or {}).get("sha") or "")
+            if head_sha:
+                client.cached(
+                    f"statuses/{head_sha}.json",
+                    f"repos/{repo}/commits/{head_sha}/statuses?per_page=100",
+                )
+        except (LookupError, PermissionError) as exc:
+            skipped += 1
+            _log(f"[collect] warning: skipping PR #{number}: {exc}")
             continue
         with_verdicts += 1
-        pr = json.loads(pr_path.read_text(encoding="utf-8"))
-        client.cached(f"{base}/commits.json", f"repos/{repo}/pulls/{number}/commits", paginate=True)
-        head_sha = str((pr.get("head") or {}).get("sha") or "")
-        if head_sha:
-            client.cached(
-                f"statuses/{head_sha}.json",
-                f"repos/{repo}/commits/{head_sha}/statuses?per_page=100",
-            )
         if position % 50 == 0:
             _log(
                 f"[collect] {position}/{len(numbers)} PRs, {with_verdicts} review threads, "
@@ -497,9 +514,10 @@ def cmd_collect(args: argparse.Namespace) -> int:
             )
     _log(
         f"[collect] done: {len(numbers)} PRs, {with_verdicts} review threads, "
-        f"{client.calls} API calls this run, {client.total_logged_calls()} logged in total"
+        f"{client.calls} API calls this run, {client.total_logged_calls()} logged in total, "
+        f"{skipped} PRs skipped"
     )
-    return 0
+    return int(skipped > 0)
 
 
 # ---------------------------------------------------------------------------
@@ -1115,12 +1133,12 @@ def _assemble_pr(
         taxonomy_classes: list[str] = []
         if labeled_case is not None:
             truth = _ground_truth(labeled_case)
-            adjudication["source"] = "labeled"
-            adjudication["ground_truth"] = truth
             # The failure classes describe the dissent at this head; a PASS at
             # the same head did not exhibit them. ``control`` labels the whole
             # round as correctly handled, so every verdict in it keeps it.
             if record["verdict"] == "changes_requested":
+                adjudication["source"] = "labeled"
+                adjudication["ground_truth"] = truth
                 taxonomy_classes = truth["taxonomy_classes"]
             else:
                 taxonomy_classes = [c for c in truth["taxonomy_classes"] if c == "control"]
@@ -1393,9 +1411,9 @@ def cmd_build(args: argparse.Namespace) -> int:
     base = args.repo_root
 
     sample_info: tuple[str, bytes, int] | None = None
-    if len(payload) > FULL_COMMIT_LIMIT_BYTES or args.force_sample:
+    sample_path = out_dir / out.name.replace(".jsonl", ".sample.jsonl")
+    if len(payload) > FULL_COMMIT_LIMIT_BYTES or args.force_sample or sample_path.exists():
         sample = select_sample(records, SAMPLE_SIZE)
-        sample_path = out_dir / out.name.replace(".jsonl", ".sample.jsonl")
         sample_bytes = write_jsonl(sample, sample_path)
         sample_info = (_rel_to(sample_path, base), sample_bytes, len(sample))
         _log(f"[build] dataset is {len(payload)} bytes; wrote {len(sample)}-record sample")
@@ -1684,7 +1702,7 @@ def render_summary(records: list[dict[str, Any]], manifest: dict[str, Any] | Non
             [
                 "Family",
                 "Split rounds as minority",
-                "  as lone dissenter",
+                "  on dissenting minority side",
                 "Vindicated",
                 "Share",
                 "Dissents vindicated",
@@ -1692,6 +1710,11 @@ def render_summary(records: list[dict[str, Any]], manifest: dict[str, Any] | Non
             ],
             rows,
         )
+    )
+    lines.append("")
+    lines.append(
+        "A minority side can contain multiple families; **all** counts distinct split rounds, "
+        "not family appearances."
     )
     lines.append("")
     heads_multi = defaultdict(set)
@@ -1702,6 +1725,39 @@ def render_summary(records: list[dict[str, Any]], manifest: dict[str, Any] | Non
     lines.append(
         f"Rounds with ≥2 counting families: **{multi}**; of those, split: **{len(splits)}** "
         f"({_pct(len(splits), multi)}). Agreement is therefore {_pct(multi - len(splits), multi)}."
+    )
+    lines.append("")
+
+    lines.append("## Pairwise agreement by family pair")
+    lines.append("")
+    lines.append(
+        "Each pair is compared once per (PR, head) with a known counting verdict from both "
+        "families, using the latest PASS/CHANGES-REQUESTED per family. Agreements include "
+        "pairs on the same side of a split round; unknown and advisory-only verdicts are excluded. "
+        "The total is weighted by pair-round comparisons, not unique rounds."
+    )
+    lines.append("")
+    compared: Counter = Counter()
+    disagreed: Counter = Counter()
+    for fams in heads_multi.values():
+        compared.update(combinations(sorted(fams), 2))
+    for split in splits:
+        for minority in split["minority_families"]:
+            for majority in split["majority_families"]:
+                disagreed[tuple(sorted((minority, majority)))] += 1
+    rows = [
+        [a, b, n, n - disagreed[(a, b)], _pct(n - disagreed[(a, b)], n)]
+        for (a, b), n in sorted(compared.items())
+    ]
+    total_compared = sum(compared.values())
+    total_agreed = total_compared - sum(disagreed.values())
+    rows.append(
+        ["**all pairs**", "", total_compared, total_agreed, _pct(total_agreed, total_compared)]
+    )
+    lines.append(
+        _md_table(
+            ["Family A", "Family B", "Rounds compared", "Agreements", "Agreement rate (%)"], rows
+        )
     )
     lines.append("")
 
@@ -1752,7 +1808,12 @@ def render_summary(records: list[dict[str, Any]], manifest: dict[str, Any] | Non
         overruled_row.append(n)
     overruled_row.append(total)
     rows.append(overruled_row)
+    rows.append(["**all**", *(sum(row[i] for row in rows) for i in range(1, len(families) + 2))])
     lines.append(_md_table(["Taxonomy class", *families, "Total"], rows))
+    lines.append("")
+    lines.append(
+        "Totals count class memberships; a multi-labelled dissent can contribute more than once."
+    )
     lines.append("")
     valid_true = sum(
         1
@@ -1783,9 +1844,12 @@ def render_summary(records: list[dict[str, Any]], manifest: dict[str, Any] | Non
     lines.append(_md_table(["Measure", "Value"], rows))
     lines.append("")
     dist = Counter(reached)
-    if dist:
-        lines.append(_md_table(["Rounds", "PRs"], [[n, dist[n]] for n in sorted(dist)]))
-        lines.append("")
+    lines.append(
+        _md_table(
+            ["Rounds", "PRs"], [[n, dist[n]] for n in sorted(dist)] + [["**all**", len(reached)]]
+        )
+    )
+    lines.append("")
 
     # -- adjudication mechanisms --------------------------------------------
     lines.append("## Adjudication mechanisms (dissent records only)")
@@ -1851,6 +1915,38 @@ def render_summary(records: list[dict[str, Any]], manifest: dict[str, Any] | Non
         "this head on [P2]/[P3]-only dissent→`severity_gating`; otherwise `unresolved`."
     )
     lines.append("")
+    lines.extend(
+        [
+            "## How to regenerate",
+            "",
+            "From the repository root (Python 3.11 and authenticated `gh` for collect):",
+            "",
+            "```bash",
+            "python3 scripts/build_disagreement_atlas.py collect --cache-dir /tmp/atlas-cache "
+            "--since 2026-06-26T21:04:36Z",
+            "python3 scripts/build_disagreement_atlas.py build --cache-dir /tmp/atlas-cache "
+            "--out /tmp/atlas-build/atlas-v1.jsonl --manifest /tmp/atlas-build/manifest.json "
+            "--schema docs/atlas/schema.json",
+            "python3 scripts/build_disagreement_atlas.py summary "
+            "--dataset /tmp/atlas-build/atlas-v1.jsonl --out /tmp/atlas-build/summary.md",
+            "```",
+            "",
+            "A from-scratch collect costs about three API calls per indexed PR plus the index pages "
+            "(thousands of calls and tens of minutes for the full window); use `--prs 8802 8811 8824` "
+            "for a bounded smoke run.",
+            "",
+            "An identical collect reuses cached files without rewriting them. Use `--refresh-index` "
+            "to discover new PRs and `--refresh` to refetch per-PR responses; `--prs 8802 8811 8824` "
+            "restricts collection for a smoke run. Build and summary run offline; identical cache "
+            "and checkout inputs produce byte-identical JSONL. Cache files stay outside the tree.",
+            "",
+            "These commands build from the current cache and checkout, not the frozen release. "
+            "To reproduce this page's tables, download `atlas-v1.jsonl` and `manifest.json` from "
+            "the `atlas-v1` release and run summary with that dataset. See [README.md](README.md) "
+            "for download and `verify --require-dataset` commands.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -1873,7 +1969,11 @@ def cmd_summary(args: argparse.Namespace) -> int:
 
 
 def verify_manifest(
-    manifest_path: Path, *, base: Path, public_key_path: Path | None = None
+    manifest_path: Path,
+    *,
+    base: Path,
+    public_key_path: Path | None = None,
+    require_dataset: bool = False,
 ) -> tuple[bool, list[str]]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     problems: list[str] = []
@@ -1882,9 +1982,8 @@ def verify_manifest(
     dataset = manifest.get("dataset") or {}
     dataset_path = base / str(dataset.get("path") or "")
     if not dataset_path.exists():
-        # The full dataset ships as a release asset when it exceeds the commit
-        # size cap, so a checkout verifies the sample and digest without it.
-        if manifest.get("sample"):
+        # A checkout can verify the sample; publishing must verify the full asset.
+        if manifest.get("sample") and not require_dataset:
             checks.append(
                 f"dataset SKIPPED (not present: {dataset_path}; download the release "
                 f"asset next to manifest.json to verify sha256 {dataset.get('sha256')})"
@@ -1994,7 +2093,12 @@ def verify_manifest(
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
-    ok, lines = verify_manifest(args.manifest, base=args.repo_root, public_key_path=args.public_key)
+    ok, lines = verify_manifest(
+        args.manifest,
+        base=args.repo_root,
+        public_key_path=args.public_key,
+        require_dataset=args.require_dataset,
+    )
     for line in lines:
         print(f"  - {line}")
     print("VERIFIED" if ok else "FAILED")
@@ -2186,6 +2290,9 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--manifest", type=Path, default=Path("docs/atlas/manifest.json"))
     verify.add_argument("--repo-root", type=Path, default=REPO_ROOT)
     verify.add_argument("--public-key", type=Path, default=None, help="Ed25519 PEM public key")
+    verify.add_argument(
+        "--require-dataset", action="store_true", help="fail if the full dataset is absent"
+    )
     verify.set_defaults(func=cmd_verify)
 
     fixture = sub.add_parser("make-fixture", help="strip cached PRs into a test fixture")
