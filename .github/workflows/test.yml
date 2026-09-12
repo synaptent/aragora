@@ -2396,6 +2396,13 @@ jobs:
         env:
           DATABASE_URL: postgresql://aragora:aragora@localhost:5432/aragora_test
 
+      - name: Run Aragora runtime migrations
+        run: |
+          python -m aragora.migrations upgrade --database-url "$DATABASE_URL"
+          python -m aragora.migrations status
+        env:
+          DATABASE_URL: postgresql://aragora:aragora@localhost:5432/aragora_test
+
       - name: Verify schema
         run: |
           echo "Verifying schema tables exist..."
