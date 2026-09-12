@@ -921,23 +921,36 @@ class TestThreadSafety:
 class TestCacheIsolation:
     """Tests for cache isolation between debates."""
 
-    def test_debate_cache_isolation(self):
-        """Test that debate caches are isolated."""
-        debate_id_1 = f"isolated-1-{uuid.uuid4().hex[:8]}"
-        debate_id_2 = f"isolated-2-{uuid.uuid4().hex[:8]}"
+    @pytest.mark.parametrize("cleanup_first", [0, 1])
+    def test_debate_cache_isolation(self, cleanup_first):
+        """Cleaning one debate must preserve the other debate's cached values."""
+        debate_ids = [f"isolated-{i}-{uuid.uuid4().hex}" for i in range(2)]
+        scores = [0.9, 0.2]
+        try:
+            caches = [get_pairwise_similarity_cache(debate_id) for debate_id in debate_ids]
+            caches[0].put("text_a", "text_b", scores[0])
+            assert caches[0].get("text_a", "text_b") == scores[0]
+            assert caches[1].get("text_a", "text_b") is None
 
-        cache1 = get_pairwise_similarity_cache(debate_id_1)
-        cache2 = get_pairwise_similarity_cache(debate_id_2)
+            caches[1].put("text_a", "text_b", scores[1])
+            for cache, score in zip(caches, scores):
+                assert cache.get("text_a", "text_b") == score
 
-        # Add to cache1
-        cache1.put("text_a", "text_b", 0.9)
+            cleanup_similarity_cache(debate_ids[cleanup_first])
+            assert caches[cleanup_first].get("text_a", "text_b") is None
 
-        # Should not be in cache2
-        assert cache2.get("text_a", "text_b") is None
+            survivor = 1 - cleanup_first
+            assert caches[survivor].get("text_a", "text_b") == scores[survivor]
+            surviving_cache = get_pairwise_similarity_cache(debate_ids[survivor])
+            assert surviving_cache.get("text_a", "text_b") == scores[survivor]
 
-        # Cleanup
-        cleanup_similarity_cache(debate_id_1)
-        cleanup_similarity_cache(debate_id_2)
+            replacement = get_pairwise_similarity_cache(debate_ids[cleanup_first])
+            assert replacement.get("text_a", "text_b") is None
+            replacement.put("text_a", "text_b", 0.5)
+            assert surviving_cache.get("text_a", "text_b") == scores[survivor]
+        finally:
+            for debate_id in debate_ids:
+                cleanup_similarity_cache(debate_id)
 
     def test_convergence_detector_isolation(self):
         """Test ConvergenceDetector instances are isolated."""
