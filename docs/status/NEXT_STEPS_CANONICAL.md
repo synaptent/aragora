@@ -1,6 +1,6 @@
 # Next Steps (Canonical)
 
-Last updated: 2026-09-07
+Last updated: 2026-09-12
 
 This is the single source of truth for short-horizon execution priorities.
 [CANONICAL_GOALS](../CANONICAL_GOALS.md) defines what Aragora is and why.
@@ -14,15 +14,19 @@ This is the single source of truth for short-horizon execution priorities.
 
 **The live execution spine is the Receipt-First Mission, epic [#9966](https://github.com/synaptent/aragora/issues/9966)** (adopted 2026-09-03, baseline ref `23909906e8`). It supersedes the external-proof month (Jul 9 → Aug 9) as the dated frame, and it absorbs the open ODR tranche obligations below. Progress is measured only by the epic's ten exit metrics and six guardrails; `scripts/receipt_first_scoreboard.py` is the measuring instrument and every mission PR names the row it moves. Closes stage-gate drift [#9805](https://github.com/synaptent/aragora/issues/9805).
 
-Mission state as declared (checked 2026-09-07 against `origin/main` `ebe1bfd262`):
+Mission state (declared 2026-09-07; refreshed 2026-09-12 against `origin/main` `c30b897ae2`):
 
 | Milestone | Scope | State |
 |---|---|---|
-| M0 | scoreboard, import-cycle repair, Atlas v1, release 2.10.0, drift paydown batch 1 | Done except batch 1: v2.10.0 tagged 2026-09-04 ([#9977](https://github.com/synaptent/aragora/pull/9977)); Atlas v1 merged ([#9951](https://github.com/synaptent/aragora/pull/9951)); mutual import cycles 144 → 138 (≤140); batch 1 [#9979](https://github.com/synaptent/aragora/pull/9979) operator-settled 2026-09-07, merge pending the settlement status |
-| M1 | ODR v0.2 schema + vectors, `aragora-verify` 0.2.0, file-based signing keys | In flight: signing-key loader merged ([#9984](https://github.com/synaptent/aragora/pull/9984)); v0.2 core emitter [#9988](https://github.com/synaptent/aragora/pull/9988) parked; packaging fix [#10010](https://github.com/synaptent/aragora/pull/10010) open; vectors and 0.2.0 not started |
-| M2 | dissent visibility, Atlas v2, release 2.11.0 | Started: advisory summaries [#10016](https://github.com/synaptent/aragora/pull/10016) under ruling 11 |
-| M3 | hosted receipts, public receipt endpoints, `api.aragora.ai` cutover on [#9391](https://github.com/synaptent/aragora/issues/9391) | Not started; blocked on the production-hosting decision |
+| M0 | scoreboard, import-cycle repair, Atlas v1, release 2.10.0, drift paydown batch 1 | Done except batch 1: v2.10.0 tagged 2026-09-04 ([#9977](https://github.com/synaptent/aragora/pull/9977)); Atlas v1 merged ([#9951](https://github.com/synaptent/aragora/pull/9951)); mutual import cycles 144 → 138 (≤140); import-cycle ratchet merged 2026-09-11 ([#9949](https://github.com/synaptent/aragora/pull/9949)). Batch 1 [#9979](https://github.com/synaptent/aragora/pull/9979) is still open at head `3d3c7c92`: the operator authorization comment of 2026-09-07 was posted, but the live merge-quorum gate reads only one counted signal at that head (Claude PASS counted; the OpenAI `[P2]` on the legacy `items[]` list is advisory and therefore non-counting under severity gating), so `settle_tier4_pr.py --settle-only` cannot set `aragora/human-settlement`. It needs a bounded repair plus one fresh collection, or an operator ruling that changes the evidence, before settlement. Batch 2 [#10013](https://github.com/synaptent/aragora/pull/10013) stays stacked behind it |
+| M1 | ODR v0.2 schema + vectors, `aragora-verify` 0.2.0, file-based signing keys | In flight: signing-key loader merged ([#9984](https://github.com/synaptent/aragora/pull/9984)); packaging fix merged 2026-09-08 ([#10010](https://github.com/synaptent/aragora/pull/10010)); v0.2 core emitter [#9988](https://github.com/synaptent/aragora/pull/9988) still open at head `2ea4b7c9` awaiting its landing-round collection; vectors and 0.2.0 not started |
+| M2 | dissent visibility, Atlas v2, release 2.11.0 | Mostly landed: advisory summaries [#10016](https://github.com/synaptent/aragora/pull/10016) and hardening [#10036](https://github.com/synaptent/aragora/pull/10036) merged 2026-09-07; scoreboard rows 6/8 [#10043](https://github.com/synaptent/aragora/pull/10043), Atlas pairwise summary [#10048](https://github.com/synaptent/aragora/pull/10048) and Atlas docs-site pages [#10050](https://github.com/synaptent/aragora/pull/10050) merged 2026-09-10. Atlas weekly job [#10051](https://github.com/synaptent/aragora/pull/10051) (Tier 4) has its packet under ruling 14 but its head `cb58db6b` now conflicts with `main` and must be restacked before settlement. Release 2.11.0 not cut |
+| M3 | hosted receipts, public receipt endpoints, `api.aragora.ai` cutover on [#9391](https://github.com/synaptent/aragora/issues/9391) | Started: the provider-neutral Hetzner deploy pack [#9882](https://github.com/synaptent/aragora/pull/9882) merged 2026-09-11 under rulings 17/18 (with [#9854](https://github.com/synaptent/aragora/pull/9854) folded in); the 30-minute production probes are parked pending a canary ([#10025](https://github.com/synaptent/aragora/pull/10025)). `api.aragora.ai` still times out; the canary host is operator-owned and must pass a read-only audit before any DNS cutover. Hosted receipts remain container-local SQLite under `ARAGORA_DB_BACKEND=postgres` until the DB-backend alias normalization lands |
 | M4 | external proof (receipts release, demo repo), release 2.12.0 | Not started |
+
+**Parallel Tier-4 queue (readiness mission).** A second stacked mission, `readiness/*` M1–M7 ([#9982](https://github.com/synaptent/aragora/pull/9982), [#9997](https://github.com/synaptent/aragora/pull/9997), [#10005](https://github.com/synaptent/aragora/pull/10005), [#10027](https://github.com/synaptent/aragora/pull/10027), [#10049](https://github.com/synaptent/aragora/pull/10049), [#10052](https://github.com/synaptent/aragora/pull/10052), [#10060](https://github.com/synaptent/aragora/pull/10060)), is queued for operator review as drafts labelled `operator-review-required`. Each milestone is cut from the previous tip, so the stack merges in order or not at all. As of 2026-09-12 M1 carries a grounded `[P2]` from both families (the committed `uv.lock` violates the 7-day cooldown the PR introduces) and is not settleable until repaired, and M5 conflicts with `main`. This mission does not move the Receipt-First exit metrics; it competes for the same operator settlement time.
+
+**Settlement mechanics worth knowing.** Under severity-gated dissent a `[P2]`/`[P3]`-only CHANGES-REQUESTED is advisory: it does not block, but it also does not count. A Tier 3-4 head with one counted PASS and one advisory CHANGES-REQUESTED therefore sits at one of two required signals and cannot be settled by authorization comment alone; the operator-advisory relief valve applies only when every review is advisory. The fix is a bounded repair and one fresh collection, not a stronger authorization comment.
 
 **External-proof month outcome by week (recorded, not re-litigated):**
 
@@ -198,7 +202,7 @@ The current dated frame is the Receipt-First mission's exit-metric table on [#99
 - **100%** of failures land in truthful canonical buckets
 - repeated rescue classes become explicit product work
 
-Current status: `docs/status/B0_BENCHMARK_TRUTH_STATUS.md` and `docs/status/TW03_RESCUE_PRODUCTIZATION_STATUS.md` are the live recurring proof surfaces. When benchmark publication drifts, lags, or lands incomplete corpus coverage, restoring that publication becomes the immediate gate again before any scope widening.
+Current status: `docs/status/B0_BENCHMARK_TRUTH_STATUS.md` and `docs/status/TW03_RESCUE_PRODUCTIZATION_STATUS.md` are the live recurring proof surfaces. As of 2026-09-12 the `B0` surface on `main` is dated 2026-09-01; the automated refresh [#9980](https://github.com/synaptent/aragora/pull/9980) is parked at one countable review family because the worker Claude profiles are out of usage or revoked, so restoring reviewer capacity is the gate on freshness, not the publication job. When benchmark publication drifts, lags, or lands incomplete corpus coverage, restoring that publication becomes the immediate gate again before any scope widening.
 
 Primary truth metric:
 
@@ -264,6 +268,8 @@ This is the executable backlog for the next 30 days. Keep it to one bounded lane
 - Receipt-First mission [#9966](https://github.com/synaptent/aragora/issues/9966), in milestone order: M1 (ODR v0.2 + vectors + `aragora-verify` 0.2.0, closes ODR-2 [#8225](https://github.com/synaptent/aragora/issues/8225)), M2 (dissent visibility, Atlas v2, 2.11.0), M3 (hosted receipts; needs the [#9391](https://github.com/synaptent/aragora/issues/9391) hosting decision), M4 (external proof, 2.12.0)
 - Contract-drift paydown batches (exit metric row 10) and the guardrail ceilings, every batch
 - Operator settlement of ready Tier 3-4 mission PRs within one working day of the packet comment, so workers are not parked on rulings
+- Keep at least two countable reviewer families available to workers (Claude profile usage/OAuth plus OpenAI); every mission park between 2026-09-10 and 2026-09-11 was a reviewer-transport park, not a ruling park
+- Restack any Tier 3-4 head that falls behind `main` before asking for settlement ([#10051](https://github.com/synaptent/aragora/pull/10051), readiness M5 [#10049](https://github.com/synaptent/aragora/pull/10049))
 - `CS-01..03` (background)
 - observer truth on current `main` (background)
 - benchmark publication freshness and completeness (background)
@@ -289,7 +295,7 @@ This is the executable backlog for the next 30 days. Keep it to one bounded lane
 
 ## Live Boss-Ready Queue
 
-The active execution lane is the ODR tranche (epic [#8223](https://github.com/synaptent/aragora/issues/8223)) plus the external-proof month plan; the rules below govern the Foreman/proof-loop background queue only.
+The active execution lane is the Receipt-First mission (epic [#9966](https://github.com/synaptent/aragora/issues/9966)); the rules below govern the Foreman/proof-loop background queue only.
 
 - There is no dedicated open boss-ready trust-loop issue right now.
 - Keep the live queue empty unless the recurring `TW-01/TW-02/TW-03` publication surfaces expose a fresh repeated rescue class or a concrete regression.
