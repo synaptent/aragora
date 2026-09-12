@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragora.ai/schemas/decision-quality-result-v1.json",
+  "title": "Outcome-Backed Decision Quality Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "benchmark_id",
+    "revision",
+    "manifest_sha256",
+    "implementation_sha",
+    "case_id",
+    "domain",
+    "split",
+    "repetition",
+    "condition",
+    "requested_model",
+    "resolved_model",
+    "transport",
+    "calls",
+    "output",
+    "latency_ms",
+    "cost_usd",
+    "errors",
+    "attempt_count",
+    "receipt_hash",
+    "receipt_verification",
+    "recorded_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "decision-quality-result/1.0"
+    },
+    "run_id": {"type": "string", "minLength": 1},
+    "benchmark_id": {"type": "string", "minLength": 1},
+    "revision": {"type": "string", "minLength": 1},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "implementation_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "case_id": {"type": "string", "minLength": 1},
+    "domain": {
+      "enum": [
+        "software_engineering",
+        "business_operations",
+        "policy_compliance",
+        "science_forecasting"
+      ]
+    },
+    "split": {"enum": ["development", "holdout"]},
+    "repetition": {"type": "integer", "minimum": 1, "maximum": 2},
+    "condition": {
+      "enum": ["single_claude", "single_openai", "single_gemini", "aragora_team"]
+    },
+    "requested_model": {"type": ["string", "null"]},
+    "resolved_model": {"type": ["string", "null"]},
+    "transport": {"type": ["string", "null"]},
+    "calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "family",
+          "requested_model",
+          "resolved_model",
+          "transport",
+          "billing_class",
+          "latency_ms",
+          "cost_usd"
+        ]
+      }
+    },
+    "output": {
+      "type": ["object", "null"],
+      "properties": {
+        "selected_option_id": {"type": "string"},
+        "forecast_probability": {"type": "number", "minimum": 0, "maximum": 1},
+        "cruxes": {"type": "array", "items": {"type": "string"}},
+        "source_ids": {"type": "array", "items": {"type": "string"}},
+        "rationale": {"type": "string"}
+      },
+      "required": ["selected_option_id", "forecast_probability", "cruxes", "source_ids"]
+    },
+    "latency_ms": {"type": "number", "minimum": 0},
+    "cost_usd": {"type": "number", "minimum": 0},
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "attempt_count": {"type": "integer", "minimum": 1, "maximum": 2},
+    "receipt_hash": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      ]
+    },
+    "receipt_verification": {
+      "enum": [
+        "not_applicable",
+        "missing",
+        "invalid",
+        "input_mismatch",
+        "decision_mismatch",
+        "failed",
+        "verified"
+      ]
+    },
+    "recorded_at": {"type": "string", "format": "date-time"}
+  }
+}
