@@ -177,27 +177,28 @@ export function ModelSelector({
   const [searchQuery, setSearchQuery] = useState('');
 
   const verticals = useMemo(() => {
-    const verts = [...new Set(AVAILABLE_MODELS.map(m => m.vertical))];
-    return verts.map(v => ({ id: v, name: v.charAt(0).toUpperCase() + v.slice(1) }));
+    const verts = [...new Set(AVAILABLE_MODELS.map((m) => m.vertical))];
+    return verts.map((v) => ({ id: v, name: v.charAt(0).toUpperCase() + v.slice(1) }));
   }, []);
 
   const filteredModels = useMemo(() => {
     let models = AVAILABLE_MODELS;
 
     if (verticalFilter) {
-      models = models.filter(m => m.vertical === verticalFilter);
+      models = models.filter((m) => m.vertical === verticalFilter);
     }
 
     if (typeFilter) {
-      models = models.filter(m => m.type === typeFilter);
+      models = models.filter((m) => m.type === typeFilter);
     }
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      models = models.filter(m =>
-        m.name.toLowerCase().includes(query) ||
-        m.description.toLowerCase().includes(query) ||
-        m.huggingFaceId.toLowerCase().includes(query)
+      models = models.filter(
+        (m) =>
+          m.name.toLowerCase().includes(query) ||
+          m.description.toLowerCase().includes(query) ||
+          m.huggingFaceId.toLowerCase().includes(query),
       );
     }
 
@@ -233,8 +234,10 @@ export function ModelSelector({
           className="px-3 py-2 text-sm bg-bg border border-border rounded font-theme-data focus:outline-none focus:border-[var(--accent)]"
         >
           <option value="">All Verticals</option>
-          {verticals.map(v => (
-            <option key={v.id} value={v.id}>{v.name}</option>
+          {verticals.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
           ))}
         </select>
         <select
@@ -251,15 +254,16 @@ export function ModelSelector({
 
       {/* Model Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {filteredModels.map(model => (
+        {filteredModels.map((model) => (
           <div
             key={model.id}
             onClick={() => onSelectModel(model)}
             className={`
               p-4 bg-bg border-2 rounded-lg cursor-pointer transition-all
-              ${selectedModel?.id === model.id
-                ? 'border-[var(--accent)] bg-[var(--accent)]/5'
-                : 'border-border hover:border-text-muted'
+              ${
+                selectedModel?.id === model.id
+                  ? 'border-[var(--accent)] bg-[var(--accent)]/5'
+                  : 'border-border hover:border-text-muted'
               }
             `}
           >
@@ -280,11 +284,15 @@ export function ModelSelector({
                 <p className="text-xs text-text-muted mt-1 line-clamp-1">{model.description}</p>
                 <div className="flex items-center gap-3 mt-2 text-xs">
                   <span className="font-theme-data text-text-muted">{model.size}</span>
-                  <span className={`px-1.5 py-0.5 rounded ${
-                    model.type === 'primary' ? 'bg-cyan-900/30 text-cyan-400' :
-                    model.type === 'small' ? 'bg-yellow-900/30 text-yellow-400' :
-                    'bg-purple-900/30 text-purple-400'
-                  }`}>
+                  <span
+                    className={`px-1.5 py-0.5 rounded ${
+                      model.type === 'primary'
+                        ? 'bg-cyan-900/30 text-cyan-400'
+                        : model.type === 'small'
+                          ? 'bg-yellow-900/30 text-yellow-400'
+                          : 'bg-purple-900/30 text-purple-400'
+                    }`}
+                  >
                     {model.type}
                   </span>
                   {model.downloads && (

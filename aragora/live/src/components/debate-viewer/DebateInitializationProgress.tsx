@@ -2,11 +2,7 @@
 
 import { useMemo } from 'react';
 import type { StreamEvent } from '@/types/events';
-import type {
-  QuickClassificationData,
-  AgentPreviewData,
-  ContextPreviewData,
-} from '@/types/events';
+import type { QuickClassificationData, AgentPreviewData, ContextPreviewData } from '@/types/events';
 import { getAgentColors } from '@/utils/agentColors';
 
 interface Props {
@@ -22,17 +18,17 @@ interface Props {
 export function DebateInitializationProgress({ task, agents, streamEvents }: Props) {
   // Extract preview data from stream events
   const classification = useMemo(() => {
-    const event = streamEvents.find(e => e.type === 'quick_classification');
+    const event = streamEvents.find((e) => e.type === 'quick_classification');
     return event?.data as QuickClassificationData | undefined;
   }, [streamEvents]);
 
   const agentPreviews = useMemo(() => {
-    const event = streamEvents.find(e => e.type === 'agent_preview');
+    const event = streamEvents.find((e) => e.type === 'agent_preview');
     return (event?.data as AgentPreviewData)?.agents;
   }, [streamEvents]);
 
   const contextPreview = useMemo(() => {
-    const event = streamEvents.find(e => e.type === 'context_preview');
+    const event = streamEvents.find((e) => e.type === 'context_preview');
     return event?.data as ContextPreviewData | undefined;
   }, [streamEvents]);
 
@@ -46,9 +42,7 @@ export function DebateInitializationProgress({ task, agents, streamEvents }: Pro
           errors.push({
             agent: (data?.agent as string) || 'unknown',
             message:
-              (data?.error as string) ||
-              (data?.message as string) ||
-              'Initialization failed',
+              (data?.error as string) || (data?.message as string) || 'Initialization failed',
           });
         }
       }
@@ -67,9 +61,7 @@ export function DebateInitializationProgress({ task, agents, streamEvents }: Pro
           errors.push({
             agent: (event.agent as string) || (data?.agent as string) || 'unknown',
             message:
-              (data?.message as string) ||
-              (data?.error as string) ||
-              `Agent error: ${errorType}`,
+              (data?.message as string) || (data?.error as string) || `Agent error: ${errorType}`,
           });
         }
       }
@@ -78,9 +70,7 @@ export function DebateInitializationProgress({ task, agents, streamEvents }: Pro
   }, [streamEvents]);
 
   // Get latest phase_progress event for status message
-  const latestProgress = streamEvents
-    .filter(e => e.type === 'phase_progress')
-    .pop();
+  const latestProgress = streamEvents.filter((e) => e.type === 'phase_progress').pop();
 
   const progressMessage = (latestProgress?.data as { message?: string })?.message;
 
@@ -202,7 +192,7 @@ export function DebateInitializationProgress({ task, agents, streamEvents }: Pro
             <div className="text-xs text-text-muted">
               Related trends:{' '}
               <span className="text-text-secondary">
-                {contextPreview.trending_topics.map(t => t.topic).join(', ')}
+                {contextPreview.trending_topics.map((t) => t.topic).join(', ')}
               </span>
             </div>
           )}
@@ -220,7 +210,7 @@ export function DebateInitializationProgress({ task, agents, streamEvents }: Pro
       {/* Agent badges (fallback if no agent preview) */}
       {!agentPreviews && agents.length > 0 && (
         <div className="flex flex-wrap justify-center gap-2">
-          {agents.map(agent => {
+          {agents.map((agent) => {
             const colors = getAgentColors(agent);
             return (
               <span

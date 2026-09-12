@@ -32,12 +32,9 @@ export function DailyDigestWidget({
     const fetchDigest = async () => {
       try {
         const baseUrl = apiBase || '';
-        const response = await fetch(
-          `${baseUrl}/api/email/daily-digest?user_id=${userId}`,
-          {
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          }
-        );
+        const response = await fetch(`${baseUrl}/api/email/daily-digest?user_id=${userId}`, {
+          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        });
         if (response.ok) {
           const data = await response.json();
           setStats(data);
@@ -64,11 +61,7 @@ export function DailyDigestWidget({
       >
         <span>📊</span>
         <span className="text-[var(--text-muted)]">Daily Digest</span>
-        {stats && (
-          <span className="text-[var(--acid-green)]">
-            {stats.timeSaved} saved
-          </span>
-        )}
+        {stats && <span className="text-[var(--acid-green)]">{stats.timeSaved} saved</span>}
       </button>
     );
   }
@@ -93,9 +86,7 @@ export function DailyDigestWidget({
       {/* Header */}
       <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-            {'>'} TODAY'S DIGEST
-          </h3>
+          <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} TODAY'S DIGEST</h3>
           <p className="text-xs text-[var(--text-muted)]">
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long',
@@ -114,23 +105,9 @@ export function DailyDigestWidget({
 
       {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-4 p-4 border-b border-[var(--border)]">
-        <DigestStat
-          label="Received"
-          value={stats.emailsReceived}
-          icon="📥"
-        />
-        <DigestStat
-          label="Processed"
-          value={stats.emailsProcessed}
-          icon="✅"
-          color="green"
-        />
-        <DigestStat
-          label="Critical"
-          value={stats.criticalHandled}
-          icon="🔴"
-          color="red"
-        />
+        <DigestStat label="Received" value={stats.emailsReceived} icon="📥" />
+        <DigestStat label="Processed" value={stats.emailsProcessed} icon="✅" color="green" />
+        <DigestStat label="Critical" value={stats.criticalHandled} icon="🔴" color="red" />
       </div>
 
       {/* Category Breakdown */}
@@ -152,9 +129,7 @@ export function DailyDigestWidget({
 
       {/* Top Senders */}
       <div className="p-4">
-        <h4 className="text-xs font-theme-data text-[var(--text-muted)] mb-3">
-          Top Senders Today
-        </h4>
+        <h4 className="text-xs font-theme-data text-[var(--text-muted)] mb-3">Top Senders Today</h4>
         <div className="space-y-2">
           {stats.topSenders.map((sender, i) => (
             <div
@@ -163,9 +138,7 @@ export function DailyDigestWidget({
             >
               <span className="flex items-center gap-2">
                 <span className="text-[var(--text-muted)]">{i + 1}.</span>
-                <span className="text-[var(--text)] truncate max-w-[150px]">
-                  {sender.name}
-                </span>
+                <span className="text-[var(--text)] truncate max-w-[150px]">{sender.name}</span>
               </span>
               <span className="text-[var(--acid-cyan)]">{sender.count}</span>
             </div>
@@ -196,9 +169,7 @@ function DigestStat({
   return (
     <div className="text-center">
       <div className="text-lg mb-1">{icon}</div>
-      <div className={`text-xl font-theme-data font-bold ${colorClasses[color]}`}>
-        {value}
-      </div>
+      <div className={`text-xl font-theme-data font-bold ${colorClasses[color]}`}>{value}</div>
       <div className="text-xs text-[var(--text-muted)]">{label}</div>
     </div>
   );

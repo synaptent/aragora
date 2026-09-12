@@ -31,7 +31,13 @@ interface BatchingOpportunity {
 
 interface Recommendation {
   id: string;
-  type: 'model_downgrade' | 'caching' | 'batching' | 'rate_limiting' | 'prompt_optimization' | 'provider_switch';
+  type:
+    | 'model_downgrade'
+    | 'caching'
+    | 'batching'
+    | 'rate_limiting'
+    | 'prompt_optimization'
+    | 'provider_switch';
   priority: 'critical' | 'high' | 'medium' | 'low';
   status: 'pending' | 'applied' | 'dismissed';
   current_cost_usd: string;
@@ -59,12 +65,7 @@ interface RecommendationSummary {
   dismissed_count: number;
   total_potential_savings_usd: string;
   realized_savings_usd: string;
-  by_priority: {
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-  };
+  by_priority: { critical: number; high: number; medium: number; low: number };
 }
 
 interface Props {
@@ -111,7 +112,7 @@ export function OptimizationRecommendations({ workspaceId = 'default' }: Props) 
       const statusParam = filter !== 'all' ? `&status=${filter}` : '';
       const response = await fetch(
         `/api/costs/recommendations?workspace_id=${workspaceId}${statusParam}`,
-        { headers }
+        { headers },
       );
 
       if (response.ok) {
@@ -204,15 +205,21 @@ export function OptimizationRecommendations({ workspaceId = 'default' }: Props) 
       {summary && (
         <div className="grid grid-cols-4 gap-2 text-center">
           <div className="bg-[var(--bg)] rounded p-2">
-            <div className="text-lg font-theme-data text-red-400">{summary.by_priority.critical}</div>
+            <div className="text-lg font-theme-data text-red-400">
+              {summary.by_priority.critical}
+            </div>
             <div className="text-xs text-[var(--text-muted)]">Critical</div>
           </div>
           <div className="bg-[var(--bg)] rounded p-2">
-            <div className="text-lg font-theme-data text-orange-400">{summary.by_priority.high}</div>
+            <div className="text-lg font-theme-data text-orange-400">
+              {summary.by_priority.high}
+            </div>
             <div className="text-xs text-[var(--text-muted)]">High</div>
           </div>
           <div className="bg-[var(--bg)] rounded p-2">
-            <div className="text-lg font-theme-data text-yellow-400">{summary.by_priority.medium}</div>
+            <div className="text-lg font-theme-data text-yellow-400">
+              {summary.by_priority.medium}
+            </div>
             <div className="text-xs text-[var(--text-muted)]">Medium</div>
           </div>
           <div className="bg-[var(--bg)] rounded p-2">
@@ -224,7 +231,7 @@ export function OptimizationRecommendations({ workspaceId = 'default' }: Props) 
 
       {/* Filter Tabs */}
       <div className="flex border-b border-[var(--border)]">
-        {(['pending', 'applied', 'dismissed', 'all'] as const).map(f => (
+        {(['pending', 'applied', 'dismissed', 'all'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -248,21 +255,22 @@ export function OptimizationRecommendations({ workspaceId = 'default' }: Props) 
             <div className="text-sm">No {filter !== 'all' ? filter : ''} recommendations</div>
           </div>
         ) : (
-          recommendations.map(rec => (
-            <div
-              key={rec.id}
-              className={`border rounded p-4 ${PRIORITY_COLORS[rec.priority]}`}
-            >
+          recommendations.map((rec) => (
+            <div key={rec.id} className={`border rounded p-4 ${PRIORITY_COLORS[rec.priority]}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{TYPE_ICONS[rec.type]}</span>
                     <h4 className="text-sm font-theme-data text-[var(--text)]">{rec.title}</h4>
-                    <span className={`text-xs px-2 py-0.5 rounded ${
-                      rec.status === 'applied' ? 'bg-green-500/20 text-green-400' :
-                      rec.status === 'dismissed' ? 'bg-gray-500/20 text-gray-400' :
-                      'bg-[var(--acid-green)]/20 text-[var(--acid-green)]'
-                    }`}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${
+                        rec.status === 'applied'
+                          ? 'bg-green-500/20 text-green-400'
+                          : rec.status === 'dismissed'
+                            ? 'bg-gray-500/20 text-gray-400'
+                            : 'bg-[var(--acid-green)]/20 text-[var(--acid-green)]'
+                      }`}
+                    >
                       {rec.status}
                     </span>
                   </div>
@@ -272,12 +280,13 @@ export function OptimizationRecommendations({ workspaceId = 'default' }: Props) 
                   {rec.model_alternative && (
                     <div className="mt-2 text-xs bg-[var(--bg)] rounded p-2">
                       <div className="text-[var(--text-muted)]">
-                        Switch to: <span className="text-[var(--text)]">{rec.model_alternative.model}</span>
-                        {' '}({rec.model_alternative.provider})
+                        Switch to:{' '}
+                        <span className="text-[var(--text)]">{rec.model_alternative.model}</span> (
+                        {rec.model_alternative.provider})
                       </div>
                       <div className="text-[var(--text-muted)]">
-                        Quality: {(rec.model_alternative.quality_score * 100).toFixed(0)}%
-                        {' | '}Latency: {rec.model_alternative.latency_multiplier}x
+                        Quality: {(rec.model_alternative.quality_score * 100).toFixed(0)}%{' | '}
+                        Latency: {rec.model_alternative.latency_multiplier}x
                       </div>
                     </div>
                   )}
@@ -286,8 +295,12 @@ export function OptimizationRecommendations({ workspaceId = 'default' }: Props) 
                   {rec.caching_opportunity && (
                     <div className="mt-2 text-xs bg-[var(--bg)] rounded p-2">
                       <div className="text-[var(--text-muted)]">
-                        Strategy: <span className="text-[var(--text)]">{rec.caching_opportunity.cache_strategy}</span>
-                        {' | '}Est. hit rate: {(rec.caching_opportunity.estimated_hit_rate * 100).toFixed(0)}%
+                        Strategy:{' '}
+                        <span className="text-[var(--text)]">
+                          {rec.caching_opportunity.cache_strategy}
+                        </span>
+                        {' | '}Est. hit rate:{' '}
+                        {(rec.caching_opportunity.estimated_hit_rate * 100).toFixed(0)}%
                       </div>
                     </div>
                   )}
@@ -296,9 +309,7 @@ export function OptimizationRecommendations({ workspaceId = 'default' }: Props) 
                     <span className="text-xs text-[var(--text-muted)]">
                       Confidence: {(rec.confidence_score * 100).toFixed(0)}%
                     </span>
-                    <span className="text-xs text-[var(--text-muted)]">
-                      Risk: {rec.risk_level}
-                    </span>
+                    <span className="text-xs text-[var(--text-muted)]">Risk: {rec.risk_level}</span>
                   </div>
                 </div>
 

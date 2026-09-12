@@ -3,7 +3,10 @@
  */
 
 import { render, screen, act } from '@testing-library/react';
-import { ExecutionProgressOverlay, type ExecutionProgressOverlayProps } from '../ExecutionProgressOverlay';
+import {
+  ExecutionProgressOverlay,
+  type ExecutionProgressOverlayProps,
+} from '../ExecutionProgressOverlay';
 
 const defaultProps: ExecutionProgressOverlayProps = {
   executing: false,
@@ -56,10 +59,7 @@ describe('ExecutionProgressOverlay', () => {
   });
 
   it('marks completed stages with checkmark', () => {
-    renderOverlay({
-      executing: true,
-      completedStages: ['ideas', 'goals'],
-    });
+    renderOverlay({ executing: true, completedStages: ['ideas', 'goals'] });
     const ideasDot = screen.getByTestId('stage-dot-ideas');
     const goalsDot = screen.getByTestId('stage-dot-goals');
     expect(ideasDot.textContent).toBe('\u2713');
@@ -67,11 +67,7 @@ describe('ExecutionProgressOverlay', () => {
   });
 
   it('shows subtask count when totalSubtasks > 0', () => {
-    renderOverlay({
-      executing: true,
-      completedSubtasks: 3,
-      totalSubtasks: 8,
-    });
+    renderOverlay({ executing: true, completedSubtasks: 3, totalSubtasks: 8 });
     expect(screen.getByTestId('subtask-count')).toHaveTextContent('3/8 subtasks');
   });
 
@@ -81,11 +77,7 @@ describe('ExecutionProgressOverlay', () => {
   });
 
   it('shows progress percentage', () => {
-    renderOverlay({
-      executing: true,
-      completedSubtasks: 5,
-      totalSubtasks: 10,
-    });
+    renderOverlay({ executing: true, completedSubtasks: 5, totalSubtasks: 10 });
     expect(screen.getByText('50%')).toBeInTheDocument();
   });
 
@@ -134,7 +126,9 @@ describe('ExecutionProgressOverlay', () => {
     expect(screen.getByTestId('execution-progress-overlay')).toBeInTheDocument();
 
     // Transition to success
-    rerender(<ExecutionProgressOverlay {...defaultProps} executing={false} executeStatus="success" />);
+    rerender(
+      <ExecutionProgressOverlay {...defaultProps} executing={false} executeStatus="success" />,
+    );
 
     // Still visible immediately
     expect(screen.getByTestId('execution-progress-overlay')).toBeInTheDocument();

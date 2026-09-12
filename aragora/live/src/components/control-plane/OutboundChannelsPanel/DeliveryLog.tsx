@@ -137,7 +137,9 @@ export function DeliveryLog({
           <div className="text-xs text-text-muted">Total</div>
         </div>
         <div className="bg-surface rounded p-3 text-center">
-          <div className="text-xl font-theme-data font-bold text-[var(--accent)]">{stats.delivered}</div>
+          <div className="text-xl font-theme-data font-bold text-[var(--accent)]">
+            {stats.delivered}
+          </div>
           <div className="text-xs text-text-muted">Delivered</div>
         </div>
         <div className="bg-surface rounded p-3 text-center">
@@ -156,9 +158,7 @@ export function DeliveryLog({
           <div className="card p-8 text-center">
             <div className="text-4xl mb-2">📭</div>
             <p className="text-text-muted">No delivery logs yet</p>
-            <p className="text-xs text-text-muted mt-1">
-              Outbound messages will appear here
-            </p>
+            <p className="text-xs text-text-muted mt-1">Outbound messages will appear here</p>
           </div>
         ) : (
           entries.map((entry) => (
@@ -179,23 +179,17 @@ export function DeliveryLog({
                         {entry.channel_name}
                       </span>
                       {entry.recipient && (
-                        <span className="text-xs text-text-muted">
-                          → {entry.recipient}
-                        </span>
+                        <span className="text-xs text-text-muted">→ {entry.recipient}</span>
                       )}
                     </div>
-                    <p className="text-xs text-text-muted truncate">
-                      {entry.content_preview}
-                    </p>
+                    <p className="text-xs text-text-muted truncate">{entry.content_preview}</p>
                     {entry.deliberation_id && (
                       <div className="text-xs text-cyan-400 mt-1">
                         Debate: {entry.deliberation_id.slice(0, 8)}...
                       </div>
                     )}
                     {entry.error_message && entry.status === 'failed' && (
-                      <div className="text-xs text-red-400 mt-1">
-                        ⚠ {entry.error_message}
-                      </div>
+                      <div className="text-xs text-red-400 mt-1">⚠ {entry.error_message}</div>
                     )}
                   </div>
                 </div>
@@ -204,18 +198,19 @@ export function DeliveryLog({
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                   <span
                     className={`px-2 py-0.5 rounded text-xs font-theme-data ${getStatusBadgeClass(
-                      entry.status
+                      entry.status,
                     )}`}
                   >
                     {entry.status.toUpperCase()}
                   </span>
-                  <span className="text-xs text-text-muted" title={entry.sent_at ? formatFullTime(entry.sent_at) : ''}>
+                  <span
+                    className="text-xs text-text-muted"
+                    title={entry.sent_at ? formatFullTime(entry.sent_at) : ''}
+                  >
                     {entry.sent_at ? formatTime(entry.sent_at) : 'Queued'}
                   </span>
                   {entry.retry_count && entry.retry_count > 0 && (
-                    <span className="text-xs text-yellow-400">
-                      Retry #{entry.retry_count}
-                    </span>
+                    <span className="text-xs text-yellow-400">Retry #{entry.retry_count}</span>
                   )}
                 </div>
               </div>

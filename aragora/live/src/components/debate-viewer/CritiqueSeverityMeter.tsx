@@ -53,7 +53,7 @@ export function CritiqueSeverityMeter({ events, agents: _agents }: CritiqueSever
         critiqueList.push({
           agent: data.agent,
           target: data.target,
-          severity: data.severity ?? 5,  // Default to middle of 0-10 scale
+          severity: data.severity ?? 5, // Default to middle of 0-10 scale
           issues: data.issues || [],
           round: event.round || 0,
           timestamp: event.timestamp,
@@ -150,7 +150,9 @@ export function CritiqueSeverityMeter({ events, agents: _agents }: CritiqueSever
                     style={{ width: `${(agentAvg / 10) * 100}%`, opacity: 0.7 }}
                   />
                 </div>
-                <span className={`text-xs font-theme-data ${getSeverityColor(agentAvg)} w-12 text-right`}>
+                <span
+                  className={`text-xs font-theme-data ${getSeverityColor(agentAvg)} w-12 text-right`}
+                >
                   {agentCritiques.length}×
                 </span>
               </div>

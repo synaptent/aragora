@@ -64,13 +64,17 @@ export function ViolationTracker({
     });
   }, [violations, selectedVertical, severityFilter, statusFilter]);
 
-  const severityCounts = useMemo(() => ({
-    all: violations.filter((v) => v.status !== 'resolved').length,
-    critical: violations.filter((v) => v.severity === 'critical' && v.status !== 'resolved').length,
-    high: violations.filter((v) => v.severity === 'high' && v.status !== 'resolved').length,
-    medium: violations.filter((v) => v.severity === 'medium' && v.status !== 'resolved').length,
-    low: violations.filter((v) => v.severity === 'low' && v.status !== 'resolved').length,
-  }), [violations]);
+  const severityCounts = useMemo(
+    () => ({
+      all: violations.filter((v) => v.status !== 'resolved').length,
+      critical: violations.filter((v) => v.severity === 'critical' && v.status !== 'resolved')
+        .length,
+      high: violations.filter((v) => v.severity === 'high' && v.status !== 'resolved').length,
+      medium: violations.filter((v) => v.severity === 'medium' && v.status !== 'resolved').length,
+      low: violations.filter((v) => v.severity === 'low' && v.status !== 'resolved').length,
+    }),
+    [violations],
+  );
 
   const handleClick = (v: ComplianceViolation) => {
     setExpandedId(expandedId === v.id ? null : v.id);
@@ -93,7 +97,11 @@ export function ViolationTracker({
           className="px-3 py-2 text-sm bg-bg border border-border rounded focus:border-[var(--accent)] focus:outline-none"
         >
           <option value="">All Verticals</option>
-          {verticals.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          {verticals.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
         </select>
         <select
           value={statusFilter}
@@ -114,7 +122,9 @@ export function ViolationTracker({
             onClick={() => setSeverityFilter(sev)}
             className={`px-3 py-1 text-xs font-theme-data rounded ${
               severityFilter === sev
-                ? sev === 'all' ? 'bg-[var(--accent)] text-bg' : `${SEVERITY_COLORS[sev].bg} ${SEVERITY_COLORS[sev].text}`
+                ? sev === 'all'
+                  ? 'bg-[var(--accent)] text-bg'
+                  : `${SEVERITY_COLORS[sev].bg} ${SEVERITY_COLORS[sev].text}`
                 : 'bg-surface text-text-muted hover:text-text'
             }`}
           >
@@ -132,7 +142,9 @@ export function ViolationTracker({
               key={v.id}
               onClick={() => handleClick(v)}
               className={`p-4 bg-bg border rounded-lg cursor-pointer transition-all ${
-                expandedId === v.id ? 'border-[var(--accent)]' : 'border-border hover:border-text-muted'
+                expandedId === v.id
+                  ? 'border-[var(--accent)]'
+                  : 'border-border hover:border-text-muted'
               }`}
             >
               <div className="flex items-start justify-between gap-4">
@@ -144,10 +156,14 @@ export function ViolationTracker({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${SEVERITY_COLORS[v.severity].bg} ${SEVERITY_COLORS[v.severity].text}`}>
+                  <span
+                    className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${SEVERITY_COLORS[v.severity].bg} ${SEVERITY_COLORS[v.severity].text}`}
+                  >
                     {v.severity}
                   </span>
-                  <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${STATUS_COLORS[v.status].bg} ${STATUS_COLORS[v.status].text}`}>
+                  <span
+                    className={`px-2 py-0.5 text-xs font-theme-data rounded ${STATUS_COLORS[v.status].bg} ${STATUS_COLORS[v.status].text}`}
+                  >
                     {v.status}
                   </span>
                 </div>
@@ -165,11 +181,17 @@ export function ViolationTracker({
                   <div className="flex gap-2">
                     {v.status === 'open' && (
                       <>
-                        <button className="flex-1 px-3 py-1.5 text-xs font-theme-data bg-yellow-900/30 text-yellow-400 border border-yellow-800/30 rounded">Investigate</button>
-                        <button className="flex-1 px-3 py-1.5 text-xs font-theme-data bg-green-900/30 text-green-400 border border-green-800/30 rounded">Resolve</button>
+                        <button className="flex-1 px-3 py-1.5 text-xs font-theme-data bg-yellow-900/30 text-yellow-400 border border-yellow-800/30 rounded">
+                          Investigate
+                        </button>
+                        <button className="flex-1 px-3 py-1.5 text-xs font-theme-data bg-green-900/30 text-green-400 border border-green-800/30 rounded">
+                          Resolve
+                        </button>
                       </>
                     )}
-                    <button className="px-3 py-1.5 text-xs font-theme-data bg-surface border border-border rounded hover:border-[var(--accent)]">View Details</button>
+                    <button className="px-3 py-1.5 text-xs font-theme-data bg-surface border border-border rounded hover:border-[var(--accent)]">
+                      View Details
+                    </button>
                   </div>
                 </div>
               )}

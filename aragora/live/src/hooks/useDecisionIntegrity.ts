@@ -44,12 +44,7 @@ export interface ConsensusMetrics {
 
 export interface ComplianceStatus {
   status?: string;
-  frameworks?: Array<{
-    name: string;
-    status: string;
-    score?: number;
-    last_assessed?: string;
-  }>;
+  frameworks?: Array<{ name: string; status: string; score?: number; last_assessed?: string }>;
   overall_score?: number;
   violations_count?: number;
   findings?: Array<{
@@ -222,16 +217,14 @@ function computeIntegrityMetrics(
         )
       : 0;
 
-  const memoryPressure = memory?.memory_pressure
-    ? Math.round(memory.memory_pressure * 100)
-    : 0;
+  const memoryPressure = memory?.memory_pressure ? Math.round(memory.memory_pressure * 100) : 0;
 
-  const receiptDeliveryRate = receipts?.delivery_rate
-    !== undefined
-    ? Math.round(receipts.delivery_rate * 100)
-    : receipts?.total_receipts !== undefined && receipts.delivered !== undefined
-      ? Math.round((receipts.delivered / receipts.total_receipts) * 100)
-      : 0;
+  const receiptDeliveryRate =
+    receipts?.delivery_rate !== undefined
+      ? Math.round(receipts.delivery_rate * 100)
+      : receipts?.total_receipts !== undefined && receipts.delivered !== undefined
+        ? Math.round((receipts.delivered / receipts.total_receipts) * 100)
+        : 0;
 
   // System integrity: weighted average of consensus health, compliance,
   // inverse memory pressure, and receipt delivery rate
@@ -252,9 +245,7 @@ function computeIntegrityMetrics(
     (receiptDeliveryRate > 0 ? weights.receipts : 0);
 
   const systemIntegrity =
-    totalWeight > 0
-      ? Math.round(components.reduce((a, b) => a + b, 0) / totalWeight)
-      : 0;
+    totalWeight > 0 ? Math.round(components.reduce((a, b) => a + b, 0) / totalWeight) : 0;
 
   return {
     activeDebates,
@@ -266,9 +257,7 @@ function computeIntegrityMetrics(
   };
 }
 
-function normalizeDeliveryStatus(
-  value: unknown,
-): 'delivered' | 'pending' | 'failed' {
+function normalizeDeliveryStatus(value: unknown): 'delivered' | 'pending' | 'failed' {
   const status = typeof value === 'string' ? value.toLowerCase() : '';
   if (status === 'success' || status === 'delivered') return 'delivered';
   if (status === 'failed' || status === 'error') return 'failed';
@@ -304,10 +293,8 @@ function normalizeReceiptStats(
   const failed = recent.filter((delivery) => delivery.status === 'failed').length;
   const aggregateDelivered =
     resolvedStats?.delivered ?? resolvedStats?.delivered_count ?? delivered;
-  const aggregatePending =
-    resolvedStats?.pending ?? resolvedStats?.pending_count ?? pending;
-  const aggregateFailed =
-    resolvedStats?.failed ?? resolvedStats?.failed_count ?? failed;
+  const aggregatePending = resolvedStats?.pending ?? resolvedStats?.pending_count ?? pending;
+  const aggregateFailed = resolvedStats?.failed ?? resolvedStats?.failed_count ?? failed;
   const deliveryRate =
     resolvedStats?.delivery_rate ??
     resolvedStats?.delivery_success_rate ??
@@ -316,14 +303,9 @@ function normalizeReceiptStats(
       : undefined);
 
   return {
-    total_receipts:
-      resolvedStats?.total ??
-      resolvedStats?.total_receipts ??
-      recent.length,
+    total_receipts: resolvedStats?.total ?? resolvedStats?.total_receipts ?? recent.length,
     verified_count:
-      resolvedStats?.verified ??
-      resolvedStats?.verified_count ??
-      resolvedStats?.signed,
+      resolvedStats?.verified ?? resolvedStats?.verified_count ?? resolvedStats?.signed,
     delivered: aggregateDelivered,
     pending: aggregatePending,
     failed: aggregateFailed,
@@ -377,13 +359,7 @@ export function useDecisionIntegrity(options?: DecisionIntegrityOptions) {
 
   const metrics = useMemo(
     () =>
-      computeIntegrityMetrics(
-        debates.data,
-        consensus.data,
-        compliance.data,
-        memory.data,
-        receipts,
-      ),
+      computeIntegrityMetrics(debates.data, consensus.data, compliance.data, memory.data, receipts),
     [debates.data, consensus.data, compliance.data, memory.data, receipts],
   );
 

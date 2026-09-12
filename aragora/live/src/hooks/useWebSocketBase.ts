@@ -21,12 +21,7 @@ export const MAX_RECONNECT_ATTEMPTS = 15;
 export const MAX_RECONNECT_DELAY_MS = 30000; // 30 seconds cap
 
 export type WebSocketConnectionStatus =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'streaming'
-  | 'complete'
-  | 'error';
+  'disconnected' | 'connecting' | 'connected' | 'streaming' | 'complete' | 'error';
 
 /**
  * Validate WebSocket URL format.
@@ -166,21 +161,24 @@ export function useWebSocketBase<TEvent = unknown>({
     clearReconnectTimeout();
     reconnectTimeoutRef.current = setTimeout(() => {
       if (!isUnmountedRef.current) {
-        setReconnectAttempt(prev => prev + 1);
-        setReconnectTrigger(prev => prev + 1);
+        setReconnectAttempt((prev) => prev + 1);
+        setReconnectTrigger((prev) => prev + 1);
       }
     }, delay);
   }, [reconnectAttempt, autoReconnect, clearReconnectTimeout, logPrefix, onError]);
 
   // Send message through WebSocket
-  const send = useCallback((message: Record<string, unknown>) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
-      logger.debug(`${logPrefix} Sent:`, message);
-    } else {
-      logger.warn(`${logPrefix} Cannot send message - WebSocket not open`);
-    }
-  }, [logPrefix]);
+  const send = useCallback(
+    (message: Record<string, unknown>) => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(message));
+        logger.debug(`${logPrefix} Sent:`, message);
+      } else {
+        logger.warn(`${logPrefix} Cannot send message - WebSocket not open`);
+      }
+    },
+    [logPrefix],
+  );
 
   // Manual reconnect trigger
   const reconnect = useCallback(() => {
@@ -188,7 +186,7 @@ export function useWebSocketBase<TEvent = unknown>({
     setError(null);
     hasEverConnectedRef.current = false;
     handshakeFailuresRef.current = 0;
-    setReconnectTrigger(prev => prev + 1);
+    setReconnectTrigger((prev) => prev + 1);
   }, []);
 
   // Manual disconnect
@@ -350,15 +348,7 @@ export function useWebSocketBase<TEvent = unknown>({
 
   const isConnected = status === 'connected' || status === 'streaming';
 
-  return {
-    status,
-    error,
-    isConnected,
-    reconnectAttempt,
-    send,
-    reconnect,
-    disconnect,
-  };
+  return { status, error, isConnected, reconnectAttempt, send, reconnect, disconnect };
 }
 
 export default useWebSocketBase;

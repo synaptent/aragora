@@ -87,11 +87,7 @@ export async function exchangeCodeForKey(code: string): Promise<KeyExchangeResul
   const res = await fetch(OPENROUTER_KEYS_API, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      code,
-      code_verifier: verifier,
-      code_challenge_method: 'S256',
-    }),
+    body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: 'S256' }),
   });
 
   if (!res.ok) {
@@ -104,10 +100,7 @@ export async function exchangeCodeForKey(code: string): Promise<KeyExchangeResul
   // Clean up session storage
   sessionStorage.removeItem(SESSION_VERIFIER_KEY);
 
-  return {
-    key: data.key,
-    userId: data.user_id ?? null,
-  };
+  return { key: data.key, userId: data.user_id ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -119,10 +112,7 @@ export interface OpenRouterKeyInfo {
   limit: number | null;
   limitRemaining: number | null;
   usage: number;
-  rateLimit: {
-    requests: number;
-    interval: string;
-  } | null;
+  rateLimit: { requests: number; interval: string } | null;
 }
 
 /**
@@ -140,9 +130,10 @@ export async function fetchKeyInfo(apiKey: string): Promise<OpenRouterKeyInfo | 
     return {
       label: data.data?.label ?? null,
       limit: data.data?.limit ?? null,
-      limitRemaining: data.data?.limit != null && data.data?.usage != null
-        ? data.data.limit - data.data.usage
-        : null,
+      limitRemaining:
+        data.data?.limit != null && data.data?.usage != null
+          ? data.data.limit - data.data.usage
+          : null,
       usage: data.data?.usage ?? 0,
       rateLimit: data.data?.rate_limit
         ? { requests: data.data.rate_limit.requests, interval: data.data.rate_limit.interval }

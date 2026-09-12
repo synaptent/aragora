@@ -28,8 +28,8 @@ function getTrend(agent: AgentRanking): 'up' | 'down' | 'stable' {
 }
 
 const TREND_ICON: Record<string, { char: string; color: string }> = {
-  up: { char: '\u25B2', color: 'text-green-400' },   // Black up triangle
-  down: { char: '\u25BC', color: 'text-red-400' },    // Black down triangle
+  up: { char: '\u25B2', color: 'text-green-400' }, // Black up triangle
+  down: { char: '\u25BC', color: 'text-red-400' }, // Black down triangle
   stable: { char: '\u25C6', color: 'text-text-muted' }, // Black diamond
 };
 
@@ -51,7 +51,7 @@ function EnhancedRankingsTableComponent({
         setSortDir('desc');
       }
     },
-    [sortField]
+    [sortField],
   );
 
   const sortedAgents = useMemo(() => {
@@ -109,7 +109,8 @@ function EnhancedRankingsTableComponent({
         role="columnheader"
         aria-sort={isActive ? (sortDir === 'desc' ? 'descending' : 'ascending') : 'none'}
       >
-        {label}{arrow}
+        {label}
+        {arrow}
       </th>
     );
   };
@@ -163,9 +164,17 @@ function EnhancedRankingsTableComponent({
             <th className="text-left py-1.5 px-1 text-text-muted">Agent</th>
             <th className="text-center py-1.5 px-1 text-text-muted w-8">Trend</th>
             <SortHeader field="elo" label="ELO" className="text-right" />
-            <SortHeader field="win_rate" label="Win %" className="text-right hidden sm:table-cell" />
+            <SortHeader
+              field="win_rate"
+              label="Win %"
+              className="text-right hidden sm:table-cell"
+            />
             <SortHeader field="games" label="Games" className="text-right hidden sm:table-cell" />
-            <SortHeader field="consistency" label="Calibration" className="text-right hidden md:table-cell" />
+            <SortHeader
+              field="consistency"
+              label="Calibration"
+              className="text-right hidden md:table-cell"
+            />
             <th className="text-right py-1.5 px-1 text-text-muted">W/L/D</th>
           </tr>
         </thead>
@@ -239,10 +248,8 @@ function EnhancedRankingsTableComponent({
 
                 {/* W/L/D */}
                 <td className="py-1.5 px-1 text-right text-text-muted">
-                  <span className="text-green-400">{agent.wins}</span>
-                  /
-                  <span className="text-red-400">{agent.losses}</span>
-                  /
+                  <span className="text-green-400">{agent.wins}</span>/
+                  <span className="text-red-400">{agent.losses}</span>/
                   <span className="text-yellow-400">{agent.draws}</span>
                 </td>
               </tr>

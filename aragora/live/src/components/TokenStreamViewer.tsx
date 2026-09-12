@@ -126,9 +126,7 @@ export function TokenStreamViewer({ events, agents = [] }: TokenStreamViewerProp
           {activeStreamers.length > 0 && (
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-xs text-green-400">
-                {activeStreamers.length} streaming
-              </span>
+              <span className="text-xs text-green-400">{activeStreamers.length} streaming</span>
             </span>
           )}
         </h3>
@@ -149,7 +147,9 @@ export function TokenStreamViewer({ events, agents = [] }: TokenStreamViewerProp
         <div className="h-2 bg-bg-primary rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-cyan-600 to-blue-500"
-            style={{ width: `${Math.min((totalTokens / (TOKEN_BUDGET * agents.length)) * 100, 100)}%` }}
+            style={{
+              width: `${Math.min((totalTokens / (TOKEN_BUDGET * agents.length)) * 100, 100)}%`,
+            }}
           />
         </div>
       </div>

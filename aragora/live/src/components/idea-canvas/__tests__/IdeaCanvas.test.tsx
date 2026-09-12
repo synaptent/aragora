@@ -16,11 +16,28 @@ import { IDEA_NODE_CONFIGS } from '../types';
 // ---------------------------------------------------------------------------
 
 jest.mock('@xyflow/react', () => ({
-  ReactFlow: ({ children, onNodeClick, onPaneClick, ...props }: Record<string, unknown> & { children?: React.ReactNode; onNodeClick?: (e: React.MouseEvent, node: Record<string, unknown>) => void; onPaneClick?: () => void; nodes?: Array<Record<string, unknown>> }) => (
+  ReactFlow: ({
+    children,
+    onNodeClick,
+    onPaneClick,
+    ...props
+  }: Record<string, unknown> & {
+    children?: React.ReactNode;
+    onNodeClick?: (e: React.MouseEvent, node: Record<string, unknown>) => void;
+    onPaneClick?: () => void;
+    nodes?: Array<Record<string, unknown>>;
+  }) => (
     <div data-testid="react-flow" onClick={() => onPaneClick?.()}>
       {children}
       {props.nodes?.map((n: Record<string, unknown>) => (
-        <div key={n.id as string} data-testid={`node-${n.id}`} onClick={(e: React.MouseEvent) => { e.stopPropagation(); onNodeClick?.(e, n); }}>
+        <div
+          key={n.id as string}
+          data-testid={`node-${n.id}`}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            onNodeClick?.(e, n);
+          }}
+        >
           {(n.data as Record<string, unknown>)?.label as string}
         </div>
       ))}
@@ -43,16 +60,17 @@ jest.mock('@xyflow/react', () => ({
     fitView: jest.fn(),
     screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
   }),
-  addEdge: jest.fn((connection: Record<string, unknown>, edges: unknown[]) => [...edges, { id: 'new-edge', ...connection }]),
+  addEdge: jest.fn((connection: Record<string, unknown>, edges: unknown[]) => [
+    ...edges,
+    { id: 'new-edge', ...connection },
+  ]),
 }));
 
 // ---------------------------------------------------------------------------
 // Mock the useIdeaCanvas hook (for IdeaCanvas integration tests)
 // ---------------------------------------------------------------------------
 
-jest.mock('../useIdeaCanvas', () => ({
-  useIdeaCanvas: jest.fn(),
-}));
+jest.mock('../useIdeaCanvas', () => ({ useIdeaCanvas: jest.fn() }));
 
 // ---------------------------------------------------------------------------
 // Mock CollaborationOverlay so it does not interfere
@@ -67,9 +85,7 @@ jest.mock('../CollaborationOverlay', () => ({
 // ---------------------------------------------------------------------------
 
 const mockApiPost = jest.fn();
-jest.mock('../../../lib/api', () => ({
-  apiPost: (...args: unknown[]) => mockApiPost(...args),
-}));
+jest.mock('../../../lib/api', () => ({ apiPost: (...args: unknown[]) => mockApiPost(...args) }));
 
 // ---------------------------------------------------------------------------
 // Imports after mocks
@@ -143,9 +159,15 @@ describe('IdeaPalette', () => {
   it('renders all 9 idea node type labels', () => {
     render(<IdeaPalette />);
     const expectedLabels = [
-      'Concept', 'Observation', 'Question',
-      'Hypothesis', 'Insight', 'Evidence',
-      'Cluster', 'Assumption', 'Constraint',
+      'Concept',
+      'Observation',
+      'Question',
+      'Hypothesis',
+      'Insight',
+      'Evidence',
+      'Cluster',
+      'Assumption',
+      'Constraint',
     ];
     for (const label of expectedLabels) {
       expect(screen.getByText(label)).toBeInTheDocument();
@@ -163,9 +185,15 @@ describe('IdeaPalette', () => {
   it('renders all 9 idea node type descriptions', () => {
     render(<IdeaPalette />);
     const allTypes: IdeaNodeType[] = [
-      'concept', 'observation', 'question',
-      'hypothesis', 'insight', 'evidence',
-      'cluster', 'assumption', 'constraint',
+      'concept',
+      'observation',
+      'question',
+      'hypothesis',
+      'insight',
+      'evidence',
+      'cluster',
+      'assumption',
+      'constraint',
     ];
     for (const type of allTypes) {
       expect(screen.getByText(IDEA_NODE_CONFIGS[type].description)).toBeInTheDocument();
@@ -179,8 +207,7 @@ describe('IdeaPalette', () => {
     // Verify DOM order: each successive element appears after the previous
     for (let i = 1; i < elements.length; i++) {
       expect(
-        elements[i - 1].compareDocumentPosition(elements[i]) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        elements[i - 1].compareDocumentPosition(elements[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
   });
@@ -191,8 +218,7 @@ describe('IdeaPalette', () => {
     const elements = labels.map((l) => screen.getByText(l));
     for (let i = 1; i < elements.length; i++) {
       expect(
-        elements[i - 1].compareDocumentPosition(elements[i]) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        elements[i - 1].compareDocumentPosition(elements[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
   });
@@ -203,8 +229,7 @@ describe('IdeaPalette', () => {
     const elements = labels.map((l) => screen.getByText(l));
     for (let i = 1; i < elements.length; i++) {
       expect(
-        elements[i - 1].compareDocumentPosition(elements[i]) &
-          Node.DOCUMENT_POSITION_FOLLOWING
+        elements[i - 1].compareDocumentPosition(elements[i]) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
   });
@@ -213,9 +238,15 @@ describe('IdeaPalette', () => {
     render(<IdeaPalette />);
 
     const allTypes: IdeaNodeType[] = [
-      'concept', 'observation', 'question',
-      'hypothesis', 'insight', 'evidence',
-      'cluster', 'assumption', 'constraint',
+      'concept',
+      'observation',
+      'question',
+      'hypothesis',
+      'insight',
+      'evidence',
+      'cluster',
+      'assumption',
+      'constraint',
     ];
 
     for (const type of allTypes) {
@@ -229,7 +260,9 @@ describe('IdeaPalette', () => {
       // Simulate dragStart and check dataTransfer
       const dataTransferData: Record<string, string> = {};
       const mockDataTransfer = {
-        setData: (key: string, value: string) => { dataTransferData[key] = value; },
+        setData: (key: string, value: string) => {
+          dataTransferData[key] = value;
+        },
         effectAllowed: '',
       };
 
@@ -254,10 +287,7 @@ describe('IdeaPalette', () => {
 
 describe('IdeaNode', () => {
   // Helper to render IdeaNode with required xyflow NodeProps
-  function renderIdeaNode(
-    data: IdeaNodeData,
-    selected = false
-  ) {
+  function renderIdeaNode(data: IdeaNodeData, selected = false) {
     // IdeaNode expects NodeProps-like shape; we provide minimal required fields
     return render(
       <IdeaNode
@@ -270,7 +300,7 @@ describe('IdeaNode', () => {
         isConnectable={true}
         positionAbsoluteX={0}
         positionAbsoluteY={0}
-      />
+      />,
     );
   }
 
@@ -294,9 +324,15 @@ describe('IdeaNode', () => {
 
   it('renders icons correctly for all 9 types', () => {
     const allTypes: IdeaNodeType[] = [
-      'concept', 'observation', 'question',
-      'hypothesis', 'insight', 'evidence',
-      'cluster', 'assumption', 'constraint',
+      'concept',
+      'observation',
+      'question',
+      'hypothesis',
+      'insight',
+      'evidence',
+      'cluster',
+      'assumption',
+      'constraint',
     ];
     for (const type of allTypes) {
       const { unmount } = renderIdeaNode(makeIdeaNodeData({ ideaType: type }));
@@ -436,11 +472,9 @@ describe('IdeaPropertyEditor', () => {
           onChange={mockOnChange}
           onPromote={mockOnPromote}
           onDelete={mockOnDelete}
-        />
+        />,
       );
-      expect(
-        screen.getByText('Select a node to edit its properties')
-      ).toBeInTheDocument();
+      expect(screen.getByText('Select a node to edit its properties')).toBeInTheDocument();
     });
 
     it('does not render form fields when data is null', () => {
@@ -450,7 +484,7 @@ describe('IdeaPropertyEditor', () => {
           onChange={mockOnChange}
           onPromote={mockOnPromote}
           onDelete={mockOnDelete}
-        />
+        />,
       );
       expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
       expect(screen.queryByRole('slider')).not.toBeInTheDocument();
@@ -474,7 +508,7 @@ describe('IdeaPropertyEditor', () => {
           onChange={mockOnChange}
           onPromote={mockOnPromote}
           onDelete={mockOnDelete}
-        />
+        />,
       );
     }
 
@@ -525,15 +559,19 @@ describe('IdeaPropertyEditor', () => {
       expect(options.length).toBe(9);
 
       const allTypes: IdeaNodeType[] = [
-        'concept', 'observation', 'question',
-        'hypothesis', 'insight', 'evidence',
-        'cluster', 'assumption', 'constraint',
+        'concept',
+        'observation',
+        'question',
+        'hypothesis',
+        'insight',
+        'evidence',
+        'cluster',
+        'assumption',
+        'constraint',
       ];
       for (const type of allTypes) {
         const config = IDEA_NODE_CONFIGS[type];
-        const option = options.find(
-          (opt) => (opt as HTMLOptionElement).value === type
-        );
+        const option = options.find((opt) => (opt as HTMLOptionElement).value === type);
         expect(option).toBeTruthy();
         expect(option!.textContent).toBe(`${config.icon} ${config.label}`);
       }
@@ -575,25 +613,19 @@ describe('IdeaPropertyEditor', () => {
       renderEditor();
       const tagsInput = screen.getByDisplayValue('tag1, tag2');
       fireEvent.change(tagsInput, { target: { value: 'alpha, beta, gamma' } });
-      expect(mockOnChange).toHaveBeenCalledWith({
-        tags: ['alpha', 'beta', 'gamma'],
-      });
+      expect(mockOnChange).toHaveBeenCalledWith({ tags: ['alpha', 'beta', 'gamma'] });
     });
 
     it('filters out empty strings from parsed tags', () => {
       renderEditor();
       const tagsInput = screen.getByDisplayValue('tag1, tag2');
       fireEvent.change(tagsInput, { target: { value: 'alpha, , ,beta' } });
-      expect(mockOnChange).toHaveBeenCalledWith({
-        tags: ['alpha', 'beta'],
-      });
+      expect(mockOnChange).toHaveBeenCalledWith({ tags: ['alpha', 'beta'] });
     });
 
     it('renders the "Promote to Goal" button when not promoted', () => {
       renderEditor();
-      expect(
-        screen.getByRole('button', { name: /promote to goal/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /promote to goal/i })).toBeInTheDocument();
     });
 
     it('calls onPromote when "Promote to Goal" button is clicked', () => {
@@ -609,17 +641,13 @@ describe('IdeaPropertyEditor', () => {
         promotedToGoalId: 'goal-42',
       });
       renderEditor(promotedData);
-      expect(
-        screen.queryByRole('button', { name: /promote to goal/i })
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /promote to goal/i })).not.toBeInTheDocument();
       expect(screen.getByText('Promoted to goal')).toBeInTheDocument();
     });
 
     it('renders the "Delete Node" button', () => {
       renderEditor();
-      expect(
-        screen.getByRole('button', { name: /delete node/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /delete node/i })).toBeInTheDocument();
     });
 
     it('calls onDelete when "Delete Node" button is clicked', () => {
@@ -629,13 +657,9 @@ describe('IdeaPropertyEditor', () => {
     });
 
     it('renders "Delete Node" button even when promoted', () => {
-      const promotedData = makeIdeaNodeData({
-        promotedToGoalId: 'goal-42',
-      });
+      const promotedData = makeIdeaNodeData({ promotedToGoalId: 'goal-42' });
       renderEditor(promotedData);
-      expect(
-        screen.getByRole('button', { name: /delete node/i })
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /delete node/i })).toBeInTheDocument();
     });
 
     it('displays the KM node ID when kmNodeId is present', () => {
@@ -678,9 +702,7 @@ describe('IdeaCanvas', () => {
     expect(screen.getByTestId('react-flow')).toBeInTheDocument();
 
     // Empty state property editor text is present (no node selected)
-    expect(
-      screen.getByText('Select a node to edit its properties')
-    ).toBeInTheDocument();
+    expect(screen.getByText('Select a node to edit its properties')).toBeInTheDocument();
 
     // Palette heading is present
     expect(screen.getByText('Idea Nodes')).toBeInTheDocument();
@@ -720,8 +742,18 @@ describe('IdeaCanvas', () => {
 
   it('renders nodes provided by the hook', () => {
     const testNodes = [
-      { id: 'n1', type: 'ideaNode', position: { x: 0, y: 0 }, data: { label: 'First', ideaType: 'concept' } },
-      { id: 'n2', type: 'ideaNode', position: { x: 100, y: 0 }, data: { label: 'Second', ideaType: 'insight' } },
+      {
+        id: 'n1',
+        type: 'ideaNode',
+        position: { x: 0, y: 0 },
+        data: { label: 'First', ideaType: 'concept' },
+      },
+      {
+        id: 'n2',
+        type: 'ideaNode',
+        position: { x: 100, y: 0 },
+        data: { label: 'Second', ideaType: 'insight' },
+      },
     ];
     mockedUseIdeaCanvas.mockReturnValue(makeMockCanvasHook({ nodes: testNodes }));
 
@@ -735,10 +767,15 @@ describe('IdeaCanvas', () => {
   it('calls setSelectedNodeId on node click', () => {
     const mockSetSelected = jest.fn();
     const testNodes = [
-      { id: 'n1', type: 'ideaNode', position: { x: 0, y: 0 }, data: { label: 'Clickable', ideaType: 'concept' } },
+      {
+        id: 'n1',
+        type: 'ideaNode',
+        position: { x: 0, y: 0 },
+        data: { label: 'Clickable', ideaType: 'concept' },
+      },
     ];
     mockedUseIdeaCanvas.mockReturnValue(
-      makeMockCanvasHook({ nodes: testNodes, setSelectedNodeId: mockSetSelected })
+      makeMockCanvasHook({ nodes: testNodes, setSelectedNodeId: mockSetSelected }),
     );
 
     render(<IdeaCanvas canvasId="test-canvas" />);
@@ -748,9 +785,7 @@ describe('IdeaCanvas', () => {
 
   it('calls setSelectedNodeId(null) on pane click (deselect)', () => {
     const mockSetSelected = jest.fn();
-    mockedUseIdeaCanvas.mockReturnValue(
-      makeMockCanvasHook({ setSelectedNodeId: mockSetSelected })
-    );
+    mockedUseIdeaCanvas.mockReturnValue(makeMockCanvasHook({ setSelectedNodeId: mockSetSelected }));
 
     render(<IdeaCanvas canvasId="test-canvas" />);
     fireEvent.click(screen.getByTestId('react-flow'));
@@ -766,10 +801,7 @@ describe('IdeaCanvas', () => {
       tags: ['proof'],
     });
     mockedUseIdeaCanvas.mockReturnValue(
-      makeMockCanvasHook({
-        selectedNodeId: 'n1',
-        selectedNodeData: nodeData,
-      })
+      makeMockCanvasHook({ selectedNodeId: 'n1', selectedNodeData: nodeData }),
     );
 
     render(<IdeaCanvas canvasId="test-canvas" />);
@@ -779,20 +811,16 @@ describe('IdeaCanvas', () => {
     expect(screen.getByDisplayValue('Evidence body text')).toBeInTheDocument();
     expect(screen.getByDisplayValue('proof')).toBeInTheDocument();
     // Empty state message should NOT be shown
-    expect(
-      screen.queryByText('Select a node to edit its properties')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Select a node to edit its properties')).not.toBeInTheDocument();
   });
 
   it('shows empty property editor when no node is selected', () => {
     mockedUseIdeaCanvas.mockReturnValue(
-      makeMockCanvasHook({ selectedNodeId: null, selectedNodeData: null })
+      makeMockCanvasHook({ selectedNodeId: null, selectedNodeData: null }),
     );
 
     render(<IdeaCanvas canvasId="test-canvas" />);
-    expect(
-      screen.getByText('Select a node to edit its properties')
-    ).toBeInTheDocument();
+    expect(screen.getByText('Select a node to edit its properties')).toBeInTheDocument();
   });
 
   it('calls updateSelectedNode when property editor fields change', () => {
@@ -803,7 +831,7 @@ describe('IdeaCanvas', () => {
         selectedNodeId: 'n1',
         selectedNodeData: nodeData,
         updateSelectedNode: mockUpdate,
-      })
+      }),
     );
 
     render(<IdeaCanvas canvasId="test-canvas" />);
@@ -821,7 +849,7 @@ describe('IdeaCanvas', () => {
         selectedNodeId: 'n1',
         selectedNodeData: nodeData,
         deleteSelectedNode: mockDelete,
-      })
+      }),
     );
 
     render(<IdeaCanvas canvasId="test-canvas" />);
@@ -832,34 +860,21 @@ describe('IdeaCanvas', () => {
   it('shows Promote to Goal button for non-promoted node', () => {
     const nodeData = makeIdeaNodeData({ label: 'Promotable' });
     mockedUseIdeaCanvas.mockReturnValue(
-      makeMockCanvasHook({
-        selectedNodeId: 'n1',
-        selectedNodeData: nodeData,
-      })
+      makeMockCanvasHook({ selectedNodeId: 'n1', selectedNodeData: nodeData }),
     );
 
     render(<IdeaCanvas canvasId="test-canvas" />);
-    expect(
-      screen.getByRole('button', { name: /promote to goal/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /promote to goal/i })).toBeInTheDocument();
   });
 
   it('hides Promote to Goal button for already-promoted node', () => {
-    const nodeData = makeIdeaNodeData({
-      label: 'Already Promoted',
-      promotedToGoalId: 'goal-99',
-    });
+    const nodeData = makeIdeaNodeData({ label: 'Already Promoted', promotedToGoalId: 'goal-99' });
     mockedUseIdeaCanvas.mockReturnValue(
-      makeMockCanvasHook({
-        selectedNodeId: 'n1',
-        selectedNodeData: nodeData,
-      })
+      makeMockCanvasHook({ selectedNodeId: 'n1', selectedNodeData: nodeData }),
     );
 
     render(<IdeaCanvas canvasId="test-canvas" />);
-    expect(
-      screen.queryByRole('button', { name: /promote to goal/i })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /promote to goal/i })).not.toBeInTheDocument();
     expect(screen.getByText('Promoted to goal')).toBeInTheDocument();
   });
 
@@ -867,16 +882,12 @@ describe('IdeaCanvas', () => {
 
   it('renders the idea textarea with placeholder', () => {
     render(<IdeaCanvas canvasId="test-canvas" />);
-    expect(
-      screen.getByPlaceholderText(/paste your ideas here/i)
-    ).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/paste your ideas here/i)).toBeInTheDocument();
   });
 
   it('renders the Add Ideas button', () => {
     render(<IdeaCanvas canvasId="test-canvas" />);
-    expect(
-      screen.getByRole('button', { name: /add ideas/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add ideas/i })).toBeInTheDocument();
   });
 
   it('disables Add Ideas button when textarea is empty', () => {
@@ -907,10 +918,7 @@ describe('IdeaCanvas', () => {
 
     expect(mockApiPost).toHaveBeenCalledWith(
       '/api/v1/canvas/pipeline/from-ideas',
-      expect.objectContaining({
-        ideas: ['Idea A', 'Idea B'],
-        auto_advance: false,
-      }),
+      expect.objectContaining({ ideas: ['Idea A', 'Idea B'], auto_advance: false }),
     );
   });
 
@@ -918,9 +926,7 @@ describe('IdeaCanvas', () => {
 
   it('renders the Generate Goals button', () => {
     render(<IdeaCanvas canvasId="test-canvas" />);
-    expect(
-      screen.getByRole('button', { name: /generate goals/i })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /generate goals/i })).toBeInTheDocument();
   });
 
   it('disables Generate Goals button when there are no nodes', () => {
@@ -944,12 +950,8 @@ describe('IdeaCanvas', () => {
     const testNodes = [
       { id: 'n1', type: 'ideaNode', position: { x: 0, y: 0 }, data: { label: 'Idea' } },
     ];
-    const testEdges = [
-      { id: 'e1', source: 'n1', target: 'n2' },
-    ];
-    mockedUseIdeaCanvas.mockReturnValue(
-      makeMockCanvasHook({ nodes: testNodes, edges: testEdges })
-    );
+    const testEdges = [{ id: 'e1', source: 'n1', target: 'n2' }];
+    mockedUseIdeaCanvas.mockReturnValue(makeMockCanvasHook({ nodes: testNodes, edges: testEdges }));
     mockApiPost.mockResolvedValueOnce({ goals_count: 2, goals: [{}, {}] });
 
     const onGoalsGenerated = jest.fn();
@@ -966,9 +968,7 @@ describe('IdeaCanvas', () => {
       expect.objectContaining({
         ideas_canvas_id: 'test-canvas',
         ideas_canvas_data: expect.objectContaining({
-          nodes: expect.arrayContaining([
-            expect.objectContaining({ id: 'n1' }),
-          ]),
+          nodes: expect.arrayContaining([expect.objectContaining({ id: 'n1' })]),
         }),
       }),
     );

@@ -19,9 +19,7 @@ const _NOMIC_LOOP_WS_URL = process.env.NEXT_PUBLIC_NOMIC_LOOP_WS_URL;
 // Build-time production detection — inlined at build from env vars.
 // This is SSR-safe (no window dependency) and prevents hydration mismatches.
 const _isProductionBuild = Boolean(
-  _API_BASE_URL &&
-    !_API_BASE_URL.includes('localhost') &&
-    !_API_BASE_URL.includes('127.0.0.1'),
+  _API_BASE_URL && !_API_BASE_URL.includes('localhost') && !_API_BASE_URL.includes('127.0.0.1'),
 );
 
 // Detect production environment - check build config first, then hostname
@@ -66,13 +64,15 @@ if (typeof window !== 'undefined') {
     // WebSocket URL is required in production (can't use rewrites for WS)
     console.error(
       '[Aragora] CRITICAL: NEXT_PUBLIC_WS_URL not set in production. ' +
-      'WebSocket features will not work. Please configure this in your deployment.'
+        'WebSocket features will not work. Please configure this in your deployment.',
     );
     if (document.body) {
       const errorBanner = document.createElement('div');
       errorBanner.id = 'aragora-config-error';
-      errorBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#dc2626;color:white;padding:12px;text-align:center;z-index:99999;font-family:monospace;';
-      errorBanner.textContent = 'Configuration Error: Missing NEXT_PUBLIC_WS_URL. Contact your administrator.';
+      errorBanner.style.cssText =
+        'position:fixed;top:0;left:0;right:0;background:#dc2626;color:white;padding:12px;text-align:center;z-index:99999;font-family:monospace;';
+      errorBanner.textContent =
+        'Configuration Error: Missing NEXT_PUBLIC_WS_URL. Contact your administrator.';
       document.body.prepend(errorBanner);
     }
   } else if (!isProd) {
@@ -81,12 +81,12 @@ if (typeof window !== 'undefined') {
       console.warn(
         isLocalBrowserDev()
           ? '[Aragora] NEXT_PUBLIC_API_URL not set, using same-origin /api proxy (local dev mode).'
-          : '[Aragora] NEXT_PUBLIC_API_URL not set, using localhost:8080 fallback (dev mode).'
+          : '[Aragora] NEXT_PUBLIC_API_URL not set, using localhost:8080 fallback (dev mode).',
       );
     }
     if (!_WS_URL) {
       console.warn(
-        '[Aragora] NEXT_PUBLIC_WS_URL not set, using ws://localhost:8765/ws fallback (dev mode).'
+        '[Aragora] NEXT_PUBLIC_WS_URL not set, using ws://localhost:8765/ws fallback (dev mode).',
       );
     }
   }
@@ -207,45 +207,53 @@ export const PROMPT_ENGINE_WS_URL = WS_URL.replace(/\/ws\/?$/, '') + '/ws/prompt
 
 // Helper to detect dev/localhost mode (useful for conditional behavior)
 export const IS_DEV_MODE = !_API_BASE_URL || API_BASE_URL.includes('localhost');
-export const IS_PRODUCTION = _isProductionBuild || (typeof window !== 'undefined' && isProductionEnvironment());
+export const IS_PRODUCTION =
+  _isProductionBuild || (typeof window !== 'undefined' && isProductionEnvironment());
 
 // === Debate Defaults ===
 // 9-round format: Round 0 (context), Rounds 1-7 (debate), Round 8 (adjudication)
-export const DEFAULT_AGENTS = process.env.NEXT_PUBLIC_DEFAULT_AGENTS || 'grok,anthropic-api,openai-api,deepseek,mistral,gemini,qwen,kimi';
+export const DEFAULT_AGENTS =
+  process.env.NEXT_PUBLIC_DEFAULT_AGENTS ||
+  'grok,anthropic-api,openai-api,deepseek,mistral,gemini,qwen,kimi';
 export const DEFAULT_ROUNDS = parseInt(process.env.NEXT_PUBLIC_DEFAULT_ROUNDS || '9', 10);
 export const MAX_ROUNDS = parseInt(process.env.NEXT_PUBLIC_MAX_ROUNDS || '12', 10);
 export const DEFAULT_CONSENSUS = process.env.NEXT_PUBLIC_DEFAULT_CONSENSUS || 'judge';
 
 // === Agent Display Names ===
 export const AGENT_DISPLAY_NAMES: Record<string, string> = {
-  'grok': 'Grok 4',
+  grok: 'Grok 4',
   'anthropic-api': 'Opus 4.6',
   'openai-api': 'GPT 5.2',
-  'deepseek': 'DeepSeek V3',
-  'mistral': 'Mistral Large 3',
-  'gemini': 'Gemini 3.1 Pro',
-  'qwen': 'Qwen 3.8 Max',
+  deepseek: 'DeepSeek V3',
+  mistral: 'Mistral Large 3',
+  gemini: 'Gemini 3.1 Pro',
+  qwen: 'Qwen 3.8 Max',
   'qwen-max': 'Qwen 3.8 Max',
-  'kimi': 'Kimi K3',
+  kimi: 'Kimi K3',
   'kimi-thinking': 'Kimi K2 Thinking',
-  'llama': 'Llama 3.3',
+  llama: 'Llama 3.3',
   'llama4-maverick': 'Llama 4 Maverick',
   'llama4-scout': 'Llama 4 Scout',
-  'sonar': 'Perplexity Sonar',
+  sonar: 'Perplexity Sonar',
   'command-r': 'Cohere Command R+',
-  'jamba': 'AI21 Jamba',
-  'yi': 'Yi Large',
-  'openrouter': 'OpenRouter',
+  jamba: 'AI21 Jamba',
+  yi: 'Yi Large',
+  openrouter: 'OpenRouter',
   'deepseek-r1': 'DeepSeek R1',
-  'ollama': 'Ollama (Local)',
+  ollama: 'Ollama (Local)',
 };
 
 // === Streaming Configuration ===
-export const STREAMING_CAPABLE_AGENTS = (process.env.NEXT_PUBLIC_STREAMING_AGENTS || 'grok,anthropic-api,openai-api,mistral').split(',');
+export const STREAMING_CAPABLE_AGENTS = (
+  process.env.NEXT_PUBLIC_STREAMING_AGENTS || 'grok,anthropic-api,openai-api,mistral'
+).split(',');
 
 // === UI Timeouts ===
 export const API_TIMEOUT_MS = parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || '30000', 10);
-export const WS_RECONNECT_DELAY_MS = parseInt(process.env.NEXT_PUBLIC_WS_RECONNECT_DELAY || '3000', 10);
+export const WS_RECONNECT_DELAY_MS = parseInt(
+  process.env.NEXT_PUBLIC_WS_RECONNECT_DELAY || '3000',
+  10,
+);
 export const COPY_FEEDBACK_DURATION_MS = 2000;
 
 // === Pagination ===
@@ -253,9 +261,9 @@ export const DEFAULT_PAGE_SIZE = parseInt(process.env.NEXT_PUBLIC_DEFAULT_PAGE_S
 export const MAX_PAGE_SIZE = 100;
 
 // === Cache TTLs (milliseconds) ===
-export const CACHE_TTL_LEADERBOARD = 5 * 60 * 1000;  // 5 minutes
-export const CACHE_TTL_DEBATES = 2 * 60 * 1000;      // 2 minutes
-export const CACHE_TTL_AGENT = 10 * 60 * 1000;       // 10 minutes
+export const CACHE_TTL_LEADERBOARD = 5 * 60 * 1000; // 5 minutes
+export const CACHE_TTL_DEBATES = 2 * 60 * 1000; // 2 minutes
+export const CACHE_TTL_AGENT = 10 * 60 * 1000; // 10 minutes
 
 // === Feature Flags ===
 export const ENABLE_STREAMING = process.env.NEXT_PUBLIC_ENABLE_STREAMING !== 'false';
@@ -312,7 +320,14 @@ export interface ApiFetchResult<T> {
   data: T | null;
   error: string | null;
   status?: number;
-  errorCode?: 'AUTH_REQUIRED' | 'FORBIDDEN' | 'RATE_LIMITED' | 'SERVER_ERROR' | 'NETWORK_ERROR' | 'TIMEOUT' | 'UNKNOWN';
+  errorCode?:
+    | 'AUTH_REQUIRED'
+    | 'FORBIDDEN'
+    | 'RATE_LIMITED'
+    | 'SERVER_ERROR'
+    | 'NETWORK_ERROR'
+    | 'TIMEOUT'
+    | 'UNKNOWN';
 }
 
 // Retry configuration for API calls
@@ -371,9 +386,11 @@ function resolveApiFetchUrl(endpoint: string): string {
 export async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit,
-  retryOptions?: { maxAttempts?: number; skipRetry?: boolean }
+  retryOptions?: { maxAttempts?: number; skipRetry?: boolean },
 ): Promise<ApiFetchResult<T>> {
-  const maxAttempts = retryOptions?.skipRetry ? 1 : (retryOptions?.maxAttempts ?? API_RETRY_CONFIG.maxAttempts);
+  const maxAttempts = retryOptions?.skipRetry
+    ? 1
+    : (retryOptions?.maxAttempts ?? API_RETRY_CONFIG.maxAttempts);
   let lastError: Error | null = null;
   let lastStatus: number | undefined;
 
@@ -385,10 +402,7 @@ export async function apiFetch<T>(
       const response = await fetch(resolveApiFetchUrl(endpoint), {
         ...options,
         signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options?.headers,
-        },
+        headers: { 'Content-Type': 'application/json', ...options?.headers },
       });
 
       clearTimeout(timeoutId);
@@ -413,9 +427,9 @@ export async function apiFetch<T>(
         if (attempt < maxAttempts && API_RETRY_CONFIG.shouldRetry(lastError)) {
           const delayMs = Math.min(
             API_RETRY_CONFIG.initialDelayMs * Math.pow(2, attempt - 1),
-            API_RETRY_CONFIG.maxDelayMs
+            API_RETRY_CONFIG.maxDelayMs,
           );
-          await new Promise(resolve => setTimeout(resolve, delayMs));
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
           continue;
         }
 
@@ -441,9 +455,9 @@ export async function apiFetch<T>(
       if (attempt < maxAttempts && API_RETRY_CONFIG.shouldRetry(lastError)) {
         const delayMs = Math.min(
           API_RETRY_CONFIG.initialDelayMs * Math.pow(2, attempt - 1),
-          API_RETRY_CONFIG.maxDelayMs
+          API_RETRY_CONFIG.maxDelayMs,
         );
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
 

@@ -3,9 +3,4 @@
  */
 
 export { QueueMonitoringPanel } from './QueueMonitoringPanel';
-export type {
-  JobStatus,
-  QueueJob,
-  QueueStats,
-  QueueWorker,
-} from './QueueMonitoringPanel';
+export type { JobStatus, QueueJob, QueueStats, QueueWorker } from './QueueMonitoringPanel';

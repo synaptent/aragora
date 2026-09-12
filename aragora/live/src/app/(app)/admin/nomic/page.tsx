@@ -14,11 +14,7 @@ interface NomicStatus {
   cycle_count: number;
   last_cycle_at?: string;
   error?: string;
-  state_machine: {
-    state: string;
-    transitions: number;
-    last_transition?: string;
-  };
+  state_machine: { state: string; transitions: number; last_transition?: string };
 }
 
 interface ImprovementMetrics {
@@ -62,7 +58,15 @@ interface CircuitBreakerStatus {
 
 const PHASES = ['context', 'debate', 'design', 'implement', 'verify', 'commit'] as const;
 
-function PhaseBadge({ phase, current, paused }: { phase: string; current: boolean; paused: boolean }) {
+function PhaseBadge({
+  phase,
+  current,
+  paused,
+}: {
+  phase: string;
+  current: boolean;
+  paused: boolean;
+}) {
   if (current && paused) {
     return (
       <span className="px-3 py-1.5 text-sm font-theme-data rounded border bg-acid-yellow/20 text-[var(--acid-yellow)] border-acid-yellow/40 animate-pulse">
@@ -92,7 +96,9 @@ function CircuitBreakerBadge({ state }: { state: string }) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[state] || colors.closed}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[state] || colors.closed}`}
+    >
       {state.toUpperCase().replace('_', '-')}
     </span>
   );
@@ -147,7 +153,9 @@ export default function NomicAdminPage() {
       }
 
       // Fetch circuit breakers
-      const cbRes = await fetch(`${backendConfig.api}/api/v1/admin/nomic/circuit-breakers`, { headers });
+      const cbRes = await fetch(`${backendConfig.api}/api/v1/admin/nomic/circuit-breakers`, {
+        headers,
+      });
       if (cbRes.ok) {
         const data = await cbRes.json();
         setCircuitBreakers(data.circuit_breakers || []);
@@ -155,30 +163,42 @@ export default function NomicAdminPage() {
 
       // Fetch self-improvement metrics
       try {
-        const metricsRes = await fetch(`${backendConfig.api}/api/v1/admin/nomic/improvements`, { headers });
+        const metricsRes = await fetch(`${backendConfig.api}/api/v1/admin/nomic/improvements`, {
+          headers,
+        });
         if (metricsRes.ok) {
           const data = await metricsRes.json();
           setImprovements(data.improvements || []);
         }
-      } catch { /* endpoint may not exist yet */ }
+      } catch {
+        /* endpoint may not exist yet */
+      }
 
       // Fetch specialist registry
       try {
-        const specRes = await fetch(`${backendConfig.api}/api/v1/admin/nomic/specialists`, { headers });
+        const specRes = await fetch(`${backendConfig.api}/api/v1/admin/nomic/specialists`, {
+          headers,
+        });
         if (specRes.ok) {
           const data = await specRes.json();
           setSpecialists(data.specialists || []);
         }
-      } catch { /* endpoint may not exist yet */ }
+      } catch {
+        /* endpoint may not exist yet */
+      }
 
       // Fetch epistemic graph stats
       try {
-        const epiRes = await fetch(`${backendConfig.api}/api/v1/admin/nomic/epistemic-stats`, { headers });
+        const epiRes = await fetch(`${backendConfig.api}/api/v1/admin/nomic/epistemic-stats`, {
+          headers,
+        });
         if (epiRes.ok) {
           const data = await epiRes.json();
           setEpistemicStats(data);
         }
-      } catch { /* endpoint may not exist yet */ }
+      } catch {
+        /* endpoint may not exist yet */
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch nomic data');
     } finally {
@@ -241,7 +261,11 @@ export default function NomicAdminPage() {
   };
 
   const handleReset = async () => {
-    if (!confirm(`Reset nomic to ${resetPhase.toUpperCase()} phase? This will discard current progress.`)) {
+    if (
+      !confirm(
+        `Reset nomic to ${resetPhase.toUpperCase()} phase? This will discard current progress.`,
+      )
+    ) {
       return;
     }
     setActionLoading('reset');
@@ -298,7 +322,9 @@ export default function NomicAdminPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading Nomic Control Panel...</div>
+        <div className="text-[var(--accent)] font-theme-data animate-pulse">
+          Loading Nomic Control Panel...
+        </div>
       </div>
     );
   }
@@ -312,11 +338,16 @@ export default function NomicAdminPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <Link href="/admin" className="text-text-muted hover:text-text mb-2 inline-block text-sm">
+            <Link
+              href="/admin"
+              className="text-text-muted hover:text-text mb-2 inline-block text-sm"
+            >
               &larr; Back to Admin
             </Link>
             <h1 className="text-2xl font-theme-data text-[var(--accent)]">Nomic Control Panel</h1>
-            <p className="text-sm text-text-muted font-theme-data">Self-improvement loop monitoring and control</p>
+            <p className="text-sm text-text-muted font-theme-data">
+              Self-improvement loop monitoring and control
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <select
@@ -350,7 +381,9 @@ export default function NomicAdminPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="card p-4">
             <div className="text-xs font-theme-data text-text-muted mb-1">Status</div>
-            <div className={`text-xl font-theme-data ${status?.running ? (status.paused ? 'text-[var(--acid-yellow)]' : 'text-[var(--accent)]') : 'text-text-muted'}`}>
+            <div
+              className={`text-xl font-theme-data ${status?.running ? (status.paused ? 'text-[var(--acid-yellow)]' : 'text-[var(--accent)]') : 'text-text-muted'}`}
+            >
               {status?.running ? (status.paused ? 'PAUSED' : 'RUNNING') : 'STOPPED'}
             </div>
           </div>
@@ -385,9 +418,7 @@ export default function NomicAdminPage() {
                   current={status?.current_phase === phase}
                   paused={status?.paused || false}
                 />
-                {index < PHASES.length - 1 && (
-                  <span className="mx-2 text-text-muted">&rarr;</span>
-                )}
+                {index < PHASES.length - 1 && <span className="mx-2 text-text-muted">&rarr;</span>}
               </div>
             ))}
           </div>
@@ -468,7 +499,9 @@ export default function NomicAdminPage() {
         <div className="card p-4">
           <h2 className="text-lg font-theme-data text-text mb-4">Circuit Breakers</h2>
           {circuitBreakers.length === 0 ? (
-            <div className="text-sm font-theme-data text-text-muted">No circuit breakers registered</div>
+            <div className="text-sm font-theme-data text-text-muted">
+              No circuit breakers registered
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm font-theme-data">
@@ -516,7 +549,9 @@ export default function NomicAdminPage() {
               </div>
               <div>
                 <span className="text-text-muted">Last Transition:</span>{' '}
-                <span className="text-text">{formatTimeAgo(status.state_machine.last_transition)}</span>
+                <span className="text-text">
+                  {formatTimeAgo(status.state_machine.last_transition)}
+                </span>
               </div>
             </div>
           </div>
@@ -526,28 +561,46 @@ export default function NomicAdminPage() {
         <div className="card p-4">
           <h2 className="text-lg font-theme-data text-text mb-4">Self-Improvement Metrics</h2>
           {improvements.length === 0 ? (
-            <div className="text-sm font-theme-data text-text-muted">No improvement cycles recorded yet</div>
+            <div className="text-sm font-theme-data text-text-muted">
+              No improvement cycles recorded yet
+            </div>
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                 <div className="p-3 bg-surface rounded border border-border">
                   <div className="text-xs font-theme-data text-text-muted mb-1">Total Cycles</div>
-                  <div className="text-2xl font-theme-data text-[var(--accent)]">{improvements.length}</div>
+                  <div className="text-2xl font-theme-data text-[var(--accent)]">
+                    {improvements.length}
+                  </div>
                 </div>
                 <div className="p-3 bg-surface rounded border border-border">
-                  <div className="text-xs font-theme-data text-text-muted mb-1">Avg Improvement</div>
+                  <div className="text-xs font-theme-data text-text-muted mb-1">
+                    Avg Improvement
+                  </div>
                   <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
-                    {(improvements.reduce((sum, m) => sum + m.improvement_score, 0) / improvements.length * 100).toFixed(1)}%
+                    {(
+                      (improvements.reduce((sum, m) => sum + m.improvement_score, 0) /
+                        improvements.length) *
+                      100
+                    ).toFixed(1)}
+                    %
                   </div>
                 </div>
                 <div className="p-3 bg-surface rounded border border-border">
                   <div className="text-xs font-theme-data text-text-muted mb-1">Success Rate</div>
                   <div className="text-2xl font-theme-data text-[var(--accent)]">
-                    {(improvements.filter(m => m.success_criteria_met).length / improvements.length * 100).toFixed(0)}%
+                    {(
+                      (improvements.filter((m) => m.success_criteria_met).length /
+                        improvements.length) *
+                      100
+                    ).toFixed(0)}
+                    %
                   </div>
                 </div>
                 <div className="p-3 bg-surface rounded border border-border">
-                  <div className="text-xs font-theme-data text-text-muted mb-1">Net Tests Added</div>
+                  <div className="text-xs font-theme-data text-text-muted mb-1">
+                    Net Tests Added
+                  </div>
                   <div className="text-2xl font-theme-data text-[var(--acid-magenta)]">
                     +{improvements.reduce((sum, m) => sum + m.tests_passed_delta, 0)}
                   </div>
@@ -566,34 +619,58 @@ export default function NomicAdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {improvements.slice(-10).reverse().map((m) => (
-                      <tr key={m.cycle_id} className="border-b border-border/50 hover:bg-surface/50">
-                        <td className="py-2 text-text max-w-xs truncate">{m.goal}</td>
-                        <td className="py-2">
-                          <span className={m.improvement_score > 0.5 ? 'text-[var(--accent)]' : m.improvement_score > 0 ? 'text-[var(--acid-yellow)]' : 'text-acid-red'}>
-                            {(m.improvement_score * 100).toFixed(0)}%
-                          </span>
-                        </td>
-                        <td className="py-2 text-text">
-                          <span className={m.tests_passed_delta >= 0 ? 'text-[var(--accent)]' : 'text-acid-red'}>
-                            {m.tests_passed_delta >= 0 ? '+' : ''}{m.tests_passed_delta}
-                          </span>
-                        </td>
-                        <td className="py-2">
-                          <span className={m.lint_errors_delta <= 0 ? 'text-[var(--accent)]' : 'text-acid-red'}>
-                            {m.lint_errors_delta <= 0 ? '' : '+'}{m.lint_errors_delta}
-                          </span>
-                        </td>
-                        <td className="py-2">
-                          {m.success_criteria_met ? (
-                            <span className="text-[var(--accent)]">MET</span>
-                          ) : (
-                            <span className="text-acid-red">MISS</span>
-                          )}
-                        </td>
-                        <td className="py-2 text-text-muted">{formatTimeAgo(m.timestamp)}</td>
-                      </tr>
-                    ))}
+                    {improvements
+                      .slice(-10)
+                      .reverse()
+                      .map((m) => (
+                        <tr
+                          key={m.cycle_id}
+                          className="border-b border-border/50 hover:bg-surface/50"
+                        >
+                          <td className="py-2 text-text max-w-xs truncate">{m.goal}</td>
+                          <td className="py-2">
+                            <span
+                              className={
+                                m.improvement_score > 0.5
+                                  ? 'text-[var(--accent)]'
+                                  : m.improvement_score > 0
+                                    ? 'text-[var(--acid-yellow)]'
+                                    : 'text-acid-red'
+                              }
+                            >
+                              {(m.improvement_score * 100).toFixed(0)}%
+                            </span>
+                          </td>
+                          <td className="py-2 text-text">
+                            <span
+                              className={
+                                m.tests_passed_delta >= 0 ? 'text-[var(--accent)]' : 'text-acid-red'
+                              }
+                            >
+                              {m.tests_passed_delta >= 0 ? '+' : ''}
+                              {m.tests_passed_delta}
+                            </span>
+                          </td>
+                          <td className="py-2">
+                            <span
+                              className={
+                                m.lint_errors_delta <= 0 ? 'text-[var(--accent)]' : 'text-acid-red'
+                              }
+                            >
+                              {m.lint_errors_delta <= 0 ? '' : '+'}
+                              {m.lint_errors_delta}
+                            </span>
+                          </td>
+                          <td className="py-2">
+                            {m.success_criteria_met ? (
+                              <span className="text-[var(--accent)]">MET</span>
+                            ) : (
+                              <span className="text-acid-red">MISS</span>
+                            )}
+                          </td>
+                          <td className="py-2 text-text-muted">{formatTimeAgo(m.timestamp)}</td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -605,13 +682,21 @@ export default function NomicAdminPage() {
         <div className="card p-4">
           <h2 className="text-lg font-theme-data text-text mb-4">Domain Specialists</h2>
           {specialists.length === 0 ? (
-            <div className="text-sm font-theme-data text-text-muted">No specialists promoted yet. Agents are promoted after 5+ domain matches with ELO 150+ above baseline.</div>
+            <div className="text-sm font-theme-data text-text-muted">
+              No specialists promoted yet. Agents are promoted after 5+ domain matches with ELO 150+
+              above baseline.
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {specialists.map((s) => (
-                <div key={`${s.agent_name}-${s.domain}`} className="p-3 bg-surface rounded border border-border">
+                <div
+                  key={`${s.agent_name}-${s.domain}`}
+                  className="p-3 bg-surface rounded border border-border"
+                >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-theme-data text-[var(--acid-cyan)] text-sm">{s.agent_name}</span>
+                    <span className="font-theme-data text-[var(--acid-cyan)] text-sm">
+                      {s.agent_name}
+                    </span>
                     <span className="px-2 py-0.5 text-xs font-theme-data rounded border bg-acid-magenta/20 text-[var(--acid-magenta)] border-acid-magenta/40">
                       {s.domain}
                     </span>
@@ -643,30 +728,43 @@ export default function NomicAdminPage() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="p-3 bg-surface rounded border border-border">
                 <div className="text-xs font-theme-data text-text-muted mb-1">Total Beliefs</div>
-                <div className="text-xl font-theme-data text-[var(--accent)]">{epistemicStats.total_beliefs}</div>
+                <div className="text-xl font-theme-data text-[var(--accent)]">
+                  {epistemicStats.total_beliefs}
+                </div>
               </div>
               <div className="p-3 bg-surface rounded border border-border">
                 <div className="text-xs font-theme-data text-text-muted mb-1">Edges</div>
-                <div className="text-xl font-theme-data text-[var(--acid-cyan)]">{epistemicStats.total_edges}</div>
+                <div className="text-xl font-theme-data text-[var(--acid-cyan)]">
+                  {epistemicStats.total_edges}
+                </div>
               </div>
               <div className="p-3 bg-surface rounded border border-border">
                 <div className="text-xs font-theme-data text-text-muted mb-1">Avg Confidence</div>
-                <div className="text-xl font-theme-data text-[var(--acid-yellow)]">{(epistemicStats.avg_confidence * 100).toFixed(0)}%</div>
+                <div className="text-xl font-theme-data text-[var(--acid-yellow)]">
+                  {(epistemicStats.avg_confidence * 100).toFixed(0)}%
+                </div>
               </div>
               <div className="p-3 bg-surface rounded border border-border">
                 <div className="text-xs font-theme-data text-text-muted mb-1">Consensus</div>
-                <div className="text-xl font-theme-data text-[var(--accent)]">{epistemicStats.by_type.consensus}</div>
+                <div className="text-xl font-theme-data text-[var(--accent)]">
+                  {epistemicStats.by_type.consensus}
+                </div>
               </div>
               <div className="p-3 bg-surface rounded border border-border">
                 <div className="text-xs font-theme-data text-text-muted mb-1">Dissent</div>
-                <div className="text-xl font-theme-data text-acid-red">{epistemicStats.by_type.dissent}</div>
+                <div className="text-xl font-theme-data text-acid-red">
+                  {epistemicStats.by_type.dissent}
+                </div>
               </div>
             </div>
             {epistemicStats.domains.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="text-xs font-theme-data text-text-muted">Domains:</span>
                 {epistemicStats.domains.map((d) => (
-                  <span key={d} className="px-2 py-0.5 text-xs font-theme-data rounded border bg-surface text-text border-border">
+                  <span
+                    key={d}
+                    className="px-2 py-0.5 text-xs font-theme-data rounded border bg-surface text-text border-border"
+                  >
                     {d}
                   </span>
                 ))}

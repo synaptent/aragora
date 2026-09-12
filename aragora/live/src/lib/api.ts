@@ -58,7 +58,7 @@ function resolveRequestUrl(path: string, baseUrl?: string): string {
  */
 export async function apiFetch<T = unknown>(
   path: string,
-  options: ApiFetchOptions = {}
+  options: ApiFetchOptions = {},
 ): Promise<T> {
   const { baseUrl, ...fetchOptions } = options;
   const url = resolveRequestUrl(path, baseUrl);
@@ -73,10 +73,7 @@ export async function apiFetch<T = unknown>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...fetchOptions,
-    headers,
-  });
+  const response = await fetch(url, { ...fetchOptions, headers });
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => response.statusText);
@@ -102,7 +99,7 @@ export async function apiFetch<T = unknown>(
  */
 export async function apiFetchSafe<T = unknown>(
   path: string,
-  options: ApiFetchOptions = {}
+  options: ApiFetchOptions = {},
 ): Promise<ApiFetchResult<T>> {
   try {
     const data = await apiFetch<T>(path, options);
@@ -117,7 +114,7 @@ export async function apiFetchSafe<T = unknown>(
  */
 export async function apiGet<T = unknown>(
   path: string,
-  options: Omit<ApiFetchOptions, 'method'> = {}
+  options: Omit<ApiFetchOptions, 'method'> = {},
 ): Promise<T> {
   return apiFetch<T>(path, { ...options, method: 'GET' });
 }
@@ -128,7 +125,7 @@ export async function apiGet<T = unknown>(
 export async function apiPost<T = unknown>(
   path: string,
   body?: unknown,
-  options: Omit<ApiFetchOptions, 'method' | 'body'> = {}
+  options: Omit<ApiFetchOptions, 'method' | 'body'> = {},
 ): Promise<T> {
   return apiFetch<T>(path, {
     ...options,
@@ -143,7 +140,7 @@ export async function apiPost<T = unknown>(
 export async function apiPut<T = unknown>(
   path: string,
   body?: unknown,
-  options: Omit<ApiFetchOptions, 'method' | 'body'> = {}
+  options: Omit<ApiFetchOptions, 'method' | 'body'> = {},
 ): Promise<T> {
   return apiFetch<T>(path, {
     ...options,
@@ -157,7 +154,7 @@ export async function apiPut<T = unknown>(
  */
 export async function apiDelete<T = unknown>(
   path: string,
-  options: Omit<ApiFetchOptions, 'method'> = {}
+  options: Omit<ApiFetchOptions, 'method'> = {},
 ): Promise<T> {
   return apiFetch<T>(path, { ...options, method: 'DELETE' });
 }

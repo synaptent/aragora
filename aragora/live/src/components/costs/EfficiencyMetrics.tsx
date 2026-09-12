@@ -15,11 +15,7 @@ interface EfficiencyData {
     total_calls: number;
     total_cost: number;
   };
-  model_utilization: Array<{
-    model: string;
-    cost: string;
-    percentage: number;
-  }>;
+  model_utilization: Array<{ model: string; cost: string; percentage: number }>;
 }
 
 interface Props {
@@ -47,7 +43,7 @@ export function EfficiencyMetrics({ workspaceId = 'default', timeRange = '7d' }:
 
       const response = await fetch(
         `/api/costs/efficiency?workspace_id=${workspaceId}&range=${timeRange}`,
-        { headers }
+        { headers },
       );
 
       if (response.ok) {
@@ -98,9 +94,7 @@ export function EfficiencyMetrics({ workspaceId = 'default', timeRange = '7d' }:
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4 space-y-4">
       {/* Header */}
-      <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-        {'>'} EFFICIENCY METRICS
-      </h3>
+      <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} EFFICIENCY METRICS</h3>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-3 gap-4">
@@ -140,10 +134,7 @@ export function EfficiencyMetrics({ workspaceId = 'default', timeRange = '7d' }:
                 <div className="h-2 bg-[var(--bg)] rounded-full overflow-hidden">
                   <div
                     className="h-full transition-all duration-500"
-                    style={{
-                      width: `${model.percentage}%`,
-                      backgroundColor: getModelColor(idx),
-                    }}
+                    style={{ width: `${model.percentage}%`, backgroundColor: getModelColor(idx) }}
                   />
                 </div>
               </div>
@@ -155,7 +146,8 @@ export function EfficiencyMetrics({ workspaceId = 'default', timeRange = '7d' }:
       {/* Summary */}
       <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
         <span className="text-xs text-[var(--text-muted)]">
-          Total: {formatNumber(metrics.total_tokens)} tokens / {formatNumber(metrics.total_calls)} calls
+          Total: {formatNumber(metrics.total_tokens)} tokens / {formatNumber(metrics.total_calls)}{' '}
+          calls
         </span>
         <span className="text-xs font-theme-data text-[var(--acid-green)]">
           ${metrics.total_cost.toFixed(2)}
@@ -174,7 +166,8 @@ interface MetricCardProps {
 
 function MetricCard({ label, value, color, trend }: MetricCardProps) {
   const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→';
-  const trendColor = trend === 'up' ? 'text-red-400' : trend === 'down' ? 'text-green-400' : 'text-gray-400';
+  const trendColor =
+    trend === 'up' ? 'text-red-400' : trend === 'down' ? 'text-green-400' : 'text-gray-400';
 
   return (
     <div className="bg-[var(--bg)] rounded p-3">
@@ -187,7 +180,11 @@ function MetricCard({ label, value, color, trend }: MetricCardProps) {
   );
 }
 
-function getTrend(value: number, baseline: number, higherIsBetter = false): 'up' | 'down' | 'stable' {
+function getTrend(
+  value: number,
+  baseline: number,
+  higherIsBetter = false,
+): 'up' | 'down' | 'stable' {
   const diff = (value - baseline) / baseline;
   if (Math.abs(diff) < 0.1) return 'stable';
   if (diff > 0) return higherIsBetter ? 'down' : 'up';

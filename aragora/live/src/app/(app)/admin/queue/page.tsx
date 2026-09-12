@@ -52,7 +52,9 @@ function StatusBadge({ status }: { status: QueueJob['status'] }) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.pending}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.pending}`}
+    >
       {status.toUpperCase()}
     </span>
   );
@@ -66,10 +68,20 @@ function PriorityBadge({ priority }: { priority: QueueJob['priority'] }) {
     critical: 'text-acid-red',
   };
 
-  return <span className={`text-xs font-theme-data ${colors[priority]}`}>{priority.toUpperCase()}</span>;
+  return (
+    <span className={`text-xs font-theme-data ${colors[priority]}`}>{priority.toUpperCase()}</span>
+  );
 }
 
-function StatsCard({ label, value, color = 'acid-green' }: { label: string; value: number; color?: string }) {
+function StatsCard({
+  label,
+  value,
+  color = 'acid-green',
+}: {
+  label: string;
+  value: number;
+  color?: string;
+}) {
   return (
     <div className="card p-4">
       <div className={`text-2xl font-theme-data text-${color}`}>{value.toLocaleString()}</div>
@@ -192,7 +204,10 @@ export default function QueueAdminPage() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <nav className="flex items-center gap-3">
-              <Link href="/admin" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/admin"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [ADMIN]
               </Link>
               <BackendSelector compact />
@@ -205,7 +220,9 @@ export default function QueueAdminPage() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-theme-data text-[var(--accent)]">Queue Management</h1>
-              <p className="text-text-muted font-theme-data text-sm">Monitor and manage the job queue</p>
+              <p className="text-text-muted font-theme-data text-sm">
+                Monitor and manage the job queue
+              </p>
             </div>
             <div className="flex items-center gap-4">
               <select
@@ -251,13 +268,20 @@ export default function QueueAdminPage() {
           {/* Workers */}
           {workers.length > 0 && (
             <div className="card p-4 mb-6">
-              <h2 className="font-theme-data text-[var(--accent)] mb-3">Workers ({workers.length})</h2>
+              <h2 className="font-theme-data text-[var(--accent)] mb-3">
+                Workers ({workers.length})
+              </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {workers.map((worker) => (
-                  <div key={worker.name} className="bg-surface p-3 rounded border border-[var(--accent)]/20">
+                  <div
+                    key={worker.name}
+                    className="bg-surface p-3 rounded border border-[var(--accent)]/20"
+                  >
                     <div className="font-theme-data text-sm text-text truncate">{worker.name}</div>
                     <div className="flex justify-between mt-1">
-                      <span className="font-theme-data text-xs text-text-muted">Pending: {worker.pending}</span>
+                      <span className="font-theme-data text-xs text-text-muted">
+                        Pending: {worker.pending}
+                      </span>
                       <span className="font-theme-data text-xs text-text-muted">
                         Idle: {formatDuration(worker.idle_time_ms)}
                       </span>
@@ -291,7 +315,9 @@ export default function QueueAdminPage() {
           <div className="card overflow-hidden">
             {loading && jobs.length === 0 ? (
               <div className="p-8 text-center">
-                <div className="font-theme-data text-text-muted animate-pulse">Loading queue data...</div>
+                <div className="font-theme-data text-text-muted animate-pulse">
+                  Loading queue data...
+                </div>
               </div>
             ) : jobs.length === 0 ? (
               <div className="p-8 text-center">
@@ -318,7 +344,10 @@ export default function QueueAdminPage() {
                         className="border-b border-[var(--accent)]/10 hover:bg-surface/50 cursor-pointer"
                         onClick={() => setSelectedJob(job)}
                       >
-                        <td className="p-3 font-theme-data text-sm text-text truncate max-w-[150px]" title={job.id}>
+                        <td
+                          className="p-3 font-theme-data text-sm text-text truncate max-w-[150px]"
+                          title={job.id}
+                        >
                           {job.id.slice(0, 12)}...
                         </td>
                         <td className="p-3 font-theme-data text-sm text-text">{job.job_type}</td>
@@ -331,7 +360,9 @@ export default function QueueAdminPage() {
                         <td className="p-3 font-theme-data text-sm text-text">
                           {job.attempts}/{job.max_attempts}
                         </td>
-                        <td className="p-3 font-theme-data text-xs text-text-muted">{formatDate(job.created_at)}</td>
+                        <td className="p-3 font-theme-data text-xs text-text-muted">
+                          {formatDate(job.created_at)}
+                        </td>
                         <td className="p-3">
                           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                             {job.status === 'failed' && (
@@ -387,7 +418,9 @@ export default function QueueAdminPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="font-theme-data text-xs text-text-muted">ID</label>
-                    <div className="font-theme-data text-sm text-text break-all">{selectedJob.id}</div>
+                    <div className="font-theme-data text-sm text-text break-all">
+                      {selectedJob.id}
+                    </div>
                   </div>
                   <div>
                     <label className="font-theme-data text-xs text-text-muted">Type</label>
@@ -413,18 +446,24 @@ export default function QueueAdminPage() {
                   </div>
                   <div>
                     <label className="font-theme-data text-xs text-text-muted">Created</label>
-                    <div className="font-theme-data text-sm text-text">{formatDate(selectedJob.created_at)}</div>
+                    <div className="font-theme-data text-sm text-text">
+                      {formatDate(selectedJob.created_at)}
+                    </div>
                   </div>
                   {selectedJob.started_at && (
                     <div>
                       <label className="font-theme-data text-xs text-text-muted">Started</label>
-                      <div className="font-theme-data text-sm text-text">{formatDate(selectedJob.started_at)}</div>
+                      <div className="font-theme-data text-sm text-text">
+                        {formatDate(selectedJob.started_at)}
+                      </div>
                     </div>
                   )}
                   {selectedJob.completed_at && (
                     <div>
                       <label className="font-theme-data text-xs text-text-muted">Completed</label>
-                      <div className="font-theme-data text-sm text-text">{formatDate(selectedJob.completed_at)}</div>
+                      <div className="font-theme-data text-sm text-text">
+                        {formatDate(selectedJob.completed_at)}
+                      </div>
                     </div>
                   )}
                 </div>

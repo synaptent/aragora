@@ -13,7 +13,8 @@ import { useEventStream } from '@/hooks/useEventStream';
 import { apiFetch } from '@/lib/api';
 
 export type InputMode = 'text' | 'list' | 'json';
-export type AutoFlowPhase = 'clustering' | 'goals' | 'tasks' | 'agents' | 'validating' | 'complete' | null;
+export type AutoFlowPhase =
+  'clustering' | 'goals' | 'tasks' | 'agents' | 'validating' | 'complete' | null;
 
 export interface CommandStats {
   activeOps: number;
@@ -34,18 +35,25 @@ export function useCommandCenter() {
   // Get selected node data
   const selectedNode = useMemo(() => {
     if (!selectedNodeId) return null;
-    const node = dag.nodes.find(n => n.id === selectedNodeId);
+    const node = dag.nodes.find((n) => n.id === selectedNodeId);
     if (!node) return null;
     return { id: node.id, ...(node.data as DAGNodeData) };
   }, [selectedNodeId, dag.nodes]);
 
   // Compute stats
-  const stats: CommandStats = useMemo(() => ({
-    activeOps: dag.operationLoading ? 1 : 0,
-    budgetConsumed: 0, // Will be enriched by event stream data
-    agentsActive: dag.nodes.filter(n => (n.data as DAGNodeData).stage === 'orchestration' && (n.data as DAGNodeData).status === 'running').length,
-    totalNodes: dag.nodes.length,
-  }), [dag.nodes, dag.operationLoading]);
+  const stats: CommandStats = useMemo(
+    () => ({
+      activeOps: dag.operationLoading ? 1 : 0,
+      budgetConsumed: 0, // Will be enriched by event stream data
+      agentsActive: dag.nodes.filter(
+        (n) =>
+          (n.data as DAGNodeData).stage === 'orchestration' &&
+          (n.data as DAGNodeData).status === 'running',
+      ).length,
+      totalNodes: dag.nodes.length,
+    }),
+    [dag.nodes, dag.operationLoading],
+  );
 
   // Create a new graph and run auto-flow
   const submitBrainDump = useCallback(async (text: string, mode: InputMode) => {
@@ -60,12 +68,21 @@ export function useCommandCenter() {
           ideas = [text];
         }
       } else if (mode === 'list') {
-        ideas = text.split('\n').map(l => l.replace(/^[\s\-*\u2022\d.]+/, '').trim()).filter(Boolean);
+        ideas = text
+          .split('\n')
+          .map((l) => l.replace(/^[\s\-*\u2022\d.]+/, '').trim())
+          .filter(Boolean);
       } else {
-        ideas = text.split('\n').map(l => l.trim()).filter(Boolean);
+        ideas = text
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean);
         if (ideas.length === 1) {
           // Single block of text - split by sentences for better clustering
-          ideas = text.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 10);
+          ideas = text
+            .split(/[.!?]+/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 10);
           if (ideas.length === 0) ideas = [text];
         }
       }
@@ -74,7 +91,10 @@ export function useCommandCenter() {
       setAutoFlowPhase('clustering');
       const result = await apiFetch<{ data: { graph_id: string }; graph_id?: string }>(
         '/api/v1/pipeline/dag',
-        { method: 'POST', body: JSON.stringify({ title: ideas[0]?.slice(0, 50) || 'Command Center', ideas }) }
+        {
+          method: 'POST',
+          body: JSON.stringify({ title: ideas[0]?.slice(0, 50) || 'Command Center', ideas }),
+        },
       );
 
       const newGraphId = result.data?.graph_id || result.graph_id;
@@ -83,11 +103,11 @@ export function useCommandCenter() {
 
         // Run auto-flow with phased animation
         setAutoFlowPhase('goals');
-        await new Promise<void>(r => setTimeout(r, 500));
+        await new Promise<void>((r) => setTimeout(r, 500));
         setAutoFlowPhase('tasks');
-        await new Promise<void>(r => setTimeout(r, 500));
+        await new Promise<void>((r) => setTimeout(r, 500));
         setAutoFlowPhase('agents');
-        await new Promise<void>(r => setTimeout(r, 500));
+        await new Promise<void>((r) => setTimeout(r, 500));
         setAutoFlowPhase('complete');
       }
     } catch (err) {
@@ -97,43 +117,49 @@ export function useCommandCenter() {
   }, []);
 
   // Run auto-flow on existing graph
-  const runAutoFlow = useCallback(async (ideas: string[]) => {
-    if (!graphId) return;
-    setAutoFlowPhase('clustering');
-    const result = await dag.autoFlow(ideas);
-    if (result?.success) {
-      setAutoFlowPhase('complete');
-    } else {
-      setAutoFlowPhase(null);
-    }
-  }, [graphId, dag]);
+  const runAutoFlow = useCallback(
+    async (ideas: string[]) => {
+      if (!graphId) return;
+      setAutoFlowPhase('clustering');
+      const result = await dag.autoFlow(ideas);
+      if (result?.success) {
+        setAutoFlowPhase('complete');
+      } else {
+        setAutoFlowPhase(null);
+      }
+    },
+    [graphId, dag],
+  );
 
   // Node action dispatcher
-  const handleNodeAction = useCallback(async (action: string, nodeId: string) => {
-    switch (action) {
-      case 'debate':
-        return dag.debateNode(nodeId);
-      case 'decompose':
-        return dag.decomposeNode(nodeId);
-      case 'prioritize':
-        return dag.prioritizeChildren(nodeId);
-      case 'assign':
-        return dag.assignAgents(nodeId);
-      case 'execute':
-        return dag.executeNode(nodeId);
-      case 'precedents':
-        return dag.findPrecedents(nodeId);
-      case 'delete':
-        dag.deleteNode(nodeId);
-        setSelectedNodeId(null);
-        return;
-    }
-  }, [dag]);
+  const handleNodeAction = useCallback(
+    async (action: string, nodeId: string) => {
+      switch (action) {
+        case 'debate':
+          return dag.debateNode(nodeId);
+        case 'decompose':
+          return dag.decomposeNode(nodeId);
+        case 'prioritize':
+          return dag.prioritizeChildren(nodeId);
+        case 'assign':
+          return dag.assignAgents(nodeId);
+        case 'execute':
+          return dag.executeNode(nodeId);
+        case 'precedents':
+          return dag.findPrecedents(nodeId);
+        case 'delete':
+          dag.deleteNode(nodeId);
+          setSelectedNodeId(null);
+          return;
+      }
+    },
+    [dag],
+  );
 
   // Filter events for selected node
   const nodeEvents = useMemo(() => {
     if (!selectedNodeId) return [];
-    return eventStream.events.filter(e => e.nodeId === selectedNodeId);
+    return eventStream.events.filter((e) => e.nodeId === selectedNodeId);
   }, [selectedNodeId, eventStream.events]);
 
   return {

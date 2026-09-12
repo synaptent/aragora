@@ -77,7 +77,9 @@ export function MonitoringPanel({ apiBase }: MonitoringPanelProps) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500/30 rounded text-red-400">
         {error}
-        <button onClick={fetchData} className="ml-4 text-sm underline">Retry</button>
+        <button onClick={fetchData} className="ml-4 text-sm underline">
+          Retry
+        </button>
       </div>
     );
   }
@@ -106,15 +108,19 @@ export function MonitoringPanel({ apiBase }: MonitoringPanelProps) {
                 <span className="text-sm text-white/70">{name}</span>
                 <span className={`text-lg ${dirStyle.color}`}>{dirStyle.icon}</span>
               </div>
-              <div className="text-2xl font-bold text-white">
-                {trend.current_value.toFixed(2)}
-              </div>
+              <div className="text-2xl font-bold text-white">{trend.current_value.toFixed(2)}</div>
               <div className="flex items-center gap-2 mt-1 text-xs">
-                <span className={
-                  trend.change_percent > 0 ? 'text-[var(--accent)]' :
-                  trend.change_percent < 0 ? 'text-red-400' : 'text-white/50'
-                }>
-                  {trend.change_percent > 0 ? '+' : ''}{trend.change_percent.toFixed(1)}%
+                <span
+                  className={
+                    trend.change_percent > 0
+                      ? 'text-[var(--accent)]'
+                      : trend.change_percent < 0
+                        ? 'text-red-400'
+                        : 'text-white/50'
+                  }
+                >
+                  {trend.change_percent > 0 ? '+' : ''}
+                  {trend.change_percent.toFixed(1)}%
                 </span>
                 <span className="text-white/40">•</span>
                 <span className="text-white/40">{trend.data_points} points</span>
@@ -141,9 +147,12 @@ export function MonitoringPanel({ apiBase }: MonitoringPanelProps) {
     return (
       <div className="space-y-2">
         {anomalies.map((anomaly) => {
-          const severityColor = anomaly.severity === 'critical' ? 'border-red-500/50 bg-red-500/10' :
-                               anomaly.severity === 'high' ? 'border-orange-500/50 bg-orange-500/10' :
-                               'border-yellow-500/50 bg-yellow-500/10';
+          const severityColor =
+            anomaly.severity === 'critical'
+              ? 'border-red-500/50 bg-red-500/10'
+              : anomaly.severity === 'high'
+                ? 'border-orange-500/50 bg-orange-500/10'
+                : 'border-yellow-500/50 bg-yellow-500/10';
 
           return (
             <div key={anomaly.id} className={`border rounded-lg p-4 ${severityColor}`}>
@@ -151,11 +160,15 @@ export function MonitoringPanel({ apiBase }: MonitoringPanelProps) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-white">{anomaly.metric_name}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-xs uppercase ${
-                      anomaly.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                      anomaly.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                      'bg-yellow-500/20 text-yellow-500'
-                    }`}>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-xs uppercase ${
+                        anomaly.severity === 'critical'
+                          ? 'bg-red-500/20 text-red-400'
+                          : anomaly.severity === 'high'
+                            ? 'bg-orange-500/20 text-orange-400'
+                            : 'bg-yellow-500/20 text-yellow-500'
+                      }`}
+                    >
                       {anomaly.severity}
                     </span>
                   </div>
@@ -197,7 +210,9 @@ export function MonitoringPanel({ apiBase }: MonitoringPanelProps) {
             aria-controls="anomalies-panel"
             onClick={() => setActiveTab('anomalies')}
             className={`px-3 py-1.5 text-sm rounded transition-colors ${
-              activeTab === 'anomalies' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white'
+              activeTab === 'anomalies'
+                ? 'bg-white/10 text-white'
+                : 'text-white/50 hover:text-white'
             }`}
           >
             Anomalies ({anomalies.length})

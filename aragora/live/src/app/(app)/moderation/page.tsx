@@ -66,23 +66,33 @@ export default function ModerationPage() {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Total Checks</span>
-            <span className="text-sm font-theme-data text-[var(--acid-green)]">{stats.checks.toLocaleString()}</span>
+            <span className="text-sm font-theme-data text-[var(--acid-green)]">
+              {stats.checks.toLocaleString()}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Blocked</span>
-            <span className="text-sm font-theme-data text-red-400">{stats.blocked.toLocaleString()}</span>
+            <span className="text-sm font-theme-data text-red-400">
+              {stats.blocked.toLocaleString()}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Flagged</span>
-            <span className="text-sm font-theme-data text-yellow-400">{stats.flagged.toLocaleString()}</span>
+            <span className="text-sm font-theme-data text-yellow-400">
+              {stats.flagged.toLocaleString()}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Passed</span>
-            <span className="text-sm font-theme-data text-green-400">{stats.passed.toLocaleString()}</span>
+            <span className="text-sm font-theme-data text-green-400">
+              {stats.passed.toLocaleString()}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Cache Hits</span>
-            <span className="text-sm font-theme-data text-[var(--acid-cyan)]">{stats.cache_hits.toLocaleString()}</span>
+            <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+              {stats.cache_hits.toLocaleString()}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Errors</span>
@@ -115,10 +125,7 @@ export default function ModerationPage() {
 
   // Handle threshold save
   const handleSaveThresholds = async () => {
-    await updateConfig({
-      block_threshold: blockThreshold,
-      review_threshold: reviewThreshold,
-    });
+    await updateConfig({ block_threshold: blockThreshold, review_threshold: reviewThreshold });
   };
 
   return (
@@ -130,7 +137,9 @@ export default function ModerationPage() {
         <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">CONTENT MODERATION</h1>
+            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">
+              CONTENT MODERATION
+            </h1>
             <p className="text-text-muted text-sm font-theme-data">
               Review flagged content and configure spam filtering thresholds
             </p>
@@ -159,8 +168,12 @@ export default function ModerationPage() {
                     {/* Block Threshold */}
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <label className="text-xs font-theme-data text-text-muted">Block Threshold</label>
-                        <span className="text-sm font-theme-data text-red-400">{blockThreshold.toFixed(2)}</span>
+                        <label className="text-xs font-theme-data text-text-muted">
+                          Block Threshold
+                        </label>
+                        <span className="text-sm font-theme-data text-red-400">
+                          {blockThreshold.toFixed(2)}
+                        </span>
                       </div>
                       <input
                         type="range"
@@ -179,8 +192,12 @@ export default function ModerationPage() {
                     {/* Review Threshold */}
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <label className="text-xs font-theme-data text-text-muted">Review Threshold</label>
-                        <span className="text-sm font-theme-data text-yellow-400">{reviewThreshold.toFixed(2)}</span>
+                        <label className="text-xs font-theme-data text-text-muted">
+                          Review Threshold
+                        </label>
+                        <span className="text-sm font-theme-data text-yellow-400">
+                          {reviewThreshold.toFixed(2)}
+                        </span>
                       </div>
                       <input
                         type="range"
@@ -251,7 +268,9 @@ export default function ModerationPage() {
                   ) : queue.length === 0 ? (
                     <div className="p-8 text-center">
                       <div className="text-4xl mb-4">✅</div>
-                      <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">Queue Empty</h3>
+                      <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">
+                        Queue Empty
+                      </h3>
                       <p className="text-text-muted text-sm font-theme-data">
                         No content pending review. All clear!
                       </p>
@@ -276,7 +295,9 @@ export default function ModerationPage() {
               {/* Selected Item Detail */}
               {selectedItem && (
                 <div className="mt-4 border border-[var(--acid-cyan)]/30 bg-surface/50 p-4">
-                  <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">Content Details</h3>
+                  <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-3">
+                    Content Details
+                  </h3>
                   <div className="space-y-3">
                     {/* Full Content */}
                     <div>

@@ -64,21 +64,18 @@ function VerdictBadge({ verdict }: { verdict: Receipt['verdict'] }) {
 // =============================================================================
 
 function TrendIndicator({ trend, value }: { trend: 'up' | 'down' | 'stable'; value?: number }) {
-  const icons = {
-    up: '↑',
-    down: '↓',
-    stable: '→',
-  };
-  const colors = {
-    up: 'text-green-400',
-    down: 'text-red-400',
-    stable: 'text-[var(--text-muted)]',
-  };
+  const icons = { up: '↑', down: '↓', stable: '→' };
+  const colors = { up: 'text-green-400', down: 'text-red-400', stable: 'text-[var(--text-muted)]' };
 
   return (
     <span className={`font-theme-data ${colors[trend]}`}>
       {icons[trend]}
-      {value !== undefined && <span className="ml-1">{value > 0 ? '+' : ''}{value}%</span>}
+      {value !== undefined && (
+        <span className="ml-1">
+          {value > 0 ? '+' : ''}
+          {value}%
+        </span>
+      )}
     </span>
   );
 }
@@ -99,22 +96,42 @@ function DecisionAuditCard({ apiBase }: { apiBase: string }) {
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       // Map to Receipt format
-      const mapped = (data.results || data || []).slice(0, 5).map((r: Record<string, unknown>) => ({
-        id: r.id || r.debate_id || String(Math.random()),
-        timestamp: r.timestamp || new Date().toISOString(),
-        verdict: r.verdict || 'PASS',
-        topic: r.topic || r.question || 'Unnamed Decision',
-        findings_count: r.findings_count || (Array.isArray(r.findings) ? r.findings.length : 0),
-      }));
+      const mapped = (data.results || data || [])
+        .slice(0, 5)
+        .map((r: Record<string, unknown>) => ({
+          id: r.id || r.debate_id || String(Math.random()),
+          timestamp: r.timestamp || new Date().toISOString(),
+          verdict: r.verdict || 'PASS',
+          topic: r.topic || r.question || 'Unnamed Decision',
+          findings_count: r.findings_count || (Array.isArray(r.findings) ? r.findings.length : 0),
+        }));
       setReceipts(mapped);
       setError(null);
     } catch {
       setError('Could not load audit trail');
       // Show mock data for demo
       setReceipts([
-        { id: '1', timestamp: new Date().toISOString(), verdict: 'PASS', topic: 'Q4 Budget Allocation', findings_count: 0 },
-        { id: '2', timestamp: new Date(Date.now() - 3600000).toISOString(), verdict: 'CONDITIONAL', topic: 'Vendor Selection', findings_count: 2 },
-        { id: '3', timestamp: new Date(Date.now() - 7200000).toISOString(), verdict: 'PASS', topic: 'Hiring Decision', findings_count: 0 },
+        {
+          id: '1',
+          timestamp: new Date().toISOString(),
+          verdict: 'PASS',
+          topic: 'Q4 Budget Allocation',
+          findings_count: 0,
+        },
+        {
+          id: '2',
+          timestamp: new Date(Date.now() - 3600000).toISOString(),
+          verdict: 'CONDITIONAL',
+          topic: 'Vendor Selection',
+          findings_count: 2,
+        },
+        {
+          id: '3',
+          timestamp: new Date(Date.now() - 7200000).toISOString(),
+          verdict: 'PASS',
+          topic: 'Hiring Decision',
+          findings_count: 0,
+        },
       ]);
     } finally {
       setLoading(false);
@@ -200,7 +217,9 @@ function ComplianceScoreCard({ apiBase }: { apiBase: string }) {
 
       const passed = results.filter((r: { verdict: string }) => r.verdict === 'PASS').length;
       const failed = results.filter((r: { verdict: string }) => r.verdict === 'FAIL').length;
-      const conditional = results.filter((r: { verdict: string }) => r.verdict === 'CONDITIONAL').length;
+      const conditional = results.filter(
+        (r: { verdict: string }) => r.verdict === 'CONDITIONAL',
+      ).length;
       const total = results.length || 1;
       const score = Math.round((passed / total) * 100);
 
@@ -213,13 +232,7 @@ function ComplianceScoreCard({ apiBase }: { apiBase: string }) {
       });
     } catch {
       // Show mock data
-      setCompliance({
-        score: 87,
-        passed: 42,
-        failed: 3,
-        conditional: 5,
-        trend: 5,
-      });
+      setCompliance({ score: 87, passed: 42, failed: 3, conditional: 5, trend: 5 });
     } finally {
       setLoading(false);
     }
@@ -233,8 +246,8 @@ function ComplianceScoreCard({ apiBase }: { apiBase: string }) {
     ? compliance.score >= 80
       ? 'text-green-400'
       : compliance.score >= 60
-      ? 'text-yellow-400'
-      : 'text-red-400'
+        ? 'text-yellow-400'
+        : 'text-red-400'
     : 'text-[var(--text-muted)]';
 
   return (
@@ -252,7 +265,10 @@ function ComplianceScoreCard({ apiBase }: { apiBase: string }) {
               <div className={`text-4xl font-bold font-theme-data ${scoreColor}`}>
                 {compliance.score}%
               </div>
-              <TrendIndicator trend={compliance.trend >= 0 ? 'up' : 'down'} value={compliance.trend} />
+              <TrendIndicator
+                trend={compliance.trend >= 0 ? 'up' : 'down'}
+                value={compliance.trend}
+              />
             </div>
 
             {/* Progress bar */}
@@ -262,8 +278,8 @@ function ComplianceScoreCard({ apiBase }: { apiBase: string }) {
                   compliance.score >= 80
                     ? 'bg-green-500'
                     : compliance.score >= 60
-                    ? 'bg-yellow-500'
-                    : 'bg-red-500'
+                      ? 'bg-yellow-500'
+                      : 'bg-red-500'
                 }`}
                 style={{ width: `${compliance.score}%` }}
               />
@@ -276,7 +292,9 @@ function ComplianceScoreCard({ apiBase }: { apiBase: string }) {
                 <div className="text-xs text-[var(--text-muted)]">Passed</div>
               </div>
               <div className="p-2 bg-[var(--bg)] rounded">
-                <div className="text-lg font-theme-data text-yellow-400">{compliance.conditional}</div>
+                <div className="text-lg font-theme-data text-yellow-400">
+                  {compliance.conditional}
+                </div>
                 <div className="text-xs text-[var(--text-muted)]">Conditional</div>
               </div>
               <div className="p-2 bg-[var(--bg)] rounded">
@@ -323,12 +341,7 @@ function ActiveWorkflowsCard({ apiBase }: { apiBase: string }) {
       });
     } catch {
       // Show mock data
-      setStats({
-        active: 3,
-        completed_today: 12,
-        failed: 0,
-        pending: 5,
-      });
+      setStats({ active: 3, completed_today: 12, failed: 0, pending: 5 });
     } finally {
       setLoading(false);
     }
@@ -368,9 +381,7 @@ function ActiveWorkflowsCard({ apiBase }: { apiBase: string }) {
               <div className="text-xs text-[var(--text-muted)]">Completed Today</div>
             </div>
             <div className="p-3 bg-[var(--bg)] rounded-lg">
-              <div className="text-2xl font-bold font-theme-data text-red-400">
-                {stats.failed}
-              </div>
+              <div className="text-2xl font-bold font-theme-data text-red-400">{stats.failed}</div>
               <div className="text-xs text-[var(--text-muted)]">Failed</div>
             </div>
           </div>
@@ -404,13 +415,15 @@ function TeamPerformanceCard({ apiBase }: { apiBase: string }) {
       const response = await fetch(`${apiBase}/api/leaderboard-view?limit=5`);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
-      const mapped = (data.agents || data || []).slice(0, 5).map((a: Record<string, unknown>) => ({
-        agent: a.agent || a.name || 'Unknown',
-        elo: a.elo || a.rating || 1500,
-        wins: a.wins || 0,
-        losses: a.losses || 0,
-        trend: (a.trend as TeamMember['trend']) || (Math.random() > 0.5 ? 'up' : 'stable'),
-      }));
+      const mapped = (data.agents || data || [])
+        .slice(0, 5)
+        .map((a: Record<string, unknown>) => ({
+          agent: a.agent || a.name || 'Unknown',
+          elo: a.elo || a.rating || 1500,
+          wins: a.wins || 0,
+          losses: a.losses || 0,
+          trend: (a.trend as TeamMember['trend']) || (Math.random() > 0.5 ? 'up' : 'stable'),
+        }));
       setTeam(mapped);
     } catch {
       // Show mock data

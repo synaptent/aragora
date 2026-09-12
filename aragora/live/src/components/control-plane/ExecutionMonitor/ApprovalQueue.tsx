@@ -15,11 +15,7 @@ export interface ApprovalQueueProps {
 /**
  * Queue component for handling human approval requests in workflows.
  */
-export function ApprovalQueue({
-  requests,
-  onResolve,
-  loadingStates = {},
-}: ApprovalQueueProps) {
+export function ApprovalQueue({ requests, onResolve, loadingStates = {} }: ApprovalQueueProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
 
@@ -27,14 +23,14 @@ export function ApprovalQueue({
     (requestId: string) => {
       onResolve(requestId, true, notes[requestId]);
     },
-    [onResolve, notes]
+    [onResolve, notes],
   );
 
   const handleReject = useCallback(
     (requestId: string) => {
       onResolve(requestId, false, notes[requestId]);
     },
-    [onResolve, notes]
+    [onResolve, notes],
   );
 
   const toggleExpand = useCallback((id: string) => {
@@ -59,8 +55,7 @@ export function ApprovalQueue({
       {requests.map((request) => {
         const isExpanded = expandedId === request.id;
         const isLoading = loadingStates[request.id];
-        const isOverdue =
-          request.deadline && new Date(request.deadline) < new Date();
+        const isOverdue = request.deadline && new Date(request.deadline) < new Date();
 
         return (
           <div
@@ -87,8 +82,7 @@ export function ApprovalQueue({
                 <div>
                   <div className="text-sm font-theme-data text-text">{request.step_name}</div>
                   <div className="text-xs text-text-muted">
-                    Requested{' '}
-                    {new Date(request.requested_at).toLocaleString()}
+                    Requested {new Date(request.requested_at).toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -134,9 +128,7 @@ export function ApprovalQueue({
 
                 {/* Notes input */}
                 <div className="mt-4">
-                  <label className="block text-xs text-text-muted mb-1">
-                    Notes (optional)
-                  </label>
+                  <label className="block text-xs text-text-muted mb-1">Notes (optional)</label>
                   <textarea
                     value={notes[request.id] || ''}
                     onChange={(e) => updateNotes(request.id, e.target.value)}

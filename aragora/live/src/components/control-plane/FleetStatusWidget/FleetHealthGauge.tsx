@@ -28,24 +28,12 @@ export function FleetHealthGauge({
 }: FleetHealthGaugeProps) {
   const { color, bgColor, label } = useMemo(() => {
     if (health >= 80) {
-      return {
-        color: 'stroke-green-400',
-        bgColor: 'stroke-green-900/30',
-        label: 'Healthy',
-      };
+      return { color: 'stroke-green-400', bgColor: 'stroke-green-900/30', label: 'Healthy' };
     }
     if (health >= 50) {
-      return {
-        color: 'stroke-yellow-400',
-        bgColor: 'stroke-yellow-900/30',
-        label: 'Degraded',
-      };
+      return { color: 'stroke-yellow-400', bgColor: 'stroke-yellow-900/30', label: 'Degraded' };
     }
-    return {
-      color: 'stroke-crimson',
-      bgColor: 'stroke-red-900/30',
-      label: 'Critical',
-    };
+    return { color: 'stroke-crimson', bgColor: 'stroke-red-900/30', label: 'Critical' };
   }, [health]);
 
   // Calculate SVG parameters
@@ -56,11 +44,7 @@ export function FleetHealthGauge({
 
   return (
     <div className={`relative inline-flex flex-col items-center ${className}`}>
-      <svg
-        width={size}
-        height={size}
-        className="transform -rotate-90"
-      >
+      <svg width={size} height={size} className="transform -rotate-90">
         {/* Background circle */}
         <circle
           cx={center}
@@ -86,17 +70,11 @@ export function FleetHealthGauge({
 
       {/* Center text */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-lg font-theme-data font-bold text-text">
-          {Math.round(health)}%
-        </span>
+        <span className="text-lg font-theme-data font-bold text-text">{Math.round(health)}%</span>
       </div>
 
       {/* Label below gauge */}
-      {showLabel && (
-        <span className="mt-1 text-xs font-theme-data text-text-muted">
-          {label}
-        </span>
-      )}
+      {showLabel && <span className="mt-1 text-xs font-theme-data text-text-muted">{label}</span>}
     </div>
   );
 }

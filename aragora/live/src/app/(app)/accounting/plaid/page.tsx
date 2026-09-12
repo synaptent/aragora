@@ -23,13 +23,7 @@ import { logger } from '@/utils/logger';
 // Plaid Link types (from react-plaid-link)
 interface PlaidLinkOnSuccessMetadata {
   institution: { name: string; institution_id: string } | null;
-  accounts: Array<{
-    id: string;
-    name: string;
-    mask: string;
-    type: string;
-    subtype: string;
-  }>;
+  accounts: Array<{ id: string; name: string; mask: string; type: string; subtype: string }>;
   link_session_id: string;
 }
 
@@ -57,7 +51,9 @@ function PlaidLinkContent() {
   const { tokens } = useAuth();
 
   const [linkToken, setLinkToken] = useState<string | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'linking' | 'exchanging' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<
+    'loading' | 'ready' | 'linking' | 'exchanging' | 'success' | 'error'
+  >('loading');
   const [error, setError] = useState<string | null>(null);
   const [linkedAccounts, setLinkedAccounts] = useState<PlaidLinkOnSuccessMetadata['accounts']>([]);
   const [institutionName, setInstitutionName] = useState<string>('');
@@ -135,18 +131,21 @@ function PlaidLinkContent() {
         setStatus('error');
       }
     },
-    [backendConfig.api, tokens?.access_token, router]
+    [backendConfig.api, tokens?.access_token, router],
   );
 
-  const onExit: PlaidLinkOnExit = useCallback((plaidError, _metadata) => {
-    if (plaidError) {
-      setError(plaidError.display_message || plaidError.error_message);
-      setStatus('error');
-    } else {
-      // User cancelled
-      router.push('/accounting');
-    }
-  }, [router]);
+  const onExit: PlaidLinkOnExit = useCallback(
+    (plaidError, _metadata) => {
+      if (plaidError) {
+        setError(plaidError.display_message || plaidError.error_message);
+        setStatus('error');
+      } else {
+        // User cancelled
+        router.push('/accounting');
+      }
+    },
+    [router],
+  );
 
   const onEvent: PlaidLinkOnEvent = useCallback((eventName, metadata) => {
     // Log events for debugging
@@ -162,12 +161,7 @@ function PlaidLinkContent() {
     const Plaid = (window as any).Plaid;
 
     if (Plaid) {
-      const handler = Plaid.create({
-        token: linkToken,
-        onSuccess,
-        onExit,
-        onEvent,
-      });
+      const handler = Plaid.create({ token: linkToken, onSuccess, onExit, onEvent });
       handler.open();
     } else {
       // Plaid SDK not loaded - show manual fallback or demo mode
@@ -177,8 +171,20 @@ function PlaidLinkContent() {
         onSuccess('demo_public_token', {
           institution: { name: 'Demo Bank', institution_id: 'demo_inst' },
           accounts: [
-            { id: 'demo_acc_1', name: 'Checking', mask: '1234', type: 'depository', subtype: 'checking' },
-            { id: 'demo_acc_2', name: 'Savings', mask: '5678', type: 'depository', subtype: 'savings' },
+            {
+              id: 'demo_acc_1',
+              name: 'Checking',
+              mask: '1234',
+              type: 'depository',
+              subtype: 'checking',
+            },
+            {
+              id: 'demo_acc_2',
+              name: 'Savings',
+              mask: '5678',
+              type: 'depository',
+              subtype: 'savings',
+            },
           ],
           link_session_id: 'demo_session',
         });
@@ -195,9 +201,7 @@ function PlaidLinkContent() {
             <>
               <div className="w-16 h-16 mx-auto mb-6 border-4 border-[var(--accent)] border-t-transparent rounded-full animate-spin" />
               <h2 className="text-lg font-theme-data mb-2">Initializing...</h2>
-              <p className="text-sm text-[var(--muted)]">
-                Preparing secure bank connection
-              </p>
+              <p className="text-sm text-[var(--muted)]">Preparing secure bank connection</p>
             </>
           )}
 
@@ -209,8 +213,8 @@ function PlaidLinkContent() {
                 Connect Your Bank
               </h2>
               <p className="text-sm text-[var(--muted)] mb-6">
-                Securely link your bank accounts via Plaid for automatic
-                transaction sync and reconciliation.
+                Securely link your bank accounts via Plaid for automatic transaction sync and
+                reconciliation.
               </p>
 
               <div className="space-y-4 mb-6 text-left">
@@ -260,9 +264,7 @@ function PlaidLinkContent() {
             <>
               <div className="w-16 h-16 mx-auto mb-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin" />
               <h2 className="text-lg font-theme-data mb-2">Almost Done...</h2>
-              <p className="text-sm text-[var(--muted)]">
-                Securely linking your accounts
-              </p>
+              <p className="text-sm text-[var(--muted)]">Securely linking your accounts</p>
             </>
           )}
 
@@ -272,9 +274,7 @@ function PlaidLinkContent() {
               <div className="w-16 h-16 mx-auto mb-6 bg-green-500/20 rounded-full flex items-center justify-center">
                 <span className="text-3xl text-green-400">&#10003;</span>
               </div>
-              <h2 className="text-xl font-theme-data text-green-400 mb-2">
-                Bank Connected!
-              </h2>
+              <h2 className="text-xl font-theme-data text-green-400 mb-2">Bank Connected!</h2>
               <p className="text-sm text-[var(--muted)] mb-4">
                 Successfully linked {linkedAccounts.length} account
                 {linkedAccounts.length !== 1 ? 's' : ''} from {institutionName}
@@ -287,16 +287,12 @@ function PlaidLinkContent() {
                     className="flex items-center justify-between py-2 border-b border-[var(--border)] last:border-0"
                   >
                     <span className="text-sm">{account.name}</span>
-                    <span className="text-xs text-[var(--muted)]">
-                      ••••{account.mask}
-                    </span>
+                    <span className="text-xs text-[var(--muted)]">••••{account.mask}</span>
                   </div>
                 ))}
               </div>
 
-              <p className="text-xs text-[var(--muted)]">
-                Redirecting to accounting...
-              </p>
+              <p className="text-xs text-[var(--muted)]">Redirecting to accounting...</p>
             </>
           )}
 
@@ -306,9 +302,7 @@ function PlaidLinkContent() {
               <div className="w-16 h-16 mx-auto mb-6 bg-red-500/20 rounded-full flex items-center justify-center">
                 <span className="text-3xl text-red-400">&#10007;</span>
               </div>
-              <h2 className="text-xl font-theme-data text-red-400 mb-2">
-                Connection Failed
-              </h2>
+              <h2 className="text-xl font-theme-data text-red-400 mb-2">Connection Failed</h2>
               <p className="text-sm text-[var(--muted)] mb-6">
                 {error || 'Something went wrong. Please try again.'}
               </p>

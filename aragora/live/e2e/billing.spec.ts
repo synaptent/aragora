@@ -20,21 +20,12 @@ const mockSubscription = {
     current_period_start: '2026-01-01T00:00:00Z',
     current_period_end: '2026-02-01T00:00:00Z',
     cancel_at_period_end: false,
-    payment_method: {
-      type: 'card',
-      last4: '4242',
-      brand: 'visa',
-    },
+    payment_method: { type: 'card', last4: '4242', brand: 'visa' },
   },
 };
 
 const mockFreeSubscription = {
-  subscription: {
-    tier: 'free',
-    status: 'active',
-    debates_limit: 10,
-    debates_used: 5,
-  },
+  subscription: { tier: 'free', status: 'active', debates_limit: 10, debates_used: 5 },
 };
 
 // Mock usage data
@@ -86,9 +77,7 @@ const mockInvoices = {
   ],
 };
 
-const mockNoInvoices = {
-  invoices: [],
-};
+const mockNoInvoices = { invoices: [] };
 
 // Mock forecast
 const mockForecast = {
@@ -147,15 +136,18 @@ test.describe('Billing Page', () => {
 
       // Mock authentication
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -176,15 +168,18 @@ test.describe('Billing Page', () => {
       await mockApiResponse(page, '**/api/billing/plans', mockPlans);
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -203,15 +198,18 @@ test.describe('Billing Page', () => {
       await mockApiResponse(page, '**/api/billing/plans', mockPlans);
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -232,15 +230,18 @@ test.describe('Billing Page', () => {
       await mockApiResponse(page, '**/api/billing/plans', mockPlans);
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -258,15 +259,18 @@ test.describe('Billing Page', () => {
       await mockApiResponse(page, '**/api/billing/plans', mockPlans);
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -286,15 +290,18 @@ test.describe('Billing Page', () => {
       await mockApiResponse(page, '**/api/billing/plans', mockPlans);
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -307,7 +314,9 @@ test.describe('Billing Page', () => {
       }
 
       // Should show plan options
-      await expect(page.locator('text=/Enterprise|Pro|Business/i').first()).toBeVisible({ timeout: 10000 });
+      await expect(page.locator('text=/Enterprise|Pro|Business/i').first()).toBeVisible({
+        timeout: 10000,
+      });
     });
   });
 
@@ -320,15 +329,18 @@ test.describe('Billing Page', () => {
       await mockApiResponse(page, '**/api/billing/plans', mockPlans);
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -352,15 +364,18 @@ test.describe('Billing Page', () => {
       await mockApiResponse(page, '**/api/billing/plans', mockPlans);
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -372,8 +387,14 @@ test.describe('Billing Page', () => {
         await invoicesTab.click();
 
         // Should show empty message or free tier indicator
-        const hasNoInvoices = await page.locator('text=/no invoices|no billing history/i').isVisible().catch(() => false);
-        const hasFreeIndicator = await page.locator('text=/free/i').isVisible().catch(() => false);
+        const hasNoInvoices = await page
+          .locator('text=/no invoices|no billing history/i')
+          .isVisible()
+          .catch(() => false);
+        const hasFreeIndicator = await page
+          .locator('text=/free/i')
+          .isVisible()
+          .catch(() => false);
         expect(hasNoInvoices || hasFreeIndicator).toBe(true);
       }
     });
@@ -388,15 +409,18 @@ test.describe('Billing Page', () => {
       await mockApiResponse(page, '**/api/billing/plans', mockPlans);
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -421,22 +445,23 @@ test.describe('Billing Page', () => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({
-            portal: { url: 'https://billing.stripe.com/session/test' },
-          }),
+          body: JSON.stringify({ portal: { url: 'https://billing.stripe.com/session/test' } }),
         });
       });
 
       await page.addInitScript(() => {
-        localStorage.setItem('auth_tokens', JSON.stringify({
-          access_token: 'mock-token',
-          refresh_token: 'mock-refresh',
-          expires_at: Date.now() + 3600000,
-        }));
-        localStorage.setItem('auth_user', JSON.stringify({
-          id: 'user-123',
-          email: 'test@example.com',
-        }));
+        localStorage.setItem(
+          'auth_tokens',
+          JSON.stringify({
+            access_token: 'mock-token',
+            refresh_token: 'mock-refresh',
+            expires_at: Date.now() + 3600000,
+          }),
+        );
+        localStorage.setItem(
+          'auth_user',
+          JSON.stringify({ id: 'user-123', email: 'test@example.com' }),
+        );
       });
 
       await page.goto('/billing');
@@ -459,7 +484,9 @@ test.describe('Billing Success Page', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Should show success indication
-    await expect(page.locator('text=/success|thank you|confirmed|complete/i').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=/success|thank you|confirmed|complete/i').first()).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test('should have link back to billing', async ({ page, aragoraPage }) => {

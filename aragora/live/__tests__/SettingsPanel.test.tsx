@@ -15,16 +15,11 @@ import { SettingsPanel } from '@/components/settings-panel';
 // Mock the hooks – keep the real AuthContext so renderWithProviders can wrap with AuthContext.Provider
 jest.mock('../src/context/AuthContext', () => {
   const actual = jest.requireActual('../src/context/AuthContext');
-  return {
-    ...actual,
-    useAuth: () => mockAuth,
-  };
+  return { ...actual, useAuth: () => mockAuth };
 });
 
 jest.mock('../src/components/BackendSelector', () => ({
-  useBackend: () => ({
-    config: { api: 'http://localhost:8080' },
-  }),
+  useBackend: () => ({ config: { api: 'http://localhost:8080' } }),
 }));
 
 const mockAuth = {
@@ -55,16 +50,18 @@ window.confirm = jest.fn();
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: jest.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
+  value: jest
+    .fn()
+    .mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      dispatchEvent: jest.fn(),
+    })),
 });
 
 function setupMocks() {

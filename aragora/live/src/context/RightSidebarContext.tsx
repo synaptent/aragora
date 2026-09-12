@@ -63,21 +63,25 @@ export function RightSidebarProvider({ children }: { children: ReactNode }) {
     setActivityContentState(content);
   }, []);
 
-  const setContext = useCallback((context: {
-    title?: string;
-    subtitle?: string;
-    statsContent?: ReactNode;
-    propertiesContent?: ReactNode;
-    actionsContent?: ReactNode;
-    activityContent?: ReactNode;
-  }) => {
-    if (context.title !== undefined) setTitleState(context.title);
-    if (context.subtitle !== undefined) setSubtitle(context.subtitle);
-    if (context.statsContent !== undefined) setStatsContentState(context.statsContent);
-    if (context.propertiesContent !== undefined) setPropertiesContentState(context.propertiesContent);
-    if (context.actionsContent !== undefined) setActionsContentState(context.actionsContent);
-    if (context.activityContent !== undefined) setActivityContentState(context.activityContent);
-  }, []);
+  const setContext = useCallback(
+    (context: {
+      title?: string;
+      subtitle?: string;
+      statsContent?: ReactNode;
+      propertiesContent?: ReactNode;
+      actionsContent?: ReactNode;
+      activityContent?: ReactNode;
+    }) => {
+      if (context.title !== undefined) setTitleState(context.title);
+      if (context.subtitle !== undefined) setSubtitle(context.subtitle);
+      if (context.statsContent !== undefined) setStatsContentState(context.statsContent);
+      if (context.propertiesContent !== undefined)
+        setPropertiesContentState(context.propertiesContent);
+      if (context.actionsContent !== undefined) setActionsContentState(context.actionsContent);
+      if (context.activityContent !== undefined) setActivityContentState(context.activityContent);
+    },
+    [],
+  );
 
   const clearContext = useCallback(() => {
     setTitleState('Context');
@@ -88,41 +92,40 @@ export function RightSidebarProvider({ children }: { children: ReactNode }) {
     setActivityContentState(null);
   }, []);
 
-  const value = useMemo<RightSidebarContextType>(() => ({
-    title,
-    subtitle,
-    statsContent,
-    propertiesContent,
-    actionsContent,
-    activityContent,
-    setTitle,
-    setStatsContent,
-    setPropertiesContent,
-    setActionsContent,
-    setActivityContent,
-    setContext,
-    clearContext,
-  }), [
-    title,
-    subtitle,
-    statsContent,
-    propertiesContent,
-    actionsContent,
-    activityContent,
-    setTitle,
-    setStatsContent,
-    setPropertiesContent,
-    setActionsContent,
-    setActivityContent,
-    setContext,
-    clearContext,
-  ]);
-
-  return (
-    <RightSidebarContext.Provider value={value}>
-      {children}
-    </RightSidebarContext.Provider>
+  const value = useMemo<RightSidebarContextType>(
+    () => ({
+      title,
+      subtitle,
+      statsContent,
+      propertiesContent,
+      actionsContent,
+      activityContent,
+      setTitle,
+      setStatsContent,
+      setPropertiesContent,
+      setActionsContent,
+      setActivityContent,
+      setContext,
+      clearContext,
+    }),
+    [
+      title,
+      subtitle,
+      statsContent,
+      propertiesContent,
+      actionsContent,
+      activityContent,
+      setTitle,
+      setStatsContent,
+      setPropertiesContent,
+      setActionsContent,
+      setActivityContent,
+      setContext,
+      clearContext,
+    ],
   );
+
+  return <RightSidebarContext.Provider value={value}>{children}</RightSidebarContext.Provider>;
 }
 
 export function useRightSidebar() {

@@ -46,14 +46,8 @@ interface SharedInboxMessage {
   tags: string[];
   priority?: string;
   trust_wedge?: {
-    receipt: {
-      receipt_id: string;
-      state: string;
-      canonical_receipt_id?: string | null;
-    };
-    decision: {
-      final_action: string;
-    };
+    receipt: { receipt_id: string; state: string; canonical_receipt_id?: string | null };
+    decision: { final_action: string };
   } | null;
 }
 
@@ -61,15 +55,8 @@ interface RoutingRule {
   id: string;
   name: string;
   workspace_id: string;
-  conditions: Array<{
-    field: string;
-    operator: string;
-    value: string;
-  }>;
-  actions: Array<{
-    type: string;
-    target?: string;
-  }>;
+  conditions: Array<{ field: string; operator: string; value: string }>;
+  actions: Array<{ type: string; target?: string }>;
   priority: number;
   enabled: boolean;
   stats: { total_matches: number };
@@ -123,12 +110,7 @@ function PriorityIndicator({ priority }: { priority?: string }) {
     medium: 'text-[var(--acid-yellow)]',
     low: 'text-[var(--acid-cyan)]',
   };
-  const icons: Record<string, string> = {
-    critical: '!!!',
-    high: '!!',
-    medium: '!',
-    low: '-',
-  };
+  const icons: Record<string, string> = { critical: '!!!', high: '!!', medium: '!', low: '-' };
   return (
     <span className={`text-xs font-theme-data ${colors[priority] || 'text-muted'}`}>
       {icons[priority] || ''}
@@ -187,9 +169,7 @@ export default function SharedInboxPage() {
     try {
       const response = await fetch(
         `${backendConfig.api}/api/v1/inbox/shared?workspace_id=${workspaceId}`,
-        {
-          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-        }
+        { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
       );
       if (response.ok) {
         const data = await response.json();
@@ -216,9 +196,7 @@ export default function SharedInboxPage() {
 
         const response = await fetch(
           `${backendConfig.api}/api/v1/inbox/shared/${inboxId}/messages?${params}`,
-          {
-            headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-          }
+          { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
         );
         if (response.ok) {
           const data = await response.json();
@@ -234,16 +212,14 @@ export default function SharedInboxPage() {
         console.error('Error fetching messages:', error);
       }
     },
-    [backendConfig.api, tokens?.access_token, statusFilter]
+    [backendConfig.api, tokens?.access_token, statusFilter],
   );
 
   const fetchRules = useCallback(async () => {
     try {
       const response = await fetch(
         `${backendConfig.api}/api/v1/inbox/routing/rules?workspace_id=${workspaceId}`,
-        {
-          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-        }
+        { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
       );
       if (response.ok) {
         const data = await response.json();
@@ -314,7 +290,7 @@ export default function SharedInboxPage() {
             Authorization: `Bearer ${tokens?.access_token || ''}`,
           },
           body: JSON.stringify({ assigned_to: assignedTo }),
-        }
+        },
       );
       fetchMessages(selectedInbox.id);
     } catch {
@@ -335,7 +311,7 @@ export default function SharedInboxPage() {
             Authorization: `Bearer ${tokens?.access_token || ''}`,
           },
           body: JSON.stringify({ status: newStatus }),
-        }
+        },
       );
       fetchMessages(selectedInbox.id);
     } catch {
@@ -360,7 +336,7 @@ export default function SharedInboxPage() {
             auto_approve: false,
             auto_execute: false,
           }),
-        }
+        },
       );
       if (response.ok) {
         const json = await response.json();
@@ -392,7 +368,7 @@ export default function SharedInboxPage() {
   const handleReceiptReview = async (
     messageId: string,
     choice: 'approve' | 'reject',
-    execute = false
+    execute = false,
   ) => {
     const receiptId = debateResults[messageId]?.receipt?.receipt_id;
     if (!receiptId) return;
@@ -408,7 +384,7 @@ export default function SharedInboxPage() {
             Authorization: `Bearer ${tokens?.access_token || ''}`,
           },
           body: JSON.stringify({ choice, execute }),
-        }
+        },
       );
 
       const json = await response.json().catch(() => ({}));
@@ -435,10 +411,7 @@ export default function SharedInboxPage() {
     } catch {
       setDebateResults((prev) => ({
         ...prev,
-        [messageId]: {
-          ...prev[messageId],
-          execution_error: 'Receipt review failed.',
-        },
+        [messageId]: { ...prev[messageId], execution_error: 'Receipt review failed.' },
       }));
     } finally {
       setReceiptActionMessageId(null);
@@ -460,7 +433,7 @@ export default function SharedInboxPage() {
             Authorization: `Bearer ${tokens?.access_token || ''}`,
           },
           body: JSON.stringify({}),
-        }
+        },
       );
 
       const json = await response.json().catch(() => ({}));
@@ -487,10 +460,7 @@ export default function SharedInboxPage() {
     } catch {
       setDebateResults((prev) => ({
         ...prev,
-        [messageId]: {
-          ...prev[messageId],
-          execution_error: 'Receipt execution failed.',
-        },
+        [messageId]: { ...prev[messageId], execution_error: 'Receipt execution failed.' },
       }));
     } finally {
       setReceiptActionMessageId(null);
@@ -538,12 +508,11 @@ export default function SharedInboxPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-theme-data mb-1">SHARED INBOX</h1>
-            <p className="text-muted text-sm font-theme-data">Team collaboration email management</p>
+            <p className="text-muted text-sm font-theme-data">
+              Team collaboration email management
+            </p>
           </div>
-          <button
-            onClick={() => setShowCreateInbox(true)}
-            className="btn btn-primary"
-          >
+          <button onClick={() => setShowCreateInbox(true)} className="btn btn-primary">
             + New Inbox
           </button>
         </div>
@@ -587,10 +556,7 @@ export default function SharedInboxPage() {
                 <div className="col-span-full card p-12 text-center">
                   <div className="text-4xl mb-4">📬</div>
                   <div className="text-muted font-theme-data mb-4">No shared inboxes yet</div>
-                  <button
-                    onClick={() => setShowCreateInbox(true)}
-                    className="btn btn-primary"
-                  >
+                  <button onClick={() => setShowCreateInbox(true)} className="btn btn-primary">
                     Create First Inbox
                   </button>
                 </div>
@@ -747,19 +713,20 @@ export default function SharedInboxPage() {
                         {(message.priority === 'critical' || message.priority === 'high') &&
                           !debateResults[message.id]?.receipt &&
                           !message.trust_wedge?.receipt && (
-                          <button
-                            onClick={() => handleStartDebate(message.id)}
-                            disabled={debatingMessageId === message.id}
-                            className="px-2 py-1 text-xs font-theme-data bg-acid-purple/10 text-acid-purple hover:bg-acid-purple/20 rounded transition-colors disabled:opacity-50"
-                          >
-                            {debatingMessageId === message.id ? 'Staging...' : 'Stage Review'}
-                          </button>
-                        )}
+                            <button
+                              onClick={() => handleStartDebate(message.id)}
+                              disabled={debatingMessageId === message.id}
+                              className="px-2 py-1 text-xs font-theme-data bg-acid-purple/10 text-acid-purple hover:bg-acid-purple/20 rounded transition-colors disabled:opacity-50"
+                            >
+                              {debatingMessageId === message.id ? 'Staging...' : 'Stage Review'}
+                            </button>
+                          )}
                       </div>
 
                       {message.trust_wedge?.decision?.final_action && (
                         <div className="mt-2 text-xs font-theme-data text-muted">
-                          Canonical action: {message.trust_wedge.decision.final_action.toUpperCase()}
+                          Canonical action:{' '}
+                          {message.trust_wedge.decision.final_action.toUpperCase()}
                         </div>
                       )}
 
@@ -775,7 +742,8 @@ export default function SharedInboxPage() {
                             )}
                             {typeof debateResults[message.id].confidence === 'number' && (
                               <span className="text-muted">
-                                confidence: {(debateResults[message.id].confidence! * 100).toFixed(0)}%
+                                confidence:{' '}
+                                {(debateResults[message.id].confidence! * 100).toFixed(0)}%
                               </span>
                             )}
                             {debateResults[message.id].receipt?.state && (
@@ -788,17 +756,23 @@ export default function SharedInboxPage() {
                             <p className="text-muted">{debateResults[message.id].final_answer}</p>
                           )}
                           {debateResults[message.id].receipt_error && (
-                            <p className="text-acid-red mt-1">{debateResults[message.id].receipt_error}</p>
+                            <p className="text-acid-red mt-1">
+                              {debateResults[message.id].receipt_error}
+                            </p>
                           )}
                           {debateResults[message.id].execution_error && (
-                            <p className="text-acid-red mt-1">{debateResults[message.id].execution_error}</p>
+                            <p className="text-acid-red mt-1">
+                              {debateResults[message.id].execution_error}
+                            </p>
                           )}
                           {debateResults[message.id].receipt?.receipt_id && (
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               {debateResults[message.id].receipt?.state === 'created' && (
                                 <>
                                   <button
-                                    onClick={() => handleReceiptReview(message.id, 'approve', false)}
+                                    onClick={() =>
+                                      handleReceiptReview(message.id, 'approve', false)
+                                    }
                                     disabled={receiptActionMessageId === message.id}
                                     className="px-2 py-1 text-xs font-theme-data bg-[var(--accent)]/10 text-[var(--accent)] hover:bg-[var(--accent)]/20 rounded transition-colors disabled:opacity-50"
                                   >
@@ -820,17 +794,20 @@ export default function SharedInboxPage() {
                                   </button>
                                 </>
                               )}
-                              {debateResults[message.id].receipt?.state === 'approved' && !debateResults[message.id].executed && (
-                                <button
-                                  onClick={() => handleReceiptExecute(message.id)}
-                                  disabled={receiptActionMessageId === message.id}
-                                  className="px-2 py-1 text-xs font-theme-data bg-accent/10 text-accent hover:bg-accent/20 rounded transition-colors disabled:opacity-50"
-                                >
-                                  Execute
-                                </button>
-                              )}
+                              {debateResults[message.id].receipt?.state === 'approved' &&
+                                !debateResults[message.id].executed && (
+                                  <button
+                                    onClick={() => handleReceiptExecute(message.id)}
+                                    disabled={receiptActionMessageId === message.id}
+                                    className="px-2 py-1 text-xs font-theme-data bg-accent/10 text-accent hover:bg-accent/20 rounded transition-colors disabled:opacity-50"
+                                  >
+                                    Execute
+                                  </button>
+                                )}
                               {debateResults[message.id].executed && (
-                                <span className="text-[var(--accent)]">Action executed with receipt.</span>
+                                <span className="text-[var(--accent)]">
+                                  Action executed with receipt.
+                                </span>
                               )}
                             </div>
                           )}
@@ -850,10 +827,7 @@ export default function SharedInboxPage() {
                 <span className="text-sm text-muted font-theme-data">
                   {rules.length} routing rule{rules.length !== 1 ? 's' : ''}
                 </span>
-                <button
-                  onClick={() => setShowCreateRule(true)}
-                  className="btn btn-sm btn-ghost"
-                >
+                <button onClick={() => setShowCreateRule(true)} className="btn btn-sm btn-ghost">
                   + Add Rule
                 </button>
               </div>
@@ -862,20 +836,14 @@ export default function SharedInboxPage() {
                 <div className="card p-12 text-center">
                   <div className="text-4xl mb-4">🔀</div>
                   <div className="text-muted font-theme-data mb-4">No routing rules configured</div>
-                  <button
-                    onClick={() => setShowCreateRule(true)}
-                    className="btn btn-primary"
-                  >
+                  <button onClick={() => setShowCreateRule(true)} className="btn btn-primary">
                     Create First Rule
                   </button>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {rules.map((rule) => (
-                    <div
-                      key={rule.id}
-                      className={`card p-4 ${!rule.enabled ? 'opacity-50' : ''}`}
-                    >
+                    <div key={rule.id} className={`card p-4 ${!rule.enabled ? 'opacity-50' : ''}`}>
                       <div className="flex items-start justify-between">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
@@ -946,7 +914,9 @@ export default function SharedInboxPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-theme-data text-muted mb-1">Description</label>
+                  <label className="block text-sm font-theme-data text-muted mb-1">
+                    Description
+                  </label>
                   <input
                     type="text"
                     value={newInboxDescription}
@@ -956,7 +926,9 @@ export default function SharedInboxPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-theme-data text-muted mb-1">Email Address</label>
+                  <label className="block text-sm font-theme-data text-muted mb-1">
+                    Email Address
+                  </label>
                   <input
                     type="email"
                     value={newInboxEmail}
@@ -967,10 +939,7 @@ export default function SharedInboxPage() {
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2 mt-6">
-                <button
-                  onClick={() => setShowCreateInbox(false)}
-                  className="btn btn-ghost"
-                >
+                <button onClick={() => setShowCreateInbox(false)} className="btn btn-ghost">
                   Cancel
                 </button>
                 <button
@@ -997,10 +966,7 @@ export default function SharedInboxPage() {
                 Rule builder coming soon...
               </div>
               <div className="flex items-center justify-end gap-2 mt-6">
-                <button
-                  onClick={() => setShowCreateRule(false)}
-                  className="btn btn-ghost"
-                >
+                <button onClick={() => setShowCreateRule(false)} className="btn btn-ghost">
                   Close
                 </button>
               </div>

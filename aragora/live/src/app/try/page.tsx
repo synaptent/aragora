@@ -27,7 +27,10 @@ const FOLLOW_UP_SUGGESTIONS = [
 const PROGRESS_STEPS = [
   { label: 'Assembling agent panel', subtext: 'Selecting specialists for your question' },
   { label: 'Strategic Analyst weighing in', subtext: 'Evaluating market dynamics and tradeoffs' },
-  { label: 'Devil\'s Advocate probing risks', subtext: 'Stress-testing assumptions and blind spots' },
+  {
+    label: "Devil's Advocate probing risks",
+    subtext: 'Stress-testing assumptions and blind spots',
+  },
   { label: 'Implementation Expert reviewing', subtext: 'Assessing practical feasibility' },
   { label: 'Building consensus', subtext: 'Agents voting on the strongest position' },
   { label: 'Generating verdict', subtext: 'Synthesizing into a decision receipt' },
@@ -112,7 +115,9 @@ function TryPageInner() {
       if (response.status === 429) {
         const retryAfter = response.headers.get('Retry-After');
         const waitSec = retryAfter ? parseInt(retryAfter, 10) : 60;
-        setError(`Rate limit reached. Please try again in ${waitSec > 60 ? `${Math.ceil(waitSec / 60)} minutes` : `${waitSec} seconds`}.`);
+        setError(
+          `Rate limit reached. Please try again in ${waitSec > 60 ? `${Math.ceil(waitSec / 60)} minutes` : `${waitSec} seconds`}.`,
+        );
         setIsAnalyzing(false);
         return;
       }
@@ -153,7 +158,8 @@ function TryPageInner() {
                   parsedResult = {
                     verdict: r.verdict ?? r.consensus ?? 'Analysis Complete',
                     confidence: r.confidence ?? r.consensus_confidence ?? 0.75,
-                    explanation: r.explanation ?? r.summary ?? r.final_answer ?? r.consensus_text ?? '',
+                    explanation:
+                      r.explanation ?? r.summary ?? r.final_answer ?? r.consensus_text ?? '',
                     debateId: r.id,
                     topic: r.topic,
                     participants: r.participants,
@@ -174,7 +180,9 @@ function TryPageInner() {
             setResult({
               verdict: 'Analysis Complete',
               confidence: 0.75,
-              explanation: accumulated.slice(0, 800) || 'The agents have completed their analysis. Sign up to see the full debate transcript and decision receipt.',
+              explanation:
+                accumulated.slice(0, 800) ||
+                'The agents have completed their analysis. Sign up to see the full debate transcript and decision receipt.',
             });
           }
         }
@@ -281,7 +289,10 @@ function TryPageInner() {
             <div className="mb-6 p-3 border border-[var(--warning)]/30 bg-[var(--warning)]/10">
               <p className="text-sm font-theme-data text-[var(--warning)] mb-2">{error}</p>
               <button
-                onClick={() => { setError(null); handleAnalyze(); }}
+                onClick={() => {
+                  setError(null);
+                  handleAnalyze();
+                }}
                 disabled={question.length < 10}
                 className="text-xs font-theme-data px-4 py-1.5 border border-[var(--warning)]/40 text-[var(--warning)] hover:bg-[var(--warning)]/10 transition-colors disabled:opacity-50"
               >
@@ -319,25 +330,50 @@ function TryPageInner() {
                       <div
                         className="w-5 h-5 flex items-center justify-center shrink-0 text-xs font-bold font-theme-data rounded-full border-2 transition-all"
                         style={{
-                          borderColor: isActive || isDone ? 'var(--acid-green)' : 'rgba(57,255,20,0.2)',
-                          color: isDone ? 'var(--bg)' : isActive ? 'var(--acid-green)' : 'rgba(57,255,20,0.3)',
+                          borderColor:
+                            isActive || isDone ? 'var(--acid-green)' : 'rgba(57,255,20,0.2)',
+                          color: isDone
+                            ? 'var(--bg)'
+                            : isActive
+                              ? 'var(--acid-green)'
+                              : 'rgba(57,255,20,0.3)',
                           backgroundColor: isDone ? 'var(--acid-green)' : 'transparent',
                         }}
                       >
                         {isDone ? '✓' : i + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="text-xs font-theme-data" style={{ color: isActive ? 'var(--text)' : 'var(--text-muted)' }}>
+                        <span
+                          className="text-xs font-theme-data"
+                          style={{ color: isActive ? 'var(--text)' : 'var(--text-muted)' }}
+                        >
                           {step.label}
                         </span>
                         {isActive && (
-                          <p className="text-xs font-theme-data text-[var(--text-muted)]/60 mt-0.5">{step.subtext}</p>
+                          <p className="text-xs font-theme-data text-[var(--text-muted)]/60 mt-0.5">
+                            {step.subtext}
+                          </p>
                         )}
                       </div>
                       {isActive && (
-                        <svg className="animate-spin h-4 w-4 shrink-0 text-[var(--acid-green)]" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        <svg
+                          className="animate-spin h-4 w-4 shrink-0 text-[var(--acid-green)]"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
                         </svg>
                       )}
                     </div>
@@ -348,7 +384,9 @@ function TryPageInner() {
               <div className="h-1 bg-[var(--acid-green)]/10 overflow-hidden">
                 <div
                   className="h-full bg-[var(--acid-green)] transition-all duration-1000 ease-out"
-                  style={{ width: `${Math.min(((progressStep + 1) / PROGRESS_STEPS.length) * 100, 95)}%` }}
+                  style={{
+                    width: `${Math.min(((progressStep + 1) / PROGRESS_STEPS.length) * 100, 95)}%`,
+                  }}
                 />
               </div>
               <div className="flex justify-between text-xs font-theme-data text-[var(--text-muted)]/60">

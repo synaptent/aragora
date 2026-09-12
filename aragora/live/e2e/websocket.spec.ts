@@ -98,13 +98,16 @@ test.describe('WebSocket Connectivity', () => {
       // Look for connection status indicators
       const statusIndicator = page.locator(
         '[data-testid="connection-status"], ' +
-        '[aria-label*="connection"], ' +
-        '.connection-status, ' +
-        '[data-testid="ws-status"]'
+          '[aria-label*="connection"], ' +
+          '.connection-status, ' +
+          '[data-testid="ws-status"]',
       );
 
       // Status indicator may or may not be visible
-      const hasIndicator = await statusIndicator.first().isVisible({ timeout: 2000 }).catch(() => false);
+      const hasIndicator = await statusIndicator
+        .first()
+        .isVisible({ timeout: 2000 })
+        .catch(() => false);
 
       // If we have a status indicator, it should be present
       expect(typeof hasIndicator).toBe('boolean');

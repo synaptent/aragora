@@ -61,7 +61,15 @@ export function UseCaseStep({ onNext, onBack }: UseCaseStepProps) {
   const handleSelect = (id: string) => {
     setSelected(id);
     // Cast to the expected union type - use cases are pre-defined and validated
-    setUseCase(id as 'team_decisions' | 'project_planning' | 'vendor_selection' | 'policy_review' | 'technical_decisions' | 'general');
+    setUseCase(
+      id as
+        | 'team_decisions'
+        | 'project_planning'
+        | 'vendor_selection'
+        | 'policy_review'
+        | 'technical_decisions'
+        | 'general',
+    );
   };
 
   const handleNext = () => {
@@ -93,14 +101,9 @@ export function UseCaseStep({ onNext, onBack }: UseCaseStepProps) {
             }`}
           >
             <div className="flex items-start gap-3">
-              <span
-                className="text-xl"
-                dangerouslySetInnerHTML={{ __html: useCase.icon }}
-              />
+              <span className="text-xl" dangerouslySetInnerHTML={{ __html: useCase.icon }} />
               <div>
-                <div className="font-theme-data text-sm text-[var(--accent)]">
-                  {useCase.label}
-                </div>
+                <div className="font-theme-data text-sm text-[var(--accent)]">{useCase.label}</div>
                 <div className="font-theme-data text-xs text-text-muted mt-1">
                   {useCase.description}
                 </div>

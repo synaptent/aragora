@@ -26,9 +26,7 @@ export default function GlobalError({
   useEffect(() => {
     console.error('Global app error:', error);
     const reporter = getCrashReporter();
-    const accepted = reporter.capture(error, {
-      componentName: 'next-global-error-boundary',
-    });
+    const accepted = reporter.capture(error, { componentName: 'next-global-error-boundary' });
     if (accepted) {
       reporter.flush();
     }
@@ -49,7 +47,10 @@ export default function GlobalError({
 
   return (
     <html lang="en" className="dark">
-      <body className="bg-[#0a0a0a] text-[#e0e0e0]" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+      <body
+        className="bg-[#0a0a0a] text-[#e0e0e0]"
+        style={{ fontFamily: 'JetBrains Mono, monospace' }}
+      >
         {/* CRT scanline overlay */}
         <div
           style={{
@@ -82,7 +83,10 @@ export default function GlobalError({
           }}
         />
 
-        <div className="min-h-screen flex items-center justify-center p-4" style={{ position: 'relative', zIndex: 10 }}>
+        <div
+          className="min-h-screen flex items-center justify-center p-4"
+          style={{ position: 'relative', zIndex: 10 }}
+        >
           <div className="max-w-2xl w-full border border-[#ff0040] bg-[#0d0d0d] p-6">
             <div className="text-[#ff0040] text-center mb-6">
               <div className="text-4xl font-bold mb-2" style={{ textShadow: '0 0 10px #ff0040' }}>
@@ -100,9 +104,7 @@ export default function GlobalError({
                 {'>'} {error.message || 'Fatal system error'}
               </div>
               {error.digest && (
-                <div className="text-[#666] text-xs mt-2">
-                  Error digest: {error.digest}
-                </div>
+                <div className="text-[#666] text-xs mt-2">Error digest: {error.digest}</div>
               )}
             </div>
 
@@ -131,7 +133,10 @@ export default function GlobalError({
             </button>
 
             {showDiagnostics && (
-              <div className="bg-[#0a0a0a] border border-[#333] p-3 text-xs" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div
+                className="bg-[#0a0a0a] border border-[#333] p-3 text-xs"
+                style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+              >
                 <div>
                   <span className="text-[#666]">Timestamp: </span>
                   <span className="text-[#00ffff]">{timestamp}</span>
@@ -146,7 +151,9 @@ export default function GlobalError({
                 </div>
                 <div>
                   <span className="text-[#666]">URL: </span>
-                  <span className="text-[#e0e0e0]">{typeof window !== 'undefined' ? window.location.href : 'SSR'}</span>
+                  <span className="text-[#e0e0e0]">
+                    {typeof window !== 'undefined' ? window.location.href : 'SSR'}
+                  </span>
                 </div>
                 <div>
                   <span className="text-[#666]">Hydration Issue: </span>
@@ -165,7 +172,14 @@ export default function GlobalError({
                     {showStack && (
                       <pre
                         className="overflow-x-auto overflow-y-auto whitespace-pre-wrap"
-                        style={{ fontSize: '10px', color: '#666', maxHeight: '10rem', borderTop: '1px solid #333', paddingTop: '0.5rem', marginTop: '0.25rem' }}
+                        style={{
+                          fontSize: '10px',
+                          color: '#666',
+                          maxHeight: '10rem',
+                          borderTop: '1px solid #333',
+                          paddingTop: '0.5rem',
+                          marginTop: '0.25rem',
+                        }}
                       >
                         {error.stack}
                       </pre>

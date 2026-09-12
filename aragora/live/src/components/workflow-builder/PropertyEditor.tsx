@@ -114,7 +114,7 @@ const MultiSelect = memo(function MultiSelect({
         onChange([...selected, option]);
       }
     },
-    [selected, onChange]
+    [selected, onChange],
   );
 
   return (
@@ -202,9 +202,7 @@ function TaskNodeEditor({
           { value: 'function', label: 'Function Call' },
           { value: 'http', label: 'HTTP Request' },
         ]}
-        onChange={(taskType) =>
-          onUpdate({ taskType: taskType as TaskNodeData['taskType'] })
-        }
+        onChange={(taskType) => onUpdate({ taskType: taskType as TaskNodeData['taskType'] })}
       />
       {data.taskType === 'function' && (
         <InputField
@@ -264,9 +262,7 @@ function HumanCheckpointEditor({
           { value: 'presentation', label: 'Presentation' },
         ]}
         onChange={(approvalType) =>
-          onUpdate({
-            approvalType: approvalType as HumanCheckpointNodeData['approvalType'],
-          })
+          onUpdate({ approvalType: approvalType as HumanCheckpointNodeData['approvalType'] })
         }
       />
       <InputField
@@ -330,9 +326,7 @@ function MemoryWriteEditor({
       <InputField
         label="Retention (years)"
         value={String(data.retentionYears || '')}
-        onChange={(v) =>
-          onUpdate({ retentionYears: parseInt(v) || undefined })
-        }
+        onChange={(v) => onUpdate({ retentionYears: parseInt(v) || undefined })}
         type="number"
       />
     </>

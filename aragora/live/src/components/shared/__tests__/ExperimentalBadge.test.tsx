@@ -122,9 +122,7 @@ describe('ExperimentalTag', () => {
 
 describe('ExperimentalBanner', () => {
   it('does not render for stable status', () => {
-    const { container } = render(
-      <ExperimentalBanner status="stable" featureName="Test Feature" />
-    );
+    const { container } = render(<ExperimentalBanner status="stable" featureName="Test Feature" />);
     expect(container.firstChild).toBeNull();
   });
 

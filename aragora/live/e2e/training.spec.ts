@@ -107,7 +107,10 @@ test.describe('Training Export Page', () => {
 
     // Look for export type buttons (SFT, DPO, Gauntlet)
     const sftButton = page.locator('button', { hasText: /sft/i });
-    const hasSft = await sftButton.first().isVisible({ timeout: 3000 }).catch(() => false);
+    const hasSft = await sftButton
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
     expect(hasSft).toBeDefined();
   });
 
@@ -121,7 +124,10 @@ test.describe('Training Export Page', () => {
 
     // Look for tab buttons
     const tabs = page.locator('button').filter({ hasText: /export|formats|history/i });
-    const hasTab = await tabs.first().isVisible({ timeout: 3000 }).catch(() => false);
+    const hasTab = await tabs
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
     expect(hasTab).toBeDefined();
   });
 
@@ -134,8 +140,13 @@ test.describe('Training Export Page', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for configuration inputs (sliders, selects, checkboxes)
-    const inputs = page.locator('input[type="range"], input[type="number"], select, input[type="checkbox"]');
-    const hasInputs = await inputs.first().isVisible({ timeout: 3000 }).catch(() => false);
+    const inputs = page.locator(
+      'input[type="range"], input[type="number"], select, input[type="checkbox"]',
+    );
+    const hasInputs = await inputs
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
     expect(hasInputs).toBeDefined();
   });
 
@@ -256,9 +267,9 @@ test.describe('Training API Endpoints', () => {
   });
 
   test('should handle /api/training/export/sft endpoint', async ({ page }) => {
-    const response = await page.request.post('/api/training/export/sft', {
-      data: { limit: 10, format: 'json' },
-    }).catch(() => null);
+    const response = await page.request
+      .post('/api/training/export/sft', { data: { limit: 10, format: 'json' } })
+      .catch(() => null);
 
     if (response) {
       expect([200, 400, 404, 503]).toContain(response.status());
@@ -276,7 +287,10 @@ test.describe('Training Page Navigation', () => {
 
     // Check for header navigation
     const dashboardLink = page.locator('a[href="/"], a:has-text("DASHBOARD")');
-    const hasNav = await dashboardLink.first().isVisible({ timeout: 3000 }).catch(() => false);
+    const hasNav = await dashboardLink
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
     expect(hasNav).toBeDefined();
   });
 

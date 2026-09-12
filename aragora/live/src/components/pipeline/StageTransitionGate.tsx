@@ -23,10 +23,7 @@ export interface TransitionProvenanceLink {
 }
 
 export interface StageTransitionNodeLookup {
-  [nodeId: string]: {
-    label: string;
-    stage?: string;
-  };
+  [nodeId: string]: { label: string; stage?: string };
 }
 
 export interface StageTransitionGateProps {
@@ -49,10 +46,7 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
     label: 'Approved',
     className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
   },
-  rejected: {
-    label: 'Rejected',
-    className: 'bg-red-500/15 text-red-300 border-red-500/40',
-  },
+  rejected: { label: 'Rejected', className: 'bg-red-500/15 text-red-300 border-red-500/40' },
   revised: {
     label: 'Needs revision',
     className: 'bg-blue-500/15 text-blue-300 border-blue-500/40',
@@ -107,7 +101,8 @@ export function StageTransitionGate({
   }, [nodeLookup, provenance]);
 
   const questionList = useMemo(
-    () => Array.from(new Set(questions.map((question) => question.trim()).filter(Boolean))).slice(0, 3),
+    () =>
+      Array.from(new Set(questions.map((question) => question.trim()).filter(Boolean))).slice(0, 3),
     [questions],
   );
 
@@ -176,8 +171,9 @@ export function StageTransitionGate({
             Provenance
           </p>
           <p className="text-xs text-text-muted font-theme-data">
-            {provenanceSummary.sourceCount} source{provenanceSummary.sourceCount === 1 ? '' : 's'} {'->'}{' '}
-            {provenanceSummary.targetCount} draft{provenanceSummary.targetCount === 1 ? '' : 's'}
+            {provenanceSummary.sourceCount} source{provenanceSummary.sourceCount === 1 ? '' : 's'}{' '}
+            {'->'} {provenanceSummary.targetCount} draft
+            {provenanceSummary.targetCount === 1 ? '' : 's'}
           </p>
           {provenanceSummary.sourceLabels.length > 0 && (
             <p className="text-xs text-text mt-1">
@@ -209,7 +205,10 @@ export function StageTransitionGate({
       )}
 
       {transition.human_notes && (
-        <p className="text-xs text-text-muted mb-2" data-testid={`transition-note-${transition.id}`}>
+        <p
+          className="text-xs text-text-muted mb-2"
+          data-testid={`transition-note-${transition.id}`}
+        >
           Note: {transition.human_notes}
         </p>
       )}

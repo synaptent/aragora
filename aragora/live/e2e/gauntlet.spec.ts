@@ -100,7 +100,10 @@ test.describe('Gauntlet Page', () => {
     await expect(page).toHaveTitle(/Gauntlet|Aragora|Live/i);
     // Should show gauntlet-related heading or content - allow more time for lazy load
     await page.waitForTimeout(2000);
-    const gauntletHeading = page.locator('h1, h2, h3').filter({ hasText: /gauntlet|stress|live/i }).first();
+    const gauntletHeading = page
+      .locator('h1, h2, h3')
+      .filter({ hasText: /gauntlet|stress|live/i })
+      .first();
     const gauntletText = page.locator('text=/gauntlet|stress.?test|live/i').first();
     const mainContent = page.locator('main').first();
     // Wait for any of these to be visible
@@ -139,8 +142,14 @@ test.describe('Gauntlet Page', () => {
 
   test('should allow filtering by verdict', async ({ page }) => {
     // Find verdict filter buttons
-    const passFilter = page.locator('button').filter({ hasText: /^PASS$/i }).first();
-    const _failFilter = page.locator('button').filter({ hasText: /^FAIL$/i }).first();
+    const passFilter = page
+      .locator('button')
+      .filter({ hasText: /^PASS$/i })
+      .first();
+    const _failFilter = page
+      .locator('button')
+      .filter({ hasText: /^FAIL$/i })
+      .first();
 
     if (await passFilter.isVisible({ timeout: 2000 }).catch(() => false)) {
       await passFilter.click();
@@ -155,7 +164,10 @@ test.describe('Gauntlet Page', () => {
   });
 
   test('should refresh results on button click', async ({ page }) => {
-    const refreshButton = page.locator('button').filter({ hasText: /refresh/i }).first();
+    const refreshButton = page
+      .locator('button')
+      .filter({ hasText: /refresh/i })
+      .first();
 
     if (await refreshButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await refreshButton.click();
@@ -210,7 +222,10 @@ test.describe('Gauntlet Results - Details', () => {
     await page.waitForTimeout(2000);
 
     // Find clickable result row - look for any clickable element with result content
-    const resultRow = page.locator('div, tr').filter({ hasText: /investment|gnt_abc/i }).first();
+    const resultRow = page
+      .locator('div, tr')
+      .filter({ hasText: /investment|gnt_abc/i })
+      .first();
 
     const isRowVisible = await resultRow.isVisible({ timeout: 5000 }).catch(() => false);
     if (isRowVisible) {
@@ -233,7 +248,10 @@ test.describe('Gauntlet Results - Details', () => {
       await page.waitForTimeout(500);
 
       // Should show receipt link
-      const receiptLink = page.locator('a, button').filter({ hasText: /receipt/i }).first();
+      const receiptLink = page
+        .locator('a, button')
+        .filter({ hasText: /receipt/i })
+        .first();
       if (await receiptLink.isVisible({ timeout: 2000 }).catch(() => false)) {
         // Link should have correct href
         const href = await receiptLink.getAttribute('href');

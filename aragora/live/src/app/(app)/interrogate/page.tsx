@@ -2,9 +2,19 @@
 
 import { useState } from 'react';
 import { useInterrogation } from '@/hooks/useInterrogation';
-import type { InterrogationStage, InterrogationQuestion, Requirement } from '@/hooks/useInterrogation';
+import type {
+  InterrogationStage,
+  InterrogationQuestion,
+  Requirement,
+} from '@/hooks/useInterrogation';
 
-const STAGES: InterrogationStage[] = ['idle', 'decomposing', 'questioning', 'crystallizing', 'complete'];
+const STAGES: InterrogationStage[] = [
+  'idle',
+  'decomposing',
+  'questioning',
+  'crystallizing',
+  'complete',
+];
 const STAGE_LABELS: Record<InterrogationStage, string> = {
   idle: 'READY',
   decomposing: 'DECOMPOSING',
@@ -46,9 +56,7 @@ function QuestionCard({
         </span>
       </div>
 
-      <p className="text-xs font-theme-data text-[var(--text-muted)] italic">
-        Why: {question.why}
-      </p>
+      <p className="text-xs font-theme-data text-[var(--text-muted)] italic">Why: {question.why}</p>
 
       {question.context && (
         <p className="text-xs font-theme-data text-[var(--text-muted)]">
@@ -115,8 +123,17 @@ const LEVEL_BORDER: Record<Requirement['level'], string> = {
 
 export default function InterrogatePage() {
   const {
-    dimensions, questions, answers, spec, stage, error, loading,
-    start, answer, crystallize, reset,
+    dimensions,
+    questions,
+    answers,
+    spec,
+    stage,
+    error,
+    loading,
+    start,
+    answer,
+    crystallize,
+    reset,
   } = useInterrogation();
 
   const [prompt, setPrompt] = useState('');
@@ -228,7 +245,10 @@ export default function InterrogatePage() {
                 Skip remaining &rarr; crystallize
               </button>
             </div>
-            <QuestionCard question={currentQuestion} onAnswer={(a) => answer(currentQuestion.text, a)} />
+            <QuestionCard
+              question={currentQuestion}
+              onAnswer={(a) => answer(currentQuestion.text, a)}
+            />
           </section>
         )}
 
@@ -249,8 +269,12 @@ export default function InterrogatePage() {
         {/* Crystallizing spinner */}
         {stage === 'crystallizing' && loading && (
           <section className="border border-[var(--border)] bg-[var(--surface)] p-6 rounded text-center">
-            <div className="animate-pulse text-[var(--acid-green)] text-sm mb-1">Crystallizing spec...</div>
-            <p className="text-[10px] text-[var(--text-muted)]">Synthesizing answers into structured specification</p>
+            <div className="animate-pulse text-[var(--acid-green)] text-sm mb-1">
+              Crystallizing spec...
+            </div>
+            <p className="text-[10px] text-[var(--text-muted)]">
+              Synthesizing answers into structured specification
+            </p>
           </section>
         )}
 
@@ -262,24 +286,32 @@ export default function InterrogatePage() {
             </h2>
 
             <div>
-              <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Problem Statement</h3>
+              <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">
+                Problem Statement
+              </h3>
               <p className="text-sm text-[var(--text)]">{spec.problem_statement}</p>
             </div>
 
             {spec.requirements.length > 0 && (
               <div>
-                <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-2">Requirements</h3>
+                <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-2">
+                  Requirements
+                </h3>
                 <div className="space-y-1.5">
                   {spec.requirements.map((req, i) => (
                     <div
                       key={i}
                       className={`flex items-start gap-2 text-xs border-l-2 ${LEVEL_BORDER[req.level]} pl-3 py-1`}
                     >
-                      <span className={`font-bold uppercase text-[10px] w-12 shrink-0 ${LEVEL_COLORS[req.level]}`}>
+                      <span
+                        className={`font-bold uppercase text-[10px] w-12 shrink-0 ${LEVEL_COLORS[req.level]}`}
+                      >
                         {req.level}
                       </span>
                       <span className="text-[var(--text)]">{req.description}</span>
-                      <span className="text-[var(--text-muted)] text-[10px] ml-auto shrink-0">[{req.dimension}]</span>
+                      <span className="text-[var(--text-muted)] text-[10px] ml-auto shrink-0">
+                        [{req.dimension}]
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -288,10 +320,14 @@ export default function InterrogatePage() {
 
             {spec.non_requirements.length > 0 && (
               <div>
-                <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Non-Requirements</h3>
+                <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">
+                  Non-Requirements
+                </h3>
                 <ul className="text-xs text-[var(--text-muted)] space-y-0.5 list-none">
                   {spec.non_requirements.map((nr, i) => (
-                    <li key={i} className="before:content-['x_'] before:text-red-400">{nr}</li>
+                    <li key={i} className="before:content-['x_'] before:text-red-400">
+                      {nr}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -299,10 +335,14 @@ export default function InterrogatePage() {
 
             {spec.success_criteria.length > 0 && (
               <div>
-                <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Success Criteria</h3>
+                <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">
+                  Success Criteria
+                </h3>
                 <ul className="text-xs text-[var(--acid-green)]/80 space-y-0.5 list-none">
                   {spec.success_criteria.map((sc, i) => (
-                    <li key={i} className="before:content-['>>_']">{sc}</li>
+                    <li key={i} className="before:content-['>>_']">
+                      {sc}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -313,7 +353,9 @@ export default function InterrogatePage() {
                 <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Risks</h3>
                 <ul className="text-xs text-yellow-400/80 space-y-0.5 list-none">
                   {spec.risks.map((r, i) => (
-                    <li key={i} className="before:content-['!_']">{r}</li>
+                    <li key={i} className="before:content-['!_']">
+                      {r}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -321,7 +363,9 @@ export default function InterrogatePage() {
 
             {spec.context_summary && (
               <div>
-                <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">Context Summary</h3>
+                <h3 className="text-[10px] text-[var(--text-muted)] uppercase mb-1">
+                  Context Summary
+                </h3>
                 <p className="text-xs text-[var(--text-muted)]">{spec.context_summary}</p>
               </div>
             )}

@@ -1,9 +1,6 @@
 'use client';
 
-import type {
-  AgentBridgeRunDetail,
-  BridgeApiError,
-} from '@/components/autonomous/bridge/types';
+import type { AgentBridgeRunDetail, BridgeApiError } from '@/components/autonomous/bridge/types';
 import { useSWRFetch } from './useSWRFetch';
 
 export interface UseAgentBridgeRunOptions {
@@ -20,7 +17,7 @@ export interface UseAgentBridgeRunResult {
 
 export function useAgentBridgeRun(
   runId: string | null,
-  options: UseAgentBridgeRunOptions = {}
+  options: UseAgentBridgeRunOptions = {},
 ): UseAgentBridgeRunResult {
   const { enabled = true } = options;
   const endpoint = runId ? `/api/v1/agent-bridge/runs/${encodeURIComponent(runId)}` : null;

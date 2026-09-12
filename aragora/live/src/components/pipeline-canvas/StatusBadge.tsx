@@ -32,11 +32,11 @@ const STATUS_LABELS: Record<ExecutionStatus, string> = {
 };
 
 const STATUS_ICONS: Record<ExecutionStatus, string> = {
-  pending: '\u25CB',    // ○
+  pending: '\u25CB', // ○
   in_progress: '\u25D4', // ◔
-  succeeded: '\u2713',   // ✓
-  failed: '\u2717',      // ✗
-  partial: '\u25D1',     // ◑
+  succeeded: '\u2713', // ✓
+  failed: '\u2717', // ✗
+  partial: '\u25D1', // ◑
 };
 
 export const StatusBadge = memo(function StatusBadge({
@@ -53,12 +53,14 @@ export const StatusBadge = memo(function StatusBadge({
   const handleMouseLeave = useCallback(() => setShowTooltip(false), []);
 
   const hasDetails = receiptHash || agent || timestamp;
-  const sizeClasses = size === 'sm'
-    ? 'px-1.5 py-0.5 text-[10px]'
-    : 'px-2 py-1 text-xs';
+  const sizeClasses = size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs';
 
   return (
-    <div className="relative inline-block" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+    <div
+      className="relative inline-block"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       <span
         className={`
           inline-flex items-center gap-1 rounded font-theme-data ring-1

@@ -45,13 +45,7 @@ const NODE_COLORS: Record<string, string> = {
   evidence: '#ffff39',
 };
 
-const NODE_RADIUS = {
-  root: 16,
-  argument: 12,
-  rebuttal: 10,
-  synthesis: 14,
-  evidence: 8,
-};
+const NODE_RADIUS = { root: 16, argument: 12, rebuttal: 10, synthesis: 14, evidence: 8 };
 
 export function ForceGraph({ nodes, width = 800, height = 500, onNodeClick }: ForceGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -60,14 +54,19 @@ export function ForceGraph({ nodes, width = 800, height = 500, onNodeClick }: Fo
   // Build links from parent-child relationships
   const links = useMemo(() => {
     const linkArray: GraphLink[] = [];
-    nodes.forEach(node => {
+    nodes.forEach((node) => {
       if (node.parent_id) {
         linkArray.push({
           source: node.parent_id,
           target: node.id,
-          type: node.type === 'rebuttal' ? 'opposes' :
-                node.type === 'synthesis' ? 'synthesizes' :
-                node.type === 'evidence' ? 'supports' : 'extends',
+          type:
+            node.type === 'rebuttal'
+              ? 'opposes'
+              : node.type === 'synthesis'
+                ? 'synthesizes'
+                : node.type === 'evidence'
+                  ? 'supports'
+                  : 'extends',
         });
       }
     });
@@ -84,10 +83,12 @@ export function ForceGraph({ nodes, width = 800, height = 500, onNodeClick }: Fo
     const g = svg.append('g').attr('class', 'graph-container');
 
     // Create arrow markers for directed edges
-    svg.append('defs').selectAll('marker')
+    svg
+      .append('defs')
+      .selectAll('marker')
       .data(['supports', 'opposes', 'extends', 'synthesizes'])
       .join('marker')
-      .attr('id', d => `arrow-${d}`)
+      .attr('id', (d) => `arrow-${d}`)
       .attr('viewBox', '0 -5 10 10')
       .attr('refX', 20)
       .attr('refY', 0)
@@ -95,30 +96,37 @@ export function ForceGraph({ nodes, width = 800, height = 500, onNodeClick }: Fo
       .attr('markerHeight', 6)
       .attr('orient', 'auto')
       .append('path')
-      .attr('fill', d => d === 'opposes' ? '#ff3939' : d === 'synthesizes' ? '#39ffff' : '#666')
+      .attr('fill', (d) => (d === 'opposes' ? '#ff3939' : d === 'synthesizes' ? '#39ffff' : '#666'))
       .attr('d', 'M0,-5L10,0L0,5');
 
     // Create simulation
-    const simulation = d3.forceSimulation<GraphNode>(nodes)
-      .force('link', d3.forceLink<GraphNode, GraphLink>(links)
-        .id((d) => d.id)
-        .distance(100))
+    const simulation = d3
+      .forceSimulation<GraphNode>(nodes)
+      .force(
+        'link',
+        d3
+          .forceLink<GraphNode, GraphLink>(links)
+          .id((d) => d.id)
+          .distance(100),
+      )
       .force('charge', d3.forceManyBody().strength(-300))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide().radius(30));
 
     // Draw links
-    const link = g.append('g')
+    const link = g
+      .append('g')
       .attr('class', 'links')
       .selectAll('line')
       .data(links)
       .join('line')
-      .attr('stroke', d => d.type === 'opposes' ? '#ff393980' : '#66666680')
+      .attr('stroke', (d) => (d.type === 'opposes' ? '#ff393980' : '#66666680'))
       .attr('stroke-width', 2)
-      .attr('marker-end', d => `url(#arrow-${d.type})`);
+      .attr('marker-end', (d) => `url(#arrow-${d.type})`);
 
     // Draw nodes
-    const node = g.append('g')
+    const node = g
+      .append('g')
       .attr('class', 'nodes')
       .selectAll('g')
       .data(nodes)
@@ -128,25 +136,28 @@ export function ForceGraph({ nodes, width = 800, height = 500, onNodeClick }: Fo
       .call(drag(simulation) as never);
 
     // Node circles
-    node.append('circle')
-      .attr('r', d => NODE_RADIUS[d.type] || 10)
-      .attr('fill', d => NODE_COLORS[d.type] || '#666')
+    node
+      .append('circle')
+      .attr('r', (d) => NODE_RADIUS[d.type] || 10)
+      .attr('fill', (d) => NODE_COLORS[d.type] || '#666')
       .attr('stroke', '#000')
       .attr('stroke-width', 2)
       .attr('opacity', 0.9);
 
     // Node labels
-    node.append('text')
+    node
+      .append('text')
       .attr('dx', 15)
       .attr('dy', 4)
       .attr('font-size', '10px')
       .attr('fill', '#ccc')
       .attr('font-family', 'monospace')
-      .text(d => d.agent);
+      .text((d) => d.agent);
 
     // Tooltip on hover
-    node.append('title')
-      .text(d => `${d.type}: ${d.content.slice(0, 100)}${d.content.length > 100 ? '...' : ''}`);
+    node
+      .append('title')
+      .text((d) => `${d.type}: ${d.content.slice(0, 100)}${d.content.length > 100 ? '...' : ''}`);
 
     // Click handler
     node.on('click', (event, d) => {
@@ -221,12 +232,17 @@ export function ForceGraph({ nodes, width = 800, height = 500, onNodeClick }: Fo
       {selectedNode && (
         <div className="absolute top-2 right-2 w-72 p-3 bg-surface border border-[var(--accent)]/30 rounded shadow-lg">
           <div className="flex items-center justify-between mb-2">
-            <span className={`px-2 py-0.5 rounded text-xs font-theme-data ${
-              selectedNode.type === 'argument' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-              selectedNode.type === 'rebuttal' ? 'bg-acid-red/20 text-acid-red' :
-              selectedNode.type === 'synthesis' ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]' :
-              'bg-surface text-text-muted'
-            }`}>
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-theme-data ${
+                selectedNode.type === 'argument'
+                  ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                  : selectedNode.type === 'rebuttal'
+                    ? 'bg-acid-red/20 text-acid-red'
+                    : selectedNode.type === 'synthesis'
+                      ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]'
+                      : 'bg-surface text-text-muted'
+              }`}
+            >
               {selectedNode.type}
             </span>
             <button

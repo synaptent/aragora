@@ -29,9 +29,7 @@ export function NextStepsPanel({ debateId }: NextStepsPanelProps) {
 
   return (
     <section className="container mx-auto px-4 mt-8 mb-4">
-      <div className="text-[var(--accent)] font-theme-data text-sm mb-4">
-        {'>'} NEXT STEPS
-      </div>
+      <div className="text-[var(--accent)] font-theme-data text-sm mb-4">{'>'} NEXT STEPS</div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Send to Pipeline */}
@@ -74,7 +72,7 @@ export function NextStepsPanel({ debateId }: NextStepsPanelProps) {
               </div>
               <div className="text-xs font-theme-data text-text-muted mt-1">
                 {saveStatus === 'error'
-                  ? (saveError || 'Failed to save. Try again.')
+                  ? saveError || 'Failed to save. Try again.'
                   : saveStatus === 'success'
                     ? 'Debate outcome persisted to the Knowledge Mound.'
                     : 'Persist this debate\u2019s findings to the Knowledge Mound for future reference.'}
@@ -89,9 +87,7 @@ export function NextStepsPanel({ debateId }: NextStepsPanelProps) {
           className="group block bg-surface border border-[var(--accent)]/30 rounded p-4 hover:border-accent hover:bg-accent/5 transition-all"
         >
           <div className="flex items-start gap-3">
-            <span className="text-accent font-theme-data text-lg shrink-0">
-              {'\u21BB'}
-            </span>
+            <span className="text-accent font-theme-data text-lg shrink-0">{'\u21BB'}</span>
             <div>
               <div className="text-sm font-theme-data text-accent group-hover:text-accent transition-colors">
                 SELF-IMPROVE FROM THIS

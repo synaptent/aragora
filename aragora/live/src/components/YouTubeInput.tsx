@@ -96,7 +96,9 @@ export function YouTubeInput({
         };
 
         if (info.duration > maxDurationSeconds) {
-          setError(`Video too long (${formatDuration(info.duration)}). Max: ${formatDuration(maxDurationSeconds)}`);
+          setError(
+            `Video too long (${formatDuration(info.duration)}). Max: ${formatDuration(maxDurationSeconds)}`,
+          );
           setState('error');
           setVideoInfo(info);
           return;
@@ -110,7 +112,7 @@ export function YouTubeInput({
         setVideoInfo(null);
       }
     },
-    [apiBase, maxDurationSeconds]
+    [apiBase, maxDurationSeconds],
   );
 
   // Debounced URL validation
@@ -285,7 +287,9 @@ export function YouTubeInput({
             <div className="text-xs text-text-muted mt-1">
               Duration: {formatDuration(videoInfo.duration)}
               {videoInfo.duration > maxDurationSeconds && (
-                <span className="text-[var(--crimson)] ml-2">(exceeds {formatDuration(maxDurationSeconds)} limit)</span>
+                <span className="text-[var(--crimson)] ml-2">
+                  (exceeds {formatDuration(maxDurationSeconds)} limit)
+                </span>
               )}
             </div>
           </div>
@@ -316,7 +320,8 @@ export function YouTubeInput({
       {/* Help text */}
       {state === 'idle' && !videoInfo && (
         <div className="text-xs text-text-muted">
-          Supports youtube.com and youtu.be URLs. Max video length: {formatDuration(maxDurationSeconds)}.
+          Supports youtube.com and youtu.be URLs. Max video length:{' '}
+          {formatDuration(maxDurationSeconds)}.
         </div>
       )}
     </div>

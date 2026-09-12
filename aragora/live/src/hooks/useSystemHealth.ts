@@ -97,32 +97,19 @@ export interface SystemHealthOverview {
 // Hooks
 // ============================================================================
 
-export function useSystemHealth(
-  options?: UseSWRFetchOptions<{ data: SystemHealthOverview }>
-) {
-  const result = useSWRFetch<{ data: SystemHealthOverview }>(
-    '/api/admin/system-health',
-    {
-      refreshInterval: 30000,
-      ...options,
-    }
-  );
+export function useSystemHealth(options?: UseSWRFetchOptions<{ data: SystemHealthOverview }>) {
+  const result = useSWRFetch<{ data: SystemHealthOverview }>('/api/admin/system-health', {
+    refreshInterval: 30000,
+    ...options,
+  });
 
-  return {
-    ...result,
-    health: result.data?.data ?? null,
-  };
+  return { ...result, health: result.data?.data ?? null };
 }
 
-export function useCircuitBreakers(
-  options?: UseSWRFetchOptions<{ data: SubsystemHealth }>
-) {
+export function useCircuitBreakers(options?: UseSWRFetchOptions<{ data: SubsystemHealth }>) {
   const result = useSWRFetch<{ data: SubsystemHealth }>(
     '/api/admin/system-health/circuit-breakers',
-    {
-      refreshInterval: 15000,
-      ...options,
-    }
+    { refreshInterval: 15000, ...options },
   );
 
   return {
@@ -132,16 +119,11 @@ export function useCircuitBreakers(
   };
 }
 
-export function useSLOStatus(
-  options?: UseSWRFetchOptions<{ data: SLOHealth }>
-) {
-  const result = useSWRFetch<{ data: SLOHealth }>(
-    '/api/admin/system-health/slos',
-    {
-      refreshInterval: 30000,
-      ...options,
-    }
-  );
+export function useSLOStatus(options?: UseSWRFetchOptions<{ data: SLOHealth }>) {
+  const result = useSWRFetch<{ data: SLOHealth }>('/api/admin/system-health/slos', {
+    refreshInterval: 30000,
+    ...options,
+  });
 
   return {
     ...result,
@@ -151,16 +133,11 @@ export function useSLOStatus(
   };
 }
 
-export function useAgentPoolHealth(
-  options?: UseSWRFetchOptions<{ data: AgentPoolHealth }>
-) {
-  const result = useSWRFetch<{ data: AgentPoolHealth }>(
-    '/api/admin/system-health/agents',
-    {
-      refreshInterval: 30000,
-      ...options,
-    }
-  );
+export function useAgentPoolHealth(options?: UseSWRFetchOptions<{ data: AgentPoolHealth }>) {
+  const result = useSWRFetch<{ data: AgentPoolHealth }>('/api/admin/system-health/agents', {
+    refreshInterval: 30000,
+    ...options,
+  });
 
   return {
     ...result,
@@ -171,16 +148,11 @@ export function useAgentPoolHealth(
   };
 }
 
-export function useBudgetStatus(
-  options?: UseSWRFetchOptions<{ data: BudgetInfo }>
-) {
-  const result = useSWRFetch<{ data: BudgetInfo }>(
-    '/api/admin/system-health/budget',
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
-  );
+export function useBudgetStatus(options?: UseSWRFetchOptions<{ data: BudgetInfo }>) {
+  const result = useSWRFetch<{ data: BudgetInfo }>('/api/admin/system-health/budget', {
+    refreshInterval: 60000,
+    ...options,
+  });
 
   return {
     ...result,

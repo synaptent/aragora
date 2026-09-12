@@ -11,7 +11,10 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { DebateThisButton } from '@/components/DebateThisButton';
 
 const ImpasseDetectionPanel = dynamic(
-  () => import('@/components/ImpasseDetectionPanel').then(m => ({ default: m.ImpasseDetectionPanel })),
+  () =>
+    import('@/components/ImpasseDetectionPanel').then((m) => ({
+      default: m.ImpasseDetectionPanel,
+    })),
   {
     ssr: false,
     loading: () => (
@@ -19,7 +22,7 @@ const ImpasseDetectionPanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function ImpassePage() {
@@ -83,18 +86,30 @@ export default function ImpassePage() {
               {'>'} IMPASSE DETECTION
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Detect debate deadlocks, identify pivot claims, and suggest fork points
-              for branching discussions into alternative paths.
+              Detect debate deadlocks, identify pivot claims, and suggest fork points for branching
+              discussions into alternative paths.
             </p>
           </div>
 
           <div className="mb-6 p-4 border border-warning/30 bg-warning/5 rounded">
             <h3 className="text-sm font-theme-data text-warning mb-2">Impasse Analysis Features</h3>
             <ul className="text-xs font-theme-data text-text-muted space-y-1">
-              <li>- <span className="text-[var(--accent)]">Deadlock detection</span>: Identify when debates stall</li>
-              <li>- <span className="text-[var(--accent)]">Pivot claims</span>: Find claims that could break the impasse</li>
-              <li>- <span className="text-[var(--accent)]">Fork suggestions</span>: Branch debates into alternative paths</li>
-              <li>- <span className="text-[var(--accent)]">Resolution strategies</span>: Recommended actions to progress</li>
+              <li>
+                - <span className="text-[var(--accent)]">Deadlock detection</span>: Identify when
+                debates stall
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Pivot claims</span>: Find claims that could
+                break the impasse
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Fork suggestions</span>: Branch debates
+                into alternative paths
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Resolution strategies</span>: Recommended
+                actions to progress
+              </li>
             </ul>
           </div>
 
@@ -120,7 +135,11 @@ export default function ImpassePage() {
               <DebateThisButton
                 question="How should we resolve this debate impasse?"
                 source="impasse"
-                context={activeDebateId ? `Impasse analysis for debate ${activeDebateId}` : 'Debate deadlock detection and resolution'}
+                context={
+                  activeDebateId
+                    ? `Impasse analysis for debate ${activeDebateId}`
+                    : 'Debate deadlock detection and resolution'
+                }
                 variant="button"
               />
             </div>
@@ -141,12 +160,8 @@ export default function ImpassePage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // IMPASSE DETECTION
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // IMPASSE DETECTION</p>
         </footer>
       </main>
     </>

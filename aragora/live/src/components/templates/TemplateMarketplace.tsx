@@ -14,25 +14,20 @@ interface DebateTemplate {
 }
 
 const DIFFICULTY_STYLES: Record<DifficultyLevel, { label: string; className: string }> = {
-  beginner: {
-    label: 'BEGINNER',
-    className: 'bg-green-500/20 text-green-400 border-green-500/30',
-  },
+  beginner: { label: 'BEGINNER', className: 'bg-green-500/20 text-green-400 border-green-500/30' },
   intermediate: {
     label: 'INTERMEDIATE',
     className: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   },
-  advanced: {
-    label: 'ADVANCED',
-    className: 'bg-red-500/20 text-red-400 border-red-500/30',
-  },
+  advanced: { label: 'ADVANCED', className: 'bg-red-500/20 text-red-400 border-red-500/30' },
 };
 
 const CURATED_TEMPLATES: DebateTemplate[] = [
   {
     id: 'architecture_decision',
     title: 'Architecture Decision',
-    description: 'Microservices vs Monolith -- multi-agent trade-off analysis with consensus-driven recommendation.',
+    description:
+      'Microservices vs Monolith -- multi-agent trade-off analysis with consensus-driven recommendation.',
     category: 'Decision Making',
     difficulty: 'intermediate',
     isPro: false,
@@ -40,7 +35,8 @@ const CURATED_TEMPLATES: DebateTemplate[] = [
   {
     id: 'code_review',
     title: 'Code Review',
-    description: 'Should we approve this PR? Adversarial review across security, performance, and maintainability.',
+    description:
+      'Should we approve this PR? Adversarial review across security, performance, and maintainability.',
     category: 'Technical',
     difficulty: 'beginner',
     isPro: false,
@@ -48,7 +44,8 @@ const CURATED_TEMPLATES: DebateTemplate[] = [
   {
     id: 'hiring_decision',
     title: 'Candidate Assessment',
-    description: 'Evaluate a hiring candidate with multi-perspective analysis on skills, culture fit, and growth.',
+    description:
+      'Evaluate a hiring candidate with multi-perspective analysis on skills, culture fit, and growth.',
     category: 'Hiring',
     difficulty: 'intermediate',
     isPro: false,
@@ -56,7 +53,8 @@ const CURATED_TEMPLATES: DebateTemplate[] = [
   {
     id: 'risk_assessment',
     title: 'Risk Analysis',
-    description: 'New product launch risk assessment with mitigation strategies and probability scoring.',
+    description:
+      'New product launch risk assessment with mitigation strategies and probability scoring.',
     category: 'Risk',
     difficulty: 'intermediate',
     isPro: false,
@@ -72,7 +70,8 @@ const CURATED_TEMPLATES: DebateTemplate[] = [
   {
     id: 'soc2_audit',
     title: 'Compliance Audit',
-    description: 'SOC 2 readiness evaluation with gap analysis, evidence review, and remediation plan.',
+    description:
+      'SOC 2 readiness evaluation with gap analysis, evidence review, and remediation plan.',
     category: 'Compliance',
     difficulty: 'advanced',
     isPro: true,
@@ -88,7 +87,8 @@ const CURATED_TEMPLATES: DebateTemplate[] = [
   {
     id: 'incident_postmortem',
     title: 'Incident Postmortem',
-    description: 'Root cause analysis for production outages with blameless timeline reconstruction.',
+    description:
+      'Root cause analysis for production outages with blameless timeline reconstruction.',
     category: 'Technical',
     difficulty: 'advanced',
     isPro: true,
@@ -96,21 +96,20 @@ const CURATED_TEMPLATES: DebateTemplate[] = [
 ];
 
 const CATEGORY_ACCENTS: Record<string, string> = {
-  'Decision Making': 'text-[var(--acid-green)] bg-[var(--acid-green)]/10 border-[var(--acid-green)]/30',
-  'Technical': 'text-purple-400 bg-purple-500/10 border-purple-500/30',
-  'Hiring': 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-  'Risk': 'text-red-400 bg-red-500/10 border-red-500/30',
-  'Strategy': 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
-  'Compliance': 'text-pink-400 bg-pink-500/10 border-pink-500/30',
+  'Decision Making':
+    'text-[var(--acid-green)] bg-[var(--acid-green)]/10 border-[var(--acid-green)]/30',
+  Technical: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
+  Hiring: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+  Risk: 'text-red-400 bg-red-500/10 border-red-500/30',
+  Strategy: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+  Compliance: 'text-pink-400 bg-pink-500/10 border-pink-500/30',
 };
 
 export function TemplateMarketplace() {
   return (
     <div className="mt-8">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
-          {'>'} DEBATE TEMPLATES
-        </h3>
+        <h3 className="text-sm font-theme-data text-[var(--acid-green)]">{'>'} DEBATE TEMPLATES</h3>
         <Link
           href="/templates"
           className="text-xs font-theme-data text-[var(--text-muted)] hover:text-[var(--acid-green)] transition-colors"
@@ -122,7 +121,8 @@ export function TemplateMarketplace() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {CURATED_TEMPLATES.map((template) => {
           const diffStyle = DIFFICULTY_STYLES[template.difficulty];
-          const catStyle = CATEGORY_ACCENTS[template.category] ?? CATEGORY_ACCENTS['Decision Making'];
+          const catStyle =
+            CATEGORY_ACCENTS[template.category] ?? CATEGORY_ACCENTS['Decision Making'];
 
           return (
             <Link
@@ -132,9 +132,7 @@ export function TemplateMarketplace() {
             >
               {/* Category + Pro badge row */}
               <div className="flex items-center justify-between mb-2">
-                <span
-                  className={`px-2 py-0.5 text-[10px] font-theme-data border ${catStyle}`}
-                >
+                <span className={`px-2 py-0.5 text-[10px] font-theme-data border ${catStyle}`}>
                   {template.category.toUpperCase()}
                 </span>
                 {template.isPro && (

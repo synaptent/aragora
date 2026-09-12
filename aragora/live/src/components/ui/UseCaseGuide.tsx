@@ -201,12 +201,10 @@ export function UseCaseGuide({
   const [searchQuery, setSearchQuery] = useState('');
 
   // Get all unique tags
-  const allTags = Array.from(
-    new Set(USE_CASES.flatMap(uc => uc.tags))
-  ).sort();
+  const allTags = Array.from(new Set(USE_CASES.flatMap((uc) => uc.tags))).sort();
 
   // Filter use cases
-  const filteredUseCases = USE_CASES.filter(uc => {
+  const filteredUseCases = USE_CASES.filter((uc) => {
     // Filter by mode
     if (!isFeatureVisible(uc.minMode)) return false;
 
@@ -219,7 +217,7 @@ export function UseCaseGuide({
       return (
         uc.title.toLowerCase().includes(query) ||
         uc.description.toLowerCase().includes(query) ||
-        uc.tags.some(t => t.toLowerCase().includes(query))
+        uc.tags.some((t) => t.toLowerCase().includes(query))
       );
     }
 
@@ -230,12 +228,8 @@ export function UseCaseGuide({
     <div className={`space-y-4 ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="font-theme-data font-bold text-text">
-          What would you like to do?
-        </h2>
-        {showModeFilter && (
-          <ModeBadges currentMode={mode} onModeChange={setMode} />
-        )}
+        <h2 className="font-theme-data font-bold text-text">What would you like to do?</h2>
+        {showModeFilter && <ModeBadges currentMode={mode} onModeChange={setMode} />}
       </div>
 
       {/* Search and filters */}
@@ -244,7 +238,7 @@ export function UseCaseGuide({
           type="text"
           placeholder="Search use cases..."
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="
             flex-1 min-w-48 px-3 py-1.5 text-sm font-theme-data
             bg-surface border border-[var(--accent)]/30
@@ -260,25 +254,27 @@ export function UseCaseGuide({
             aria-pressed={!selectedTag}
             className={`
               px-2 py-1 text-xs font-theme-data
-              ${!selectedTag
-                ? 'bg-[var(--accent)] text-bg'
-                : 'border border-[var(--accent)]/30 text-[var(--accent)]/70 hover:border-[var(--accent)]/50'
+              ${
+                !selectedTag
+                  ? 'bg-[var(--accent)] text-bg'
+                  : 'border border-[var(--accent)]/30 text-[var(--accent)]/70 hover:border-[var(--accent)]/50'
               }
               transition-colors
             `}
           >
             All
           </button>
-          {allTags.map(tag => (
+          {allTags.map((tag) => (
             <button
               key={tag}
               onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
               aria-pressed={selectedTag === tag}
               className={`
                 px-2 py-1 text-xs font-theme-data
-                ${selectedTag === tag
-                  ? 'bg-[var(--accent)] text-bg'
-                  : 'border border-[var(--accent)]/30 text-[var(--accent)]/70 hover:border-[var(--accent)]/50'
+                ${
+                  selectedTag === tag
+                    ? 'bg-[var(--accent)] text-bg'
+                    : 'border border-[var(--accent)]/30 text-[var(--accent)]/70 hover:border-[var(--accent)]/50'
                 }
                 transition-colors
               `}
@@ -291,7 +287,7 @@ export function UseCaseGuide({
 
       {/* Use case cards */}
       <div className="grid gap-3 md:grid-cols-2">
-        {filteredUseCases.map(useCase => (
+        {filteredUseCases.map((useCase) => (
           <UseCaseCard key={useCase.id} useCase={useCase} />
         ))}
       </div>
@@ -323,26 +319,22 @@ export function UseCaseGuide({
 function UseCaseCard({ useCase }: { useCase: UseCase }) {
   return (
     <Link href={useCase.href}>
-      <div className="
+      <div
+        className="
         p-4 bg-surface border border-[var(--accent)]/20
         hover:border-[var(--accent)]/50 hover:bg-[var(--accent)]/5
         transition-colors cursor-pointer
-      ">
+      "
+      >
         <div className="flex items-start gap-3">
-          <span className="text-2xl text-[var(--accent)] font-theme-data">
-            {useCase.icon}
-          </span>
+          <span className="text-2xl text-[var(--accent)] font-theme-data">{useCase.icon}</span>
           <div className="flex-1 min-w-0">
-            <h3 className="font-theme-data font-bold text-text">
-              {useCase.title}
-            </h3>
-            <p className="text-sm text-text-muted mt-1">
-              {useCase.description}
-            </p>
+            <h3 className="font-theme-data font-bold text-text">{useCase.title}</h3>
+            <p className="text-sm text-text-muted mt-1">{useCase.description}</p>
 
             {/* Features preview */}
             <div className="flex flex-wrap gap-1 mt-2">
-              {useCase.features.slice(0, 3).map(feature => (
+              {useCase.features.slice(0, 3).map((feature) => (
                 <span
                   key={feature}
                   className="
@@ -386,9 +378,10 @@ function ModeBadges({
           onClick={() => onModeChange(mode)}
           className={`
             px-2 py-1 text-xs font-theme-data
-            ${currentMode === mode
-              ? 'bg-[var(--accent)] text-bg'
-              : 'text-[var(--accent)]/70 hover:bg-[var(--accent)]/10'
+            ${
+              currentMode === mode
+                ? 'bg-[var(--accent)] text-bg'
+                : 'text-[var(--accent)]/70 hover:bg-[var(--accent)]/10'
             }
             transition-colors
           `}
@@ -408,7 +401,7 @@ export function QuickActionDropdown({ className = '' }: { className?: string }) 
   const { isFeatureVisible } = useProgressiveMode();
   const [isOpen, setIsOpen] = useState(false);
 
-  const visibleUseCases = USE_CASES.filter(uc => isFeatureVisible(uc.minMode));
+  const visibleUseCases = USE_CASES.filter((uc) => isFeatureVisible(uc.minMode));
 
   return (
     <div className={`relative ${className}`}>
@@ -427,12 +420,14 @@ export function QuickActionDropdown({ className = '' }: { className?: string }) 
       </button>
 
       {isOpen && (
-        <div className="
+        <div
+          className="
           absolute top-full left-0 mt-1 w-64 z-50
           bg-surface border border-[var(--accent)]/30
           shadow-lg
-        ">
-          {visibleUseCases.map(uc => (
+        "
+        >
+          {visibleUseCases.map((uc) => (
             <Link
               key={uc.id}
               href={uc.href}
@@ -476,20 +471,24 @@ export function FeatureTooltip({
     >
       {children}
       {isVisible && (
-        <div className="
+        <div
+          className="
           absolute bottom-full left-1/2 -translate-x-1/2 mb-2
           px-3 py-2 w-48 z-50
           bg-surface border border-[var(--accent)]/30
           text-xs font-theme-data
           shadow-lg
-        ">
+        "
+        >
           <div className="text-[var(--accent)] font-bold mb-1">{title}</div>
           <div className="text-text-muted">{description}</div>
           {/* Arrow */}
-          <div className="
+          <div
+            className="
             absolute top-full left-1/2 -translate-x-1/2
             border-4 border-transparent border-t-acid-green/30
-          " />
+          "
+          />
         </div>
       )}
     </div>

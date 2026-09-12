@@ -5,8 +5,18 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
-    <a href={href} {...props}>{children}</a>
+  return ({
+    children,
+    href,
+    ...props
+  }: {
+    children: React.ReactNode;
+    href: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
   );
 });
 
@@ -33,10 +43,7 @@ jest.mock('../src/components/ui/EmptyState', () => ({
 
 // Mock RightSidebarContext
 jest.mock('../src/context/RightSidebarContext', () => ({
-  useRightSidebar: () => ({
-    setContext: jest.fn(),
-    clearContext: jest.fn(),
-  }),
+  useRightSidebar: () => ({ setContext: jest.fn(), clearContext: jest.fn() }),
 }));
 
 // Mock logger
@@ -67,7 +74,10 @@ describe('DebatesPage', () => {
     global.fetch = mockFetch;
   });
 
-  function mockBackendDebates(debates: unknown[], options?: { total?: number; has_more?: boolean }) {
+  function mockBackendDebates(
+    debates: unknown[],
+    options?: { total?: number; has_more?: boolean },
+  ) {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -201,9 +211,7 @@ describe('DebatesPage', () => {
   });
 
   it('normalizes question field to task', async () => {
-    mockBackendDebates([
-      sampleDebate({ task: undefined, question: 'What should we build?' }),
-    ]);
+    mockBackendDebates([sampleDebate({ task: undefined, question: 'What should we build?' })]);
 
     await act(async () => {
       render(<DebatesPage />);
@@ -255,7 +263,7 @@ describe('DebatesPage', () => {
         expect(screen.getByText('ALL')).toBeInTheDocument();
         // "CONSENSUS" may also appear as a status badge — get all and check one is a button
         const consensusElements = screen.getAllByText('CONSENSUS');
-        expect(consensusElements.some(el => el.tagName === 'BUTTON')).toBe(true);
+        expect(consensusElements.some((el) => el.tagName === 'BUTTON')).toBe(true);
         expect(screen.getByText('NO CONSENSUS')).toBeInTheDocument();
       });
     });
@@ -277,7 +285,7 @@ describe('DebatesPage', () => {
 
       // Find the CONSENSUS filter button (not the status badge)
       const consensusButtons = screen.getAllByText('CONSENSUS');
-      const filterBtn = consensusButtons.find(el => el.tagName === 'BUTTON')!;
+      const filterBtn = consensusButtons.find((el) => el.tagName === 'BUTTON')!;
       fireEvent.click(filterBtn);
 
       expect(screen.getByText('Consensus debate')).toBeInTheDocument();
@@ -313,7 +321,7 @@ describe('DebatesPage', () => {
 
       // Find the CONSENSUS filter button (not status badges)
       const consensusButtons = screen.getAllByText('CONSENSUS');
-      const filterBtn = consensusButtons.find(el => el.tagName === 'BUTTON')!;
+      const filterBtn = consensusButtons.find((el) => el.tagName === 'BUTTON')!;
       fireEvent.click(filterBtn);
 
       expect(screen.getByText(/Showing 2 of 3 debates/)).toBeInTheDocument();
@@ -323,7 +331,7 @@ describe('DebatesPage', () => {
   describe('pagination', () => {
     it('shows load more button when has_more is true', async () => {
       const debates = Array.from({ length: 20 }, (_, i) =>
-        sampleDebate({ id: `d${i}`, task: `Debate ${i}` })
+        sampleDebate({ id: `d${i}`, task: `Debate ${i}` }),
       );
       mockBackendDebates(debates, { has_more: true });
 
@@ -350,7 +358,7 @@ describe('DebatesPage', () => {
 
     it('loads more debates on button click', async () => {
       const firstPage = Array.from({ length: 20 }, (_, i) =>
-        sampleDebate({ id: `d${i}`, task: `Debate ${i}` })
+        sampleDebate({ id: `d${i}`, task: `Debate ${i}` }),
       );
       mockBackendDebates(firstPage, { has_more: true });
 
@@ -364,7 +372,7 @@ describe('DebatesPage', () => {
 
       // Mock second page
       const secondPage = Array.from({ length: 5 }, (_, i) =>
-        sampleDebate({ id: `d${20 + i}`, task: `Debate ${20 + i}` })
+        sampleDebate({ id: `d${20 + i}`, task: `Debate ${20 + i}` }),
       );
       mockBackendDebates(secondPage);
 
@@ -391,9 +399,7 @@ describe('DebatesPage', () => {
   });
 
   it('displays cycle and phase info', async () => {
-    mockBackendDebates([
-      sampleDebate({ cycle_number: 3, phase: 'critique' }),
-    ]);
+    mockBackendDebates([sampleDebate({ cycle_number: 3, phase: 'critique' })]);
 
     await act(async () => {
       render(<DebatesPage />);
@@ -414,9 +420,7 @@ describe('DebatesPage', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/v1/debates?limit=20&offset=0'),
-        expect.objectContaining({
-          headers: { 'Content-Type': 'application/json' },
-        })
+        expect.objectContaining({ headers: { 'Content-Type': 'application/json' } }),
       );
     });
   });
@@ -441,9 +445,7 @@ describe('DebatesPage', () => {
     });
 
     it('shows CONSENSUS for consensus debates without winning proposal', async () => {
-      mockBackendDebates([
-        sampleDebate({ winning_proposal: null, consensus_reached: true }),
-      ]);
+      mockBackendDebates([sampleDebate({ winning_proposal: null, consensus_reached: true })]);
 
       await act(async () => {
         render(<DebatesPage />);
@@ -453,14 +455,12 @@ describe('DebatesPage', () => {
         // CONSENSUS appears as both filter button and status badge
         const elements = screen.getAllByText('CONSENSUS');
         // At least one should be a span (the status badge), not just a button
-        expect(elements.some(el => el.tagName === 'SPAN')).toBe(true);
+        expect(elements.some((el) => el.tagName === 'SPAN')).toBe(true);
       });
     });
 
     it('shows NO CONSENSUS for non-consensus debates', async () => {
-      mockBackendDebates([
-        sampleDebate({ consensus_reached: false }),
-      ]);
+      mockBackendDebates([sampleDebate({ consensus_reached: false })]);
 
       await act(async () => {
         render(<DebatesPage />);
@@ -469,7 +469,7 @@ describe('DebatesPage', () => {
       await waitFor(() => {
         // "NO CONSENSUS" appears as both filter button and status badge
         const elements = screen.getAllByText('NO CONSENSUS');
-        expect(elements.some(el => el.tagName === 'SPAN')).toBe(true);
+        expect(elements.some((el) => el.tagName === 'SPAN')).toBe(true);
       });
     });
   });
@@ -479,9 +479,7 @@ describe('DebatesPage', () => {
   // ---------------------------------------------------------------------------
 
   it('shows receipt indicator [RCV] when vote_tally present', async () => {
-    mockBackendDebates([
-      sampleDebate({ vote_tally: { 'claude': 3, 'gpt-4': 2 } }),
-    ]);
+    mockBackendDebates([sampleDebate({ vote_tally: { claude: 3, 'gpt-4': 2 } })]);
 
     await act(async () => {
       render(<DebatesPage />);
@@ -493,9 +491,7 @@ describe('DebatesPage', () => {
   });
 
   it('does not show receipt indicator when vote_tally is null', async () => {
-    mockBackendDebates([
-      sampleDebate({ vote_tally: null }),
-    ]);
+    mockBackendDebates([sampleDebate({ vote_tally: null })]);
 
     await act(async () => {
       render(<DebatesPage />);
@@ -546,10 +542,9 @@ describe('DebatesPage', () => {
   // ---------------------------------------------------------------------------
 
   it('renders footer with debate count', async () => {
-    mockBackendDebates([
-      sampleDebate({ id: 'd1' }),
-      sampleDebate({ id: 'd2' }),
-    ], { has_more: false });
+    mockBackendDebates([sampleDebate({ id: 'd1' }), sampleDebate({ id: 'd2' })], {
+      has_more: false,
+    });
 
     await act(async () => {
       render(<DebatesPage />);

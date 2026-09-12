@@ -186,7 +186,7 @@ describe('shortcutsStore', () => {
         result.current.disableShortcut('nav-hub');
       });
 
-      expect(result.current.disabledShortcuts.filter(id => id === 'nav-hub')).toHaveLength(1);
+      expect(result.current.disabledShortcuts.filter((id) => id === 'nav-hub')).toHaveLength(1);
     });
 
     it('enableShortcut removes shortcut from disabled list', () => {

@@ -8,12 +8,13 @@ interface ForkComparisonPanelProps {
 }
 
 function ForkCard({ fork, label }: { fork: ForkComparisonData['leftFork']; label: string }) {
-  const statusColor = {
-    created: 'text-[var(--acid-cyan)]',
-    running: 'text-[var(--acid-yellow)]',
-    completed: 'text-[var(--accent)]',
-    unknown: 'text-text-muted',
-  }[fork.status || 'unknown'] || 'text-text-muted';
+  const statusColor =
+    {
+      created: 'text-[var(--acid-cyan)]',
+      running: 'text-[var(--acid-yellow)]',
+      completed: 'text-[var(--accent)]',
+      unknown: 'text-text-muted',
+    }[fork.status || 'unknown'] || 'text-text-muted';
 
   return (
     <div className="flex-1 p-3 border border-[var(--accent)]/20 bg-surface/30">
@@ -21,16 +22,17 @@ function ForkCard({ fork, label }: { fork: ForkComparisonData['leftFork']; label
         <span className="text-[10px] font-theme-data text-[var(--acid-cyan)] bg-[var(--acid-cyan)]/10 px-1.5 py-0.5 border border-[var(--acid-cyan)]/30">
           {label}
         </span>
-        <span className={`text-xs font-theme-data ${statusColor}`}>
-          {fork.status || 'unknown'}
-        </span>
+        <span className={`text-xs font-theme-data ${statusColor}`}>{fork.status || 'unknown'}</span>
       </div>
       <div className="space-y-1">
         <div className="text-xs font-theme-data text-text">
           {fork.type === 'root' ? 'ROOT DEBATE' : `Fork @ Round ${fork.branch_point}`}
         </div>
         {fork.pivot_claim && (
-          <div className="text-[10px] font-theme-data text-text-muted line-clamp-2" title={fork.pivot_claim}>
+          <div
+            className="text-[10px] font-theme-data text-text-muted line-clamp-2"
+            title={fork.pivot_claim}
+          >
             {fork.pivot_claim}
           </div>
         )}
@@ -73,7 +75,9 @@ export function ForkComparisonPanel({ comparison, onClear }: ForkComparisonPanel
       <div className="grid grid-cols-2 gap-3 p-3 border border-[var(--accent)]/20 bg-bg/50">
         <div>
           <div className="text-[10px] font-theme-data text-text-muted mb-1">DIVERGENCE POINT</div>
-          <div className="text-sm font-theme-data text-[var(--accent)]">Round {divergencePoint}</div>
+          <div className="text-sm font-theme-data text-[var(--accent)]">
+            Round {divergencePoint}
+          </div>
         </div>
         <div>
           <div className="text-[10px] font-theme-data text-text-muted mb-1">SHARED MESSAGES</div>
@@ -86,7 +90,10 @@ export function ForkComparisonPanel({ comparison, onClear }: ForkComparisonPanel
           <div className="text-xs font-theme-data text-text-muted">OUTCOME DIFFERENCES</div>
           <div className="space-y-1">
             {outcomeDiff.map((diff, idx) => (
-              <div key={idx} className="grid grid-cols-3 gap-2 p-2 border border-[var(--accent)]/10 text-[10px] font-theme-data">
+              <div
+                key={idx}
+                className="grid grid-cols-3 gap-2 p-2 border border-[var(--accent)]/10 text-[10px] font-theme-data"
+              >
                 <div className="text-text-muted uppercase">{diff.field.replace(/_/g, ' ')}</div>
                 <div className="text-[var(--acid-cyan)]">{String(diff.left ?? 'null')}</div>
                 <div className="text-[var(--acid-yellow)]">{String(diff.right ?? 'null')}</div>

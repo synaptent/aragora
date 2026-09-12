@@ -27,11 +27,7 @@ export interface SpectateStatus {
   active: boolean;
   subscribers: number;
   buffer_size: number;
-  bridge_state:
-    | 'inactive'
-    | 'idle'
-    | 'activity_unattributed'
-    | 'live_debates_available';
+  bridge_state: 'inactive' | 'idle' | 'activity_unattributed' | 'live_debates_available';
   last_event_at: string | null;
   activity_age_seconds: number | null;
   recent_activity_window_seconds: number;
@@ -113,9 +109,7 @@ function appendSpectateEvent(
   nextEvent: SpectateEvent,
   maxEvents: number,
 ): SpectateEvent[] {
-  const deduped = new Map(
-    currentEvents.map((event) => [spectateEventKey(event), event] as const),
-  );
+  const deduped = new Map(currentEvents.map((event) => [spectateEventKey(event), event] as const));
   deduped.set(spectateEventKey(nextEvent), nextEvent);
   return Array.from(deduped.values()).slice(-maxEvents);
 }
@@ -153,11 +147,7 @@ export function useSpectate(
   pipelineId?: string,
   options: UseSpectateOptions = {},
 ): UseSpectateReturn {
-  const {
-    pollInterval = 2000,
-    maxEvents = 50,
-    enabled = true,
-  } = options;
+  const { pollInterval = 2000, maxEvents = 50, enabled = true } = options;
 
   const [events, setEvents] = useState<SpectateEvent[]>([]);
   const [connected, setConnected] = useState(false);
@@ -171,9 +161,7 @@ export function useSpectate(
   const fetchRecent = useCallback(async () => {
     try {
       const params = buildSpectateParams(debateId, pipelineId, maxEvents);
-      const res = await fetch(
-        `${API_BASE_URL}/api/v1/spectate/recent?${params.toString()}`,
-      );
+      const res = await fetch(`${API_BASE_URL}/api/v1/spectate/recent?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setEvents(data.events || []);
@@ -205,10 +193,7 @@ export function useSpectate(
   }, []);
 
   const refresh = useCallback(async () => {
-    const [recentOk] = await Promise.all([
-      fetchRecent(),
-      fetchStatus(),
-    ]);
+    const [recentOk] = await Promise.all([fetchRecent(), fetchStatus()]);
     setConnected(recentOk);
     setLoaded(true);
   }, [fetchRecent, fetchStatus]);
@@ -244,9 +229,7 @@ export function useSpectate(
     }
 
     const params = buildSpectateParams(debateId, pipelineId, maxEvents);
-    const source = new EventSource(
-      `${API_BASE_URL}/api/v1/spectate/stream?${params.toString()}`,
-    );
+    const source = new EventSource(`${API_BASE_URL}/api/v1/spectate/stream?${params.toString()}`);
     eventSourceRef.current = source;
 
     const handleConnected = () => {
@@ -263,9 +246,7 @@ export function useSpectate(
         const parsed = JSON.parse(event.data) as unknown;
         if (!isSpectateEvent(parsed)) return;
 
-        setEvents((currentEvents) =>
-          appendSpectateEvent(currentEvents, parsed, maxEvents),
-        );
+        setEvents((currentEvents) => appendSpectateEvent(currentEvents, parsed, maxEvents));
         setConnected(true);
         setLoaded(true);
       } catch {

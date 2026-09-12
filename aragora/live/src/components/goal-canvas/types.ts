@@ -4,22 +4,10 @@
  * Matches the Python GoalNodeType enum from aragora/canvas/stages.py.
  */
 
-export type GoalNodeType =
-  | 'goal'
-  | 'principle'
-  | 'strategy'
-  | 'milestone'
-  | 'metric'
-  | 'risk';
+export type GoalNodeType = 'goal' | 'principle' | 'strategy' | 'milestone' | 'metric' | 'risk';
 
 export type GoalEdgeType =
-  | 'requires'
-  | 'blocks'
-  | 'follows'
-  | 'derived_from'
-  | 'supports'
-  | 'conflicts'
-  | 'decomposes_into';
+  'requires' | 'blocks' | 'follows' | 'derived_from' | 'supports' | 'conflicts' | 'decomposes_into';
 
 export type GoalPriority = 'critical' | 'high' | 'medium' | 'low';
 

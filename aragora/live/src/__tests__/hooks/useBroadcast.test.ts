@@ -50,10 +50,9 @@ describe('useBroadcast', () => {
       expect(exists!).toBe(true);
       expect(result.current.hasAudio).toBe(true);
       expect(result.current.audioUrl).toContain(debateId);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining(`/audio/${debateId}.mp3`),
-        { method: 'HEAD' }
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining(`/audio/${debateId}.mp3`), {
+        method: 'HEAD',
+      });
     });
 
     it('returns false when audio does not exist', async () => {
@@ -93,10 +92,7 @@ describe('useBroadcast', () => {
         duration_seconds: 120,
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResult),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockResult) });
 
       const { result } = renderHook(() => useBroadcast(debateId));
 
@@ -116,7 +112,7 @@ describe('useBroadcast', () => {
       mockFetch.mockReturnValueOnce(
         new Promise<Response>((resolve) => {
           resolvePromise = resolve;
-        })
+        }),
       );
 
       const { result } = renderHook(() => useBroadcast(debateId));
@@ -164,10 +160,7 @@ describe('useBroadcast', () => {
   describe('publishToTwitter', () => {
     it('publishes to Twitter successfully', async () => {
       const mockResult = { success: true, url: 'https://twitter.com/status/123' };
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResult),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockResult) });
 
       const { result } = renderHook(() => useBroadcast(debateId));
 
@@ -182,7 +175,7 @@ describe('useBroadcast', () => {
         expect.objectContaining({
           method: 'POST',
           body: expect.stringContaining('Check out this debate!'),
-        })
+        }),
       );
     });
 
@@ -208,10 +201,7 @@ describe('useBroadcast', () => {
   describe('publishToYouTube', () => {
     it('publishes to YouTube successfully', async () => {
       const mockResult = { success: true, url: 'https://youtube.com/watch?v=abc' };
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResult),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockResult) });
 
       const { result } = renderHook(() => useBroadcast(debateId));
 
@@ -223,10 +213,7 @@ describe('useBroadcast', () => {
       expect(publishResult!).toEqual(mockResult);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining(`/api/debates/${debateId}/publish/youtube`),
-        expect.objectContaining({
-          method: 'POST',
-          body: expect.stringContaining('My Debate'),
-        })
+        expect.objectContaining({ method: 'POST', body: expect.stringContaining('My Debate') }),
       );
     });
   });
@@ -247,10 +234,7 @@ describe('useBroadcast', () => {
         error: null,
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResult),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockResult) });
 
       const { result } = renderHook(() => useBroadcast(debateId));
 
@@ -268,12 +252,7 @@ describe('useBroadcast', () => {
     it('includes options in URL params', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () =>
-          Promise.resolve({
-            debate_id: debateId,
-            success: true,
-            steps_completed: [],
-          }),
+        json: () => Promise.resolve({ debate_id: debateId, success: true, steps_completed: [] }),
       });
 
       const { result } = renderHook(() => useBroadcast(debateId));
@@ -288,7 +267,7 @@ describe('useBroadcast', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringMatching(/video=true.*title=Test\+Title.*episode_number=42/),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -321,10 +300,9 @@ describe('useBroadcast', () => {
         json: () => Promise.resolve({ broadcast_id: 'bc-1', status: 'complete' }),
       });
 
-      const { result, rerender } = renderHook(
-        ({ id }) => useBroadcast(id),
-        { initialProps: { id: 'debate-1' } }
-      );
+      const { result, rerender } = renderHook(({ id }) => useBroadcast(id), {
+        initialProps: { id: 'debate-1' },
+      });
 
       await act(async () => {
         await result.current.generateBroadcast();
@@ -332,7 +310,7 @@ describe('useBroadcast', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/debates/debate-1/broadcast'),
-        expect.any(Object)
+        expect.any(Object),
       );
 
       // Change debateId
@@ -344,7 +322,7 @@ describe('useBroadcast', () => {
 
       expect(mockFetch).toHaveBeenLastCalledWith(
         expect.stringContaining('/api/debates/debate-2/broadcast'),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });

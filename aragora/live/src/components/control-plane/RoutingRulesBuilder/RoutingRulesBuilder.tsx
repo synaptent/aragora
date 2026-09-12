@@ -18,16 +18,9 @@ export interface RoutingRulesBuilderProps {
   className?: string;
 }
 
-const DEFAULT_CONDITION: Condition = {
-  field: 'confidence',
-  operator: 'lt',
-  value: 0.7,
-};
+const DEFAULT_CONDITION: Condition = { field: 'confidence', operator: 'lt', value: 0.7 };
 
-const DEFAULT_ACTION: Action = {
-  type: 'route_to_channel',
-  target: '',
-};
+const DEFAULT_ACTION: Action = { type: 'route_to_channel', target: '' };
 
 /**
  * Visual builder for routing rules with IF/THEN logic.
@@ -65,15 +58,10 @@ export function RoutingRulesBuilder({
   // Test state
   const [testContext, setTestContext] = useState<string>(
     JSON.stringify(
-      {
-        confidence: 0.65,
-        topic: 'security review',
-        status: 'completed',
-        agent_count: 3,
-      },
+      { confidence: 0.65, topic: 'security review', status: 'completed', agent_count: 3 },
       null,
-      2
-    )
+      2,
+    ),
   );
   const [testResults, setTestResults] = useState<EvaluateResponse | null>(null);
   const [testing, setTesting] = useState(false);
@@ -85,8 +73,12 @@ export function RoutingRulesBuilder({
 
     try {
       const [rulesRes, templatesRes] = await Promise.all([
-        api.get('/api/v1/routing-rules').catch(() => ({ rules: [] })) as Promise<{ rules: RoutingRule[] }>,
-        api.get('/api/v1/routing-rules/templates').catch(() => ({ templates: [] })) as Promise<{ templates: RoutingRule[] }>,
+        api.get('/api/v1/routing-rules').catch(() => ({ rules: [] })) as Promise<{
+          rules: RoutingRule[];
+        }>,
+        api.get('/api/v1/routing-rules/templates').catch(() => ({ templates: [] })) as Promise<{
+          templates: RoutingRule[];
+        }>,
       ]);
 
       setRules(rulesRes.rules || []);
@@ -103,7 +95,11 @@ export function RoutingRulesBuilder({
           conditions: [{ field: 'confidence', operator: 'lt', value: 0.7 }],
           actions: [
             { type: 'require_approval', target: 'default' },
-            { type: 'notify', target: 'admin', params: { message: 'Low confidence review needed' } },
+            {
+              type: 'notify',
+              target: 'admin',
+              params: { message: 'Low confidence review needed' },
+            },
           ],
           priority: 100,
           enabled: true,
@@ -182,7 +178,7 @@ export function RoutingRulesBuilder({
       (r) =>
         r.name.toLowerCase().includes(query) ||
         r.description?.toLowerCase().includes(query) ||
-        r.tags?.some((t) => t.toLowerCase().includes(query))
+        r.tags?.some((t) => t.toLowerCase().includes(query)),
     );
   }, [rules, searchQuery]);
 
@@ -211,11 +207,7 @@ export function RoutingRulesBuilder({
 
   const handleUseTemplate = useCallback((template: RoutingRule) => {
     setSelectedRule(null);
-    setEditorRule({
-      ...template,
-      id: undefined,
-      name: `${template.name} (Copy)`,
-    });
+    setEditorRule({ ...template, id: undefined, name: `${template.name} (Copy)` });
     setActiveTab('editor');
   }, []);
 
@@ -254,21 +246,19 @@ export function RoutingRulesBuilder({
         logger.error('Failed to delete rule:', err);
       }
     },
-    [api, loadData]
+    [api, loadData],
   );
 
   const handleToggleRule = useCallback(
     async (rule: RoutingRule) => {
       try {
-        await api.post(`/api/v1/routing-rules/${rule.id}/toggle`, {
-          enabled: !rule.enabled,
-        });
+        await api.post(`/api/v1/routing-rules/${rule.id}/toggle`, { enabled: !rule.enabled });
         await loadData();
       } catch (err) {
         logger.error('Failed to toggle rule:', err);
       }
     },
-    [api, loadData]
+    [api, loadData],
   );
 
   const handleTestRules = useCallback(async () => {
@@ -277,7 +267,9 @@ export function RoutingRulesBuilder({
 
     try {
       const context = JSON.parse(testContext);
-      const result = await api.post('/api/v1/routing-rules/evaluate', { context }) as EvaluateResponse;
+      const result = (await api.post('/api/v1/routing-rules/evaluate', {
+        context,
+      })) as EvaluateResponse;
       setTestResults(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to evaluate rules');
@@ -308,7 +300,9 @@ export function RoutingRulesBuilder({
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 px-4 py-2 text-sm font-theme-data rounded transition-colors ${
-              activeTab === tab.id ? 'bg-[var(--accent)] text-bg' : 'text-text-muted hover:text-text'
+              activeTab === tab.id
+                ? 'bg-[var(--accent)] text-bg'
+                : 'text-text-muted hover:text-text'
             }`}
           >
             {tab.label}
@@ -378,7 +372,8 @@ export function RoutingRulesBuilder({
                       <p className="text-sm text-text-muted mb-2">{rule.description}</p>
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-cyan-400">
-                          {rule.conditions.length} condition{rule.conditions.length !== 1 ? 's' : ''}
+                          {rule.conditions.length} condition
+                          {rule.conditions.length !== 1 ? 's' : ''}
                         </span>
                         <span className="text-text-muted">→</span>
                         <span className="text-[var(--accent)]">
@@ -470,7 +465,9 @@ export function RoutingRulesBuilder({
                 <input
                   type="number"
                   value={editorRule.priority || 0}
-                  onChange={(e) => setEditorRule({ ...editorRule, priority: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setEditorRule({ ...editorRule, priority: parseInt(e.target.value) || 0 })
+                  }
                   className="w-full px-3 py-2 text-sm bg-surface border border-border rounded focus:border-[var(--accent)] focus:outline-none"
                 />
               </div>
@@ -579,7 +576,9 @@ export function RoutingRulesBuilder({
                   <div
                     key={result.rule_id}
                     className={`p-3 rounded ${
-                      result.matched ? 'bg-[var(--accent)]/10 border border-[var(--accent)]/30' : 'bg-surface'
+                      result.matched
+                        ? 'bg-[var(--accent)]/10 border border-[var(--accent)]/30'
+                        : 'bg-surface'
                     }`}
                   >
                     <div className="flex items-center justify-between">

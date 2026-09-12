@@ -58,14 +58,10 @@ export const PrincipleNode = memo(function PrincipleNode({ data, selected }: Pri
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 line-clamp-2">
-        {label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 line-clamp-2">{label}</div>
 
       {description && (
-        <div className="text-xs text-text-muted mb-1 line-clamp-2">
-          {description}
-        </div>
+        <div className="text-xs text-text-muted mb-1 line-clamp-2">{description}</div>
       )}
 
       {typeof confidence === 'number' && (

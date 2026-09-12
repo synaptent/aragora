@@ -77,12 +77,7 @@ export function PruningTab({ workspaceId = 'default', onPruneComplete }: Pruning
   };
 
   const handleAutoPrune = async (dryRun: boolean) => {
-    const result = await autoPrune({
-      stalenessThreshold,
-      minAgeDays,
-      action: pruneAction,
-      dryRun,
-    });
+    const result = await autoPrune({ stalenessThreshold, minAgeDays, action: pruneAction, dryRun });
     if (result && !dryRun && result.items_pruned > 0) {
       onPruneComplete?.();
     }
@@ -98,13 +93,27 @@ export function PruningTab({ workspaceId = 'default', onPruneComplete }: Pruning
   const getActionBadge = (action: PruningAction) => {
     switch (action) {
       case 'archive':
-        return <span className="px-2 py-0.5 text-xs rounded bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]">Archive</span>;
+        return (
+          <span className="px-2 py-0.5 text-xs rounded bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]">
+            Archive
+          </span>
+        );
       case 'delete':
-        return <span className="px-2 py-0.5 text-xs rounded bg-[var(--crimson)]/20 text-[var(--crimson)]">Delete</span>;
+        return (
+          <span className="px-2 py-0.5 text-xs rounded bg-[var(--crimson)]/20 text-[var(--crimson)]">
+            Delete
+          </span>
+        );
       case 'demote':
-        return <span className="px-2 py-0.5 text-xs rounded bg-acid-yellow/20 text-[var(--acid-yellow)]">Demote</span>;
+        return (
+          <span className="px-2 py-0.5 text-xs rounded bg-acid-yellow/20 text-[var(--acid-yellow)]">
+            Demote
+          </span>
+        );
       case 'flag':
-        return <span className="px-2 py-0.5 text-xs rounded bg-purple-500/20 text-purple-400">Flag</span>;
+        return (
+          <span className="px-2 py-0.5 text-xs rounded bg-purple-500/20 text-purple-400">Flag</span>
+        );
       default:
         return null;
     }
@@ -131,7 +140,9 @@ export function PruningTab({ workspaceId = 'default', onPruneComplete }: Pruning
             onChange={(e) => setStalenessThreshold(parseFloat(e.target.value))}
             className="w-20"
           />
-          <span className="font-theme-data text-[var(--acid-cyan)] w-12">{(stalenessThreshold * 100).toFixed(0)}%</span>
+          <span className="font-theme-data text-[var(--acid-cyan)] w-12">
+            {(stalenessThreshold * 100).toFixed(0)}%
+          </span>
         </label>
         <label className="flex items-center gap-2 text-sm">
           <span className="text-text-muted">Min Age:</span>
@@ -213,7 +224,10 @@ export function PruningTab({ workspaceId = 'default', onPruneComplete }: Pruning
         <div className="p-4 border border-panel-border rounded bg-panel-bg max-h-64 overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold">Pruning History</h3>
-            <button onClick={() => setShowHistory(false)} className="text-text-muted hover:text-text-primary">
+            <button
+              onClick={() => setShowHistory(false)}
+              className="text-text-muted hover:text-text-primary"
+            >
               ✕
             </button>
           </div>
@@ -222,9 +236,14 @@ export function PruningTab({ workspaceId = 'default', onPruneComplete }: Pruning
           ) : (
             <div className="space-y-2">
               {history.map((entry) => (
-                <div key={entry.history_id} className="p-2 border border-panel-border rounded text-xs">
+                <div
+                  key={entry.history_id}
+                  className="p-2 border border-panel-border rounded text-xs"
+                >
                   <div className="flex items-center justify-between">
-                    <span className="font-theme-data">{new Date(entry.executed_at).toLocaleString()}</span>
+                    <span className="font-theme-data">
+                      {new Date(entry.executed_at).toLocaleString()}
+                    </span>
                     {getActionBadge(entry.action)}
                   </div>
                   <div className="text-text-muted mt-1">
@@ -327,7 +346,8 @@ export function PruningTab({ workspaceId = 'default', onPruneComplete }: Pruning
                     </span>
                   </span>
                   <span>
-                    Confidence: <span className="font-theme-data">{(item.confidence * 100).toFixed(0)}%</span>
+                    Confidence:{' '}
+                    <span className="font-theme-data">{(item.confidence * 100).toFixed(0)}%</span>
                   </span>
                   <span>
                     Retrievals: <span className="font-theme-data">{item.retrieval_count}</span>

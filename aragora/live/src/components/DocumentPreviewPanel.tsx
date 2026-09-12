@@ -69,7 +69,9 @@ function StatusBadge({ status }: { status: string }) {
     failed: 'bg-acid-red/20 text-acid-red border-acid-red/40',
   };
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.pending}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.pending}`}
+    >
       {status.toUpperCase()}
     </span>
   );
@@ -84,7 +86,9 @@ function ChunkTypeBadge({ type }: { type: string }) {
     image: 'bg-acid-orange/20 text-acid-orange',
   };
   return (
-    <span className={`px-1.5 py-0.5 text-xs font-theme-data rounded ${colors[type] || colors.text}`}>
+    <span
+      className={`px-1.5 py-0.5 text-xs font-theme-data rounded ${colors[type] || colors.text}`}
+    >
       {type}
     </span>
   );
@@ -176,7 +180,9 @@ export function DocumentPreviewPanel({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <StatusBadge status={document.status} />
-            <span className="text-xs font-theme-data text-muted truncate">{document.mime_type}</span>
+            <span className="text-xs font-theme-data text-muted truncate">
+              {document.mime_type}
+            </span>
           </div>
           <h3 className="font-theme-data font-medium truncate" title={document.filename}>
             {document.filename}
@@ -273,7 +279,9 @@ export function DocumentPreviewPanel({
                   {activeChunkIndex + 1} / {chunks.length}
                 </span>
                 <button
-                  onClick={() => setActiveChunkIndex(Math.min(chunks.length - 1, activeChunkIndex + 1))}
+                  onClick={() =>
+                    setActiveChunkIndex(Math.min(chunks.length - 1, activeChunkIndex + 1))
+                  }
                   disabled={activeChunkIndex === chunks.length - 1}
                   className="px-2 py-1 text-xs font-theme-data border border-border rounded disabled:opacity-30"
                 >

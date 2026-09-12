@@ -13,18 +13,12 @@ const mockUseOnboarding = jest.fn();
 
 global.fetch = mockFetch as typeof fetch;
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => mockUseAuth(),
-}));
+jest.mock('@/context/AuthContext', () => ({ useAuth: () => mockUseAuth() }));
 
 jest.mock('@/components/BackendSelector', () => ({
-  BACKENDS: {
-    production: { api: 'https://api.aragora.ai' },
-  },
+  BACKENDS: { production: { api: 'https://api.aragora.ai' } },
   useBackend: () => mockUseBackend(),
 }));
 
@@ -32,25 +26,18 @@ jest.mock('@/hooks/useDashboardPreferences', () => ({
   useDashboardPreferences: () => mockUseDashboardPreferences(),
 }));
 
-jest.mock('@/hooks/useOnboarding', () => ({
-  useOnboarding: () => mockUseOnboarding(),
-}));
+jest.mock('@/hooks/useOnboarding', () => ({ useOnboarding: () => mockUseOnboarding() }));
 
 describe('OnboardingPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     sessionStorage.clear();
 
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      tokens: { access_token: 'token-123' },
-    });
+    mockUseAuth.mockReturnValue({ isAuthenticated: true, tokens: { access_token: 'token-123' } });
     mockUseBackend.mockReturnValue({
       config: { api: '', ws: 'ws://localhost:8766/api/control-plane/stream' },
     });
-    mockUseDashboardPreferences.mockReturnValue({
-      markOnboardingComplete: jest.fn(),
-    });
+    mockUseDashboardPreferences.mockReturnValue({ markOnboardingComplete: jest.fn() });
     mockUseOnboarding.mockReturnValue({
       setSelectedIndustry: jest.fn(),
       setFirstDebateTopic: jest.fn(),
@@ -65,7 +52,10 @@ describe('OnboardingPage', () => {
   });
 
   it('uses the same-origin API path when the selected backend resolves to an empty local base', async () => {
-    sessionStorage.setItem('aragora_onboarding_question', 'Should we raise our next round now or wait 6 months?');
+    sessionStorage.setItem(
+      'aragora_onboarding_question',
+      'Should we raise our next round now or wait 6 months?',
+    );
     sessionStorage.setItem('aragora_onboarding_role', 'ceo');
 
     mockFetch.mockResolvedValue({

@@ -132,12 +132,7 @@ export async function createErrorFromResponse(response: Response): Promise<Error
 
   const code = (errorData.code as string) || statusToErrorCode(response.status);
 
-  return new AragoraError(
-    message,
-    code,
-    response.status,
-    errorData
-  );
+  return new AragoraError(message, code, response.status, errorData);
 }
 
 /**
@@ -256,7 +251,5 @@ export function extractErrorDetails(error: unknown): {
     };
   }
 
-  return {
-    message: String(error),
-  };
+  return { message: String(error) };
 }

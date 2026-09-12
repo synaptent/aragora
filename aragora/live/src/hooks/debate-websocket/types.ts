@@ -21,7 +21,7 @@ export interface TranscriptMessage {
   role?: string;
   content: string;
   round?: number;
-  phase?: number;  // Current debate phase (0-8 for 9-round format)
+  phase?: number; // Current debate phase (0-8 for 9-round format)
   timestamp?: number;
   calibration?: {
     brier_score: number;
@@ -49,20 +49,21 @@ export interface EvidenceSource {
 
 export interface StreamingMessage {
   agent: string;
-  taskId: string;  // Task ID for distinguishing concurrent outputs from same agent
+  taskId: string; // Task ID for distinguishing concurrent outputs from same agent
   content: string;
   isComplete: boolean;
   startTime: number;
-  expectedSeq: number;  // Next expected agent_seq for ordering
-  pendingTokens: Map<number, string>;  // Buffer for out-of-order tokens
+  expectedSeq: number; // Next expected agent_seq for ordering
+  pendingTokens: Map<number, string>; // Buffer for out-of-order tokens
   // Reasoning visibility
   reasoning: ReasoningStep[];
   evidence: EvidenceSource[];
   confidence: number | null;
-  reasoningPhase: string;  // Current reasoning phase (e.g. "ANALYZING", "FORMING ARGUMENT")
+  reasoningPhase: string; // Current reasoning phase (e.g. "ANALYZING", "FORMING ARGUMENT")
 }
 
-export type DebateConnectionStatus = 'idle' | 'connecting' | 'streaming' | 'polling' | 'complete' | 'error';
+export type DebateConnectionStatus =
+  'idle' | 'connecting' | 'streaming' | 'polling' | 'complete' | 'error';
 
 export interface UseDebateWebSocketOptions {
   debateId: string;
@@ -88,11 +89,11 @@ export interface UseDebateWebSocketReturn {
   // Connection state
   status: DebateConnectionStatus;
   error: string | null;
-  errorDetails: string | null;  // Detailed error message from server
+  errorDetails: string | null; // Detailed error message from server
   isConnected: boolean;
   isPolling: boolean;
-  reconnectAttempt: number;  // Expose for UI feedback
-  connectionQuality: ConnectionQuality | null;  // Server-reported quality metrics
+  reconnectAttempt: number; // Expose for UI feedback
+  connectionQuality: ConnectionQuality | null; // Server-reported quality metrics
 
   // Debate data
   task: string;
@@ -109,8 +110,8 @@ export interface UseDebateWebSocketReturn {
   sendSuggestion: (suggestion: string) => void;
   registerAckCallback: (callback: (msgType: string) => void) => () => void;
   registerErrorCallback: (callback: (message: string) => void) => () => void;
-  reconnect: () => void;  // Manual reconnect trigger
-  sendPing: () => void;  // Application-level latency measurement ping
+  reconnect: () => void; // Manual reconnect trigger
+  sendPing: () => void; // Application-level latency measurement ping
 }
 
 // Debate status from server API

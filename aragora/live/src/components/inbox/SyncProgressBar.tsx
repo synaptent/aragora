@@ -49,7 +49,9 @@ export function SyncProgressBar({
 
       <div className="flex justify-between text-xs font-theme-data text-text-muted mb-2">
         <span>{job_status.toUpperCase()}</span>
-        <span>{job_messages_synced} / {indexedCount} messages</span>
+        <span>
+          {job_messages_synced} / {indexedCount} messages
+        </span>
       </div>
 
       {isRunning && (
@@ -62,14 +64,10 @@ export function SyncProgressBar({
       )}
 
       {lastSync && (
-        <p className="text-text-muted text-xs">
-          Last sync: {new Date(lastSync).toLocaleString()}
-        </p>
+        <p className="text-text-muted text-xs">Last sync: {new Date(lastSync).toLocaleString()}</p>
       )}
 
-      {job_error && (
-        <p className="text-red-400 text-xs mt-2">{job_error}</p>
-      )}
+      {job_error && <p className="text-red-400 text-xs mt-2">{job_error}</p>}
     </div>
   );
 }

@@ -36,8 +36,4 @@ export type {
   EvaluateResponse,
 } from './types';
 
-export {
-  CONDITION_FIELDS,
-  OPERATORS_BY_TYPE,
-  ACTION_CONFIGS,
-} from './types';
+export { CONDITION_FIELDS, OPERATORS_BY_TYPE, ACTION_CONFIGS } from './types';

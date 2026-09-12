@@ -10,9 +10,33 @@ import DOMPurify from 'dompurify';
 // Configure DOMPurify with safe defaults
 const SAFE_CONFIG = {
   ALLOWED_TAGS: [
-    'b', 'i', 'em', 'strong', 'a', 'p', 'br', 'ul', 'ol', 'li',
-    'code', 'pre', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'b',
+    'i',
+    'em',
+    'strong',
+    'a',
+    'p',
+    'br',
+    'ul',
+    'ol',
+    'li',
+    'code',
+    'pre',
+    'blockquote',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'span',
+    'div',
+    'table',
+    'thead',
+    'tbody',
+    'tr',
+    'th',
+    'td',
   ],
   ALLOWED_ATTR: ['href', 'title', 'class', 'id', 'target', 'rel'],
   ALLOW_DATA_ATTR: false,
@@ -22,10 +46,7 @@ const SAFE_CONFIG = {
 };
 
 // Strict config for plain text only (no HTML allowed)
-const STRICT_CONFIG = {
-  ALLOWED_TAGS: [] as string[],
-  ALLOWED_ATTR: [] as string[],
-};
+const STRICT_CONFIG = { ALLOWED_TAGS: [] as string[], ALLOWED_ATTR: [] as string[] };
 
 /**
  * Sanitize HTML content, allowing safe formatting tags.
@@ -87,7 +108,7 @@ export function sanitizeUrl(url: string): string {
 export function validateFileUpload(
   file: File,
   allowedExtensions: string[],
-  maxSizeMB: number = 10
+  maxSizeMB: number = 10,
 ): { valid: boolean; error?: string } {
   // Check file size
   const maxBytes = maxSizeMB * 1024 * 1024;
@@ -98,10 +119,7 @@ export function validateFileUpload(
   // Check extension
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   if (!allowedExtensions.includes(ext)) {
-    return {
-      valid: false,
-      error: `Invalid file type. Allowed: ${allowedExtensions.join(', ')}`,
-    };
+    return { valid: false, error: `Invalid file type. Allowed: ${allowedExtensions.join(', ')}` };
   }
 
   // Check MIME type matches extension
@@ -131,11 +149,13 @@ export function validateFileUpload(
  * Trims whitespace, limits length, removes control characters.
  */
 export function sanitizeSuggestion(text: string, maxLength: number = 1000): string {
-  return text
-    .trim()
-    .slice(0, maxLength)
-    // Remove control characters except newlines
-    .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    // Normalize whitespace
-    .replace(/\s+/g, ' ');
+  return (
+    text
+      .trim()
+      .slice(0, maxLength)
+      // Remove control characters except newlines
+      .replace(/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g, '')
+      // Normalize whitespace
+      .replace(/\s+/g, ' ')
+  );
 }

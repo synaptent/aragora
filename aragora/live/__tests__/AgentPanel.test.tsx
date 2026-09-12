@@ -17,37 +17,31 @@ jest.mock('../src/utils/agentColors', () => ({
 }));
 
 describe('AgentPanel', () => {
-  const createAgentEvent = (agent: string, content: string, role = 'proposer', round = 1): StreamEvent => ({
+  const createAgentEvent = (
+    agent: string,
+    content: string,
+    role = 'proposer',
+    round = 1,
+  ): StreamEvent => ({
     type: 'agent_message',
     agent,
     round,
     timestamp: Date.now() / 1000,
-    data: {
-      content,
-      role,
-    },
+    data: { content, role },
   });
 
   const createCritiqueEvent = (agent: string, target: string, issues: string[]): StreamEvent => ({
     type: 'critique',
     agent,
     timestamp: Date.now() / 1000,
-    data: {
-      target,
-      issues,
-      severity: 0.5,
-    },
+    data: { target, issues, severity: 0.5 },
   });
 
   const createConsensusEvent = (reached: boolean, confidence: number): StreamEvent => ({
     type: 'consensus',
     agent: 'system',
     timestamp: Date.now() / 1000,
-    data: {
-      reached,
-      confidence,
-      answer: 'The consensus answer',
-    },
+    data: { reached, confidence, answer: 'The consensus answer' },
   });
 
   describe('Empty State', () => {
@@ -99,9 +93,7 @@ describe('AgentPanel', () => {
 
   describe('Critique Events', () => {
     it('renders critique events', () => {
-      const events = [
-        createCritiqueEvent('gemini', 'claude', ['Issue 1', 'Issue 2']),
-      ];
+      const events = [createCritiqueEvent('gemini', 'claude', ['Issue 1', 'Issue 2'])];
       render(<AgentPanel events={events} />);
       expect(screen.getByText('GEMINI')).toBeInTheDocument();
       expect(screen.getByText(/claude.*2 issues/i)).toBeInTheDocument();

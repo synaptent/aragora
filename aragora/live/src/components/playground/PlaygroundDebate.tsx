@@ -52,21 +52,12 @@ interface DebateResult {
     suggestions: string[];
     severity: number;
   }>;
-  votes: Array<{
-    agent: string;
-    choice: string;
-    confidence: number;
-    reasoning: string;
-  }>;
+  votes: Array<{ agent: string; choice: string; confidence: number; reasoning: string }>;
   receipt: {
     receipt_id: string;
     verdict: string;
     confidence: number;
-    consensus: {
-      reached: boolean;
-      method: string;
-      confidence: number;
-    };
+    consensus: { reached: boolean; method: string; confidence: number };
     rounds_used: number;
     timestamp: string;
     signature: string;
@@ -174,9 +165,24 @@ const DEMO_CRITIQUES: CritiqueEntry[] = [
 ];
 
 const DEMO_VOTES: VoteEntry[] = [
-  { agent: 'claude-analyst', color: 'var(--acid-cyan)', choice: 'gemini-synthesizer', confidence: 0.82 },
-  { agent: 'gpt-contrarian', color: 'var(--acid-magenta)', choice: 'gemini-synthesizer', confidence: 0.61 },
-  { agent: 'gemini-synthesizer', color: 'var(--acid-green)', choice: 'gemini-synthesizer', confidence: 0.91 },
+  {
+    agent: 'claude-analyst',
+    color: 'var(--acid-cyan)',
+    choice: 'gemini-synthesizer',
+    confidence: 0.82,
+  },
+  {
+    agent: 'gpt-contrarian',
+    color: 'var(--acid-magenta)',
+    choice: 'gemini-synthesizer',
+    confidence: 0.61,
+  },
+  {
+    agent: 'gemini-synthesizer',
+    color: 'var(--acid-green)',
+    choice: 'gemini-synthesizer',
+    confidence: 0.91,
+  },
 ];
 
 const DEMO_RECEIPT: ReceiptData = {
@@ -214,10 +220,7 @@ function apiResultToDisplay(result: DebateResult) {
     from: c.agent,
     to: c.target_agent,
     fromColor: colorMap.get(c.agent) ?? 'var(--acid-cyan)',
-    text: [
-      ...(c.issues ?? []),
-      ...(c.suggestions ?? []).map((s) => `Suggestion: ${s}`),
-    ].join(' '),
+    text: [...(c.issues ?? []), ...(c.suggestions ?? []).map((s) => `Suggestion: ${s}`)].join(' '),
     severity: c.severity,
   }));
 
@@ -282,7 +285,9 @@ function Cursor({ visible }: { visible: boolean }) {
 
 function PhaseLabel({ label, active }: { label: string; active: boolean }) {
   return (
-    <div className={`flex items-center gap-2 mb-4 ${active ? 'opacity-100' : 'opacity-40'} transition-opacity duration-500`}>
+    <div
+      className={`flex items-center gap-2 mb-4 ${active ? 'opacity-100' : 'opacity-40'} transition-opacity duration-500`}
+    >
       <span className="text-xs font-theme-data text-[var(--acid-green)]">{'>>'}</span>
       <span className="text-sm font-theme-data font-bold text-[var(--acid-green)] uppercase tracking-wider">
         {label}
@@ -306,16 +311,11 @@ function AgentProposal({
   return (
     <div className="border border-[var(--border)] bg-[var(--surface)]/30 p-4 mb-3">
       <div className="flex items-center gap-2 mb-2">
-        <span
-          className="w-2 h-2 rounded-full"
-          style={{ backgroundColor: agent.color }}
-        />
+        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: agent.color }} />
         <span className="text-xs font-theme-data font-bold" style={{ color: agent.color }}>
           {agent.name}
         </span>
-        <span className="text-xs font-theme-data text-[var(--text-muted)]">
-          [{agent.role}]
-        </span>
+        <span className="text-xs font-theme-data text-[var(--text-muted)]">[{agent.role}]</span>
       </div>
       <p className="text-xs font-theme-data text-[var(--text)] leading-relaxed whitespace-pre-wrap">
         {text}
@@ -372,10 +372,7 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
   // Auto-scroll to bottom as content appears
   const scrollToBottom = useCallback(() => {
     if (containerRef.current) {
-      containerRef.current.scrollTo({
-        top: containerRef.current.scrollHeight,
-        behavior: 'smooth',
-      });
+      containerRef.current.scrollTo({ top: containerRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, []);
 
@@ -455,26 +452,58 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
     timers.push(setTimeout(() => setPhase('topic'), (t += 300)));
 
     // Proposals phase — one per agent
-    timers.push(setTimeout(() => { setPhase('proposals'); setProposalIndex(0); }, (t += 1200)));
+    timers.push(
+      setTimeout(
+        () => {
+          setPhase('proposals');
+          setProposalIndex(0);
+        },
+        (t += 1200),
+      ),
+    );
     for (let i = 1; i < agents.length; i++) {
       const delay = isLive ? 800 : 3500;
       timers.push(setTimeout(() => setProposalIndex(i), (t += delay)));
     }
 
     // Critiques phase
-    timers.push(setTimeout(() => { setPhase('critiques'); setCritiqueIndex(0); }, (t += (isLive ? 1000 : 4000))));
+    timers.push(
+      setTimeout(
+        () => {
+          setPhase('critiques');
+          setCritiqueIndex(0);
+        },
+        (t += isLive ? 1000 : 4000),
+      ),
+    );
     for (let i = 1; i < critiques.length; i++) {
-      timers.push(setTimeout(() => setCritiqueIndex(i), (t += (isLive ? 400 : 1500))));
+      timers.push(setTimeout(() => setCritiqueIndex(i), (t += isLive ? 400 : 1500)));
     }
 
     // Votes phase
-    timers.push(setTimeout(() => { setPhase('votes'); setVoteIndex(0); }, (t += (isLive ? 800 : 2000))));
+    timers.push(
+      setTimeout(
+        () => {
+          setPhase('votes');
+          setVoteIndex(0);
+        },
+        (t += isLive ? 800 : 2000),
+      ),
+    );
     for (let i = 1; i < votes.length; i++) {
-      timers.push(setTimeout(() => setVoteIndex(i), (t += (isLive ? 300 : 600))));
+      timers.push(setTimeout(() => setVoteIndex(i), (t += isLive ? 300 : 600)));
     }
 
     // Receipt phase
-    timers.push(setTimeout(() => { setPhase('receipt'); setShowReceipt(true); }, (t += (isLive ? 800 : 1500))));
+    timers.push(
+      setTimeout(
+        () => {
+          setPhase('receipt');
+          setShowReceipt(true);
+        },
+        (t += isLive ? 800 : 1500),
+      ),
+    );
 
     return () => timers.forEach(clearTimeout);
   }, [started, agents.length, critiques.length, votes.length, isLive]);
@@ -488,7 +517,9 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
   }, [showReceipt, onDebateComplete, debateId, shareUrl]);
 
   // Scroll on phase/content changes
-  useEffect(() => { scrollToBottom(); }, [phase, proposalIndex, critiqueIndex, voteIndex, showReceipt, p0, p1, p2, scrollToBottom]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [phase, proposalIndex, critiqueIndex, voteIndex, showReceipt, p0, p1, p2, scrollToBottom]);
 
   const phaseIdx = PHASE_ORDER.indexOf(phase);
 
@@ -594,7 +625,11 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
                     <span
                       className="w-3 h-3 rounded-full animate-pulse"
                       style={{
-                        backgroundColor: ['var(--acid-cyan)', 'var(--acid-magenta)', 'var(--acid-green)'][i],
+                        backgroundColor: [
+                          'var(--acid-cyan)',
+                          'var(--acid-magenta)',
+                          'var(--acid-green)',
+                        ][i],
                         animationDelay: `${i * 200}ms`,
                       }}
                     />
@@ -623,9 +658,7 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
           {started && phaseIdx >= 0 && (
             <div className="border-l-2 border-[var(--acid-green)] pl-4">
               <span className="text-xs font-theme-data text-[var(--text-muted)]">TOPIC</span>
-              <p className="text-sm font-theme-data text-[var(--text)] mt-1 font-bold">
-                {topic}
-              </p>
+              <p className="text-sm font-theme-data text-[var(--text)] mt-1 font-bold">{topic}</p>
               <div className="flex items-center gap-3 mt-2 text-xs font-theme-data text-[var(--text-muted)]">
                 <span>{agents.length} agents</span>
                 <span>|</span>
@@ -714,28 +747,32 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
                     {receipt.verdict}
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-theme-data text-[var(--text-muted)]">CONFIDENCE</span>
+                    <span className="text-xs font-theme-data text-[var(--text-muted)]">
+                      CONFIDENCE
+                    </span>
                     <div className="w-32 h-2.5 bg-[var(--bg)] border border-[var(--border)] overflow-hidden rounded-sm">
                       <div
                         className="h-full transition-all duration-1000 rounded-sm"
                         style={{
                           width: `${Math.round(receipt.confidence * 100)}%`,
-                          backgroundColor: receipt.confidence >= 0.8
-                            ? 'var(--acid-green)'
-                            : receipt.confidence >= 0.6
-                              ? 'var(--acid-yellow, #ffd700)'
-                              : 'var(--acid-magenta)',
+                          backgroundColor:
+                            receipt.confidence >= 0.8
+                              ? 'var(--acid-green)'
+                              : receipt.confidence >= 0.6
+                                ? 'var(--acid-yellow, #ffd700)'
+                                : 'var(--acid-magenta)',
                         }}
                       />
                     </div>
                     <span
                       className="text-xs font-theme-data font-bold"
                       style={{
-                        color: receipt.confidence >= 0.8
-                          ? 'var(--acid-green)'
-                          : receipt.confidence >= 0.6
-                            ? 'var(--acid-yellow, #ffd700)'
-                            : 'var(--acid-magenta)',
+                        color:
+                          receipt.confidence >= 0.8
+                            ? 'var(--acid-green)'
+                            : receipt.confidence >= 0.6
+                              ? 'var(--acid-yellow, #ffd700)'
+                              : 'var(--acid-magenta)',
                       }}
                     >
                       {Math.round(receipt.confidence * 100)}%
@@ -791,9 +828,7 @@ export function PlaygroundDebate({ onDebateComplete }: PlaygroundDebateProps = {
                     <button
                       onClick={() => {
                         const url = `${window.location.origin}${shareUrl}`;
-                        navigator.clipboard
-                          .writeText(url)
-                          .catch(() => {});
+                        navigator.clipboard.writeText(url).catch(() => {});
                       }}
                       className="w-full py-2 text-xs font-theme-data font-bold border border-[var(--acid-green)] text-[var(--acid-green)] hover:bg-[var(--acid-green)]/10 transition-colors"
                     >

@@ -54,11 +54,7 @@ export function useSupabaseHistory() {
           isLoading: false,
         }));
       } catch (e) {
-        setState((prev) => ({
-          ...prev,
-          error: String(e),
-          isLoading: false,
-        }));
+        setState((prev) => ({ ...prev, error: String(e), isLoading: false }));
       }
     }
 
@@ -80,20 +76,9 @@ export function useSupabaseHistory() {
           fetchDebatesForLoop(loopId),
         ]);
 
-        setState((prev) => ({
-          ...prev,
-          cycles,
-          events,
-          debates,
-          isLoading: false,
-          error: null,
-        }));
+        setState((prev) => ({ ...prev, cycles, events, debates, isLoading: false, error: null }));
       } catch (e) {
-        setState((prev) => ({
-          ...prev,
-          error: String(e),
-          isLoading: false,
-        }));
+        setState((prev) => ({ ...prev, error: String(e), isLoading: false }));
       }
     }
 
@@ -105,10 +90,7 @@ export function useSupabaseHistory() {
     if (!state.isConfigured || !state.selectedLoopId) return;
 
     const unsubscribe = subscribeToEvents(state.selectedLoopId, (newEvent) => {
-      setState((prev) => ({
-        ...prev,
-        events: [...prev.events, newEvent],
-      }));
+      setState((prev) => ({ ...prev, events: [...prev.events, newEvent] }));
     });
 
     return () => {
@@ -123,10 +105,7 @@ export function useSupabaseHistory() {
     const unsubscribe = subscribeToAllEvents((newEvent) => {
       // If this is from a new loop, add it to the list
       if (!state.recentLoops.includes(newEvent.loop_id)) {
-        setState((prev) => ({
-          ...prev,
-          recentLoops: [newEvent.loop_id, ...prev.recentLoops],
-        }));
+        setState((prev) => ({ ...prev, recentLoops: [newEvent.loop_id, ...prev.recentLoops] }));
       }
     });
 
@@ -137,13 +116,7 @@ export function useSupabaseHistory() {
 
   // Select a loop
   const selectLoop = useCallback((loopId: string) => {
-    setState((prev) => ({
-      ...prev,
-      selectedLoopId: loopId,
-      cycles: [],
-      events: [],
-      debates: [],
-    }));
+    setState((prev) => ({ ...prev, selectedLoopId: loopId, cycles: [], events: [], debates: [] }));
   }, []);
 
   // Refresh current loop data
@@ -159,25 +132,11 @@ export function useSupabaseHistory() {
         fetchDebatesForLoop(state.selectedLoopId),
       ]);
 
-      setState((prev) => ({
-        ...prev,
-        cycles,
-        events,
-        debates,
-        isLoading: false,
-      }));
+      setState((prev) => ({ ...prev, cycles, events, debates, isLoading: false }));
     } catch (e) {
-      setState((prev) => ({
-        ...prev,
-        error: String(e),
-        isLoading: false,
-      }));
+      setState((prev) => ({ ...prev, error: String(e), isLoading: false }));
     }
   }, [state.selectedLoopId]);
 
-  return {
-    ...state,
-    selectLoop,
-    refresh,
-  };
+  return { ...state, selectLoop, refresh };
 }

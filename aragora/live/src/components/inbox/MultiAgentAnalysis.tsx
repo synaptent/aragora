@@ -161,10 +161,7 @@ export function MultiAgentAnalysis({
       {error && (
         <div className="text-red-400 text-xs font-theme-data py-2">
           {error}
-          <button
-            onClick={runAnalysis}
-            className="ml-2 underline hover:no-underline"
-          >
+          <button onClick={runAnalysis} className="ml-2 underline hover:no-underline">
             Retry
           </button>
         </div>
@@ -174,7 +171,9 @@ export function MultiAgentAnalysis({
         <div className="space-y-3">
           {/* Priority & Category */}
           <div className="flex items-center gap-3">
-            <span className={`px-2 py-1 text-xs font-theme-data rounded ${getPriorityColor(result.priority)}`}>
+            <span
+              className={`px-2 py-1 text-xs font-theme-data rounded ${getPriorityColor(result.priority)}`}
+            >
               {result.priority.toUpperCase()}
             </span>
             <span className="px-2 py-1 text-xs font-theme-data bg-purple-500/10 border border-purple-500/30 text-purple-400 rounded">
@@ -246,9 +245,7 @@ export function MultiAgentAnalysis({
               </span>
             )}
             {result.debate_id && (
-              <span className="ml-4">
-                Debate ID: {result.debate_id.slice(0, 8)}...
-              </span>
+              <span className="ml-4">Debate ID: {result.debate_id.slice(0, 8)}...</span>
             )}
           </div>
 

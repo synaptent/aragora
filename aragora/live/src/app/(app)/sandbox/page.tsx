@@ -54,15 +54,21 @@ export default function SandboxPage() {
             <>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-[var(--text-muted)]">Available</span>
-                <span className="text-sm font-theme-data text-[var(--acid-green)]">{poolStatus.available}</span>
+                <span className="text-sm font-theme-data text-[var(--acid-green)]">
+                  {poolStatus.available}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-[var(--text-muted)]">In Use</span>
-                <span className="text-sm font-theme-data text-[var(--acid-cyan)]">{poolStatus.in_use}</span>
+                <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+                  {poolStatus.in_use}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-xs text-[var(--text-muted)]">Pool Health</span>
-                <span className={`text-sm font-theme-data ${poolStatus.healthy ? 'text-green-400' : 'text-red-400'}`}>
+                <span
+                  className={`text-sm font-theme-data ${poolStatus.healthy ? 'text-green-400' : 'text-red-400'}`}
+                >
                   {poolStatus.healthy ? 'HEALTHY' : 'DEGRADED'}
                 </span>
               </div>
@@ -73,7 +79,9 @@ export default function SandboxPage() {
               <div className="border-t border-[var(--border)] pt-3 mt-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-[var(--text-muted)]">Mode</span>
-                  <span className="text-sm font-theme-data text-[var(--acid-cyan)]">{config.mode.toUpperCase()}</span>
+                  <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+                    {config.mode.toUpperCase()}
+                  </span>
                 </div>
               </div>
               <div className="flex justify-between items-center">
@@ -92,7 +100,9 @@ export default function SandboxPage() {
           )}
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Executions</span>
-            <span className="text-sm font-theme-data text-[var(--acid-green)]">{executionHistory.length}</span>
+            <span className="text-sm font-theme-data text-[var(--acid-green)]">
+              {executionHistory.length}
+            </span>
           </div>
         </div>
       ),
@@ -205,9 +215,7 @@ export default function SandboxPage() {
                   <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
                     code{LANGUAGE_CONFIG[language].extension}
                   </span>
-                  <span className="text-xs font-theme-data text-text-muted">
-                    Ctrl+Enter to run
-                  </span>
+                  <span className="text-xs font-theme-data text-text-muted">Ctrl+Enter to run</span>
                 </div>
                 <textarea
                   ref={textareaRef}
@@ -236,9 +244,7 @@ export default function SandboxPage() {
               <div className="border border-[var(--accent)]/30 bg-surface/50">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--accent)]/20 bg-surface/80">
                   <span className="text-xs font-theme-data text-[var(--acid-cyan)]">OUTPUT</span>
-                  {currentExecution && (
-                    <StatusBadge status={currentExecution.status} />
-                  )}
+                  {currentExecution && <StatusBadge status={currentExecution.status} />}
                 </div>
 
                 <div className="h-80 overflow-auto">
@@ -260,28 +266,36 @@ export default function SandboxPage() {
                     </div>
                   )}
 
-                  {currentExecution && (
-                    <ExecutionOutput result={currentExecution} />
-                  )}
+                  {currentExecution && <ExecutionOutput result={currentExecution} />}
                 </div>
               </div>
 
               {/* Execution Details */}
               {currentExecution && (
                 <div className="border border-[var(--acid-cyan)]/30 bg-surface/50 p-4">
-                  <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] mb-3 uppercase">Execution Details</h3>
+                  <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] mb-3 uppercase">
+                    Execution Details
+                  </h3>
                   <div className="grid grid-cols-2 gap-3 text-xs font-theme-data">
                     <div>
                       <span className="text-text-muted">Duration</span>
-                      <div className="text-text">{currentExecution.duration_seconds.toFixed(3)}s</div>
+                      <div className="text-text">
+                        {currentExecution.duration_seconds.toFixed(3)}s
+                      </div>
                     </div>
                     <div>
                       <span className="text-text-muted">Memory</span>
-                      <div className="text-text">{currentExecution.memory_used_mb.toFixed(1)} MB</div>
+                      <div className="text-text">
+                        {currentExecution.memory_used_mb.toFixed(1)} MB
+                      </div>
                     </div>
                     <div>
                       <span className="text-text-muted">Exit Code</span>
-                      <div className={currentExecution.exit_code === 0 ? 'text-green-400' : 'text-red-400'}>
+                      <div
+                        className={
+                          currentExecution.exit_code === 0 ? 'text-green-400' : 'text-red-400'
+                        }
+                      >
                         {currentExecution.exit_code}
                       </div>
                     </div>
@@ -297,7 +311,9 @@ export default function SandboxPage() {
                       <span className="text-xs text-orange-400">Policy Violations:</span>
                       <ul className="mt-1 space-y-1">
                         {currentExecution.policy_violations.map((v, i) => (
-                          <li key={i} className="text-xs text-text-muted">• {v}</li>
+                          <li key={i} className="text-xs text-text-muted">
+                            • {v}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -309,7 +325,9 @@ export default function SandboxPage() {
                       <span className="text-xs text-[var(--accent)]">Files Created:</span>
                       <ul className="mt-1 space-y-1">
                         {currentExecution.files_created.map((f, i) => (
-                          <li key={i} className="text-xs text-text-muted font-theme-data">• {f}</li>
+                          <li key={i} className="text-xs text-text-muted font-theme-data">
+                            • {f}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -348,7 +366,9 @@ export default function SandboxPage() {
 function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLES[status as keyof typeof STATUS_STYLES] || STATUS_STYLES.pending;
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data ${style.color} ${style.bgColor} border border-current/30`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data ${style.color} ${style.bgColor} border border-current/30`}
+    >
       {style.label}
     </span>
   );
@@ -407,7 +427,9 @@ function HistoryItem({ result }: { result: ExecutionResult }) {
       <span className="text-xs font-theme-data text-text-muted">
         {result.duration_seconds.toFixed(3)}s
       </span>
-      <span className={`text-xs font-theme-data ${result.exit_code === 0 ? 'text-green-400' : 'text-red-400'}`}>
+      <span
+        className={`text-xs font-theme-data ${result.exit_code === 0 ? 'text-green-400' : 'text-red-400'}`}
+      >
         exit {result.exit_code}
       </span>
     </div>

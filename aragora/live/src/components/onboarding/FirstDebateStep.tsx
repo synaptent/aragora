@@ -45,10 +45,7 @@ export function FirstDebateStep() {
   const [receipt, setReceipt] = useState<ReceiptFull | null>(null);
 
   // Use WebSocket for real-time debate progress
-  const {
-    status: wsStatus,
-    messages: wsMessages,
-  } = useDebateWebSocket({
+  const { status: wsStatus, messages: wsMessages } = useDebateWebSocket({
     debateId: firstDebateId || '',
     enabled: !!firstDebateId && debateStatus === 'running',
   });
@@ -65,65 +62,72 @@ export function FirstDebateStep() {
     }
   }, [wsStatus, debateStatus, setDebateStatus, setDebateError, updateProgress]);
 
-  const _pollReceiptIdForDebate = useCallback(async (debateId: string, signal: AbortSignal) => {
-    const maxAttempts = 12;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      if (signal.aborted) return null;
+  const _pollReceiptIdForDebate = useCallback(
+    async (debateId: string, signal: AbortSignal) => {
+      const maxAttempts = 12;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (signal.aborted) return null;
 
-      const response = await fetch(
-        `${apiBase}/api/v2/receipts?debate_id=${encodeURIComponent(debateId)}&limit=1&offset=0`,
-        { signal }
-      );
+        const response = await fetch(
+          `${apiBase}/api/v2/receipts?debate_id=${encodeURIComponent(debateId)}&limit=1&offset=0`,
+          { signal },
+        );
 
-      if (!response.ok) {
-        // Auth errors are actionable; others are usually transient.
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('Not authorized to view receipts');
+        if (!response.ok) {
+          // Auth errors are actionable; others are usually transient.
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Not authorized to view receipts');
+          }
+          throw new Error(`Failed to list receipts (HTTP ${response.status})`);
         }
-        throw new Error(`Failed to list receipts (HTTP ${response.status})`);
-      }
 
-      const data = await response.json().catch(() => ({}));
-      const receipts: ReceiptListItem[] = Array.isArray(data?.receipts) ? data.receipts : [];
-      const first = receipts[0];
-      const receiptId = (first?.receipt_id || first?.id || '').trim();
-      if (receiptId) return receiptId;
+        const data = await response.json().catch(() => ({}));
+        const receipts: ReceiptListItem[] = Array.isArray(data?.receipts) ? data.receipts : [];
+        const first = receipts[0];
+        const receiptId = (first?.receipt_id || first?.id || '').trim();
+        if (receiptId) return receiptId;
 
-      // Backoff: 0.5s, 1s, 1.5s, ... capped at 4s
-      const waitMs = Math.min(4000, 500 * attempt);
-      await new Promise((r) => setTimeout(r, waitMs));
-    }
-
-    return null;
-  }, [apiBase]);
-
-  const _pollReceiptById = useCallback(async (receiptId: string, signal: AbortSignal) => {
-    const maxAttempts = 12;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      if (signal.aborted) return null;
-
-      const response = await fetch(`${apiBase}/api/v2/receipts/${encodeURIComponent(receiptId)}`, {
-        signal,
-      });
-
-      if (response.status === 404) {
+        // Backoff: 0.5s, 1s, 1.5s, ... capped at 4s
         const waitMs = Math.min(4000, 500 * attempt);
         await new Promise((r) => setTimeout(r, waitMs));
-        continue;
       }
 
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('Not authorized to view receipts');
+      return null;
+    },
+    [apiBase],
+  );
+
+  const _pollReceiptById = useCallback(
+    async (receiptId: string, signal: AbortSignal) => {
+      const maxAttempts = 12;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        if (signal.aborted) return null;
+
+        const response = await fetch(
+          `${apiBase}/api/v2/receipts/${encodeURIComponent(receiptId)}`,
+          { signal },
+        );
+
+        if (response.status === 404) {
+          const waitMs = Math.min(4000, 500 * attempt);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
         }
-        throw new Error(`Failed to fetch receipt (HTTP ${response.status})`);
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Not authorized to view receipts');
+          }
+          throw new Error(`Failed to fetch receipt (HTTP ${response.status})`);
+        }
+
+        return (await response.json().catch(() => ({}))) as ReceiptFull;
       }
 
-      return (await response.json().catch(() => ({}))) as ReceiptFull;
-    }
-
-    return null;
-  }, [apiBase]);
+      return null;
+    },
+    [apiBase],
+  );
 
   const fetchReceipt = useCallback(async () => {
     if (!firstDebateId || debateStatus !== 'completed') return;
@@ -175,35 +179,38 @@ export function FirstDebateStep() {
     fetchReceipt();
   }, [debateStatus, firstDebateId, fetchReceipt, receipt, receiptError, receiptLoading]);
 
-  const downloadReceiptExport = useCallback(async (format: 'md' | 'pdf') => {
-    if (!firstReceiptId) {
-      setReceiptError('Receipt is not ready yet');
-      return;
-    }
+  const downloadReceiptExport = useCallback(
+    async (format: 'md' | 'pdf') => {
+      if (!firstReceiptId) {
+        setReceiptError('Receipt is not ready yet');
+        return;
+      }
 
-    setReceiptError(null);
+      setReceiptError(null);
 
-    const response = await fetch(
-      `${apiBase}/api/v2/receipts/${encodeURIComponent(firstReceiptId)}/export?format=${format}&raw=true`
-    );
-    if (!response.ok) {
-      throw new Error(`Export failed (HTTP ${response.status})`);
-    }
+      const response = await fetch(
+        `${apiBase}/api/v2/receipts/${encodeURIComponent(firstReceiptId)}/export?format=${format}&raw=true`,
+      );
+      if (!response.ok) {
+        throw new Error(`Export failed (HTTP ${response.status})`);
+      }
 
-    const blob = await response.blob();
-    const contentType = response.headers.get('content-type') || '';
-    const pdfFallback = format === 'pdf' && contentType.includes('text/html');
-    const ext = format === 'md' ? 'md' : (pdfFallback ? 'html' : 'pdf');
+      const blob = await response.blob();
+      const contentType = response.headers.get('content-type') || '';
+      const pdfFallback = format === 'pdf' && contentType.includes('text/html');
+      const ext = format === 'md' ? 'md' : pdfFallback ? 'html' : 'pdf';
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `decision-receipt-${firstReceiptId}.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [apiBase, firstReceiptId]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `decision-receipt-${firstReceiptId}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+    [apiBase, firstReceiptId],
+  );
 
   const handleStartDebate = useCallback(async () => {
     if (!firstDebateTopic.trim()) {
@@ -216,7 +223,11 @@ export function FirstDebateStep() {
     setReceiptError(null);
     setReceiptLoading(false);
     setFirstReceiptId(null);
-    updateProgress({ receiptViewed: false, firstDebateCompleted: false, firstDebateStarted: false });
+    updateProgress({
+      receiptViewed: false,
+      firstDebateCompleted: false,
+      firstDebateStarted: false,
+    });
     setDebateStatus('creating');
     setDebateError(null);
 
@@ -246,7 +257,6 @@ export function FirstDebateStep() {
       }
       setDebateStatus('running');
       updateProgress({ firstDebateStarted: true });
-
     } catch (err) {
       setDebateError(err instanceof Error ? err.message : 'Failed to start debate');
       setDebateStatus('error');
@@ -265,12 +275,8 @@ export function FirstDebateStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">
-          Run Your First Debate
-        </h3>
-        <p className="text-sm text-text-muted">
-          Enter a topic to see Aragora in action
-        </p>
+        <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">Run Your First Debate</h3>
+        <p className="text-sm text-text-muted">Enter a topic to see Aragora in action</p>
       </div>
 
       {/* Topic Input */}
@@ -326,9 +332,7 @@ export function FirstDebateStep() {
 
       {debateStatus === 'completed' && (
         <div className="p-4 border border-[var(--accent)]/30 rounded-lg bg-[var(--accent)]/5">
-          <div className="text-sm font-theme-data text-[var(--accent)] mb-2">
-            Debate completed
-          </div>
+          <div className="text-sm font-theme-data text-[var(--accent)] mb-2">Debate completed</div>
           <div className="text-xs text-text-muted">
             {receiptLoading && <>Generating your decision receipt...</>}
             {!receiptLoading && receipt && <>Decision receipt ready.</>}
@@ -338,11 +342,7 @@ export function FirstDebateStep() {
 
           {/* Receipt panel */}
           <div className="mt-3 space-y-3">
-            {receiptError && (
-              <div className="text-xs text-accent-red">
-                {receiptError}
-              </div>
-            )}
+            {receiptError && <div className="text-xs text-accent-red">{receiptError}</div>}
 
             {receiptLoading && (
               <div className="w-full h-1 bg-[var(--accent)]/20 rounded-full overflow-hidden">
@@ -359,7 +359,9 @@ export function FirstDebateStep() {
                       {(receipt.verdict || 'NEEDS_REVIEW').toString().toUpperCase()}
                     </span>
                     <span className="text-[10px] font-theme-data text-text-muted">
-                      {typeof receipt.confidence === 'number' ? `${Math.round(receipt.confidence * 100)}%` : '...'}
+                      {typeof receipt.confidence === 'number'
+                        ? `${Math.round(receipt.confidence * 100)}%`
+                        : '...'}
                     </span>
                   </div>
                 </div>
@@ -367,7 +369,9 @@ export function FirstDebateStep() {
                 <div className="grid grid-cols-2 gap-2 text-xs text-text">
                   <div>
                     <div className="text-[10px] text-text-muted font-theme-data">Receipt ID</div>
-                    <div className="font-theme-data break-all">{firstReceiptId || receipt.receipt_id || '...'}</div>
+                    <div className="font-theme-data break-all">
+                      {firstReceiptId || receipt.receipt_id || '...'}
+                    </div>
                   </div>
                   <div>
                     <div className="text-[10px] text-text-muted font-theme-data">Risk</div>
@@ -379,13 +383,21 @@ export function FirstDebateStep() {
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
-                    onClick={() => downloadReceiptExport('md').catch((e) => setReceiptError(e instanceof Error ? e.message : 'Export failed'))}
+                    onClick={() =>
+                      downloadReceiptExport('md').catch((e) =>
+                        setReceiptError(e instanceof Error ? e.message : 'Export failed'),
+                      )
+                    }
                     className="px-3 py-1.5 text-xs font-theme-data border border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/10 transition-colors"
                   >
                     DOWNLOAD MD
                   </button>
                   <button
-                    onClick={() => downloadReceiptExport('pdf').catch((e) => setReceiptError(e instanceof Error ? e.message : 'Export failed'))}
+                    onClick={() =>
+                      downloadReceiptExport('pdf').catch((e) =>
+                        setReceiptError(e instanceof Error ? e.message : 'Export failed'),
+                      )
+                    }
                     className="px-3 py-1.5 text-xs font-theme-data border border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors"
                   >
                     DOWNLOAD PDF
@@ -407,10 +419,14 @@ export function FirstDebateStep() {
             {!receiptLoading && !receipt && (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => fetchReceipt().catch((err) => {
-                    console.warn('[FirstDebateStep] Retry receipt fetch failed:', err);
-                    setReceiptError(err instanceof Error ? err.message : 'Failed to load receipt');
-                  })}
+                  onClick={() =>
+                    fetchReceipt().catch((err) => {
+                      console.warn('[FirstDebateStep] Retry receipt fetch failed:', err);
+                      setReceiptError(
+                        err instanceof Error ? err.message : 'Failed to load receipt',
+                      );
+                    })
+                  }
                   className="px-3 py-1.5 text-xs font-theme-data border border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10 transition-colors"
                 >
                   RETRY RECEIPT
@@ -447,7 +463,8 @@ export function FirstDebateStep() {
       {/* Template Info */}
       {selectedTemplate && debateStatus === 'idle' && (
         <div className="text-center text-xs text-text-muted">
-          Using template: {selectedTemplate.name} ({selectedTemplate.agentsCount} agents, {selectedTemplate.rounds} rounds)
+          Using template: {selectedTemplate.name} ({selectedTemplate.agentsCount} agents,{' '}
+          {selectedTemplate.rounds} rounds)
         </div>
       )}
     </div>

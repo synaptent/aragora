@@ -41,9 +41,9 @@ export function CalibrationPanel({ apiBase, events = [] }: CalibrationPanelProps
   const [error, setError] = useState<string | null>(null);
 
   // Extract calibration_update events from stream
-  const calibrationEvents = useMemo(() =>
-    events.filter(e => e.type === 'calibration_update'),
-    [events]
+  const calibrationEvents = useMemo(
+    () => events.filter((e) => e.type === 'calibration_update'),
+    [events],
   );
   const latestCalibrationEvent = calibrationEvents[calibrationEvents.length - 1];
 
@@ -62,16 +62,19 @@ export function CalibrationPanel({ apiBase, events = [] }: CalibrationPanelProps
     }
   }, [apiBase]);
 
-  const fetchAgentDetail = useCallback(async (agentName: string) => {
-    try {
-      const response = await fetch(`${apiBase}/api/agent/${agentName}/calibration`);
-      if (!response.ok) throw new Error('Failed to fetch agent calibration');
-      const data = await response.json();
-      setAgentDetail(data);
-    } catch (err) {
-      logger.error('Failed to fetch agent calibration:', err);
-    }
-  }, [apiBase]);
+  const fetchAgentDetail = useCallback(
+    async (agentName: string) => {
+      try {
+        const response = await fetch(`${apiBase}/api/agent/${agentName}/calibration`);
+        if (!response.ok) throw new Error('Failed to fetch agent calibration');
+        const data = await response.json();
+        setAgentDetail(data);
+      } catch (err) {
+        logger.error('Failed to fetch agent calibration:', err);
+      }
+    },
+    [apiBase],
+  );
 
   // Initial fetch on expand
   useEffect(() => {
@@ -115,10 +118,7 @@ export function CalibrationPanel({ apiBase, events = [] }: CalibrationPanelProps
   return (
     <div className="panel" style={{ padding: 0 }}>
       {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="panel-collapsible-header w-full"
-      >
+      <button onClick={() => setExpanded(!expanded)} className="panel-collapsible-header w-full">
         <div className="flex items-center gap-2">
           <span className="text-[var(--acid-cyan)] font-theme-data text-sm">[CALIBRATION]</span>
           <span className="text-text-muted text-xs">Confidence accuracy scores</span>
@@ -145,9 +145,9 @@ export function CalibrationPanel({ apiBase, events = [] }: CalibrationPanelProps
                 {agents.map((agent, idx) => (
                   <button
                     key={agent.name}
-                    onClick={() => setSelectedAgent(
-                      selectedAgent === agent.name ? null : agent.name
-                    )}
+                    onClick={() =>
+                      setSelectedAgent(selectedAgent === agent.name ? null : agent.name)
+                    }
                     className={`w-full text-left border p-2 text-xs transition-colors ${
                       selectedAgent === agent.name
                         ? 'border-[var(--accent)] bg-[var(--accent)]/10'
@@ -157,14 +157,21 @@ export function CalibrationPanel({ apiBase, events = [] }: CalibrationPanelProps
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
                         <span className="text-text-muted w-4">#{idx + 1}</span>
-                        <span className="font-theme-data text-[var(--acid-cyan)]">{agent.name}</span>
+                        <span className="font-theme-data text-[var(--acid-cyan)]">
+                          {agent.name}
+                        </span>
                       </div>
                       <span className={getScoreColor(agent.calibration_score)}>
                         {(agent.calibration_score * 100).toFixed(0)}%
                       </span>
                     </div>
                     <div className="flex justify-between mt-1 text-text-muted/70">
-                      <span>Brier: <span className={getBrierColor(agent.brier_score)}>{agent.brier_score.toFixed(3)}</span></span>
+                      <span>
+                        Brier:{' '}
+                        <span className={getBrierColor(agent.brier_score)}>
+                          {agent.brier_score.toFixed(3)}
+                        </span>
+                      </span>
                       <span>Acc: {(agent.accuracy * 100).toFixed(0)}%</span>
                       <span>{agent.games} games</span>
                     </div>
@@ -176,9 +183,14 @@ export function CalibrationPanel({ apiBase, events = [] }: CalibrationPanelProps
               {agentDetail && (
                 <div className="border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 p-3 space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="font-theme-data text-[var(--acid-cyan)] text-sm">{agentDetail.agent}</span>
+                    <span className="font-theme-data text-[var(--acid-cyan)] text-sm">
+                      {agentDetail.agent}
+                    </span>
                     <span className="text-xs text-text-muted">
-                      ECE: <span className={getBrierColor(agentDetail.ece)}>{agentDetail.ece.toFixed(3)}</span>
+                      ECE:{' '}
+                      <span className={getBrierColor(agentDetail.ece)}>
+                        {agentDetail.ece.toFixed(3)}
+                      </span>
                     </span>
                   </div>
 
@@ -199,34 +211,39 @@ export function CalibrationPanel({ apiBase, events = [] }: CalibrationPanelProps
                               style={{ width: `${bucket.actual * 100}%`, opacity: 0.7 }}
                             />
                           </div>
-                          <span className="w-8 text-right">
-                            {bucket.count}
-                          </span>
+                          <span className="w-8 text-right">{bucket.count}</span>
                         </div>
                       ))}
                       <div className="text-xs text-text-muted/50 flex gap-4 mt-1">
-                        <span><span className="inline-block w-2 h-2 bg-[var(--acid-cyan)]/50 mr-1" />predicted</span>
-                        <span><span className="inline-block w-2 h-2 bg-[var(--accent)] mr-1" />actual</span>
+                        <span>
+                          <span className="inline-block w-2 h-2 bg-[var(--acid-cyan)]/50 mr-1" />
+                          predicted
+                        </span>
+                        <span>
+                          <span className="inline-block w-2 h-2 bg-[var(--accent)] mr-1" />
+                          actual
+                        </span>
                       </div>
                     </div>
                   )}
 
                   {/* Domain calibration */}
-                  {agentDetail.domain_calibration && Object.keys(agentDetail.domain_calibration).length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-[var(--acid-cyan)]/20">
-                      <div className="text-xs text-text-muted mb-1">By domain:</div>
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(agentDetail.domain_calibration).map(([domain, score]) => (
-                          <span
-                            key={domain}
-                            className={`text-xs px-1 py-0.5 border border-[var(--accent)]/30 ${getScoreColor(score as number)}`}
-                          >
-                            {domain}: {((score as number) * 100).toFixed(0)}%
-                          </span>
-                        ))}
+                  {agentDetail.domain_calibration &&
+                    Object.keys(agentDetail.domain_calibration).length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-[var(--acid-cyan)]/20">
+                        <div className="text-xs text-text-muted mb-1">By domain:</div>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(agentDetail.domain_calibration).map(([domain, score]) => (
+                            <span
+                              key={domain}
+                              className={`text-xs px-1 py-0.5 border border-[var(--accent)]/30 ${getScoreColor(score as number)}`}
+                            >
+                              {domain}: {((score as number) * 100).toFixed(0)}%
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               )}
 

@@ -14,7 +14,11 @@ interface UseLandingDebateProgressOptions {
   enabled: boolean;
 }
 
-export function useLandingDebateProgress({ debateId, wsUrl, enabled }: UseLandingDebateProgressOptions) {
+export function useLandingDebateProgress({
+  debateId,
+  wsUrl,
+  enabled,
+}: UseLandingDebateProgressOptions) {
   const [latestEvent, setLatestEvent] = useState<DebateProgressEvent | null>(null);
   const [eventCount, setEventCount] = useState(0);
   const [connected, setConnected] = useState(false);
@@ -30,7 +34,9 @@ export function useLandingDebateProgress({ debateId, wsUrl, enabled }: UseLandin
     timerRef.current = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startTime.current) / 1000));
     }, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [enabled]);
 
   // WebSocket connection
@@ -51,12 +57,16 @@ export function useLandingDebateProgress({ debateId, wsUrl, enabled }: UseLandin
           const mapped = mapEventToProgress(data);
           if (mapped) {
             setLatestEvent(mapped);
-            setEventCount(c => c + 1);
+            setEventCount((c) => c + 1);
           }
-        } catch { /* ignore parse errors */ }
+        } catch {
+          /* ignore parse errors */
+        }
       };
 
-      return () => { ws.close(); };
+      return () => {
+        ws.close();
+      };
     } catch {
       return;
     }

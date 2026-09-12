@@ -117,9 +117,17 @@ const EVENT_METADATA: Record<string, { label: string; accent: string; background
   judge: { label: 'Judge', accent: '#d97706', background: 'rgba(217, 119, 6, 0.08)' },
   consensus: { label: 'Consensus', accent: '#059669', background: 'rgba(5, 150, 105, 0.08)' },
   converged: { label: 'Converged', accent: '#059669', background: 'rgba(5, 150, 105, 0.08)' },
-  agent_reasoning: { label: 'Reasoning', accent: '#0f766e', background: 'rgba(15, 118, 110, 0.08)' },
+  agent_reasoning: {
+    label: 'Reasoning',
+    accent: '#0f766e',
+    background: 'rgba(15, 118, 110, 0.08)',
+  },
   agent_thinking: { label: 'Thinking', accent: '#0891b2', background: 'rgba(8, 145, 178, 0.08)' },
-  argument_strength: { label: 'Strength', accent: '#ca8a04', background: 'rgba(202, 138, 4, 0.08)' },
+  argument_strength: {
+    label: 'Strength',
+    accent: '#ca8a04',
+    background: 'rgba(202, 138, 4, 0.08)',
+  },
   crux_identified: { label: 'Crux', accent: '#be123c', background: 'rgba(190, 18, 60, 0.08)' },
   default: { label: 'Update', accent: '#475569', background: 'rgba(71, 85, 105, 0.08)' },
 };
@@ -144,12 +152,12 @@ function buildEventCopy(event: SpectateEvent): string | null {
   const data = event.data || {};
 
   const directCopy =
-    getText(data.details)
-    ?? getText(data.summary)
-    ?? getText(data.message)
-    ?? getText(data.reasoning)
-    ?? getText(data.crux_description)
-    ?? getText(data.verdict);
+    getText(data.details) ??
+    getText(data.summary) ??
+    getText(data.message) ??
+    getText(data.reasoning) ??
+    getText(data.crux_description) ??
+    getText(data.verdict);
 
   if (directCopy) {
     return directCopy;
@@ -222,8 +230,8 @@ function pickDominantDebateId(events: SpectateEvent[]): string | null {
 
   for (const [debateId, summary] of grouped.entries()) {
     if (
-      summary.count > winnerCount
-      || (summary.count === winnerCount && summary.lastEventMs > winnerTimestamp)
+      summary.count > winnerCount ||
+      (summary.count === winnerCount && summary.lastEventMs > winnerTimestamp)
     ) {
       winner = debateId;
       winnerCount = summary.count;
@@ -313,9 +321,7 @@ export function LiveDemoSection() {
     }
 
     const intervalId = window.setInterval(() => {
-      setDemoVisibleCount((current) =>
-        current >= FALLBACK_STREAM.length ? 3 : current + 1,
-      );
+      setDemoVisibleCount((current) => (current >= FALLBACK_STREAM.length ? 3 : current + 1));
     }, 1500);
 
     return () => window.clearInterval(intervalId);
@@ -327,13 +333,15 @@ export function LiveDemoSection() {
   if (loaded) {
     if (!status?.active) {
       bridgeBadge = 'Bridge offline';
-      bridgeSummary = 'Public spectate is offline right now, so the sample debate below stays illustrative.';
+      bridgeSummary =
+        'Public spectate is offline right now, so the sample debate below stays illustrative.';
     } else if (recentEventCount > 0) {
       bridgeBadge = 'Bridge active';
       bridgeSummary = `${recentEventCount} recent event${recentEventCount === 1 ? '' : 's'} in the last ${activityWindowMinutes} minute${activityWindowMinutes === 1 ? '' : 's'}.`;
     } else {
       bridgeBadge = 'Bridge ready';
-      bridgeSummary = 'Public spectate is online, but no recent live debate activity is visible yet.';
+      bridgeSummary =
+        'Public spectate is online, but no recent live debate activity is visible yet.';
     }
   }
 
@@ -362,13 +370,23 @@ export function LiveDemoSection() {
       <div className="max-w-4xl mx-auto">
         <p
           className="text-center uppercase tracking-widest"
-          style={{ fontSize: isDark ? '16px' : '18px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)', marginBottom: '20px' }}
+          style={{
+            fontSize: isDark ? '16px' : '18px',
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-landing)',
+            marginBottom: '20px',
+          }}
         >
           {isDark ? '> SEE IT IN ACTION' : 'SEE IT IN ACTION'}
         </p>
         <p
           className="text-center"
-          style={{ fontSize: isDark ? '16px' : '18px', color: 'var(--text)', fontFamily: 'var(--font-landing)', marginBottom: '48px' }}
+          style={{
+            fontSize: isDark ? '16px' : '18px',
+            color: 'var(--text)',
+            fontFamily: 'var(--font-landing)',
+            marginBottom: '48px',
+          }}
         >
           Watch agents argue, critique, and converge without leaving the landing page.
         </p>
@@ -458,7 +476,11 @@ export function LiveDemoSection() {
             </span>
             <span
               className="ml-auto"
-              style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-landing)' }}
+              style={{
+                fontSize: '10px',
+                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-landing)',
+              }}
             >
               {hasLiveTranscript
                 ? `Streaming recent bridge events${activeRound ? ` · Round ${activeRound}` : ''}`
@@ -467,19 +489,11 @@ export function LiveDemoSection() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.9fr)]">
-            <div
-              style={{
-                borderRight: '1px solid var(--border)',
-              }}
-            >
+            <div style={{ borderRight: '1px solid var(--border)' }}>
               <div
                 data-testid="live-debate-transcript"
                 aria-live="polite"
-                style={{
-                  display: 'grid',
-                  gap: '12px',
-                  padding: '20px',
-                }}
+                style={{ display: 'grid', gap: '12px', padding: '20px' }}
               >
                 {transcriptEvents.map((event, index) => (
                   <article
@@ -513,23 +527,12 @@ export function LiveDemoSection() {
                         {event.label}
                       </span>
                       {event.agentName ? (
-                        <span
-                          style={{
-                            fontSize: '12px',
-                            color: 'var(--text)',
-                            fontWeight: 700,
-                          }}
-                        >
+                        <span style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 700 }}>
                           {event.agentName}
                         </span>
                       ) : null}
                       {event.roundNumber ? (
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                          }}
-                        >
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                           Round {event.roundNumber}
                         </span>
                       ) : null}
@@ -563,22 +566,11 @@ export function LiveDemoSection() {
               </div>
             </div>
 
-            <div
-              style={{
-                padding: '20px',
-                display: 'grid',
-                gap: '18px',
-                alignContent: 'start',
-              }}
-            >
+            <div style={{ padding: '20px', display: 'grid', gap: '18px', alignContent: 'start' }}>
               <div>
                 <p
                   className="uppercase tracking-widest"
-                  style={{
-                    fontSize: '10px',
-                    color: 'var(--text-muted)',
-                    marginBottom: '10px',
-                  }}
+                  style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '10px' }}
                 >
                   Stream source
                 </p>
@@ -615,11 +607,7 @@ export function LiveDemoSection() {
               <div>
                 <p
                   className="uppercase tracking-widest"
-                  style={{
-                    fontSize: '10px',
-                    color: 'var(--text-muted)',
-                    marginBottom: '10px',
-                  }}
+                  style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '10px' }}
                 >
                   Agents on stage
                 </p>
@@ -652,11 +640,7 @@ export function LiveDemoSection() {
               >
                 <p
                   className="uppercase tracking-widest"
-                  style={{
-                    fontSize: '10px',
-                    color: 'var(--text-muted)',
-                    marginBottom: '8px',
-                  }}
+                  style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '8px' }}
                 >
                   What visitors see
                 </p>
@@ -669,7 +653,8 @@ export function LiveDemoSection() {
                     margin: 0,
                   }}
                 >
-                  Proposal, critique, reasoning, and consensus events land in-order so visitors can follow the argument instead of reading a static summary.
+                  Proposal, critique, reasoning, and consensus events land in-order so visitors can
+                  follow the argument instead of reading a static summary.
                 </p>
               </div>
             </div>

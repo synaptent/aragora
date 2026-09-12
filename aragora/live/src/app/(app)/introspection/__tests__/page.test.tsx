@@ -35,7 +35,9 @@ jest.mock('@/components/ErrorWithRetry', () => ({
   ErrorWithRetry: ({ error, onRetry }: { error: string; onRetry: () => void }) => (
     <div data-testid="error-display">
       <span>{error}</span>
-      <button onClick={onRetry} data-testid="retry-button">Retry</button>
+      <button onClick={onRetry} data-testid="retry-button">
+        Retry
+      </button>
     </div>
   ),
 }));
@@ -126,7 +128,9 @@ describe('IntrospectionPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/api/introspection/agents');
-        expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/api/introspection/leaderboard?limit=20');
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:8080/api/introspection/leaderboard?limit=20',
+        );
       });
     });
 
@@ -135,18 +139,16 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [
-                { name: 'claude', reputation_score: 0.85, total_critiques: 100 },
-                { name: 'gpt-4', reputation_score: 0.78, total_critiques: 80 },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                agents: [
+                  { name: 'claude', reputation_score: 0.85, total_critiques: 100 },
+                  { name: 'gpt-4', reputation_score: 0.78, total_critiques: 80 },
+                ],
+              }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -181,10 +183,7 @@ describe('IntrospectionPage', () => {
     });
 
     it('displays error for non-ok response', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
       renderWithProviders(<IntrospectionPage />);
 
@@ -200,15 +199,13 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [{ name: 'claude', reputation_score: 0.85, total_critiques: 100 }],
-            }),
+            json: () =>
+              Promise.resolve({
+                agents: [{ name: 'claude', reputation_score: 0.85, total_critiques: 100 }],
+              }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -225,27 +222,23 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents/claude')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agent_name: 'claude',
-              strengths: ['Logical reasoning'],
-              weaknesses: ['Verbose'],
-              specializations: ['Code review'],
-              recent_debates: [],
-            }),
+            json: () =>
+              Promise.resolve({
+                agent_name: 'claude',
+                strengths: ['Logical reasoning'],
+                weaknesses: ['Verbose'],
+                specializations: ['Code review'],
+                recent_debates: [],
+              }),
           });
         }
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [{ name: 'claude', reputation_score: 0.85 }],
-            }),
+            json: () => Promise.resolve({ agents: [{ name: 'claude', reputation_score: 0.85 }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -260,7 +253,7 @@ describe('IntrospectionPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          'http://localhost:8080/api/introspection/agents/claude'
+          'http://localhost:8080/api/introspection/agents/claude',
         );
       });
     });
@@ -291,13 +284,14 @@ describe('IntrospectionPage', () => {
       const user = userEvent.setup();
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          agents: [],
-          leaderboard: [
-            { agent_name: 'claude', reputation_score: 0.92, total_critiques: 150, rank: 1 },
-            { agent_name: 'gpt-4', reputation_score: 0.88, total_critiques: 120, rank: 2 },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            agents: [],
+            leaderboard: [
+              { agent_name: 'claude', reputation_score: 0.92, total_critiques: 150, rank: 1 },
+              { agent_name: 'gpt-4', reputation_score: 0.88, total_critiques: 120, rank: 2 },
+            ],
+          }),
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -341,23 +335,25 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents/claude')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agent_name: 'claude',
-              strengths: [],
-              weaknesses: [],
-              specializations: [],
-              recent_debates: [],
-            }),
+            json: () =>
+              Promise.resolve({
+                agent_name: 'claude',
+                strengths: [],
+                weaknesses: [],
+                specializations: [],
+                recent_debates: [],
+              }),
           });
         }
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            agents: [],
-            leaderboard: [
-              { agent_name: 'claude', reputation_score: 0.92, total_critiques: 150, rank: 1 },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              agents: [],
+              leaderboard: [
+                { agent_name: 'claude', reputation_score: 0.92, total_critiques: 150, rank: 1 },
+              ],
+            }),
         });
       });
 
@@ -378,7 +374,7 @@ describe('IntrospectionPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          'http://localhost:8080/api/introspection/agents/claude'
+          'http://localhost:8080/api/introspection/agents/claude',
         );
       });
     });
@@ -391,33 +387,29 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents/claude') && !url.includes('?')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agent_name: 'claude',
-              reputation: {
-                score: 0.85,
-                total_critiques: 100,
-                win_rate: 0.72,
-                average_helpfulness: 0.88,
-              },
-              strengths: ['Logical reasoning', 'Clear explanations'],
-              weaknesses: ['Sometimes verbose'],
-              specializations: ['Code review', 'Documentation'],
-              recent_debates: [],
-            }),
+            json: () =>
+              Promise.resolve({
+                agent_name: 'claude',
+                reputation: {
+                  score: 0.85,
+                  total_critiques: 100,
+                  win_rate: 0.72,
+                  average_helpfulness: 0.88,
+                },
+                strengths: ['Logical reasoning', 'Clear explanations'],
+                weaknesses: ['Sometimes verbose'],
+                specializations: ['Code review', 'Documentation'],
+                recent_debates: [],
+              }),
           });
         }
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [{ name: 'claude', reputation_score: 0.85 }],
-            }),
+            json: () => Promise.resolve({ agents: [{ name: 'claude', reputation_score: 0.85 }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -445,32 +437,24 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents/claude') && !url.includes('?')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agent_name: 'claude',
-              calibration: {
-                confidence: 0.75,
-                accuracy: 0.82,
-                calibration_error: 0.07,
-              },
-              strengths: [],
-              weaknesses: [],
-              specializations: [],
-              recent_debates: [],
-            }),
+            json: () =>
+              Promise.resolve({
+                agent_name: 'claude',
+                calibration: { confidence: 0.75, accuracy: 0.82, calibration_error: 0.07 },
+                strengths: [],
+                weaknesses: [],
+                specializations: [],
+                recent_debates: [],
+              }),
           });
         }
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [{ name: 'claude' }],
-            }),
+            json: () => Promise.resolve({ agents: [{ name: 'claude' }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -497,35 +481,31 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents/claude') && !url.includes('?')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agent_name: 'claude',
-              strengths: [],
-              weaknesses: [],
-              specializations: [],
-              recent_debates: [
-                {
-                  debate_id: 'debate-123',
-                  task: 'Code review for authentication module',
-                  role: 'critic',
-                  outcome: 'win',
-                  timestamp: '2024-01-15T10:00:00Z',
-                },
-              ],
-            }),
+            json: () =>
+              Promise.resolve({
+                agent_name: 'claude',
+                strengths: [],
+                weaknesses: [],
+                specializations: [],
+                recent_debates: [
+                  {
+                    debate_id: 'debate-123',
+                    task: 'Code review for authentication module',
+                    role: 'critic',
+                    outcome: 'win',
+                    timestamp: '2024-01-15T10:00:00Z',
+                  },
+                ],
+              }),
           });
         }
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [{ name: 'claude' }],
-            }),
+            json: () => Promise.resolve({ agents: [{ name: 'claude' }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -551,27 +531,23 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents/claude') && !url.includes('?')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agent_name: 'claude',
-              strengths: [],
-              weaknesses: [],
-              specializations: [],
-              recent_debates: [],
-            }),
+            json: () =>
+              Promise.resolve({
+                agent_name: 'claude',
+                strengths: [],
+                weaknesses: [],
+                specializations: [],
+                recent_debates: [],
+              }),
           });
         }
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [{ name: 'claude' }],
-            }),
+            json: () => Promise.resolve({ agents: [{ name: 'claude' }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -633,15 +609,10 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [{ name: 'claude', reputation_score: 0.85 }],
-            }),
+            json: () => Promise.resolve({ agents: [{ name: 'claude', reputation_score: 0.85 }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);
@@ -657,15 +628,10 @@ describe('IntrospectionPage', () => {
         if (url.includes('/agents')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              agents: [{ name: 'claude', reputation_score: 0.7 }],
-            }),
+            json: () => Promise.resolve({ agents: [{ name: 'claude', reputation_score: 0.7 }] }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ leaderboard: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ leaderboard: [] }) });
       });
 
       renderWithProviders(<IntrospectionPage />);

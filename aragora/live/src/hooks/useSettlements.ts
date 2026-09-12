@@ -46,7 +46,7 @@ export function useSettlements(options?: UseSWRFetchOptions<SettlementSummary>) 
     {
       refreshInterval: 60000, // Refresh every 60 seconds
       ...options,
-    }
+    },
   );
 
   return {

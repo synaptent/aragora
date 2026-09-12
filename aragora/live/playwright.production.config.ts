@@ -29,9 +29,7 @@ export default defineConfig({
   timeout: 60000,
 
   // Expect timeout
-  expect: {
-    timeout: 15000,
-  },
+  expect: { timeout: 15000 },
 
   // Reporter configuration
   reporter: [
@@ -71,17 +69,9 @@ export default defineConfig({
   projects: [
     {
       name: 'production-chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 1920, height: 1080 },
-      },
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1920, height: 1080 } },
     },
-    {
-      name: 'production-mobile',
-      use: {
-        ...devices['iPhone 12'],
-      },
-    },
+    { name: 'production-mobile', use: { ...devices['iPhone 12'] } },
   ],
 
   // No web server - we're testing live production

@@ -33,49 +33,52 @@ export function DebateListPanel({ onSelectDebate, limit = 20 }: DebateListPanelP
 
   const apiBase = API_BASE_URL;
 
-  const fetchDebates = useCallback(async (reset = false) => {
-    try {
-      setLoading(true);
-      const currentOffset = reset ? 0 : offset;
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (tokens?.access_token) {
-        headers['Authorization'] = `Bearer ${tokens.access_token}`;
+  const fetchDebates = useCallback(
+    async (reset = false) => {
+      try {
+        setLoading(true);
+        const currentOffset = reset ? 0 : offset;
+        const headers: HeadersInit = { 'Content-Type': 'application/json' };
+        if (tokens?.access_token) {
+          headers['Authorization'] = `Bearer ${tokens.access_token}`;
+        }
+        const response = await fetch(
+          `${apiBase}/api/debates?limit=${limit}&offset=${currentOffset}`,
+          { headers },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch debates: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const newDebates = data.debates || [];
+
+        if (reset) {
+          setDebates(newDebates);
+          setOffset(limit);
+        } else {
+          setDebates((prev) => [...prev, ...newDebates]);
+          setOffset((prev) => prev + limit);
+        }
+
+        setHasMore(newDebates.length === limit);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load debates');
+      } finally {
+        setLoading(false);
       }
-      const response = await fetch(
-        `${apiBase}/api/debates?limit=${limit}&offset=${currentOffset}`,
-        { headers }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch debates: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const newDebates = data.debates || [];
-
-      if (reset) {
-        setDebates(newDebates);
-        setOffset(limit);
-      } else {
-        setDebates(prev => [...prev, ...newDebates]);
-        setOffset(prev => prev + limit);
-      }
-
-      setHasMore(newDebates.length === limit);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load debates');
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase, limit, offset, tokens?.access_token]);
+    },
+    [apiBase, limit, offset, tokens?.access_token],
+  );
 
   useEffect(() => {
     fetchDebates(true);
   }, [fetchDebates]);
 
   const filteredDebates = useMemo(() => {
-    return debates.filter(debate => {
+    return debates.filter((debate) => {
       if (filter === 'consensus') return debate.consensus_reached;
       if (filter === 'no-consensus') return !debate.consensus_reached;
       return true;
@@ -148,9 +151,7 @@ export function DebateListPanel({ onSelectDebate, limit = 20 }: DebateListPanelP
 
       <div className="max-h-96">
         {filteredDebates.length === 0 && !loading ? (
-          <div className="text-zinc-500 dark:text-zinc-400 text-center py-8">
-            No debates found
-          </div>
+          <div className="text-zinc-500 dark:text-zinc-400 text-center py-8">No debates found</div>
         ) : (
           <VirtualList
             items={filteredDebates}
@@ -200,9 +201,7 @@ export function DebateListPanel({ onSelectDebate, limit = 20 }: DebateListPanelP
                         </span>
                       ))}
                       {debate.agents.length > 4 && (
-                        <span className="text-zinc-500 text-xs">
-                          +{debate.agents.length - 4}
-                        </span>
+                        <span className="text-zinc-500 text-xs">+{debate.agents.length - 4}</span>
                       )}
                     </div>
                   </div>
@@ -220,7 +219,8 @@ export function DebateListPanel({ onSelectDebate, limit = 20 }: DebateListPanelP
                 </div>
                 {debate.winner && (
                   <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    Winner: <span className="text-blue-600 dark:text-blue-400">{debate.winner}</span>
+                    Winner:{' '}
+                    <span className="text-blue-600 dark:text-blue-400">{debate.winner}</span>
                   </div>
                 )}
               </div>

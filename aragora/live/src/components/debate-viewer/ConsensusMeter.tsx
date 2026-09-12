@@ -21,7 +21,7 @@ type ConsensusState = 'waiting' | 'diverging' | 'converging' | 'consensus' | 'de
 function getConsensusState(
   votes: AgentVote[],
   totalAgents: number,
-  consensusReached: boolean
+  consensusReached: boolean,
 ): ConsensusState {
   if (votes.length === 0) return 'waiting';
   if (consensusReached) return 'consensus';
@@ -56,7 +56,11 @@ function getStateConfig(state: ConsensusState) {
     case 'diverging':
       return { color: 'text-yellow-400', bg: 'bg-yellow-400/20', label: 'DIVERGING' };
     case 'converging':
-      return { color: 'text-[var(--acid-cyan)]', bg: 'bg-[var(--acid-cyan)]/20', label: 'CONVERGING' };
+      return {
+        color: 'text-[var(--acid-cyan)]',
+        bg: 'bg-[var(--acid-cyan)]/20',
+        label: 'CONVERGING',
+      };
     case 'consensus':
       return { color: 'text-[var(--accent)]', bg: 'bg-[var(--accent)]/20', label: 'CONSENSUS' };
     case 'deadlock':
@@ -194,7 +198,9 @@ export function ConsensusMeter({ events, agents }: ConsensusMeterProps) {
         {/* Consensus Result */}
         {consensusData?.reached && (
           <div className="pt-2 border-t border-[var(--accent)]/20">
-            <div className="text-xs font-theme-data text-[var(--accent)] mb-1">CONSENSUS REACHED</div>
+            <div className="text-xs font-theme-data text-[var(--accent)] mb-1">
+              CONSENSUS REACHED
+            </div>
             {consensusData.answer && (
               <div className="text-xs font-theme-data text-text-primary bg-[var(--accent)]/10 p-2 border border-[var(--accent)]/30">
                 {consensusData.answer}

@@ -101,9 +101,7 @@ export function PhaseIndicator({
         <span className="text-text-muted">
           R{currentRound}: {phase.name}
         </span>
-        {isComplete && (
-          <span className="text-green-400">[COMPLETE]</span>
-        )}
+        {isComplete && <span className="text-green-400">[COMPLETE]</span>}
       </div>
     );
   }
@@ -117,9 +115,7 @@ export function PhaseIndicator({
           <div className="text-sm font-theme-data text-text">
             Round {currentRound}: {phase.name}
           </div>
-          <div className="text-xs font-theme-data text-text-muted">
-            {phase.cognitiveMode} Mode
-          </div>
+          <div className="text-xs font-theme-data text-text-muted">{phase.cognitiveMode} Mode</div>
         </div>
         {isComplete && (
           <span className="ml-auto px-2 py-1 text-xs font-theme-data bg-green-900/30 text-green-400 border border-green-500/30">
@@ -129,9 +125,7 @@ export function PhaseIndicator({
       </div>
 
       {/* Phase Description */}
-      <div className="text-xs font-theme-data text-text-muted pl-10">
-        {phase.description}
-      </div>
+      <div className="text-xs font-theme-data text-text-muted pl-10">{phase.description}</div>
 
       {/* Progress Bar */}
       {showProgress && (
@@ -157,8 +151,8 @@ export function PhaseIndicator({
                   p.number < currentRound
                     ? 'bg-accent'
                     : p.number === currentRound
-                    ? 'bg-accent animate-pulse'
-                    : 'bg-border'
+                      ? 'bg-accent animate-pulse'
+                      : 'bg-border'
                 }`}
                 title={`R${p.number}: ${p.name}`}
               />

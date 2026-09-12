@@ -24,28 +24,25 @@ interface ReportExportModalProps {
   onClose: () => void;
 }
 
-const FORMAT_INFO: Record<ExportFormat, { label: string; description: string; extension: string }> = {
-  json: {
-    label: 'JSON',
-    description: 'Structured data format, ideal for programmatic access',
-    extension: 'json',
-  },
-  markdown: {
-    label: 'Markdown',
-    description: 'Human-readable format, great for documentation',
-    extension: 'md',
-  },
-  html: {
-    label: 'HTML',
-    description: 'Styled report for viewing in browsers',
-    extension: 'html',
-  },
-  csv: {
-    label: 'CSV',
-    description: 'Spreadsheet format for data analysis',
-    extension: 'csv',
-  },
-};
+const FORMAT_INFO: Record<ExportFormat, { label: string; description: string; extension: string }> =
+  {
+    json: {
+      label: 'JSON',
+      description: 'Structured data format, ideal for programmatic access',
+      extension: 'json',
+    },
+    markdown: {
+      label: 'Markdown',
+      description: 'Human-readable format, great for documentation',
+      extension: 'md',
+    },
+    html: {
+      label: 'HTML',
+      description: 'Styled report for viewing in browsers',
+      extension: 'html',
+    },
+    csv: { label: 'CSV', description: 'Spreadsheet format for data analysis', extension: 'csv' },
+  };
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
 
@@ -62,7 +59,7 @@ export function ReportExportModal({
 
   const [format, setFormat] = useState<ExportFormat>('json');
   const [selectedSeverities, setSelectedSeverities] = useState<Set<string>>(
-    new Set(SEVERITY_ORDER)
+    new Set(SEVERITY_ORDER),
   );
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set(categories));
   const [includeEvidence, setIncludeEvidence] = useState(true);
@@ -115,7 +112,14 @@ export function ReportExportModal({
     if (!includeEvidence) params.set('include_evidence', 'false');
     if (!includeMetadata) params.set('include_metadata', 'false');
     return params.toString();
-  }, [format, selectedSeverities, selectedCategories, categories.length, includeEvidence, includeMetadata]);
+  }, [
+    format,
+    selectedSeverities,
+    selectedCategories,
+    categories.length,
+    includeEvidence,
+    includeMetadata,
+  ]);
 
   // Download report
   const handleDownload = async () => {
@@ -125,9 +129,7 @@ export function ReportExportModal({
       const queryParams = buildQueryParams();
       const response = await fetch(
         `${backendConfig.api}/api/audit/sessions/${sessionId}/report?${queryParams}`,
-        {
-          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-        }
+        { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
       );
 
       if (!response.ok) {
@@ -158,9 +160,7 @@ export function ReportExportModal({
       const queryParams = buildQueryParams();
       const response = await fetch(
         `${backendConfig.api}/api/audit/sessions/${sessionId}/report?${queryParams}`,
-        {
-          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-        }
+        { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
       );
 
       if (!response.ok) {
@@ -201,7 +201,9 @@ export function ReportExportModal({
       <div className="relative bg-background border border-border rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="p-4 border-b border-border flex items-center justify-between">
-          <h2 id="export-modal-title" className="font-theme-data text-lg">Export Audit Report</h2>
+          <h2 id="export-modal-title" className="font-theme-data text-lg">
+            Export Audit Report
+          </h2>
           <button
             onClick={onClose}
             className="text-muted hover:text-foreground"
@@ -237,7 +239,9 @@ export function ReportExportModal({
 
           {/* Severity Filter */}
           <div>
-            <label className="block text-xs font-theme-data text-muted mb-2">INCLUDE SEVERITIES</label>
+            <label className="block text-xs font-theme-data text-muted mb-2">
+              INCLUDE SEVERITIES
+            </label>
             <div className="flex flex-wrap gap-2">
               {SEVERITY_ORDER.map((sev) => {
                 const count = severityCounts[sev] || 0;
@@ -265,7 +269,9 @@ export function ReportExportModal({
           {/* Category Filter */}
           {categories.length > 0 && (
             <div>
-              <label className="block text-xs font-theme-data text-muted mb-2">INCLUDE CATEGORIES</label>
+              <label className="block text-xs font-theme-data text-muted mb-2">
+                INCLUDE CATEGORIES
+              </label>
               <div className="flex flex-wrap gap-2">
                 {categories.map((cat) => {
                   const isSelected = selectedCategories.has(cat);

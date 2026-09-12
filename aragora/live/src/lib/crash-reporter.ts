@@ -103,7 +103,7 @@ export class CrashReporter {
    */
   capture(
     error: Error,
-    options?: { componentStack?: string | null; componentName?: string | null }
+    options?: { componentStack?: string | null; componentName?: string | null },
   ): boolean {
     const message = error.message || String(error);
     const stack = error.stack ?? null;

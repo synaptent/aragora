@@ -64,7 +64,11 @@ function assertAdminOverviewFixtures() {
   if (!debateTrends.data_points.every((item) => typeof item.total === 'number')) {
     throw new Error('Mock debate trends payload contains a non-numeric total');
   }
-  if (!usageTrends.data_points.every((item) => typeof item.requests === 'number' && typeof item.tokens === 'number')) {
+  if (
+    !usageTrends.data_points.every(
+      (item) => typeof item.requests === 'number' && typeof item.tokens === 'number',
+    )
+  ) {
     throw new Error('Mock usage trends payload contains non-numeric request/token counts');
   }
 }
@@ -72,15 +76,27 @@ function assertAdminOverviewFixtures() {
 async function mockAdminOverviewData(page: import('@playwright/test').Page) {
   assertAdminOverviewFixtures();
   await mockApiResponse(page, /\/api\/health\/?$/, adminOverviewFixtures.health);
-  await mockApiResponse(page, '**/api/v1/dashboard/activity?limit=10', adminOverviewFixtures.activity);
-  await mockApiResponse(page, '**/api/analytics/debates/trends?time_range=30d', adminOverviewFixtures.debateTrends);
-  await mockApiResponse(page, '**/api/analytics/usage/tokens?time_range=30d', adminOverviewFixtures.usageTrends);
+  await mockApiResponse(
+    page,
+    '**/api/v1/dashboard/activity?limit=10',
+    adminOverviewFixtures.activity,
+  );
+  await mockApiResponse(
+    page,
+    '**/api/analytics/debates/trends?time_range=30d',
+    adminOverviewFixtures.debateTrends,
+  );
+  await mockApiResponse(
+    page,
+    '**/api/analytics/usage/tokens?time_range=30d',
+    adminOverviewFixtures.usageTrends,
+  );
 }
 
 async function setupAdminOverviewTest(
   page: import('@playwright/test').Page,
   aragoraPage: { dismissAllOverlays: () => Promise<void> },
-  viewport?: { width: number; height: number }
+  viewport?: { width: number; height: number },
 ) {
   await mockAdminOverviewData(page);
   if (viewport) {
@@ -89,7 +105,9 @@ async function setupAdminOverviewTest(
   await page.goto('/admin');
   await aragoraPage.dismissAllOverlays();
   await page.waitForLoadState('domcontentloaded');
-  await expect(page.getByRole('heading', { name: 'Admin Overview' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Admin Overview' })).toBeVisible({
+    timeout: 10000,
+  });
 }
 
 test.describe('Admin Overview', () => {
@@ -100,7 +118,7 @@ test.describe('Admin Overview', () => {
   test('loads the admin overview shell and current layout', async ({ page }) => {
     await expect(page).toHaveTitle(/Admin|Aragora/i);
     await expect(
-      page.getByText(/System health, usage metrics, and recent activity at a glance\./i)
+      page.getByText(/System health, usage metrics, and recent activity at a glance\./i),
     ).toBeVisible();
     await expect(page.getByRole('banner')).toBeVisible();
     await expect(page.getByRole('complementary', { name: 'Main navigation' })).toBeVisible();
@@ -109,7 +127,7 @@ test.describe('Admin Overview', () => {
 
   test('shows the non-admin access warning', async ({ page }) => {
     await expect(
-      page.getByText(/Admin access required\. Some features may be restricted\./i)
+      page.getByText(/Admin access required\. Some features may be restricted\./i),
     ).toBeVisible();
   });
 
@@ -188,7 +206,9 @@ const responsiveCases = [
     name: 'keeps the overview content visible on desktop',
     viewport: { width: 1920, height: 1080 },
     assertion: async (page: import('@playwright/test').Page) => {
-      await expect(page.getByRole('main', { name: 'Main content' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('main', { name: 'Main content' })).toBeVisible({
+        timeout: 10000,
+      });
       await expect(page.getByRole('heading', { name: 'System Health' })).toBeVisible();
     },
   },

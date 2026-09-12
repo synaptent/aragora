@@ -2,10 +2,7 @@ import { render, screen } from '@testing-library/react';
 import AgentPerformancePage from '../page';
 
 // Mock MatrixRain (decorative, not testable)
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
 // Mock PanelErrorBoundary to pass children through
 jest.mock('@/components/PanelErrorBoundary', () => ({
@@ -53,12 +50,7 @@ jest.mock('@/hooks/useSystemIntelligence', () => ({
 jest.mock('@/hooks/useSWRFetch', () => ({
   useSWRFetch: () => ({
     data: {
-      data: {
-        total_debates: 42,
-        consensus_rate: 0.78,
-        avg_duration_ms: 5000,
-        avg_rounds: 3,
-      },
+      data: { total_debates: 42, consensus_rate: 0.78, avg_duration_ms: 5000, avg_rounds: 3 },
     },
     error: null,
     isLoading: false,

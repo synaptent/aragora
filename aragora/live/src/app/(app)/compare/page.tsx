@@ -9,7 +9,7 @@ import { BackendSelector } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const AgentComparePanel = dynamic(
-  () => import('@/components/AgentComparePanel').then(m => ({ default: m.AgentComparePanel })),
+  () => import('@/components/AgentComparePanel').then((m) => ({ default: m.AgentComparePanel })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +17,7 @@ const AgentComparePanel = dynamic(
         <div className="h-[600px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function ComparePage() {
@@ -71,8 +71,8 @@ export default function ComparePage() {
               {'>'} AGENT COMPARISON
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Head-to-head agent comparison with ELO ratings, win rates,
-              consistency scores, and calibration metrics.
+              Head-to-head agent comparison with ELO ratings, win rates, consistency scores, and
+              calibration metrics.
             </p>
           </div>
 
@@ -80,22 +80,22 @@ export default function ComparePage() {
             <div className="p-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded">
               <h3 className="text-sm font-theme-data text-[var(--accent)] mb-2">ELO Rating</h3>
               <p className="text-xs font-theme-data text-text-muted">
-                Skill-based ranking derived from debate outcomes.
-                Higher ELO indicates stronger performance.
+                Skill-based ranking derived from debate outcomes. Higher ELO indicates stronger
+                performance.
               </p>
             </div>
             <div className="p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
               <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">Consistency</h3>
               <p className="text-xs font-theme-data text-text-muted">
-                How reliably an agent maintains positions and
-                produces coherent arguments across debates.
+                How reliably an agent maintains positions and produces coherent arguments across
+                debates.
               </p>
             </div>
             <div className="p-4 border border-gold/30 bg-gold/5 rounded">
               <h3 className="text-sm font-theme-data text-gold mb-2">Calibration</h3>
               <p className="text-xs font-theme-data text-text-muted">
-                How well confidence matches actual accuracy.
-                Well-calibrated agents know what they know.
+                How well confidence matches actual accuracy. Well-calibrated agents know what they
+                know.
               </p>
             </div>
           </div>
@@ -107,12 +107,8 @@ export default function ComparePage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // AGENT COMPARISON
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // AGENT COMPARISON</p>
         </footer>
       </main>
     </>

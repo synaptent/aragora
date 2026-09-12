@@ -99,7 +99,10 @@ export class AragoraApiClient {
   private async request<T>(
     method: string,
     path: string,
-    options: RequestOptions & { body?: unknown; query?: Record<string, string | number | undefined> } = {}
+    options: RequestOptions & {
+      body?: unknown;
+      query?: Record<string, string | number | undefined>;
+    } = {},
   ): Promise<T> {
     let url = `${this.config.baseUrl}${path}`;
 
@@ -144,18 +147,19 @@ export class AragoraApiClient {
     return response.json();
   }
 
-
   /**
    * List all debates
    * Returns a paginated list of recent debates
    * @requires Authentication
    */
-  async getDebates(query?: { limit?: number }, options?: RequestOptions): Promise<{
-  debates?: DebateSummary[];
-}> {
-    return this.request<{
-  debates?: DebateSummary[];
-}>('GET', `/api/debates`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getDebates(
+    query?: { limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ debates?: DebateSummary[] }> {
+    return this.request<{ debates?: DebateSummary[] }>('GET', `/api/debates`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
@@ -163,7 +167,10 @@ export class AragoraApiClient {
    * Starts an ad-hoc debate with the provided task/question.
    * @requires Authentication
    */
-  async postDebates(body: DebateCreateRequest, options?: RequestOptions): Promise<DebateCreateResponse> {
+  async postDebates(
+    body: DebateCreateRequest,
+    options?: RequestOptions,
+  ): Promise<DebateCreateResponse> {
     return this.request<DebateCreateResponse>('POST', `/api/debates`, { ...options, body });
   }
 
@@ -174,7 +181,10 @@ Use POST /api/debates instead.
 
    * @requires Authentication
    */
-  async postDebate(body: DebateCreateRequest, options?: RequestOptions): Promise<DebateCreateResponse> {
+  async postDebate(
+    body: DebateCreateRequest,
+    options?: RequestOptions,
+  ): Promise<DebateCreateResponse> {
     return this.request<DebateCreateResponse>('POST', `/api/debate`, { ...options, body });
   }
 
@@ -189,8 +199,16 @@ Use POST /api/debates instead.
    * Export debate
    * @requires Authentication
    */
-  async getDebatesByidExportByformat(id: string, format: 'json' | 'csv' | 'html', query?: { table?: 'summary' | 'messages' | 'critiques' | 'votes' }, options?: RequestOptions): Promise<unknown> {
-    return this.request<unknown>('GET', `/api/debates/${id}/export/${format}`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getDebatesByidExportByformat(
+    id: string,
+    format: 'json' | 'csv' | 'html',
+    query?: { table?: 'summary' | 'messages' | 'critiques' | 'votes' },
+    options?: RequestOptions,
+  ): Promise<unknown> {
+    return this.request<unknown>('GET', `/api/debates/${id}/export/${format}`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
@@ -204,7 +222,10 @@ Use POST /api/debates instead.
   /**
    * Get convergence status
    */
-  async getDebatesByidConvergence(id: string, options?: RequestOptions): Promise<ConvergenceStatus> {
+  async getDebatesByidConvergence(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<ConvergenceStatus> {
     return this.request<ConvergenceStatus>('GET', `/api/debates/${id}/convergence`, { ...options });
   }
 
@@ -221,35 +242,43 @@ Use POST /api/debates instead.
    * Create a counterfactual fork of the debate
    * @requires Authentication
    */
-  async postDebatesByidFork(id: string, body: {
-    /** Round number to fork from */
-  branch_point: number;
-    /** Optional modified context for the fork */
-  modified_context?: string;
-}, options?: RequestOptions): Promise<unknown> {
+  async postDebatesByidFork(
+    id: string,
+    body: {
+      /** Round number to fork from */
+      branch_point: number;
+      /** Optional modified context for the fork */
+      modified_context?: string;
+    },
+    options?: RequestOptions,
+  ): Promise<unknown> {
     return this.request<unknown>('POST', `/api/debates/${id}/fork`, { ...options, body });
   }
 
   /**
    * Get agent rankings
    */
-  async getLeaderboard(query?: { limit?: number; domain?: string }, options?: RequestOptions): Promise<{
-  leaderboard?: LeaderboardEntry[];
-}> {
-    return this.request<{
-  leaderboard?: LeaderboardEntry[];
-}>('GET', `/api/leaderboard`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getLeaderboard(
+    query?: { limit?: number; domain?: string },
+    options?: RequestOptions,
+  ): Promise<{ leaderboard?: LeaderboardEntry[] }> {
+    return this.request<{ leaderboard?: LeaderboardEntry[] }>('GET', `/api/leaderboard`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Get recent matches
    */
-  async getMatchesRecent(query?: { limit?: number; loop_id?: string }, options?: RequestOptions): Promise<{
-  matches?: Match[];
-}> {
-    return this.request<{
-  matches?: Match[];
-}>('GET', `/api/matches/recent`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getMatchesRecent(
+    query?: { limit?: number; loop_id?: string },
+    options?: RequestOptions,
+  ): Promise<{ matches?: Match[] }> {
+    return this.request<{ matches?: Match[] }>('GET', `/api/matches/recent`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
@@ -262,18 +291,24 @@ Use POST /api/debates instead.
   /**
    * Get agent match history
    */
-  async getAgentBynameHistory(name: string, query?: { limit?: number }, options?: RequestOptions): Promise<{
-  history?: MatchHistoryEntry[];
-}> {
-    return this.request<{
-  history?: MatchHistoryEntry[];
-}>('GET', `/api/agent/${name}/history`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getAgentBynameHistory(
+    name: string,
+    query?: { limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ history?: MatchHistoryEntry[] }> {
+    return this.request<{ history?: MatchHistoryEntry[] }>('GET', `/api/agent/${name}/history`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Get consistency score
    */
-  async getAgentBynameConsistency(name: string, options?: RequestOptions): Promise<ConsistencyScore> {
+  async getAgentBynameConsistency(
+    name: string,
+    options?: RequestOptions,
+  ): Promise<ConsistencyScore> {
     return this.request<ConsistencyScore>('GET', `/api/agent/${name}/consistency`, { ...options });
   }
 
@@ -281,38 +316,45 @@ Use POST /api/debates instead.
    * Get relationship network
    * Returns rivals and allies for the agent
    */
-  async getAgentBynameNetwork(name: string, options?: RequestOptions): Promise<RelationshipNetwork> {
+  async getAgentBynameNetwork(
+    name: string,
+    options?: RequestOptions,
+  ): Promise<RelationshipNetwork> {
     return this.request<RelationshipNetwork>('GET', `/api/agent/${name}/network`, { ...options });
   }
 
   /**
    * Compare multiple agents
    */
-  async getAgentCompare(query?: { agents: string[] }, options?: RequestOptions): Promise<AgentComparison> {
+  async getAgentCompare(
+    query?: { agents: string[] },
+    options?: RequestOptions,
+  ): Promise<AgentComparison> {
     const queryParams = query ? { agents: query.agents.join(',') } : undefined;
-    return this.request<AgentComparison>('GET', `/api/agent/compare`, { ...options, query: queryParams });
+    return this.request<AgentComparison>('GET', `/api/agent/compare`, {
+      ...options,
+      query: queryParams,
+    });
   }
 
   /**
    * Get recent position flips
    */
-  async getFlipsRecent(query?: { limit?: number }, options?: RequestOptions): Promise<{
-  flips?: PositionFlip[];
-}> {
-    return this.request<{
-  flips?: PositionFlip[];
-}>('GET', `/api/flips/recent`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getFlipsRecent(
+    query?: { limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ flips?: PositionFlip[] }> {
+    return this.request<{ flips?: PositionFlip[] }>('GET', `/api/flips/recent`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Health check
    */
-  async getHealth(options?: RequestOptions): Promise<{
-  status?: 'healthy' | 'degraded';
-}> {
-    return this.request<{
-  status?: 'healthy' | 'degraded';
-}>('GET', `/api/health`, { ...options });
+  async getHealth(options?: RequestOptions): Promise<{ status?: 'healthy' | 'degraded' }> {
+    return this.request<{ status?: 'healthy' | 'degraded' }>('GET', `/api/health`, { ...options });
   }
 
   /**
@@ -340,34 +382,34 @@ Use POST /api/debates instead.
   /**
    * Get available modes
    */
-  async getModes(options?: RequestOptions): Promise<{
-  modes?: Mode[];
-}> {
-    return this.request<{
-  modes?: Mode[];
-}>('GET', `/api/modes`, { ...options });
+  async getModes(options?: RequestOptions): Promise<{ modes?: Mode[] }> {
+    return this.request<{ modes?: Mode[] }>('GET', `/api/modes`, { ...options });
   }
 
   /**
    * Find similar debates
    */
-  async getConsensusSimilar(query?: { topic: string; limit?: number }, options?: RequestOptions): Promise<{
-  similar?: SimilarDebate[];
-}> {
-    return this.request<{
-  similar?: SimilarDebate[];
-}>('GET', `/api/consensus/similar`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getConsensusSimilar(
+    query?: { topic: string; limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ similar?: SimilarDebate[] }> {
+    return this.request<{ similar?: SimilarDebate[] }>('GET', `/api/consensus/similar`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Get settled topics
    */
-  async getConsensusSettled(query?: { min_confidence?: number; limit?: number }, options?: RequestOptions): Promise<{
-  settled?: SettledTopic[];
-}> {
-    return this.request<{
-  settled?: SettledTopic[];
-}>('GET', `/api/consensus/settled`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getConsensusSettled(
+    query?: { min_confidence?: number; limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ settled?: SettledTopic[] }> {
+    return this.request<{ settled?: SettledTopic[] }>('GET', `/api/consensus/settled`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
@@ -380,36 +422,45 @@ Use POST /api/debates instead.
   /**
    * Get dissenting views
    */
-  async getConsensusDissents(query?: { topic?: string; domain?: string; limit?: number }, options?: RequestOptions): Promise<{
-  dissents?: Dissent[];
-}> {
-    return this.request<{
-  dissents?: Dissent[];
-}>('GET', `/api/consensus/dissents`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getConsensusDissents(
+    query?: { topic?: string; domain?: string; limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ dissents?: Dissent[] }> {
+    return this.request<{ dissents?: Dissent[] }>('GET', `/api/consensus/dissents`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Retrieve memories
    */
-  async getMemoryContinuumRetrieve(query?: { query: string; tiers?: 'fast' | 'medium' | 'slow' | 'glacial'[]; limit?: number; min_importance?: number }, options?: RequestOptions): Promise<{
-  memories?: Memory[];
-}> {
-    return this.request<{
-  memories?: Memory[];
-}>('GET', `/api/memory/continuum/retrieve`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getMemoryContinuumRetrieve(
+    query?: {
+      query: string;
+      tiers?: 'fast' | 'medium' | 'slow' | 'glacial'[];
+      limit?: number;
+      min_importance?: number;
+    },
+    options?: RequestOptions,
+  ): Promise<{ memories?: Memory[] }> {
+    return this.request<{ memories?: Memory[] }>('GET', `/api/memory/continuum/retrieve`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Trigger consolidation
    */
-  async postMemoryContinuumConsolidate(options?: RequestOptions): Promise<{
-  promoted?: number;
-  demoted?: number;
-}> {
-    return this.request<{
-  promoted?: number;
-  demoted?: number;
-}>('POST', `/api/memory/continuum/consolidate`, { ...options });
+  async postMemoryContinuumConsolidate(
+    options?: RequestOptions,
+  ): Promise<{ promoted?: number; demoted?: number }> {
+    return this.request<{ promoted?: number; demoted?: number }>(
+      'POST',
+      `/api/memory/continuum/consolidate`,
+      { ...options },
+    );
   }
 
   /**
@@ -422,48 +473,48 @@ Use POST /api/debates instead.
   /**
    * List tournaments
    */
-  async getTournaments(options?: RequestOptions): Promise<{
-  tournaments?: Tournament[];
-}> {
-    return this.request<{
-  tournaments?: Tournament[];
-}>('GET', `/api/tournaments`, { ...options });
+  async getTournaments(options?: RequestOptions): Promise<{ tournaments?: Tournament[] }> {
+    return this.request<{ tournaments?: Tournament[] }>('GET', `/api/tournaments`, { ...options });
   }
 
   /**
    * Get tournament standings
    */
-  async getTournamentsByidStandings(id: string, options?: RequestOptions): Promise<TournamentStandings> {
-    return this.request<TournamentStandings>('GET', `/api/tournaments/${id}/standings`, { ...options });
+  async getTournamentsByidStandings(
+    id: string,
+    options?: RequestOptions,
+  ): Promise<TournamentStandings> {
+    return this.request<TournamentStandings>('GET', `/api/tournaments/${id}/standings`, {
+      ...options,
+    });
   }
 
   /**
    * List replays
    */
-  async getReplays(options?: RequestOptions): Promise<{
-  replays?: ReplaySummary[];
-}> {
-    return this.request<{
-  replays?: ReplaySummary[];
-}>('GET', `/api/replays`, { ...options });
+  async getReplays(options?: RequestOptions): Promise<{ replays?: ReplaySummary[] }> {
+    return this.request<{ replays?: ReplaySummary[] }>('GET', `/api/replays`, { ...options });
   }
 
   /**
    * Get replay
    */
-  async getReplaysByreplay_id(replay_id: string, query?: { offset?: number; limit?: number }, options?: RequestOptions): Promise<Replay> {
-    return this.request<Replay>('GET', `/api/replays/${replay_id}`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getReplaysByreplay_id(
+    replay_id: string,
+    query?: { offset?: number; limit?: number },
+    options?: RequestOptions,
+  ): Promise<Replay> {
+    return this.request<Replay>('GET', `/api/replays/${replay_id}`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * List documents
    */
-  async getDocuments(options?: RequestOptions): Promise<{
-  documents?: DocumentSummary[];
-}> {
-    return this.request<{
-  documents?: DocumentSummary[];
-}>('GET', `/api/documents`, { ...options });
+  async getDocuments(options?: RequestOptions): Promise<{ documents?: DocumentSummary[] }> {
+    return this.request<{ documents?: DocumentSummary[] }>('GET', `/api/documents`, { ...options });
   }
 
   /**
@@ -490,14 +541,20 @@ Use POST /api/debates instead.
   /**
    * Verify claim formally
    */
-  async postVerificationFormal_verify(body: {
-    /** Claim to verify */
-  claim: string;
-  claim_type?: string;
-  context?: string;
-  timeout?: number;
-}, options?: RequestOptions): Promise<VerificationResult> {
-    return this.request<VerificationResult>('POST', `/api/verification/formal-verify`, { ...options, body });
+  async postVerificationFormal_verify(
+    body: {
+      /** Claim to verify */
+      claim: string;
+      claim_type?: string;
+      context?: string;
+      timeout?: number;
+    },
+    options?: RequestOptions,
+  ): Promise<VerificationResult> {
+    return this.request<VerificationResult>('POST', `/api/verification/formal-verify`, {
+      ...options,
+      body,
+    });
   }
 
   /**
@@ -524,15 +581,27 @@ Use POST /api/debates instead.
   /**
    * Get relationship graph
    */
-  async getRelationshipsGraph(query?: { min_debates?: number; min_score?: number }, options?: RequestOptions): Promise<RelationshipGraph> {
-    return this.request<RelationshipGraph>('GET', `/api/relationships/graph`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getRelationshipsGraph(
+    query?: { min_debates?: number; min_score?: number },
+    options?: RequestOptions,
+  ): Promise<RelationshipGraph> {
+    return this.request<RelationshipGraph>('GET', `/api/relationships/graph`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Get relationship between agents
    */
-  async getRelationshipByagent_aByagent_b(agent_a: string, agent_b: string, options?: RequestOptions): Promise<Relationship> {
-    return this.request<Relationship>('GET', `/api/relationship/${agent_a}/${agent_b}`, { ...options });
+  async getRelationshipByagent_aByagent_b(
+    agent_a: string,
+    agent_b: string,
+    options?: RequestOptions,
+  ): Promise<Relationship> {
+    return this.request<Relationship>('GET', `/api/relationship/${agent_a}/${agent_b}`, {
+      ...options,
+    });
   }
 
   /**
@@ -545,62 +614,73 @@ Use POST /api/debates instead.
   /**
    * Get moments timeline
    */
-  async getMomentsTimeline(query?: { limit?: number; offset?: number }, options?: RequestOptions): Promise<{
-  moments?: Moment[];
-}> {
-    return this.request<{
-  moments?: Moment[];
-}>('GET', `/api/moments/timeline`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getMomentsTimeline(
+    query?: { limit?: number; offset?: number },
+    options?: RequestOptions,
+  ): Promise<{ moments?: Moment[] }> {
+    return this.request<{ moments?: Moment[] }>('GET', `/api/moments/timeline`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Get trending moments
    */
-  async getMomentsTrending(query?: { limit?: number }, options?: RequestOptions): Promise<{
-  moments?: Moment[];
-}> {
-    return this.request<{
-  moments?: Moment[];
-}>('GET', `/api/moments/trending`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getMomentsTrending(
+    query?: { limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ moments?: Moment[] }> {
+    return this.request<{ moments?: Moment[] }>('GET', `/api/moments/trending`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Get dashboard debate metrics
    */
-  async getDashboardDebates(query?: { domain?: string; limit?: number; hours?: number }, options?: RequestOptions): Promise<DashboardMetrics> {
-    return this.request<DashboardMetrics>('GET', `/api/dashboard/debates`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getDashboardDebates(
+    query?: { domain?: string; limit?: number; hours?: number },
+    options?: RequestOptions,
+  ): Promise<DashboardMetrics> {
+    return this.request<DashboardMetrics>('GET', `/api/dashboard/debates`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Get trending topics
    */
-  async getPulseTrending(query?: { limit?: number }, options?: RequestOptions): Promise<{
-  topics?: TrendingTopic[];
-}> {
-    return this.request<{
-  topics?: TrendingTopic[];
-}>('GET', `/api/pulse/trending`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getPulseTrending(
+    query?: { limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ topics?: TrendingTopic[] }> {
+    return this.request<{ topics?: TrendingTopic[] }>('GET', `/api/pulse/trending`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Start a debate on a trending topic
    * @requires Authentication
    */
-  async postPulseDebate_topic(body: {
-    /** Topic to debate */
-  topic: string;
-  rounds?: number;
-  consensus_threshold?: number;
-}, options?: RequestOptions): Promise<{
-  debate_id?: string;
-  topic?: string;
-  status?: string;
-}> {
-    return this.request<{
-  debate_id?: string;
-  topic?: string;
-  status?: string;
-}>('POST', `/api/pulse/debate-topic`, { ...options, body });
+  async postPulseDebate_topic(
+    body: {
+      /** Topic to debate */
+      topic: string;
+      rounds?: number;
+      consensus_threshold?: number;
+    },
+    options?: RequestOptions,
+  ): Promise<{ debate_id?: string; topic?: string; status?: string }> {
+    return this.request<{ debate_id?: string; topic?: string; status?: string }>(
+      'POST',
+      `/api/pulse/debate-topic`,
+      { ...options, body },
+    );
   }
 
   /**
@@ -614,136 +694,139 @@ Use POST /api/debates instead.
    * Start the pulse scheduler
    * @requires Authentication
    */
-  async postPulseSchedulerStart(options?: RequestOptions): Promise<{
-  status?: string;
-  run_id?: string;
-}> {
-    return this.request<{
-  status?: string;
-  run_id?: string;
-}>('POST', `/api/pulse/scheduler/start`, { ...options });
+  async postPulseSchedulerStart(
+    options?: RequestOptions,
+  ): Promise<{ status?: string; run_id?: string }> {
+    return this.request<{ status?: string; run_id?: string }>(
+      'POST',
+      `/api/pulse/scheduler/start`,
+      { ...options },
+    );
   }
 
   /**
    * Stop the pulse scheduler
    * @requires Authentication
    */
-  async postPulseSchedulerStop(options?: RequestOptions): Promise<{
-  status?: string;
-}> {
-    return this.request<{
-  status?: string;
-}>('POST', `/api/pulse/scheduler/stop`, { ...options });
+  async postPulseSchedulerStop(options?: RequestOptions): Promise<{ status?: string }> {
+    return this.request<{ status?: string }>('POST', `/api/pulse/scheduler/stop`, { ...options });
   }
 
   /**
    * Pause the pulse scheduler
    * @requires Authentication
    */
-  async postPulseSchedulerPause(options?: RequestOptions): Promise<{
-  status?: string;
-}> {
-    return this.request<{
-  status?: string;
-}>('POST', `/api/pulse/scheduler/pause`, { ...options });
+  async postPulseSchedulerPause(options?: RequestOptions): Promise<{ status?: string }> {
+    return this.request<{ status?: string }>('POST', `/api/pulse/scheduler/pause`, { ...options });
   }
 
   /**
    * Resume the pulse scheduler
    * @requires Authentication
    */
-  async postPulseSchedulerResume(options?: RequestOptions): Promise<{
-  status?: string;
-}> {
-    return this.request<{
-  status?: string;
-}>('POST', `/api/pulse/scheduler/resume`, { ...options });
+  async postPulseSchedulerResume(options?: RequestOptions): Promise<{ status?: string }> {
+    return this.request<{ status?: string }>('POST', `/api/pulse/scheduler/resume`, { ...options });
   }
 
   /**
    * Update scheduler configuration
    * @requires Authentication
    */
-  async patchPulseSchedulerConfig(body: {
-  poll_interval_seconds?: number;
-  max_debates_per_hour?: number;
-  min_volume_threshold?: number;
-  min_controversy_score?: number;
-  dedup_window_hours?: number;
-}, options?: RequestOptions): Promise<{
-  status?: string;
-  config?: Record<string, unknown>;
-}> {
-    return this.request<{
-  status?: string;
-  config?: Record<string, unknown>;
-}>('PATCH', `/api/pulse/scheduler/config`, { ...options, body });
+  async patchPulseSchedulerConfig(
+    body: {
+      poll_interval_seconds?: number;
+      max_debates_per_hour?: number;
+      min_volume_threshold?: number;
+      min_controversy_score?: number;
+      dedup_window_hours?: number;
+    },
+    options?: RequestOptions,
+  ): Promise<{ status?: string; config?: Record<string, unknown> }> {
+    return this.request<{ status?: string; config?: Record<string, unknown> }>(
+      'PATCH',
+      `/api/pulse/scheduler/config`,
+      { ...options, body },
+    );
   }
 
   /**
    * Get scheduled debate history
    */
-  async getPulseSchedulerHistory(query?: { limit?: number; offset?: number; platform?: string; category?: string }, options?: RequestOptions): Promise<{
-  history?: ScheduledDebateRecord[];
-  total?: number;
-}> {
-    return this.request<{
-  history?: ScheduledDebateRecord[];
-  total?: number;
-}>('GET', `/api/pulse/scheduler/history`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getPulseSchedulerHistory(
+    query?: { limit?: number; offset?: number; platform?: string; category?: string },
+    options?: RequestOptions,
+  ): Promise<{ history?: ScheduledDebateRecord[]; total?: number }> {
+    return this.request<{ history?: ScheduledDebateRecord[]; total?: number }>(
+      'GET',
+      `/api/pulse/scheduler/history`,
+      { ...options, query: query as Record<string, string | number | undefined> },
+    );
   }
 
   /**
    * Get Slack integration status
    */
-  async getIntegrationsSlackStatus(options?: RequestOptions): Promise<{
-  enabled?: boolean;
-  signing_secret_configured?: boolean;
-  bot_token_configured?: boolean;
-  webhook_configured?: boolean;
-}> {
+  async getIntegrationsSlackStatus(
+    options?: RequestOptions,
+  ): Promise<{
+    enabled?: boolean;
+    signing_secret_configured?: boolean;
+    bot_token_configured?: boolean;
+    webhook_configured?: boolean;
+  }> {
     return this.request<{
-  enabled?: boolean;
-  signing_secret_configured?: boolean;
-  bot_token_configured?: boolean;
-  webhook_configured?: boolean;
-}>('GET', `/api/integrations/slack/status`, { ...options });
+      enabled?: boolean;
+      signing_secret_configured?: boolean;
+      bot_token_configured?: boolean;
+      webhook_configured?: boolean;
+    }>('GET', `/api/integrations/slack/status`, { ...options });
   }
 
   /**
    * Handle Slack slash commands
    * Endpoint for Slack to POST slash command payloads
    */
-  async postIntegrationsSlackCommands(body: Record<string, unknown>, options?: RequestOptions): Promise<{
-  response_type?: 'ephemeral' | 'in_channel';
-  text?: string;
-  blocks?: Record<string, unknown>[];
-}> {
+  async postIntegrationsSlackCommands(
+    body: Record<string, unknown>,
+    options?: RequestOptions,
+  ): Promise<{
+    response_type?: 'ephemeral' | 'in_channel';
+    text?: string;
+    blocks?: Record<string, unknown>[];
+  }> {
     return this.request<{
-  response_type?: 'ephemeral' | 'in_channel';
-  text?: string;
-  blocks?: Record<string, unknown>[];
-}>('POST', `/api/integrations/slack/commands`, { ...options, body });
+      response_type?: 'ephemeral' | 'in_channel';
+      text?: string;
+      blocks?: Record<string, unknown>[];
+    }>('POST', `/api/integrations/slack/commands`, { ...options, body });
   }
 
   /**
    * Handle Slack interactive components
    * Endpoint for Slack interactive component callbacks
    */
-  async postIntegrationsSlackInteractive(body: Record<string, unknown>, options?: RequestOptions): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>('POST', `/api/integrations/slack/interactive`, { ...options, body });
+  async postIntegrationsSlackInteractive(
+    body: Record<string, unknown>,
+    options?: RequestOptions,
+  ): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/integrations/slack/interactive`, {
+      ...options,
+      body,
+    });
   }
 
   /**
    * Handle Slack Events API
    * Endpoint for Slack event subscriptions
    */
-  async postIntegrationsSlackEvents(body: {
-  type?: string;
-  challenge?: string;
-  event?: Record<string, unknown>;
-}, options?: RequestOptions): Promise<Record<string, unknown>> {
-    return this.request<Record<string, unknown>>('POST', `/api/integrations/slack/events`, { ...options, body });
+  async postIntegrationsSlackEvents(
+    body: { type?: string; challenge?: string; event?: Record<string, unknown> },
+    options?: RequestOptions,
+  ): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>('POST', `/api/integrations/slack/events`, {
+      ...options,
+      body,
+    });
   }
 
   /**
@@ -753,16 +836,26 @@ Probes test for contradiction handling, hallucination, sycophancy, and more.
 
    * @requires Authentication
    */
-  async postProbesCapability(body: {
-    /** Name of the agent to probe */
-  agent_name: string;
-    /** Types of probes to run (default all) */
-  probe_types?: 'contradiction' | 'hallucination' | 'sycophancy' | 'persistence' | 'confidence_calibration' | 'reasoning_depth' | 'edge_case'[];
-    /** Number of probes per type */
-  probes_per_type?: number;
-    /** Agent model type */
-  model_type?: string;
-}, options?: RequestOptions): Promise<ProbeReport> {
+  async postProbesCapability(
+    body: {
+      /** Name of the agent to probe */
+      agent_name: string;
+      /** Types of probes to run (default all) */
+      probe_types?:
+        | 'contradiction'
+        | 'hallucination'
+        | 'sycophancy'
+        | 'persistence'
+        | 'confidence_calibration'
+        | 'reasoning_depth'
+        | 'edge_case'[];
+      /** Number of probes per type */
+      probes_per_type?: number;
+      /** Agent model type */
+      model_type?: string;
+    },
+    options?: RequestOptions,
+  ): Promise<ProbeReport> {
     return this.request<ProbeReport>('POST', `/api/probes/capability`, { ...options, body });
   }
 
@@ -770,16 +863,18 @@ Probes test for contradiction handling, hallucination, sycophancy, and more.
    * Get emergent traits from agent performance
    * Detect emergent behavioral traits from agent debate patterns
    */
-  async getLaboratoryEmergent_traits(query?: { min_confidence?: number; limit?: number }, options?: RequestOptions): Promise<{
-  emergent_traits?: EmergentTrait[];
-  count?: number;
-  min_confidence?: number;
-}> {
+  async getLaboratoryEmergent_traits(
+    query?: { min_confidence?: number; limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ emergent_traits?: EmergentTrait[]; count?: number; min_confidence?: number }> {
     return this.request<{
-  emergent_traits?: EmergentTrait[];
-  count?: number;
-  min_confidence?: number;
-}>('GET', `/api/laboratory/emergent-traits`, { ...options, query: query as Record<string, string | number | undefined> });
+      emergent_traits?: EmergentTrait[];
+      count?: number;
+      min_confidence?: number;
+    }>('GET', `/api/laboratory/emergent-traits`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
@@ -787,28 +882,29 @@ Probes test for contradiction handling, hallucination, sycophancy, and more.
    * Analyze agents and suggest which traits could be transferred between them
    * @requires Authentication
    */
-  async postLaboratoryCross_pollinationsSuggest(body: {
-  source_agents?: string[];
-  target_agents?: string[];
-  min_benefit_score?: number;
-}, options?: RequestOptions): Promise<{
-  suggestions?: CrossPollinationSuggestion[];
-}> {
-    return this.request<{
-  suggestions?: CrossPollinationSuggestion[];
-}>('POST', `/api/laboratory/cross-pollinations/suggest`, { ...options, body });
+  async postLaboratoryCross_pollinationsSuggest(
+    body: { source_agents?: string[]; target_agents?: string[]; min_benefit_score?: number },
+    options?: RequestOptions,
+  ): Promise<{ suggestions?: CrossPollinationSuggestion[] }> {
+    return this.request<{ suggestions?: CrossPollinationSuggestion[] }>(
+      'POST',
+      `/api/laboratory/cross-pollinations/suggest`,
+      { ...options, body },
+    );
   }
 
   /**
    * Get recent insights
    * Retrieve recently extracted insights from debates
    */
-  async getInsightsRecent(query?: { limit?: number }, options?: RequestOptions): Promise<{
-  insights?: Insight[];
-}> {
-    return this.request<{
-  insights?: Insight[];
-}>('GET', `/api/insights/recent`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getInsightsRecent(
+    query?: { limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ insights?: Insight[] }> {
+    return this.request<{ insights?: Insight[] }>('GET', `/api/insights/recent`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
@@ -816,35 +912,35 @@ Probes test for contradiction handling, hallucination, sycophancy, and more.
    * Analyze content and extract structured insights
    * @requires Authentication
    */
-  async postInsightsExtract_detailed(body: {
-    /** Content to analyze */
-  content: string;
-    /** Optional context for analysis */
-  context?: string;
-}, options?: RequestOptions): Promise<{
-  insights?: Insight[];
-  metadata?: Record<string, unknown>;
-}> {
-    return this.request<{
-  insights?: Insight[];
-  metadata?: Record<string, unknown>;
-}>('POST', `/api/insights/extract-detailed`, { ...options, body });
+  async postInsightsExtract_detailed(
+    body: {
+      /** Content to analyze */
+      content: string;
+      /** Optional context for analysis */
+      context?: string;
+    },
+    options?: RequestOptions,
+  ): Promise<{ insights?: Insight[]; metadata?: Record<string, unknown> }> {
+    return this.request<{ insights?: Insight[]; metadata?: Record<string, unknown> }>(
+      'POST',
+      `/api/insights/extract-detailed`,
+      { ...options, body },
+    );
   }
 
   /**
    * Get best-performing team combinations
    * Retrieve historical best-performing agent team combinations
    */
-  async getRoutingBest_teams(query?: { min_debates?: number; limit?: number }, options?: RequestOptions): Promise<{
-  min_debates?: number;
-  combinations?: TeamCombination[];
-  count?: number;
-}> {
-    return this.request<{
-  min_debates?: number;
-  combinations?: TeamCombination[];
-  count?: number;
-}>('GET', `/api/routing/best-teams`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getRoutingBest_teams(
+    query?: { min_debates?: number; limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ min_debates?: number; combinations?: TeamCombination[]; count?: number }> {
+    return this.request<{ min_debates?: number; combinations?: TeamCombination[]; count?: number }>(
+      'GET',
+      `/api/routing/best-teams`,
+      { ...options, query: query as Record<string, string | number | undefined> },
+    );
   }
 
   /**
@@ -852,81 +948,92 @@ Probes test for contradiction handling, hallucination, sycophancy, and more.
    * Get ranked agent recommendations based on task requirements
    * @requires Authentication
    */
-  async postRoutingRecommendations(body: {
-    /** Primary domain for the task */
-  primary_domain?: string;
-  secondary_domains?: string[];
-  required_traits?: string[];
-  task_id?: string;
-  limit?: number;
-}, options?: RequestOptions): Promise<{
-  recommendations?: AgentRecommendation[];
-}> {
-    return this.request<{
-  recommendations?: AgentRecommendation[];
-}>('POST', `/api/routing/recommendations`, { ...options, body });
+  async postRoutingRecommendations(
+    body: {
+      /** Primary domain for the task */
+      primary_domain?: string;
+      secondary_domains?: string[];
+      required_traits?: string[];
+      task_id?: string;
+      limit?: number;
+    },
+    options?: RequestOptions,
+  ): Promise<{ recommendations?: AgentRecommendation[] }> {
+    return this.request<{ recommendations?: AgentRecommendation[] }>(
+      'POST',
+      `/api/routing/recommendations`,
+      { ...options, body },
+    );
   }
 
   /**
    * Get top evolution patterns
    * Returns the most successful patterns extracted from winning debate strategies
    */
-  async getEvolutionPatterns(query?: { type?: 'argument' | 'structure' | 'citation' | 'all'; limit?: number }, options?: RequestOptions): Promise<{
-  patterns?: EvolutionPattern[];
-}> {
-    return this.request<{
-  patterns?: EvolutionPattern[];
-}>('GET', `/api/evolution/patterns`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getEvolutionPatterns(
+    query?: { type?: 'argument' | 'structure' | 'citation' | 'all'; limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ patterns?: EvolutionPattern[] }> {
+    return this.request<{ patterns?: EvolutionPattern[] }>('GET', `/api/evolution/patterns`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
    * Get evolution summary
    * Returns aggregate statistics about prompt evolution
    */
-  async getEvolutionSummary(options?: RequestOptions): Promise<{
-  total_patterns?: number;
-  agents_evolved?: number;
-  success_rate?: number;
-  last_evolution?: string;
-}> {
+  async getEvolutionSummary(
+    options?: RequestOptions,
+  ): Promise<{
+    total_patterns?: number;
+    agents_evolved?: number;
+    success_rate?: number;
+    last_evolution?: string;
+  }> {
     return this.request<{
-  total_patterns?: number;
-  agents_evolved?: number;
-  success_rate?: number;
-  last_evolution?: string;
-}>('GET', `/api/evolution/summary`, { ...options });
+      total_patterns?: number;
+      agents_evolved?: number;
+      success_rate?: number;
+      last_evolution?: string;
+    }>('GET', `/api/evolution/summary`, { ...options });
   }
 
   /**
    * Get agent evolution history
    * Returns prompt evolution history for a specific agent
    */
-  async getEvolutionByagentHistory(agent: string, query?: { limit?: number }, options?: RequestOptions): Promise<{
-  agent?: string;
-  history?: EvolutionEvent[];
-}> {
-    return this.request<{
-  agent?: string;
-  history?: EvolutionEvent[];
-}>('GET', `/api/evolution/${agent}/history`, { ...options, query: query as Record<string, string | number | undefined> });
+  async getEvolutionByagentHistory(
+    agent: string,
+    query?: { limit?: number },
+    options?: RequestOptions,
+  ): Promise<{ agent?: string; history?: EvolutionEvent[] }> {
+    return this.request<{ agent?: string; history?: EvolutionEvent[] }>(
+      'GET',
+      `/api/evolution/${agent}/history`,
+      { ...options, query: query as Record<string, string | number | undefined> },
+    );
   }
 
   /**
    * Get agent prompt
    * Returns current or specific version of agent's evolved prompt
    */
-  async getEvolutionByagentPrompt(agent: string, query?: { version?: number }, options?: RequestOptions): Promise<{
-  agent?: string;
-  version?: number;
-  prompt?: string;
-  patterns_applied?: string[];
-}> {
+  async getEvolutionByagentPrompt(
+    agent: string,
+    query?: { version?: number },
+    options?: RequestOptions,
+  ): Promise<{ agent?: string; version?: number; prompt?: string; patterns_applied?: string[] }> {
     return this.request<{
-  agent?: string;
-  version?: number;
-  prompt?: string;
-  patterns_applied?: string[];
-}>('GET', `/api/evolution/${agent}/prompt`, { ...options, query: query as Record<string, string | number | undefined> });
+      agent?: string;
+      version?: number;
+      prompt?: string;
+      patterns_applied?: string[];
+    }>('GET', `/api/evolution/${agent}/prompt`, {
+      ...options,
+      query: query as Record<string, string | number | undefined>,
+    });
   }
 
   /**
@@ -934,19 +1041,20 @@ Probes test for contradiction handling, hallucination, sycophancy, and more.
    * Generates podcast-style audio from a debate trace
    * @requires Authentication
    */
-  async postDebatesByidBroadcast(id: string, body?: {
-    /** Agent to voice mapping */
-  voice_mapping?: Record<string, string>;
-  include_intro?: boolean;
-  include_outro?: boolean;
-}, options?: RequestOptions): Promise<{
-  job_id?: string;
-  status?: 'queued' | 'processing' | 'completed' | 'failed';
-}> {
+  async postDebatesByidBroadcast(
+    id: string,
+    body?: {
+      /** Agent to voice mapping */
+      voice_mapping?: Record<string, string>;
+      include_intro?: boolean;
+      include_outro?: boolean;
+    },
+    options?: RequestOptions,
+  ): Promise<{ job_id?: string; status?: 'queued' | 'processing' | 'completed' | 'failed' }> {
     return this.request<{
-  job_id?: string;
-  status?: 'queued' | 'processing' | 'completed' | 'failed';
-}>('POST', `/api/debates/${id}/broadcast`, { ...options, body });
+      job_id?: string;
+      status?: 'queued' | 'processing' | 'completed' | 'failed';
+    }>('POST', `/api/debates/${id}/broadcast`, { ...options, body });
   }
 
   /**
@@ -954,21 +1062,25 @@ Probes test for contradiction handling, hallucination, sycophancy, and more.
    * Runs complete broadcast pipeline including TTS, mixing, and publishing
    * @requires Authentication
    */
-  async postDebatesByidBroadcastFull(id: string, body?: {
-  platforms?: 'rss' | 'youtube' | 'twitter'[];
-  tts_backend?: 'elevenlabs' | 'google' | 'openai';
-}, options?: RequestOptions): Promise<{
-  job_id?: string;
-  status?: string;
+  async postDebatesByidBroadcastFull(
+    id: string,
+    body?: {
+      platforms?: 'rss' | 'youtube' | 'twitter'[];
+      tts_backend?: 'elevenlabs' | 'google' | 'openai';
+    },
+    options?: RequestOptions,
+  ): Promise<{
+    job_id?: string;
+    status?: string;
     /** Estimated completion time in seconds */
-  estimated_duration?: number;
-}> {
+    estimated_duration?: number;
+  }> {
     return this.request<{
-  job_id?: string;
-  status?: string;
-    /** Estimated completion time in seconds */
-  estimated_duration?: number;
-}>('POST', `/api/debates/${id}/broadcast/full`, { ...options, body });
+      job_id?: string;
+      status?: string;
+      /** Estimated completion time in seconds */
+      estimated_duration?: number;
+    }>('POST', `/api/debates/${id}/broadcast/full`, { ...options, body });
   }
 
   /**
@@ -978,13 +1090,9 @@ Probes test for contradiction handling, hallucination, sycophancy, and more.
   async getPodcastFeedXml(options?: RequestOptions): Promise<unknown> {
     return this.request<unknown>('GET', `/api/podcast/feed.xml`, { ...options });
   }
-
 }
 
 // Default instance factory
 export function createApiClient(config: Partial<ApiClientConfig> = {}): AragoraApiClient {
-  return new AragoraApiClient({
-    baseUrl: config.baseUrl || API_BASE_URL,
-    ...config,
-  });
+  return new AragoraApiClient({ baseUrl: config.baseUrl || API_BASE_URL, ...config });
 }

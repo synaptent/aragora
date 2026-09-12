@@ -143,17 +143,15 @@ export function TricksterAlert({ debateId }: TricksterAlertProps) {
               severityLevel === 'high'
                 ? 'text-red-400'
                 : severityLevel === 'medium'
-                ? 'text-orange-400'
-                : 'text-yellow-400'
+                  ? 'text-orange-400'
+                  : 'text-yellow-400'
             }`}
           >
             TRICKSTER ALERT: {data.total_alerts} hollow consensus{' '}
             {data.total_alerts === 1 ? 'warning' : 'warnings'}
           </span>
         </div>
-        <span className="text-xs font-theme-data text-text-muted">
-          {expanded ? '[-]' : '[+]'}
-        </span>
+        <span className="text-xs font-theme-data text-text-muted">{expanded ? '[-]' : '[+]'}</span>
       </div>
 
       {expanded && (
@@ -187,24 +185,13 @@ export function TricksterAlert({ debateId }: TricksterAlertProps) {
             {data.hollow_consensus_alerts.map((alert, idx) => {
               const level = getSeverityLevel(alert.severity);
               return (
-                <div
-                  key={idx}
-                  className={`p-3 border rounded ${SEVERITY_COLORS[level]}`}
-                >
+                <div key={idx} className={`p-3 border rounded ${SEVERITY_COLORS[level]}`}>
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs font-theme-data font-bold">
-                      Round {alert.round}
-                    </div>
+                    <div className="text-xs font-theme-data font-bold">Round {alert.round}</div>
                     <div className="flex gap-4 text-xs font-theme-data text-text-muted">
-                      <span>
-                        Severity: {Math.round(alert.severity * 100)}%
-                      </span>
-                      <span>
-                        Evidence Quality: {Math.round(alert.evidence_quality * 100)}%
-                      </span>
-                      <span>
-                        Convergence: {Math.round(alert.convergence * 100)}%
-                      </span>
+                      <span>Severity: {Math.round(alert.severity * 100)}%</span>
+                      <span>Evidence Quality: {Math.round(alert.evidence_quality * 100)}%</span>
+                      <span>Convergence: {Math.round(alert.convergence * 100)}%</span>
                     </div>
                   </div>
                   {alert.gaps && Object.keys(alert.gaps).length > 0 && (
@@ -216,9 +203,7 @@ export function TricksterAlert({ debateId }: TricksterAlertProps) {
                         {Object.entries(alert.gaps).map(([agent, gaps]) => (
                           <div key={agent} className="text-xs font-theme-data">
                             <span className="text-text">{agent}: </span>
-                            <span className="text-text-muted">
-                              {(gaps as string[]).join(', ')}
-                            </span>
+                            <span className="text-text-muted">{(gaps as string[]).join(', ')}</span>
                           </div>
                         ))}
                       </div>
@@ -236,10 +221,7 @@ export function TricksterAlert({ debateId }: TricksterAlertProps) {
                 Trickster Interventions
               </div>
               {data.interventions.map((intervention, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 border border-purple-500/30 bg-purple-500/10 rounded"
-                >
+                <div key={idx} className="p-3 border border-purple-500/30 bg-purple-500/10 rounded">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span>{INTERVENTION_ICONS[intervention.type] || '🎭'}</span>

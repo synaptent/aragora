@@ -34,11 +34,7 @@ interface ConnectedWorkspace {
   latency_ms: number;
   shared_items: number;
   active_consents: number;
-  capabilities: {
-    agent_execution: boolean;
-    workflow_execution: boolean;
-    knowledge_query: boolean;
-  };
+  capabilities: { agent_execution: boolean; workflow_execution: boolean; knowledge_query: boolean };
 }
 
 interface SyncEvent {
@@ -82,9 +78,7 @@ function StatusDot({ status }: { status: string }) {
     idle: 'bg-gray-500',
   };
   const color = colorMap[status] || 'bg-gray-500';
-  return (
-    <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />
-  );
+  return <span className={`inline-block w-2.5 h-2.5 rounded-full ${color}`} />;
 }
 
 function StatCard({
@@ -282,15 +276,8 @@ export default function FederationManagementPage() {
           {/* Overview Stats */}
           {overview && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <StatCard
-                label="Connected Workspaces"
-                value={overview.connected_workspaces}
-              />
-              <StatCard
-                label="Online"
-                value={overview.online_workspaces ?? 0}
-                color="acid-cyan"
-              />
+              <StatCard label="Connected Workspaces" value={overview.connected_workspaces} />
+              <StatCard label="Online" value={overview.online_workspaces ?? 0} color="acid-cyan" />
               <StatCard
                 label="Shared Knowledge"
                 value={overview.shared_knowledge_count}
@@ -313,7 +300,8 @@ export default function FederationManagementPage() {
             <h2 className="font-theme-data text-[var(--accent)] mb-4">Connected Workspaces</h2>
             {workspaces.length === 0 ? (
               <p className="font-theme-data text-sm text-text-muted">
-                No workspaces are currently federated. Register workspaces via the Coordination API to enable federation.
+                No workspaces are currently federated. Register workspaces via the Coordination API
+                to enable federation.
               </p>
             ) : (
               <div className="overflow-x-auto">
@@ -387,9 +375,7 @@ export default function FederationManagementPage() {
             <div className="card p-6">
               <h2 className="font-theme-data text-[var(--accent)] mb-4">Sync Activity</h2>
               {activity.length === 0 ? (
-                <p className="font-theme-data text-sm text-text-muted">
-                  No recent sync activity.
-                </p>
+                <p className="font-theme-data text-sm text-text-muted">No recent sync activity.</p>
               ) : (
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                   {activity.map((event) => (
@@ -398,7 +384,9 @@ export default function FederationManagementPage() {
                       className="p-3 bg-bg rounded border border-[var(--accent)]/10"
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className={`font-theme-data text-xs font-bold uppercase ${eventTypeColor(event.type)}`}>
+                        <span
+                          className={`font-theme-data text-xs font-bold uppercase ${eventTypeColor(event.type)}`}
+                        >
                           {eventTypeLabel(event.type)}
                         </span>
                         <span className="font-theme-data text-xs text-text-muted">
@@ -414,7 +402,11 @@ export default function FederationManagementPage() {
                         <div className="font-theme-data text-xs text-text-muted mt-1">
                           Scope: <span className="text-text">{event.scope}</span>
                           {event.times_used !== undefined && (
-                            <> | Used: <span className="text-[var(--acid-cyan)]">{event.times_used}x</span></>
+                            <>
+                              {' '}
+                              | Used:{' '}
+                              <span className="text-[var(--acid-cyan)]">{event.times_used}x</span>
+                            </>
                           )}
                         </div>
                       )}
@@ -472,9 +464,7 @@ export default function FederationManagementPage() {
                     <div className="flex items-center gap-2">
                       <span
                         className={`inline-block w-2.5 h-2.5 rounded-full ${
-                          fedConfig.knowledge_sharing.audit_enabled
-                            ? 'bg-green-500'
-                            : 'bg-red-500'
+                          fedConfig.knowledge_sharing.audit_enabled ? 'bg-green-500' : 'bg-red-500'
                         }`}
                       />
                       <span className="font-theme-data text-sm text-text">
@@ -527,12 +517,8 @@ export default function FederationManagementPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // FEDERATION MANAGEMENT
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // FEDERATION MANAGEMENT</p>
         </footer>
       </main>
     </>

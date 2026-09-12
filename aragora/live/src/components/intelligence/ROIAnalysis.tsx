@@ -108,7 +108,8 @@ export function ROIAnalysis({ backendUrl }: ROIAnalysisProps) {
           </div>
         </div>
         <div className="mt-3 text-xs font-theme-data text-text-muted">
-          ${data.roi_summary.total_cost_usd} invested / ${data.roi_summary.total_value_generated_usd} value
+          ${data.roi_summary.total_cost_usd} invested / $
+          {data.roi_summary.total_value_generated_usd} value
         </div>
       </div>
 
@@ -123,7 +124,9 @@ export function ROIAnalysis({ backendUrl }: ROIAnalysisProps) {
         </div>
         <div className="bg-surface/50 rounded-lg p-3 border border-[var(--accent)]/20">
           <p className="text-text-muted text-xs font-theme-data mb-1">Value Generated</p>
-          <p className="text-lg font-theme-data text-[var(--accent)]">${data.roi_summary.total_value_generated_usd}</p>
+          <p className="text-lg font-theme-data text-[var(--accent)]">
+            ${data.roi_summary.total_value_generated_usd}
+          </p>
           <p className="text-xs text-text-muted">
             {data.time_savings.estimated_hours_saved} hours saved
           </p>
@@ -150,7 +153,9 @@ export function ROIAnalysis({ backendUrl }: ROIAnalysisProps) {
             <div className="h-2 bg-bg rounded-full overflow-hidden">
               <div
                 className="h-full bg-[var(--accent)]"
-                style={{ width: `${(data.time_savings.avg_time_per_ai_decision_hours / data.time_savings.avg_time_per_manual_decision_hours) * 100}%` }}
+                style={{
+                  width: `${(data.time_savings.avg_time_per_ai_decision_hours / data.time_savings.avg_time_per_manual_decision_hours) * 100}%`,
+                }}
               ></div>
             </div>
           </div>

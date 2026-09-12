@@ -14,8 +14,16 @@ interface PhaseGateProps {
 }
 
 export function PhaseGate({
-  phaseFrom, phaseTo, addedNodes, removedNodes, unchangedCount,
-  onApprove, onEdit, onSkipToEnd, onToggleFullAuto, fullAuto,
+  phaseFrom,
+  phaseTo,
+  addedNodes,
+  removedNodes,
+  unchangedCount,
+  onApprove,
+  onEdit,
+  onSkipToEnd,
+  onToggleFullAuto,
+  fullAuto,
 }: PhaseGateProps) {
   return (
     <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm z-30 flex items-center justify-center">
@@ -32,13 +40,19 @@ export function PhaseGate({
 
         {/* Diff View */}
         <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-          {addedNodes.map(n => (
-            <div key={n.id} className="flex items-center gap-2 px-3 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+          {addedNodes.map((n) => (
+            <div
+              key={n.id}
+              className="flex items-center gap-2 px-3 py-1.5 rounded bg-emerald-500/10 border border-emerald-500/20"
+            >
               <span className="text-emerald-400 text-xs font-theme-data">+ {n.label}</span>
             </div>
           ))}
-          {removedNodes.map(n => (
-            <div key={n.id} className="flex items-center gap-2 px-3 py-1.5 rounded bg-red-500/10 border border-red-500/20">
+          {removedNodes.map((n) => (
+            <div
+              key={n.id}
+              className="flex items-center gap-2 px-3 py-1.5 rounded bg-red-500/10 border border-red-500/20"
+            >
               <span className="text-red-400 text-xs font-theme-data">- {n.label}</span>
             </div>
           ))}
@@ -62,7 +76,9 @@ export function PhaseGate({
             onChange={onToggleFullAuto}
             className="rounded border-border bg-bg text-[var(--accent)] focus:ring-acid-green/30"
           />
-          <span className="text-xs font-theme-data text-text-muted">Full Auto (skip future gates)</span>
+          <span className="text-xs font-theme-data text-text-muted">
+            Full Auto (skip future gates)
+          </span>
         </label>
 
         {/* Action Buttons */}

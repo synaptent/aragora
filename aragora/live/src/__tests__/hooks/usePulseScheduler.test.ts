@@ -5,7 +5,11 @@ import { usePulseScheduler } from '@/hooks/usePulseScheduler';
 // Provide an authenticated wrapper so useAuth() returns valid tokens
 const hookWrapper = createHookWrapper({
   isAuthenticated: true,
-  tokens: { access_token: 'test-token', refresh_token: 'test-refresh', token_type: 'bearer' } as never,
+  tokens: {
+    access_token: 'test-token',
+    refresh_token: 'test-refresh',
+    token_type: 'bearer',
+  } as never,
 });
 
 // Mock fetch
@@ -114,10 +118,7 @@ describe('usePulseScheduler', () => {
 
   describe('fetchStatus', () => {
     it('fetches and stores status', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockStatus),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockStatus) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -136,12 +137,8 @@ describe('usePulseScheduler', () => {
       mockFetch.mockImplementation(
         () =>
           new Promise((resolve) => {
-            resolvePromise = () =>
-              resolve({
-                ok: true,
-                json: () => Promise.resolve(mockStatus),
-              });
-          })
+            resolvePromise = () => resolve({ ok: true, json: () => Promise.resolve(mockStatus) });
+          }),
       );
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
@@ -160,10 +157,7 @@ describe('usePulseScheduler', () => {
     });
 
     it('handles 503 as scheduler unavailable', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 503,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -175,10 +169,7 @@ describe('usePulseScheduler', () => {
     });
 
     it('handles other HTTP errors', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -204,10 +195,7 @@ describe('usePulseScheduler', () => {
 
   describe('polling', () => {
     it('starts polling at specified interval', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockStatus),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockStatus) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -234,10 +222,7 @@ describe('usePulseScheduler', () => {
     });
 
     it('stops polling', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockStatus),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockStatus) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -260,10 +245,7 @@ describe('usePulseScheduler', () => {
     });
 
     it('clears previous polling when starting new polling', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockStatus),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockStatus) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -293,10 +275,7 @@ describe('usePulseScheduler', () => {
     });
 
     it('cleans up polling on unmount', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockStatus),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockStatus) });
 
       const { result, unmount } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -333,7 +312,7 @@ describe('usePulseScheduler', () => {
         expect(success).toBe(true);
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/pulse/scheduler/start'),
-          expect.objectContaining({ method: 'POST' })
+          expect.objectContaining({ method: 'POST' }),
         );
         expect(result.current.isRunning).toBe(true);
       });
@@ -361,10 +340,7 @@ describe('usePulseScheduler', () => {
       it('sends stop request with graceful flag', async () => {
         mockFetch
           .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
-          .mockResolvedValueOnce({
-            ok: true,
-            json: () => Promise.resolve(mockStatus),
-          });
+          .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockStatus) });
 
         const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -374,20 +350,14 @@ describe('usePulseScheduler', () => {
 
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/pulse/scheduler/stop'),
-          expect.objectContaining({
-            method: 'POST',
-            body: JSON.stringify({ graceful: true }),
-          })
+          expect.objectContaining({ method: 'POST', body: JSON.stringify({ graceful: true }) }),
         );
       });
 
       it('sends stop request with graceful=false', async () => {
         mockFetch
           .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
-          .mockResolvedValueOnce({
-            ok: true,
-            json: () => Promise.resolve(mockStatus),
-          });
+          .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockStatus) });
 
         const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -397,9 +367,7 @@ describe('usePulseScheduler', () => {
 
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/pulse/scheduler/stop'),
-          expect.objectContaining({
-            body: JSON.stringify({ graceful: false }),
-          })
+          expect.objectContaining({ body: JSON.stringify({ graceful: false }) }),
         );
       });
     });
@@ -421,7 +389,7 @@ describe('usePulseScheduler', () => {
 
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/pulse/scheduler/pause'),
-          expect.objectContaining({ method: 'POST' })
+          expect.objectContaining({ method: 'POST' }),
         );
         expect(result.current.isPaused).toBe(true);
       });
@@ -444,7 +412,7 @@ describe('usePulseScheduler', () => {
 
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/pulse/scheduler/resume'),
-          expect.objectContaining({ method: 'POST' })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -454,10 +422,7 @@ describe('usePulseScheduler', () => {
     it('sends config updates', async () => {
       mockFetch
         .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(mockStatus),
-        });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockStatus) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -470,7 +435,7 @@ describe('usePulseScheduler', () => {
         expect.objectContaining({
           method: 'PATCH',
           body: JSON.stringify({ max_debates_per_hour: 10 }),
-        })
+        }),
       );
     });
 
@@ -494,10 +459,7 @@ describe('usePulseScheduler', () => {
 
   describe('fetchHistory', () => {
     it('fetches debate history', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockHistory),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockHistory) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -511,10 +473,7 @@ describe('usePulseScheduler', () => {
     });
 
     it('fetches with pagination params', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockHistory),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockHistory) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -524,19 +483,16 @@ describe('usePulseScheduler', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('limit=20'),
-        expect.anything()
+        expect.anything(),
       );
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('offset=10'),
-        expect.anything()
+        expect.anything(),
       );
     });
 
     it('fetches with platform filter', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockHistory),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockHistory) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -546,15 +502,12 @@ describe('usePulseScheduler', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('platform=twitter'),
-        expect.anything()
+        expect.anything(),
       );
     });
 
     it('handles fetch history error', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 
@@ -630,10 +583,7 @@ describe('usePulseScheduler', () => {
     });
 
     it('exposes config and metrics shortcuts', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockStatus),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockStatus) });
 
       const { result } = renderHook(() => usePulseScheduler(), { wrapper: hookWrapper });
 

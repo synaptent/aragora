@@ -9,7 +9,5 @@ interface LeaderboardAgentsPayload {
 
 export function extractLeaderboardAgentNames(data: LeaderboardAgentsPayload): string[] {
   const entries = data.leaderboard ?? data.agents ?? [];
-  return entries
-    .map((entry) => entry.name?.trim())
-    .filter((name): name is string => Boolean(name));
+  return entries.map((entry) => entry.name?.trim()).filter((name): name is string => Boolean(name));
 }

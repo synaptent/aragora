@@ -11,7 +11,8 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 import { useSWRFetch } from '@/hooks/useSWRFetch';
 
 const ExplainabilityPanel = dynamic(
-  () => import('@/components/ExplainabilityPanel').then(m => ({ default: m.ExplainabilityPanel })),
+  () =>
+    import('@/components/ExplainabilityPanel').then((m) => ({ default: m.ExplainabilityPanel })),
   {
     ssr: false,
     loading: () => (
@@ -19,11 +20,14 @@ const ExplainabilityPanel = dynamic(
         <div className="h-[400px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 const BatchExplainabilityPanel = dynamic(
-  () => import('@/components/BatchExplainabilityPanel').then(m => ({ default: m.BatchExplainabilityPanel })),
+  () =>
+    import('@/components/BatchExplainabilityPanel').then((m) => ({
+      default: m.BatchExplainabilityPanel,
+    })),
   {
     ssr: false,
     loading: () => (
@@ -31,7 +35,7 @@ const BatchExplainabilityPanel = dynamic(
         <div className="h-[300px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 interface RecentDebate {
@@ -53,7 +57,7 @@ export default function ExplainabilityPage() {
 
   const { data: recentData, isLoading } = useSWRFetch<RecentDebatesResponse>(
     '/api/v1/debates?limit=20&sort=created_at:desc',
-    { refreshInterval: 30000, baseUrl: config.api }
+    { refreshInterval: 30000, baseUrl: config.api },
   );
 
   const debates = recentData?.debates || recentData?.data || [];
@@ -70,10 +74,16 @@ export default function ExplainabilityPage() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <div className="flex items-center gap-3">
-              <Link href="/" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [DASHBOARD]
               </Link>
-              <Link href="/receipts" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/receipts"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [RECEIPTS]
               </Link>
               <BackendSelector compact />
@@ -119,7 +129,9 @@ export default function ExplainabilityPage() {
                     Select Debate
                   </h3>
                   {isLoading ? (
-                    <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">Loading...</div>
+                    <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">
+                      Loading...
+                    </div>
                   ) : debates.length === 0 ? (
                     <p className="text-text-muted text-sm">No debates found. Run a debate first.</p>
                   ) : (
@@ -139,11 +151,13 @@ export default function ExplainabilityPage() {
                           </div>
                           <div className="text-text line-clamp-2">{debate.task}</div>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${
-                              debate.consensus_reached
-                                ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
-                                : 'bg-yellow-500/20 text-yellow-400'
-                            }`}>
+                            <span
+                              className={`text-xs px-1.5 py-0.5 rounded ${
+                                debate.consensus_reached
+                                  ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                                  : 'bg-yellow-500/20 text-yellow-400'
+                              }`}
+                            >
                               {debate.consensus_reached ? 'Consensus' : 'No Consensus'}
                             </span>
                           </div>

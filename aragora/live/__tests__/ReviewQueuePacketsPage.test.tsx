@@ -39,16 +39,10 @@ jest.mock('../src/config', () => ({
   WS_URL: 'ws://localhost:8765/ws',
 }));
 
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
 import PacketsClient from '../src/app/(app)/review-queue/packets/[receiptId]/PacketsClient';
-import {
-  canonicalJson,
-  type SettlementReceipt,
-} from '../src/hooks/useReviewQueueFromPacket';
+import { canonicalJson, type SettlementReceipt } from '../src/hooks/useReviewQueueFromPacket';
 
 const RECEIPT_ID_HINT = 'open-queue-settlement-20260517T142811Z';
 
@@ -108,10 +102,7 @@ function fakeFile(payload: unknown, name = 'receipt.json'): File {
   // in case the test env lacks it.
   const file = new File([text], name, { type: 'application/json' });
   if (typeof (file as unknown as { text?: () => Promise<string> }).text !== 'function') {
-    Object.defineProperty(file, 'text', {
-      value: () => Promise.resolve(text),
-      configurable: true,
-    });
+    Object.defineProperty(file, 'text', { value: () => Promise.resolve(text), configurable: true });
   }
   return file;
 }
@@ -211,9 +202,7 @@ describe('ReviewQueuePacketsPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('packets-sha-check')).toHaveTextContent(/payload match/);
     });
-    expect(screen.getByTestId('packets-hmac-check')).toHaveTextContent(
-      /not verified in browser/,
-    );
+    expect(screen.getByTestId('packets-hmac-check')).toHaveTextContent(/not verified in browser/);
   });
 
   it('detects sha256 mismatch when the claimed hash is wrong', async () => {
@@ -415,9 +404,7 @@ describe('ReviewQueuePacketsPage keyboard sign-off', () => {
     fireEvent.keyDown(window, { key: 'j' });
     fireEvent.keyDown(window, { key: '4' });
     await waitFor(() => {
-      const input = screen.getByTestId(
-        'packet-decision-option-7245-reject',
-      ) as HTMLInputElement;
+      const input = screen.getByTestId('packet-decision-option-7245-reject') as HTMLInputElement;
       expect(input.checked).toBe(true);
     });
 
@@ -431,17 +418,11 @@ describe('ReviewQueuePacketsPage keyboard sign-off', () => {
       expect(screen.getByTestId('packets-decision-list')).toBeInTheDocument();
     });
 
-    const event = new KeyboardEvent('keydown', {
-      key: 'Tab',
-      bubbles: true,
-      cancelable: true,
-    });
+    const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
     window.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(false);
-    expect(document.activeElement).not.toBe(
-      screen.getByTestId('packet-decision-comment-7240'),
-    );
+    expect(document.activeElement).not.toBe(screen.getByTestId('packet-decision-comment-7240'));
   });
 
   it('? toggles the keyboard help overlay; Esc closes it', async () => {
@@ -469,9 +450,7 @@ describe('ReviewQueuePacketsPage keyboard sign-off', () => {
       expect(screen.getByTestId('packets-decision-list')).toBeInTheDocument();
     });
 
-    const textarea = screen.getByTestId(
-      'packet-decision-comment-7240',
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByTestId('packet-decision-comment-7240') as HTMLTextAreaElement;
     textarea.focus();
     fireEvent.keyDown(textarea, { key: '1' });
 
@@ -489,9 +468,7 @@ describe('ReviewQueuePacketsPage keyboard sign-off', () => {
       expect(screen.getByTestId('packets-decision-list')).toBeInTheDocument();
     });
 
-    const textarea = screen.getByTestId(
-      'packet-decision-comment-7240',
-    ) as HTMLTextAreaElement;
+    const textarea = screen.getByTestId('packet-decision-comment-7240') as HTMLTextAreaElement;
     textarea.focus();
     fireEvent.keyDown(textarea, { key: '?' });
 
@@ -542,9 +519,7 @@ describe('ReviewQueuePacketsPage keyboard sign-off', () => {
         expect(input.checked).toBe(true);
       });
 
-      const downloadBtn = screen.getByTestId(
-        'packets-download-button',
-      ) as HTMLButtonElement;
+      const downloadBtn = screen.getByTestId('packets-download-button') as HTMLButtonElement;
       await act(async () => {
         fireEvent.click(downloadBtn);
       });
@@ -568,14 +543,10 @@ describe('ReviewQueuePacketsPage keyboard sign-off', () => {
       const decided = parsed.decisions.find((d) => d.pr_number === 7240);
       expect(decided?.decision).toBe('request_changes');
       // Both timestamps should be ISO-8601 strings on the decided entry.
-      expect(decided?.first_focused_at_utc).toMatch(
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
-      );
-      expect(decided?.decided_at_utc).toMatch(
-        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
-      );
+      expect(decided?.first_focused_at_utc).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      expect(decided?.decided_at_utc).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
       expect(typeof decided?.decision_seconds).toBe('number');
-      expect((decided?.decision_seconds ?? -1)).toBeGreaterThanOrEqual(0);
+      expect(decided?.decision_seconds ?? -1).toBeGreaterThanOrEqual(0);
 
       const undecided = parsed.decisions.find((d) => d.pr_number === 7245);
       // Never focused (and never decided) → both null.

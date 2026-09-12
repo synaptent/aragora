@@ -9,7 +9,7 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const CalibrationPanel = dynamic(
-  () => import('@/components/CalibrationPanel').then(m => ({ default: m.CalibrationPanel })),
+  () => import('@/components/CalibrationPanel').then((m) => ({ default: m.CalibrationPanel })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +17,7 @@ const CalibrationPanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function CalibrationPage() {
@@ -73,18 +73,30 @@ export default function CalibrationPage() {
               {'>'} AGENT CALIBRATION
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Track agent confidence calibration, accuracy curves, and reliability metrics.
-              Identify over-confident or under-confident agents.
+              Track agent confidence calibration, accuracy curves, and reliability metrics. Identify
+              over-confident or under-confident agents.
             </p>
           </div>
 
           <div className="mb-6 p-4 border border-gold/30 bg-gold/5 rounded">
             <h3 className="text-sm font-theme-data text-gold mb-2">Calibration Metrics</h3>
             <ul className="text-xs font-theme-data text-text-muted space-y-1">
-              <li>- <span className="text-[var(--accent)]">Expected Calibration Error (ECE)</span>: Lower is better</li>
-              <li>- <span className="text-[var(--accent)]">Brier Score</span>: Prediction accuracy measure</li>
-              <li>- <span className="text-[var(--accent)]">Reliability Diagrams</span>: Confidence vs accuracy curves</li>
-              <li>- <span className="text-[var(--accent)]">Confidence Distribution</span>: How agents spread confidence</li>
+              <li>
+                - <span className="text-[var(--accent)]">Expected Calibration Error (ECE)</span>:
+                Lower is better
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Brier Score</span>: Prediction accuracy
+                measure
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Reliability Diagrams</span>: Confidence vs
+                accuracy curves
+              </li>
+              <li>
+                - <span className="text-[var(--accent)]">Confidence Distribution</span>: How agents
+                spread confidence
+              </li>
             </ul>
           </div>
 
@@ -95,12 +107,8 @@ export default function CalibrationPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // AGENT CALIBRATION
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // AGENT CALIBRATION</p>
         </footer>
       </main>
     </>

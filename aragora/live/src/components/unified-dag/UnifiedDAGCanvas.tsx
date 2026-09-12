@@ -19,7 +19,13 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { useUnifiedDAG, STAGE_COLORS, type DAGNodeData, type DAGOperationResult, type DAGStage } from '@/hooks/useUnifiedDAG';
+import {
+  useUnifiedDAG,
+  STAGE_COLORS,
+  type DAGNodeData,
+  type DAGOperationResult,
+  type DAGStage,
+} from '@/hooks/useUnifiedDAG';
 import { DAGStageLanes } from './DAGStageLanes';
 import { NodeContextMenu } from './NodeContextMenu';
 import { AIOperationPanel } from './AIOperationPanel';
@@ -45,9 +51,7 @@ const nodeTypes = {
   executionNode: ExecutionDAGNode,
 };
 
-const edgeTypes = {
-  crossStage: CrossStageEdge,
-};
+const edgeTypes = { crossStage: CrossStageEdge };
 
 // ---------------------------------------------------------------------------
 // Component
@@ -94,19 +98,11 @@ export function UnifiedDAGCanvas({ graphId }: UnifiedDAGCanvasProps) {
   }, [dag.edges, filteredNodes, stageFilter]);
 
   // Right-click handler
-  const handleNodeContextMenu: NodeMouseHandler = useCallback(
-    (event, node) => {
-      event.preventDefault();
-      const nodeData = node.data as DAGNodeData;
-      setContextMenu({
-        nodeId: node.id,
-        stage: nodeData.stage,
-        x: event.clientX,
-        y: event.clientY,
-      });
-    },
-    [],
-  );
+  const handleNodeContextMenu: NodeMouseHandler = useCallback((event, node) => {
+    event.preventDefault();
+    const nodeData = node.data as DAGNodeData;
+    setContextMenu({ nodeId: node.id, stage: nodeData.stage, x: event.clientX, y: event.clientY });
+  }, []);
 
   // Connect handler
   const onConnect: OnConnect = useCallback(
@@ -122,14 +118,11 @@ export function UnifiedDAGCanvas({ graphId }: UnifiedDAGCanvasProps) {
   );
 
   // AI operation wrappers
-  const withResult = useCallback(
-    async (fn: () => Promise<DAGOperationResult | null>) => {
-      setShowPanel(true);
-      const result = await fn();
-      if (result) setLastResult(result);
-    },
-    [],
-  );
+  const withResult = useCallback(async (fn: () => Promise<DAGOperationResult | null>) => {
+    setShowPanel(true);
+    const result = await fn();
+    if (result) setLastResult(result);
+  }, []);
 
   const handleDebate = useCallback(
     (nodeId: string) => withResult(() => dag.debateNode(nodeId)),
@@ -191,10 +184,7 @@ export function UnifiedDAGCanvas({ graphId }: UnifiedDAGCanvasProps) {
     () =>
       filteredNodes.map((node) => ({
         ...node,
-        data: {
-          ...(node.data as DAGNodeData),
-          onExecuteNode: _handleExecuteNode,
-        },
+        data: { ...(node.data as DAGNodeData), onExecuteNode: _handleExecuteNode },
       })),
     [filteredNodes, _handleExecuteNode],
   );

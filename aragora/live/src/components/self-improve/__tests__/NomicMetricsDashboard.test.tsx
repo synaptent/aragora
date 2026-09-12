@@ -15,13 +15,9 @@ jest.mock('@/components/nomic/HealthScoreGauge', () => ({
   ),
 }));
 
-jest.mock('../RegressionGuard', () => ({
-  RegressionGuard: () => <div>Regression Guard</div>,
-}));
+jest.mock('../RegressionGuard', () => ({ RegressionGuard: () => <div>Regression Guard</div> }));
 
-jest.mock('@/hooks/useSWRFetch', () => ({
-  useSWRFetch: jest.fn(),
-}));
+jest.mock('@/hooks/useSWRFetch', () => ({ useSWRFetch: jest.fn() }));
 
 const mockUseSWRFetch = useSWRFetch as jest.Mock;
 

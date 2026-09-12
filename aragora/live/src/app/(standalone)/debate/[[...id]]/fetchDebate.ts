@@ -27,8 +27,7 @@ export interface SavedDebate {
   messages?: SavedDebateMessage[];
 }
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 function parseSavedDebate(payload: unknown): SavedDebate | null {
   if (!payload || typeof payload !== 'object') {
@@ -52,21 +51,14 @@ function parseSavedDebate(payload: unknown): SavedDebate | null {
           : null;
   const status = typeof debate.status === 'string' ? debate.status : 'completed';
   const messages = normalizeMessages(debate.messages ?? debate.transcript);
-  const participants = normalizeParticipants(
-    debate.participants ?? debate.agents,
-    messages,
-  );
+  const participants = normalizeParticipants(debate.participants ?? debate.agents, messages);
   const proposals = normalizeProposals(debate.proposals, messages);
   const critiques = normalizeCritiques(debate.critiques);
   const votes = normalizeVotes(debate.votes);
-  const finalAnswer = firstString(
-    debate.final_answer,
-    debate.conclusion,
-    debate.winning_proposal,
-    debate.verdict,
-  ) ?? '';
-  const verdict =
-    firstString(debate.verdict, debate.winning_proposal, debate.final_answer) ?? null;
+  const finalAnswer =
+    firstString(debate.final_answer, debate.conclusion, debate.winning_proposal, debate.verdict) ??
+    '';
+  const verdict = firstString(debate.verdict, debate.winning_proposal, debate.final_answer) ?? null;
   const receiptHash =
     debate.receipt_hash == null
       ? null
@@ -129,10 +121,10 @@ function normalizeConsensusReached(payload: Record<string, unknown>): boolean {
     return payload.consensus_reached;
   }
   if (
-    payload.consensus
-    && typeof payload.consensus === 'object'
-    && payload.consensus !== null
-    && typeof (payload.consensus as Record<string, unknown>).reached === 'boolean'
+    payload.consensus &&
+    typeof payload.consensus === 'object' &&
+    payload.consensus !== null &&
+    typeof (payload.consensus as Record<string, unknown>).reached === 'boolean'
   ) {
     return Boolean((payload.consensus as Record<string, unknown>).reached);
   }
@@ -146,21 +138,14 @@ function normalizeConfidence(payload: Record<string, unknown>): number {
   if (typeof payload.agreement === 'number') {
     return payload.agreement;
   }
-  if (
-    payload.consensus
-    && typeof payload.consensus === 'object'
-    && payload.consensus !== null
-  ) {
+  if (payload.consensus && typeof payload.consensus === 'object' && payload.consensus !== null) {
     const consensus = payload.consensus as Record<string, unknown>;
     return normalizeNumber(consensus.confidence ?? consensus.agreement);
   }
   return 0;
 }
 
-function normalizeRoundsUsed(
-  value: unknown,
-  messages: SavedDebateMessage[],
-): number {
+function normalizeRoundsUsed(value: unknown, messages: SavedDebateMessage[]): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
   }
@@ -194,20 +179,19 @@ function normalizeMessages(value: unknown): SavedDebateMessage[] {
     const round = typeof record.round === 'number' ? record.round : undefined;
     const timestamp = typeof record.timestamp === 'string' ? record.timestamp : undefined;
 
-    return [{
-      role,
-      content,
-      ...(agent ? { agent } : {}),
-      ...(round != null ? { round } : {}),
-      ...(timestamp ? { timestamp } : {}),
-    }];
+    return [
+      {
+        role,
+        content,
+        ...(agent ? { agent } : {}),
+        ...(round != null ? { round } : {}),
+        ...(timestamp ? { timestamp } : {}),
+      },
+    ];
   });
 }
 
-function normalizeParticipants(
-  value: unknown,
-  messages: SavedDebateMessage[],
-): string[] {
+function normalizeParticipants(value: unknown, messages: SavedDebateMessage[]): string[] {
   if (Array.isArray(value)) {
     return value.filter((participant): participant is string => typeof participant === 'string');
   }
@@ -225,9 +209,9 @@ function normalizeProposals(
 ): Record<string, string> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).flatMap(([agent, content]) => (
-        typeof content === 'string' ? [[agent, content]] : []
-      )),
+      Object.entries(value as Record<string, unknown>).flatMap(([agent, content]) =>
+        typeof content === 'string' ? [[agent, content]] : [],
+      ),
     );
   }
 
@@ -262,8 +246,8 @@ function normalizeCritiques(
     const agent = firstString(record.agent, record.author) ?? 'unknown';
     const target = firstString(record.target, record.target_agent, record.to_agent) ?? '';
     const text =
-      firstString(record.text, record.summary)
-      ?? (Array.isArray(record.issues)
+      firstString(record.text, record.summary) ??
+      (Array.isArray(record.issues)
         ? record.issues.filter((issue): issue is string => typeof issue === 'string').join('\n')
         : null);
 
@@ -295,11 +279,7 @@ function normalizeVotes(
       return [];
     }
 
-    return [{
-      agent,
-      choice,
-      confidence: normalizeNumber(record.confidence),
-    }];
+    return [{ agent, choice, confidence: normalizeNumber(record.confidence) }];
   });
 }
 
@@ -337,9 +317,7 @@ async function fetchDebateFromCandidateUrls(
  * then falls back to the playground endpoint for backward compatibility.
  * Returns null when the debate cannot be fetched (not found, API down, etc.).
  */
-export async function fetchDebate(
-  debateId: string,
-): Promise<SavedDebate | null> {
+export async function fetchDebate(debateId: string): Promise<SavedDebate | null> {
   return fetchDebateFromCandidateUrls(debateId, { next: { revalidate: 300 } });
 }
 
@@ -349,8 +327,6 @@ export async function fetchDebate(
  * Used by the standalone viewer as a fail-soft recovery path when the initial
  * server-side preload misses but the permalink still resolves publicly.
  */
-export async function fetchDebateClient(
-  debateId: string,
-): Promise<SavedDebate | null> {
+export async function fetchDebateClient(debateId: string): Promise<SavedDebate | null> {
   return fetchDebateFromCandidateUrls(debateId, { cache: 'no-store' });
 }

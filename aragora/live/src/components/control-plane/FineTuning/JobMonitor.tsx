@@ -27,18 +27,12 @@ const VERTICAL_ICONS: Record<string, string> = {
   research: '&#x1F52C;',
 };
 
-export function JobMonitor({
-  jobs,
-  onCancelJob,
-  onViewJob,
-  className = '',
-}: JobMonitorProps) {
+export function JobMonitor({ jobs, onCancelJob, onViewJob, className = '' }: JobMonitorProps) {
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const filteredJobs = statusFilter === 'all'
-    ? jobs
-    : jobs.filter(j => j.status === statusFilter);
+  const filteredJobs =
+    statusFilter === 'all' ? jobs : jobs.filter((j) => j.status === statusFilter);
 
   const formatDuration = (start?: string, end?: string) => {
     if (!start) return '-';
@@ -61,7 +55,7 @@ export function JobMonitor({
       {/* Filter */}
       <div className="flex items-center gap-2 mb-4">
         <span className="text-xs text-text-muted">Filter:</span>
-        {['all', 'training', 'queued', 'completed', 'failed'].map(status => (
+        {['all', 'training', 'queued', 'completed', 'failed'].map((status) => (
           <button
             key={status}
             onClick={() => setStatusFilter(status)}
@@ -83,7 +77,7 @@ export function JobMonitor({
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredJobs.map(job => {
+          {filteredJobs.map((job) => {
             const isExpanded = expandedJobId === job.id;
             const colors = STATUS_COLORS[job.status];
 
@@ -103,7 +97,9 @@ export function JobMonitor({
                     <div className="flex items-center gap-3">
                       <span
                         className="text-xl"
-                        dangerouslySetInnerHTML={{ __html: VERTICAL_ICONS[job.vertical] || '&#x1F4BB;' }}
+                        dangerouslySetInnerHTML={{
+                          __html: VERTICAL_ICONS[job.vertical] || '&#x1F4BB;',
+                        }}
                       />
                       <div>
                         <h4 className="font-theme-data font-bold text-text">{job.name}</h4>
@@ -111,7 +107,9 @@ export function JobMonitor({
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`px-2 py-1 text-xs font-theme-data uppercase rounded ${colors.bg} ${colors.text}`}>
+                      <span
+                        className={`px-2 py-1 text-xs font-theme-data uppercase rounded ${colors.bg} ${colors.text}`}
+                      >
                         {job.status}
                       </span>
                     </div>
@@ -137,7 +135,10 @@ export function JobMonitor({
                       </div>
                       {job.loss !== undefined && (
                         <div className="text-xs text-text-muted mt-1">
-                          Loss: <span className="font-theme-data text-cyan-400">{job.loss.toFixed(4)}</span>
+                          Loss:{' '}
+                          <span className="font-theme-data text-cyan-400">
+                            {job.loss.toFixed(4)}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -150,7 +151,9 @@ export function JobMonitor({
                     <div className="grid grid-cols-2 gap-4 text-xs">
                       <div>
                         <span className="text-text-muted">Training Examples:</span>
-                        <span className="font-theme-data text-text ml-2">{job.trainingExamples.toLocaleString()}</span>
+                        <span className="font-theme-data text-text ml-2">
+                          {job.trainingExamples.toLocaleString()}
+                        </span>
                       </div>
                       <div>
                         <span className="text-text-muted">Duration:</span>
@@ -160,31 +163,41 @@ export function JobMonitor({
                       </div>
                       <div>
                         <span className="text-text-muted">Started:</span>
-                        <span className="font-theme-data text-text ml-2">{formatDate(job.startedAt)}</span>
+                        <span className="font-theme-data text-text ml-2">
+                          {formatDate(job.startedAt)}
+                        </span>
                       </div>
                       <div>
                         <span className="text-text-muted">Completed:</span>
-                        <span className="font-theme-data text-text ml-2">{formatDate(job.completedAt)}</span>
+                        <span className="font-theme-data text-text ml-2">
+                          {formatDate(job.completedAt)}
+                        </span>
                       </div>
                     </div>
 
                     {job.outputPath && (
                       <div className="mt-3 p-2 bg-surface border border-border rounded">
                         <span className="text-xs text-text-muted">Output:</span>
-                        <code className="block text-xs font-theme-data text-[var(--acid-cyan)] mt-1">{job.outputPath}</code>
+                        <code className="block text-xs font-theme-data text-[var(--acid-cyan)] mt-1">
+                          {job.outputPath}
+                        </code>
                       </div>
                     )}
 
                     {job.error && (
                       <div className="mt-3 p-2 bg-red-900/20 border border-red-800/30 rounded">
                         <span className="text-xs text-red-400">Error:</span>
-                        <code className="block text-xs font-theme-data text-red-300 mt-1">{job.error}</code>
+                        <code className="block text-xs font-theme-data text-red-300 mt-1">
+                          {job.error}
+                        </code>
                       </div>
                     )}
 
                     {/* Actions */}
                     <div className="flex gap-2 mt-4">
-                      {(job.status === 'training' || job.status === 'preparing' || job.status === 'queued') && (
+                      {(job.status === 'training' ||
+                        job.status === 'preparing' ||
+                        job.status === 'queued') && (
                         <button
                           onClick={() => onCancelJob?.(job.id)}
                           className="px-3 py-1.5 text-xs font-theme-data bg-red-900/30 text-red-400 border border-red-800/30 rounded hover:bg-red-900/50 transition-colors"

@@ -64,11 +64,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
    * Get items eligible for pruning
    */
   const getPrunableItems = useCallback(
-    async (
-      stalenessThreshold = 0.9,
-      minAgeDays = 30,
-      limit = 100
-    ): Promise<PrunableItem[]> => {
+    async (stalenessThreshold = 0.9, minAgeDays = 30, limit = 100): Promise<PrunableItem[]> => {
       setIsLoading(true);
       setError(null);
 
@@ -80,9 +76,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
           limit: limit.toString(),
         });
 
-        const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/pruning/items?${params}`
-        );
+        const response = await fetch(`${getBaseUrl()}/api/knowledge/mound/pruning/items?${params}`);
 
         if (!response.ok) {
           throw new Error(`Failed to get prunable items: ${response.statusText}`);
@@ -99,7 +93,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl]
+    [workspaceId, getBaseUrl],
   );
 
   /**
@@ -109,25 +103,17 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
     async (
       itemIds: string[],
       action: PruningAction = 'archive',
-      reason = 'manual_prune'
+      reason = 'manual_prune',
     ): Promise<PruneResult | null> => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/pruning/execute`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              workspace_id: workspaceId,
-              item_ids: itemIds,
-              action,
-              reason,
-            }),
-          }
-        );
+        const response = await fetch(`${getBaseUrl()}/api/knowledge/mound/pruning/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspace_id: workspaceId, item_ids: itemIds, action, reason }),
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to prune items: ${response.statusText}`);
@@ -139,7 +125,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
         // Remove pruned items from local state
         if (result.success) {
           setPrunableItems((prev) =>
-            prev.filter((item) => !result.pruned_item_ids.includes(item.node_id))
+            prev.filter((item) => !result.pruned_item_ids.includes(item.node_id)),
           );
         }
 
@@ -152,7 +138,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl]
+    [workspaceId, getBaseUrl],
   );
 
   /**
@@ -165,7 +151,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
         minAgeDays?: number;
         action?: PruningAction;
         dryRun?: boolean;
-      } = {}
+      } = {},
     ): Promise<PruneResult | null> => {
       setIsLoading(true);
       setError(null);
@@ -178,20 +164,17 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
       } = options;
 
       try {
-        const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/pruning/auto`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              workspace_id: workspaceId,
-              staleness_threshold: stalenessThreshold,
-              min_age_days: minAgeDays,
-              action,
-              dry_run: dryRun,
-            }),
-          }
-        );
+        const response = await fetch(`${getBaseUrl()}/api/knowledge/mound/pruning/auto`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspace_id: workspaceId,
+            staleness_threshold: stalenessThreshold,
+            min_age_days: minAgeDays,
+            action,
+            dry_run: dryRun,
+          }),
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to auto-prune: ${response.statusText}`);
@@ -214,7 +197,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl, getPrunableItems]
+    [workspaceId, getBaseUrl, getPrunableItems],
   );
 
   /**
@@ -226,16 +209,13 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
       setError(null);
 
       try {
-        const params = new URLSearchParams({
-          workspace_id: workspaceId,
-          limit: limit.toString(),
-        });
+        const params = new URLSearchParams({ workspace_id: workspaceId, limit: limit.toString() });
         if (since) {
           params.append('since', since);
         }
 
         const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/pruning/history?${params}`
+          `${getBaseUrl()}/api/knowledge/mound/pruning/history?${params}`,
         );
 
         if (!response.ok) {
@@ -253,7 +233,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl]
+    [workspaceId, getBaseUrl],
   );
 
   /**
@@ -265,17 +245,11 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
       setError(null);
 
       try {
-        const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/pruning/restore`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              workspace_id: workspaceId,
-              node_id: nodeId,
-            }),
-          }
-        );
+        const response = await fetch(`${getBaseUrl()}/api/knowledge/mound/pruning/restore`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspace_id: workspaceId, node_id: nodeId }),
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to restore item: ${response.statusText}`);
@@ -291,7 +265,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl]
+    [workspaceId, getBaseUrl],
   );
 
   /**
@@ -303,18 +277,15 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
       setError(null);
 
       try {
-        const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/pruning/decay`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              workspace_id: workspaceId,
-              decay_rate: decayRate,
-              min_confidence: minConfidence,
-            }),
-          }
-        );
+        const response = await fetch(`${getBaseUrl()}/api/knowledge/mound/pruning/decay`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspace_id: workspaceId,
+            decay_rate: decayRate,
+            min_confidence: minConfidence,
+          }),
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to apply decay: ${response.statusText}`);
@@ -330,7 +301,7 @@ export function usePruning({ workspaceId = 'default' }: UsePruningOptions = {}) 
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl]
+    [workspaceId, getBaseUrl],
   );
 
   /**

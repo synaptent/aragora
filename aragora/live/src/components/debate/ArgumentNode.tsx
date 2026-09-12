@@ -3,7 +3,8 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 
-export type ArgumentType = 'proposal' | 'critique' | 'evidence' | 'concession' | 'vote' | 'consensus';
+export type ArgumentType =
+  'proposal' | 'critique' | 'evidence' | 'concession' | 'vote' | 'consensus';
 
 export interface ArgumentNodeData {
   label: string;
@@ -58,11 +59,7 @@ function ArgumentNodeComponent({ data, selected }: NodeProps) {
         </span>
         <span
           className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase"
-          style={{
-            backgroundColor: `${color}20`,
-            color: color,
-            border: `1px solid ${color}40`,
-          }}
+          style={{ backgroundColor: `${color}20`, color: color, border: `1px solid ${color}40` }}
         >
           {TYPE_LABELS[nodeData.argumentType] || nodeData.argumentType}
         </span>
@@ -74,9 +71,7 @@ function ArgumentNodeComponent({ data, selected }: NodeProps) {
       </div>
 
       {/* Footer: round */}
-      <div className="px-3 pb-2 text-[10px] text-[var(--text-muted)]">
-        R{nodeData.round}
-      </div>
+      <div className="px-3 pb-2 text-[10px] text-[var(--text-muted)]">R{nodeData.round}</div>
 
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--border)] !w-2 !h-2" />
     </div>

@@ -25,7 +25,7 @@ type PlaywrightProject = {
 const projects = (config.projects ?? []) as PlaywrightProject[];
 
 function getProject(name: string): PlaywrightProject {
-  const project = projects.find(candidate => candidate.name === name);
+  const project = projects.find((candidate) => candidate.name === name);
   expect(project).toBeDefined();
   return project as PlaywrightProject;
 }
@@ -34,7 +34,14 @@ describe('playwright config', () => {
   it('keeps production and specialty suites out of the default browser matrix', () => {
     expect(SPECIALTY_PROJECT_TEST_IGNORE).toContain('**/production/**');
 
-    for (const projectName of ['chromium', 'ci-smoke', 'firefox', 'webkit', 'Mobile Chrome', 'Mobile Safari']) {
+    for (const projectName of [
+      'chromium',
+      'ci-smoke',
+      'firefox',
+      'webkit',
+      'Mobile Chrome',
+      'Mobile Safari',
+    ]) {
       expect(getProject(projectName).testIgnore).toEqual(SPECIALTY_PROJECT_TEST_IGNORE);
     }
   });
@@ -47,7 +54,7 @@ describe('playwright config', () => {
         '**/homepage.spec.ts',
         '**/landing.spec.ts',
         '**/navigation.spec.ts',
-      ])
+      ]),
     );
   });
 

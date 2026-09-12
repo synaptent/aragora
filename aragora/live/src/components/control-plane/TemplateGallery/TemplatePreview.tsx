@@ -57,10 +57,7 @@ export function TemplatePreview({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-bg/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative bg-surface border border-border rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
@@ -109,7 +106,9 @@ export function TemplatePreview({
               {/* Inputs */}
               {template.inputs && Object.keys(template.inputs).length > 0 && (
                 <div>
-                  <h3 className="text-sm font-theme-data text-[var(--accent)] mb-2">Required Inputs</h3>
+                  <h3 className="text-sm font-theme-data text-[var(--accent)] mb-2">
+                    Required Inputs
+                  </h3>
                   <div className="space-y-2">
                     {Object.entries(template.inputs).map(([key, description]) => (
                       <div key={key} className="p-2 bg-bg rounded border border-border">
@@ -193,9 +192,7 @@ export function TemplatePreview({
                         </div>
                       </div>
                       {step.description && (
-                        <p className="text-xs text-text-muted mt-2 ml-6">
-                          {step.description}
-                        </p>
+                        <p className="text-xs text-text-muted mt-2 ml-6">{step.description}</p>
                       )}
                     </div>
                   </div>

@@ -1,0 +1,11 @@
+{
+  "_comment": "Shrink-only baseline of selected tracked and untracked (not ignored) files longer than 2000 lines at adoption, frozen by scripts/ci/check_file_sizes.py --freeze. A NEW oversized file not listed here fails the checker (fail-on-new); this baseline may only shrink -- split a god file, re-export from its original path, then re-freeze.",
+  "limit": 2000,
+  "frozen_from_ref": "9c855bb494d1aabb2d5ea6b9b7bd44c5d2d7705b",
+  "frozen_at": "2026-09-10T09:04:01Z",
+  "files": {
+    "aragora/live/src/components/Oracle.tsx": 2256,
+    "aragora/live/src/lib/aragora-client.ts": 3191,
+    "aragora/live/src/types/api.generated.ts": 187459
+  }
+}

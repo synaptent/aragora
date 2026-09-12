@@ -131,11 +131,7 @@ export class ErrorCollector {
           message: `Request failed: ${requestUrl} - ${failure?.errorText || 'unknown'}`,
           url: this.page.url(),
           timestamp: new Date(),
-          details: {
-            requestUrl,
-            method: request.method(),
-            errorText: failure?.errorText,
-          },
+          details: { requestUrl, method: request.method(), errorText: failure?.errorText },
         });
       }
     });
@@ -152,11 +148,7 @@ export class ErrorCollector {
           message: `HTTP ${status}: ${response.url()}`,
           url: this.page.url(),
           timestamp: new Date(),
-          details: {
-            requestUrl: response.url(),
-            status,
-            statusText: response.statusText(),
-          },
+          details: { requestUrl: response.url(), status, statusText: response.statusText() },
         });
       }
     });
@@ -165,10 +157,7 @@ export class ErrorCollector {
   private addError(error: CollectedError) {
     // Deduplicate errors
     const isDuplicate = this.errors.some(
-      (e) =>
-        e.type === error.type &&
-        e.message === error.message &&
-        e.url === error.url
+      (e) => e.type === error.type && e.message === error.message && e.url === error.url,
     );
     if (!isDuplicate) {
       this.errors.push(error);
@@ -178,13 +167,8 @@ export class ErrorCollector {
   /**
    * Add an error manually (e.g., from accessibility tests)
    */
-  addManualError(
-    error: Omit<CollectedError, 'timestamp'> & { timestamp?: Date }
-  ) {
-    this.addError({
-      ...error,
-      timestamp: error.timestamp || new Date(),
-    });
+  addManualError(error: Omit<CollectedError, 'timestamp'> & { timestamp?: Date }) {
+    this.addError({ ...error, timestamp: error.timestamp || new Date() });
   }
 
   /**
@@ -198,9 +182,7 @@ export class ErrorCollector {
    * Get critical and high severity errors
    */
   getCriticalErrors(): CollectedError[] {
-    return this.errors.filter(
-      (e) => e.severity === 'critical' || e.severity === 'high'
-    );
+    return this.errors.filter((e) => e.severity === 'critical' || e.severity === 'high');
   }
 
   /**
@@ -296,9 +278,7 @@ export class ProductionPage {
     await this.page.waitForLoadState('domcontentloaded');
     // Wait for Next.js hydration marker or React root
     await this.page
-      .waitForSelector('#__next, #root, [data-testid="app-root"]', {
-        timeout: 10000,
-      })
+      .waitForSelector('#__next, #root, [data-testid="app-root"]', { timeout: 10000 })
       .catch(() => {});
     // Additional wait for dynamic content
     await this.page.waitForTimeout(1000);
@@ -331,25 +311,24 @@ export class ProductionPage {
 }
 
 // Extended test with production fixtures
-export const test = base.extend<{
-  productionPage: ProductionPage;
-  errorCollector: ErrorCollector;
-}>({
-  productionPage: async ({ page }, use) => {
-    const prodPage = new ProductionPage(page);
-    await use(prodPage);
+export const test = base.extend<{ productionPage: ProductionPage; errorCollector: ErrorCollector }>(
+  {
+    productionPage: async ({ page }, use) => {
+      const prodPage = new ProductionPage(page);
+      await use(prodPage);
 
-    // After test: log any errors found
-    const errors = prodPage.errorCollector.errors;
-    if (errors.length > 0) {
-      console.log(prodPage.errorCollector.generateReport());
-    }
+      // After test: log any errors found
+      const errors = prodPage.errorCollector.errors;
+      if (errors.length > 0) {
+        console.log(prodPage.errorCollector.generateReport());
+      }
+    },
+    errorCollector: async ({ page }, use) => {
+      const collector = new ErrorCollector(page);
+      await use(collector);
+    },
   },
-  errorCollector: async ({ page }, use) => {
-    const collector = new ErrorCollector(page);
-    await use(collector);
-  },
-});
+);
 
 export { expect };
 
@@ -361,22 +340,13 @@ export async function rateLimitDelay(page: Page, ms = 1000) {
 // Helper to check if a URL is accessible
 export async function isUrlAccessible(
   page: Page,
-  url: string
+  url: string,
 ): Promise<{ accessible: boolean; status?: number; error?: string }> {
   try {
-    const response = await page.goto(url, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
-    });
-    return {
-      accessible: response !== null && response.status() < 400,
-      status: response?.status(),
-    };
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    return { accessible: response !== null && response.status() < 400, status: response?.status() };
   } catch (error) {
-    return {
-      accessible: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
+    return { accessible: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 

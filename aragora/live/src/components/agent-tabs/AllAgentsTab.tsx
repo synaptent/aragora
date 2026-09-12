@@ -56,18 +56,13 @@ export function AllAgentsTab({
         className="flex-1 overflow-y-auto p-4 space-y-3"
       >
         {unifiedTimeline.length === 0 ? (
-          <div className="text-center text-text-muted py-8">
-            Waiting for agent responses...
-          </div>
+          <div className="text-center text-text-muted py-8">Waiting for agent responses...</div>
         ) : (
           unifiedTimeline.map((msg, idx) => {
             const colors = getAgentColors(msg.agent);
             const roleIcon = ROLE_ICONS[msg.role] || ROLE_ICONS.default;
             return (
-              <div
-                key={idx}
-                className={`${colors.bg} border ${colors.border} p-3 rounded`}
-              >
+              <div key={idx} className={`${colors.bg} border ${colors.border} p-3 rounded`}>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-sm">{roleIcon}</span>
                   <span className={`font-medium text-sm ${colors.text}`}>{msg.agent}</span>

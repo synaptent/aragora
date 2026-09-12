@@ -4,21 +4,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAragoraClient } from '@/hooks/useAragoraClient';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ApiError } from './ApiError';
-import type {
-  Tournament,
-  TournamentMatch,
-  TournamentStanding,
-} from '@/lib/aragora-client';
+import type { Tournament, TournamentMatch, TournamentStanding } from '@/lib/aragora-client';
 
 interface TournamentBracketProps {
   tournamentId?: string;
   onSelectTournament?: (id: string) => void;
 }
 
-export function TournamentBracket({
-  tournamentId,
-  onSelectTournament,
-}: TournamentBracketProps) {
+export function TournamentBracket({ tournamentId, onSelectTournament }: TournamentBracketProps) {
   const client = useAragoraClient();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -130,9 +123,7 @@ export function TournamentBracket({
                   </div>
                   <div className="text-right">
                     <StatusBadge status={t.status} />
-                    <p className="text-xs text-slate-400 mt-1">
-                      {t.participants.length} agents
-                    </p>
+                    <p className="text-xs text-slate-400 mt-1">{t.participants.length} agents</p>
                   </div>
                 </div>
               </button>
@@ -162,9 +153,7 @@ export function TournamentBracket({
                 {selectedTournament.bracket_type.replace('_', ' ')}
               </span>
               {selectedTournament.winner && (
-                <span className="text-sm text-yellow-400">
-                  Winner: {selectedTournament.winner}
-                </span>
+                <span className="text-sm text-yellow-400">Winner: {selectedTournament.winner}</span>
               )}
             </div>
           </div>
@@ -193,10 +182,10 @@ export function TournamentBracket({
                           s.rank === 1
                             ? 'bg-yellow-500 text-black'
                             : s.rank === 2
-                            ? 'bg-slate-300 text-black'
-                            : s.rank === 3
-                            ? 'bg-amber-600 text-white'
-                            : 'bg-slate-700 text-slate-300'
+                              ? 'bg-slate-300 text-black'
+                              : s.rank === 3
+                                ? 'bg-amber-600 text-white'
+                                : 'bg-slate-700 text-slate-300'
                         }`}
                       >
                         {s.rank}

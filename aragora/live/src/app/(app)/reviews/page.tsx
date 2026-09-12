@@ -6,11 +6,15 @@ import { useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const ReviewsPanel = dynamic(
-  () => import('@/components/ReviewsPanel').then(m => ({ default: m.ReviewsPanel })),
+  () => import('@/components/ReviewsPanel').then((m) => ({ default: m.ReviewsPanel })),
   {
     ssr: false,
-    loading: () => <div className="card p-4 animate-pulse"><div className="h-96 bg-surface rounded" /></div>,
-  }
+    loading: () => (
+      <div className="card p-4 animate-pulse">
+        <div className="h-96 bg-surface rounded" />
+      </div>
+    ),
+  },
 );
 
 export default function ReviewsPage() {
@@ -40,7 +44,9 @@ export default function ReviewsPage() {
 
             {/* Usage hints */}
             <div className="bg-surface border border-border rounded-lg p-4">
-              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">Create a Shareable Review</h3>
+              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">
+                Create a Shareable Review
+              </h3>
               <ul className="text-xs text-text-muted space-y-2 font-theme-data">
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--acid-cyan)]">&gt;</span>
@@ -48,7 +54,9 @@ export default function ReviewsPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--acid-cyan)]">&gt;</span>
-                  <code className="bg-bg px-2 py-0.5">aragora review https://github.com/org/repo/pull/123 --share</code>
+                  <code className="bg-bg px-2 py-0.5">
+                    aragora review https://github.com/org/repo/pull/123 --share
+                  </code>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-[var(--acid-cyan)]">&gt;</span>
@@ -57,11 +65,22 @@ export default function ReviewsPage() {
                 </li>
               </ul>
               <div className="mt-4 pt-3 border-t border-border">
-                <h4 className="text-xs font-theme-data text-[var(--acid-cyan)] mb-2">What you get:</h4>
+                <h4 className="text-xs font-theme-data text-[var(--acid-cyan)] mb-2">
+                  What you get:
+                </h4>
                 <ul className="text-xs text-text-muted space-y-1 font-theme-data">
-                  <li>• <span className="text-red-400">Unanimous Issues</span> - All AI models agree (fix these first)</li>
-                  <li>• <span className="text-amber-400">Split Opinions</span> - Models disagree (you decide)</li>
-                  <li>• <span className="text-[var(--accent)]">Agreement Score</span> - How much the AI team aligned</li>
+                  <li>
+                    • <span className="text-red-400">Unanimous Issues</span> - All AI models agree
+                    (fix these first)
+                  </li>
+                  <li>
+                    • <span className="text-amber-400">Split Opinions</span> - Models disagree (you
+                    decide)
+                  </li>
+                  <li>
+                    • <span className="text-[var(--accent)]">Agreement Score</span> - How much the
+                    AI team aligned
+                  </li>
                 </ul>
               </div>
             </div>

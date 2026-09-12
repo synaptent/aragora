@@ -26,7 +26,7 @@ export interface UseAgentBridgeEventsResult {
 
 export function useAgentBridgeEvents(
   runId: string | null,
-  options: UseAgentBridgeEventsOptions = {}
+  options: UseAgentBridgeEventsOptions = {},
 ): UseAgentBridgeEventsResult {
   const { enabled = true, poll = false, limit = DEFAULT_EVENT_LIMIT } = options;
   const endpoint = runId

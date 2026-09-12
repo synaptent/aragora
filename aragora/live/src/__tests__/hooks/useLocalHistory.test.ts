@@ -70,24 +70,16 @@ describe('useLocalHistory', () => {
   const setupSuccessMocks = () => {
     mockFetchWithRetry.mockImplementation((url: string) => {
       if (url.includes('/api/history/summary')) {
-        return Promise.resolve({
-          json: () => Promise.resolve(mockSummary),
-        });
+        return Promise.resolve({ json: () => Promise.resolve(mockSummary) });
       }
       if (url.includes('/api/history/cycles')) {
-        return Promise.resolve({
-          json: () => Promise.resolve({ cycles: mockCycles }),
-        });
+        return Promise.resolve({ json: () => Promise.resolve({ cycles: mockCycles }) });
       }
       if (url.includes('/api/history/events')) {
-        return Promise.resolve({
-          json: () => Promise.resolve({ events: mockEvents }),
-        });
+        return Promise.resolve({ json: () => Promise.resolve({ events: mockEvents }) });
       }
       if (url.includes('/api/history/debates')) {
-        return Promise.resolve({
-          json: () => Promise.resolve({ debates: mockDebates }),
-        });
+        return Promise.resolve({ json: () => Promise.resolve({ debates: mockDebates }) });
       }
       return Promise.reject(new Error('Unknown URL'));
     });
@@ -110,26 +102,18 @@ describe('useLocalHistory', () => {
         expect(mockFetchWithRetry).toHaveBeenCalledTimes(4);
       });
 
-      expect(mockFetchWithRetry).toHaveBeenCalledWith(
-        '/api/history/summary',
-        undefined,
-        { maxAttempts: 2 }
-      );
-      expect(mockFetchWithRetry).toHaveBeenCalledWith(
-        '/api/history/cycles?limit=50',
-        undefined,
-        { maxAttempts: 2 }
-      );
-      expect(mockFetchWithRetry).toHaveBeenCalledWith(
-        '/api/history/events?limit=100',
-        undefined,
-        { maxAttempts: 2 }
-      );
-      expect(mockFetchWithRetry).toHaveBeenCalledWith(
-        '/api/history/debates?limit=20',
-        undefined,
-        { maxAttempts: 2 }
-      );
+      expect(mockFetchWithRetry).toHaveBeenCalledWith('/api/history/summary', undefined, {
+        maxAttempts: 2,
+      });
+      expect(mockFetchWithRetry).toHaveBeenCalledWith('/api/history/cycles?limit=50', undefined, {
+        maxAttempts: 2,
+      });
+      expect(mockFetchWithRetry).toHaveBeenCalledWith('/api/history/events?limit=100', undefined, {
+        maxAttempts: 2,
+      });
+      expect(mockFetchWithRetry).toHaveBeenCalledWith('/api/history/debates?limit=20', undefined, {
+        maxAttempts: 2,
+      });
     });
   });
 
@@ -252,11 +236,9 @@ describe('useLocalHistory', () => {
         expect(mockFetchWithRetry).toHaveBeenCalled();
       });
 
-      expect(mockFetchWithRetry).toHaveBeenCalledWith(
-        '/api/history/summary',
-        undefined,
-        { maxAttempts: 2 }
-      );
+      expect(mockFetchWithRetry).toHaveBeenCalledWith('/api/history/summary', undefined, {
+        maxAttempts: 2,
+      });
     });
 
     it('uses custom apiBase', async () => {
@@ -270,7 +252,7 @@ describe('useLocalHistory', () => {
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         'https://api.example.com/api/history/summary',
         undefined,
-        { maxAttempts: 2 }
+        { maxAttempts: 2 },
       );
     });
   });
@@ -318,11 +300,8 @@ describe('useLocalHistory', () => {
       mockFetchWithRetry.mockImplementation(
         () =>
           new Promise((resolve) => {
-            resolveRefresh = () =>
-              resolve({
-                json: () => Promise.resolve({}),
-              });
-          })
+            resolveRefresh = () => resolve({ json: () => Promise.resolve({}) });
+          }),
       );
 
       act(() => {
@@ -341,24 +320,16 @@ describe('useLocalHistory', () => {
     it('handles empty cycles array', async () => {
       mockFetchWithRetry.mockImplementation((url: string) => {
         if (url.includes('/api/history/summary')) {
-          return Promise.resolve({
-            json: () => Promise.resolve(mockSummary),
-          });
+          return Promise.resolve({ json: () => Promise.resolve(mockSummary) });
         }
         if (url.includes('/api/history/cycles')) {
-          return Promise.resolve({
-            json: () => Promise.resolve({ cycles: [] }),
-          });
+          return Promise.resolve({ json: () => Promise.resolve({ cycles: [] }) });
         }
         if (url.includes('/api/history/events')) {
-          return Promise.resolve({
-            json: () => Promise.resolve({ events: [] }),
-          });
+          return Promise.resolve({ json: () => Promise.resolve({ events: [] }) });
         }
         if (url.includes('/api/history/debates')) {
-          return Promise.resolve({
-            json: () => Promise.resolve({ debates: [] }),
-          });
+          return Promise.resolve({ json: () => Promise.resolve({ debates: [] }) });
         }
         return Promise.reject(new Error('Unknown URL'));
       });
@@ -377,14 +348,10 @@ describe('useLocalHistory', () => {
     it('handles missing array in response', async () => {
       mockFetchWithRetry.mockImplementation((url: string) => {
         if (url.includes('/api/history/summary')) {
-          return Promise.resolve({
-            json: () => Promise.resolve(mockSummary),
-          });
+          return Promise.resolve({ json: () => Promise.resolve(mockSummary) });
         }
         // Return objects without the expected arrays
-        return Promise.resolve({
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ json: () => Promise.resolve({}) });
       });
 
       const { result } = renderHook(() => useLocalHistory());

@@ -32,9 +32,5 @@ export const selectGraphHasData = (state: KnowledgeExplorerStore) => {
 };
 
 export const selectIsAnyPanelOpen = (state: KnowledgeExplorerStore) => {
-  return (
-    state.detailPanel.isOpen ||
-    state.relationshipEditor.isOpen ||
-    state.nodeEditor.isOpen
-  );
+  return state.detailPanel.isOpen || state.relationshipEditor.isOpen || state.nodeEditor.isOpen;
 };

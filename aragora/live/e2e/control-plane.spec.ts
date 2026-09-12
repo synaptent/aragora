@@ -90,7 +90,9 @@ test.describe('Control Plane Page', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Should show agents section
-    const agentsSection = page.locator('text=Agent', { hasNot: page.locator('text=Agents') }).first();
+    const agentsSection = page
+      .locator('text=Agent', { hasNot: page.locator('text=Agents') })
+      .first();
     await expect(agentsSection).toBeDefined();
   });
 
@@ -166,7 +168,9 @@ test.describe('Control Plane Interactions', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for action buttons
-    const actionButton = page.locator('button:has-text("Pause"), button:has-text("Cancel"), button:has-text("Stop")');
+    const actionButton = page.locator(
+      'button:has-text("Pause"), button:has-text("Cancel"), button:has-text("Stop")',
+    );
     const hasActions = await actionButton.isVisible().catch(() => false);
     expect(hasActions).toBeDefined();
   });
@@ -218,7 +222,9 @@ test.describe('Control Plane WebSocket', () => {
 
     // Force close WebSocket connections
     await page.evaluate(() => {
-      (window as unknown as { __wsConnections?: WebSocket[] }).__wsConnections?.forEach((ws) => ws.close());
+      (window as unknown as { __wsConnections?: WebSocket[] }).__wsConnections?.forEach((ws) =>
+        ws.close(),
+      );
     });
 
     // Page should remain functional

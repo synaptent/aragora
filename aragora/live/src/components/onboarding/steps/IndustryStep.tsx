@@ -29,8 +29,7 @@ export function IndustryStep() {
           What brings you to Aragora?
         </h2>
         <p className="text-sm font-theme-data text-[var(--text-muted)]">
-          Select your industry so we can tailor the experience.
-          No account needed for this step.
+          Select your industry so we can tailor the experience. No account needed for this step.
         </p>
       </div>
 
@@ -50,18 +49,16 @@ export function IndustryStep() {
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
-                  {meta.icon}
-                </span>
-                <span className={`text-sm font-theme-data font-bold ${
-                  isSelected ? 'text-[var(--acid-green)]' : 'text-[var(--text)]'
-                }`}>
+                <span className="text-sm font-theme-data text-[var(--acid-cyan)]">{meta.icon}</span>
+                <span
+                  className={`text-sm font-theme-data font-bold ${
+                    isSelected ? 'text-[var(--acid-green)]' : 'text-[var(--text)]'
+                  }`}
+                >
                   {meta.label}
                 </span>
               </div>
-              <p className="text-xs font-theme-data text-[var(--text-muted)]">
-                {description}
-              </p>
+              <p className="text-xs font-theme-data text-[var(--text-muted)]">{description}</p>
             </button>
           );
         })}
