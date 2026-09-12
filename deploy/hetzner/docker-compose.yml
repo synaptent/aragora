@@ -1,0 +1,108 @@
+# Provider-neutral production origin (#9391).
+#
+# Every port binds to 127.0.0.1. Nothing is reachable from the internet directly;
+# Cloudflare Tunnel dials OUT from this host, so the box needs no inbound rules,
+# no public IP, and no load balancer. That is what replaces the terminated AWS
+# edge without touching DNS.
+#
+# Secrets are loaded from env_file, never interpolated from the invoking shell.
+
+name: aragora-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: [./secrets.env]
+    environment:
+      POSTGRES_DB: aragora
+      POSTGRES_USER: aragora
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "aragora", "-d", "aragora"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    ports: ["127.0.0.1:6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # One-shot. Runs to completion before the app is allowed up, so a failed
+  # migration stops the release instead of surfacing as runtime errors later.
+  migrate:
+    build: {context: ../.., dockerfile: deploy/Dockerfile.backend}
+    restart: "no"
+    env_file: [./secrets.env]
+    environment:
+      ARAGORA_DB_BACKEND: postgres
+    command: ["python", "-m", "aragora.migrations", "upgrade"]
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  app:
+    build: {context: ../.., dockerfile: deploy/Dockerfile.backend}
+    restart: unless-stopped
+    env_file: [./secrets.env]
+    environment:
+      ARAGORA_ENV: production
+      ARAGORA_SINGLE_INSTANCE: "true"
+      ARAGORA_DB_BACKEND: postgres
+      ARAGORA_DEMO_MODE: "false"      # no provider key must never mean demo data in production
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "127.0.0.1:8080:8080"         # HTTP  — tunnel ingress
+      - "127.0.0.1:8765:8765"         # WS    — tunnel ingress
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/readyz',timeout=5)\""]
+      interval: 20s
+      timeout: 8s
+      retries: 6
+      start_period: 45s
+
+  # Nightly dump kept OFF this host as well as on it. The previous setup wrote
+  # to a bind mount on the instance and lost everything with the instance; a
+  # copy that shares a failure domain with its source is not a backup.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: [./secrets.env]
+    volumes: [./backups:/backups]
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          F=/backups/aragora-$$(date +%Y%m%d_%H%M%S).sql.gz
+          rm -f /backups/*.sql.gz.part
+          if PGPASSWORD="$$POSTGRES_PASSWORD" pg_dump -h postgres -U aragora -Z 6 -f "$$F.part" aragora; then
+            mv "$$F.part" "$$F" && echo "[backup] wrote $$F"
+            find /backups -name '*.sql.gz' -mtime +14 -delete
+          else
+            rm -f "$$F.part"
+            echo "[backup] FAILED - investigate immediately"
+          fi
+          sleep 86400
+        done
+    depends_on:
+      postgres: {condition: service_healthy}
+
+volumes:
+  pgdata:
+  redisdata:

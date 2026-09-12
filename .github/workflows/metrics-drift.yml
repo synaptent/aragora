@@ -28,6 +28,12 @@ on:
       - 'docs/METRICS.md'
       - 'scripts/regenerate_metrics.py'
       - '.mypy-baseline'
+      # The import-cycle ratchet builds its graph from the `aragora` package
+      # only, so `aragora/**` above already re-runs it for every source
+      # change that can add a cycle; these two entries cover the measurer
+      # and its frozen baseline.
+      - 'scripts/ci/measure_import_graph.py'
+      - 'scripts/baselines/import_cycles_baseline.json'
       - '.github/workflows/metrics-drift.yml'
   schedule:
     - cron: '0 5 * * 1'
@@ -144,3 +150,75 @@ jobs:
               fi
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  import-cycles:
+    name: Import cycle ratchet (non-required)
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install grimp
+        # Pinned so the strict lane compares like with like across runs; bump
+        # deliberately (and re-measure) rather than floating with upstream.
+        run: python3 -m pip install -q "grimp==3.17"
+
+      - name: Measure mutual import cycles at head
+        if: github.event_name == 'pull_request'
+        id: head
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/measure_import_graph.py --json > /tmp/head.json
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          print("cycles=" + str(json.load(open("/tmp/head.json"))["mutual_import_cycles"]))
+          PY
+
+      - name: Fail only on growth this PR introduces
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          HEAD_CYCLES: ${{ steps.head.outputs.cycles }}
+        run: |
+          set -euo pipefail
+          base_sha=$(git rev-parse -q --verify HEAD^1)
+          git worktree add --detach /tmp/base-tree "$base_sha"
+          mkdir -p /tmp/base-tree/scripts/ci
+          cp scripts/ci/measure_import_graph.py /tmp/base-tree/scripts/ci/measure_import_graph.py
+          (cd /tmp/base-tree && python3 scripts/ci/measure_import_graph.py --json > /tmp/base.json)
+          read -r base head_frozen base_frozen < <(python3 - <<'PY'
+          import json, os
+          base = json.load(open("/tmp/base.json"))["mutual_import_cycles"]
+          head_frozen = json.load(open("scripts/baselines/import_cycles_baseline.json"))["value"]
+          base_path = "/tmp/base-tree/scripts/baselines/import_cycles_baseline.json"
+          base_frozen = json.load(open(base_path))["value"] if os.path.exists(base_path) else head_frozen
+          print(base, head_frozen, base_frozen)
+          PY
+          )
+          head="$HEAD_CYCLES"
+          echo "mutual import cycles: base=$base head=$head frozen_baseline=$head_frozen (base tree: $base_frozen)"
+          if [ "$head_frozen" -gt "$base_frozen" ]; then
+            echo "::error::This PR raises the frozen cycles baseline $base_frozen -> $head_frozen. The baseline is shrink-only; re-freeze only after removing cycles (scripts/ci/measure_import_graph.py --freeze)."
+            exit 1
+          fi
+          if [ "$head" -gt "$base" ]; then
+            echo "::error::This PR adds $((head - base)) mutual import cycle(s). The ratchet is shrink-only; remove the new mutual import (see #9240 for the current identity set)."
+            exit 1
+          fi
+          if [ "$head" -gt "$head_frozen" ]; then
+            echo "::warning::main is above the frozen baseline ($head > $head_frozen). Inherited, not introduced by this PR. Repair is tracked in #9240."
+          fi
+
+      - name: Strict ratchet against the frozen baseline (schedule and manual runs)
+        if: github.event_name != 'pull_request'
+        run: python3 scripts/ci/measure_import_graph.py --check
