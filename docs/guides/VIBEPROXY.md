@@ -146,3 +146,45 @@ instead of silently reaching a direct provider endpoint.
 One timeout budget covers catalog resolution and each eligible proxy request;
 catalog discovery is additionally capped at a few seconds so an unresponsive
 proxy cannot delay `vibeproxy-prefer` fallback.
+
+## Prepare-Only Audited Claude Code Runner
+
+`scripts/prepare_claude_code_vibeproxy_review.py` is a separate, opt-in diagnostic,
+not a quorum backend. Every output has `non_countable=true` and
+`would_count=false`; there is no posting or apply option. Existing single-shot
+caps, family requirements, dissent handling, and attempt budgets are unchanged.
+
+Run the no-inference preflight against a clean disposable checkout, using full
+base/head SHAs and a new output directory outside that checkout:
+
+```bash
+python3 scripts/prepare_claude_code_vibeproxy_review.py \
+  --checkout /path/to/clean-checkout --base FULL_BASE_SHA --head FULL_HEAD_SHA \
+  --output /private/tmp/claude-review-diagnostic-unique
+```
+
+Only after separate authorization and reviewer-capacity coordination, repeat with
+a **new** output directory, `--execute --timeout 180`, and
+`ARAGORA_MODEL_TRANSPORT=vibeproxy-required`. The existing
+`ARAGORA_VIBEPROXY_BASE_URL` must select the literal `127.0.0.1` HTTP gateway;
+no remote gateway, direct fallback, model mapping, or saved Claude login is used.
+Execution currently requires macOS `sandbox-exec` and Claude Code `2.1.263`.
+Unsupported containment or CLI versions fail closed.
+
+The host materializes exact Git blobs into a read-only sandbox. Only bounded
+Read operations are permitted. It verifies returned line ranges against those
+blobs and checks that the same results reach subsequent model requests. Every
+changed file must be covered before the diagnostic is complete; partial reads,
+missing history, model substitution, truncation, and failed tools are terminal.
+Deleted, renamed, empty, binary, symlink, and submodule surfaces are unsupported
+in this first version. Streams are bounded and buffered per response so tool
+instructions can be checked before execution. Hard deadlines kill the owned CLI
+process group; a failed diagnostic must not be retried implicitly.
+
+`diagnostic.json` records coverage, artifact hashes, harness/binary identity,
+gateway, requested/response-declared model, and termination. Upstream model
+attestation remains explicitly `UNMEASURED`. Artifacts include source content and
+are local diagnostics, not PR evidence comments; keep the private output directory
+secure. Exit `0` means preflight/preparation succeeded, not that the code is sound
+or countable. Exit `2` is a failed diagnostic. Production counting integration and
+any real-PR pilot require separate Tier-4 authorization.
