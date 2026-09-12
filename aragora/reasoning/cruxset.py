@@ -316,6 +316,7 @@ def build_cruxset_from_analysis(
     receipt_id: str = "",
     provenance: dict[str, Any] | None = None,
     max_cruxes: int = 5,
+    counterfactuals_by_claim_id: dict[str, str] | None = None,
 ) -> CruxSet:
     """Convert a :class:`CruxAnalysisResult` payload into a CruxSet.
 
@@ -329,10 +330,20 @@ def build_cruxset_from_analysis(
     composes from influence × disagreement × uncertainty × centrality
     × resolution_impact). The first ``max_cruxes`` are taken; the
     ``load_bearing_score`` is the analyser's ``crux_score``.
+
+    ``counterfactuals_by_claim_id`` is the DIC-15 counterfactual hook: a
+    mapping from ``claim_id`` to a human-readable counterfactual string
+    computed by the crux-finder validation pass (see
+    :func:`~aragora.reasoning.cruxset_emission.maybe_emit_cruxset_from_finder_result`).
+    When supplied, it overrides the default ``resolution_impact`` text so
+    the AGT-05 reputation flow and downstream consumers see the richer
+    condition/outcome text rather than the bare numeric score.
     """
     raw_cruxes = list(analysis_payload.get("cruxes") or [])
     if not raw_cruxes:
         raise ValueError("analysis_payload contains no cruxes; cannot build CruxSet")
+
+    cf_map: dict[str, str] = counterfactuals_by_claim_id or {}
 
     cruxes: list[Crux] = []
     for entry in raw_cruxes[:max_cruxes]:
@@ -356,18 +367,24 @@ def build_cruxset_from_analysis(
                     rationale="contesting agents",
                 ),
             )
+        claim_id = str(entry.get("claim_id") or "")
+        # DIC-15 hook: prefer the validation-pass counterfactual when available.
+        if claim_id in cf_map:
+            counterfactual_text = cf_map[claim_id]
+        elif entry.get("resolution_impact") is not None:
+            counterfactual_text = (
+                f"Resolution impact {round(float(entry.get('resolution_impact') or 0.0), 4)}"
+            )
+        else:
+            counterfactual_text = ""
         cruxes.append(
             Crux(
-                crux_id=str(entry.get("claim_id") or ""),
+                crux_id=claim_id,
                 statement=str(entry.get("statement") or ""),
                 positions=positions,
                 load_bearing_score=float(entry.get("crux_score") or 0.0),
                 evidence_gaps=tuple(),
-                counterfactual=(
-                    f"Resolution impact {round(float(entry.get('resolution_impact') or 0.0), 4)}"
-                    if entry.get("resolution_impact") is not None
-                    else ""
-                ),
+                counterfactual=counterfactual_text,
                 candidate_verifier="",
             )
         )
