@@ -129,7 +129,9 @@ class DebatesAPI:
         if status:
             params["status"] = status
 
-        return SyncPaginator(self._client, "/api/v1/debates", params, page_size)
+        return SyncPaginator(
+            self._client, "/api/v1/debates", params, page_size, items_key="debates"
+        )
 
     def get_messages(self, debate_id: str) -> dict[str, Any]:
         """
@@ -1250,7 +1252,9 @@ class AsyncDebatesAPI:
         if status:
             params["status"] = status
 
-        return AsyncPaginator(self._client, "/api/v1/debates", params, page_size)
+        return AsyncPaginator(
+            self._client, "/api/v1/debates", params, page_size, items_key="debates"
+        )
 
     async def stream(self, debate_id: str) -> AsyncIterator[WebSocketEvent]:
         """
