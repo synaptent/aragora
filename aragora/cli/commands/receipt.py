@@ -14,6 +14,7 @@ import argparse
 from datetime import datetime
 import json
 import logging
+import math
 import os
 import sys
 import tempfile
@@ -584,6 +585,80 @@ def cmd_receipt_verify(args: argparse.Namespace) -> None:
     sys.exit(0 if checks_passed == checks_total else 1)
 
 
+def _validate_inspection_fields(data: dict[str, Any]) -> None:
+    """Check display inputs without normalizing decisions or verifying signatures."""
+
+    def require(value: Any, kind: type, field: str, *, nullable: bool = False) -> None:
+        if value is None and nullable:
+            return
+        if not isinstance(value, kind):
+            raise ValueError(f"{field} must be {kind.__name__}")
+
+    def number(value: Any, field: str, *, allow_string: bool = False) -> float:
+        kinds = (int, float, str) if allow_string else (int, float)
+        if isinstance(value, bool) or not isinstance(value, kinds):
+            raise ValueError(f"{field} must be a finite number")
+        try:
+            numeric = float(value)
+        except (ValueError, OverflowError):
+            raise ValueError(f"{field} must be a finite number") from None
+        if not math.isfinite(numeric):
+            raise ValueError(f"{field} must be a finite number")
+        return numeric
+
+    require(data.get("verdict", "UNKNOWN"), str, "verdict")
+    for field in ("confidence", "robustness_score"):
+        if not math.isfinite(number(data.get(field, 0), field) * 100):
+            raise ValueError(f"{field} cannot be displayed as a finite percentage")
+    for field in ("signature", "artifact_hash", "input_hash", "verdict_reasoning"):
+        require(data.get(field), str, field, nullable=True)
+
+    risk = data.get("risk_summary")
+    require(risk, dict, "risk_summary", nullable=True)
+    if risk:
+        for field in ("critical", "high", "medium", "low", "total"):
+            if field in risk:
+                number(risk[field], f"risk_summary.{field}")
+
+    consensus = data.get("consensus_proof")
+    require(consensus, dict, "consensus_proof", nullable=True)
+    if consensus:
+        if "reached" in consensus:
+            require(consensus["reached"], bool, "consensus_proof.reached")
+        for field in ("supporting_agents", "dissenting_agents"):
+            agents = consensus.get(field)
+            require(agents, list, f"consensus_proof.{field}", nullable=True)
+            for i, agent in enumerate(agents or []):
+                require(agent, str, f"consensus_proof.{field}[{i}]")
+
+    responses = data.get("agent_responses")
+    require(responses, list, "agent_responses", nullable=True)
+    for i, response in enumerate(responses or []):
+        prefix = f"agent_responses[{i}]"
+        require(response, dict, prefix)
+        require(response.get("content", ""), str, f"{prefix}.content")
+
+    cost = data.get("cost_summary")
+    require(cost, dict, "cost_summary", nullable=True)
+    if cost:
+        field = "total_cost" if "total_cost" in cost else "total"
+        total = cost.get(field, 0)
+        # Older receipts can omit a cost or serialize it as a decimal string.
+        if total is not None and total != "":
+            number(total, f"cost_summary.{field}", allow_string=True)
+
+    config = data.get("config_used", {})
+    require(config, dict, "config_used")
+    critiques = config.get("critique_summaries")
+    require(critiques, list, "config_used.critique_summaries", nullable=True)
+    for i, critique in enumerate(critiques or []):
+        prefix = f"config_used.critique_summaries[{i}]"
+        require(critique, dict, prefix)
+        number(critique.get("severity", 0), f"{prefix}.severity")
+        require(critique.get("issues", []), list, f"{prefix}.issues")
+    require(data.get("dissenting_views"), list, "dissenting_views", nullable=True)
+
+
 def cmd_receipt_inspect(args: argparse.Namespace) -> None:
     """Display detailed receipt information."""
     receipt_path = getattr(args, "receipt", None)
@@ -595,6 +670,12 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
     path = Path(receipt_path)
     data = _load_receipt_json(path)
     if data is None:
+        sys.exit(1)
+
+    try:
+        _validate_inspection_fields(data)
+    except ValueError as e:
+        print(f"Error: Invalid receipt inspection field: {e}", file=sys.stderr)
         sys.exit(1)
 
     print("\nDecision Receipt")
