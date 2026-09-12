@@ -4598,21 +4598,140 @@ def _genesis_authority(authority: dict[str, Any]) -> dict[str, Any]:
     return genesis
 
 
-def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses():
+def _paydown_waves(authority: dict[str, Any]) -> list[tuple[str, list[str]]]:
+    """Group the committed paydown into digest-bound waves, in replay order.
+
+    Every resolved record's final event binds the active set it leaves behind,
+    so the records sharing one digest form a wave and the waves chain from
+    genesis: a wave is next exactly when its digest equals the digest of the
+    remaining set minus its own ids. Returns ``(digest, sorted ids)`` pairs.
+    """
+    waves: dict[str, list[str]] = {}
+    as_of_by_digest: dict[str, str] = {}
+    for item in authority["active_inventory"]:
+        last = item["disposition_history"][-1]
+        if item["status"] == "active":
+            assert len(item["disposition_history"]) == 1
+            continue
+        assert item["status"] == "resolved" and last["status"] == "resolved"
+        digest = last["evidence"]["fact"]["active_original_record_ids_sha256"]
+        waves.setdefault(digest, []).append(item["original_record_id"])
+        as_of_by_digest.setdefault(digest, last["as_of"])
+        assert as_of_by_digest[digest] == last["as_of"]
+    remaining = {item["original_record_id"] for item in authority["active_inventory"]}
+    replayed: list[tuple[str, list[str]]] = []
+    while waves:
+        bound = [
+            digest
+            for digest, ids in waves.items()
+            if ratchet._sha256_bytes(ratchet._canonical_json_bytes(sorted(remaining - set(ids))))
+            == digest
+        ]
+        assert len(bound) == 1, "paydown wave is not bound to the active set it leaves"
+        ids = sorted(waves.pop(bound[0]))
+        remaining -= set(ids)
+        replayed.append((bound[0], ids))
+    dates = [as_of_by_digest[digest] for digest, _ids in replayed]
+    assert dates == sorted(dates), "paydown waves replay out of chronological order"
+    return replayed
+
+
+def _replay_committed_paydown(
+    authority: dict[str, Any], *, repo_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> list[tuple[str, list[str]]]:
+    """Replay the committed paydown through the production comparator.
+
+    ``compare_accepted_authorities`` binds the appended events of one head to
+    that head's live digest, so a multi-wave authority is judged one wave at a
+    time: wave k's base carries waves < k and its head carries waves <= k,
+    each validated against the baseline witnesses of its own moment. Those
+    witnesses are the committed baselines plus the cohort literals of every
+    later wave, served through ``load_git_docs`` under synthetic refs; the
+    analyzer bundle is still checked against the real tree.
+    """
+    waves = _paydown_waves(authority)
+    records = {
+        record["original_record_id"]: record
+        for record in authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    }
+    alias_of = {
+        list_key: alias for alias, (_p, keys) in gen.BASELINE_SPECS.items() for list_key in keys
+    }
+    committed_docs = gen.load_working_docs(repo_root)
+    docs_by_ref: dict[str, dict[str, Any]] = {}
+    for index in range(len(waves) + 1):
+        docs = copy.deepcopy(committed_docs)
+        for _digest, ids in waves[index:]:
+            for record_id in ids:
+                record = records[record_id]
+                docs[alias_of[record["source_json_key"]]][record["source_json_key"]].append(
+                    record["exact_historical_literal_record"]
+                )
+        docs_by_ref[f"wave-{index}"] = docs
+
+    def fake_git_docs(root: Path, ref: str) -> dict[str, dict[str, Any]]:
+        return copy.deepcopy(docs_by_ref[ref])
+
+    real_validate_bundle = ratchet._validate_bundle
+    monkeypatch.setattr(ratchet.inventory_mod, "load_git_docs", fake_git_docs)
+    monkeypatch.setattr(
+        ratchet, "_validate_bundle", lambda auth, root, ref=None: real_validate_bundle(auth, root)
+    )
+    committed = {item["original_record_id"]: item for item in authority["active_inventory"]}
+    previous = _genesis_authority(authority)
+    for index, (_digest, ids) in enumerate(waves, start=1):
+        applied = {record_id for _d, wave_ids in waves[:index] for record_id in wave_ids}
+        head = copy.deepcopy(previous)
+        head["active_inventory"] = [
+            copy.deepcopy(committed[item["original_record_id"]])
+            if item["original_record_id"] in applied
+            else item
+            for item in head["active_inventory"]
+        ]
+        head["active_inventory_sha256"] = ratchet._sha256_bytes(
+            ratchet._canonical_json_bytes(head["active_inventory"])
+        )
+        _relink_authority_manifest(head)
+        compared = ratchet.compare_accepted_authorities(
+            previous,
+            head,
+            repo_root=repo_root,
+            base_ref=f"wave-{index - 1}",
+            head_ref=f"wave-{index}",
+        )
+        assert (compared["passing"], compared["status"]) == (True, "pass")
+        assert compared["added_original_record_ids"] == []
+        assert compared["removed_original_record_ids"] == ids
+        previous = head
+    assert previous == authority
+    return waves
+
+
+def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses(
+    monkeypatch: pytest.MonkeyPatch,
+):
     authority, root = _accepted_authority(), Path(ratchet.__file__).parents[1]
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     assert (summary["original_record_total"], summary["sdk_provenance_record_total"]) == (655, 598)
-    assert (len(summary["active_original_record_ids"]), len(summary["live_original_record_ids"])) == (398, 398)  # fmt: skip
-    # The committed authority equals the genesis authority plus exactly the
-    # 257-record digest-bound catch-up paydown (255 historical + the 2
-    # VAL-CDG-016 serve-side literals), each event bound to the live digest.
+    assert (len(summary["active_original_record_ids"]), len(summary["live_original_record_ids"])) == (288, 288)  # fmt: skip
+    # The committed authority equals the genesis authority plus the digest-bound
+    # paydown waves (255 historical + the 2 VAL-CDG-016 serve-side literals,
+    # then 59 TypeScript and 51 SDK literals): 367 resolved records, each wave
+    # passing the production comparator against the wave before it.
     genesis = _genesis_authority(authority)
     genesis_summary = ratchet.validate_accepted_authority(genesis, repo_root=root)
     assert len(genesis_summary["active_original_record_ids"]) == 655
-    compared = ratchet.compare_accepted_authorities(genesis, authority, repo_root=root)
-    assert compared["passing"] and compared["status"] == "pass"
-    assert compared["added_original_record_ids"] == []
-    assert len(compared["removed_original_record_ids"]) == 257
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    assert [len(ids) for _digest, ids in waves] == [257, 59, 51]
+    removed = sorted(record_id for _digest, ids in waves for record_id in ids)
+    assert removed == sorted(
+        set(genesis_summary["active_original_record_ids"])
+        - set(summary["active_original_record_ids"])
+    )
+    live_digest = ratchet._sha256_bytes(
+        ratchet._canonical_json_bytes(sorted(summary["live_original_record_ids"]))
+    )
+    assert waves[-1][0] == live_digest
 
 
 def test_accepted_authority_rejects_unbound_paydown_and_bundle():
@@ -4667,7 +4786,7 @@ def test_live_residue_is_frozen_shrink_only_against_tolerance_ref(monkeypatch):
     kwargs = {"repo_root": root, "live_ref": "candidate-ref", "residue_ref": "tolerance-ref"}
     removal_live = ratchet._live_witnesses(authority, **kwargs)
     equal_live = ratchet._live_witnesses(authority, repo_root=root, live_ref="tolerance-ref", residue_ref="tolerance-ref")  # fmt: skip
-    assert removal_live == equal_live and len(equal_live) == 398
+    assert removal_live == equal_live and len(equal_live) == 288
     head_docs["routes"]["missing_in_spec"].append(f"{entry}/guard-v2-new")
     with pytest.raises(ValueError, match="new live baseline keys outside immutable original cohort") as one_new:  # fmt: skip
         ratchet._live_witnesses(authority, **kwargs)
@@ -4890,7 +5009,7 @@ def test_accepted_main_modes_bind_non_head_ref_and_ignore_dirty_worktree_authori
     if mode == "program":
         assert result["program"]["source_sha"] == source
         assert result["program"]["start_date"] == "2026-04-17"
-        assert result["current"]["total_items"] == 398
+        assert result["current"]["total_items"] == 288
     else:
         assert result["source_sha"] == source
         assert result["authority"]["first_parent_chain"][0] == source
@@ -5861,7 +5980,9 @@ def test_pr_mode_reports_complete_exact_original_record_set_diagnostics(
     assert not compared["passing"]
 
 
-def test_pr_mode_passes_equal_or_subset_original_record_ids(tmp_path: Path):
+def test_pr_mode_passes_equal_or_subset_original_record_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     # Equal head: identical baselines pass with empty deltas.
     paths, repo, base = _seed(tmp_path, program=RED_PROGRAM)
     equal = _result(paths, "2026-07-16", repo=repo, cohort=base, mode="pr", base_ref=base)
@@ -5902,17 +6023,19 @@ def test_pr_mode_passes_equal_or_subset_original_record_ids(tmp_path: Path):
         }
     # Accepted-authority layer: an exact evidenced paydown subset passes with
     # the complete sorted removed set and no added IDs. The committed head IS
-    # that paydown relative to its reconstructed all-active genesis base.
+    # that paydown relative to its reconstructed all-active genesis base,
+    # one comparator-verified wave at a time.
     root = Path(ratchet.__file__).parents[1]
     authority = _accepted_authority()
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     live = set(summary["live_original_record_ids"])
-    genesis = _genesis_authority(authority)
-    compared = ratchet.compare_accepted_authorities(genesis, authority, repo_root=root)
-    assert (compared["passing"], compared["status"]) == (True, "pass")
-    assert compared["added_original_record_ids"] == []
-    removed = compared["removed_original_record_ids"]
-    assert removed == sorted(removed) and len(removed) == 257
+    genesis_summary = ratchet.validate_accepted_authority(
+        _genesis_authority(authority), repo_root=root
+    )
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    removed = sorted(record_id for _digest, ids in waves for record_id in ids)
+    assert set(genesis_summary["active_original_record_ids"]) - set(removed) == live
+    assert removed == sorted(removed) and len(removed) == 367
     assert set(removed).isdisjoint(live)
 
 
@@ -6031,7 +6154,7 @@ def test_accepted_inventory_annotation_tamper_does_not_change_enforcement():
     # Untampered enforcement outcome (the invariant being defended).
     summary = ratchet.validate_accepted_authority(_accepted_authority(), repo_root=root)
     assert summary["original_record_total"] == 655
-    assert len(summary["live_original_record_ids"]) == 398
+    assert len(summary["live_original_record_ids"]) == 288
     # Any annotation key added to an accepted-inventory row fails closed: the
     # row schema is exactly {category, disposition_history, original_record_id,
     # status}, so tamper can never ride along as metadata.
@@ -7509,7 +7632,9 @@ def test_pr_mode_exact_original_record_diagnostics_are_sorted_complete_and_untru
     assert result["pr_delta"]["counts"]["verify_python_sdk_drift"]["delta"] == 25
 
 
-def test_pr_mode_passes_strict_original_record_subset(tmp_path: Path):
+def test_pr_mode_passes_strict_original_record_subset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     # A strict subset in two categories (with matching resolutions) passes
     # while the program schedule stays honestly red.
     paths, repo, base = _seed(tmp_path, program=RED_PROGRAM)
@@ -7536,19 +7661,20 @@ def test_pr_mode_passes_strict_original_record_subset(tmp_path: Path):
     assert result["pr_delta"]["counts"]["routes_missing_in_spec"]["delta"] == -1
     # Accepted-authority layer: a global+per-category strict subset head
     # passes with exact removed IDs and empty added IDs. The committed head
-    # is that subset relative to its reconstructed all-active genesis base.
+    # is that subset relative to its reconstructed all-active genesis base,
+    # reached through comparator-verified paydown waves.
     root = Path(ratchet.__file__).parents[1]
     authority = _accepted_authority()
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     live = set(summary["live_original_record_ids"])
-    genesis = _genesis_authority(authority)
-    genesis_summary = ratchet.validate_accepted_authority(genesis, repo_root=root)
-    compared = ratchet.compare_accepted_authorities(genesis, authority, repo_root=root)
-    assert compared["passing"] and compared["status"] == "pass"
-    assert compared["added_original_record_ids"] == []
+    genesis_summary = ratchet.validate_accepted_authority(
+        _genesis_authority(authority), repo_root=root
+    )
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    replayed_removed = sorted(record_id for _digest, ids in waves for record_id in ids)
     expected_removed = sorted(set(genesis_summary["active_original_record_ids"]) - live)
-    assert compared["removed_original_record_ids"] == expected_removed
-    assert len(expected_removed) == 257
+    assert replayed_removed == expected_removed
+    assert len(expected_removed) == 367
 
 
 # ---- VAL-CDG-008: exact UTC week arithmetic, non-backdated final as-of
@@ -9698,7 +9824,7 @@ def test_transition_reconstructs_all_655_ids_and_598_provenance_records():
     summary = ratchet.validate_accepted_authority(_real_authority(), repo_root=_REPO_ROOT)
     assert summary["original_record_total"] == 655
     assert summary["sdk_provenance_record_total"] == 598
-    assert len(summary["active_original_record_ids"]) == 398
+    assert len(summary["active_original_record_ids"]) == 288
     # The genesis reconstruction of the committed authority still spans the
     # full 655-record cohort — paydown resolves records, never removes them.
     genesis_summary = ratchet.validate_accepted_authority(
@@ -9932,7 +10058,7 @@ def test_strict_subset_requires_separate_authenticated_paydown():
     resolve(paydown, live_digest)
     compared = ratchet.compare_accepted_authorities(genesis, paydown, repo_root=root)
     assert compared["passing"] is True
-    assert len(compared["removed_original_record_ids"]) == 257
+    assert len(compared["removed_original_record_ids"]) == 367
     assert compared["authority"] == {"source": "accepted_authority"}
     assert "transition" not in compared
     # The same subset without the exact appended active-set digest cannot be
