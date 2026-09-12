@@ -16,6 +16,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import uuid
 
 from aragora.agents.failure_semantics import all_responses_are_failures
@@ -120,12 +121,15 @@ def _clamp_receipt_confidence(value: Any, *, default: float = 0.0) -> float:
     return numeric
 
 
-def _normalize_receipt_boolean(value: Any, *, default: bool = False) -> bool:
+def _normalize_receipt_boolean(value: Any, *, default: bool = False, strict: bool = False) -> bool:
+    """Decode legacy flags; strict consumers reject unknowns instead of defaulting."""
     if isinstance(value, bool):
         return value
     if value is None:
-        return default
+        return False if strict else default
     if isinstance(value, int | float):
+        if strict and isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("receipt boolean must be finite")
         return value != 0
     if isinstance(value, str):
         normalized = value.strip().lower()
@@ -133,7 +137,8 @@ def _normalize_receipt_boolean(value: Any, *, default: bool = False) -> bool:
             return True
         if normalized in {"false", "0", "no", "n", "off", ""}:
             return False
-        return default
+    if strict:
+        raise ValueError("unrecognized receipt boolean")
     return default
 
 
