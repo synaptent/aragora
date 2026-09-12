@@ -469,14 +469,17 @@ class ReceiptStore:
             schema_statements = self.SCHEMA_STATEMENTS_SQLITE
             migration_statements = self.MIGRATION_STATEMENTS_SQLITE
 
-        # Run migrations first to add any missing columns before creating indexes
+        # Bootstrap fresh databases before ALTERs; upgrade old tables before indexes.
+        # A failed table creation is fatal, not a skippable additive migration.
+        self._backend.execute_write(schema_statements[0])
+
         for statement in migration_statements:
             try:
                 self._backend.execute_write(statement)
             except (OSError, RuntimeError, ValueError, sqlite3.Error) as e:
                 logger.debug("Migration statement skipped: %s", e)
 
-        for statement in schema_statements:
+        for statement in schema_statements[1:]:
             try:
                 self._backend.execute_write(statement)
             except (OSError, RuntimeError, ValueError, sqlite3.Error) as e:
