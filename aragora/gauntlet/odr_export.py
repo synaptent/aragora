@@ -2,7 +2,7 @@
 Open Decision Receipt (ODR) exporter.
 
 Maps the native :class:`aragora.gauntlet.receipt_models.DecisionReceipt` onto
-the vendor-neutral Open Decision Receipt content profile (ODR v0.1) defined in
+ODR v0.1 or v0.2 (default v0.1 until aragora-verify 0.2.0 is published), defined in
 ``docs/specs/OPEN_DECISION_RECEIPT.md`` and machine-validated by
 ``aragora/gauntlet/odr_schema.json`` (JSON Schema draft 2020-12).
 
@@ -36,12 +36,21 @@ from aragora.gauntlet.odr_jcs import jcs_canonicalize, odr_content_digest
 if TYPE_CHECKING:
     from aragora.gauntlet.receipt_models import DecisionReceipt
 
-ODR_VERSION = "0.1"
-ODR_PROFILE_URI = "https://aragora.ai/specs/open-decision-receipt/v0.1"
+ODR_DEFAULT_VERSION = "0.1"
+ODR_VERSIONS = ("0.1", "0.2")
+ODR_PROFILE_URIS = {
+    "0.1": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+    "0.2": "https://aragora.ai/specs/open-decision-receipt/v0.2",
+}
+ODR_VERSION = ODR_DEFAULT_VERSION
+ODR_PROFILE_URI = ODR_PROFILE_URIS[ODR_DEFAULT_VERSION]
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "ODR_DEFAULT_VERSION",
+    "ODR_VERSIONS",
+    "ODR_PROFILE_URIS",
     "ODR_VERSION",
     "ODR_PROFILE_URI",
     "absent",
@@ -267,14 +276,18 @@ def _map_attestation(attestation: dict[str, Any] | None) -> dict[str, Any]:
 def decision_receipt_to_odr(
     receipt: DecisionReceipt,
     *,
+    odr_version: str = ODR_DEFAULT_VERSION,
     crux_set: list[dict[str, Any]] | None = None,
     attestation: dict[str, Any] | None = None,
     calibration_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Map a :class:`DecisionReceipt` onto the ODR v0.1 content profile.
+    """Map a :class:`DecisionReceipt` onto ODR v0.1 or v0.2.
+
+    Default v0.1 until aragora-verify 0.2.0 is published.
 
     Args:
         receipt: The source receipt. Fields are copied, never invented.
+        odr_version: Requested profile version, ``"0.1"`` or ``"0.2"``.
         crux_set: Optional crux items (e.g. from a ``CruxReceipt``) to include;
             when omitted, the ``cruxes`` block carries an absent marker.
         attestation: Optional human-attestation block. When omitted, the
@@ -289,9 +302,11 @@ def decision_receipt_to_odr(
     Returns:
         A JSON-serializable dict conforming to ``aragora/gauntlet/odr_schema.json``.
     """
-    return {
-        "odr_version": ODR_VERSION,
-        "profile": ODR_PROFILE_URI,
+    if odr_version not in ODR_VERSIONS:
+        raise ValueError(f"odr_version must be one of {ODR_VERSIONS}")
+    doc: dict[str, Any] = {
+        "odr_version": odr_version,
+        "profile": ODR_PROFILE_URIS[odr_version],
         "receipt_id": receipt.receipt_id,
         "issued_at": receipt.timestamp or None,
         "subject": _map_subject(receipt),
@@ -311,6 +326,7 @@ def decision_receipt_to_odr(
             "artifact_hash": receipt.artifact_hash,
         },
     }
+    return doc
 
 
 def sign_odr_if_configured(
