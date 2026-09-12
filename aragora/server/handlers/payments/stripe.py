@@ -120,6 +120,8 @@ async def handle_charge(
         body, err = await parse_json_body(request, context="handle_charge")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
 
         amount = Decimal(str(body.get("amount", 0)))
@@ -368,6 +370,8 @@ async def handle_authorize(request: web.Request) -> web.Response:
         body, err = await parse_json_body(request, context="handle_authorize")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
 
         amount = Decimal(str(body.get("amount", 0)))
@@ -464,6 +468,8 @@ async def handle_capture(request: web.Request) -> web.Response:
         body, err = await parse_json_body(request, context="handle_capture")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
         transaction_id = body.get("transaction_id")
         amount = body.get("amount")
@@ -551,6 +557,8 @@ async def handle_refund(
         body, err = await parse_json_body(request, context="handle_refund")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
         transaction_id = body.get("transaction_id")
         amount = Decimal(str(body.get("amount", 0)))
@@ -675,6 +683,8 @@ async def handle_void(
         body, err = await parse_json_body(request, context="handle_void")
         if err:
             return err
+        if body is None:
+            return web_error_response("Invalid request body", 400)
         provider = _pkg()._get_provider_from_request(request, body)
         transaction_id = body.get("transaction_id")
 
@@ -1281,6 +1291,8 @@ async def handle_authnet_webhook(request: web.Request) -> web.Response:
         payload, err = await parse_json_body(request, context="handle_authnet_webhook")
         if err:
             return err
+        if payload is None:
+            return web_error_response("Invalid request body", 400)
         signature = request.headers.get("X-ANET-Signature")
 
         connector = await _pkg().get_authnet_connector(request)
