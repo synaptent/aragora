@@ -30,6 +30,10 @@ from .exceptions import (
     ValidationError,
 )
 
+# Bound automatic server-directed waits to one minute, without retrying early.
+# The parser retains larger hints for callers; configured fallback is unchanged.
+_MAX_AUTOMATIC_RETRY_AFTER_SECONDS = 60
+
 # RFC 9110 section 5.6.7: accept the complete three HTTP-date forms, not
 # arbitrary email dates or a valid prefix followed by unsupported content.
 _HTTP_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
@@ -724,6 +728,8 @@ class AragoraClient:
 
             except RateLimitError as e:
                 last_error = e
+                if e.retry_after is not None and e.retry_after > _MAX_AUTOMATIC_RETRY_AFTER_SECONDS:
+                    raise
                 if attempt < self.max_retries - 1:
                     # Use server-specified retry delay if available
                     delay = (
@@ -1400,6 +1406,8 @@ class AragoraAsyncClient:
 
             except RateLimitError as e:
                 last_error = e
+                if e.retry_after is not None and e.retry_after > _MAX_AUTOMATIC_RETRY_AFTER_SECONDS:
+                    raise
                 if attempt < self.max_retries - 1:
                     # Use server-specified retry delay if available
                     delay = (

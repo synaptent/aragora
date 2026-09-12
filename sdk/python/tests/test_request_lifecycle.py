@@ -24,8 +24,14 @@ HINTS = [
     pytest.param("", None, id="empty"),
     pytest.param("0", 0, id="zero"),
     pytest.param("12", 12, id="integer"),
+    pytest.param("59", 59, id="integer-below-wait-bound"),
+    pytest.param("60", 60, id="integer-at-wait-bound"),
+    pytest.param("61", 61, id="integer-above-wait-bound"),
     pytest.param(" 0012\t", 12, id="whitespace-leading-zero"),
     pytest.param(FUTURE, 2, id="http-date-ceiling"),
+    pytest.param("Fri, 11 Sep 2026 12:00:59 GMT", 59, id="date-below-wait-bound"),
+    pytest.param("Fri, 11 Sep 2026 12:01:00 GMT", 60, id="date-at-wait-bound"),
+    pytest.param("Fri, 11 Sep 2026 12:01:01 GMT", 61, id="date-above-wait-bound"),
     pytest.param("Friday, 11-Sep-26 12:00:02 GMT", 2, id="rfc850-date"),
     pytest.param("Fri Sep 11 12:00:02 2026", 2, id="asctime-utc"),
     pytest.param("Fri, 11 Sep 2026 12:00:00 GMT", 0, id="past-date"),
@@ -140,20 +146,102 @@ async def test_retry_policy_parity(header: str | None, hint: int | None, succeed
                         return await c.request("GET", "/api/v1/debates")
                     return c.request("GET", "/api/v1/debates")
 
-                if succeed:
+                oversized = hint is not None and hint > 60
+                if succeed and not oversized:
                     assert await run(client) == {"ok": True}
                 else:
                     with pytest.raises(RateLimitError) as raised:
                         await run(client)
                     assert_diagnostics(raised.value, hint)
-                assert request.call_count == 3
+                assert request.call_count == (1 if oversized else 3)
                 delays = [call.args[0] for call in sleeps.call_args_list]
-                assert delays == ([hint, hint] if hint is not None else [7, 14])
+                expected = [] if oversized else ([hint, hint] if hint is not None else [7, 14])
+                assert delays == expected
         finally:
             if isinstance(client, AragoraAsyncClient):
                 await client.close()
             else:
                 client.close()
+
+
+@pytest.mark.parametrize("async_mode", [False, True], ids=["sync", "async"])
+@pytest.mark.parametrize("prior_attempts", [0, 1], ids=["first-hint", "late-hint"])
+@pytest.mark.parametrize(
+    "header,now,hint",
+    [
+        ("61", NOW, 61),
+        ("Thu, 11 Sep 2070 12:00:02 GMT", NOW, 1388534402),
+        (FUTURE, 0.0, 1789128002),  # A severely skewed local clock.
+    ],
+)
+async def test_oversized_hint_preserves_original_error_without_replay(
+    async_mode: bool, prior_attempts: int, header: str, now: float, hint: int
+) -> None:
+    client = AragoraAsyncClient(max_retries=5) if async_mode else AragoraClient(max_retries=5)
+    errors: list[RateLimitError] = []
+    decode = client._handle_error_response
+
+    def record_error(response: httpx.Response) -> None:
+        try:
+            decode(response)
+        except RateLimitError as error:
+            errors.append(error)
+            raise
+
+    responses = [limited("2")] * prior_attempts + [
+        limited(header),
+        httpx.Response(200, json={"must_not_be_requested": True}),
+    ]
+    sleep = AsyncMock() if async_mode else Mock()
+    try:
+        with (
+            patch.object(client._client, "request", side_effect=responses) as request,
+            patch.object(client, "_handle_error_response", side_effect=record_error),
+            patch("aragora_sdk.client.time.time", return_value=now),
+            patch("asyncio.sleep" if async_mode else "aragora_sdk.client.time.sleep", sleep),
+            pytest.raises(RateLimitError) as raised,
+        ):
+            if isinstance(client, AragoraAsyncClient):
+                await client.request("POST", "/api/v1/debates", json={"task": "example"})
+            else:
+                client.request("POST", "/api/v1/debates", json={"task": "example"})
+        assert raised.value is errors[-1]
+        assert_diagnostics(raised.value, hint)
+        assert request.call_count == prior_attempts + 1
+        assert [call.args[0] for call in sleep.call_args_list] == [2] * prior_attempts
+    finally:
+        if isinstance(client, AragoraAsyncClient):
+            await client.close()
+        else:
+            client.close()
+
+
+@pytest.mark.parametrize("async_mode", [False, True], ids=["sync", "async"])
+async def test_large_configured_fallback_is_unchanged(async_mode: bool) -> None:
+    client = (
+        AragoraAsyncClient(max_retries=3, retry_delay=61)
+        if async_mode
+        else AragoraClient(max_retries=3, retry_delay=61)
+    )
+    sleep = AsyncMock() if async_mode else Mock()
+    try:
+        with (
+            patch.object(client._client, "request", return_value=limited("broken")) as request,
+            patch("asyncio.sleep" if async_mode else "aragora_sdk.client.time.sleep", sleep),
+            pytest.raises(RateLimitError) as raised,
+        ):
+            if isinstance(client, AragoraAsyncClient):
+                await client.request("GET", "/api/v1/debates")
+            else:
+                client.request("GET", "/api/v1/debates")
+        assert_diagnostics(raised.value, None)
+        assert request.call_count == 3
+        assert [call.args[0] for call in sleep.call_args_list] == [61, 122]
+    finally:
+        if isinstance(client, AragoraAsyncClient):
+            await client.close()
+        else:
+            client.close()
 
 
 @pytest.mark.parametrize("client_type", [AragoraClient, AragoraAsyncClient])
