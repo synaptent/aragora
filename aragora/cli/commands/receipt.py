@@ -599,7 +599,10 @@ def _inspection_cosmetic(value: Any, field: str) -> str:
     try:
         if isinstance(value, str):
             value.encode(sys.stdout.encoding or "utf-8")
-            return value
+            summary = "".join(
+                char if char.isprintable() else json.dumps(char)[1:-1] for char in value[:121]
+            )
+            return summary[:117] + "..." if len(summary) > 120 else summary
         if not isinstance(value, bool) and (
             isinstance(value, int) or isinstance(value, float) and math.isfinite(value)
         ):

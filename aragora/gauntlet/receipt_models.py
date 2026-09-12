@@ -16,6 +16,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import uuid
 
 from aragora.agents.failure_semantics import all_responses_are_failures
@@ -127,6 +128,8 @@ def _normalize_receipt_boolean(value: Any, *, default: bool = False, strict: boo
     if value is None:
         return False if strict else default
     if isinstance(value, int | float):
+        if strict and isinstance(value, float) and not math.isfinite(value):
+            raise ValueError("receipt boolean must be finite")
         return value != 0
     if isinstance(value, str):
         normalized = value.strip().lower()

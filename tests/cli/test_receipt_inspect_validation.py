@@ -166,8 +166,7 @@ def test_missing_and_nullable_optional_fields_preserve_defaults(tmp_path: Path) 
         (-0.0, "No"),
         (0.5, "Yes"),
         (-0.5, "Yes"),
-        (float("inf"), "Yes"),
-        (float("nan"), "Yes"),
+        (10**400, "Yes"),
         (" Y ", "Yes"),
         (" N ", "No"),
     ],
@@ -214,7 +213,21 @@ def test_strict_model_boolean_strings(flag: str) -> None:
     assert _normalize_receipt_boolean(None, default=True) is True
 
 
-@pytest.mark.parametrize("value", ["unknown", "2", "none", "false-ish", [], {}, [True]])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "unknown",
+        "2",
+        "none",
+        "false-ish",
+        [],
+        {},
+        [True],
+        float("nan"),
+        float("inf"),
+        -float("inf"),
+    ],
+)
 def test_unknown_boolean_never_defaults(value: Any, tmp_path: Path) -> None:
     from aragora.gauntlet.receipt_models import _normalize_receipt_boolean
 
@@ -257,6 +270,9 @@ def test_numeric_risk_count_contract(value: Any, tmp_path: Path) -> None:
     "value",
     [
         "legacy",
+        "caf\u00e9",
+        "x" * 1000,
+        "a\nb\r\t\x1b[31m\x07\x7f\x85\u202e",
         0,
         42.5,
         {},
@@ -298,11 +314,9 @@ def test_cosmetic_values_are_display_only(
             if isinstance(value, (dict, list))
             else str(value)
         )
-        expected = (
-            expected[:117] + "..."
-            if isinstance(value, (dict, list)) and len(expected) > 120
-            else expected
-        )
+        if value == "a\nb\r\t\x1b[31m\x07\x7f\x85\u202e":
+            expected = r"a\nb\r\t\u001b[31m\u0007\u007f\u0085\u202e"
+        expected = expected[:117] + "..." if len(expected) > 120 else expected
         labels = {
             "signature": "Signature:     ",
             "artifact_hash": "Artifact Hash: ",
@@ -315,6 +329,25 @@ def test_cosmetic_values_are_display_only(
         assert labels[field] + expected in captured.out
         assert captured.err == ""
     assert "Traceback" not in captured.err and "[PASS]" not in captured.out
+
+
+@pytest.mark.parametrize("length", [119, 120, 121, 1000])
+def test_cosmetic_cap_applies_after_escaping(length: int) -> None:
+    from aragora.cli.commands.receipt import _inspection_cosmetic
+
+    value = "\n" * length
+    assert _inspection_cosmetic(value, "signature") == (r"\n" * length)[:117] + "..."
+    expected = "x" * length if length <= 120 else "x" * 117 + "..."
+    assert _inspection_cosmetic("x" * length, "signature") == expected
+
+
+def test_escaped_cosmetics_through_cli(tmp_path: Path) -> None:
+    result = inspect_process({"signature": "\x1b[31m\nForged", "input_hash": "h" * 1000}, tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "Cannot render receipt field" not in result.stderr and "Traceback" not in result.stderr
+    assert r"Signature:     \u001b[31m\nForged" in result.stdout
+    assert "Input Hash:    " + "h" * 117 + "..." in result.stdout
+    assert "\x1b" not in result.stdout and "\nForged" not in result.stdout
 
 
 def test_pre_validator_legacy_fixture(tmp_path: Path) -> None:
