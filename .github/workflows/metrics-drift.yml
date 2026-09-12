@@ -222,3 +222,186 @@ jobs:
       - name: Strict ratchet against the frozen baseline (schedule and manual runs)
         if: github.event_name != 'pull_request'
         run: python3 scripts/ci/measure_import_graph.py --check
+
+  atlas:
+    name: Disagreement Atlas
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    # Cold caches may span several API-budget windows; the collector backs off itself.
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      artifact-id: ${{ steps.atlas_upload.outputs.artifact-id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ARAGORA_USE_SECRETS_MANAGER: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Atlas dependencies
+        run: bash scripts/ci_install_project.sh
+
+      - name: Set Atlas scratch paths
+        run: |
+          echo "ATLAS_CACHE=$RUNNER_TEMP/atlas-cache" >> "$GITHUB_ENV"
+          echo "ATLAS_OUT=$RUNNER_TEMP/atlas-output" >> "$GITHUB_ENV"
+
+      - name: Restore Atlas fetch cache
+        id: atlas_cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.ATLAS_CACHE }}
+          key: atlas-fetch-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            atlas-fetch-v1-${{ runner.os }}-
+
+      - name: Collect Atlas incrementally
+        id: atlas_collect
+        # Leave time to persist partial fetches even if collection exhausts its budget.
+        timeout-minutes: 300
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Retry once from saved per-PR responses; never publish an incomplete corpus.
+          for attempt in 1 2; do
+            log="$RUNNER_TEMP/atlas-collect-$attempt.log"
+            if python3 scripts/build_disagreement_atlas.py collect --cache-dir "$ATLAS_CACHE" \
+                --repo "$GH_REPO" --refresh-index 2>&1 | tail -n 200 | tail -c 16384 > "$log"; then
+              cat "$log"
+              exit 0
+            fi
+            cat "$log" >&2
+            if [ "$attempt" -eq 1 ]; then
+              echo "atlas: collection incomplete; retrying once from cache" >&2
+              sleep 10
+            fi
+          done
+          echo "::error::Atlas collection incomplete after two attempts; publication blocked. Inspect collection diagnostics and restore source access before retrying." >&2
+          exit 1
+
+      - name: Upload Atlas collection diagnostics
+        if: failure() && steps.atlas_collect.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlas-collection-errors-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/atlas-collect-*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Save Atlas fetch cache
+        if: always() && steps.atlas_cache.outcome == 'success'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.ATLAS_CACHE }}
+          key: ${{ steps.atlas_cache.outputs.cache-primary-key }}
+
+      - name: Build Atlas
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ATLAS_OUT"
+          python3 scripts/build_disagreement_atlas.py build --cache-dir "$ATLAS_CACHE" \
+            --out "$ATLAS_OUT/atlas-v1.jsonl" --manifest "$ATLAS_OUT/manifest.json" \
+            --schema docs/atlas/schema.json --repo-root "$GITHUB_WORKSPACE" --force-sample
+          python3 scripts/build_disagreement_atlas.py summary \
+            --dataset "$ATLAS_OUT/atlas-v1.jsonl" --manifest "$ATLAS_OUT/manifest.json" \
+            --out "$ATLAS_OUT/summary.md"
+          python3 scripts/build_disagreement_atlas.py verify \
+            --manifest "$ATLAS_OUT/manifest.json" --repo-root "$ATLAS_OUT" --require-dataset
+
+      - name: Name Atlas artifact
+        id: atlas_date
+        run: echo "tag=atlas-$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Atlas artifact
+        id: atlas_upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.atlas_date.outputs.tag }}
+          if-no-files-found: error
+          path: |
+            ${{ env.ATLAS_OUT }}/atlas-v1.jsonl
+            ${{ env.ATLAS_OUT }}/atlas-v1.sample.jsonl
+            ${{ env.ATLAS_OUT }}/manifest.json
+            ${{ env.ATLAS_OUT }}/summary.md
+
+      - name: Explain branch release skip
+        if: github.ref != 'refs/heads/main'
+        run: 'echo "atlas: non-main ref; artifact uploaded; release skipped"'
+
+  publish-atlas:
+    name: Publish Disagreement Atlas
+    needs: atlas
+    if: >-
+      github.ref == 'refs/heads/main' && needs.atlas.result == 'success' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Require Atlas artifact
+        env:
+          ATLAS_ARTIFACT_ID: ${{ needs.atlas.outputs.artifact-id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${ATLAS_ARTIFACT_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "atlas: successful build artifact ID missing or invalid" >&2
+            exit 1
+          fi
+          echo "ATLAS_OUT=$RUNNER_TEMP/atlas-output" >> "$GITHUB_ENV"
+
+      - name: Download this run's Atlas artifact
+        uses: actions/download-artifact@v4
+        with:
+          # No cross-run token or run-id override: consume only this run's upload.
+          artifact-ids: ${{ needs.atlas.outputs.artifact-id }}
+          path: ${{ env.ATLAS_OUT }}
+          merge-multiple: true
+
+      - name: Publish dated Atlas release
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(date -u +%F)
+          if gh release view "atlas-$today" > /dev/null 2> "$RUNNER_TEMP/atlas-release-view.err"; then
+            echo "atlas: dated release already exists; no release"
+            exit 0
+          elif ! grep -q 'release not found' "$RUNNER_TEMP/atlas-release-view.err"; then
+            cat "$RUNNER_TEMP/atlas-release-view.err" >&2
+            exit 1
+          fi
+          latest=$(gh release list --limit 100 --exclude-drafts --json tagName \
+            --jq '[.[] | select(.tagName | startswith("atlas-"))][0].tagName // empty')
+          sha=$(jq -er '.dataset.sha256' "$ATLAS_OUT/manifest.json")
+          if [ -n "$latest" ]; then
+            previous=$(mktemp -d "$RUNNER_TEMP/atlas-previous.XXXXXX")
+            gh release download "$latest" --pattern manifest.json --dir "$previous"
+            previous_sha=$(jq -er '.dataset.sha256' "$previous/manifest.json")
+            if [ "$sha" = "$previous_sha" ]; then
+              echo "atlas: dataset unchanged ($sha); no release"
+              exit 0
+            fi
+          fi
+          gh release create "atlas-$today" \
+            "$ATLAS_OUT/atlas-v1.jsonl" "$ATLAS_OUT/atlas-v1.sample.jsonl" \
+            "$ATLAS_OUT/manifest.json" "$ATLAS_OUT/summary.md" \
+            --target main --latest=false --title "Disagreement Atlas $today" \
+            --notes "Weekly Atlas regeneration. Dataset SHA-256: $sha"
