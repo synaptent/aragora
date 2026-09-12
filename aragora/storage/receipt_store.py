@@ -472,18 +472,21 @@ class ReceiptStore:
             schema_statements = self.SCHEMA_STATEMENTS_SQLITE
             migration_statements = self.MIGRATION_STATEMENTS_SQLITE
 
-        # Run migrations first to add any missing columns before creating indexes
+        self._backend.execute_write(schema_statements[0])
+
+        # Legacy tables need optional columns before their indexes can be created.
         for statement in migration_statements:
             try:
                 self._backend.execute_write(statement)
-            except (OSError, RuntimeError, ValueError, sqlite3.Error) as e:
+            except sqlite3.OperationalError as e:
+                if self.backend_type == "postgresql" or str(e) != (
+                    f"duplicate column name: {statement.split()[5]}"
+                ):
+                    raise
                 logger.debug("Migration statement skipped: %s", e)
 
-        for statement in schema_statements:
-            try:
-                self._backend.execute_write(statement)
-            except (OSError, RuntimeError, ValueError, sqlite3.Error) as e:
-                logger.debug("Schema statement skipped: %s", e)
+        for statement in schema_statements[1:]:
+            self._backend.execute_write(statement)
 
     def close(self) -> None:
         """Close any open backend resources."""
