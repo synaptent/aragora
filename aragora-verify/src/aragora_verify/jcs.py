@@ -76,7 +76,7 @@ def _es_number_to_string(value: float) -> str:
     return sign + out
 
 
-def _jcs_serialize(value: Any, out: list[str]) -> None:
+def _jcs_serialize(value: Any, out: list[str]) -> None:  # noqa: C901 - Keep RFC 8785 type dispatch auditable in one place.
     """Append the JCS serialization of ``value`` to ``out``."""
     if value is None:
         out.append("null")

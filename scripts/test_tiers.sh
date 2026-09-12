@@ -183,24 +183,16 @@ case "$tier" in
     ;;
 
   typecheck)
-    # Run mypy on aragora - REQUIRED (0 errors as of Phase 5)
+    # REQUIRED: full internal import graph, zero NEW errors against recorded debt.
     echo -e "${YELLOW}=== Type checking aragora (REQUIRED) ===${NC}"
-
-    # Count actual errors (not notes) - pattern: "file:line:col: error:"
-    # Disable pipefail for this pipeline since mypy returns non-zero on errors
-    ERROR_COUNT=$(set +o pipefail; mypy aragora/ --ignore-missing-imports --show-error-codes 2>/dev/null | { grep -cE "^[^:]+:[0-9]+:[0-9]+: error:" || true; } | tr -d '[:space:]')
-    ERROR_COUNT=${ERROR_COUNT:-0}
-
-    if [ "$ERROR_COUNT" -gt 0 ]; then
-      echo -e "${RED}Found $ERROR_COUNT mypy error(s)!${NC}"
-      mypy aragora/ --ignore-missing-imports --show-error-codes
-      echo ""
-      echo -e "${RED}=== Type check FAILED ===${NC}"
-      echo "mypy error count must remain at 0 (currently: $ERROR_COUNT)"
-      exit 1
-    fi
-
-    echo -e "${GREEN}=== Type check passed (0 errors) ===${NC}"
+    # Freeze target platform and exclude ambient third-party stubs/SDKs so the
+    # baseline is reproducible locally and on CI. Internal imports still follow
+    # pyproject.toml; the changed-file gate continues to use installed stubs.
+    "${TYPECHECK_PYTHON:-python}" scripts/ci/mypy_with_baseline.py \
+      --baseline scripts/baselines/root-mypy-full.json -- \
+      aragora/ --config-file=pyproject.toml --ignore-missing-imports \
+      --show-error-codes --no-pretty --no-color-output \
+      --python-version=3.11 --platform=linux --no-site-packages
     ;;
 
   frontend)
@@ -231,7 +223,7 @@ case "$tier" in
     echo "  storage   Storage/database tests"
     echo "  privacy   Privacy handler tests only"
     echo "  lint      Run linting (ruff format, ruff check)"
-    echo "  typecheck Run type checking (mypy)"
+    echo "  typecheck Full mypy 2.1.0 ratchet (0 no new errors; 1 new; 2 config; 3 tool failure)"
     echo "  frontend  Frontend unit tests"
     echo "  e2e       End-to-end tests"
     echo ""

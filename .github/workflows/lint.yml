@@ -19,6 +19,51 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  ratchets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+      - uses: ./.github/actions/setup-node-safe
+        with:
+          node-version: "25.9.0"
+      - name: Install readiness toolchain
+        run: python -m pip install -e '.[dev,test,readiness]'
+      - name: Run root ratchets
+        shell: bash
+        working-directory: .
+        run: |
+          make readiness-lint-root READINESS_REPORT_DIR=/tmp/ratchets 2>&1 | tee ratchets.log
+          test ${PIPESTATUS[0]} -eq 0
+          ! grep -q '^SKIP root:' ratchets.log
+      - name: Summarize root ratchets
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## Root ratchets (advisory)'
+            echo '```text'
+            if [ -f ratchets.log ]; then
+              tail -n 80 ratchets.log
+            else
+              echo 'Ratchets did not run; check the toolchain setup steps.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload ratchet reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: root-ratchet-reports
+          path: /tmp/ratchets/*.report.json
+          if-no-files-found: warn
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -372,37 +417,34 @@ jobs:
             exit 1
           fi
 
+      # The full-tier baseline (scripts/baselines/root-mypy-full.json) is a CPython 3.11 HOST census:
+      # mypy parses with the host interpreter's ast, so line attribution (and the ratchet keys derived
+      # from it) can differ on 3.12+ even with --python-version=3.11. Hosted ubuntu-24.04 puts
+      # /usr/bin/python3.12 on PATH and keeps 3.11 only in the toolcache, so the host is set up
+      # explicitly instead of resolved from PATH.
+      - uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+
       - name: Resolve Python runtime
         id: typecheck_python
         shell: bash
         run: |
           set -euo pipefail
-          PYTHON_BIN=""
-          for candidate in python3.13 python3.12 python3.11 python3.10 python3 python; do
-            if command -v "$candidate" >/dev/null 2>&1; then
-              PYTHON_BIN="$(command -v "$candidate")"
-              break
-            fi
-          done
-          if [[ -z "$PYTHON_BIN" ]]; then
-            echo "::error::Python runtime not found on runner"
-            exit 1
-          fi
+          PYTHON_BIN="$(command -v python)"
           PYTHON_VERSION="$("$PYTHON_BIN" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-          if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-            echo "::error::Python >=3.10 required for typecheck, found ${PYTHON_VERSION} at ${PYTHON_BIN}"
+          echo "Using Python ${PYTHON_VERSION} at ${PYTHON_BIN}"
+          if [[ "$PYTHON_VERSION" != "3.11" ]]; then
+            echo "::error::The full typecheck tier requires a CPython 3.11 host (the mypy baseline's parser); found ${PYTHON_VERSION} at ${PYTHON_BIN}"
             exit 1
           fi
-          echo "Using Python ${PYTHON_VERSION} at ${PYTHON_BIN}"
-          "$PYTHON_BIN" -m ensurepip --upgrade || true
           "$PYTHON_BIN" -m pip install --upgrade pip
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "python_bin=$PYTHON_BIN" >> "$GITHUB_OUTPUT"
 
       - name: Install mypy and type stubs
         run: |
-          "${{ steps.typecheck_python.outputs.python_bin }}" -m pip install --user -e .
-          "${{ steps.typecheck_python.outputs.python_bin }}" -m pip install --user mypy types-requests types-redis types-python-dateutil types-setuptools types-jsonschema types-PyYAML
+          python -m pip install -e .
+          python -m pip install mypy==2.1.0 types-requests types-redis types-python-dateutil types-setuptools types-jsonschema types-PyYAML
 
       - name: Resolve phase-1 typecheck plan
         id: typecheck_plan
@@ -457,9 +499,11 @@ jobs:
 
       - name: Run full typecheck tier
         if: steps.typecheck_plan.outputs.mode == 'full'
+        env:
+          TYPECHECK_PYTHON: ${{ steps.typecheck_python.outputs.python_bin }}
         run: PATH="$HOME/.local/bin:$PATH" bash scripts/test_tiers.sh typecheck
         shell: bash
-        # Phase 5: mypy now REQUIRED (43→0 errors fixed Jan 2026)
+        # Required shrink-only baseline, with raw and NEW counts in the log.
 
       - name: Run changed-file typecheck gate
         if: steps.typecheck_plan.outputs.mode == 'changed'

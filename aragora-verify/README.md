@@ -1,5 +1,7 @@
 # aragora-verify
 
+## Overview
+
 **Verify an [Open Decision Receipt](https://github.com/synaptent/aragora/blob/main/docs/specs/OPEN_DECISION_RECEIPT.md) offline — no Aragora install, no server, no account.**
 
 Action-level receipts (Microsoft AGT, SCITT, in-toto/SLSA) prove *what happened
@@ -24,9 +26,104 @@ It depends only on the Python standard library plus `cryptography`.
 
 ## Install
 
+For development, run from the repository's `aragora-verify/` directory in an
+activated Python 3.10+ virtual environment:
+
+```bash
+pip install -e '.[dev]'
+```
+
+The `dev` extra includes pytest, pytest-cov, pytest-randomly, pytest-xdist, and
+pytest-timeout. With an unseeded uv environment, use `uv pip install -e '.[dev]'`
+instead (uv environments do not include pip by default).
+
+For the published package:
+
 ```bash
 pip install aragora-verify
 ```
+
+Check the installed version (read from `importlib.metadata`) or CLI usage:
+
+```bash
+python -m aragora_verify --version
+python -m aragora_verify --help
+```
+
+The existing `aragora-verify --version` and `--help` commands are equivalent.
+
+## Build
+
+From `aragora-verify/`, build a wheel and source distribution with uv:
+
+```bash
+uv build
+```
+
+Alternatively, install the build frontend with `python -m pip install build`,
+then run `python -m build`.
+
+## Test
+
+From `aragora-verify/` after installing the `dev` extra:
+
+```bash
+pytest tests -q
+```
+
+To run deterministically with parallel workers, a timeout, and package coverage:
+
+```bash
+pytest tests -q -p no:randomly -n 4 --timeout=120 --cov=aragora_verify
+```
+
+## Lint & Typecheck
+
+Use the repository's development toolchain (root `dev` extra for ruff and mypy,
+with mypy pinned to the CI version). From `aragora-verify/`:
+
+```bash
+ruff check .
+ruff format --check .
+mypy --strict src
+```
+
+## Configuration
+
+All package-specific `ARAGORA_*` environment variables are optional:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ARAGORA_LOG_FORMAT` | `text` | `json` selects JSON lines; any other value selects text |
+| `ARAGORA_LOG_LEVEL` | `WARNING` | Case-insensitive stdlib logging level; invalid names fall back to WARNING |
+
+Logging settings take effect only when explicitly calling `configure_logging()`.
+Verification itself is offline and requires no environment variables, credentials,
+server, or account. Receipt, public-key, and chain paths are CLI arguments (see Use).
+
+## Logging
+
+Importing the package does not configure logging or import telemetry SDKs.
+Logging is local only, with no PostHog/Sentry client or network exporter:
+
+```python
+from aragora_verify._logging import configure_logging
+
+configure_logging()
+```
+
+This explicitly replaces root handlers with one stderr handler, including on
+repeated calls. Defaults are plain `LEVEL logger: message` text at WARNING
+(INFO is suppressed). Set `ARAGORA_LOG_FORMAT=json` for one JSON object per line:
+`ts` (UTC ISO-8601 timestamp), `level`, `logger`, and `msg`; optional fields are
+`exception`, `stack`, and structured extras.
+
+Both formatters use `redact()` to mask values as `***` for keys matching
+`(?i)(api[_-]?key|token|secret|password|authorization)` in nested mappings and
+sequences, and `key=value` assignments in messages (including quoted and
+Bearer/Basic values). Interpolated messages and exceptions are redacted without
+mutating the original record. Unlabelled sensitive text is not automatically
+recognized; avoid logging credentials or user content.
 
 ## Use
 

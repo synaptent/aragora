@@ -1042,6 +1042,10 @@ class InvoiceHandler(BaseHandler):
         "/api/v1/accounting/payments/scheduled": ["GET"],
     }
 
+    # Contract discovery reads list-shaped metadata; the dynamic-ID canary
+    # cannot distinguish this collection from a broad prefix match.
+    GET_ROUTES = ["/api/v1/accounting/invoices"]
+
     DYNAMIC_ROUTES = {
         "/api/v1/accounting/invoices/{invoice_id}": ["GET"],
         "/api/v1/accounting/invoices/{invoice_id}/approve": ["POST"],
@@ -1083,6 +1087,10 @@ class InvoiceHandler(BaseHandler):
         if len(parts) >= 6:
             return parts[5]
         return None
+
+    async def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
+        """Bridge the modular registry's GET entry point to the existing handler."""
+        return await self.handle_get(path, query_params)
 
     @require_permission("finance:read")
     async def handle_get(
