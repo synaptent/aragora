@@ -1,0 +1,102 @@
+# One-shot repair: bring the Hetzner nodes back onto the tailnet (#9391).
+#
+# Those three hosts are alive — their runners are online and executing jobs —
+# but they left the tailnet 61 days ago, so SSH (which is Tailscale-only) cannot
+# reach them. This uses the one channel that still works, the runner agent, to
+# restore the channel that does not.
+#
+# Deliberately narrow: it authenticates Tailscale and reports. It does not
+# deploy, does not read repository secrets other than the auth key, and does not
+# touch production. Once SSH is back, everything else happens over SSH where it
+# belongs.
+name: Hetzner Tailscale Rejoin
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type REJOIN to proceed'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  rejoin:
+    name: Rejoin tailnet
+    if: github.event.inputs.confirm == 'REJOIN'
+    runs-on: [self-hosted, aragora, Linux, X64, hetzner]
+    timeout-minutes: 10
+    strategy:
+      # Three identical jobs so the scheduler places one on each of the three
+      # runners. They share the same labels, so there is no way to address a
+      # specific host; running the set in parallel is what reaches all of them.
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3]
+    steps:
+      - name: Identify this host
+        shell: bash
+        run: |
+          echo "runner=${RUNNER_NAME}  host=$(hostname)  slot=${{ matrix.slot }}"
+
+      - name: Report current tailscale state
+        shell: bash
+        run: |
+          if command -v tailscale >/dev/null 2>&1; then
+            echo "installed: $(tailscale version | head -1)"
+            tailscale status --peers=false 2>&1 | head -5 || echo "not connected"
+          else
+            echo "tailscale is NOT installed on $(hostname)"
+          fi
+
+      - name: Install tailscale if absent
+        shell: bash
+        run: |
+          if ! command -v tailscale >/dev/null 2>&1; then
+            echo "installing tailscale"
+            curl -fsSL https://tailscale.com/install.sh | sudo sh
+          else
+            echo "already installed"
+          fi
+
+      - name: Authenticate and come up
+        shell: bash
+        env:
+          TS_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          if [ -z "${TS_AUTHKEY}" ]; then
+            echo "::error::TAILSCALE_AUTHKEY secret is not set. Add it before running."
+            exit 1
+          fi
+          sudo systemctl enable --now tailscaled || true
+
+          # Pass the key via a 0600 file rather than on the command line: argv is
+          # world-readable through `ps`, so any other process on this shared box
+          # could read the key mid-run. Removed in a trap so it does not survive
+          # a failure either.
+          keyfile="$(mktemp)"
+          trap 'rm -f "$keyfile"' EXIT
+          chmod 600 "$keyfile"
+          printf '%s' "${TS_AUTHKEY}" > "$keyfile"
+
+          sudo tailscale up \
+            --authkey="file:${keyfile}" \
+            --hostname="$(hostname)" \
+            --accept-routes \
+            --ssh=false
+          echo "tailscale up completed"
+
+      - name: Confirm it joined
+        shell: bash
+        run: |
+          ip="$(tailscale ip -4 2>/dev/null || true)"
+          if [ -z "$ip" ]; then
+            echo "::error::no tailscale IPv4 assigned — the node did not join"
+            tailscale status 2>&1 | head -10
+            exit 1
+          fi
+          echo "joined: $(hostname) -> ${ip}"
+          # Persist across reboot, which is the likeliest reason it dropped off.
+          sudo systemctl is-enabled tailscaled || sudo systemctl enable tailscaled
