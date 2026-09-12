@@ -4734,6 +4734,29 @@ def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses(
     assert waves[-1][0] == live_digest
 
 
+def test_latest_typescript_paydown_is_resolved_in_legacy_inventory():
+    root = Path(ratchet.__file__).parents[1]
+    authority = _accepted_authority()
+    latest_wave_ids = set(_paydown_waves(authority)[-1][1])
+    cohort_records = {
+        record["original_record_id"]: record
+        for record in authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    }
+    retired_literals = {
+        cohort_records[record_id]["exact_historical_literal_record"]
+        for record_id in latest_wave_ids
+        if cohort_records[record_id]["source_json_key"] == "typescript_sdk_drift"
+    }
+    inventory = json.loads((root / "scripts/baselines/contract_drift_inventory.json").read_text())
+    rows = {item["id"]: item for item in inventory["items"]}
+
+    assert len(retired_literals) == 59
+    for literal in retired_literals:
+        row = rows[f"typescript_sdk_drift:{literal}"]
+        assert row["status"] == "resolved"
+        assert row["resolved_on"] == "2026-09-04"
+
+
 def test_accepted_authority_rejects_unbound_paydown_and_bundle():
     authority = _accepted_authority()
     item = authority["active_inventory"][0]

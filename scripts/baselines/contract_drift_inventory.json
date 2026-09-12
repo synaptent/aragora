@@ -6109,8 +6109,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:DELETE /api/debates/{param}/notes/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6189,24 +6190,27 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:DELETE /api/knowledge/mound/federation/regions/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:DELETE /api/knowledge/mound/nodes/{param}/access",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:DELETE /api/knowledge/mound/share",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6278,16 +6282,18 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:DELETE /api/payments/customer/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:DELETE /api/payments/subscription/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6326,8 +6332,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:DELETE /api/webhooks/{param}/events",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6352,32 +6359,36 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/admin/organizations/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/admin/organizations/{param}/credits",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/admin/organizations/{param}/credits/expiring",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/admin/organizations/{param}/credits/transactions",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6393,8 +6404,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/admin/users/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6624,8 +6636,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/debates/batch/{param}/results",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6685,8 +6698,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/debates/{param}/agent-statistics",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6709,16 +6723,18 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/debates/{param}/health",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/debates/{param}/quality",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -6741,8 +6757,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/debates/{param}/similar",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -7451,24 +7468,27 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/payments/customer/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/payments/subscription/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/payments/transaction/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -7904,40 +7924,45 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/webhooks/{param}/deliveries",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/webhooks/{param}/deliveries/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/webhooks/{param}/retry-policy",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/webhooks/{param}/signing",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:GET /api/webhooks/{param}/stats",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -8065,8 +8090,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:PATCH /api/knowledge/mound/share",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -8179,24 +8205,27 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/admin/organizations/{param}/credits",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/admin/users/{param}/impersonate",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/admin/users/{param}/suspend",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -8569,16 +8598,18 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/debates/batch/{param}/cancel",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/debates/batch/{param}/retry",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -8609,24 +8640,27 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/debates/{param}/make-permanent",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/debates/{param}/notes",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/debates/{param}/restore",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -8953,88 +8987,99 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/culture/documents",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/culture/promote",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/federation/regions",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/federation/sync/all",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/federation/sync/pull",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/federation/sync/push",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/global",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/global/promote",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/index/repository",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/nodes/{param}/access",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/knowledge/mound/share",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -9146,56 +9191,63 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/payments/authorize",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/payments/capture",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/payments/charge",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/payments/customer",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/payments/refund",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/payments/subscription",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/payments/void",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -9435,24 +9487,27 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/webhooks/{param}/deliveries/{param}/retry",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/webhooks/{param}/events",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:POST /api/webhooks/{param}/rotate-secret",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -9512,8 +9567,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:PUT /api/admin/organizations/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -9545,8 +9601,9 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:PUT /api/knowledge/mound/nodes/{param}/visibility",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
@@ -9561,16 +9618,18 @@
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:PUT /api/payments/customer/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
       "discovered_on": "2026-04-17",
       "id": "typescript_sdk_drift:PUT /api/payments/subscription/{param}",
       "provenance": "2026-04-17 program baseline cohort",
+      "resolved_on": "2026-09-04",
       "source": "typescript_sdk_drift",
-      "status": "open"
+      "status": "resolved"
     },
     {
       "class": "start_cohort",
