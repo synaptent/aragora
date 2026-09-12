@@ -85,7 +85,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
 
@@ -260,7 +260,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Set up Node 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: 'npm'
@@ -2045,7 +2045,7 @@ jobs:
           bash scripts/ci_install_project.sh --extras dev,test
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24.18.0'
           cache: 'npm'
@@ -2185,7 +2185,7 @@ jobs:
 
       - name: Set up Node.js
         if: steps.scope.outputs.frontend == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24.18.0'
           cache: 'npm'
