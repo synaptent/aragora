@@ -168,6 +168,19 @@ repos:
         language: system
         types: [text]
 
+  # Blanket `except ...: pass` in tests/ is budgeted: ruff S110/S112 measured
+  # against committed per-file ceilings in scripts/baselines/try_except_pass_budget.json.
+  # Fails only when a file exceeds its ceiling (new files have ceiling 0) or a
+  # `noqa` for S110/S112 appears. After removing sites run `--tighten`.
+  - repo: local
+    hooks:
+      - id: try-except-pass-budget
+        name: try/except-pass budget (tests/)
+        entry: python3 scripts/check_try_except_pass_budget.py
+        language: system
+        pass_filenames: false
+        files: ^(tests/.*\.py|scripts/check_try_except_pass_budget\.py|scripts/baselines/try_except_pass_budget\.json)$
+
   # Boundary 2 quarantine: report new or stale receipts+verifier module edges.
   - repo: local
     hooks:
