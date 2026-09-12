@@ -20,11 +20,11 @@
  * Controls who can access the item.
  */
 export type VisibilityLevel =
-  | 'private'      // Creator and explicit grantees only
-  | 'workspace'    // All workspace members (default)
+  | 'private' // Creator and explicit grantees only
+  | 'workspace' // All workspace members (default)
   | 'organization' // All organization members
-  | 'public'       // Unauthenticated access
-  | 'system';      // System-wide verified facts (global knowledge)
+  | 'public' // Unauthenticated access
+  | 'system'; // System-wide verified facts (global knowledge)
 
 /**
  * Type of access grant recipient.
@@ -55,13 +55,7 @@ export type NodeType = 'fact' | 'concept' | 'claim' | 'evidence' | 'relationship
  * Source type for knowledge.
  */
 export type KnowledgeSource =
-  | 'conversation'
-  | 'debate'
-  | 'document'
-  | 'web'
-  | 'user_input'
-  | 'system'
-  | 'fact';
+  'conversation' | 'debate' | 'document' | 'web' | 'user_input' | 'system' | 'fact';
 
 // =============================================================================
 // Knowledge Items
@@ -442,14 +436,27 @@ export interface KnowledgeMoundApi {
   // Sharing
   shareItem(request: ShareItemRequest): Promise<ShareGrant>;
   revokeShare(itemId: string, granteeId: string): Promise<SuccessResponse>;
-  getSharedWithMe(workspaceId: string, options?: { limit?: number; offset?: number }): Promise<SharedWithMeResponse>;
-  getMyShares(workspaceId: string, options?: { limit?: number; offset?: number }): Promise<{ grants: ShareGrant[]; count: number }>;
+  getSharedWithMe(
+    workspaceId: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<SharedWithMeResponse>;
+  getMyShares(
+    workspaceId: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<{ grants: ShareGrant[]; count: number }>;
 
   // Global Knowledge
   storeVerifiedFact(request: StoreVerifiedFactRequest): Promise<{ nodeId: string }>;
-  queryGlobalKnowledge(query: string, options?: { limit?: number; topics?: string[] }): Promise<GlobalKnowledgeResponse>;
+  queryGlobalKnowledge(
+    query: string,
+    options?: { limit?: number; topics?: string[] },
+  ): Promise<GlobalKnowledgeResponse>;
   promoteToGlobal(request: PromoteToGlobalRequest): Promise<{ globalId: string }>;
-  getSystemFacts(options?: { limit?: number; offset?: number; topics?: string[] }): Promise<PaginatedResponse<VerifiedFact>>;
+  getSystemFacts(options?: {
+    limit?: number;
+    offset?: number;
+    topics?: string[];
+  }): Promise<PaginatedResponse<VerifiedFact>>;
   getSystemWorkspaceId(): Promise<{ systemWorkspaceId: string }>;
 
   // Federation
@@ -458,6 +465,9 @@ export interface KnowledgeMoundApi {
   listRegions(): Promise<{ regions: FederatedRegion[]; count: number }>;
   syncToRegion(request: SyncRegionRequest): Promise<SyncResult>;
   pullFromRegion(request: SyncRegionRequest): Promise<SyncResult>;
-  syncAllRegions(options?: { workspaceId?: string; since?: string }): Promise<{ results: SyncResult[] }>;
+  syncAllRegions(options?: {
+    workspaceId?: string;
+    since?: string;
+  }): Promise<{ results: SyncResult[] }>;
   getFederationStatus(): Promise<FederationStatus>;
 }

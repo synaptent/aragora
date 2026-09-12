@@ -2,17 +2,11 @@ import { renderHook, act } from '@testing-library/react';
 import { useGauntletWebSocket } from '@/hooks/useGauntletWebSocket';
 
 // Mock config
-jest.mock('@/config', () => ({
-  WS_URL: 'wss://test.com/ws',
-}));
+jest.mock('@/config', () => ({ WS_URL: 'wss://test.com/ws' }));
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
-  logger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-  },
+  logger: { debug: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
 // Mock WebSocket
@@ -86,7 +80,7 @@ describe('useGauntletWebSocket', () => {
   describe('initial state', () => {
     it('starts with connecting status', () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       expect(result.current.status).toBe('connecting');
@@ -96,7 +90,7 @@ describe('useGauntletWebSocket', () => {
 
     it('initializes with empty data', () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       expect(result.current.inputType).toBe('');
@@ -111,7 +105,7 @@ describe('useGauntletWebSocket', () => {
 
     it('does not connect when disabled', () => {
       renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws', enabled: false })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws', enabled: false }),
       );
 
       expect(MockWebSocket.instances).toHaveLength(0);
@@ -122,9 +116,7 @@ describe('useGauntletWebSocket', () => {
     it('connects and handles open event', async () => {
       // Note: The hook may re-create WebSockets due to effect dependencies.
       // This test verifies that connection setup works correctly.
-      renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }));
 
       await act(async () => {});
 
@@ -143,7 +135,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles connection error', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -164,7 +156,7 @@ describe('useGauntletWebSocket', () => {
   describe('gauntlet events', () => {
     it('handles gauntlet_start event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -198,7 +190,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles gauntlet_phase event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -219,7 +211,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles gauntlet_progress event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -241,7 +233,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles gauntlet_agent_active event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -252,11 +244,7 @@ describe('useGauntletWebSocket', () => {
         // First initialize agents
         ws.simulateMessage({
           type: 'gauntlet_start',
-          data: {
-            input_type: 'prompt',
-            input_summary: 'Test',
-            agents: ['claude'],
-          },
+          data: { input_type: 'prompt', input_summary: 'Test', agents: ['claude'] },
           timestamp: Date.now() / 1000,
           seq: 1,
         });
@@ -275,7 +263,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles gauntlet_attack event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -302,7 +290,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles gauntlet_probe event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -329,7 +317,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles gauntlet_finding event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -365,7 +353,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles gauntlet_verdict event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -398,7 +386,7 @@ describe('useGauntletWebSocket', () => {
 
     it('handles gauntlet_complete event', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -427,7 +415,7 @@ describe('useGauntletWebSocket', () => {
 
     it('ignores events for different gauntlet', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -450,7 +438,7 @@ describe('useGauntletWebSocket', () => {
 
     it('accumulates events', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -479,7 +467,7 @@ describe('useGauntletWebSocket', () => {
   describe('reconnect', () => {
     it('reconnect resets state and reconnects', async () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'wss://test.com/ws' }),
       );
 
       await act(async () => {});
@@ -510,7 +498,7 @@ describe('useGauntletWebSocket', () => {
   describe('URL validation', () => {
     it('sets error for invalid URL protocol', () => {
       const { result } = renderHook(() =>
-        useGauntletWebSocket({ gauntletId, wsUrl: 'http://invalid' })
+        useGauntletWebSocket({ gauntletId, wsUrl: 'http://invalid' }),
       );
 
       expect(result.current.status).toBe('error');

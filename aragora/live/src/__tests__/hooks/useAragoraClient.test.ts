@@ -7,13 +7,9 @@ const mockUseBackend = jest.fn();
 const mockGetClient = jest.fn();
 const mockClearClient = jest.fn();
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => mockUseAuth(),
-}));
+jest.mock('@/context/AuthContext', () => ({ useAuth: () => mockUseAuth() }));
 
-jest.mock('@/components/BackendSelector', () => ({
-  useBackend: () => mockUseBackend(),
-}));
+jest.mock('@/components/BackendSelector', () => ({ useBackend: () => mockUseBackend() }));
 
 jest.mock('@/lib/aragora-client', () => ({
   getClient: (...args: unknown[]) => mockGetClient(...args),
@@ -23,11 +19,7 @@ jest.mock('@/lib/aragora-client', () => ({
 
 // Mock client instance
 const mockClient = {
-  debates: {
-    list: jest.fn(),
-    get: jest.fn(),
-    create: jest.fn(),
-  },
+  debates: { list: jest.fn(), get: jest.fn(), create: jest.fn() },
   health: jest.fn(),
 };
 
@@ -42,9 +34,7 @@ describe('useAragoraClient', () => {
       user: null,
     });
 
-    mockUseBackend.mockReturnValue({
-      config: { api: 'http://localhost:8080' },
-    });
+    mockUseBackend.mockReturnValue({ config: { api: 'http://localhost:8080' } });
 
     mockGetClient.mockReturnValue(mockClient);
   });
@@ -59,25 +49,15 @@ describe('useAragoraClient', () => {
     it('passes token and baseUrl to getClient', () => {
       renderHook(() => useAragoraClient());
 
-      expect(mockGetClient).toHaveBeenCalledWith(
-        'test-token',
-        'http://localhost:8080'
-      );
+      expect(mockGetClient).toHaveBeenCalledWith('test-token', 'http://localhost:8080');
     });
 
     it('passes undefined token when not authenticated', () => {
-      mockUseAuth.mockReturnValue({
-        tokens: null,
-        isAuthenticated: false,
-        user: null,
-      });
+      mockUseAuth.mockReturnValue({ tokens: null, isAuthenticated: false, user: null });
 
       renderHook(() => useAragoraClient());
 
-      expect(mockGetClient).toHaveBeenCalledWith(
-        undefined,
-        'http://localhost:8080'
-      );
+      expect(mockGetClient).toHaveBeenCalledWith(undefined, 'http://localhost:8080');
     });
 
     it('memoizes client when token and baseUrl unchanged', () => {
@@ -107,10 +87,7 @@ describe('useAragoraClient', () => {
 
       // Should create a new client
       expect(mockGetClient).toHaveBeenCalledTimes(2);
-      expect(mockGetClient).toHaveBeenLastCalledWith(
-        'new-token',
-        'http://localhost:8080'
-      );
+      expect(mockGetClient).toHaveBeenLastCalledWith('new-token', 'http://localhost:8080');
     });
 
     it('creates new client when baseUrl changes', () => {
@@ -119,18 +96,13 @@ describe('useAragoraClient', () => {
       expect(mockGetClient).toHaveBeenCalledTimes(1);
 
       // Change backend URL
-      mockUseBackend.mockReturnValue({
-        config: { api: 'http://new-backend:9000' },
-      });
+      mockUseBackend.mockReturnValue({ config: { api: 'http://new-backend:9000' } });
 
       rerender();
 
       // Should create a new client
       expect(mockGetClient).toHaveBeenCalledTimes(2);
-      expect(mockGetClient).toHaveBeenLastCalledWith(
-        'test-token',
-        'http://new-backend:9000'
-      );
+      expect(mockGetClient).toHaveBeenLastCalledWith('test-token', 'http://new-backend:9000');
     });
 
     it('handles empty access_token', () => {
@@ -159,11 +131,7 @@ describe('useAragoraClient', () => {
       expect(mockClearClient).not.toHaveBeenCalled();
 
       // Simulate logout
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        tokens: null,
-        user: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, tokens: null, user: null });
 
       rerender();
 
@@ -171,11 +139,7 @@ describe('useAragoraClient', () => {
     });
 
     it('does not clear client when already logged out', () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        tokens: null,
-        user: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, tokens: null, user: null });
 
       renderHook(() => useClientCleanup());
 
@@ -203,10 +167,7 @@ describe('useAragoraClient', () => {
 
   describe('useClientAuth', () => {
     it('returns isAuthenticated true when authenticated', () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: true,
-        user: { email: 'user@example.com' },
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: true, user: { email: 'user@example.com' } });
 
       const { result } = renderHook(() => useClientAuth());
 
@@ -214,10 +175,7 @@ describe('useAragoraClient', () => {
     });
 
     it('returns isAuthenticated false when not authenticated', () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        user: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, user: null });
 
       const { result } = renderHook(() => useClientAuth());
 
@@ -258,10 +216,7 @@ describe('useAragoraClient', () => {
     });
 
     it('returns isAdmin false when not authenticated', () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        user: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, user: null });
 
       const { result } = renderHook(() => useClientAuth());
 
@@ -280,10 +235,7 @@ describe('useAragoraClient', () => {
     });
 
     it('updates when auth state changes', () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        user: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, user: null });
 
       const { result, rerender } = renderHook(() => useClientAuth());
 

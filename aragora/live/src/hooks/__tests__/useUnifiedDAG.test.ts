@@ -1,10 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 
-import {
-  mapServerGraphToReactFlow,
-  validateDagGraph,
-  type DAGNodeData,
-} from '../useUnifiedDAG';
+import { mapServerGraphToReactFlow, validateDagGraph, type DAGNodeData } from '../useUnifiedDAG';
 
 function makeDagNode(id: string, stage: DAGNodeData['stage']): Node<DAGNodeData> {
   return {
@@ -65,12 +61,7 @@ describe('useUnifiedDAG helpers', () => {
     expect(nodes[0]).toMatchObject({
       id: 'idea-1',
       position: { x: 48, y: 120 },
-      data: {
-        stage: 'ideas',
-        subtype: 'concept',
-        status: 'running',
-        assignedAgent: 'codex',
-      },
+      data: { stage: 'ideas', subtype: 'concept', status: 'running', assignedAgent: 'codex' },
     });
 
     expect(edges[0]).toMatchObject({
@@ -78,31 +69,15 @@ describe('useUnifiedDAG helpers', () => {
       source: 'idea-1',
       target: 'goal-1',
       type: 'crossStage',
-      data: expect.objectContaining({
-        edgeType: 'derives',
-        crossStage: true,
-        weight: 0.8,
-      }),
+      data: expect.objectContaining({ edgeType: 'derives', crossStage: true, weight: 0.8 }),
     });
   });
 
   it('auto-layouts principles between ideas and goals using upstream ordering', () => {
     const { nodes } = mapServerGraphToReactFlow({
       nodes: [
-        {
-          id: 'idea-1',
-          stage: 'ideas',
-          node_subtype: 'concept',
-          label: 'Idea A',
-          position_y: 120,
-        },
-        {
-          id: 'idea-2',
-          stage: 'ideas',
-          node_subtype: 'concept',
-          label: 'Idea B',
-          position_y: 320,
-        },
+        { id: 'idea-1', stage: 'ideas', node_subtype: 'concept', label: 'Idea A', position_y: 120 },
+        { id: 'idea-2', stage: 'ideas', node_subtype: 'concept', label: 'Idea B', position_y: 320 },
         {
           id: 'principle-1',
           stage: 'principles',
@@ -139,17 +114,8 @@ describe('useUnifiedDAG helpers', () => {
   });
 
   it('validates goals connected directly from ideas when principles are absent', () => {
-    const nodes = [
-      makeDagNode('idea-1', 'ideas'),
-      makeDagNode('goal-1', 'goals'),
-    ];
-    const edges: Edge[] = [
-      {
-        id: 'edge-1',
-        source: 'idea-1',
-        target: 'goal-1',
-      },
-    ];
+    const nodes = [makeDagNode('idea-1', 'ideas'), makeDagNode('goal-1', 'goals')];
+    const edges: Edge[] = [{ id: 'edge-1', source: 'idea-1', target: 'goal-1' }];
 
     expect(validateDagGraph(nodes, edges)).toEqual([]);
   });

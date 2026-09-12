@@ -52,9 +52,7 @@ function TextInputModal({
 
         {secondaryField && (
           <>
-            <label className="block text-sm font-medium mb-1">
-              {secondaryField.label}
-            </label>
+            <label className="block text-sm font-medium mb-1">{secondaryField.label}</label>
             <input
               type="text"
               className="w-full border rounded-lg p-2 text-sm mb-3 dark:bg-zinc-800 dark:border-zinc-700"
@@ -107,16 +105,12 @@ function InterventionLogEntry({ entry }: { entry: InterventionEntry }) {
       </span>
       <div className="flex-1 min-w-0">
         {entry.message && (
-          <p className="text-sm text-zinc-700 dark:text-zinc-300 truncate">
-            {entry.message}
-          </p>
+          <p className="text-sm text-zinc-700 dark:text-zinc-300 truncate">{entry.message}</p>
         )}
         {entry.target_agent && (
           <p className="text-xs text-zinc-500">Target: {entry.target_agent}</p>
         )}
-        {entry.source && (
-          <p className="text-xs text-zinc-500">Source: {entry.source}</p>
-        )}
+        {entry.source && <p className="text-xs text-zinc-500">Source: {entry.source}</p>}
       </div>
       <span className="text-xs text-zinc-400 whitespace-nowrap">
         {formatTimestamp(entry.timestamp)}
@@ -310,13 +304,11 @@ export function InterventionPanel({
           </div>
           <div className="max-h-48 overflow-y-auto px-4 py-1">
             {log && log.entries.length > 0 ? (
-              [...log.entries].reverse().map((entry, idx) => (
-                <InterventionLogEntry key={idx} entry={entry} />
-              ))
+              [...log.entries]
+                .reverse()
+                .map((entry, idx) => <InterventionLogEntry key={idx} entry={entry} />)
             ) : (
-              <p className="text-xs text-zinc-400 py-2 text-center">
-                No interventions yet
-              </p>
+              <p className="text-xs text-zinc-400 py-2 text-center">No interventions yet</p>
             )}
           </div>
         </div>
@@ -328,10 +320,7 @@ export function InterventionPanel({
           title="Send Nudge"
           fieldName="Message"
           placeholder="Consider the economic implications..."
-          secondaryField={{
-            label: 'Target Agent (optional)',
-            placeholder: 'e.g. claude, gpt4',
-          }}
+          secondaryField={{ label: 'Target Agent (optional)', placeholder: 'e.g. claude, gpt4' }}
           onSubmit={handleNudge}
           onClose={() => setActiveModal(null)}
         />
@@ -352,10 +341,7 @@ export function InterventionPanel({
           title="Inject Evidence"
           fieldName="Evidence"
           placeholder="According to recent research..."
-          secondaryField={{
-            label: 'Source (optional)',
-            placeholder: 'e.g. https://arxiv.org/...',
-          }}
+          secondaryField={{ label: 'Source (optional)', placeholder: 'e.g. https://arxiv.org/...' }}
           onSubmit={handleEvidence}
           onClose={() => setActiveModal(null)}
         />

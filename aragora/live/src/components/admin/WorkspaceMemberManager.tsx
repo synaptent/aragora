@@ -54,7 +54,8 @@ function RoleSelector({
             : 'bg-surface-elevated text-text border-[var(--accent)]/30 hover:border-[var(--accent)]/60'
         }`}
       >
-        {currentRole.toUpperCase()} {!disabled && <span className="ml-1 text-[var(--acid-cyan)]">v</span>}
+        {currentRole.toUpperCase()}{' '}
+        {!disabled && <span className="ml-1 text-[var(--acid-cyan)]">v</span>}
       </button>
       {isOpen && (
         <>
@@ -97,7 +98,7 @@ function InviteModal({
   onClose: () => void;
 }) {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState(roles.find(r => r.isDefault)?.id || roles[0]?.id || 'member');
+  const [role, setRole] = useState(roles.find((r) => r.isDefault)?.id || roles[0]?.id || 'member');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,7 +125,9 @@ function InviteModal({
         <h3 className="font-theme-data text-lg text-[var(--accent)] mb-4">INVITE MEMBER</h3>
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block font-theme-data text-xs text-text-muted mb-2">EMAIL ADDRESS</label>
+            <label className="block font-theme-data text-xs text-text-muted mb-2">
+              EMAIL ADDRESS
+            </label>
             <input
               type="email"
               value={email}
@@ -190,53 +193,62 @@ export function WorkspaceMemberManager({
   const [showInvite, setShowInvite] = useState(false);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
-  const handleRoleChange = useCallback(async (memberId: string, newRole: string) => {
-    if (!onRoleChange) return;
+  const handleRoleChange = useCallback(
+    async (memberId: string, newRole: string) => {
+      if (!onRoleChange) return;
 
-    setProcessingIds(prev => new Set(prev).add(memberId));
-    try {
-      await onRoleChange(memberId, newRole);
-    } finally {
-      setProcessingIds(prev => {
-        const next = new Set(prev);
-        next.delete(memberId);
-        return next;
-      });
-    }
-  }, [onRoleChange]);
+      setProcessingIds((prev) => new Set(prev).add(memberId));
+      try {
+        await onRoleChange(memberId, newRole);
+      } finally {
+        setProcessingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(memberId);
+          return next;
+        });
+      }
+    },
+    [onRoleChange],
+  );
 
-  const handleAction = useCallback(async (action: string, member: WorkspaceMember) => {
-    if (action === 'remove' && onRemove) {
-      if (confirm(`Remove ${member.name || member.email} from workspace?`)) {
-        setProcessingIds(prev => new Set(prev).add(member.id));
-        try {
-          await onRemove(member.id);
-        } finally {
-          setProcessingIds(prev => {
-            const next = new Set(prev);
-            next.delete(member.id);
-            return next;
-          });
+  const handleAction = useCallback(
+    async (action: string, member: WorkspaceMember) => {
+      if (action === 'remove' && onRemove) {
+        if (confirm(`Remove ${member.name || member.email} from workspace?`)) {
+          setProcessingIds((prev) => new Set(prev).add(member.id));
+          try {
+            await onRemove(member.id);
+          } finally {
+            setProcessingIds((prev) => {
+              const next = new Set(prev);
+              next.delete(member.id);
+              return next;
+            });
+          }
         }
       }
-    }
-  }, [onRemove]);
+    },
+    [onRemove],
+  );
 
-  const handleBulkAction = useCallback(async (action: string) => {
-    if (!onBulkAction || selectedIds.length === 0) return;
+  const handleBulkAction = useCallback(
+    async (action: string) => {
+      if (!onBulkAction || selectedIds.length === 0) return;
 
-    if (action === 'remove') {
-      if (!confirm(`Remove ${selectedIds.length} member(s) from workspace?`)) return;
-    }
+      if (action === 'remove') {
+        if (!confirm(`Remove ${selectedIds.length} member(s) from workspace?`)) return;
+      }
 
-    selectedIds.forEach(id => setProcessingIds(prev => new Set(prev).add(id)));
-    try {
-      await onBulkAction(action, selectedIds);
-      setSelectedIds([]);
-    } finally {
-      setProcessingIds(new Set());
-    }
-  }, [onBulkAction, selectedIds]);
+      selectedIds.forEach((id) => setProcessingIds((prev) => new Set(prev).add(id)));
+      try {
+        await onBulkAction(action, selectedIds);
+        setSelectedIds([]);
+      } finally {
+        setProcessingIds(new Set());
+      }
+    },
+    [onBulkAction, selectedIds],
+  );
 
   const columns: Column<WorkspaceMember>[] = [
     {
@@ -359,11 +371,7 @@ export function WorkspaceMemberManager({
 
       {/* Invite Modal */}
       {showInvite && onInvite && (
-        <InviteModal
-          roles={roles}
-          onInvite={onInvite}
-          onClose={() => setShowInvite(false)}
-        />
+        <InviteModal roles={roles} onInvite={onInvite} onClose={() => setShowInvite(false)} />
       )}
     </div>
   );

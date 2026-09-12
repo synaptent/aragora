@@ -25,16 +25,8 @@ const mockCapabilities = {
 
 const mockStats = {
   stats: {
-    routing: {
-      registered_agents: 8,
-      historical_records: 1250,
-    },
-    consensus: {
-      calibration_samples: 450,
-      accuracy: 0.87,
-      precision: 0.85,
-      recall: 0.89,
-    },
+    routing: { registered_agents: 8, historical_records: 1250 },
+    consensus: { calibration_samples: 450, accuracy: 0.87, precision: 0.85, recall: 0.89 },
   },
   status: 'healthy',
 };
@@ -51,9 +43,9 @@ const mockRoutingResult = {
   agent_scores: {
     'anthropic-api': 0.95,
     'openai-api': 0.91,
-    'grok': 0.88,
-    'deepseek': 0.82,
-    'mistral': 0.79,
+    grok: 0.88,
+    deepseek: 0.82,
+    mistral: 0.79,
   },
   diversity_score: 0.85,
 };
@@ -62,8 +54,8 @@ const mockScoringResult = {
   overall: 0.85,
   coherence: 0.88,
   completeness: 0.82,
-  relevance: 0.90,
-  clarity: 0.80,
+  relevance: 0.9,
+  clarity: 0.8,
   confidence: 0.87,
   is_high_quality: true,
   needs_review: false,
@@ -232,7 +224,10 @@ test.describe('ML Dashboard - Agent Routing', () => {
       // Should show routing form elements
       const taskInput = page.locator('input, textarea').filter({ hasText: /task/i }).first();
       const agentInput = page.locator('input, textarea').first();
-      const routeButton = page.locator('button').filter({ hasText: /route|select|run/i }).first();
+      const routeButton = page
+        .locator('button')
+        .filter({ hasText: /route|select|run/i })
+        .first();
 
       const hasTaskInput = await taskInput.isVisible({ timeout: 3000 }).catch(() => false);
       const hasAgentInput = await agentInput.isVisible().catch(() => false);
@@ -257,7 +252,10 @@ test.describe('ML Dashboard - Agent Routing', () => {
         await taskInput.fill('Analyze the performance implications of microservices');
 
         // Click route button
-        const routeButton = page.locator('button').filter({ hasText: /route|select|run/i }).first();
+        const routeButton = page
+          .locator('button')
+          .filter({ hasText: /route|select|run/i })
+          .first();
         if (await routeButton.isVisible().catch(() => false)) {
           await routeButton.click();
           await page.waitForTimeout(1000);
@@ -266,7 +264,9 @@ test.describe('ML Dashboard - Agent Routing', () => {
           const selectedAgents = page.locator('text=/anthropic-api|selected.*agents/i').first();
           const confidence = page.locator('text=/92%|0\\.92|confidence/i').first();
 
-          const hasSelectedAgents = await selectedAgents.isVisible({ timeout: 5000 }).catch(() => false);
+          const hasSelectedAgents = await selectedAgents
+            .isVisible({ timeout: 5000 })
+            .catch(() => false);
           const hasConfidence = await confidence.isVisible().catch(() => false);
 
           expect(hasSelectedAgents || hasConfidence).toBeTruthy();
@@ -298,7 +298,10 @@ test.describe('ML Dashboard - Quality Scoring', () => {
 
       // Should show scoring form elements
       const textInput = page.locator('input, textarea').first();
-      const scoreButton = page.locator('button').filter({ hasText: /score|analyze|run/i }).first();
+      const scoreButton = page
+        .locator('button')
+        .filter({ hasText: /score|analyze|run/i })
+        .first();
 
       const hasTextInput = await textInput.isVisible({ timeout: 3000 }).catch(() => false);
       const hasScoreButton = await scoreButton.isVisible().catch(() => false);
@@ -323,14 +326,20 @@ test.describe('ML Dashboard - Consensus Prediction', () => {
     await page.waitForTimeout(2000);
 
     // Click predict tab
-    const predictTab = page.locator('button, [role="tab"]').filter({ hasText: /predict/i }).first();
+    const predictTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /predict/i })
+      .first();
     if (await predictTab.isVisible({ timeout: 3000 }).catch(() => false)) {
       await predictTab.click();
       await page.waitForTimeout(500);
 
       // Should show prediction form elements
       const taskInput = page.locator('input, textarea').first();
-      const predictButton = page.locator('button').filter({ hasText: /predict|run/i }).first();
+      const predictButton = page
+        .locator('button')
+        .filter({ hasText: /predict|run/i })
+        .first();
 
       const hasTaskInput = await taskInput.isVisible({ timeout: 3000 }).catch(() => false);
       const hasPredictButton = await predictButton.isVisible().catch(() => false);
@@ -379,7 +388,7 @@ test.describe('ML Dashboard - Error Handling', () => {
     // Add delay to mock response to observe loading state
     await mockApiResponse(page, '**/api/health', { status: 'ok' });
     await page.route('**/api/ml/models', async (route) => {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -392,7 +401,9 @@ test.describe('ML Dashboard - Error Handling', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Should show some content while loading (skeleton or loading indicator)
-    const loadingContent = page.locator('.animate-pulse, [aria-busy="true"], text=/loading/i').first();
+    const loadingContent = page
+      .locator('.animate-pulse, [aria-busy="true"], text=/loading/i')
+      .first();
     const mainContent = page.locator('main').first();
 
     // Page should render something during load

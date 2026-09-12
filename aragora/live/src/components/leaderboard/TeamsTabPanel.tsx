@@ -18,9 +18,7 @@ function TeamsTabPanelComponent({ teams, loading }: TeamsTabPanelProps) {
       aria-labelledby="teams-tab"
       className="space-y-2 max-h-80 overflow-y-auto"
     >
-      {loading && (
-        <div className="text-center text-text-muted py-4">Loading team data...</div>
-      )}
+      {loading && <div className="text-center text-text-muted py-4">Loading team data...</div>}
 
       {!loading && teams.length === 0 && (
         <div className="text-center text-text-muted py-4">
@@ -51,9 +49,7 @@ function TeamsTabPanelComponent({ teams, loading }: TeamsTabPanelProps) {
                   title="View agent profile"
                 >
                   {agent}
-                  {i < team.agents.length - 1 && (
-                    <span className="text-text-muted ml-1">+</span>
-                  )}
+                  {i < team.agents.length - 1 && <span className="text-text-muted ml-1">+</span>}
                 </Link>
               ))}
             </div>

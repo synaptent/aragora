@@ -25,7 +25,11 @@ interface DebateSummaryResponse {
 // Sparkline SVG
 // ---------------------------------------------------------------------------
 
-function EloSparkline({ points, width = 120, height = 32 }: {
+function EloSparkline({
+  points,
+  width = 120,
+  height = 32,
+}: {
   points: { date: string; elo: number }[];
   width?: number;
   height?: number;
@@ -85,7 +89,10 @@ function EloSparkline({ points, width = 120, height = 32 }: {
 
 function ModelComparisonChart({ agents }: { agents: AgentPerformanceEntry[] }) {
   const grouped = useMemo(() => {
-    const map: Record<string, { totalElo: number; totalWinRate: number; totalCal: number; count: number }> = {};
+    const map: Record<
+      string,
+      { totalElo: number; totalWinRate: number; totalCal: number; count: number }
+    > = {};
     agents.forEach((a) => {
       // Extract model provider from agent name (e.g., "claude-opus" -> "claude", "gpt-4" -> "gpt")
       const provider = a.name.split('-')[0] || a.name;
@@ -118,8 +125,12 @@ function ModelComparisonChart({ agents }: { agents: AgentPerformanceEntry[] }) {
         <div key={g.provider} className="p-3 bg-[var(--bg)] border border-[var(--border)] rounded">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <span className="font-theme-data text-sm text-[var(--acid-cyan)] uppercase">{g.provider}</span>
-              <span className="text-[10px] text-[var(--text-muted)] ml-2">({g.agentCount} agents)</span>
+              <span className="font-theme-data text-sm text-[var(--acid-cyan)] uppercase">
+                {g.provider}
+              </span>
+              <span className="text-[10px] text-[var(--text-muted)] ml-2">
+                ({g.agentCount} agents)
+              </span>
             </div>
             <span className="font-theme-data text-sm text-purple-400">{g.avgElo}</span>
           </div>
@@ -168,7 +179,9 @@ function DomainHeatmap({ agents }: { agents: AgentPerformanceEntry[] }) {
   }, [agents]);
 
   if (domainData.length === 0) {
-    return <p className="text-sm text-[var(--text-muted)] font-theme-data">No domain data available.</p>;
+    return (
+      <p className="text-sm text-[var(--text-muted)] font-theme-data">No domain data available.</p>
+    );
   }
 
   const maxCount = domainData[0][1];
@@ -226,10 +239,18 @@ export default function AgentPerformancePage() {
     list.sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
-        case 'elo': cmp = a.elo - b.elo; break;
-        case 'winRate': cmp = a.winRate - b.winRate; break;
-        case 'calibration': cmp = a.calibration - b.calibration; break;
-        case 'name': cmp = a.name.localeCompare(b.name); break;
+        case 'elo':
+          cmp = a.elo - b.elo;
+          break;
+        case 'winRate':
+          cmp = a.winRate - b.winRate;
+          break;
+        case 'calibration':
+          cmp = a.calibration - b.calibration;
+          break;
+        case 'name':
+          cmp = a.name.localeCompare(b.name);
+          break;
       }
       return sortAsc ? cmp : -cmp;
     });
@@ -251,15 +272,12 @@ export default function AgentPerformancePage() {
   };
 
   // Summary stats
-  const avgElo = agents.length > 0
-    ? Math.round(agents.reduce((s, a) => s + a.elo, 0) / agents.length)
-    : 0;
-  const avgWinRate = agents.length > 0
-    ? agents.reduce((s, a) => s + a.winRate, 0) / agents.length
-    : 0;
-  const avgCalibration = agents.length > 0
-    ? agents.reduce((s, a) => s + a.calibration, 0) / agents.length
-    : 0;
+  const avgElo =
+    agents.length > 0 ? Math.round(agents.reduce((s, a) => s + a.elo, 0) / agents.length) : 0;
+  const avgWinRate =
+    agents.length > 0 ? agents.reduce((s, a) => s + a.winRate, 0) / agents.length : 0;
+  const avgCalibration =
+    agents.length > 0 ? agents.reduce((s, a) => s + a.calibration, 0) / agents.length : 0;
 
   return (
     <>
@@ -284,7 +302,8 @@ export default function AgentPerformancePage() {
               {'>'} AGENT PERFORMANCE ANALYTICS
             </h1>
             <p className="text-xs text-[var(--text-muted)] font-theme-data mt-1">
-              Deep-dive into agent ELO trends, model comparisons, calibration accuracy, and domain strengths
+              Deep-dive into agent ELO trends, model comparisons, calibration accuracy, and domain
+              strengths
             </p>
           </div>
 
@@ -298,30 +317,44 @@ export default function AgentPerformancePage() {
           {/* Summary Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-              <div className="text-2xl font-theme-data text-[var(--acid-green)]">{agents.length}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Agents</div>
+              <div className="text-2xl font-theme-data text-[var(--acid-green)]">
+                {agents.length}
+              </div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Agents
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-purple-400">{avgElo}</div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Avg ELO</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Avg ELO
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-              <div className={`text-2xl font-theme-data ${avgWinRate >= 0.5 ? 'text-[var(--acid-green)]' : 'text-red-400'}`}>
+              <div
+                className={`text-2xl font-theme-data ${avgWinRate >= 0.5 ? 'text-[var(--acid-green)]' : 'text-red-400'}`}
+              >
                 {(avgWinRate * 100).toFixed(1)}%
               </div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Avg Win Rate</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Avg Win Rate
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
                 {(avgCalibration * 100).toFixed(0)}%
               </div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Avg Calibration</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Avg Calibration
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-yellow-400">
                 {debateSummary?.data?.total_debates ?? '-'}
               </div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Total Debates</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Total Debates
+              </div>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
               <div className="text-2xl font-theme-data text-[var(--text)]">
@@ -329,7 +362,9 @@ export default function AgentPerformancePage() {
                   ? `${(debateSummary.data.consensus_rate * 100).toFixed(0)}%`
                   : '-'}
               </div>
-              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Consensus Rate</div>
+              <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                Consensus Rate
+              </div>
             </div>
           </div>
 
@@ -380,7 +415,9 @@ export default function AgentPerformancePage() {
             >
               <option value="">All Domains</option>
               {allDomains.map((d) => (
-                <option key={d} value={d}>{d}</option>
+                <option key={d} value={d}>
+                  {d}
+                </option>
               ))}
             </select>
             <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
@@ -426,13 +463,19 @@ export default function AgentPerformancePage() {
                   <tbody>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse">
+                        <td
+                          colSpan={6}
+                          className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse"
+                        >
                           Loading agent data...
                         </td>
                       </tr>
                     ) : filtered.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data">
+                        <td
+                          colSpan={6}
+                          className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data"
+                        >
                           No agents match the current filters.
                         </td>
                       </tr>
@@ -456,7 +499,9 @@ export default function AgentPerformancePage() {
                             <EloSparkline points={agent.eloHistory} />
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`font-theme-data ${agent.winRate >= 0.5 ? 'text-[var(--acid-green)]' : 'text-red-400'}`}>
+                            <span
+                              className={`font-theme-data ${agent.winRate >= 0.5 ? 'text-[var(--acid-green)]' : 'text-red-400'}`}
+                            >
                               {(agent.winRate * 100).toFixed(1)}%
                             </span>
                           </td>
@@ -528,9 +573,7 @@ export default function AgentPerformancePage() {
           <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // AGENT PERFORMANCE
-          </p>
+          <p className="text-[var(--text-muted)]">{'>'} ARAGORA // AGENT PERFORMANCE</p>
         </footer>
       </main>
     </>

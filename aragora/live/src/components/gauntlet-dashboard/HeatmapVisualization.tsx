@@ -16,7 +16,7 @@ export function HeatmapVisualization({ data }: HeatmapVisualizationProps) {
     );
   }
 
-  const maxCount = Math.max(...data.cells.map(c => c.count), 1);
+  const maxCount = Math.max(...data.cells.map((c) => c.count), 1);
 
   return (
     <div className="space-y-4">
@@ -26,21 +26,26 @@ export function HeatmapVisualization({ data }: HeatmapVisualizationProps) {
           <thead>
             <tr>
               <th className="text-xs font-theme-data text-text-muted text-left p-2">Category</th>
-              {data.severities.map(sev => (
-                <th key={sev} className="text-xs font-theme-data text-text-muted text-center p-2 capitalize">
+              {data.severities.map((sev) => (
+                <th
+                  key={sev}
+                  className="text-xs font-theme-data text-text-muted text-center p-2 capitalize"
+                >
                   {sev}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {data.categories.map(category => (
+            {data.categories.map((category) => (
               <tr key={category}>
                 <td className="text-xs font-theme-data text-text p-2 capitalize">
                   {category.replace(/_/g, ' ')}
                 </td>
-                {data.severities.map(severity => {
-                  const cell = data.cells.find(c => c.category === category && c.severity === severity);
+                {data.severities.map((severity) => {
+                  const cell = data.cells.find(
+                    (c) => c.category === category && c.severity === severity,
+                  );
                   const count = cell?.count || 0;
                   const intensity = count / maxCount;
                   const bgColor = SEVERITY_COLORS[severity] || 'bg-text-muted';
@@ -67,9 +72,12 @@ export function HeatmapVisualization({ data }: HeatmapVisualizationProps) {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 justify-center text-xs font-theme-data">
-        {data.severities.map(severity => (
+        {data.severities.map((severity) => (
           <div key={severity} className="flex items-center gap-2">
-            <div className={`w-4 h-4 rounded ${SEVERITY_COLORS[severity]}`} style={{ opacity: 0.7 }} />
+            <div
+              className={`w-4 h-4 rounded ${SEVERITY_COLORS[severity]}`}
+              style={{ opacity: 0.7 }}
+            />
             <span className="text-text-muted capitalize">{severity}</span>
           </div>
         ))}

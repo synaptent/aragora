@@ -2,13 +2,9 @@ import { renderWithProviders, screen } from '@/test-utils';
 import userEvent from '@testing-library/user-event';
 import { Header } from '../Header';
 
-jest.mock('next/navigation', () => ({
-  usePathname: () => '/landing',
-}));
+jest.mock('next/navigation', () => ({ usePathname: () => '/landing' }));
 
-jest.mock('@/components/Logo', () => ({
-  Logo: () => <div data-testid="logo">Logo</div>,
-}));
+jest.mock('@/components/Logo', () => ({ Logo: () => <div data-testid="logo">Logo</div> }));
 
 jest.mock('../ThemeSelector', () => ({
   ThemeSelector: () => <div data-testid="theme-selector">Theme selector</div>,
@@ -54,10 +50,7 @@ describe('Header', () => {
         'href',
         '/pricing',
       );
-      expect(screen.getAllByRole('link', { name: /log in/i })[0]).toHaveAttribute(
-        'href',
-        '/login',
-      );
+      expect(screen.getAllByRole('link', { name: /log in/i })[0]).toHaveAttribute('href', '/login');
     });
 
     it('uses the login callback when provided', async () => {

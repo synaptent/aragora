@@ -175,9 +175,7 @@ export function FollowUpPanel({
   const awaitingCount = followups.filter((f) => f.status === 'awaiting').length;
 
   return (
-    <div
-      className={`bg-[var(--surface)] border border-[var(--border)] rounded ${className}`}
-    >
+    <div className={`bg-[var(--surface)] border border-[var(--border)] rounded ${className}`}>
       {/* Header */}
       <div className="p-4 border-b border-[var(--border)]">
         <div className="flex items-center justify-between mb-3">
@@ -278,8 +276,7 @@ export function FollowUpPanel({
                         {item.status.toUpperCase()}
                       </span>
                       <span className="text-xs text-[var(--text-muted)] font-theme-data">
-                        {item.days_waiting}d
-                        {getUrgencyIndicator(item.days_waiting, item.status)}
+                        {item.days_waiting}d{getUrgencyIndicator(item.days_waiting, item.status)}
                       </span>
                       {item.reminder_count > 0 && (
                         <span className="text-xs text-[var(--text-muted)]">
@@ -299,9 +296,7 @@ export function FollowUpPanel({
                   {item.status !== 'resolved' && item.status !== 'received' && (
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() =>
-                          handleResolve(item.followup_id, 'received')
-                        }
+                        onClick={() => handleResolve(item.followup_id, 'received')}
                         disabled={resolving === item.followup_id}
                         className="px-2 py-1 text-xs font-theme-data text-green-400 hover:bg-green-500/20 rounded transition-colors"
                         title="Mark as replied"
@@ -309,9 +304,7 @@ export function FollowUpPanel({
                         Got Reply
                       </button>
                       <button
-                        onClick={() =>
-                          handleResolve(item.followup_id, 'no_longer_needed')
-                        }
+                        onClick={() => handleResolve(item.followup_id, 'no_longer_needed')}
                         disabled={resolving === item.followup_id}
                         className="px-2 py-1 text-xs font-theme-data text-[var(--text-muted)] hover:bg-[var(--surface-hover)] rounded transition-colors"
                         title="No longer needed"
@@ -325,8 +318,7 @@ export function FollowUpPanel({
                 {/* Expected by */}
                 {item.expected_by && item.status === 'awaiting' && (
                   <div className="mt-1 text-xs text-[var(--text-muted)]">
-                    Expected by:{' '}
-                    {new Date(item.expected_by).toLocaleDateString()}
+                    Expected by: {new Date(item.expected_by).toLocaleDateString()}
                   </div>
                 )}
               </div>

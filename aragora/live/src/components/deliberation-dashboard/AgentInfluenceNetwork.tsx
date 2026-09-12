@@ -9,16 +9,13 @@ interface AgentInfluenceNetworkProps {
   height?: number;
 }
 
-export function AgentInfluenceNetwork({
-  agents,
-  height = 200,
-}: AgentInfluenceNetworkProps) {
-  const sortedAgents = useMemo(() =>
-    [...agents].sort((a, b) => b.influence_score - a.influence_score),
-    [agents]
+export function AgentInfluenceNetwork({ agents, height = 200 }: AgentInfluenceNetworkProps) {
+  const sortedAgents = useMemo(
+    () => [...agents].sort((a, b) => b.influence_score - a.influence_score),
+    [agents],
   );
 
-  const maxInfluence = Math.max(...agents.map(a => a.influence_score), 1);
+  const maxInfluence = Math.max(...agents.map((a) => a.influence_score), 1);
 
   if (agents.length === 0) {
     return (
@@ -73,12 +70,8 @@ export function AgentInfluenceNetwork({
               </div>
 
               <div className="flex items-center gap-4 text-xs font-theme-data text-text-muted">
-                <span>
-                  Consensus: {Math.round(agent.consensus_contributions * 100)}%
-                </span>
-                <span>
-                  Conf: {Math.round(agent.average_confidence * 100)}%
-                </span>
+                <span>Consensus: {Math.round(agent.consensus_contributions * 100)}%</span>
+                <span>Conf: {Math.round(agent.average_confidence * 100)}%</span>
               </div>
             </div>
           );

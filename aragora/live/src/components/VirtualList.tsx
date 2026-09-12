@@ -35,11 +35,7 @@ export function VirtualList<T>({
     const start = Math.max(0, Math.floor(scrollTop / itemHeight) - overscanCount);
     const visibleCount = Math.ceil(height / itemHeight);
     const end = Math.min(items.length - 1, start + visibleCount + overscanCount * 2);
-    return {
-      startIndex: start,
-      endIndex: end,
-      offsetY: start * itemHeight,
-    };
+    return { startIndex: start, endIndex: end, offsetY: start * itemHeight };
   }, [scrollTop, itemHeight, height, items.length, overscanCount]);
 
   // Use regular list for small item counts (virtualization overhead not worth it)

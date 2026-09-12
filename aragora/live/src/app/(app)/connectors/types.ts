@@ -17,11 +17,7 @@ export interface Connector {
   description?: string;
   status?: 'configured' | 'connected' | 'syncing' | 'error' | 'disconnected';
   config?: Record<string, unknown>;
-  schedule: {
-    interval_minutes?: number;
-    cron_expression?: string;
-    enabled: boolean;
-  };
+  schedule: { interval_minutes?: number; cron_expression?: string; enabled: boolean };
   last_run: string | null;
   next_run: string | null;
   consecutive_failures: number;

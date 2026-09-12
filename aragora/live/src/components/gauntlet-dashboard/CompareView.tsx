@@ -22,7 +22,7 @@ export function CompareView({ result1, result2, apiBase, onClose }: CompareViewP
       try {
         setCompareError(null);
         const response = await fetch(
-          `${apiBase}/api/gauntlet/${result1.gauntlet_id}/compare/${result2.gauntlet_id}`
+          `${apiBase}/api/gauntlet/${result1.gauntlet_id}/compare/${result2.gauntlet_id}`,
         );
         if (response.ok) {
           const data = await response.json();
@@ -123,25 +123,33 @@ export function CompareView({ result1, result2, apiBase, onClose }: CompareViewP
             <div className="text-xs font-theme-data text-text-muted mb-3">DELTA (A - B)</div>
             <div className="grid grid-cols-4 gap-4 text-center">
               <div>
-                <div className={`text-lg font-theme-data ${result1.critical_count - result2.critical_count > 0 ? 'text-acid-red' : result1.critical_count - result2.critical_count < 0 ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+                <div
+                  className={`text-lg font-theme-data ${result1.critical_count - result2.critical_count > 0 ? 'text-acid-red' : result1.critical_count - result2.critical_count < 0 ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+                >
                   {calcDiff(result1.critical_count, result2.critical_count)}
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">Critical</div>
               </div>
               <div>
-                <div className={`text-lg font-theme-data ${result1.high_count - result2.high_count > 0 ? 'text-warning' : result1.high_count - result2.high_count < 0 ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+                <div
+                  className={`text-lg font-theme-data ${result1.high_count - result2.high_count > 0 ? 'text-warning' : result1.high_count - result2.high_count < 0 ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+                >
                   {calcDiff(result1.high_count, result2.high_count)}
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">High</div>
               </div>
               <div>
-                <div className={`text-lg font-theme-data ${result1.total_findings - result2.total_findings > 0 ? 'text-[var(--acid-yellow)]' : result1.total_findings - result2.total_findings < 0 ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+                <div
+                  className={`text-lg font-theme-data ${result1.total_findings - result2.total_findings > 0 ? 'text-[var(--acid-yellow)]' : result1.total_findings - result2.total_findings < 0 ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+                >
                   {calcDiff(result1.total_findings, result2.total_findings)}
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">Total</div>
               </div>
               <div>
-                <div className={`text-lg font-theme-data ${result1.robustness_score - result2.robustness_score > 0 ? 'text-[var(--accent)]' : result1.robustness_score - result2.robustness_score < 0 ? 'text-acid-red' : 'text-text-muted'}`}>
+                <div
+                  className={`text-lg font-theme-data ${result1.robustness_score - result2.robustness_score > 0 ? 'text-[var(--accent)]' : result1.robustness_score - result2.robustness_score < 0 ? 'text-acid-red' : 'text-text-muted'}`}
+                >
                   {((result1.robustness_score - result2.robustness_score) * 100).toFixed(0)}%
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">Robustness</div>

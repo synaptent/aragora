@@ -96,12 +96,7 @@ const defaultMockJobs: FineTuningJob[] = [
   },
 ];
 
-const defaultMockStats = {
-  running: 1,
-  queued: 1,
-  completed: 1,
-  failed: 1,
-};
+const defaultMockStats = { running: 1, queued: 1, completed: 1, failed: 1 };
 
 describe('FineTuningDashboard', () => {
   beforeEach(() => {
@@ -117,7 +112,9 @@ describe('FineTuningDashboard', () => {
     it('renders the dashboard header', () => {
       render(<FineTuningDashboard />);
       expect(screen.getByText('FINE-TUNING PIPELINE')).toBeInTheDocument();
-      expect(screen.getByText('Train domain-specific models with LoRA adapters')).toBeInTheDocument();
+      expect(
+        screen.getByText('Train domain-specific models with LoRA adapters'),
+      ).toBeInTheDocument();
     });
 
     it('displays correct job statistics', () => {
@@ -160,8 +157,10 @@ describe('FineTuningDashboard', () => {
       render(<FineTuningDashboard />);
       // Error message is in a div with red-400 class
       const errorDiv = screen.getByText((content, element) => {
-        return element?.className?.includes('text-red-400') &&
-               element?.textContent === 'Error: Failed to connect';
+        return (
+          element?.className?.includes('text-red-400') &&
+          element?.textContent === 'Error: Failed to connect'
+        );
       });
       expect(errorDiv).toBeInTheDocument();
     });

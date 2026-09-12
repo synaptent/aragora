@@ -57,9 +57,10 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
   const handleToggle = async (triggerId: string, enabled: boolean) => {
     try {
       setActionLoading(triggerId);
-      await apiFetch(`${apiBase}/autonomous/triggers/${triggerId}/${enabled ? 'disable' : 'enable'}`, {
-        method: 'POST',
-      });
+      await apiFetch(
+        `${apiBase}/autonomous/triggers/${triggerId}/${enabled ? 'disable' : 'enable'}`,
+        { method: 'POST' },
+      );
       await fetchTriggers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to toggle trigger');
@@ -73,9 +74,7 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
 
     try {
       setActionLoading(triggerId);
-      await apiFetch(`${apiBase}/autonomous/triggers/${triggerId}`, {
-        method: 'DELETE',
-      });
+      await apiFetch(`${apiBase}/autonomous/triggers/${triggerId}`, { method: 'DELETE' });
       await fetchTriggers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete trigger');
@@ -95,12 +94,18 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
           interval_seconds: newTrigger.interval_minutes * 60,
           metadata: {
             topic: newTrigger.topic,
-            agents: newTrigger.agents.split(',').map(a => a.trim()),
+            agents: newTrigger.agents.split(',').map((a) => a.trim()),
           },
         }),
       });
       setShowCreateForm(false);
-      setNewTrigger({ trigger_id: '', name: '', interval_minutes: 60, topic: '', agents: 'anthropic-api,openai-api' });
+      setNewTrigger({
+        trigger_id: '',
+        name: '',
+        interval_minutes: 60,
+        topic: '',
+        agents: 'anthropic-api,openai-api',
+      });
       await fetchTriggers();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create trigger');
@@ -136,7 +141,9 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500/30 rounded text-red-400">
         {error}
-        <button onClick={fetchTriggers} className="ml-4 text-sm underline">Retry</button>
+        <button onClick={fetchTriggers} className="ml-4 text-sm underline">
+          Retry
+        </button>
       </div>
     );
   }
@@ -178,7 +185,11 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
 
       {/* Create Form */}
       {showCreateForm && (
-        <div className="border border-white/10 bg-white/5 rounded-lg p-4 space-y-3" role="form" aria-label="Create new trigger">
+        <div
+          className="border border-white/10 bg-white/5 rounded-lg p-4 space-y-3"
+          role="form"
+          aria-label="Create new trigger"
+        >
           <div className="grid grid-cols-2 gap-3">
             <input
               type="text"
@@ -193,7 +204,9 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
               placeholder="Interval (minutes)"
               aria-label="Interval in minutes"
               value={newTrigger.interval_minutes}
-              onChange={(e) => setNewTrigger({ ...newTrigger, interval_minutes: parseInt(e.target.value) || 60 })}
+              onChange={(e) =>
+                setNewTrigger({ ...newTrigger, interval_minutes: parseInt(e.target.value) || 60 })
+              }
               className="px-3 py-2 bg-white/5 border border-white/10 rounded text-white text-sm"
             />
             <input
@@ -243,7 +256,9 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
             <div
               key={trigger.id}
               className={`border rounded-lg p-4 ${
-                trigger.enabled ? 'border-white/10 bg-white/5' : 'border-white/5 bg-white/[0.02] opacity-60'
+                trigger.enabled
+                  ? 'border-white/10 bg-white/5'
+                  : 'border-white/5 bg-white/[0.02] opacity-60'
               }`}
             >
               <div className="flex items-center justify-between">
@@ -258,7 +273,10 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
                   </div>
                   <div className="flex items-center gap-4 mt-1 text-xs text-white/40">
                     <span>Every {formatInterval(trigger.interval_seconds)}</span>
-                    <span>Runs: {trigger.run_count}{trigger.max_runs ? `/${trigger.max_runs}` : ''}</span>
+                    <span>
+                      Runs: {trigger.run_count}
+                      {trigger.max_runs ? `/${trigger.max_runs}` : ''}
+                    </span>
                     {trigger.next_run && (
                       <span>Next: {new Date(trigger.next_run).toLocaleString()}</span>
                     )}
@@ -269,7 +287,11 @@ export function TriggersPanel({ apiBase }: TriggersPanelProps) {
                   <button
                     onClick={() => handleToggle(trigger.id, trigger.enabled)}
                     disabled={actionLoading === trigger.id}
-                    aria-label={trigger.enabled ? `Disable trigger ${trigger.name}` : `Enable trigger ${trigger.name}`}
+                    aria-label={
+                      trigger.enabled
+                        ? `Disable trigger ${trigger.name}`
+                        : `Enable trigger ${trigger.name}`
+                    }
                     className={`px-3 py-1.5 text-xs rounded transition-colors disabled:opacity-50 ${
                       trigger.enabled
                         ? 'bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-500'

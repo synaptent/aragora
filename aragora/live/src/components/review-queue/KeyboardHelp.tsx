@@ -63,10 +63,7 @@ export function KeyboardHelp({ open, onClose }: KeyboardHelpProps) {
             type="button"
             onClick={onClose}
             className="rounded-lg border px-3 py-1.5 text-xs font-theme-data uppercase tracking-wider hover:opacity-80"
-            style={{
-              borderColor: 'var(--border)',
-              color: 'var(--text-muted)',
-            }}
+            style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
           >
             close
           </button>
@@ -74,11 +71,7 @@ export function KeyboardHelp({ open, onClose }: KeyboardHelpProps) {
         <table className="mt-4 w-full">
           <tbody>
             {SHORTCUTS.map((row) => (
-              <tr
-                key={row.keys}
-                className="border-t"
-                style={{ borderColor: 'var(--border)' }}
-              >
+              <tr key={row.keys} className="border-t" style={{ borderColor: 'var(--border)' }}>
                 <td className="py-2 pr-4">
                   <kbd
                     className="rounded-md border font-theme-data"

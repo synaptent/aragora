@@ -9,7 +9,7 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const SelectionDashboard = dynamic(
-  () => import('@/components/SelectionDashboard').then(m => ({ default: m.SelectionDashboard })),
+  () => import('@/components/SelectionDashboard').then((m) => ({ default: m.SelectionDashboard })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +17,7 @@ const SelectionDashboard = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function SelectionPage() {
@@ -85,13 +85,15 @@ export default function SelectionPage() {
               {'>'} AGENT SELECTION
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Configure and use agent selection plugins for scoring agents, composing teams,
-              and assigning roles based on task requirements.
+              Configure and use agent selection plugins for scoring agents, composing teams, and
+              assigning roles based on task requirements.
             </p>
           </div>
 
           <div className="mb-6 p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
-            <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">Selection System</h3>
+            <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+              Selection System
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-theme-data text-text-muted">
               <div>
                 <span className="text-[var(--accent)]">Agent Scorers</span>
@@ -119,12 +121,8 @@ export default function SelectionPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // AGENT SELECTION
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // AGENT SELECTION</p>
         </footer>
       </main>
     </>

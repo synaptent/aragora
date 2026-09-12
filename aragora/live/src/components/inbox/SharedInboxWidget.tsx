@@ -36,12 +36,9 @@ export function SharedInboxWidget({
   const fetchSummary = useCallback(async () => {
     try {
       const baseUrl = apiBase || '';
-      const response = await fetch(
-        `${baseUrl}/api/v1/inbox/shared?workspace_id=default`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
-      );
+      const response = await fetch(`${baseUrl}/api/v1/inbox/shared?workspace_id=default`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -169,9 +166,7 @@ export function SharedInboxWidget({
         <span className="text-xs text-[var(--text-muted)]">
           {summary.total_inboxes} inbox{summary.total_inboxes !== 1 ? 'es' : ''}
         </span>
-        <span className="text-xs text-[var(--text-muted)]">
-          {summary.total_messages} total
-        </span>
+        <span className="text-xs text-[var(--text-muted)]">{summary.total_messages} total</span>
       </div>
     </div>
   );

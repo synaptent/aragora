@@ -15,9 +15,7 @@ export function CompletionStep({ onComplete }: CompletionStepProps) {
         <div className="inline-block p-4 bg-[var(--accent)]/10 border border-[var(--accent)]/30 mb-4">
           <span className="text-4xl">&#x2705;</span>
         </div>
-        <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-2">
-          You&apos;re all set!
-        </h2>
+        <h2 className="text-2xl font-theme-data text-[var(--accent)] mb-2">You&apos;re all set!</h2>
         <p className="font-theme-data text-text-muted text-sm">
           {organizationName ? `Welcome to Aragora, ${organizationName}!` : 'Welcome to Aragora!'}
         </p>
@@ -49,9 +47,7 @@ export function CompletionStep({ onComplete }: CompletionStepProps) {
         </div>
 
         <div className="p-4 bg-[var(--acid-cyan)]/5 border border-[var(--acid-cyan)]/20">
-          <h3 className="font-theme-data text-sm text-[var(--acid-cyan)] mb-2">
-            Next steps
-          </h3>
+          <h3 className="font-theme-data text-sm text-[var(--acid-cyan)] mb-2">Next steps</h3>
           <ul className="space-y-2 font-theme-data text-text-muted text-sm">
             <li className="flex items-start gap-2">
               <span className="text-[var(--acid-cyan)]">&#x2192;</span>

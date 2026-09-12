@@ -82,27 +82,16 @@ export interface ComplianceStatusResponse {
   status: string;
   compliance_score: number;
   frameworks: {
-    soc2_type2: {
-      status: string;
-      controls_assessed: number;
-      controls_compliant: number;
-    };
+    soc2_type2: { status: string; controls_assessed: number; controls_compliant: number };
     gdpr: {
       status: string;
       data_export: boolean;
       consent_tracking: boolean;
       retention_policy: boolean;
     };
-    hipaa: {
-      status: string;
-      note?: string;
-    };
+    hipaa: { status: string; note?: string };
   };
-  controls_summary: {
-    total: number;
-    compliant: number;
-    non_compliant: number;
-  };
+  controls_summary: { total: number; compliant: number; non_compliant: number };
   last_audit: string;
   next_audit_due: string;
   generated_at: string;
@@ -262,57 +251,37 @@ const MOCK_AUDIT_ENTRIES: AuditEntry[] = [
  * Falls back to mock data when the backend is unavailable.
  */
 export function useComplianceStatus(
-  options?: UseSWRFetchOptions<{ data: ComplianceStatusResponse }>
+  options?: UseSWRFetchOptions<{ data: ComplianceStatusResponse }>,
 ) {
-  const result = useSWRFetch<{ data: ComplianceStatusResponse }>(
-    '/api/v2/compliance/status',
-    {
-      refreshInterval: 120000,
-      ...options,
-    }
-  );
+  const result = useSWRFetch<{ data: ComplianceStatusResponse }>('/api/v2/compliance/status', {
+    refreshInterval: 120000,
+    ...options,
+  });
 
-  return {
-    ...result,
-    status: result.data?.data ?? null,
-  };
+  return { ...result, status: result.data?.data ?? null };
 }
 
 /**
  * Hook for RBAC coverage summary.
  * Tries /api/v1/rbac/roles for role count, falls back to mock data.
  */
-export function useRBACCoverage(
-  options?: UseSWRFetchOptions<{ data: RBACCoverage }>
-) {
-  const result = useSWRFetch<{ data: RBACCoverage }>(
-    '/api/v2/security/rbac-coverage',
-    {
-      refreshInterval: 300000,
-      ...options,
-    }
-  );
+export function useRBACCoverage(options?: UseSWRFetchOptions<{ data: RBACCoverage }>) {
+  const result = useSWRFetch<{ data: RBACCoverage }>('/api/v2/security/rbac-coverage', {
+    refreshInterval: 300000,
+    ...options,
+  });
 
-  return {
-    ...result,
-    rbac: result.data?.data ?? null,
-    rbacFallback: MOCK_RBAC_COVERAGE,
-  };
+  return { ...result, rbac: result.data?.data ?? null, rbacFallback: MOCK_RBAC_COVERAGE };
 }
 
 /**
  * Hook for encryption status.
  */
-export function useEncryptionStatus(
-  options?: UseSWRFetchOptions<{ data: EncryptionStatus }>
-) {
-  const result = useSWRFetch<{ data: EncryptionStatus }>(
-    '/api/v2/security/encryption-status',
-    {
-      refreshInterval: 300000,
-      ...options,
-    }
-  );
+export function useEncryptionStatus(options?: UseSWRFetchOptions<{ data: EncryptionStatus }>) {
+  const result = useSWRFetch<{ data: EncryptionStatus }>('/api/v2/security/encryption-status', {
+    refreshInterval: 300000,
+    ...options,
+  });
 
   return {
     ...result,
@@ -327,14 +296,11 @@ export function useEncryptionStatus(
  */
 export function useAuditTrail(
   limit: number = 10,
-  options?: UseSWRFetchOptions<{ data: AuditTrailResponse }>
+  options?: UseSWRFetchOptions<{ data: AuditTrailResponse }>,
 ) {
   const result = useSWRFetch<{ data: AuditTrailResponse }>(
     `/api/v2/compliance/audit-events?limit=${limit}&format=json`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
   return {
@@ -349,7 +315,7 @@ export function useAuditTrail(
  * or return mock data if unavailable.
  */
 export function buildFrameworkIndicators(
-  status: ComplianceStatusResponse | null
+  status: ComplianceStatusResponse | null,
 ): ComplianceFrameworks {
   if (!status) return MOCK_FRAMEWORKS;
 
@@ -357,7 +323,10 @@ export function buildFrameworkIndicators(
   const indicators: FrameworkIndicator[] = [
     {
       name: 'SOC 2 Type II',
-      status: fw.soc2_type2.status === 'in_progress' ? 'partial' : (fw.soc2_type2.status as FrameworkIndicator['status']),
+      status:
+        fw.soc2_type2.status === 'in_progress'
+          ? 'partial'
+          : (fw.soc2_type2.status as FrameworkIndicator['status']),
       controls_met: fw.soc2_type2.controls_compliant,
       controls_total: fw.soc2_type2.controls_assessed,
       last_assessed: status.last_audit,
@@ -365,15 +334,23 @@ export function buildFrameworkIndicators(
     },
     {
       name: 'GDPR',
-      status: fw.gdpr.status === 'supported' ? 'compliant' : (fw.gdpr.status as FrameworkIndicator['status']),
-      controls_met: (fw.gdpr.data_export ? 1 : 0) + (fw.gdpr.consent_tracking ? 1 : 0) + (fw.gdpr.retention_policy ? 1 : 0),
+      status:
+        fw.gdpr.status === 'supported'
+          ? 'compliant'
+          : (fw.gdpr.status as FrameworkIndicator['status']),
+      controls_met:
+        (fw.gdpr.data_export ? 1 : 0) +
+        (fw.gdpr.consent_tracking ? 1 : 0) +
+        (fw.gdpr.retention_policy ? 1 : 0),
       controls_total: 3,
       last_assessed: status.last_audit,
       notes: [
         fw.gdpr.data_export && 'Data export',
         fw.gdpr.consent_tracking && 'Consent tracking',
         fw.gdpr.retention_policy && 'Retention policy',
-      ].filter(Boolean).join(', '),
+      ]
+        .filter(Boolean)
+        .join(', '),
     },
     {
       name: 'EU AI Act',

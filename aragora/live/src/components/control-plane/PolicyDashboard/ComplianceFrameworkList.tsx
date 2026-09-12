@@ -45,9 +45,9 @@ export function ComplianceFrameworkList({
     }
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      result = result.filter((fw) =>
-        fw.name.toLowerCase().includes(query) ||
-        fw.description.toLowerCase().includes(query)
+      result = result.filter(
+        (fw) =>
+          fw.name.toLowerCase().includes(query) || fw.description.toLowerCase().includes(query),
       );
     }
     return result;
@@ -85,7 +85,9 @@ export function ComplianceFrameworkList({
         >
           <option value="">All Verticals</option>
           {verticals.map((v) => (
-            <option key={v.id} value={v.id}>{v.name}</option>
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
           ))}
         </select>
       </div>
@@ -110,22 +112,30 @@ export function ComplianceFrameworkList({
                       key={fw.framework_id}
                       onClick={() => handleClick(fw)}
                       className={`p-4 bg-bg border rounded-lg cursor-pointer transition-all ${
-                        expandedId === fw.framework_id ? 'border-[var(--accent)]' : 'border-border hover:border-text-muted'
+                        expandedId === fw.framework_id
+                          ? 'border-[var(--accent)]'
+                          : 'border-border hover:border-text-muted'
                       } ${!fw.enabled ? 'opacity-60' : ''}`}
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h4 className="font-theme-data font-bold text-text">{fw.name}</h4>
-                          <span className="text-xs font-theme-data text-text-muted">{fw.framework_id.toUpperCase()}</span>
+                          <span className="text-xs font-theme-data text-text-muted">
+                            {fw.framework_id.toUpperCase()}
+                          </span>
                         </div>
-                        <span className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded border ${LEVEL_COLORS[fw.level]}`}>
+                        <span
+                          className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded border ${LEVEL_COLORS[fw.level]}`}
+                        >
                           {fw.level}
                         </span>
                       </div>
                       <p className="text-sm text-text-muted mb-3">{fw.description}</p>
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-text-muted">{fw.rules_count} rules</span>
-                        <span className={`px-2 py-0.5 rounded ${fw.enabled ? 'bg-green-900/30 text-green-400' : 'bg-surface text-text-muted'}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded ${fw.enabled ? 'bg-green-900/30 text-green-400' : 'bg-surface text-text-muted'}`}
+                        >
                           {fw.enabled ? 'ENABLED' : 'DISABLED'}
                         </span>
                       </div>
@@ -135,11 +145,13 @@ export function ComplianceFrameworkList({
                             <button className="flex-1 px-3 py-1.5 text-xs font-theme-data bg-surface border border-border rounded hover:border-[var(--accent)] transition-colors">
                               Configure
                             </button>
-                            <button className={`flex-1 px-3 py-1.5 text-xs font-theme-data rounded transition-colors ${
-                              fw.enabled
-                                ? 'bg-red-900/30 text-red-400 border border-red-800/30'
-                                : 'bg-green-900/30 text-green-400 border border-green-800/30'
-                            }`}>
+                            <button
+                              className={`flex-1 px-3 py-1.5 text-xs font-theme-data rounded transition-colors ${
+                                fw.enabled
+                                  ? 'bg-red-900/30 text-red-400 border border-red-800/30'
+                                  : 'bg-green-900/30 text-green-400 border border-green-800/30'
+                              }`}
+                            >
                               {fw.enabled ? 'Disable' : 'Enable'}
                             </button>
                           </div>

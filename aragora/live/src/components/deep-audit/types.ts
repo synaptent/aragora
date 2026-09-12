@@ -50,11 +50,36 @@ export interface AuditRoundInfo {
 }
 
 export const AUDIT_ROUNDS: AuditRoundInfo[] = [
-  { round: 1, name: 'Initial Analysis', icon: '🔬', description: 'Agents present initial assessments' },
-  { round: 2, name: 'Skeptical Review', icon: '🤔', description: 'Challenge assumptions and identify gaps' },
-  { round: 3, name: 'Lateral Exploration', icon: '💡', description: 'Explore alternative perspectives' },
-  { round: 4, name: "Devil's Advocacy", icon: '😈', description: 'Argue against the emerging consensus' },
-  { round: 5, name: 'Synthesis', icon: '⚖️', description: 'Integrate insights into recommendations' },
+  {
+    round: 1,
+    name: 'Initial Analysis',
+    icon: '🔬',
+    description: 'Agents present initial assessments',
+  },
+  {
+    round: 2,
+    name: 'Skeptical Review',
+    icon: '🤔',
+    description: 'Challenge assumptions and identify gaps',
+  },
+  {
+    round: 3,
+    name: 'Lateral Exploration',
+    icon: '💡',
+    description: 'Explore alternative perspectives',
+  },
+  {
+    round: 4,
+    name: "Devil's Advocacy",
+    icon: '😈',
+    description: 'Argue against the emerging consensus',
+  },
+  {
+    round: 5,
+    name: 'Synthesis',
+    icon: '⚖️',
+    description: 'Integrate insights into recommendations',
+  },
   { round: 6, name: 'Cross-Examination', icon: '🎯', description: 'Final probing of conclusions' },
 ];
 
@@ -65,8 +90,23 @@ export const STATUS_CONFIG = {
 } as const;
 
 export const CATEGORY_CONFIG = {
-  unanimous: { icon: '✅', color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/30' },
-  split: { icon: '⚖️', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' },
+  unanimous: {
+    icon: '✅',
+    color: 'text-green-400',
+    bg: 'bg-green-500/10',
+    border: 'border-green-500/30',
+  },
+  split: {
+    icon: '⚖️',
+    color: 'text-yellow-400',
+    bg: 'bg-yellow-500/10',
+    border: 'border-yellow-500/30',
+  },
   risk: { icon: '⚠️', color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30' },
-  insight: { icon: '💡', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
+  insight: {
+    icon: '💡',
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10',
+    border: 'border-blue-500/30',
+  },
 } as const;

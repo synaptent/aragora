@@ -34,11 +34,7 @@ export const ENDPOINTS: Endpoint[] = [
     path: '/api/v2/debates',
     description: 'Create a new debate',
     group: 'Debates',
-    body: {
-      task: 'Should we use microservices?',
-      agents: ['claude', 'openai'],
-      rounds: 3,
-    },
+    body: { task: 'Should we use microservices?', agents: ['claude', 'openai'], rounds: 3 },
   },
   {
     method: 'GET',
@@ -65,12 +61,7 @@ export const ENDPOINTS: Endpoint[] = [
     parameters: [{ name: 'debate_id', in: 'path', required: true }],
   },
   // Agents
-  {
-    method: 'GET',
-    path: '/api/v2/agents',
-    description: 'List available agents',
-    group: 'Agents',
-  },
+  { method: 'GET', path: '/api/v2/agents', description: 'List available agents', group: 'Agents' },
   {
     method: 'GET',
     path: '/api/v2/agents/{agent_id}',
@@ -100,24 +91,9 @@ export const ENDPOINTS: Endpoint[] = [
     group: 'Knowledge',
   },
   // Health
-  {
-    method: 'GET',
-    path: '/api/v2/health',
-    description: 'Health check',
-    group: 'System',
-  },
-  {
-    method: 'GET',
-    path: '/api/v2/health/ready',
-    description: 'Readiness probe',
-    group: 'System',
-  },
-  {
-    method: 'GET',
-    path: '/api/v2/metrics',
-    description: 'Prometheus metrics',
-    group: 'System',
-  },
+  { method: 'GET', path: '/api/v2/health', description: 'Health check', group: 'System' },
+  { method: 'GET', path: '/api/v2/health/ready', description: 'Readiness probe', group: 'System' },
+  { method: 'GET', path: '/api/v2/metrics', description: 'Prometheus metrics', group: 'System' },
 ];
 
 interface EndpointSelectorProps {

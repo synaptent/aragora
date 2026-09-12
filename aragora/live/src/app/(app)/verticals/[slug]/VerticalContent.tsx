@@ -14,7 +14,8 @@ const VERTICALS = {
     tagline: 'AI-Powered Legal Analysis & Compliance',
     icon: '\u2696\ufe0f',
     color: 'blue',
-    description: 'Multi-agent debate for contract review, due diligence, regulatory compliance, and legal risk assessment.',
+    description:
+      'Multi-agent debate for contract review, due diligence, regulatory compliance, and legal risk assessment.',
     heroImage: '/images/verticals/legal-hero.png',
     stats: [
       { value: '85%', label: 'Faster contract review' },
@@ -24,38 +25,68 @@ const VERTICALS = {
     useCases: [
       {
         title: 'Contract Review',
-        description: 'Automated analysis of contracts for risks, obligations, and non-standard terms.',
+        description:
+          'Automated analysis of contracts for risks, obligations, and non-standard terms.',
         icon: '\ud83d\udcdd',
-        details: ['Risk clause detection', 'Obligation extraction', 'Term comparison', 'Redline suggestions'],
+        details: [
+          'Risk clause detection',
+          'Obligation extraction',
+          'Term comparison',
+          'Redline suggestions',
+        ],
       },
       {
         title: 'Due Diligence',
         description: 'Comprehensive document review for M&A, investments, and partnerships.',
         icon: '\ud83d\udd0d',
-        details: ['Document categorization', 'Issue flagging', 'Risk scoring', 'Summary generation'],
+        details: [
+          'Document categorization',
+          'Issue flagging',
+          'Risk scoring',
+          'Summary generation',
+        ],
       },
       {
         title: 'Regulatory Compliance',
         description: 'Multi-framework compliance checking against GDPR, CCPA, SOX, and more.',
         icon: '\u2705',
-        details: ['Policy gap analysis', 'Compliance mapping', 'Audit preparation', 'Remediation tracking'],
+        details: [
+          'Policy gap analysis',
+          'Compliance mapping',
+          'Audit preparation',
+          'Remediation tracking',
+        ],
       },
       {
         title: 'Legal Research',
         description: 'Case law analysis and precedent research with multi-agent validation.',
         icon: '\ud83d\udcda',
-        details: ['Case similarity matching', 'Argument synthesis', 'Citation verification', 'Strategy recommendations'],
+        details: [
+          'Case similarity matching',
+          'Argument synthesis',
+          'Citation verification',
+          'Strategy recommendations',
+        ],
       },
     ],
     agents: [
-      { name: 'Contract Analyst', specialty: 'Commercial agreements & terms', icon: '\ud83d\udcdc' },
-      { name: 'Compliance Officer', specialty: 'Regulatory frameworks & policies', icon: '\ud83d\udee1\ufe0f' },
+      {
+        name: 'Contract Analyst',
+        specialty: 'Commercial agreements & terms',
+        icon: '\ud83d\udcdc',
+      },
+      {
+        name: 'Compliance Officer',
+        specialty: 'Regulatory frameworks & policies',
+        icon: '\ud83d\udee1\ufe0f',
+      },
       { name: 'Risk Assessor', specialty: 'Legal liability & exposure', icon: '\u26a0\ufe0f' },
       { name: 'IP Specialist', specialty: 'Intellectual property & patents', icon: '\ud83d\udca1' },
     ],
     compliance: ['GDPR', 'CCPA', 'SOX', 'HIPAA', 'SEC', 'FTC'],
     testimonial: {
-      quote: 'Aragora reduced our contract review time by 70% while catching edge cases we would have missed.',
+      quote:
+        'Aragora reduced our contract review time by 70% while catching edge cases we would have missed.',
       author: 'Sarah Chen',
       role: 'General Counsel',
       company: 'TechCorp Inc.',
@@ -66,7 +97,8 @@ const VERTICALS = {
     tagline: 'Clinical AI with Compliance Built In',
     icon: '\ud83c\udfe5',
     color: 'green',
-    description: 'HIPAA-compliant multi-agent analysis for clinical documentation, research validation, and healthcare operations.',
+    description:
+      'HIPAA-compliant multi-agent analysis for clinical documentation, research validation, and healthcare operations.',
     heroImage: '/images/verticals/healthcare-hero.png',
     stats: [
       { value: 'HIPAA', label: 'Controls built in' },
@@ -78,7 +110,12 @@ const VERTICALS = {
         title: 'Clinical Documentation',
         description: 'Review and improve clinical notes, discharge summaries, and medical records.',
         icon: '\ud83d\udccb',
-        details: ['Note completeness check', 'Terminology standardization', 'Coding suggestions', 'Quality metrics'],
+        details: [
+          'Note completeness check',
+          'Terminology standardization',
+          'Coding suggestions',
+          'Quality metrics',
+        ],
       },
       {
         title: 'Research Validation',
@@ -96,18 +133,32 @@ const VERTICALS = {
         title: 'Care Coordination',
         description: 'AI-assisted care plan review and interdisciplinary communication.',
         icon: '\ud83e\ude7a',
-        details: ['Care gap analysis', 'Treatment alignment', 'Handoff verification', 'Outcome tracking'],
+        details: [
+          'Care gap analysis',
+          'Treatment alignment',
+          'Handoff verification',
+          'Outcome tracking',
+        ],
       },
     ],
     agents: [
-      { name: 'Clinical Reviewer', specialty: 'Medical documentation & coding', icon: '\ud83e\udda0' },
-      { name: 'Compliance Auditor', specialty: 'HIPAA & regulatory adherence', icon: '\ud83d\udee1\ufe0f' },
+      {
+        name: 'Clinical Reviewer',
+        specialty: 'Medical documentation & coding',
+        icon: '\ud83e\udda0',
+      },
+      {
+        name: 'Compliance Auditor',
+        specialty: 'HIPAA & regulatory adherence',
+        icon: '\ud83d\udee1\ufe0f',
+      },
       { name: 'Research Validator', specialty: 'Clinical trial methodology', icon: '\ud83d\udd2c' },
       { name: 'Quality Analyst', specialty: 'Care quality metrics', icon: '\ud83d\udcca' },
     ],
     compliance: ['HIPAA', 'HITECH', 'FDA', '21 CFR Part 11', 'GDPR-Health'],
     testimonial: {
-      quote: 'The multi-agent approach catches inconsistencies in clinical documentation that single-pass AI misses.',
+      quote:
+        'The multi-agent approach catches inconsistencies in clinical documentation that single-pass AI misses.',
       author: 'Dr. Michael Torres',
       role: 'Chief Medical Officer',
       company: 'Regional Health System',
@@ -118,7 +169,8 @@ const VERTICALS = {
     tagline: 'Quantitative Analysis Meets AI Consensus',
     icon: '\ud83d\udcb0',
     color: 'yellow',
-    description: 'Multi-agent financial analysis for investment decisions, risk assessment, and regulatory compliance.',
+    description:
+      'Multi-agent financial analysis for investment decisions, risk assessment, and regulatory compliance.',
     heroImage: '/images/verticals/finance-hero.png',
     stats: [
       { value: '360\u00b0', label: 'Analysis coverage' },
@@ -128,9 +180,15 @@ const VERTICALS = {
     useCases: [
       {
         title: 'Investment Analysis',
-        description: 'Multi-perspective evaluation of investment opportunities and portfolio decisions.',
+        description:
+          'Multi-perspective evaluation of investment opportunities and portfolio decisions.',
         icon: '\ud83d\udcc8',
-        details: ['Fundamental analysis', 'Technical indicators', 'Risk modeling', 'Scenario planning'],
+        details: [
+          'Fundamental analysis',
+          'Technical indicators',
+          'Risk modeling',
+          'Scenario planning',
+        ],
       },
       {
         title: 'Risk Assessment',
@@ -148,18 +206,28 @@ const VERTICALS = {
         title: 'Due Diligence',
         description: 'M&A and investment due diligence with multi-agent validation.',
         icon: '\ud83d\udd0d',
-        details: ['Financial modeling', 'Synergy analysis', 'Risk identification', 'Valuation review'],
+        details: [
+          'Financial modeling',
+          'Synergy analysis',
+          'Risk identification',
+          'Valuation review',
+        ],
       },
     ],
     agents: [
       { name: 'Quant Analyst', specialty: 'Quantitative modeling & data', icon: '\ud83d\udcca' },
-      { name: 'Risk Manager', specialty: 'Risk identification & mitigation', icon: '\ud83d\udee1\ufe0f' },
+      {
+        name: 'Risk Manager',
+        specialty: 'Risk identification & mitigation',
+        icon: '\ud83d\udee1\ufe0f',
+      },
       { name: 'Compliance Officer', specialty: 'Regulatory requirements', icon: '\u2696\ufe0f' },
       { name: 'Market Strategist', specialty: 'Market dynamics & trends', icon: '\ud83c\udf10' },
     ],
     compliance: ['SEC', 'FINRA', 'SOX', 'GDPR', 'MiFID II', 'Basel III'],
     testimonial: {
-      quote: 'Aragora\'s adversarial analysis uncovered risks in our portfolio that traditional models missed.',
+      quote:
+        "Aragora's adversarial analysis uncovered risks in our portfolio that traditional models missed.",
       author: 'James Wright',
       role: 'Chief Risk Officer',
       company: 'Capital Partners LLC',
@@ -170,7 +238,8 @@ const VERTICALS = {
     tagline: 'AI Code Review That Thinks Like Your Team',
     icon: '\ud83d\udcbb',
     color: 'purple',
-    description: 'Multi-agent code review, architecture validation, and security analysis for development teams.',
+    description:
+      'Multi-agent code review, architecture validation, and security analysis for development teams.',
     heroImage: '/images/verticals/software-hero.png',
     stats: [
       { value: '3x', label: 'Faster code reviews' },
@@ -182,13 +251,23 @@ const VERTICALS = {
         title: 'Code Review',
         description: 'Multi-perspective code analysis for quality, security, and best practices.',
         icon: '\ud83d\udd0d',
-        details: ['Style consistency', 'Bug detection', 'Performance issues', 'Security vulnerabilities'],
+        details: [
+          'Style consistency',
+          'Bug detection',
+          'Performance issues',
+          'Security vulnerabilities',
+        ],
       },
       {
         title: 'Architecture Review',
         description: 'System design validation with trade-off analysis.',
         icon: '\ud83c\udfd7\ufe0f',
-        details: ['Scalability analysis', 'Pattern compliance', 'Coupling assessment', 'Migration planning'],
+        details: [
+          'Scalability analysis',
+          'Pattern compliance',
+          'Coupling assessment',
+          'Migration planning',
+        ],
       },
       {
         title: 'Security Audit',
@@ -200,18 +279,28 @@ const VERTICALS = {
         title: 'Tech Debt Assessment',
         description: 'Quantify and prioritize technical debt with multi-agent consensus.',
         icon: '\ud83d\udcb3',
-        details: ['Debt identification', 'Impact scoring', 'Remediation planning', 'Progress tracking'],
+        details: [
+          'Debt identification',
+          'Impact scoring',
+          'Remediation planning',
+          'Progress tracking',
+        ],
       },
     ],
     agents: [
-      { name: 'Senior Engineer', specialty: 'Code quality & patterns', icon: '\ud83d\udc68\u200d\ud83d\udcbb' },
+      {
+        name: 'Senior Engineer',
+        specialty: 'Code quality & patterns',
+        icon: '\ud83d\udc68\u200d\ud83d\udcbb',
+      },
       { name: 'Security Researcher', specialty: 'Vulnerability analysis', icon: '\ud83d\udd12' },
       { name: 'Architect', specialty: 'System design & scalability', icon: '\ud83c\udfd7\ufe0f' },
       { name: 'Performance Engineer', specialty: 'Optimization & efficiency', icon: '\u26a1' },
     ],
     compliance: ['SOC 2', 'ISO 27001', 'OWASP', 'PCI DSS', 'GDPR'],
     testimonial: {
-      quote: 'The multi-agent approach catches architectural issues that single-tool analysis completely misses.',
+      quote:
+        'The multi-agent approach catches architectural issues that single-tool analysis completely misses.',
       author: 'Lisa Park',
       role: 'VP of Engineering',
       company: 'ScaleTech Solutions',
@@ -222,7 +311,8 @@ const VERTICALS = {
     tagline: 'Rigorous Peer Review at AI Speed',
     icon: '\ud83c\udf93',
     color: 'cyan',
-    description: 'Multi-agent academic validation for research papers, grant proposals, and literature reviews.',
+    description:
+      'Multi-agent academic validation for research papers, grant proposals, and literature reviews.',
     heroImage: '/images/verticals/research-hero.png',
     stats: [
       { value: '10x', label: 'Faster literature review' },
@@ -234,7 +324,12 @@ const VERTICALS = {
         title: 'Paper Review',
         description: 'Multi-perspective manuscript review mimicking peer review process.',
         icon: '\ud83d\udcc4',
-        details: ['Methodology critique', 'Statistical validation', 'Literature gaps', 'Writing quality'],
+        details: [
+          'Methodology critique',
+          'Statistical validation',
+          'Literature gaps',
+          'Writing quality',
+        ],
       },
       {
         title: 'Literature Synthesis',
@@ -246,7 +341,12 @@ const VERTICALS = {
         title: 'Grant Proposal Review',
         description: 'Strengthen proposals with adversarial critique and improvement suggestions.',
         icon: '\ud83d\udcdd',
-        details: ['Significance evaluation', 'Methodology review', 'Budget justification', 'Impact assessment'],
+        details: [
+          'Significance evaluation',
+          'Methodology review',
+          'Budget justification',
+          'Impact assessment',
+        ],
       },
       {
         title: 'Research Validation',
@@ -256,14 +356,19 @@ const VERTICALS = {
       },
     ],
     agents: [
-      { name: 'Domain Expert', specialty: 'Subject matter expertise', icon: '\ud83e\uddd1\u200d\ud83c\udfeb' },
+      {
+        name: 'Domain Expert',
+        specialty: 'Subject matter expertise',
+        icon: '\ud83e\uddd1\u200d\ud83c\udfeb',
+      },
       { name: 'Methodologist', specialty: 'Research design & statistics', icon: '\ud83d\udcca' },
       { name: 'Editor', specialty: 'Academic writing & clarity', icon: '\u270d\ufe0f' },
       { name: 'Skeptic', specialty: 'Critical analysis & challenges', icon: '\ud83e\udd14' },
     ],
     compliance: ['IRB', 'ORCID', 'DOI', 'Open Access Policies'],
     testimonial: {
-      quote: 'Aragora helped us identify methodological issues in our paper before submission, saving months of revision.',
+      quote:
+        'Aragora helped us identify methodological issues in our paper before submission, saving months of revision.',
       author: 'Dr. Emily Chen',
       role: 'Associate Professor',
       company: 'Stanford University',
@@ -274,38 +379,39 @@ const VERTICALS = {
 type VerticalSlug = keyof typeof VERTICALS;
 
 function getColorClasses(color: string) {
-  const colors: Record<string, { primary: string; secondary: string; bg: string; border: string }> = {
-    blue: {
-      primary: 'text-blue-400',
-      secondary: 'text-blue-300',
-      bg: 'bg-blue-500/10',
-      border: 'border-blue-500/30',
-    },
-    green: {
-      primary: 'text-green-400',
-      secondary: 'text-green-300',
-      bg: 'bg-green-500/10',
-      border: 'border-green-500/30',
-    },
-    yellow: {
-      primary: 'text-yellow-400',
-      secondary: 'text-yellow-300',
-      bg: 'bg-yellow-500/10',
-      border: 'border-yellow-500/30',
-    },
-    purple: {
-      primary: 'text-purple-400',
-      secondary: 'text-purple-300',
-      bg: 'bg-purple-500/10',
-      border: 'border-purple-500/30',
-    },
-    cyan: {
-      primary: 'text-cyan-400',
-      secondary: 'text-cyan-300',
-      bg: 'bg-cyan-500/10',
-      border: 'border-cyan-500/30',
-    },
-  };
+  const colors: Record<string, { primary: string; secondary: string; bg: string; border: string }> =
+    {
+      blue: {
+        primary: 'text-blue-400',
+        secondary: 'text-blue-300',
+        bg: 'bg-blue-500/10',
+        border: 'border-blue-500/30',
+      },
+      green: {
+        primary: 'text-green-400',
+        secondary: 'text-green-300',
+        bg: 'bg-green-500/10',
+        border: 'border-green-500/30',
+      },
+      yellow: {
+        primary: 'text-yellow-400',
+        secondary: 'text-yellow-300',
+        bg: 'bg-yellow-500/10',
+        border: 'border-yellow-500/30',
+      },
+      purple: {
+        primary: 'text-purple-400',
+        secondary: 'text-purple-300',
+        bg: 'bg-purple-500/10',
+        border: 'border-purple-500/30',
+      },
+      cyan: {
+        primary: 'text-cyan-400',
+        secondary: 'text-cyan-300',
+        bg: 'bg-cyan-500/10',
+        border: 'border-cyan-500/30',
+      },
+    };
   return colors[color] || colors.blue;
 }
 
@@ -372,9 +478,7 @@ export default function VerticalContent({ slug }: VerticalContentProps) {
               </div>
             </div>
 
-            <p className="text-lg text-text max-w-3xl mb-8">
-              {vertical.description}
-            </p>
+            <p className="text-lg text-text max-w-3xl mb-8">{vertical.description}</p>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-6 max-w-2xl">
@@ -412,19 +516,14 @@ export default function VerticalContent({ slug }: VerticalContentProps) {
             <h2 className="text-2xl font-theme-data font-bold text-text mb-8">Use Cases</h2>
             <div className="grid md:grid-cols-2 gap-6">
               {vertical.useCases.map((useCase, i) => (
-                <div
-                  key={i}
-                  className={`p-6 bg-surface border ${colors.border} rounded-lg`}
-                >
+                <div key={i} className={`p-6 bg-surface border ${colors.border} rounded-lg`}>
                   <div className="flex items-start gap-4">
                     <span className="text-3xl">{useCase.icon}</span>
                     <div className="flex-1">
                       <h3 className={`text-lg font-theme-data font-bold ${colors.primary}`}>
                         {useCase.title}
                       </h3>
-                      <p className="text-text-muted text-sm mt-1 mb-4">
-                        {useCase.description}
-                      </p>
+                      <p className="text-text-muted text-sm mt-1 mb-4">{useCase.description}</p>
                       <div className="flex flex-wrap gap-2">
                         {useCase.details.map((detail, j) => (
                           <span
@@ -462,7 +561,9 @@ export default function VerticalContent({ slug }: VerticalContentProps) {
         {/* Compliance */}
         <section className="py-16 px-4 border-b border-border">
           <div className="max-w-6xl mx-auto">
-            <h2 className="text-2xl font-theme-data font-bold text-text mb-8">Compliance Frameworks</h2>
+            <h2 className="text-2xl font-theme-data font-bold text-text mb-8">
+              Compliance Frameworks
+            </h2>
             <div className="flex flex-wrap gap-3">
               {vertical.compliance.map((framework, i) => (
                 <span
@@ -483,7 +584,9 @@ export default function VerticalContent({ slug }: VerticalContentProps) {
               &ldquo;{vertical.testimonial.quote}&rdquo;
             </blockquote>
             <div className="flex items-center justify-center gap-4">
-              <div className={`w-12 h-12 rounded-full ${colors.bg} flex items-center justify-center`}>
+              <div
+                className={`w-12 h-12 rounded-full ${colors.bg} flex items-center justify-center`}
+              >
                 <span className="text-xl">{vertical.icon}</span>
               </div>
               <div className="text-left">

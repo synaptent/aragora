@@ -1,0 +1,9 @@
+{
+  "tool": "knip",
+  "version": 1,
+  "generated_at": "2026-09-11T22:58:03Z",
+  "findings": {
+    "package.json::clsx::dependencies": 1,
+    "package.json::vercel::binaries": 1
+  }
+}

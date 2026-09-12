@@ -1,15 +1,18 @@
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
 
 const EXTENSION_DIR = __dirname;
 
 function readExtensionFile(name) {
-  return fs.readFileSync(path.join(EXTENSION_DIR, name), "utf8");
+  return fs.readFileSync(path.join(EXTENSION_DIR, name), 'utf8');
 }
 
 function loadPopupDocument() {
-  document.documentElement.innerHTML = readExtensionFile("popup.html").replace(/<!doctype html>\s*/i, "");
+  document.documentElement.innerHTML = readExtensionFile('popup.html').replace(
+    /<!doctype html>\s*/i,
+    '',
+  );
 }
 
 function createStorageArea(initialState, areaName, changeListeners) {
@@ -17,7 +20,7 @@ function createStorageArea(initialState, areaName, changeListeners) {
 
   return {
     async get(query) {
-      if (typeof query === "string") {
+      if (typeof query === 'string') {
         return { [query]: state[query] };
       }
 
@@ -25,7 +28,7 @@ function createStorageArea(initialState, areaName, changeListeners) {
         return Object.fromEntries(query.map((key) => [key, state[key]]));
       }
 
-      if (query && typeof query === "object") {
+      if (query && typeof query === 'object') {
         return { ...query, ...state };
       }
 
@@ -36,11 +39,8 @@ function createStorageArea(initialState, areaName, changeListeners) {
       const changes = Object.fromEntries(
         Object.entries(values).map(([key, value]) => [
           key,
-          {
-            oldValue: state[key],
-            newValue: value,
-          },
-        ])
+          { oldValue: state[key], newValue: value },
+        ]),
       );
       state = { ...state, ...values };
 
@@ -111,13 +111,19 @@ function createChromeMock(options = {}) {
         },
       },
     },
-    tabs: {
-      sendMessage: jest.fn(async () => options.sendMessageResult ?? null),
-    },
+    tabs: { sendMessage: jest.fn(async () => options.sendMessageResult ?? null) },
   };
 
-  chrome.storage.local = createStorageArea(options.localState || {}, "local", listeners.storageChanged);
-  chrome.storage.sync = createStorageArea(options.syncState || {}, "sync", listeners.storageChanged);
+  chrome.storage.local = createStorageArea(
+    options.localState || {},
+    'local',
+    listeners.storageChanged,
+  );
+  chrome.storage.sync = createStorageArea(
+    options.syncState || {},
+    'sync',
+    listeners.storageChanged,
+  );
   chrome.__listeners = listeners;
 
   return chrome;
@@ -154,12 +160,7 @@ function loadExtensionScript(fileName, overrides = {}) {
   vm.createContext(context);
   vm.runInContext(readExtensionFile(fileName), context, { filename: fileName });
 
-  return {
-    chrome,
-    consoleMock,
-    context,
-    fetchMock,
-  };
+  return { chrome, consoleMock, context, fetchMock };
 }
 
 async function flushMicrotasks(turns = 8) {

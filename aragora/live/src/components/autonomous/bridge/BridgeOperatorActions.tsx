@@ -33,10 +33,7 @@ export function BridgeOperatorActions({ run, onDispatched }: BridgeOperatorActio
         if (mode === 'auto-step') {
           const event = await apiFetch<AgentBridgeEvent & { auto_step?: unknown }>(
             `/api/v1/agent-bridge/runs/${encodeURIComponent(run.run_id)}/auto-step`,
-            {
-              method: 'POST',
-              body: JSON.stringify({}),
-            }
+            { method: 'POST', body: JSON.stringify({}) },
           );
           setMessage(`Auto-step dispatched ${event.role} turn ${event.turn_index}.`);
         } else {
@@ -47,10 +44,7 @@ export function BridgeOperatorActions({ run, onDispatched }: BridgeOperatorActio
           }
           const event = await apiFetch<AgentBridgeEvent>(
             `/api/v1/agent-bridge/runs/${encodeURIComponent(run.run_id)}/dispatch`,
-            {
-              method: 'POST',
-              body: JSON.stringify({ role, prompt: trimmedPrompt }),
-            }
+            { method: 'POST', body: JSON.stringify({ role, prompt: trimmedPrompt }) },
           );
           setPrompt('');
           setMessage(`Dispatched ${event.role} turn ${event.turn_index}.`);
@@ -75,8 +69,8 @@ export function BridgeOperatorActions({ run, onDispatched }: BridgeOperatorActio
             Operator actions
           </div>
           <p className="mt-2 max-w-3xl text-sm text-white/60">
-            Write actions are owner/admin gated and require ARAGORA_FEATURE_AGENT_BRIDGE_WRITE.
-            Use them for bounded handoffs, review loops, and one-step auto-baton validation.
+            Write actions are owner/admin gated and require ARAGORA_FEATURE_AGENT_BRIDGE_WRITE. Use
+            them for bounded handoffs, review loops, and one-step auto-baton validation.
           </p>
         </div>
         <button

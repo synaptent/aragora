@@ -153,7 +153,7 @@ export function EvidenceLinkGraph({ debateId }: EvidenceLinkGraphProps) {
         claim.citations.forEach((citationRef) => {
           // Try to find matching citation
           const citationIdx = data.citations.findIndex(
-            (c) => c.text.includes(citationRef) || citationRef.includes(c.text.slice(0, 50))
+            (c) => c.text.includes(citationRef) || citationRef.includes(c.text.slice(0, 50)),
           );
           if (citationIdx !== -1) {
             graphLinks.push({
@@ -215,9 +215,8 @@ export function EvidenceLinkGraph({ debateId }: EvidenceLinkGraphProps) {
   const claimNodes = nodes.filter((n): n is ClaimNode => n.type === 'claim');
   const evidenceNodes = nodes.filter((n): n is EvidenceNode => n.type === 'evidence');
   const supportedClaims = claimNodes.filter((n) => n.supported).length;
-  const coveragePercent = claimNodes.length > 0
-    ? Math.round((supportedClaims / claimNodes.length) * 100)
-    : 0;
+  const coveragePercent =
+    claimNodes.length > 0 ? Math.round((supportedClaims / claimNodes.length) * 100) : 0;
 
   return (
     <div className="bg-surface border border-[var(--accent)]/30">
@@ -235,10 +234,15 @@ export function EvidenceLinkGraph({ debateId }: EvidenceLinkGraphProps) {
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className={`text-xs font-theme-data ${
-            coveragePercent >= 70 ? 'text-green-400' :
-            coveragePercent >= 40 ? 'text-yellow-400' : 'text-red-400'
-          }`}>
+          <span
+            className={`text-xs font-theme-data ${
+              coveragePercent >= 70
+                ? 'text-green-400'
+                : coveragePercent >= 40
+                  ? 'text-yellow-400'
+                  : 'text-red-400'
+            }`}
+          >
             {coveragePercent}% coverage
           </span>
           <span className="text-xs font-theme-data text-[var(--accent)]">
@@ -258,10 +262,15 @@ export function EvidenceLinkGraph({ debateId }: EvidenceLinkGraphProps) {
               <div className="grid grid-cols-4 gap-4 text-xs font-theme-data">
                 <div>
                   <span className="text-text-muted">Score: </span>
-                  <span className={`${
-                    data.grounded_verdict.grounding_score >= 0.7 ? 'text-green-400' :
-                    data.grounded_verdict.grounding_score >= 0.4 ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
+                  <span
+                    className={`${
+                      data.grounded_verdict.grounding_score >= 0.7
+                        ? 'text-green-400'
+                        : data.grounded_verdict.grounding_score >= 0.4
+                          ? 'text-yellow-400'
+                          : 'text-red-400'
+                    }`}
+                  >
                     {Math.round(data.grounded_verdict.grounding_score * 100)}%
                   </span>
                 </div>
@@ -302,19 +311,20 @@ export function EvidenceLinkGraph({ debateId }: EvidenceLinkGraphProps) {
                     <div
                       key={node.id}
                       className={`p-2 border rounded cursor-pointer transition-all ${
-                        node.supported
-                          ? NODE_COLORS.claim_supported
-                          : NODE_COLORS.claim_unsupported
+                        node.supported ? NODE_COLORS.claim_supported : NODE_COLORS.claim_unsupported
                       } ${selectedNode === node.id ? 'ring-1 ring-current' : ''}`}
                       onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
                     >
                       <div className="text-xs font-theme-data line-clamp-2">
-                        {node.text.slice(0, 100)}{node.text.length > 100 ? '...' : ''}
+                        {node.text.slice(0, 100)}
+                        {node.text.length > 100 ? '...' : ''}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[10px] font-theme-data ${
-                          node.supported ? 'text-green-400' : 'text-red-400'
-                        }`}>
+                        <span
+                          className={`text-[10px] font-theme-data ${
+                            node.supported ? 'text-green-400' : 'text-red-400'
+                          }`}
+                        >
                           {node.supported ? '✓ SUPPORTED' : '✗ UNSUPPORTED'}
                         </span>
                         {node.confidence > 0 && (
@@ -358,7 +368,8 @@ export function EvidenceLinkGraph({ debateId }: EvidenceLinkGraphProps) {
                       onClick={() => setSelectedNode(selectedNode === node.id ? null : node.id)}
                     >
                       <div className="text-xs font-theme-data line-clamp-2">
-                        {node.text.slice(0, 100)}{node.text.length > 100 ? '...' : ''}
+                        {node.text.slice(0, 100)}
+                        {node.text.length > 100 ? '...' : ''}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] font-theme-data text-blue-400">
@@ -396,19 +407,18 @@ export function EvidenceLinkGraph({ debateId }: EvidenceLinkGraphProps) {
                 if (!node) return null;
 
                 const connectedLinks = links.filter(
-                  (l) => l.source === selectedNode || l.target === selectedNode
+                  (l) => l.source === selectedNode || l.target === selectedNode,
                 );
 
                 return (
                   <div className="space-y-2">
-                    <div className="text-xs font-theme-data text-text">
-                      {node.text}
-                    </div>
+                    <div className="text-xs font-theme-data text-text">{node.text}</div>
                     {connectedLinks.length > 0 && (
                       <div className="text-xs font-theme-data text-text-muted">
-                        Connected to: {connectedLinks.map((l) =>
-                          l.source === selectedNode ? l.target : l.source
-                        ).join(', ')}
+                        Connected to:{' '}
+                        {connectedLinks
+                          .map((l) => (l.source === selectedNode ? l.target : l.source))
+                          .join(', ')}
                       </div>
                     )}
                   </div>

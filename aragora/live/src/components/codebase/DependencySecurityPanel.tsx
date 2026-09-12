@@ -45,10 +45,7 @@ interface ScanResult {
     medium: Vulnerability[];
     low: Vulnerability[];
   };
-  scan_summary: {
-    packages_scanned: number;
-    packages_with_vulnerabilities: number;
-  };
+  scan_summary: { packages_scanned: number; packages_with_vulnerabilities: number };
 }
 
 interface DependencyAnalysis {
@@ -79,17 +76,13 @@ export function DependencySecurityPanel({
   const [path, setPath] = useState(repoPath);
   const [analysis, setAnalysis] = useState<DependencyAnalysis | null>(null);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [licenseConflicts, setLicenseConflicts] = useState<LicenseConflict[]>(
-    []
-  );
+  const [licenseConflicts, setLicenseConflicts] = useState<LicenseConflict[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    'overview' | 'vulnerabilities' | 'licenses' | 'sbom'
-  >('overview');
-  const [sbomFormat, setSbomFormat] = useState<'cyclonedx' | 'spdx'>(
-    'cyclonedx'
+  const [activeTab, setActiveTab] = useState<'overview' | 'vulnerabilities' | 'licenses' | 'sbom'>(
+    'overview',
   );
+  const [sbomFormat, setSbomFormat] = useState<'cyclonedx' | 'spdx'>('cyclonedx');
   const [sbomContent, setSbomContent] = useState<string | null>(null);
 
   const analyzeDependencies = useCallback(async () => {
@@ -233,9 +226,7 @@ export function DependencySecurityPanel({
   };
 
   return (
-    <div
-      className={`bg-[var(--surface)] border border-[var(--border)] rounded ${className}`}
-    >
+    <div className={`bg-[var(--surface)] border border-[var(--border)] rounded ${className}`}>
       {/* Header */}
       <div className="p-4 border-b border-[var(--border)]">
         <h3 className="font-theme-data text-sm font-medium text-[var(--text)] mb-3">
@@ -291,31 +282,25 @@ export function DependencySecurityPanel({
       {/* Tabs */}
       {analysis && (
         <div className="flex border-b border-[var(--border)]">
-          {(['overview', 'vulnerabilities', 'licenses', 'sbom'] as const).map(
-            (tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-xs font-theme-data transition-colors ${
-                  activeTab === tab
-                    ? 'text-[var(--primary)] border-b-2 border-[var(--primary)]'
-                    : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-                }`}
-              >
-                {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                {tab === 'vulnerabilities' && scanResult && (
-                  <span className="ml-1 text-red-400">
-                    ({scanResult.total_vulnerabilities})
-                  </span>
-                )}
-                {tab === 'licenses' && licenseConflicts.length > 0 && (
-                  <span className="ml-1 text-yellow-400">
-                    ({licenseConflicts.length})
-                  </span>
-                )}
-              </button>
-            )
-          )}
+          {(['overview', 'vulnerabilities', 'licenses', 'sbom'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-xs font-theme-data transition-colors ${
+                activeTab === tab
+                  ? 'text-[var(--primary)] border-b-2 border-[var(--primary)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+              }`}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'vulnerabilities' && scanResult && (
+                <span className="ml-1 text-red-400">({scanResult.total_vulnerabilities})</span>
+              )}
+              {tab === 'licenses' && licenseConflicts.length > 0 && (
+                <span className="ml-1 text-yellow-400">({licenseConflicts.length})</span>
+              )}
+            </button>
+          ))}
         </div>
       )}
 
@@ -354,9 +339,7 @@ export function DependencySecurityPanel({
                 <div className="text-2xl font-theme-data text-[var(--text)]">
                   {analysis.total_dependencies}
                 </div>
-                <div className="text-xs text-[var(--text-muted)]">
-                  Total Dependencies
-                </div>
+                <div className="text-xs text-[var(--text-muted)]">Total Dependencies</div>
               </div>
               <div className="p-3 bg-[var(--surface-hover)] rounded">
                 <div className="text-2xl font-theme-data text-blue-400">
@@ -368,9 +351,7 @@ export function DependencySecurityPanel({
                 <div className="text-2xl font-theme-data text-purple-400">
                   {analysis.transitive_dependencies}
                 </div>
-                <div className="text-xs text-[var(--text-muted)]">
-                  Transitive
-                </div>
+                <div className="text-xs text-[var(--text-muted)]">Transitive</div>
               </div>
               <div className="p-3 bg-[var(--surface-hover)] rounded">
                 <div className="text-2xl font-theme-data text-gray-400">
@@ -403,9 +384,7 @@ export function DependencySecurityPanel({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-[var(--text)]">{dep.name}</span>
-                      <span className="text-[var(--text-muted)]">
-                        @{dep.version}
-                      </span>
+                      <span className="text-[var(--text-muted)]">@{dep.version}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span
@@ -414,9 +393,7 @@ export function DependencySecurityPanel({
                         {dep.type}
                       </span>
                       {dep.license && (
-                        <span className="text-[var(--text-muted)]">
-                          {dep.license}
-                        </span>
+                        <span className="text-[var(--text-muted)]">{dep.license}</span>
                       )}
                     </div>
                   </div>
@@ -473,10 +450,7 @@ export function DependencySecurityPanel({
                   </h4>
                   <div className="space-y-2">
                     {vulns.map((vuln, i) => (
-                      <div
-                        key={i}
-                        className="p-3 border border-[var(--border)] rounded"
-                      >
+                      <div key={i} className="p-3 border border-[var(--border)] rounded">
                         <div className="flex items-start justify-between mb-2">
                           <div>
                             <span
@@ -494,15 +468,11 @@ export function DependencySecurityPanel({
                             {vuln.affected_package}
                           </span>
                         </div>
-                        <p className="text-sm text-[var(--text)] mb-2">
-                          {vuln.title}
-                        </p>
+                        <p className="text-sm text-[var(--text)] mb-2">{vuln.title}</p>
                         <div className="text-xs text-[var(--text-muted)]">
                           Affected: {vuln.affected_versions}
                           {vuln.fixed_version && (
-                            <span className="ml-2 text-green-400">
-                              Fix: {vuln.fixed_version}
-                            </span>
+                            <span className="ml-2 text-green-400">Fix: {vuln.fixed_version}</span>
                           )}
                         </div>
                       </div>
@@ -553,9 +523,7 @@ export function DependencySecurityPanel({
                     <div className="text-xs text-[var(--text-muted)] mb-1">
                       License: {conflict.license} ({conflict.conflict_type})
                     </div>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {conflict.description}
-                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">{conflict.description}</p>
                   </div>
                 ))}
               </div>
@@ -570,9 +538,7 @@ export function DependencySecurityPanel({
               <div className="flex items-center gap-2">
                 <select
                   value={sbomFormat}
-                  onChange={(e) =>
-                    setSbomFormat(e.target.value as 'cyclonedx' | 'spdx')
-                  }
+                  onChange={(e) => setSbomFormat(e.target.value as 'cyclonedx' | 'spdx')}
                   className="px-2 py-1 text-xs font-theme-data bg-[var(--surface)] border border-[var(--border)] rounded text-[var(--text)]"
                 >
                   <option value="cyclonedx">CycloneDX</option>

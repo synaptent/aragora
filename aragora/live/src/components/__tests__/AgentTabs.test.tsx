@@ -9,20 +9,13 @@ global.fetch = mockFetch;
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
-  logger: {
-    error: jest.fn(),
-    info: jest.fn(),
-    debug: jest.fn(),
-  },
+  logger: { error: jest.fn(), info: jest.fn(), debug: jest.fn() },
 }));
 
 describe('AgentTabs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ positions: [] }),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ positions: [] }) });
   });
 
   const actUser = async (action: () => Promise<void>) => {
@@ -42,17 +35,13 @@ describe('AgentTabs', () => {
   const createAgentMessageEvent = (
     agent: string,
     content: string,
-    options: Partial<StreamEvent> = {}
+    options: Partial<StreamEvent> = {},
   ): StreamEvent => ({
     type: 'agent_message',
     timestamp: Date.now() / 1000,
     agent,
     round: 1,
-    data: {
-      content,
-      role: 'proposer',
-      ...options.data,
-    },
+    data: { content, role: 'proposer', ...options.data },
     ...options,
   });
 
@@ -256,12 +245,8 @@ describe('AgentTabs', () => {
   describe('roles and styling', () => {
     it('displays role badge for each message', () => {
       const events: StreamEvent[] = [
-        createAgentMessageEvent('claude', 'Test', {
-          data: { content: 'Test', role: 'proposer' },
-        }),
-        createAgentMessageEvent('gpt4', 'Test2', {
-          data: { content: 'Test2', role: 'critic' },
-        }),
+        createAgentMessageEvent('claude', 'Test', { data: { content: 'Test', role: 'proposer' } }),
+        createAgentMessageEvent('gpt4', 'Test2', { data: { content: 'Test2', role: 'critic' } }),
       ];
 
       render(<AgentTabs events={events} />);
@@ -273,9 +258,7 @@ describe('AgentTabs', () => {
 
     it('shows role icons for messages', () => {
       const events: StreamEvent[] = [
-        createAgentMessageEvent('claude', 'Test', {
-          data: { content: 'Test', role: 'proposer' },
-        }),
+        createAgentMessageEvent('claude', 'Test', { data: { content: 'Test', role: 'proposer' } }),
       ];
 
       render(<AgentTabs events={events} />);
@@ -289,7 +272,7 @@ describe('AgentTabs', () => {
     it('shows jump to latest button when auto-scroll is disabled', async () => {
       userEvent.setup();
       const events: StreamEvent[] = Array.from({ length: 20 }, (_, i) =>
-        createAgentMessageEvent('claude', `Message ${i}`, { timestamp: 1000 + i })
+        createAgentMessageEvent('claude', `Message ${i}`, { timestamp: 1000 + i }),
       );
 
       render(<AgentTabs events={events} />);
@@ -332,9 +315,7 @@ describe('AgentTabs', () => {
 
     it('shows round info in individual agent header', async () => {
       const user = userEvent.setup();
-      const events: StreamEvent[] = [
-        createAgentMessageEvent('claude', 'Message', { round: 3 }),
-      ];
+      const events: StreamEvent[] = [createAgentMessageEvent('claude', 'Message', { round: 3 })];
 
       render(<AgentTabs events={events} />);
 

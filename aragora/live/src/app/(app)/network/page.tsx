@@ -9,11 +9,15 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const AgentNetworkPanel = dynamic(
-  () => import('@/components/AgentNetworkPanel').then(m => ({ default: m.AgentNetworkPanel })),
+  () => import('@/components/AgentNetworkPanel').then((m) => ({ default: m.AgentNetworkPanel })),
   {
     ssr: false,
-    loading: () => <div className="card p-4 animate-pulse"><div className="h-96 bg-surface rounded" /></div>,
-  }
+    loading: () => (
+      <div className="card p-4 animate-pulse">
+        <div className="h-96 bg-surface rounded" />
+      </div>
+    ),
+  },
 );
 
 export default function NetworkPage() {
@@ -78,12 +82,8 @@ export default function NetworkPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // NETWORK VIEW
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // NETWORK VIEW</p>
         </footer>
       </main>
     </>

@@ -25,17 +25,20 @@ export default function PulsePage() {
     setIsDrawerOpen(true);
   }, []);
 
-  const handleDebateConfigured = useCallback((topic: TrendingTopic, _config: DebateConfig) => {
-    setDebateStarted(topic.topic);
-    setIsDrawerOpen(false);
-    setSelectedTopic(null);
+  const handleDebateConfigured = useCallback(
+    (topic: TrendingTopic, _config: DebateConfig) => {
+      setDebateStarted(topic.topic);
+      setIsDrawerOpen(false);
+      setSelectedTopic(null);
 
-    // Show success message briefly then navigate to debates
-    setTimeout(() => {
-      setDebateStarted(null);
-      router.push('/debates');
-    }, 2000);
-  }, [router]);
+      // Show success message briefly then navigate to debates
+      setTimeout(() => {
+        setDebateStarted(null);
+        router.push('/debates');
+      }, 2000);
+    },
+    [router],
+  );
 
   const handleCloseDrawer = useCallback(() => {
     setIsDrawerOpen(false);
@@ -52,7 +55,8 @@ export default function PulsePage() {
           <div className="bg-[var(--accent)]/20 border-b border-[var(--accent)]/30 py-2">
             <div className="container mx-auto px-4 text-center">
               <span className="text-sm font-theme-data text-[var(--accent)]">
-                Debate started on &quot;{debateStarted.slice(0, 50)}...&quot; - Redirecting to debates...
+                Debate started on &quot;{debateStarted.slice(0, 50)}...&quot; - Redirecting to
+                debates...
               </span>
             </div>
           </div>
@@ -124,16 +128,25 @@ export default function PulsePage() {
                       <div className="text-[var(--accent)] mb-1">WHAT IS PULSE?</div>
                       <p>
                         Pulse automatically monitors trending topics across social platforms and
-                        creates debates on relevant subjects. It runs in the background, continuously
-                        generating content based on your configuration.
+                        creates debates on relevant subjects. It runs in the background,
+                        continuously generating content based on your configuration.
                       </p>
                     </div>
                     <div>
                       <div className="text-[var(--accent)] mb-1">SOURCES</div>
                       <ul className="list-disc list-inside space-y-1">
-                        <li><span className="text-[var(--acid-cyan)]">HackerNews</span> - Tech and startup discussions</li>
-                        <li><span className="text-[var(--acid-cyan)]">Reddit</span> - Various subreddits (tech, science, AI)</li>
-                        <li><span className="text-[var(--acid-cyan)]">Twitter/X</span> - Trending hashtags and topics</li>
+                        <li>
+                          <span className="text-[var(--acid-cyan)]">HackerNews</span> - Tech and
+                          startup discussions
+                        </li>
+                        <li>
+                          <span className="text-[var(--acid-cyan)]">Reddit</span> - Various
+                          subreddits (tech, science, AI)
+                        </li>
+                        <li>
+                          <span className="text-[var(--acid-cyan)]">Twitter/X</span> - Trending
+                          hashtags and topics
+                        </li>
                       </ul>
                     </div>
                     <div>
@@ -147,8 +160,8 @@ export default function PulsePage() {
                     <div>
                       <div className="text-[var(--accent)] mb-1">CATEGORIES</div>
                       <p>
-                        Filter topics by category to focus on relevant subjects. Unchecked categories
-                        are excluded from automatic debate generation.
+                        Filter topics by category to focus on relevant subjects. Unchecked
+                        categories are excluded from automatic debate generation.
                       </p>
                     </div>
                     <div>

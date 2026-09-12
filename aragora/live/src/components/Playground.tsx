@@ -99,11 +99,7 @@ export default function Playground() {
       const res = await fetch(`${apiBase}/api/v1/playground/debate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic: topic || undefined,
-          rounds,
-          agents,
-        }),
+        body: JSON.stringify({ topic: topic || undefined, rounds, agents }),
       });
 
       const data = await res.json();
@@ -128,9 +124,7 @@ export default function Playground() {
       <header className="border-b border-[var(--border)] px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div>
-            <h1 className="text-xl text-[var(--acid-green)] font-bold">
-              aragora playground
-            </h1>
+            <h1 className="text-xl text-[var(--acid-green)] font-bold">aragora playground</h1>
             <p className="text-xs text-[var(--text-muted)] mt-1">
               Run a multi-agent adversarial debate -- no signup, no API keys
             </p>
@@ -147,10 +141,7 @@ export default function Playground() {
       <main className="max-w-4xl mx-auto px-6 py-8">
         {/* Input Section */}
         <section className="border border-[var(--border)] p-6 mb-8">
-          <label
-            htmlFor="topic-input"
-            className="block text-sm text-[var(--acid-cyan)] mb-2"
-          >
+          <label htmlFor="topic-input" className="block text-sm text-[var(--acid-cyan)] mb-2">
             Debate Topic
           </label>
           <input
@@ -166,10 +157,7 @@ export default function Playground() {
           {/* Settings row */}
           <div className="flex items-center gap-6 mt-4">
             <div>
-              <label
-                htmlFor="rounds-select"
-                className="text-xs text-[var(--text-muted)] mr-2"
-              >
+              <label htmlFor="rounds-select" className="text-xs text-[var(--text-muted)] mr-2">
                 Rounds:
               </label>
               <select
@@ -184,10 +172,7 @@ export default function Playground() {
               </select>
             </div>
             <div>
-              <label
-                htmlFor="agents-select"
-                className="text-xs text-[var(--text-muted)] mr-2"
-              >
+              <label htmlFor="agents-select" className="text-xs text-[var(--text-muted)] mr-2">
                 Agents:
               </label>
               <select
@@ -219,11 +204,7 @@ export default function Playground() {
         {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="flex items-center gap-3 text-[var(--acid-green)]">
-              <svg
-                className="animate-spin h-5 w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
                 <circle
                   className="opacity-25"
                   cx="12"
@@ -257,14 +238,10 @@ export default function Playground() {
             <section className="border border-[var(--border)] p-4 flex flex-wrap gap-4 items-center text-sm">
               <span
                 className={
-                  result.consensus_reached
-                    ? 'text-[var(--acid-green)]'
-                    : 'text-[var(--warning)]'
+                  result.consensus_reached ? 'text-[var(--acid-green)]' : 'text-[var(--warning)]'
                 }
               >
-                {result.consensus_reached
-                  ? 'Consensus Reached'
-                  : 'No Consensus'}
+                {result.consensus_reached ? 'Consensus Reached' : 'No Consensus'}
               </span>
               <span className="text-[var(--text-muted)]">|</span>
               <span className="text-[var(--text-muted)]">
@@ -275,9 +252,7 @@ export default function Playground() {
                 {result.rounds_used} round{result.rounds_used !== 1 ? 's' : ''}
               </span>
               <span className="text-[var(--text-muted)]">|</span>
-              <span className="text-[var(--text-muted)]">
-                {result.duration_seconds}s
-              </span>
+              <span className="text-[var(--text-muted)]">{result.duration_seconds}s</span>
               {result.verdict && (
                 <>
                   <span className="text-[var(--text-muted)]">|</span>
@@ -290,15 +265,11 @@ export default function Playground() {
 
             {/* Proposals */}
             <section className="border border-[var(--border)] p-4">
-              <h2 className="text-sm text-[var(--acid-green)] mb-4 font-bold">
-                Proposals
-              </h2>
+              <h2 className="text-sm text-[var(--acid-green)] mb-4 font-bold">Proposals</h2>
               <div className="space-y-4">
                 {Object.entries(result.proposals).map(([agent, content]) => (
                   <div key={agent}>
-                    <h3 className={`text-sm font-bold mb-1 ${agentColor(agent)}`}>
-                      {agent}
-                    </h3>
+                    <h3 className={`text-sm font-bold mb-1 ${agentColor(agent)}`}>{agent}</h3>
                     <p className="text-xs text-[var(--text-muted)] whitespace-pre-wrap leading-relaxed">
                       {content}
                     </p>
@@ -310,18 +281,14 @@ export default function Playground() {
             {/* Critiques */}
             {result.critiques.length > 0 && (
               <section className="border border-[var(--border)] p-4">
-                <h2 className="text-sm text-[var(--acid-green)] mb-4 font-bold">
-                  Critiques
-                </h2>
+                <h2 className="text-sm text-[var(--acid-green)] mb-4 font-bold">Critiques</h2>
                 <div className="space-y-3">
                   {result.critiques.map((c, i) => (
                     <div key={i} className="border-l-2 border-[var(--border)] pl-3">
                       <div className="text-xs mb-1">
                         <span className={agentColor(c.agent)}>{c.agent}</span>
                         <span className="text-[var(--text-muted)]"> on </span>
-                        <span className={agentColor(c.target_agent)}>
-                          {c.target_agent}
-                        </span>
+                        <span className={agentColor(c.target_agent)}>{c.target_agent}</span>
                         <span className="text-[var(--text-muted)] ml-2">
                           severity {c.severity.toFixed(1)}/10
                         </span>
@@ -343,17 +310,13 @@ export default function Playground() {
             {/* Votes */}
             {result.votes.length > 0 && (
               <section className="border border-[var(--border)] p-4">
-                <h2 className="text-sm text-[var(--acid-green)] mb-4 font-bold">
-                  Votes
-                </h2>
+                <h2 className="text-sm text-[var(--acid-green)] mb-4 font-bold">Votes</h2>
                 <div className="space-y-2">
                   {result.votes.map((v, i) => (
                     <div key={i} className="text-xs flex items-center gap-2">
                       <span className={agentColor(v.agent)}>{v.agent}</span>
                       <span className="text-[var(--text-muted)]">voted for</span>
-                      <span className={`font-bold ${agentColor(v.choice)}`}>
-                        {v.choice}
-                      </span>
+                      <span className={`font-bold ${agentColor(v.choice)}`}>{v.choice}</span>
                       <span className="text-[var(--text-muted)]">
                         ({(v.confidence * 100).toFixed(0)}%)
                       </span>
@@ -366,9 +329,7 @@ export default function Playground() {
             {/* Dissenting views */}
             {result.dissenting_views.length > 0 && (
               <section className="border border-[var(--warning)]/30 bg-[var(--warning)]/5 p-4">
-                <h2 className="text-sm text-[var(--warning)] mb-2 font-bold">
-                  Dissenting Views
-                </h2>
+                <h2 className="text-sm text-[var(--warning)] mb-2 font-bold">Dissenting Views</h2>
                 <ul className="text-xs text-[var(--text-muted)] space-y-1">
                   {result.dissenting_views.map((d, i) => (
                     <li key={i}>{d}</li>
@@ -386,9 +347,7 @@ export default function Playground() {
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <span className="text-[var(--text-muted)]">Receipt ID: </span>
-                    <span className="text-[var(--acid-cyan)]">
-                      {result.receipt.receipt_id}
-                    </span>
+                    <span className="text-[var(--acid-cyan)]">{result.receipt.receipt_id}</span>
                   </div>
                   <div>
                     <span className="text-[var(--text-muted)]">Verdict: </span>
@@ -446,9 +405,8 @@ export default function Playground() {
       <footer className="border-t border-[var(--border)] px-6 py-4 mt-8">
         <div className="max-w-4xl mx-auto text-center text-xs text-[var(--text-muted)]">
           <p>
-            Powered by{' '}
-            <span className="text-[var(--acid-green)]">aragora-debate</span>{' '}
-            with MockAgents. No real LLM calls are made.
+            Powered by <span className="text-[var(--acid-green)]">aragora-debate</span> with
+            MockAgents. No real LLM calls are made.
           </p>
         </div>
       </footer>

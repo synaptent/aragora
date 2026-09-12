@@ -80,7 +80,14 @@ interface OnboardingState {
   organizationName: string;
   organizationSlug: string;
   teamSize: '1-5' | '6-15' | '16-50' | '50+' | null;
-  useCase: 'team_decisions' | 'project_planning' | 'vendor_selection' | 'policy_review' | 'technical_decisions' | 'general' | null;
+  useCase:
+    | 'team_decisions'
+    | 'project_planning'
+    | 'vendor_selection'
+    | 'policy_review'
+    | 'technical_decisions'
+    | 'general'
+    | null;
 
   // Team invitations
   teamMembers: TeamMember[];
@@ -263,9 +270,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
         },
 
         markStepComplete: (step) =>
-          set((state) => ({
-            stepsCompleted: new Set([...state.stepsCompleted, step]),
-          })),
+          set((state) => ({ stepsCompleted: new Set([...state.stepsCompleted, step]) })),
 
         // Progressive onboarding
         setSelectedIndustry: (industry) => set({ selectedIndustry: industry }),
@@ -277,9 +282,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
         // Checklist
         updateChecklist: (updates) =>
-          set((state) => ({
-            checklist: { ...state.checklist, ...updates },
-          })),
+          set((state) => ({ checklist: { ...state.checklist, ...updates } })),
 
         // Organization
         setOrganizationName: (name) => set({ organizationName: name }),
@@ -297,15 +300,11 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
           })),
 
         removeTeamMember: (email) =>
-          set((state) => ({
-            teamMembers: state.teamMembers.filter((m) => m.email !== email),
-          })),
+          set((state) => ({ teamMembers: state.teamMembers.filter((m) => m.email !== email) })),
 
         updateTeamMemberRole: (email, role) =>
           set((state) => ({
-            teamMembers: state.teamMembers.map((m) =>
-              m.email === email ? { ...m, role } : m
-            ),
+            teamMembers: state.teamMembers.map((m) => (m.email === email ? { ...m, role } : m)),
           })),
 
         // Template
@@ -321,9 +320,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
 
         // Progress
         updateProgress: (updates) =>
-          set((state) => ({
-            progress: { ...state.progress, ...updates },
-          })),
+          set((state) => ({ progress: { ...state.progress, ...updates } })),
 
         // Completion
         completeOnboarding: () =>
@@ -334,11 +331,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
             stepsCompleted: new Set(STEP_ORDER),
           }),
 
-        skipOnboarding: () =>
-          set({
-            isSkipped: true,
-            completedAt: new Date().toISOString(),
-          }),
+        skipOnboarding: () => set({ isSkipped: true, completedAt: new Date().toISOString() }),
 
         resetOnboarding: () => set(initialState),
       }),
@@ -355,10 +348,10 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
           completedAt: state.completedAt,
           checklist: state.checklist,
         }),
-      }
+      },
     ),
-    { name: 'OnboardingStore' }
-  )
+    { name: 'OnboardingStore' },
+  ),
 );
 
 // ============================================================================
@@ -373,8 +366,7 @@ export const selectCurrentStepIndex = (state: OnboardingState) =>
 
 export const selectTotalSteps = () => STEP_ORDER.length;
 
-export const selectIsFirstStep = (state: OnboardingState) =>
-  state.currentStep === STEP_ORDER[0];
+export const selectIsFirstStep = (state: OnboardingState) => state.currentStep === STEP_ORDER[0];
 
 export const selectIsLastStep = (state: OnboardingState) =>
   state.currentStep === STEP_ORDER[STEP_ORDER.length - 1];

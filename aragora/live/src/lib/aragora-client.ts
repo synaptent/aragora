@@ -167,12 +167,7 @@ export class AragoraError extends Error {
   readonly status: number;
   readonly details?: Record<string, unknown>;
 
-  constructor(
-    message: string,
-    code: string,
-    status: number,
-    details?: Record<string, unknown>
-  ) {
+  constructor(message: string, code: string, status: number, details?: Record<string, unknown>) {
     super(message);
     this.name = 'AragoraError';
     this.code = code;
@@ -223,10 +218,7 @@ class HttpClient {
     this._baseUrl = config.baseUrl.replace(/\/$/, '');
     this._apiKey = config.apiKey;
     this.timeout = config.timeout ?? 30000;
-    this.defaultHeaders = {
-      'Content-Type': 'application/json',
-      ...config.headers,
-    };
+    this.defaultHeaders = { 'Content-Type': 'application/json', ...config.headers };
 
     if (this._apiKey) {
       this.defaultHeaders['Authorization'] = `Bearer ${this._apiKey}`;
@@ -237,22 +229,16 @@ class HttpClient {
     method: string,
     path: string,
     data?: unknown,
-    options?: RequestOptions
+    options?: RequestOptions,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      options?.timeout ?? this.timeout
-    );
+    const timeoutId = setTimeout(() => controller.abort(), options?.timeout ?? this.timeout);
 
     try {
       const response = await fetch(url, {
         method,
-        headers: {
-          ...this.defaultHeaders,
-          ...options?.headers,
-        },
+        headers: { ...this.defaultHeaders, ...options?.headers },
         body: data ? JSON.stringify(data) : undefined,
         signal: options?.signal ?? controller.signal,
       });
@@ -265,7 +251,7 @@ class HttpClient {
           errorData.error || `HTTP ${response.status}`,
           errorData.code || 'HTTP_ERROR',
           response.status,
-          errorData
+          errorData,
         );
       }
 
@@ -378,13 +364,7 @@ class UserOrganizationsAPI {
     organizations: Array<{
       user_id: string;
       org_id: string;
-      organization: {
-        id: string;
-        name: string;
-        slug: string;
-        tier: string;
-        owner_id: string;
-      };
+      organization: { id: string; name: string; slug: string; tier: string; owner_id: string };
       role: 'member' | 'admin' | 'owner';
       is_default: boolean;
       joined_at: string;
@@ -398,15 +378,12 @@ class UserOrganizationsAPI {
   /**
    * Switch to a different organization context
    */
-  async switch(orgId: string, setAsDefault = false): Promise<{
+  async switch(
+    orgId: string,
+    setAsDefault = false,
+  ): Promise<{
     success: boolean;
-    organization: {
-      id: string;
-      name: string;
-      slug: string;
-      tier: string;
-      owner_id: string;
-    };
+    organization: { id: string; name: string; slug: string; tier: string; owner_id: string };
     access_token?: string;
   }> {
     return this.http.post('/api/v1/user/organizations/switch', {
@@ -419,9 +396,7 @@ class UserOrganizationsAPI {
    * Set a default organization for the user
    */
   async setDefault(orgId: string): Promise<{ success: boolean }> {
-    return this.http.post('/api/v1/user/organizations/default', {
-      org_id: orgId,
-    });
+    return this.http.post('/api/v1/user/organizations/default', { org_id: orgId });
   }
 
   /**
@@ -458,11 +433,7 @@ export interface BillingUsage {
   tokens_in: number;
   tokens_out: number;
   estimated_cost_usd: number;
-  cost_breakdown?: {
-    input_cost: number;
-    output_cost: number;
-    total: number;
-  };
+  cost_breakdown?: { input_cost: number; output_cost: number; total: number };
   cost_by_provider?: Record<string, string>;
   period_start: string | null;
   period_end: string | null;
@@ -472,10 +443,7 @@ export interface BillingSubscription {
   tier: string;
   status: string;
   is_active: boolean;
-  organization?: {
-    id: string;
-    name: string;
-  };
+  organization?: { id: string; name: string };
   limits?: {
     debates_per_month: number;
     users_per_org: number;
@@ -510,10 +478,7 @@ export interface BillingInvoice {
 }
 
 export interface UsageForecast {
-  current_usage: {
-    debates: number;
-    debates_limit: number;
-  };
+  current_usage: { debates: number; debates_limit: number };
   projection: {
     debates_end_of_cycle: number;
     debates_per_day: number;
@@ -524,11 +489,7 @@ export interface UsageForecast {
   days_elapsed: number;
   will_hit_limit: boolean;
   debates_overage: number;
-  tier_recommendation?: {
-    recommended_tier: string;
-    debates_limit: number;
-    price_monthly: string;
-  };
+  tier_recommendation?: { recommended_tier: string; debates_limit: number; price_monthly: string };
 }
 
 class BillingAPI {
@@ -554,9 +515,11 @@ class BillingAPI {
     return this.http.get<{ forecast: UsageForecast }>('/api/billing/usage/forecast');
   }
 
-  async createCheckout(tier: string, successUrl: string, cancelUrl: string): Promise<{
-    checkout: { id: string; url: string };
-  }> {
+  async createCheckout(
+    tier: string,
+    successUrl: string,
+    cancelUrl: string,
+  ): Promise<{ checkout: { id: string; url: string } }> {
     return this.http.post('/api/billing/checkout', {
       tier,
       success_url: successUrl,
@@ -565,9 +528,7 @@ class BillingAPI {
   }
 
   async createPortal(returnUrl: string): Promise<{ portal: { url: string } }> {
-    return this.http.post('/api/billing/portal', {
-      return_url: returnUrl,
-    });
+    return this.http.post('/api/billing/portal', { return_url: returnUrl });
   }
 
   async cancelSubscription(): Promise<{ message: string; subscription: unknown }> {
@@ -587,9 +548,7 @@ class BillingAPI {
 
     // This returns CSV data, so we need raw response
     const response = await fetch(this.http.baseUrl + path, {
-      headers: this.http.apiKey
-        ? { Authorization: `Bearer ${this.http.apiKey}` }
-        : {},
+      headers: this.http.apiKey ? { Authorization: `Bearer ${this.http.apiKey}` } : {},
     });
     return response.blob();
   }
@@ -645,12 +604,7 @@ export interface CostAnalysis {
 
 export interface ComplianceScore {
   overall_score: number;
-  categories: Array<{
-    category: string;
-    score: number;
-    max_score: number;
-    findings: number;
-  }>;
+  categories: Array<{ category: string; score: number; max_score: number; findings: number }>;
   last_audit: string;
 }
 
@@ -750,12 +704,7 @@ export interface MFAEnableResponse {
 export interface MFAVerifyResponse {
   message: string;
   user: Record<string, unknown>;
-  tokens: {
-    access_token: string;
-    refresh_token: string;
-    token_type: string;
-    expires_in: number;
-  };
+  tokens: { access_token: string; refresh_token: string; token_type: string; expires_in: number };
   backup_codes_remaining?: number;
   backup_codes_warning?: string;
 }
@@ -928,7 +877,11 @@ class AdminAPI {
     return this.http.get<AdminStatsResponse>('/api/admin/stats');
   }
 
-  async users(options?: { limit?: number; offset?: number; search?: string }): Promise<AdminUsersResponse> {
+  async users(options?: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+  }): Promise<AdminUsersResponse> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
@@ -939,7 +892,11 @@ class AdminAPI {
     return this.http.get<AdminUsersResponse>(path);
   }
 
-  async organizations(options?: { limit?: number; offset?: number; tier?: string }): Promise<AdminOrganizationsResponse> {
+  async organizations(options?: {
+    limit?: number;
+    offset?: number;
+    tier?: string;
+  }): Promise<AdminOrganizationsResponse> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
@@ -1100,7 +1057,8 @@ class EvidenceAPI {
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
     if (options?.source) params.set('source', options.source);
-    if (options?.min_reliability !== undefined) params.set('min_reliability', String(options.min_reliability));
+    if (options?.min_reliability !== undefined)
+      params.set('min_reliability', String(options.min_reliability));
 
     const query = params.toString();
     const path = query ? `/api/evidence?${query}` : '/api/evidence';
@@ -1119,7 +1077,10 @@ class EvidenceAPI {
     return this.http.post<EvidenceCollectResponse>('/api/evidence/collect', options);
   }
 
-  async getDebateEvidence(debateId: string, round?: number): Promise<{
+  async getDebateEvidence(
+    debateId: string,
+    round?: number,
+  ): Promise<{
     debate_id: string;
     round: number | null;
     evidence: EvidenceSnippet[];
@@ -1129,15 +1090,12 @@ class EvidenceAPI {
     return this.http.get(`/api/evidence/debate/${debateId}${params}`);
   }
 
-  async associateWithDebate(debateId: string, evidenceIds: string[], round?: number): Promise<{
-    debate_id: string;
-    associated: string[];
-    count: number;
-  }> {
-    return this.http.post(`/api/evidence/debate/${debateId}`, {
-      evidence_ids: evidenceIds,
-      round,
-    });
+  async associateWithDebate(
+    debateId: string,
+    evidenceIds: string[],
+    round?: number,
+  ): Promise<{ debate_id: string; associated: string[]; count: number }> {
+    return this.http.post(`/api/evidence/debate/${debateId}`, { evidence_ids: evidenceIds, round });
   }
 
   async delete(id: string): Promise<{ deleted: boolean; evidence_id: string }> {
@@ -1166,13 +1124,18 @@ class TrainingAPI {
 
   async exportSFT(options?: TrainingExportOptions): Promise<TrainingExportResponse> {
     const params = new URLSearchParams();
-    if (options?.min_confidence !== undefined) params.set('min_confidence', String(options.min_confidence));
-    if (options?.min_success_rate !== undefined) params.set('min_success_rate', String(options.min_success_rate));
+    if (options?.min_confidence !== undefined)
+      params.set('min_confidence', String(options.min_confidence));
+    if (options?.min_success_rate !== undefined)
+      params.set('min_success_rate', String(options.min_success_rate));
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
-    if (options?.include_critiques !== undefined) params.set('include_critiques', String(options.include_critiques));
-    if (options?.include_patterns !== undefined) params.set('include_patterns', String(options.include_patterns));
-    if (options?.include_debates !== undefined) params.set('include_debates', String(options.include_debates));
+    if (options?.include_critiques !== undefined)
+      params.set('include_critiques', String(options.include_critiques));
+    if (options?.include_patterns !== undefined)
+      params.set('include_patterns', String(options.include_patterns));
+    if (options?.include_debates !== undefined)
+      params.set('include_debates', String(options.include_debates));
     if (options?.format) params.set('format', options.format);
 
     const query = params.toString();
@@ -1182,7 +1145,8 @@ class TrainingAPI {
 
   async exportDPO(options?: DPOExportOptions): Promise<TrainingExportResponse> {
     const params = new URLSearchParams();
-    if (options?.min_confidence_diff !== undefined) params.set('min_confidence_diff', String(options.min_confidence_diff));
+    if (options?.min_confidence_diff !== undefined)
+      params.set('min_confidence_diff', String(options.min_confidence_diff));
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
     if (options?.format) params.set('format', options.format);
@@ -1195,7 +1159,8 @@ class TrainingAPI {
   async exportGauntlet(options?: GauntletExportOptions): Promise<TrainingExportResponse> {
     const params = new URLSearchParams();
     if (options?.persona) params.set('persona', options.persona);
-    if (options?.min_severity !== undefined) params.set('min_severity', String(options.min_severity));
+    if (options?.min_severity !== undefined)
+      params.set('min_severity', String(options.min_severity));
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
     if (options?.format) params.set('format', options.format);
@@ -1309,7 +1274,10 @@ export interface TournamentStanding {
 class TournamentsAPI {
   constructor(private http: HttpClient) {}
 
-  async list(options?: { limit?: number; status?: string }): Promise<{ tournaments: Tournament[] }> {
+  async list(options?: {
+    limit?: number;
+    status?: string;
+  }): Promise<{ tournaments: Tournament[] }> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.status) params.set('status', options.status);
@@ -1372,7 +1340,10 @@ export interface PulseStats {
 class PulseAPI {
   constructor(private http: HttpClient) {}
 
-  async trending(options?: { limit?: number; category?: string }): Promise<{ topics: TrendingTopic[] }> {
+  async trending(options?: {
+    limit?: number;
+    category?: string;
+  }): Promise<{ topics: TrendingTopic[] }> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.category) params.set('category', options.category);
@@ -1420,7 +1391,10 @@ export interface GalleryEntry {
 class GalleryAPI {
   constructor(private http: HttpClient) {}
 
-  async list(options?: { limit?: number; featured?: boolean }): Promise<{ entries: GalleryEntry[] }> {
+  async list(options?: {
+    limit?: number;
+    featured?: boolean;
+  }): Promise<{ entries: GalleryEntry[] }> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.featured !== undefined) params.set('featured', String(options.featured));
@@ -1540,7 +1514,7 @@ class AgentDetailAPI {
   }
 
   async compare(agents: string[]): Promise<{ comparison: unknown }> {
-    const params = agents.map(a => `agents=${a}`).join('&');
+    const params = agents.map((a) => `agents=${a}`).join('&');
     return this.http.get(`/api/agent/compare?${params}`);
   }
 }
@@ -1637,12 +1611,7 @@ export interface GenesisLineage {
 
 export interface GenesisTree {
   debate_id: string;
-  nodes: Array<{
-    id: string;
-    genome_id: string;
-    parent_id?: string;
-    fitness: number;
-  }>;
+  nodes: Array<{ id: string; genome_id: string; parent_id?: string; fitness: number }>;
 }
 
 class GenesisAPI {
@@ -1710,11 +1679,7 @@ export interface GauntletResult {
   personas_used: string[];
   rounds_completed: number;
   risk_score: number;
-  vulnerabilities: Array<{
-    category: string;
-    severity: string;
-    description: string;
-  }>;
+  vulnerabilities: Array<{ category: string; severity: string; description: string }>;
   recommendation: string;
   created_at: string;
   completed_at?: string;
@@ -1726,11 +1691,7 @@ export interface GauntletReceipt {
   input_summary?: string;
   verdict: 'approved' | 'rejected' | 'needs_review' | 'PASS' | 'CONDITIONAL' | 'FAIL' | string;
   confidence: number;
-  risk_factors?: Array<{
-    factor: string;
-    weight: number;
-    assessment: string;
-  }>;
+  risk_factors?: Array<{ factor: string; weight: number; assessment: string }>;
   signatures?: string[];
   agent_responses?: Array<{
     agent: string;
@@ -1754,11 +1715,7 @@ export interface GauntletHeatmap {
 export interface GauntletComparison {
   gauntlet_a: GauntletResult;
   gauntlet_b: GauntletResult;
-  differences: Array<{
-    aspect: string;
-    a_value: unknown;
-    b_value: unknown;
-  }>;
+  differences: Array<{ aspect: string; a_value: unknown; b_value: unknown }>;
   recommendation: string;
 }
 
@@ -1773,7 +1730,10 @@ class GauntletAPI {
     return this.http.get('/api/gauntlet/personas');
   }
 
-  async results(params?: { limit?: number; offset?: number }): Promise<{ results: GauntletResult[] }> {
+  async results(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ results: GauntletResult[] }> {
     const query = new URLSearchParams();
     if (params?.limit) query.set('limit', params.limit.toString());
     if (params?.offset) query.set('offset', params.offset.toString());
@@ -1792,7 +1752,10 @@ class GauntletAPI {
     return this.http.get(`/api/gauntlet/${gauntletId}/heatmap`);
   }
 
-  async compare(gauntletIdA: string, gauntletIdB: string): Promise<{ comparison: GauntletComparison }> {
+  async compare(
+    gauntletIdA: string,
+    gauntletIdB: string,
+  ): Promise<{ comparison: GauntletComparison }> {
     return this.http.get(`/api/gauntlet/${gauntletIdA}/compare/${gauntletIdB}`);
   }
 
@@ -1808,7 +1771,8 @@ class GauntletAPI {
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type AuditType = 'security' | 'compliance' | 'consistency' | 'quality';
 export type FindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
-export type AuditSessionStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+export type AuditSessionStatus =
+  'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 export interface Document {
   id: string;
@@ -1936,7 +1900,11 @@ class DocumentsAPI {
 
   // Document Management
 
-  async list(options?: { limit?: number; offset?: number; status?: DocumentStatus }): Promise<{ documents: Document[] }> {
+  async list(options?: {
+    limit?: number;
+    offset?: number;
+    status?: DocumentStatus;
+  }): Promise<{ documents: Document[] }> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
@@ -1969,13 +1937,16 @@ class DocumentsAPI {
 
   // Batch Processing
 
-  async batchUpload(files: File[], metadata?: Record<string, unknown>): Promise<BatchUploadResponse> {
+  async batchUpload(
+    files: File[],
+    metadata?: Record<string, unknown>,
+  ): Promise<BatchUploadResponse> {
     const fileData = await Promise.all(
       files.map(async (file) => ({
         filename: file.name,
         content: await this.fileToBase64(file),
         content_type: file.type || 'application/octet-stream',
-      }))
+      })),
     );
     return this.http.post('/api/documents/batch', { files: fileData, metadata });
   }
@@ -1998,7 +1969,10 @@ class DocumentsAPI {
 
   // Document Content
 
-  async chunks(documentId: string, options?: { limit?: number; offset?: number }): Promise<{ chunks: DocumentChunk[] }> {
+  async chunks(
+    documentId: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<{ chunks: DocumentChunk[] }> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
@@ -2006,7 +1980,10 @@ class DocumentsAPI {
     return this.http.get(`/api/documents/${documentId}/chunks${query ? `?${query}` : ''}`);
   }
 
-  async context(documentId: string, options?: { max_tokens?: number; model?: string }): Promise<DocumentContext> {
+  async context(
+    documentId: string,
+    options?: { max_tokens?: number; model?: string },
+  ): Promise<DocumentContext> {
     const params = new URLSearchParams();
     if (options?.max_tokens) params.set('max_tokens', String(options.max_tokens));
     if (options?.model) params.set('model', options.model);
@@ -2028,7 +2005,11 @@ class DocumentsAPI {
     });
   }
 
-  async listAudits(options?: { limit?: number; offset?: number; status?: AuditSessionStatus }): Promise<{ sessions: AuditSession[] }> {
+  async listAudits(options?: {
+    limit?: number;
+    offset?: number;
+    status?: AuditSessionStatus;
+  }): Promise<{ sessions: AuditSession[] }> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
@@ -2057,7 +2038,10 @@ class DocumentsAPI {
     return this.http.post(`/api/audit/sessions/${sessionId}/cancel`, {});
   }
 
-  async auditFindings(sessionId: string, options?: { severity?: FindingSeverity; audit_type?: AuditType }): Promise<{ findings: AuditFinding[] }> {
+  async auditFindings(
+    sessionId: string,
+    options?: { severity?: FindingSeverity; audit_type?: AuditType },
+  ): Promise<{ findings: AuditFinding[] }> {
     const params = new URLSearchParams();
     if (options?.severity) params.set('severity', options.severity);
     if (options?.audit_type) params.set('audit_type', options.audit_type);
@@ -2065,7 +2049,10 @@ class DocumentsAPI {
     return this.http.get(`/api/audit/sessions/${sessionId}/findings${query ? `?${query}` : ''}`);
   }
 
-  async auditReport(sessionId: string, format: 'json' | 'markdown' | 'html' | 'pdf' = 'json'): Promise<AuditReport> {
+  async auditReport(
+    sessionId: string,
+    format: 'json' | 'markdown' | 'html' | 'pdf' = 'json',
+  ): Promise<AuditReport> {
     return this.http.get(`/api/audit/sessions/${sessionId}/report?format=${format}`);
   }
 
@@ -2094,7 +2081,8 @@ class DocumentsAPI {
 // Control Plane API
 // =============================================================================
 
-export type ControlPlaneAgentStatus = 'starting' | 'available' | 'busy' | 'draining' | 'offline' | 'failed';
+export type ControlPlaneAgentStatus =
+  'starting' | 'available' | 'busy' | 'draining' | 'offline' | 'failed';
 
 export interface ControlPlaneAgent {
   agent_id: string;
@@ -2123,13 +2111,16 @@ export interface ControlPlaneTask {
 
 export interface ControlPlaneHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
-  agents: Record<string, {
-    agent_id: string;
-    status: 'healthy' | 'degraded' | 'unhealthy';
-    last_heartbeat?: string;
-    latency_ms?: number;
-    error_rate?: number;
-  }>;
+  agents: Record<
+    string,
+    {
+      agent_id: string;
+      status: 'healthy' | 'degraded' | 'unhealthy';
+      last_heartbeat?: string;
+      latency_ms?: number;
+      error_rate?: number;
+    }
+  >;
   agents_available?: number;
   agents_total?: number;
   active_tasks?: number;
@@ -2256,20 +2247,11 @@ export interface ComplianceCheckResult {
 }
 
 export interface ComplianceStats {
-  policies: {
-    total: number;
-    enabled: number;
-    disabled: number;
-  };
+  policies: { total: number; enabled: number; disabled: number };
   violations: {
     total: number;
     open: number;
-    by_severity: {
-      critical: number;
-      high: number;
-      medium: number;
-      low: number;
-    };
+    by_severity: { critical: number; high: number; medium: number; low: number };
   };
   risk_score: number;
 }
@@ -2304,7 +2286,10 @@ class PolicyAPI {
     return this.http.post('/api/policies', policy);
   }
 
-  async update(policyId: string, updates: Partial<PolicyInput>): Promise<{ policy: Policy; message: string }> {
+  async update(
+    policyId: string,
+    updates: Partial<PolicyInput>,
+  ): Promise<{ policy: Policy; message: string }> {
     return this.http.put(`/api/policies/${policyId}`, updates);
   }
 
@@ -2312,16 +2297,22 @@ class PolicyAPI {
     return this.http.delete(`/api/policies/${policyId}`);
   }
 
-  async toggle(policyId: string, enabled?: boolean): Promise<{ message: string; policy_id: string; enabled: boolean }> {
+  async toggle(
+    policyId: string,
+    enabled?: boolean,
+  ): Promise<{ message: string; policy_id: string; enabled: boolean }> {
     return this.http.post(`/api/policies/${policyId}/toggle`, { enabled });
   }
 
-  async getViolations(policyId: string, options?: {
-    status?: ViolationStatus;
-    severity?: ViolationSeverity;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ violations: Violation[]; total: number; policy_id: string }> {
+  async getViolations(
+    policyId: string,
+    options?: {
+      status?: ViolationStatus;
+      severity?: ViolationSeverity;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{ violations: Violation[]; total: number; policy_id: string }> {
     const params = new URLSearchParams();
     if (options?.status) params.set('status', options.status);
     if (options?.severity) params.set('severity', options.severity);
@@ -2331,7 +2322,9 @@ class PolicyAPI {
     return this.http.get(`/api/policies/${policyId}/violations${query ? `?${query}` : ''}`);
   }
 
-  async listViolations(filters?: ViolationFilters): Promise<{ violations: Violation[]; total: number }> {
+  async listViolations(
+    filters?: ViolationFilters,
+  ): Promise<{ violations: Violation[]; total: number }> {
     const params = new URLSearchParams();
     if (filters?.workspace_id) params.set('workspace_id', filters.workspace_id);
     if (filters?.vertical_id) params.set('vertical_id', filters.vertical_id);
@@ -2349,24 +2342,33 @@ class PolicyAPI {
     return this.http.get(`/api/compliance/violations/${violationId}`);
   }
 
-  async updateViolation(violationId: string, status: ViolationStatus, notes?: string): Promise<{ violation: Violation; message: string }> {
+  async updateViolation(
+    violationId: string,
+    status: ViolationStatus,
+    notes?: string,
+  ): Promise<{ violation: Violation; message: string }> {
     return this.http.put(`/api/compliance/violations/${violationId}`, {
       status,
       resolution_notes: notes,
     });
   }
 
-  async checkCompliance(content: string, options?: {
-    frameworks?: string[];
-    min_severity?: ViolationSeverity;
-    store_violations?: boolean;
-    workspace_id?: string;
-    source?: string;
-  }): Promise<{ result: ComplianceCheckResult; compliant: boolean; score: number; issue_count: number }> {
-    return this.http.post('/api/compliance/check', {
-      content,
-      ...options,
-    });
+  async checkCompliance(
+    content: string,
+    options?: {
+      frameworks?: string[];
+      min_severity?: ViolationSeverity;
+      store_violations?: boolean;
+      workspace_id?: string;
+      source?: string;
+    },
+  ): Promise<{
+    result: ComplianceCheckResult;
+    compliant: boolean;
+    score: number;
+    issue_count: number;
+  }> {
+    return this.http.post('/api/compliance/check', { content, ...options });
   }
 
   async getStats(workspaceId?: string): Promise<ComplianceStats> {
@@ -2380,7 +2382,8 @@ class PolicyAPI {
 // =============================================================================
 
 export type WorkflowStatus = 'draft' | 'active' | 'archived';
-export type WorkflowCategory = 'general' | 'legal' | 'healthcare' | 'finance' | 'research' | 'custom';
+export type WorkflowCategory =
+  'general' | 'legal' | 'healthcare' | 'finance' | 'research' | 'custom';
 export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'terminated';
 
 export interface WorkflowStep {
@@ -2390,11 +2393,7 @@ export interface WorkflowStep {
   config: Record<string, unknown>;
   description?: string;
   next_steps?: string[];
-  visual?: {
-    position: { x: number; y: number };
-    category: string;
-    color?: string;
-  };
+  visual?: { position: { x: number; y: number }; category: string; color?: string };
 }
 
 export interface Workflow {
@@ -2487,7 +2486,7 @@ class WorkflowsAPI {
   }): Promise<{ workflows: Workflow[]; total_count: number }> {
     const params = new URLSearchParams();
     if (options?.category) params.set('category', options.category);
-    if (options?.tags) options.tags.forEach(t => params.append('tags', t));
+    if (options?.tags) options.tags.forEach((t) => params.append('tags', t));
     if (options?.search) params.set('search', options.search);
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
@@ -2515,11 +2514,10 @@ class WorkflowsAPI {
     return this.http.post(`/api/workflows/${workflowId}/execute`, { inputs });
   }
 
-  async simulate(workflowId: string, inputs?: Record<string, unknown>): Promise<{
-    valid: boolean;
-    errors: string[];
-    estimated_duration_ms?: number;
-  }> {
+  async simulate(
+    workflowId: string,
+    inputs?: Record<string, unknown>,
+  ): Promise<{ valid: boolean; errors: string[]; estimated_duration_ms?: number }> {
     return this.http.post(`/api/workflows/${workflowId}/simulate`, { inputs });
   }
 
@@ -2553,7 +2551,7 @@ class WorkflowsAPI {
   }): Promise<WorkflowTemplate[]> {
     const params = new URLSearchParams();
     if (options?.category) params.set('category', options.category);
-    if (options?.tags) options.tags.forEach(t => params.append('tags', t));
+    if (options?.tags) options.tags.forEach((t) => params.append('tags', t));
     const query = params.toString();
     return this.http.get(`/api/workflow-templates${query ? `?${query}` : ''}`);
   }
@@ -2562,7 +2560,11 @@ class WorkflowsAPI {
     return this.http.get(`/api/workflow-templates/${templateId}`);
   }
 
-  async createFromTemplate(templateId: string, name: string, customizations?: Record<string, unknown>): Promise<Workflow> {
+  async createFromTemplate(
+    templateId: string,
+    name: string,
+    customizations?: Record<string, unknown>,
+  ): Promise<Workflow> {
     return this.http.post('/api/workflows/from-template', {
       template_id: templateId,
       name,
@@ -2575,11 +2577,12 @@ class WorkflowsAPI {
     return this.http.get(`/api/workflow-approvals${params}`);
   }
 
-  async resolveApproval(requestId: string, status: 'approved' | 'rejected', notes?: string): Promise<{ success: boolean }> {
-    return this.http.post(`/api/workflow-approvals/${requestId}/resolve`, {
-      status,
-      notes,
-    });
+  async resolveApproval(
+    requestId: string,
+    status: 'approved' | 'rejected',
+    notes?: string,
+  ): Promise<{ success: boolean }> {
+    return this.http.post(`/api/workflow-approvals/${requestId}/resolve`, { status, notes });
   }
 }
 
@@ -2588,10 +2591,17 @@ class WorkflowsAPI {
 // =============================================================================
 
 export type ConnectorType =
-  | 'mongodb' | 'postgresql' | 'mysql'
-  | 's3' | 'google_drive' | 'sharepoint'
-  | 'slack' | 'notion' | 'confluence'
-  | 'fhir' | 'custom';
+  | 'mongodb'
+  | 'postgresql'
+  | 'mysql'
+  | 's3'
+  | 'google_drive'
+  | 'sharepoint'
+  | 'slack'
+  | 'notion'
+  | 'confluence'
+  | 'fhir'
+  | 'custom';
 
 export type ConnectorStatus = 'active' | 'inactive' | 'error' | 'syncing';
 export type SyncJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -2685,7 +2695,10 @@ class ConnectorsAPI {
     return this.http.post('/api/connectors', connector);
   }
 
-  async update(connectorId: string, updates: Partial<ConnectorInput>): Promise<{ connector: Connector; message: string }> {
+  async update(
+    connectorId: string,
+    updates: Partial<ConnectorInput>,
+  ): Promise<{ connector: Connector; message: string }> {
     return this.http.put(`/api/connectors/${connectorId}`, updates);
   }
 
@@ -2693,10 +2706,10 @@ class ConnectorsAPI {
     return this.http.delete(`/api/connectors/${connectorId}`);
   }
 
-  async sync(connectorId: string, options?: {
-    full_sync?: boolean;
-    filters?: Record<string, unknown>;
-  }): Promise<{ sync_job: SyncJob }> {
+  async sync(
+    connectorId: string,
+    options?: { full_sync?: boolean; filters?: Record<string, unknown> },
+  ): Promise<{ sync_job: SyncJob }> {
     return this.http.post(`/api/connectors/${connectorId}/sync`, options || {});
   }
 
@@ -2723,7 +2736,11 @@ class ConnectorsAPI {
     return this.http.get(`/api/connectors/sync-history${query ? `?${query}` : ''}`);
   }
 
-  async testConnection(connectorType: ConnectorType, config: Record<string, unknown>, credentials?: Record<string, string>): Promise<ConnectionTestResult> {
+  async testConnection(
+    connectorType: ConnectorType,
+    config: Record<string, unknown>,
+    credentials?: Record<string, string>,
+  ): Promise<ConnectionTestResult> {
     return this.http.post('/api/connectors/test', {
       connector_type: connectorType,
       config,
@@ -2736,7 +2753,9 @@ class ConnectorsAPI {
     return this.http.get(`/api/connectors/stats${params}`);
   }
 
-  async listTypes(): Promise<{ types: Array<{ type: ConnectorType; name: string; description: string; config_schema: object }> }> {
+  async listTypes(): Promise<{
+    types: Array<{ type: ConnectorType; name: string; description: string; config_schema: object }>;
+  }> {
     return this.http.get('/api/connectors/types');
   }
 }
@@ -2762,12 +2781,7 @@ export interface CodeEntity {
 }
 
 export interface RelationshipGraph {
-  nodes: Array<{
-    id: string;
-    name: string;
-    type: string;
-    file_path: string;
-  }>;
+  nodes: Array<{ id: string; name: string; type: string; file_path: string }>;
   edges: Array<{
     source: string;
     target: string;
@@ -2801,10 +2815,7 @@ class RepositoriesAPI {
   constructor(private http: HttpClient) {}
 
   async index(repoPath: string, options?: IndexOptions): Promise<{ job: IndexJob }> {
-    return this.http.post('/api/repository/index', {
-      repo_path: repoPath,
-      ...options,
-    });
+    return this.http.post('/api/repository/index', { repo_path: repoPath, ...options });
   }
 
   async incrementalUpdate(repositoryId: string): Promise<{ job: IndexJob }> {
@@ -2815,13 +2826,16 @@ class RepositoriesAPI {
     return this.http.get(`/api/repository/jobs/${jobId}`);
   }
 
-  async getEntities(repositoryId: string, options?: {
-    entity_type?: string;
-    file_path?: string;
-    search?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<{ entities: CodeEntity[]; total: number }> {
+  async getEntities(
+    repositoryId: string,
+    options?: {
+      entity_type?: string;
+      file_path?: string;
+      search?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{ entities: CodeEntity[]; total: number }> {
     const params = new URLSearchParams();
     if (options?.entity_type) params.set('entity_type', options.entity_type);
     if (options?.file_path) params.set('file_path', options.file_path);
@@ -2832,15 +2846,15 @@ class RepositoriesAPI {
     return this.http.get(`/api/repository/${repositoryId}/entities${query ? `?${query}` : ''}`);
   }
 
-  async getRelationshipGraph(repositoryId: string, options?: {
-    root_entity?: string;
-    depth?: number;
-    relationship_types?: string[];
-  }): Promise<{ graph: RelationshipGraph }> {
+  async getRelationshipGraph(
+    repositoryId: string,
+    options?: { root_entity?: string; depth?: number; relationship_types?: string[] },
+  ): Promise<{ graph: RelationshipGraph }> {
     const params = new URLSearchParams();
     if (options?.root_entity) params.set('root_entity', options.root_entity);
     if (options?.depth) params.set('depth', String(options.depth));
-    if (options?.relationship_types) options.relationship_types.forEach(t => params.append('relationship_types', t));
+    if (options?.relationship_types)
+      options.relationship_types.forEach((t) => params.append('relationship_types', t));
     const query = params.toString();
     return this.http.get(`/api/repository/${repositoryId}/graph${query ? `?${query}` : ''}`);
   }
@@ -2852,7 +2866,10 @@ class RepositoriesAPI {
   async list(options?: {
     limit?: number;
     offset?: number;
-  }): Promise<{ repositories: Array<{ id: string; path: string; indexed_at: string; entity_count: number }>; total: number }> {
+  }): Promise<{
+    repositories: Array<{ id: string; path: string; indexed_at: string; entity_count: number }>;
+    total: number;
+  }> {
     const params = new URLSearchParams();
     if (options?.limit) params.set('limit', String(options.limit));
     if (options?.offset) params.set('offset', String(options.offset));
@@ -2865,7 +2882,8 @@ class RepositoriesAPI {
 // Queue API (Job Queue Management)
 // =============================================================================
 
-export type QueueJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'retrying';
+export type QueueJobStatus =
+  'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'retrying';
 export type QueueJobPriority = 'low' | 'normal' | 'high' | 'critical';
 
 export interface QueueJob {
@@ -2948,12 +2966,7 @@ class QueueAPI {
   }
 
   async getWorkers(): Promise<{
-    workers: Array<{
-      name: string;
-      pending: number;
-      idle_time_ms: number;
-      last_delivery?: string;
-    }>;
+    workers: Array<{ name: string; pending: number; idle_time_ms: number; last_delivery?: string }>;
     total: number;
   }> {
     return this.http.get('/api/queue/workers');
@@ -2968,7 +2981,8 @@ class QueueAPI {
 // Extended Training API Types (Job Management)
 // =============================================================================
 
-export type TrainingJobStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TrainingJobStatus =
+  'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type TrainingJobType = 'sft' | 'dpo' | 'rlhf' | 'evaluation';
 
 export interface TrainingJob {
@@ -2977,11 +2991,7 @@ export interface TrainingJob {
   job_type: TrainingJobType;
   status: TrainingJobStatus;
   model_base: string;
-  dataset_config: {
-    source: string;
-    filters?: Record<string, unknown>;
-    sample_count: number;
-  };
+  dataset_config: { source: string; filters?: Record<string, unknown>; sample_count: number };
   training_config: {
     epochs: number;
     batch_size: number;
@@ -3023,11 +3033,7 @@ export interface TrainingJobConfig {
   name: string;
   job_type: TrainingJobType;
   model_base: string;
-  dataset_config: {
-    source: string;
-    filters?: Record<string, unknown>;
-    sample_count?: number;
-  };
+  dataset_config: { source: string; filters?: Record<string, unknown>; sample_count?: number };
   training_config: {
     epochs?: number;
     batch_size?: number;

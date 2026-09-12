@@ -16,10 +16,7 @@ import type {
 } from '@/lib/aragora-client';
 
 function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(cents / 100);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
 }
 
 function TierBar({ tier, data }: { tier: string; data: TierRevenue }) {
@@ -214,92 +211,124 @@ export default function RevenueAdminPage() {
 
           {loading ? (
             <div className="card p-8 text-center">
-              <div className="font-theme-data text-text-muted animate-pulse">Loading revenue data...</div>
+              <div className="font-theme-data text-text-muted animate-pulse">
+                Loading revenue data...
+              </div>
             </div>
-          ) : revenue && (
-            <>
-              {/* Key Metrics */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="card p-6">
-                  <div className="font-theme-data text-xs text-text-muted mb-2">Monthly Recurring Revenue</div>
-                  <div className="font-theme-data text-3xl text-[var(--accent)]">
-                    ${revenue.mrr_dollars.toLocaleString()}
+          ) : (
+            revenue && (
+              <>
+                {/* Key Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="card p-6">
+                    <div className="font-theme-data text-xs text-text-muted mb-2">
+                      Monthly Recurring Revenue
+                    </div>
+                    <div className="font-theme-data text-3xl text-[var(--accent)]">
+                      ${revenue.mrr_dollars.toLocaleString()}
+                    </div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">MRR</div>
                   </div>
-                  <div className="font-theme-data text-xs text-text-muted mt-1">MRR</div>
+                  <div className="card p-6">
+                    <div className="font-theme-data text-xs text-text-muted mb-2">
+                      Annual Recurring Revenue
+                    </div>
+                    <div className="font-theme-data text-3xl text-[var(--acid-cyan)]">
+                      ${revenue.arr_dollars.toLocaleString()}
+                    </div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">ARR</div>
+                  </div>
+                  <div className="card p-6">
+                    <div className="font-theme-data text-xs text-text-muted mb-2">
+                      Paying Organizations
+                    </div>
+                    <div className="font-theme-data text-3xl text-[var(--acid-yellow)]">
+                      {revenue.paying_organizations}
+                    </div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">
+                      of {revenue.total_organizations} total
+                    </div>
+                  </div>
+                  <div className="card p-6">
+                    <div className="font-theme-data text-xs text-text-muted mb-2">
+                      Conversion Rate
+                    </div>
+                    <div className="font-theme-data text-3xl text-[var(--acid-magenta)]">
+                      {revenue.total_organizations > 0
+                        ? (
+                            (revenue.paying_organizations / revenue.total_organizations) *
+                            100
+                          ).toFixed(1)
+                        : 0}
+                      %
+                    </div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">paying</div>
+                  </div>
                 </div>
-                <div className="card p-6">
-                  <div className="font-theme-data text-xs text-text-muted mb-2">Annual Recurring Revenue</div>
-                  <div className="font-theme-data text-3xl text-[var(--acid-cyan)]">
-                    ${revenue.arr_dollars.toLocaleString()}
-                  </div>
-                  <div className="font-theme-data text-xs text-text-muted mt-1">ARR</div>
-                </div>
-                <div className="card p-6">
-                  <div className="font-theme-data text-xs text-text-muted mb-2">Paying Organizations</div>
-                  <div className="font-theme-data text-3xl text-[var(--acid-yellow)]">
-                    {revenue.paying_organizations}
-                  </div>
-                  <div className="font-theme-data text-xs text-text-muted mt-1">
-                    of {revenue.total_organizations} total
-                  </div>
-                </div>
-                <div className="card p-6">
-                  <div className="font-theme-data text-xs text-text-muted mb-2">Conversion Rate</div>
-                  <div className="font-theme-data text-3xl text-[var(--acid-magenta)]">
-                    {revenue.total_organizations > 0
-                      ? ((revenue.paying_organizations / revenue.total_organizations) * 100).toFixed(1)
-                      : 0}%
-                  </div>
-                  <div className="font-theme-data text-xs text-text-muted mt-1">paying</div>
-                </div>
-              </div>
 
-              {/* Revenue by Tier */}
-              <div className="card p-6 mb-6">
-                <h2 className="font-theme-data text-[var(--accent)] mb-4">Revenue by Tier</h2>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-4 py-2 border-b border-[var(--accent)]/20">
-                    <div className="w-32 font-theme-data text-xs text-text-muted">TIER</div>
-                    <div className="flex-1 font-theme-data text-xs text-text-muted">SUBSCRIBERS</div>
-                    <div className="w-16 text-right font-theme-data text-xs text-text-muted">COUNT</div>
-                    <div className="w-24 text-right font-theme-data text-xs text-text-muted">MRR</div>
+                {/* Revenue by Tier */}
+                <div className="card p-6 mb-6">
+                  <h2 className="font-theme-data text-[var(--accent)] mb-4">Revenue by Tier</h2>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-4 py-2 border-b border-[var(--accent)]/20">
+                      <div className="w-32 font-theme-data text-xs text-text-muted">TIER</div>
+                      <div className="flex-1 font-theme-data text-xs text-text-muted">
+                        SUBSCRIBERS
+                      </div>
+                      <div className="w-16 text-right font-theme-data text-xs text-text-muted">
+                        COUNT
+                      </div>
+                      <div className="w-24 text-right font-theme-data text-xs text-text-muted">
+                        MRR
+                      </div>
+                    </div>
+                    {Object.entries(revenue.tier_breakdown)
+                      .sort(([, a], [, b]) => b.mrr_cents - a.mrr_cents)
+                      .map(([tier, data]) => (
+                        <TierBar key={tier} tier={tier} data={data} />
+                      ))}
                   </div>
-                  {Object.entries(revenue.tier_breakdown)
-                    .sort(([, a], [, b]) => b.mrr_cents - a.mrr_cents)
-                    .map(([tier, data]) => (
-                      <TierBar key={tier} tier={tier} data={data} />
-                    ))}
-                </div>
-                <div className="flex items-center justify-end gap-4 mt-4 pt-4 border-t border-[var(--accent)]/20">
-                  <div className="font-theme-data text-sm text-text-muted">Total MRR:</div>
-                  <div className="font-theme-data text-lg text-[var(--accent)]">
-                    {formatCurrency(revenue.mrr_cents)}
+                  <div className="flex items-center justify-end gap-4 mt-4 pt-4 border-t border-[var(--accent)]/20">
+                    <div className="font-theme-data text-sm text-text-muted">Total MRR:</div>
+                    <div className="font-theme-data text-lg text-[var(--accent)]">
+                      {formatCurrency(revenue.mrr_cents)}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Activity Stats */}
-              {stats && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="card p-4">
-                    <div className="font-theme-data text-xs text-text-muted">Total Users</div>
-                    <div className="font-theme-data text-2xl text-[var(--accent)]">{stats.total_users}</div>
+                {/* Activity Stats */}
+                {stats && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="card p-4">
+                      <div className="font-theme-data text-xs text-text-muted">Total Users</div>
+                      <div className="font-theme-data text-2xl text-[var(--accent)]">
+                        {stats.total_users}
+                      </div>
+                    </div>
+                    <div className="card p-4">
+                      <div className="font-theme-data text-xs text-text-muted">Active (24h)</div>
+                      <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">
+                        {stats.users_active_24h}
+                      </div>
+                    </div>
+                    <div className="card p-4">
+                      <div className="font-theme-data text-xs text-text-muted">New Users (7d)</div>
+                      <div className="font-theme-data text-2xl text-[var(--acid-yellow)]">
+                        {stats.new_users_7d}
+                      </div>
+                    </div>
+                    <div className="card p-4">
+                      <div className="font-theme-data text-xs text-text-muted">
+                        Debates This Month
+                      </div>
+                      <div className="font-theme-data text-2xl text-text">
+                        {stats.total_debates_this_month}
+                      </div>
+                    </div>
                   </div>
-                  <div className="card p-4">
-                    <div className="font-theme-data text-xs text-text-muted">Active (24h)</div>
-                    <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">{stats.users_active_24h}</div>
-                  </div>
-                  <div className="card p-4">
-                    <div className="font-theme-data text-xs text-text-muted">New Users (7d)</div>
-                    <div className="font-theme-data text-2xl text-[var(--acid-yellow)]">{stats.new_users_7d}</div>
-                  </div>
-                  <div className="card p-4">
-                    <div className="font-theme-data text-xs text-text-muted">Debates This Month</div>
-                    <div className="font-theme-data text-2xl text-text">{stats.total_debates_this_month}</div>
-                  </div>
-                </div>
-              )}
-            </>
+                )}
+              </>
+            )
           )}
         </div>
       </main>

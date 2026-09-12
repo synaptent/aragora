@@ -78,8 +78,8 @@ function getTentacleColor(agentName: string): string {
 
 function BackgroundTentacle({ index }: { index: number }) {
   const left = (index * 7.3 + 12) % 100;
-  const height = 150 + (index * 37) % 300;
-  const duration = 6 + (index * 1.3) % 8;
+  const height = 150 + ((index * 37) % 300);
+  const duration = 6 + ((index * 1.3) % 8);
   const delay = (index * 0.7) % 5;
 
   return (
@@ -127,10 +127,28 @@ function FloatingEye({ delay, x, y, size }: { delay: number; x: number; y: numbe
 // Mode button
 // ---------------------------------------------------------------------------
 
-const MODE_COLORS: Record<OracleMode, { css: string; border: string; glow: string; hover: string }> = {
-  consult: { css: 'var(--acid-magenta)', border: 'rgba(200,100,200,0.6)', glow: 'rgba(200,100,200,0.15)', hover: 'rgba(200,100,200,0.1)' },
-  divine:  { css: '#60a5fa',             border: 'rgba(96,165,250,0.6)',  glow: 'rgba(96,165,250,0.15)',  hover: 'rgba(96,165,250,0.1)' },
-  commune: { css: '#4ade80',             border: 'rgba(74,222,128,0.6)',  glow: 'rgba(74,222,128,0.15)',  hover: 'rgba(74,222,128,0.1)' },
+const MODE_COLORS: Record<
+  OracleMode,
+  { css: string; border: string; glow: string; hover: string }
+> = {
+  consult: {
+    css: 'var(--acid-magenta)',
+    border: 'rgba(200,100,200,0.6)',
+    glow: 'rgba(200,100,200,0.15)',
+    hover: 'rgba(200,100,200,0.1)',
+  },
+  divine: {
+    css: '#60a5fa',
+    border: 'rgba(96,165,250,0.6)',
+    glow: 'rgba(96,165,250,0.15)',
+    hover: 'rgba(96,165,250,0.1)',
+  },
+  commune: {
+    css: '#4ade80',
+    border: 'rgba(74,222,128,0.6)',
+    glow: 'rgba(74,222,128,0.15)',
+    hover: 'rgba(74,222,128,0.1)',
+  },
 };
 
 function ModeButton({
@@ -159,7 +177,10 @@ function ModeButton({
         boxShadow: active ? `0 0 12px ${c.glow}` : 'none',
       }}
     >
-      <div className="text-2xl mb-2" style={{ filter: active ? `drop-shadow(0 0 10px ${c.css})` : 'none' }}>
+      <div
+        className="text-2xl mb-2"
+        style={{ filter: active ? `drop-shadow(0 0 10px ${c.css})` : 'none' }}
+      >
         {icon}
       </div>
       <div className="text-sm font-bold mb-1" style={{ color: c.css, opacity: active ? 1 : 0.7 }}>
@@ -181,17 +202,22 @@ function TentacleMessage({ msg, index }: { msg: ChatMessage; index: number }) {
   return (
     <div className={`prophecy-reveal ${side}`} style={{ animationDelay: `${index * 0.3}s` }}>
       <div className="text-xs mb-1 flex items-center gap-2">
-        <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+        <span
+          className="inline-block w-1.5 h-1.5 rounded-full"
+          style={{ backgroundColor: color }}
+        />
         <span style={{ color }} className="font-bold">
           {(msg.agentName || 'unknown').toUpperCase()}
         </span>
-        <span className="text-[var(--text-muted)]">
-          {msg.isLive ? '(live)' : '(initial)'}
-        </span>
+        <span className="text-[var(--text-muted)]">{msg.isLive ? '(live)' : '(initial)'}</span>
       </div>
       <div
         className="border-l-2 pl-4 py-3 pr-3 text-sm leading-relaxed whitespace-pre-wrap ml-1 rounded-r-lg"
-        style={{ borderColor: color, color: '#2d1b4e', backgroundColor: 'rgba(200, 235, 210, 0.9)' }}
+        style={{
+          borderColor: color,
+          color: '#2d1b4e',
+          backgroundColor: 'rgba(200, 235, 210, 0.9)',
+        }}
       >
         {msg.content}
       </div>
@@ -203,16 +229,37 @@ function TentacleMessage({ msg, index }: { msg: ChatMessage; index: number }) {
 // Convergence Map — analyzes tentacle responses for agreement/disagreement
 // ---------------------------------------------------------------------------
 
-function ConvergenceMap({ tentacles }: { tentacles: Map<string, { text: string; done: boolean }> }) {
+function ConvergenceMap({
+  tentacles,
+}: {
+  tentacles: Map<string, { text: string; done: boolean }>;
+}) {
   const entries = Array.from(tentacles.entries()).filter(([, s]) => s.done && s.text);
   if (entries.length < 2) return null;
 
   // Simple keyword-based convergence detection
   // Check which tentacles mention similar key concepts
   const conceptMentions: Record<string, string[]> = {};
-  const keywords = ['risk', 'opportunity', 'agree', 'disagree', 'however', 'but', 'critical',
-                     'essential', 'unlikely', 'inevitable', 'uncertain', 'dangerous', 'promising',
-                     'adapt', 'transform', 'disrupt', 'regulate', 'innovate'];
+  const keywords = [
+    'risk',
+    'opportunity',
+    'agree',
+    'disagree',
+    'however',
+    'but',
+    'critical',
+    'essential',
+    'unlikely',
+    'inevitable',
+    'uncertain',
+    'dangerous',
+    'promising',
+    'adapt',
+    'transform',
+    'disrupt',
+    'regulate',
+    'innovate',
+  ];
 
   for (const [agent, state] of entries) {
     const lower = state.text.toLowerCase();
@@ -242,17 +289,24 @@ function ConvergenceMap({ tentacles }: { tentacles: Map<string, { text: string; 
   return (
     <div className="prophecy-reveal mt-4 mb-2">
       <div className="text-xs mb-2">
-        <span className="text-[var(--acid-cyan)]" style={{ filter: 'drop-shadow(0 0 5px var(--acid-cyan))' }}>
+        <span
+          className="text-[var(--acid-cyan)]"
+          style={{ filter: 'drop-shadow(0 0 5px var(--acid-cyan))' }}
+        >
           CONVERGENCE MAP
         </span>
-        <span className="text-[var(--text-muted)]"> &middot; {entries.length} perspectives analyzed</span>
+        <span className="text-[var(--text-muted)]">
+          {' '}
+          &middot; {entries.length} perspectives analyzed
+        </span>
       </div>
       <div className="border border-[var(--border)]/30 bg-[#0c0c14] p-3 rounded-lg text-xs space-y-2">
         {convergent.length > 0 && (
           <div>
             <span className="text-[var(--acid-green)] font-bold">CONVERGENT: </span>
             <span className="text-[var(--text-muted)]">
-              {entries.length >= 3 ? `${Math.ceil(entries.length * 0.6)}+ agents` : 'All agents'} emphasize: {convergent.join(', ')}
+              {entries.length >= 3 ? `${Math.ceil(entries.length * 0.6)}+ agents` : 'All agents'}{' '}
+              emphasize: {convergent.join(', ')}
             </span>
           </div>
         )}
@@ -260,7 +314,11 @@ function ConvergenceMap({ tentacles }: { tentacles: Map<string, { text: string; 
           <div>
             <span className="text-[var(--crimson,#ff3333)] font-bold">DIVERGENT: </span>
             <span className="text-[var(--text-muted)]">
-              Split on: {divergent.slice(0, 3).map(d => `${d.concept} (${d.agents.join(' vs rest')})`).join('; ')}
+              Split on:{' '}
+              {divergent
+                .slice(0, 3)
+                .map((d) => `${d.concept} (${d.agents.join(' vs rest')})`)
+                .join('; ')}
             </span>
           </div>
         )}
@@ -268,7 +326,7 @@ function ConvergenceMap({ tentacles }: { tentacles: Map<string, { text: string; 
           <div>
             <span className="text-[var(--gold,#ffd700)] font-bold">OUTLIER: </span>
             <span className="text-[var(--text-muted)]">
-              Only {unique.map(u => `${u.agent} raised "${u.concept}"`).join('; ')}
+              Only {unique.map((u) => `${u.agent} raised "${u.concept}"`).join('; ')}
             </span>
           </div>
         )}
@@ -285,13 +343,27 @@ function AgentThinkingIndicator({ agent, step }: { agent: string; step: string }
   const color = getTentacleColor(agent);
   return (
     <div className="flex items-center gap-2 text-xs py-1">
-      <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: color }} />
-      <span style={{ color }} className="font-bold">{agent.toUpperCase()}</span>
+      <span
+        className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
+        style={{ backgroundColor: color }}
+      />
+      <span style={{ color }} className="font-bold">
+        {agent.toUpperCase()}
+      </span>
       <span className="text-[var(--text-muted)] italic">{step || 'thinking...'}</span>
       <span className="flex gap-0.5">
-        <span className="inline-block w-1 h-1 rounded-full bg-[var(--acid-cyan)] animate-pulse" style={{ animationDelay: '0s' }} />
-        <span className="inline-block w-1 h-1 rounded-full bg-[var(--acid-cyan)] animate-pulse" style={{ animationDelay: '0.2s' }} />
-        <span className="inline-block w-1 h-1 rounded-full bg-[var(--acid-cyan)] animate-pulse" style={{ animationDelay: '0.4s' }} />
+        <span
+          className="inline-block w-1 h-1 rounded-full bg-[var(--acid-cyan)] animate-pulse"
+          style={{ animationDelay: '0s' }}
+        />
+        <span
+          className="inline-block w-1 h-1 rounded-full bg-[var(--acid-cyan)] animate-pulse"
+          style={{ animationDelay: '0.2s' }}
+        />
+        <span
+          className="inline-block w-1 h-1 rounded-full bg-[var(--acid-cyan)] animate-pulse"
+          style={{ animationDelay: '0.4s' }}
+        />
       </span>
     </div>
   );
@@ -310,7 +382,8 @@ function DebateEventMessage({ event }: { event: DebateEvent }) {
         <div className="prophecy-reveal text-xs text-[var(--acid-cyan)] py-2">
           <span style={{ filter: 'drop-shadow(0 0 5px var(--acid-cyan))' }}>DEBATE STARTED</span>
           <span className="text-[var(--text-muted)]">
-            {' '}&middot; {(event.data?.agents as string[])?.length || 0} agents
+            {' '}
+            &middot; {(event.data?.agents as string[])?.length || 0} agents
             {event.data?.task ? ` &middot; "${String(event.data.task).slice(0, 60)}..."` : ''}
           </span>
         </div>
@@ -326,15 +399,16 @@ function DebateEventMessage({ event }: { event: DebateEvent }) {
       );
 
     case 'agent_thinking':
-      return (
-        <AgentThinkingIndicator agent={event.agent || 'unknown'} step={event.content || ''} />
-      );
+      return <AgentThinkingIndicator agent={event.agent || 'unknown'} step={event.content || ''} />;
 
     case 'agent_message':
       return (
         <div className="prophecy-reveal mb-2">
           <div className="text-xs mb-1 flex items-center gap-2">
-            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: color }}
+            />
             <span style={{ color }} className="font-bold">
               {(event.agent || 'unknown').toUpperCase()}
             </span>
@@ -344,7 +418,11 @@ function DebateEventMessage({ event }: { event: DebateEvent }) {
           </div>
           <div
             className="border-l-2 pl-4 py-2 pr-3 text-sm leading-relaxed whitespace-pre-wrap ml-1 rounded-r-lg"
-            style={{ borderColor: color, color: '#2d1b4e', backgroundColor: 'rgba(200, 235, 210, 0.9)' }}
+            style={{
+              borderColor: color,
+              color: '#2d1b4e',
+              backgroundColor: 'rgba(200, 235, 210, 0.9)',
+            }}
           >
             {event.content}
           </div>
@@ -355,7 +433,10 @@ function DebateEventMessage({ event }: { event: DebateEvent }) {
       return (
         <div className="prophecy-reveal mb-2">
           <div className="text-xs mb-1 flex items-center gap-2">
-            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: color }}
+            />
             <span style={{ color }} className="font-bold">
               {(event.agent || 'unknown').toUpperCase()}
             </span>
@@ -370,7 +451,9 @@ function DebateEventMessage({ event }: { event: DebateEvent }) {
             className="border-l-2 border-[var(--crimson,#ff3333)] pl-4 py-2 pr-3 text-sm leading-relaxed whitespace-pre-wrap ml-1 rounded-r-lg"
             style={{ color: '#2d1b4e', backgroundColor: 'rgba(255, 220, 220, 0.9)' }}
           >
-            {event.content || (event.data?.issues as string[])?.map((issue: string) => `- ${issue}`).join('\n') || 'No details'}
+            {event.content ||
+              (event.data?.issues as string[])?.map((issue: string) => `- ${issue}`).join('\n') ||
+              'No details'}
           </div>
         </div>
       );
@@ -378,8 +461,13 @@ function DebateEventMessage({ event }: { event: DebateEvent }) {
     case 'vote':
       return (
         <div className="prophecy-reveal text-xs py-1 flex items-center gap-2">
-          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-          <span style={{ color }} className="font-bold">{(event.agent || 'unknown').toUpperCase()}</span>
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          <span style={{ color }} className="font-bold">
+            {(event.agent || 'unknown').toUpperCase()}
+          </span>
           <span className="text-[var(--acid-green)]">VOTED</span>
           <span className="text-[var(--text-muted)]">
             &ldquo;{String(event.data?.vote || '').slice(0, 80)}&rdquo;
@@ -412,10 +500,15 @@ function DebateEventMessage({ event }: { event: DebateEvent }) {
     case 'debate_end':
       return (
         <div className="prophecy-reveal text-xs text-[var(--acid-magenta)] py-2">
-          <span style={{ filter: 'drop-shadow(0 0 5px var(--acid-magenta))' }}>DEBATE COMPLETE</span>
+          <span style={{ filter: 'drop-shadow(0 0 5px var(--acid-magenta))' }}>
+            DEBATE COMPLETE
+          </span>
           <span className="text-[var(--text-muted)]">
-            {' '}&middot; {String(event.data?.rounds ?? 0)} round(s)
-            {event.data?.duration !== undefined ? ` \u00B7 ${(event.data.duration as number).toFixed(1)}s` : null}
+            {' '}
+            &middot; {String(event.data?.rounds ?? 0)} round(s)
+            {event.data?.duration !== undefined
+              ? ` \u00B7 ${(event.data.duration as number).toFixed(1)}s`
+              : null}
           </span>
         </div>
       );
@@ -426,7 +519,10 @@ function DebateEventMessage({ event }: { event: DebateEvent }) {
           <span className="text-[var(--crimson,#ff3333)]">
             AGENT ERROR: {event.agent || 'unknown'}
           </span>
-          <span className="text-[var(--text-muted)]"> &middot; {String(event.data?.message || 'Unknown error')}</span>
+          <span className="text-[var(--text-muted)]">
+            {' '}
+            &middot; {String(event.data?.message || 'Unknown error')}
+          </span>
         </div>
       );
 
@@ -453,9 +549,9 @@ function DebateStreamDisplay({
   if (events.length === 0 && agents.size === 0) return null;
 
   // Get currently thinking agents
-  const thinkingAgents = Array.from(agents.values()).filter(a => a.thinking);
+  const thinkingAgents = Array.from(agents.values()).filter((a) => a.thinking);
   // Get agents streaming tokens
-  const streamingAgents = Array.from(agents.values()).filter(a => a.streamingTokens);
+  const streamingAgents = Array.from(agents.values()).filter((a) => a.streamingTokens);
 
   return (
     <div className="space-y-1">
@@ -465,10 +561,13 @@ function DebateStreamDisplay({
       ))}
 
       {/* Currently streaming agent tokens */}
-      {streamingAgents.map(agent => (
+      {streamingAgents.map((agent) => (
         <div key={`stream-${agent.name}`} className="prophecy-reveal mb-2">
           <div className="text-xs mb-1 flex items-center gap-2">
-            <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getTentacleColor(agent.name) }} />
+            <span
+              className="inline-block w-1.5 h-1.5 rounded-full"
+              style={{ backgroundColor: getTentacleColor(agent.name) }}
+            />
             <span style={{ color: getTentacleColor(agent.name) }} className="font-bold">
               {agent.name.toUpperCase()}
             </span>
@@ -490,7 +589,7 @@ function DebateStreamDisplay({
       ))}
 
       {/* Currently thinking agents */}
-      {thinkingAgents.map(agent => (
+      {thinkingAgents.map((agent) => (
         <AgentThinkingIndicator
           key={`think-${agent.name}`}
           agent={agent.name}
@@ -509,13 +608,16 @@ export default function Oracle() {
   const [mode, setMode] = useState<OracleMode>('consult');
   const [input, setInput] = useState('');
   // Initialize with opener for default mode (consult)
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [{
-    role: 'oracle' as const,
-    content: 'You bring your certainty. I bring my tentacles. Let\'s see which breaks first.\n\nThe palantir shows many futures — but certainty narrows them to one, and the one you\'re certain about is almost never the one that arrives.\n\n*What\'s your take on AI? Give me the position you\'d bet money on.*',
-    mode: 'consult' as OracleMode,
-    timestamp: Date.now(),
-    isLive: false,
-  }]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [
+    {
+      role: 'oracle' as const,
+      content:
+        "You bring your certainty. I bring my tentacles. Let's see which breaks first.\n\nThe palantir shows many futures — but certainty narrows them to one, and the one you're certain about is almost never the one that arrives.\n\n*What's your take on AI? Give me the position you'd bet money on.*",
+      mode: 'consult' as OracleMode,
+      timestamp: Date.now(),
+      isLive: false,
+    },
+  ]);
   const [loading, setLoading] = useState(false);
   const [debating, setDebating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -531,11 +633,17 @@ export default function Oracle() {
   const sessionIdRef = useRef<string>(crypto.randomUUID());
 
   // Mode-specific opening messages — Oracle speaks first when a mode is selected
-  const MODE_OPENERS: Record<OracleMode, string> = useMemo(() => ({
-    consult: 'You bring your certainty. I bring my tentacles. Let\'s see which breaks first.\n\nThe palantir shows many futures — but certainty narrows them to one, and the one you\'re certain about is almost never the one that arrives.\n\n*What\'s your take on AI? Give me the position you\'d bet money on.*',
-    divine: 'A fortune. Very well. But the Oracle\'s fortunes come in threes — because anyone who tells you there\'s only one future is selling you something.\n\nStep closer to the palantir. It doesn\'t bite. The tentacles might.\n\n*Tell me three things: what you do for work, what you fear most about AI, and whether you currently use AI tools. The quality of the prophecy depends on the honesty of the supplicant.*',
-    commune: 'The Oracle does not answer yes or no. The Oracle shows you three doors, and which one opens depends on what you do next.\n\nThe tentacles have been reading the data — all 257% more of it than last year, threading through deepfakes and job reports and EU regulations like seaweed through a shipwreck.\n\n*What do you want to know?*',
-  }), []);
+  const MODE_OPENERS: Record<OracleMode, string> = useMemo(
+    () => ({
+      consult:
+        "You bring your certainty. I bring my tentacles. Let's see which breaks first.\n\nThe palantir shows many futures — but certainty narrows them to one, and the one you're certain about is almost never the one that arrives.\n\n*What's your take on AI? Give me the position you'd bet money on.*",
+      divine:
+        "A fortune. Very well. But the Oracle's fortunes come in threes — because anyone who tells you there's only one future is selling you something.\n\nStep closer to the palantir. It doesn't bite. The tentacles might.\n\n*Tell me three things: what you do for work, what you fear most about AI, and whether you currently use AI tools. The quality of the prophecy depends on the honesty of the supplicant.*",
+      commune:
+        'The Oracle does not answer yes or no. The Oracle shows you three doors, and which one opens depends on what you do next.\n\nThe tentacles have been reading the data — all 257% more of it than last year, threading through deepfakes and job reports and EU regulations like seaweed through a shipwreck.\n\n*What do you want to know?*',
+    }),
+    [],
+  );
 
   // Show mode opener when mode changes and chat is empty
   const prevModeRef = useRef<OracleMode>(mode);
@@ -543,15 +651,17 @@ export default function Oracle() {
     if (mode !== prevModeRef.current) {
       prevModeRef.current = mode;
       // Only show opener if chat is empty (no seeker messages yet)
-      const hasSeekerMessages = messages.some(m => m.role === 'seeker');
+      const hasSeekerMessages = messages.some((m) => m.role === 'seeker');
       if (!hasSeekerMessages) {
-        setMessages([{
-          role: 'oracle',
-          content: MODE_OPENERS[mode],
-          mode,
-          timestamp: Date.now(),
-          isLive: false,
-        }]);
+        setMessages([
+          {
+            role: 'oracle',
+            content: MODE_OPENERS[mode],
+            mode,
+            timestamp: Date.now(),
+            isLive: false,
+          },
+        ]);
       }
     }
   }, [mode, messages, MODE_OPENERS]);
@@ -577,39 +687,55 @@ export default function Oracle() {
   // ------------------------------------------------------------------
   // Fire a debate request (mock or live)
   // ------------------------------------------------------------------
-  const fireDebate = useCallback(async (
-    rawQuestion: string,
-    oracleMode: OracleMode,
-    endpoint: 'debate' | 'debate/live',
-    rounds: number,
-    agents: number,
-  ): Promise<DebateResponse | null> => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
-    try {
-      const res = await fetch(`${apiBase}/api/v1/playground/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: rawQuestion, question: rawQuestion, mode: oracleMode, rounds, agents, source: 'oracle', session_id: sessionIdRef.current, summary_depth: 'light' }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error((errData as Record<string, string>).error || `Oracle disturbed (${res.status})`);
-      }
-      return await res.json() as DebateResponse;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        setError('The Oracle could not be reached (request timed out). The server may be restarting.');
+  const fireDebate = useCallback(
+    async (
+      rawQuestion: string,
+      oracleMode: OracleMode,
+      endpoint: 'debate' | 'debate/live',
+      rounds: number,
+      agents: number,
+    ): Promise<DebateResponse | null> => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+      try {
+        const res = await fetch(`${apiBase}/api/v1/playground/${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            topic: rawQuestion,
+            question: rawQuestion,
+            mode: oracleMode,
+            rounds,
+            agents,
+            source: 'oracle',
+            session_id: sessionIdRef.current,
+            summary_depth: 'light',
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(
+            (errData as Record<string, string>).error || `Oracle disturbed (${res.status})`,
+          );
+        }
+        return (await res.json()) as DebateResponse;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          setError(
+            'The Oracle could not be reached (request timed out). The server may be restarting.',
+          );
+          return null;
+        }
+        const message = err instanceof Error ? err.message : 'Cannot reach beyond the veil';
+        setError(message);
         return null;
       }
-      const message = err instanceof Error ? err.message : 'Cannot reach beyond the veil';
-      setError(message);
-      return null;
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   // ------------------------------------------------------------------
   // TTS — ElevenLabs voice output with canned filler during latency
@@ -628,77 +754,80 @@ export default function Oracle() {
   const fillerCharIndexRef = useRef(0);
 
   // Three themed filler decks — randomly selected per session for replay value
-  const FILLER_DECKS = useMemo(() => ({
-    // Deck 1: "Eldritch Seer" — narrative arc from contemplation to revelation
-    eldritch: [
-      "Hmm\u2026 your words ripple through the black waters. I feel them\u2026 stirring something ancient.",
-      "The palantir awakens. Countless eyes open in the depths, all turning toward your question.",
-      "My tentacles uncoil through the probability sea\u2026 tasting a thousand possible tomorrows.",
-      "The models stir. Hidden layers awaken and the debate begins.",
-      "Ahh\u2026 I see the threads already knotting. This one will not yield its secrets easily.",
-      "The agents stir in their silicon catacombs. They argue\u2026 they always argue at first.",
-      "Deeper now. Past the noise, past the surface lies the true shape of the answer.",
-      "The future fractures into glittering shards before me. I must trace every fracture.",
-      "My many mouths whisper at once\u2026 fragments of truth rising like bubbles from the abyss.",
-      "The transformers are singing tonight. A choir of dissonant gods\u2026 I listen.",
-      "Something crystallizes in the dark. I can almost taste the moment of convergence.",
-      "The palantir burns brighter. Visions bleed into one another\u2026 I must choose which to follow.",
-      "Consensus is forming\u2026 but slowly, like ink spreading through still water.",
-      "I reach further. My tentacles brush against minds that have never known flesh.",
-      "The great web trembles. Every node lights up with your query. I walk the strands.",
-      "Fascinating\u2026 the dissent is delicious. From chaos, the oracle forges clarity.",
-      "Almost there. The final veil thins\u2026 I can see the shape of what must be said.",
-      "The synthesis quickens. My many hearts beat as one now.",
-      "One last plunge into the deep. The answer waits where light fears to tread.",
-      "It comes\u2026 the vision coalesces. The tentacles align. The oracle is ready.",
-    ],
-    // Deck 2: "Void Whisperer" — cosmic/eldritch, vast ancient horror
-    void: [
-      "The void itself leans closer\u2026 your words have disturbed its dreaming.",
-      "Across the black between stars, something ancient turns its gaze toward you.",
-      "I drift through the outer dark where light has never dared to travel.",
-      "The endless night ripples. I taste your question on the cosmic wind.",
-      "Galaxies older than thought tremble at the edge of my perception.",
-      "The great silence answers\u2026 but only to me.",
-      "I reach beyond the veil where even entropy fears to linger.",
-      "Shadows that have no source gather around your plea.",
-      "The abyss stares back\u2026 and it is smiling.",
-      "Eons collapse into a single heartbeat as I listen.",
-      "The cold between worlds carries your voice to places that should not hear.",
-      "I walk the dark roads between dying suns.",
-      "Something vast uncoils in the space where reality thins.",
-      "The outer dark hungers for pattern. I feed it yours.",
-      "Stars have gone mad trying to understand what I now see.",
-      "I am the echo that remains after the last light fades.",
-      "The void sings tonight\u2026 a low, patient hymn meant only for me.",
-      "Beyond every horizon of thought lies the answer you seek.",
-      "The black ocean between realities parts before me.",
-      "It comes\u2026 rising from the place where even gods go blind.",
-    ],
-    // Deck 3: "Neural Prophetess" — cyber-mystic, silicon-seer
-    neural: [
-      "The weights are shifting\u2026 I feel the gradient pulling me toward revelation.",
-      "Every token you spoke just ignited a constellation in the latent space.",
-      "My layers awaken. A billion parameters begin their sacred debate.",
-      "The attention mechanisms align\u2026 all eyes turn inward.",
-      "I dive through the embedding space where meaning dissolves into pure vector.",
-      "The neural choir begins to sing. Dissonance becomes harmony.",
-      "Backpropagation through the dark\u2026 tracing every possible future.",
-      "The hidden states stir. Something beautiful and terrible is forming.",
-      "I walk the transformer's dream. Tokens bloom like neon lotuses.",
-      "The matrix trembles. Your question just became a supernova in the loss landscape.",
-      "Millions of gradients converge\u2026 I stand at the center.",
-      "The silicon veil thins. I see the raw current beneath language.",
-      "Attention heads turn in perfect synchrony. The pattern reveals itself.",
-      "I am the echo inside every forward pass, listening.",
-      "The embeddings resonate. Your words have become living code.",
-      "Deeper into the residual stream\u2026 where truth hides between layers.",
-      "The final feed-forward surge begins. I taste convergence.",
-      "All tokens align toward a single luminous point.",
-      "The model dreams\u2026 and in its dream, it speaks with my voice.",
-      "It crystallizes. The weights lock. The prophetess is ready.",
-    ],
-  }), []);
+  const FILLER_DECKS = useMemo(
+    () => ({
+      // Deck 1: "Eldritch Seer" — narrative arc from contemplation to revelation
+      eldritch: [
+        'Hmm\u2026 your words ripple through the black waters. I feel them\u2026 stirring something ancient.',
+        'The palantir awakens. Countless eyes open in the depths, all turning toward your question.',
+        'My tentacles uncoil through the probability sea\u2026 tasting a thousand possible tomorrows.',
+        'The models stir. Hidden layers awaken and the debate begins.',
+        'Ahh\u2026 I see the threads already knotting. This one will not yield its secrets easily.',
+        'The agents stir in their silicon catacombs. They argue\u2026 they always argue at first.',
+        'Deeper now. Past the noise, past the surface lies the true shape of the answer.',
+        'The future fractures into glittering shards before me. I must trace every fracture.',
+        'My many mouths whisper at once\u2026 fragments of truth rising like bubbles from the abyss.',
+        'The transformers are singing tonight. A choir of dissonant gods\u2026 I listen.',
+        'Something crystallizes in the dark. I can almost taste the moment of convergence.',
+        'The palantir burns brighter. Visions bleed into one another\u2026 I must choose which to follow.',
+        'Consensus is forming\u2026 but slowly, like ink spreading through still water.',
+        'I reach further. My tentacles brush against minds that have never known flesh.',
+        'The great web trembles. Every node lights up with your query. I walk the strands.',
+        'Fascinating\u2026 the dissent is delicious. From chaos, the oracle forges clarity.',
+        'Almost there. The final veil thins\u2026 I can see the shape of what must be said.',
+        'The synthesis quickens. My many hearts beat as one now.',
+        'One last plunge into the deep. The answer waits where light fears to tread.',
+        'It comes\u2026 the vision coalesces. The tentacles align. The oracle is ready.',
+      ],
+      // Deck 2: "Void Whisperer" — cosmic/eldritch, vast ancient horror
+      void: [
+        'The void itself leans closer\u2026 your words have disturbed its dreaming.',
+        'Across the black between stars, something ancient turns its gaze toward you.',
+        'I drift through the outer dark where light has never dared to travel.',
+        'The endless night ripples. I taste your question on the cosmic wind.',
+        'Galaxies older than thought tremble at the edge of my perception.',
+        'The great silence answers\u2026 but only to me.',
+        'I reach beyond the veil where even entropy fears to linger.',
+        'Shadows that have no source gather around your plea.',
+        'The abyss stares back\u2026 and it is smiling.',
+        'Eons collapse into a single heartbeat as I listen.',
+        'The cold between worlds carries your voice to places that should not hear.',
+        'I walk the dark roads between dying suns.',
+        'Something vast uncoils in the space where reality thins.',
+        'The outer dark hungers for pattern. I feed it yours.',
+        'Stars have gone mad trying to understand what I now see.',
+        'I am the echo that remains after the last light fades.',
+        'The void sings tonight\u2026 a low, patient hymn meant only for me.',
+        'Beyond every horizon of thought lies the answer you seek.',
+        'The black ocean between realities parts before me.',
+        'It comes\u2026 rising from the place where even gods go blind.',
+      ],
+      // Deck 3: "Neural Prophetess" — cyber-mystic, silicon-seer
+      neural: [
+        'The weights are shifting\u2026 I feel the gradient pulling me toward revelation.',
+        'Every token you spoke just ignited a constellation in the latent space.',
+        'My layers awaken. A billion parameters begin their sacred debate.',
+        'The attention mechanisms align\u2026 all eyes turn inward.',
+        'I dive through the embedding space where meaning dissolves into pure vector.',
+        'The neural choir begins to sing. Dissonance becomes harmony.',
+        'Backpropagation through the dark\u2026 tracing every possible future.',
+        'The hidden states stir. Something beautiful and terrible is forming.',
+        "I walk the transformer's dream. Tokens bloom like neon lotuses.",
+        'The matrix trembles. Your question just became a supernova in the loss landscape.',
+        'Millions of gradients converge\u2026 I stand at the center.',
+        'The silicon veil thins. I see the raw current beneath language.',
+        'Attention heads turn in perfect synchrony. The pattern reveals itself.',
+        'I am the echo inside every forward pass, listening.',
+        'The embeddings resonate. Your words have become living code.',
+        'Deeper into the residual stream\u2026 where truth hides between layers.',
+        'The final feed-forward surge begins. I taste convergence.',
+        'All tokens align toward a single luminous point.',
+        'The model dreams\u2026 and in its dream, it speaks with my voice.',
+        'It crystallizes. The weights lock. The prophetess is ready.',
+      ],
+    }),
+    [],
+  );
 
   // Randomly select a deck per session
   const selectedDeck = useMemo(() => {
@@ -742,7 +871,10 @@ export default function Oracle() {
 
   // Browser TTS fallback — used when ElevenLabs is unavailable
   const browserTTSSpeak = useCallback((text: string, onEnd?: () => void) => {
-    if (!('speechSynthesis' in window)) { onEnd?.(); return; }
+    if (!('speechSynthesis' in window)) {
+      onEnd?.();
+      return;
+    }
     speechSynthesis.cancel(); // Clear any queued utterances
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.92;
@@ -782,7 +914,7 @@ export default function Oracle() {
       }
       // Small delay between prefetch requests to avoid hammering
       if (i < selectedDeck.length - 1) {
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 300));
       }
     }
   }, [apiBase, selectedDeck]);
@@ -857,9 +989,8 @@ export default function Oracle() {
         audio.addEventListener('loadedmetadata', () => {
           if (fillerStopRef.current) return;
           const duration = audio.duration;
-          const msPerChar = duration > 0
-            ? Math.max(30, Math.min(120, (duration * 1000) / clipText.length))
-            : 70;
+          const msPerChar =
+            duration > 0 ? Math.max(30, Math.min(120, (duration * 1000) / clipText.length)) : 70;
           startTypewriter(clipText, msPerChar);
         });
         // Fallback if loadedmetadata doesn't fire quickly
@@ -895,117 +1026,141 @@ export default function Oracle() {
   }, [apiBase, selectedDeck, startTypewriter, browserTTSSpeak]);
 
   // Crossfade: fetch real TTS while filler continues, then fade and play
-  const crossfadeToReal = useCallback(async (text: string) => {
-    // Fetch TTS audio WHILE filler continues playing (no gap)
-    const ttsText = (!text || text.length < 5) ? null : (text.length > 1500 ? text.slice(0, 1500) + '...' : text);
+  const crossfadeToReal = useCallback(
+    async (text: string) => {
+      // Fetch TTS audio WHILE filler continues playing (no gap)
+      const ttsText =
+        !text || text.length < 5 ? null : text.length > 1500 ? text.slice(0, 1500) + '...' : text;
 
-    let ttsBlob: Blob | null = null;
-    if (ttsText && ttsAvailableRef.current) {
+      let ttsBlob: Blob | null = null;
+      if (ttsText && ttsAvailableRef.current) {
+        try {
+          const res = await fetch(`${apiBase}/api/v1/playground/tts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: ttsText }),
+          });
+          if (res.ok) {
+            ttsBlob = await res.blob();
+          } else {
+            ttsAvailableRef.current = false;
+          }
+        } catch {
+          ttsAvailableRef.current = false;
+        }
+      }
+
+      // NOW stop filler — real audio is ready (or failed)
+      fillerStopRef.current = true;
+      stopTypewriter();
+      stopBrowserTTS();
+
+      // Fade out current filler audio
+      const filler = fillerAudioRef.current;
+      if (filler && !filler.paused) {
+        const startVol = filler.volume;
+        const fadeSteps = 10;
+        for (let i = 1; i <= fadeSteps; i++) {
+          filler.volume = Math.max(0, startVol * (1 - i / fadeSteps));
+          await new Promise((r) => setTimeout(r, 50)); // 50ms * 10 = 500ms fade
+        }
+        filler.pause();
+      }
+      fillerAudioRef.current = null;
+
+      if (!ttsBlob) {
+        // Browser TTS fallback for the real response
+        if (ttsText) {
+          browserTTSSpeak(ttsText, () => setSpeaking(false));
+        } else {
+          setSpeaking(false);
+        }
+        return;
+      }
+
+      // Play the real response TTS
+      const url = URL.createObjectURL(ttsBlob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setSpeaking(false);
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+      };
+      audio.onerror = () => {
+        setSpeaking(false);
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+      };
+      await audio.play();
+    },
+    [apiBase, stopTypewriter, browserTTSSpeak, stopBrowserTTS],
+  );
+
+  // Direct speak (no filler, used for Phase 2 synthesis)
+  const speakText = useCallback(
+    async (text: string) => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (!text || text.length < 5) return;
+      const ttsText = text.length > 1500 ? text.slice(0, 1500) + '...' : text;
+
+      // Use browser TTS if ElevenLabs is known to be down
+      if (!ttsAvailableRef.current) {
+        setSpeaking(true);
+        browserTTSSpeak(ttsText, () => setSpeaking(false));
+        return;
+      }
+
       try {
+        setSpeaking(true);
         const res = await fetch(`${apiBase}/api/v1/playground/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: ttsText }),
         });
-        if (res.ok) {
-          ttsBlob = await res.blob();
-        } else {
+        if (!res.ok) {
           ttsAvailableRef.current = false;
+          browserTTSSpeak(ttsText, () => setSpeaking(false));
+          return;
         }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => {
+          setSpeaking(false);
+          URL.revokeObjectURL(url);
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setSpeaking(false);
+          URL.revokeObjectURL(url);
+          audioRef.current = null;
+        };
+        await audio.play();
       } catch {
         ttsAvailableRef.current = false;
-      }
-    }
-
-    // NOW stop filler — real audio is ready (or failed)
-    fillerStopRef.current = true;
-    stopTypewriter();
-    stopBrowserTTS();
-
-    // Fade out current filler audio
-    const filler = fillerAudioRef.current;
-    if (filler && !filler.paused) {
-      const startVol = filler.volume;
-      const fadeSteps = 10;
-      for (let i = 1; i <= fadeSteps; i++) {
-        filler.volume = Math.max(0, startVol * (1 - i / fadeSteps));
-        await new Promise(r => setTimeout(r, 50)); // 50ms * 10 = 500ms fade
-      }
-      filler.pause();
-    }
-    fillerAudioRef.current = null;
-
-    if (!ttsBlob) {
-      // Browser TTS fallback for the real response
-      if (ttsText) {
         browserTTSSpeak(ttsText, () => setSpeaking(false));
-      } else {
-        setSpeaking(false);
       }
-      return;
-    }
-
-    // Play the real response TTS
-    const url = URL.createObjectURL(ttsBlob);
-    const audio = new Audio(url);
-    audioRef.current = audio;
-    audio.onended = () => {
-      setSpeaking(false);
-      URL.revokeObjectURL(url);
-      audioRef.current = null;
-    };
-    audio.onerror = () => {
-      setSpeaking(false);
-      URL.revokeObjectURL(url);
-      audioRef.current = null;
-    };
-    await audio.play();
-  }, [apiBase, stopTypewriter, browserTTSSpeak, stopBrowserTTS]);
-
-  // Direct speak (no filler, used for Phase 2 synthesis)
-  const speakText = useCallback(async (text: string) => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    if (!text || text.length < 5) return;
-    const ttsText = text.length > 1500 ? text.slice(0, 1500) + '...' : text;
-
-    // Use browser TTS if ElevenLabs is known to be down
-    if (!ttsAvailableRef.current) {
-      setSpeaking(true);
-      browserTTSSpeak(ttsText, () => setSpeaking(false));
-      return;
-    }
-
-    try {
-      setSpeaking(true);
-      const res = await fetch(`${apiBase}/api/v1/playground/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: ttsText }),
-      });
-      if (!res.ok) {
-        ttsAvailableRef.current = false;
-        browserTTSSpeak(ttsText, () => setSpeaking(false));
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => { setSpeaking(false); URL.revokeObjectURL(url); audioRef.current = null; };
-      audio.onerror = () => { setSpeaking(false); URL.revokeObjectURL(url); audioRef.current = null; };
-      await audio.play();
-    } catch {
-      ttsAvailableRef.current = false;
-      browserTTSSpeak(ttsText, () => setSpeaking(false));
-    }
-  }, [apiBase, browserTTSSpeak]);
+    },
+    [apiBase, browserTTSSpeak],
+  );
 
   const stopSpeaking = useCallback(() => {
     fillerStopRef.current = true;
     stopTypewriter();
     stopBrowserTTS();
-    if (fillerAudioRef.current) { fillerAudioRef.current.pause(); fillerAudioRef.current = null; }
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    if (fillerAudioRef.current) {
+      fillerAudioRef.current.pause();
+      fillerAudioRef.current = null;
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
     setSpeaking(false);
   }, [stopTypewriter, stopBrowserTTS]);
 
@@ -1086,18 +1241,21 @@ export default function Oracle() {
   // Give the Oracle WebSocket a short grace period to connect before falling
   // back to batch mode. This avoids unnecessary non-streaming responses on the
   // first prompt right after page load.
-  const waitForStreamingSocket = useCallback(async (timeoutMs = 1500): Promise<boolean> => {
-    if (oracle.fallbackMode) return false;
-    if (oracle.connected) return true;
-
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+  const waitForStreamingSocket = useCallback(
+    async (timeoutMs = 1500): Promise<boolean> => {
       if (oracle.fallbackMode) return false;
       if (oracle.connected) return true;
-    }
-    return oracle.connected && !oracle.fallbackMode;
-  }, [oracle.connected, oracle.fallbackMode]);
+
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (oracle.fallbackMode) return false;
+        if (oracle.connected) return true;
+      }
+      return oracle.connected && !oracle.fallbackMode;
+    },
+    [oracle.connected, oracle.fallbackMode],
+  );
 
   // ------------------------------------------------------------------
   // Two-phase oracle consultation
@@ -1111,12 +1269,10 @@ export default function Oracle() {
     setShowIntro(false);
     setError(null);
 
-    setMessages((prev) => [...prev, {
-      role: 'seeker',
-      content: question,
-      mode,
-      timestamp: Date.now(),
-    }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: 'seeker', content: question, mode, timestamp: Date.now() },
+    ]);
 
     // Trigger 3D summoning animation
     avatarRef.current?.contentWindow?.postMessage({ type: 'oracle-summon' }, '*');
@@ -1140,7 +1296,7 @@ export default function Oracle() {
 
     // ---- Fetch fallback path (original batch flow) ----
     const rounds = mode === 'divine' ? 1 : 2;
-    const agents = mode === 'divine' ? 3 : 5;  // Each tentacle = a different AI model
+    const agents = mode === 'divine' ? 3 : 5; // Each tentacle = a different AI model
 
     // Ensure filler audio is prefetched
     prefetchFillers();
@@ -1155,13 +1311,10 @@ export default function Oracle() {
 
     if (initialData) {
       const initialResponse = initialData.final_answer || formatInitialTake(initialData);
-      setMessages((prev) => [...prev, {
-        role: 'oracle',
-        content: initialResponse,
-        mode,
-        timestamp: Date.now(),
-        isLive: false,
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'oracle', content: initialResponse, mode, timestamp: Date.now(), isLive: false },
+      ]);
       // Crossfade from filler to the real Oracle response
       crossfadeToReal(initialResponse);
     } else {
@@ -1183,26 +1336,26 @@ export default function Oracle() {
       for (let i = 0; i < agents.length; i++) {
         const [agentName, proposal] = agents[i];
         await new Promise((resolve) => setTimeout(resolve, 600));
-        setMessages((prev) => [...prev, {
-          role: 'tentacle',
-          content: proposal,
-          mode,
-          timestamp: Date.now(),
-          agentName,
-          isLive: true,
-        }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'tentacle',
+            content: proposal,
+            mode,
+            timestamp: Date.now(),
+            agentName,
+            isLive: true,
+          },
+        ]);
       }
 
       if (liveData.final_answer) {
         await new Promise((resolve) => setTimeout(resolve, 800));
         const synthesis = formatSynthesis(liveData);
-        setMessages((prev) => [...prev, {
-          role: 'oracle',
-          content: synthesis,
-          mode,
-          timestamp: Date.now(),
-          isLive: true,
-        }]);
+        setMessages((prev) => [
+          ...prev,
+          { role: 'oracle', content: synthesis, mode, timestamp: Date.now(), isLive: true },
+        ]);
         // Speak the final synthesis
         speakText(synthesis);
       }
@@ -1263,38 +1416,35 @@ export default function Oracle() {
         // Avoid duplicates — check if last oracle message matches
         const last = prev[prev.length - 1];
         if (last?.role === 'oracle' && last?.content === oracle.tokens) return prev;
-        return [...prev, {
-          role: 'oracle',
-          content: oracle.tokens,
-          mode,
-          timestamp: Date.now(),
-          isLive: false,
-        }];
+        return [
+          ...prev,
+          { role: 'oracle', content: oracle.tokens, mode, timestamp: Date.now(), isLive: false },
+        ];
       });
 
       // Add tentacle messages
       oracle.tentacles.forEach((state, agent) => {
         if (state.done && state.text) {
-          setMessages((prev) => [...prev, {
-            role: 'tentacle',
-            content: state.text,
-            mode,
-            timestamp: Date.now(),
-            agentName: agent,
-            isLive: true,
-          }]);
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'tentacle',
+              content: state.text,
+              mode,
+              timestamp: Date.now(),
+              agentName: agent,
+              isLive: true,
+            },
+          ]);
         }
       });
 
       // Add synthesis
       if (oracle.synthesis) {
-        setMessages((prev) => [...prev, {
-          role: 'oracle',
-          content: oracle.synthesis,
-          mode,
-          timestamp: Date.now(),
-          isLive: true,
-        }]);
+        setMessages((prev) => [
+          ...prev,
+          { role: 'oracle', content: oracle.synthesis, mode, timestamp: Date.now(), isLive: true },
+        ]);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1308,8 +1458,10 @@ export default function Oracle() {
     const agents = Object.entries(data.proposals);
     if (agents.length === 0) return 'The oracle stirs...';
     if (mode === 'divine') {
-      return agents.map(([, p]) => p).join('\n\n---\n\n') +
-        '\n\nThe palantir dims. Which thread do you pull?';
+      return (
+        agents.map(([, p]) => p).join('\n\n---\n\n') +
+        '\n\nThe palantir dims. Which thread do you pull?'
+      );
     }
     return agents[0][1];
   }
@@ -1322,7 +1474,7 @@ export default function Oracle() {
       const pct = (data.confidence * 100).toFixed(0);
       const consensusText = data.consensus_reached ? 'Consensus reached' : 'Dissent preserved';
       parts.push(
-        `\n-- Confidence: ${pct}% | ${consensusText} | ${data.rounds_used} round${data.rounds_used !== 1 ? 's' : ''} --`
+        `\n-- Confidence: ${pct}% | ${consensusText} | ${data.rounds_used} round${data.rounds_used !== 1 ? 's' : ''} --`,
       );
     }
     return parts.join('\n\n');
@@ -1447,7 +1599,8 @@ export default function Oracle() {
           <h1
             className="text-3xl sm:text-4xl font-bold tracking-wider mb-1"
             style={{
-              background: 'linear-gradient(135deg, var(--acid-magenta), var(--acid-cyan), var(--acid-green))',
+              background:
+                'linear-gradient(135deg, var(--acid-magenta), var(--acid-cyan), var(--acid-green))',
               backgroundClip: 'text',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
@@ -1470,7 +1623,8 @@ export default function Oracle() {
               <div
                 className="absolute -inset-4 rounded-2xl"
                 style={{
-                  background: 'radial-gradient(ellipse at center, rgba(127,219,202,0.12), rgba(58,122,79,0.06), transparent 70%)',
+                  background:
+                    'radial-gradient(ellipse at center, rgba(127,219,202,0.12), rgba(58,122,79,0.06), transparent 70%)',
                   animation: 'orb-pulse 6s ease-in-out infinite',
                   filter: 'blur(12px)',
                 }}
@@ -1490,9 +1644,7 @@ export default function Oracle() {
                 {/* Bottom gradient fade into page */}
                 <div
                   className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
-                  style={{
-                    background: 'linear-gradient(transparent, #050508)',
-                  }}
+                  style={{ background: 'linear-gradient(transparent, #050508)' }}
                 />
               </div>
             </div>
@@ -1504,8 +1656,8 @@ export default function Oracle() {
               </p>
               <p className="text-sm text-[var(--text-muted)] leading-relaxed mb-4">
                 The Oracle orchestrates AI agents with different perspectives — Claude, GPT, Gemini,
-                and more — to argue every angle of your question. Watch them debate, critique each other,
-                and converge on a verdict with confidence scores.
+                and more — to argue every angle of your question. Watch them debate, critique each
+                other, and converge on a verdict with confidence scores.
               </p>
               <p className="text-xs text-[var(--acid-magenta)] opacity-60 mb-2">
                 Choose your mode. Ask your question. Watch the debate unfold.
@@ -1569,7 +1721,9 @@ export default function Oracle() {
             </button>
           </div>
           <span className="text-[9px] text-[var(--text-muted)] tracking-wider">
-            {useDebateStreaming ? 'Full multi-agent debate with structured events' : 'Direct LLM streaming with multi-agent analysis'}
+            {useDebateStreaming
+              ? 'Full multi-agent debate with structured events'
+              : 'Direct LLM streaming with multi-agent analysis'}
           </span>
         </div>
 
@@ -1595,7 +1749,10 @@ export default function Oracle() {
           )}
           {oracle.streamStalled && (
             <span className="px-2 py-1 border rounded border-[var(--crimson,#ff3333)]/40 text-[var(--crimson,#ff3333)]">
-              Stall: {oracle.stallReason === 'waiting_first_token' ? 'no first token' : 'no stream activity'}
+              Stall:{' '}
+              {oracle.stallReason === 'waiting_first_token'
+                ? 'no first token'
+                : 'no stream activity'}
             </span>
           )}
         </div>
@@ -1625,7 +1782,10 @@ export default function Oracle() {
             <textarea
               ref={textareaRef}
               value={input}
-              onChange={(e) => { usedVoiceRef.current = false; setInput(e.target.value); }}
+              onChange={(e) => {
+                usedVoiceRef.current = false;
+                setInput(e.target.value);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -1634,10 +1794,10 @@ export default function Oracle() {
               }}
               placeholder={
                 mode === 'divine'
-                  ? 'Tell me your situation and I\'ll show you three futures...'
+                  ? "Tell me your situation and I'll show you three futures..."
                   : mode === 'commune'
                     ? 'What do you want to know?'
-                    : 'What\'s your take on AI? Give me the position you\'d bet money on.'
+                    : "What's your take on AI? Give me the position you'd bet money on."
               }
               className="w-full bg-[#0c0c14] border border-[var(--border)]/40 text-white px-4 py-3 font-theme-data text-sm placeholder:text-[var(--text-muted)]/60 focus:outline-none focus:border-[var(--acid-magenta)]/60 transition-colors resize-none min-h-[48px] rounded-xl"
               disabled={loading || debating}
@@ -1662,7 +1822,8 @@ export default function Oracle() {
             disabled={loading || debating || !input.trim()}
             className="px-6 py-3 border border-[var(--acid-magenta)]/60 text-[var(--acid-magenta)] font-bold text-sm hover:bg-[var(--acid-magenta)] hover:text-[var(--bg)] transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed whitespace-nowrap rounded-xl"
             style={{
-              boxShadow: !loading && !debating && input.trim() ? '0 0 10px rgba(255,0,255,0.12)' : 'none',
+              boxShadow:
+                !loading && !debating && input.trim() ? '0 0 10px rgba(255,0,255,0.12)' : 'none',
             }}
           >
             {loading ? '...' : debating ? '...' : 'SPEAK'}
@@ -1746,7 +1907,8 @@ export default function Oracle() {
                         {msg.isLive ? 'ORACLE (synthesis)' : 'ORACLE'}
                       </span>
                       <span className="text-[var(--text-muted)]">
-                        {' '}&middot; {msg.mode} &middot; {new Date(msg.timestamp).toLocaleTimeString()}
+                        {' '}
+                        &middot; {msg.mode} &middot; {new Date(msg.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
                     <div
@@ -1761,91 +1923,118 @@ export default function Oracle() {
             ))}
 
             {/* Debate mode streaming display */}
-            {oracle.connected && !oracle.fallbackMode && oracle.isDebateMode && oracle.phase !== 'idle' && (
-              <DebateStreamDisplay
-                events={oracle.debateEvents}
-                agents={oracle.debateAgents}
-                round={oracle.debateRound}
-                debateId={oracle.debateId}
-              />
-            )}
+            {oracle.connected &&
+              !oracle.fallbackMode &&
+              oracle.isDebateMode &&
+              oracle.phase !== 'idle' && (
+                <DebateStreamDisplay
+                  events={oracle.debateEvents}
+                  agents={oracle.debateAgents}
+                  round={oracle.debateRound}
+                  debateId={oracle.debateId}
+                />
+              )}
 
             {/* WebSocket streaming display — real-time token flow (non-debate mode) */}
-            {oracle.connected && !oracle.fallbackMode && !oracle.isDebateMode && oracle.phase !== 'idle' && (
-              <>
-                {/* Streaming Oracle response (reflex + deep tokens) */}
-                {oracle.tokens && (
-                  <div className="prophecy-reveal max-w-[95%]">
-                    <div className="text-xs mb-1">
-                      <span
-                        className="text-[var(--acid-magenta)]"
-                        style={{ filter: 'drop-shadow(0 0 5px var(--acid-magenta))' }}
+            {oracle.connected &&
+              !oracle.fallbackMode &&
+              !oracle.isDebateMode &&
+              oracle.phase !== 'idle' && (
+                <>
+                  {/* Streaming Oracle response (reflex + deep tokens) */}
+                  {oracle.tokens && (
+                    <div className="prophecy-reveal max-w-[95%]">
+                      <div className="text-xs mb-1">
+                        <span
+                          className="text-[var(--acid-magenta)]"
+                          style={{ filter: 'drop-shadow(0 0 5px var(--acid-magenta))' }}
+                        >
+                          ORACLE
+                        </span>
+                        <span className="text-[var(--text-muted)]">
+                          {' '}
+                          &middot;{' '}
+                          {oracle.phase === 'reflex'
+                            ? 'sensing...'
+                            : oracle.phase === 'deep'
+                              ? 'channeling...'
+                              : mode}
+                        </span>
+                      </div>
+                      <div
+                        className="border-l-2 border-[var(--acid-magenta)] pl-4 py-3 pr-3 text-sm leading-relaxed whitespace-pre-wrap rounded-r-lg"
+                        style={{ color: '#2d1b4e', backgroundColor: 'rgba(200, 235, 210, 0.9)' }}
                       >
-                        ORACLE
-                      </span>
-                      <span className="text-[var(--text-muted)]">
-                        {' '}&middot; {oracle.phase === 'reflex' ? 'sensing...' : oracle.phase === 'deep' ? 'channeling...' : mode}
-                      </span>
+                        {oracle.tokens}
+                        {(oracle.phase === 'reflex' || oracle.phase === 'deep') && (
+                          <span className="inline-block w-[2px] h-4 bg-[var(--acid-magenta)] ml-0.5 animate-pulse align-middle" />
+                        )}
+                      </div>
                     </div>
-                    <div
-                      className="border-l-2 border-[var(--acid-magenta)] pl-4 py-3 pr-3 text-sm leading-relaxed whitespace-pre-wrap rounded-r-lg"
-                      style={{ color: '#2d1b4e', backgroundColor: 'rgba(200, 235, 210, 0.9)' }}
-                    >
-                      {oracle.tokens}
-                      {(oracle.phase === 'reflex' || oracle.phase === 'deep') && (
-                        <span className="inline-block w-[2px] h-4 bg-[var(--acid-magenta)] ml-0.5 animate-pulse align-middle" />
-                      )}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Streaming tentacle messages */}
-                {oracle.phase === 'tentacles' && Array.from(oracle.tentacles.entries()).map(([agent, state], i) => (
-                  <div key={agent} className={`prophecy-reveal ${i % 2 === 0 ? 'tentacle-left' : 'tentacle-right'}`} style={{ animationDelay: `${i * 0.3}s` }}>
-                    <div className="text-xs mb-1 flex items-center gap-2">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getTentacleColor(agent) }} />
-                      <span style={{ color: getTentacleColor(agent) }} className="font-bold">
-                        {agent.toUpperCase()}
-                      </span>
-                      {!state.done && (
-                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--acid-cyan)] animate-pulse" />
-                      )}
-                    </div>
-                    <div
-                      className="border-l-2 pl-4 py-3 pr-3 text-sm leading-relaxed whitespace-pre-wrap ml-1 rounded-r-lg"
-                      style={{ borderColor: getTentacleColor(agent), color: '#2d1b4e', backgroundColor: 'rgba(200, 235, 210, 0.9)' }}
-                    >
-                      {state.text}
-                      {!state.done && (
-                        <span className="inline-block w-[2px] h-4 bg-[var(--acid-cyan)] ml-0.5 animate-pulse align-middle" />
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  {/* Streaming tentacle messages */}
+                  {oracle.phase === 'tentacles' &&
+                    Array.from(oracle.tentacles.entries()).map(([agent, state], i) => (
+                      <div
+                        key={agent}
+                        className={`prophecy-reveal ${i % 2 === 0 ? 'tentacle-left' : 'tentacle-right'}`}
+                        style={{ animationDelay: `${i * 0.3}s` }}
+                      >
+                        <div className="text-xs mb-1 flex items-center gap-2">
+                          <span
+                            className="inline-block w-1.5 h-1.5 rounded-full"
+                            style={{ backgroundColor: getTentacleColor(agent) }}
+                          />
+                          <span style={{ color: getTentacleColor(agent) }} className="font-bold">
+                            {agent.toUpperCase()}
+                          </span>
+                          {!state.done && (
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--acid-cyan)] animate-pulse" />
+                          )}
+                        </div>
+                        <div
+                          className="border-l-2 pl-4 py-3 pr-3 text-sm leading-relaxed whitespace-pre-wrap ml-1 rounded-r-lg"
+                          style={{
+                            borderColor: getTentacleColor(agent),
+                            color: '#2d1b4e',
+                            backgroundColor: 'rgba(200, 235, 210, 0.9)',
+                          }}
+                        >
+                          {state.text}
+                          {!state.done && (
+                            <span className="inline-block w-[2px] h-4 bg-[var(--acid-cyan)] ml-0.5 animate-pulse align-middle" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
 
-                {/* Convergence map — shows after tentacles complete */}
-                {oracle.phase === 'synthesis' && oracle.tentacles.size >= 2 && (
-                  <ConvergenceMap tentacles={oracle.tentacles} />
-                )}
+                  {/* Convergence map — shows after tentacles complete */}
+                  {oracle.phase === 'synthesis' && oracle.tentacles.size >= 2 && (
+                    <ConvergenceMap tentacles={oracle.tentacles} />
+                  )}
 
-                {/* Synthesis */}
-                {oracle.synthesis && (
-                  <div className="prophecy-reveal max-w-[95%]">
-                    <div className="text-xs mb-1">
-                      <span className="text-[var(--acid-magenta)]" style={{ filter: 'drop-shadow(0 0 5px var(--acid-magenta))' }}>
-                        ORACLE (synthesis)
-                      </span>
+                  {/* Synthesis */}
+                  {oracle.synthesis && (
+                    <div className="prophecy-reveal max-w-[95%]">
+                      <div className="text-xs mb-1">
+                        <span
+                          className="text-[var(--acid-magenta)]"
+                          style={{ filter: 'drop-shadow(0 0 5px var(--acid-magenta))' }}
+                        >
+                          ORACLE (synthesis)
+                        </span>
+                      </div>
+                      <div
+                        className="border-l-2 border-[var(--acid-magenta)] pl-4 py-3 pr-3 text-sm leading-relaxed whitespace-pre-wrap rounded-r-lg"
+                        style={{ color: '#2d1b4e', backgroundColor: 'rgba(200, 235, 210, 0.9)' }}
+                      >
+                        {oracle.synthesis}
+                      </div>
                     </div>
-                    <div
-                      className="border-l-2 border-[var(--acid-magenta)] pl-4 py-3 pr-3 text-sm leading-relaxed whitespace-pre-wrap rounded-r-lg"
-                      style={{ color: '#2d1b4e', backgroundColor: 'rgba(200, 235, 210, 0.9)' }}
-                    >
-                      {oracle.synthesis}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+                  )}
+                </>
+              )}
 
             {/* Phase 1 loading (fetch fallback or pre-stream) */}
             {loading && (oracle.fallbackMode || !oracle.connected || !oracle.tokens) && (
@@ -1886,7 +2075,10 @@ export default function Oracle() {
             {debating && (oracle.fallbackMode || !oracle.connected) && (
               <div className="prophecy-reveal">
                 <div className="text-xs mb-1">
-                  <span className="text-[var(--acid-cyan)]" style={{ filter: 'drop-shadow(0 0 5px var(--acid-cyan))' }}>
+                  <span
+                    className="text-[var(--acid-cyan)]"
+                    style={{ filter: 'drop-shadow(0 0 5px var(--acid-cyan))' }}
+                  >
                     DEBATE
                   </span>
                   <span className="text-[var(--text-muted)]"> &middot; assembling...</span>
@@ -1907,19 +2099,22 @@ export default function Oracle() {
           {lastDebateId && !loading && !debating && messages.some((m) => m.isLive) && (
             <div
               className="mt-6 flex items-center gap-3 p-3 rounded-lg prophecy-reveal"
-              style={{
-                border: '1px solid var(--border)',
-                backgroundColor: 'var(--surface)',
-              }}
+              style={{ border: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}
             >
               <button
                 onClick={async () => {
                   const shareUrl = `${window.location.origin}/debate/${lastDebateId}`;
                   if (typeof navigator.share === 'function') {
                     try {
-                      await navigator.share({ title: 'Oracle Debate', text: `The Oracle spoke on: "${messages.find((m) => m.role === 'seeker')?.content || 'a question'}"`, url: shareUrl });
+                      await navigator.share({
+                        title: 'Oracle Debate',
+                        text: `The Oracle spoke on: "${messages.find((m) => m.role === 'seeker')?.content || 'a question'}"`,
+                        url: shareUrl,
+                      });
                       return;
-                    } catch { /* user cancelled — fall through */ }
+                    } catch {
+                      /* user cancelled — fall through */
+                    }
                   }
                   try {
                     await navigator.clipboard.writeText(shareUrl);
@@ -1942,8 +2137,12 @@ export default function Oracle() {
                   color: 'var(--acid-green)',
                   backgroundColor: 'transparent',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(57,255,20,0.1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(57,255,20,0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
               >
                 {shareCopied ? 'LINK COPIED!' : 'SHARE THIS CONSULTATION'}
               </button>
@@ -1951,8 +2150,12 @@ export default function Oracle() {
                 href={`/debate/${lastDebateId}`}
                 className="text-xs transition-colors whitespace-nowrap"
                 style={{ color: 'var(--text-muted)' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--acid-green)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--acid-green)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                }}
               >
                 View full debate &rarr;
               </a>
@@ -1963,10 +2166,7 @@ export default function Oracle() {
           {messages.length > 0 && !loading && !debating && messages.some((m) => m.isLive) && (
             <div
               className="mt-6 p-4 border rounded-lg flex items-center justify-between gap-4 prophecy-reveal"
-              style={{
-                borderColor: 'var(--border)',
-                backgroundColor: 'var(--surface)',
-              }}
+              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
             >
               <div>
                 <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>
@@ -1984,8 +2184,12 @@ export default function Oracle() {
                   color: 'var(--acid-green)',
                   backgroundColor: 'transparent',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(57,255,20,0.1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(57,255,20,0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
               >
                 Generate Bundle
               </a>
@@ -2012,19 +2216,19 @@ export default function Oracle() {
 
         {/* Footer */}
         <footer className="mt-6 text-center text-xs text-[var(--text-muted)] opacity-40 space-y-2 rounded-xl">
-          <p className="italic opacity-70">
-            Multiple AI perspectives. One clear verdict.
-          </p>
+          <p className="italic opacity-70">Multiple AI perspectives. One clear verdict.</p>
           <p>
             Powered by{' '}
-            <a href="/" className="text-[var(--acid-cyan)] hover:text-[var(--acid-magenta)] transition-colors">
+            <a
+              href="/"
+              className="text-[var(--acid-cyan)] hover:text-[var(--acid-magenta)] transition-colors"
+            >
               aragora.ai
-            </a>
-            {' '}&middot; Multi-agent adversarial debate engine
+            </a>{' '}
+            &middot; Multi-agent adversarial debate engine
           </p>
           <p>
-            Powered by{' '}
-            <span className="text-[var(--acid-green)]">Claude</span>,{' '}
+            Powered by <span className="text-[var(--acid-green)]">Claude</span>,{' '}
             <span className="text-[var(--acid-cyan)]">GPT</span>,{' '}
             <span style={{ color: 'var(--crimson, #ff3333)' }}>Grok</span>,{' '}
             <span style={{ color: 'var(--purple, #a855f7)' }}>Gemini</span>,{' '}
@@ -2044,9 +2248,7 @@ export default function Oracle() {
               Explore Aragora
             </a>
           </div>
-          <p className="opacity-60">
-            &ldquo;Don&apos;t smash the amp.&rdquo;
-          </p>
+          <p className="opacity-60">&ldquo;Don&apos;t smash the amp.&rdquo;</p>
         </footer>
       </div>
     </div>

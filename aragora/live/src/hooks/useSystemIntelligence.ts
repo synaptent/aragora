@@ -91,73 +91,52 @@ export interface ImprovementQueueData {
 export function useSystemIntelligence() {
   const { data, error, isLoading, mutate } = useSWRFetch<{ data: SystemOverview }>(
     '/api/v1/system-intelligence/overview',
-    { refreshInterval: 30000 }
+    { refreshInterval: 30000 },
   );
 
-  return {
-    overview: data?.data ?? null,
-    error,
-    isLoading,
-    refresh: mutate,
-  };
+  return { overview: data?.data ?? null, error, isLoading, refresh: mutate };
 }
 
 export function useAgentPerformance() {
   const { data, error, isLoading, mutate } = useSWRFetch<{ data: AgentPerformance }>(
     '/api/v1/system-intelligence/agent-performance',
-    { refreshInterval: 60000 }
+    { refreshInterval: 60000 },
   );
 
-  return {
-    agents: data?.data?.agents ?? [],
-    error,
-    isLoading,
-    refresh: mutate,
-  };
+  return { agents: data?.data?.agents ?? [], error, isLoading, refresh: mutate };
 }
 
 export function useInstitutionalMemory() {
   const { data, error, isLoading, mutate } = useSWRFetch<{ data: InstitutionalMemory }>(
     '/api/v1/system-intelligence/institutional-memory',
-    { refreshInterval: 60000 }
+    { refreshInterval: 60000 },
   );
 
-  return {
-    memory: data?.data ?? null,
-    error,
-    isLoading,
-    refresh: mutate,
-  };
+  return { memory: data?.data ?? null, error, isLoading, refresh: mutate };
 }
 
 export function useImprovementQueue() {
   const { data, error, isLoading, mutate } = useSWRFetch<{ data: ImprovementQueueData }>(
     '/api/v1/system-intelligence/improvement-queue',
-    { refreshInterval: 15000 }
+    { refreshInterval: 15000 },
   );
 
   const api = useApi();
 
   const addGoal = useCallback(
     async (goal: string, priority: number = 50) => {
-      await api.post('/api/v1/self-improve/improvement-queue', {
-        goal,
-        priority,
-        source: 'user',
-      });
+      await api.post('/api/v1/self-improve/improvement-queue', { goal, priority, source: 'user' });
       mutate();
     },
-    [api, mutate]
+    [api, mutate],
   );
 
   const reorderItem = useCallback(
     async (id: string, priority: number) => {
-      await api.put(`/api/v1/self-improve/improvement-queue/${id}/priority`, {
-        priority,
-      });
+      await api.put(`/api/v1/self-improve/improvement-queue/${id}/priority`, { priority });
       mutate();
     },
-    [api, mutate]
+    [api, mutate],
   );
 
   const removeItem = useCallback(
@@ -165,7 +144,7 @@ export function useImprovementQueue() {
       await api.request(`/api/v1/self-improve/improvement-queue/${id}`, { method: 'DELETE' });
       mutate();
     },
-    [api, mutate]
+    [api, mutate],
   );
 
   return {

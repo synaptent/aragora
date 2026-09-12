@@ -42,11 +42,7 @@ interface ForecastAlert {
 
 interface ForecastData {
   workspace_id: string;
-  predictions: {
-    monthly_cost: string;
-    daily_average: string;
-    confidence_interval: number;
-  };
+  predictions: { monthly_cost: string; daily_average: string; confidence_interval: number };
   trend: TrendAnalysis | null;
   seasonal_pattern: string;
   daily_forecasts: DailyForecast[];
@@ -90,7 +86,7 @@ export function BudgetForecast({ workspaceId = 'default', forecastDays = 30 }: P
 
       const response = await fetch(
         `/api/costs/forecast?workspace_id=${workspaceId}&days=${forecastDays}`,
-        { headers }
+        { headers },
       );
 
       if (response.ok) {
@@ -134,7 +130,7 @@ export function BudgetForecast({ workspaceId = 'default', forecastDays = 30 }: P
     );
   }
 
-  const chartData = data.daily_forecasts.map(f => ({
+  const chartData = data.daily_forecasts.map((f) => ({
     date: f.date,
     predicted: parseFloat(f.predicted_cost),
     lower: parseFloat(f.lower_bound),
@@ -162,11 +158,8 @@ export function BudgetForecast({ workspaceId = 'default', forecastDays = 30 }: P
       {/* Alerts */}
       {data.alerts.length > 0 && (
         <div className="space-y-2">
-          {data.alerts.slice(0, 2).map(alert => (
-            <div
-              key={alert.id}
-              className={`border rounded p-3 ${SEVERITY_COLORS[alert.severity]}`}
-            >
+          {data.alerts.slice(0, 2).map((alert) => (
+            <div key={alert.id} className={`border rounded p-3 ${SEVERITY_COLORS[alert.severity]}`}>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-theme-data">{alert.title}</span>
               </div>
@@ -191,13 +184,15 @@ export function BudgetForecast({ workspaceId = 'default', forecastDays = 30 }: P
           <div className="text-xs text-[var(--text-muted)]">Daily Average</div>
         </div>
         <div className="bg-[var(--bg)] rounded p-3">
-          <div className={`text-lg font-theme-data ${
-            data.budget.projected_usage_percent && data.budget.projected_usage_percent >= 100
-              ? 'text-red-400'
-              : data.budget.projected_usage_percent && data.budget.projected_usage_percent >= 80
-              ? 'text-yellow-400'
-              : 'text-green-400'
-          }`}>
+          <div
+            className={`text-lg font-theme-data ${
+              data.budget.projected_usage_percent && data.budget.projected_usage_percent >= 100
+                ? 'text-red-400'
+                : data.budget.projected_usage_percent && data.budget.projected_usage_percent >= 80
+                  ? 'text-yellow-400'
+                  : 'text-green-400'
+            }`}
+          >
             {data.budget.projected_usage_percent
               ? `${data.budget.projected_usage_percent.toFixed(0)}%`
               : 'N/A'}
@@ -209,13 +204,21 @@ export function BudgetForecast({ workspaceId = 'default', forecastDays = 30 }: P
       {/* Trend Analysis */}
       {data.trend && (
         <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
-          <span className={`font-theme-data ${
-            data.trend.direction === 'increasing' ? 'text-red-400' :
-            data.trend.direction === 'decreasing' ? 'text-green-400' : 'text-gray-400'
-          }`}>
-            {data.trend.direction === 'increasing' ? '↑' :
-             data.trend.direction === 'decreasing' ? '↓' : '→'}
-            {' '}{Math.abs(data.trend.change_rate_weekly).toFixed(1)}%/week
+          <span
+            className={`font-theme-data ${
+              data.trend.direction === 'increasing'
+                ? 'text-red-400'
+                : data.trend.direction === 'decreasing'
+                  ? 'text-green-400'
+                  : 'text-gray-400'
+            }`}
+          >
+            {data.trend.direction === 'increasing'
+              ? '↑'
+              : data.trend.direction === 'decreasing'
+                ? '↓'
+                : '→'}{' '}
+            {Math.abs(data.trend.change_rate_weekly).toFixed(1)}%/week
           </span>
           <span>{data.trend.description}</span>
         </div>
@@ -257,20 +260,8 @@ export function BudgetForecast({ workspaceId = 'default', forecastDays = 30 }: P
             />
 
             {/* Confidence Interval */}
-            <Area
-              type="monotone"
-              dataKey="upper"
-              stroke="none"
-              fill="#00ff9d"
-              fillOpacity={0.1}
-            />
-            <Area
-              type="monotone"
-              dataKey="lower"
-              stroke="none"
-              fill="var(--bg)"
-              fillOpacity={1}
-            />
+            <Area type="monotone" dataKey="upper" stroke="none" fill="#00ff9d" fillOpacity={0.1} />
+            <Area type="monotone" dataKey="lower" stroke="none" fill="var(--bg)" fillOpacity={1} />
 
             {/* Budget Line */}
             {budgetLimit && (
@@ -278,12 +269,7 @@ export function BudgetForecast({ workspaceId = 'default', forecastDays = 30 }: P
                 y={budgetLimit}
                 stroke="#ff6b6b"
                 strokeDasharray="5 5"
-                label={{
-                  value: 'Budget',
-                  fill: '#ff6b6b',
-                  fontSize: 10,
-                  position: 'right',
-                }}
+                label={{ value: 'Budget', fill: '#ff6b6b', fontSize: 10, position: 'right' }}
               />
             )}
 
@@ -301,17 +287,19 @@ export function BudgetForecast({ workspaceId = 'default', forecastDays = 30 }: P
       </div>
 
       {/* Simulation Panel */}
-      {showSimulation && (
-        <SimulationPanel workspaceId={workspaceId} />
-      )}
+      {showSimulation && <SimulationPanel workspaceId={workspaceId} />}
 
       {/* Budget Runway */}
       {data.budget.days_until_exceeded !== null && (
-        <div className={`text-center py-2 rounded ${
-          data.budget.days_until_exceeded <= 5 ? 'bg-red-500/10 text-red-400' :
-          data.budget.days_until_exceeded <= 10 ? 'bg-yellow-500/10 text-yellow-400' :
-          'bg-green-500/10 text-green-400'
-        }`}>
+        <div
+          className={`text-center py-2 rounded ${
+            data.budget.days_until_exceeded <= 5
+              ? 'bg-red-500/10 text-red-400'
+              : data.budget.days_until_exceeded <= 10
+                ? 'bg-yellow-500/10 text-yellow-400'
+                : 'bg-green-500/10 text-green-400'
+          }`}
+        >
           <span className="text-sm font-theme-data">
             {data.budget.days_until_exceeded === 0
               ? 'Budget exhausted!'
@@ -332,10 +320,7 @@ function SimulationPanel({ workspaceId }: SimulationPanelProps) {
   const apiBase = API_BASE_URL;
   const [scenario, setScenario] = useState({
     name: 'Custom Scenario',
-    changes: {
-      model_change: '',
-      request_reduction: 0,
-    },
+    changes: { model_change: '', request_reduction: 0 },
   });
   const [result, setResult] = useState<{
     baseline_cost: string;
@@ -365,11 +350,7 @@ function SimulationPanel({ workspaceId }: SimulationPanelProps) {
         headers,
         body: JSON.stringify({
           workspace_id: workspaceId,
-          scenario: {
-            name: scenario.name,
-            description: 'Custom what-if scenario',
-            changes,
-          },
+          scenario: { name: scenario.name, description: 'Custom what-if scenario', changes },
           days: 30,
         }),
       });
@@ -398,10 +379,12 @@ function SimulationPanel({ workspaceId }: SimulationPanelProps) {
           <label className="text-xs text-[var(--text-muted)] block mb-1">Model Change</label>
           <select
             value={scenario.changes.model_change}
-            onChange={(e) => setScenario(s => ({
-              ...s,
-              changes: { ...s.changes, model_change: e.target.value }
-            }))}
+            onChange={(e) =>
+              setScenario((s) => ({
+                ...s,
+                changes: { ...s.changes, model_change: e.target.value },
+              }))
+            }
             className="w-full bg-[var(--bg)] border border-[var(--border)] rounded px-2 py-1 text-xs font-theme-data text-[var(--text)]"
           >
             <option value="">No change</option>
@@ -419,10 +402,12 @@ function SimulationPanel({ workspaceId }: SimulationPanelProps) {
             min="0"
             max="50"
             value={scenario.changes.request_reduction}
-            onChange={(e) => setScenario(s => ({
-              ...s,
-              changes: { ...s.changes, request_reduction: parseInt(e.target.value) }
-            }))}
+            onChange={(e) =>
+              setScenario((s) => ({
+                ...s,
+                changes: { ...s.changes, request_reduction: parseInt(e.target.value) },
+              }))
+            }
             className="w-full"
           />
         </div>
@@ -452,9 +437,11 @@ function SimulationPanel({ workspaceId }: SimulationPanelProps) {
                 ${parseFloat(result.simulated_cost).toFixed(2)}
               </div>
             </div>
-            <div className={`text-lg font-theme-data ${
-              result.percentage_change > 0 ? 'text-green-400' : 'text-red-400'
-            }`}>
+            <div
+              className={`text-lg font-theme-data ${
+                result.percentage_change > 0 ? 'text-green-400' : 'text-red-400'
+              }`}
+            >
               {result.percentage_change > 0 ? '-' : '+'}
               {Math.abs(result.percentage_change).toFixed(0)}%
             </div>

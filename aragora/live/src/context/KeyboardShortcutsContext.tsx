@@ -221,7 +221,7 @@ export function KeyboardShortcutsProvider({ children }: KeyboardShortcutsProvide
           logger.debug(`Shortcut not implemented: ${id}`);
       }
     },
-    [router, commandPaletteToggle, isHelpOpen, openHelp, closeHelp, togglePanel]
+    [router, commandPaletteToggle, isHelpOpen, openHelp, closeHelp, togglePanel],
   );
 
   // Clear sequence after timeout
@@ -314,20 +314,21 @@ export function KeyboardShortcutsProvider({ children }: KeyboardShortcutsProvide
   ]);
 
   // Context value
-  const value = useMemo<KeyboardShortcutsContextValue>(() => ({
-    isEnabled: enabled,
-    isHelpOpen,
-    openHelp,
-    closeHelp,
-    toggleEnabled,
-    setContext,
-    shortcuts,
-  }), [enabled, isHelpOpen, openHelp, closeHelp, toggleEnabled, setContext, shortcuts]);
+  const value = useMemo<KeyboardShortcutsContextValue>(
+    () => ({
+      isEnabled: enabled,
+      isHelpOpen,
+      openHelp,
+      closeHelp,
+      toggleEnabled,
+      setContext,
+      shortcuts,
+    }),
+    [enabled, isHelpOpen, openHelp, closeHelp, toggleEnabled, setContext, shortcuts],
+  );
 
   return (
-    <KeyboardShortcutsContext.Provider value={value}>
-      {children}
-    </KeyboardShortcutsContext.Provider>
+    <KeyboardShortcutsContext.Provider value={value}>{children}</KeyboardShortcutsContext.Provider>
   );
 }
 

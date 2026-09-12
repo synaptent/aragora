@@ -37,9 +37,7 @@ function StatCard({ label, value, color, bgColor, icon, subtext }: StatCardProps
         <span className="text-xl">{icon}</span>
       </div>
       <div className={`text-xs font-theme-data mt-1 ${color}`}>{label}</div>
-      {subtext && (
-        <div className="text-xs text-text-muted mt-1">{subtext}</div>
-      )}
+      {subtext && <div className="text-xs text-text-muted mt-1">{subtext}</div>}
     </div>
   );
 }
@@ -57,12 +55,9 @@ export function InboxStatsCards({
   const fetchStats = useCallback(async () => {
     try {
       // Try new stats endpoint
-      const response = await fetch(
-        `${apiBase}/api/email/stats?user_id=${userId}`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
-      );
+      const response = await fetch(`${apiBase}/api/email/stats?user_id=${userId}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
 
       if (response.ok) {
         const data = await response.json();
@@ -72,9 +67,7 @@ export function InboxStatsCards({
         // Fallback: compute from inbox data
         const inboxResponse = await fetch(
           `${apiBase}/api/email/inbox?user_id=${userId}&limit=100`,
-          {
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          }
+          { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
         );
 
         if (inboxResponse.ok) {
@@ -83,18 +76,18 @@ export function InboxStatsCards({
 
           // Compute stats locally
           const computed: InboxStats = {
-            urgent_count: emails.filter((e: { priority?: { priority?: string } }) =>
-              e.priority?.priority === 'critical'
+            urgent_count: emails.filter(
+              (e: { priority?: { priority?: string } }) => e.priority?.priority === 'critical',
             ).length,
-            high_priority_count: emails.filter((e: { priority?: { priority?: string } }) =>
-              e.priority?.priority === 'high'
+            high_priority_count: emails.filter(
+              (e: { priority?: { priority?: string } }) => e.priority?.priority === 'high',
             ).length,
-            action_required_count: emails.filter((e: { priority?: { priority?: string } }) =>
-              e.priority?.priority === 'critical' || e.priority?.priority === 'high'
+            action_required_count: emails.filter(
+              (e: { priority?: { priority?: string } }) =>
+                e.priority?.priority === 'critical' || e.priority?.priority === 'high',
             ).length,
-            unread_count: emails.filter((e: { email?: { is_read?: boolean } }) =>
-              !e.email?.is_read
-            ).length,
+            unread_count: emails.filter((e: { email?: { is_read?: boolean } }) => !e.email?.is_read)
+              .length,
             total_count: emails.length,
           };
 

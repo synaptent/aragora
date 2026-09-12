@@ -55,11 +55,7 @@ const mockAgentCalibration = {
     { bucket: '0.6-0.8', predicted: 0.7, actual: 0.68, count: 15 },
     { bucket: '0.8-1.0', predicted: 0.9, actual: 0.88, count: 10 },
   ],
-  domain_calibration: {
-    technology: 0.88,
-    philosophy: 0.82,
-    science: 0.79,
-  },
+  domain_calibration: { technology: 0.88, philosophy: 0.82, science: 0.79 },
 };
 
 function setupSuccessfulFetch() {
@@ -315,9 +311,7 @@ describe('CalibrationPanel', () => {
 
   describe('Error Handling', () => {
     it('shows error message when fetch fails', async () => {
-      mockFetch.mockImplementation(() =>
-        Promise.resolve({ ok: false })
-      );
+      mockFetch.mockImplementation(() => Promise.resolve({ ok: false }));
 
       await act(async () => {
         render(<CalibrationPanel apiBase="http://localhost:8080" />);
@@ -329,9 +323,7 @@ describe('CalibrationPanel', () => {
     });
 
     it('handles network errors gracefully', async () => {
-      mockFetch.mockImplementation(() =>
-        Promise.reject(new Error('Network error'))
-      );
+      mockFetch.mockImplementation(() => Promise.reject(new Error('Network error')));
 
       await act(async () => {
         render(<CalibrationPanel apiBase="http://localhost:8080" />);
@@ -370,7 +362,9 @@ describe('CalibrationPanel', () => {
       });
 
       await waitFor(() => {
-        expect(screen.getByText('Calibration = how well confidence matches accuracy')).toBeInTheDocument();
+        expect(
+          screen.getByText('Calibration = how well confidence matches accuracy'),
+        ).toBeInTheDocument();
       });
     });
   });

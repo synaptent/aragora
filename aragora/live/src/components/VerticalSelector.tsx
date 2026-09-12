@@ -47,8 +47,20 @@ const INDUSTRY_VERTICALS: Vertical[] = [
     costTier: 'standard',
     keywords: [],
     personas: [
-      { id: 'analyst', name: 'Analyst', role: 'Critical analysis', traits: ['logical', 'thorough'], suitability: 0.8 },
-      { id: 'synthesizer', name: 'Synthesizer', role: 'Integration', traits: ['holistic', 'creative'], suitability: 0.8 },
+      {
+        id: 'analyst',
+        name: 'Analyst',
+        role: 'Critical analysis',
+        traits: ['logical', 'thorough'],
+        suitability: 0.8,
+      },
+      {
+        id: 'synthesizer',
+        name: 'Synthesizer',
+        role: 'Integration',
+        traits: ['holistic', 'creative'],
+        suitability: 0.8,
+      },
     ],
   },
   {
@@ -60,11 +72,40 @@ const INDUSTRY_VERTICALS: Vertical[] = [
     complianceFrameworks: ['OWASP', 'CWE', 'SANS'],
     suggestedAgents: ['claude', 'deepseek', 'codestral'],
     costTier: 'professional',
-    keywords: ['code', 'api', 'software', 'bug', 'function', 'programming', 'typescript', 'python', 'architecture', 'database'],
+    keywords: [
+      'code',
+      'api',
+      'software',
+      'bug',
+      'function',
+      'programming',
+      'typescript',
+      'python',
+      'architecture',
+      'database',
+    ],
     personas: [
-      { id: 'architect', name: 'Architect', role: 'System design', traits: ['strategic', 'scalability-focused'], suitability: 0.95 },
-      { id: 'security-eng', name: 'Security Engineer', role: 'Vulnerability analysis', traits: ['paranoid', 'thorough'], suitability: 0.9 },
-      { id: 'reviewer', name: 'Code Reviewer', role: 'Quality assurance', traits: ['detail-oriented', 'best-practices'], suitability: 0.85 },
+      {
+        id: 'architect',
+        name: 'Architect',
+        role: 'System design',
+        traits: ['strategic', 'scalability-focused'],
+        suitability: 0.95,
+      },
+      {
+        id: 'security-eng',
+        name: 'Security Engineer',
+        role: 'Vulnerability analysis',
+        traits: ['paranoid', 'thorough'],
+        suitability: 0.9,
+      },
+      {
+        id: 'reviewer',
+        name: 'Code Reviewer',
+        role: 'Quality assurance',
+        traits: ['detail-oriented', 'best-practices'],
+        suitability: 0.85,
+      },
     ],
   },
   {
@@ -76,11 +117,39 @@ const INDUSTRY_VERTICALS: Vertical[] = [
     complianceFrameworks: ['GDPR', 'SOX', 'HIPAA', 'PCI-DSS', 'CCPA'],
     suggestedAgents: ['claude', 'gpt-4o', 'gemini'],
     costTier: 'enterprise',
-    keywords: ['legal', 'contract', 'compliance', 'regulation', 'law', 'liability', 'terms', 'privacy', 'gdpr'],
+    keywords: [
+      'legal',
+      'contract',
+      'compliance',
+      'regulation',
+      'law',
+      'liability',
+      'terms',
+      'privacy',
+      'gdpr',
+    ],
     personas: [
-      { id: 'contract-analyst', name: 'Contract Analyst', role: 'Document review', traits: ['meticulous', 'risk-aware'], suitability: 0.95 },
-      { id: 'compliance-officer', name: 'Compliance Officer', role: 'Regulatory guidance', traits: ['regulatory-expert', 'cautious'], suitability: 0.9 },
-      { id: 'ip-counsel', name: 'IP Counsel', role: 'Intellectual property', traits: ['protective', 'strategic'], suitability: 0.85 },
+      {
+        id: 'contract-analyst',
+        name: 'Contract Analyst',
+        role: 'Document review',
+        traits: ['meticulous', 'risk-aware'],
+        suitability: 0.95,
+      },
+      {
+        id: 'compliance-officer',
+        name: 'Compliance Officer',
+        role: 'Regulatory guidance',
+        traits: ['regulatory-expert', 'cautious'],
+        suitability: 0.9,
+      },
+      {
+        id: 'ip-counsel',
+        name: 'IP Counsel',
+        role: 'Intellectual property',
+        traits: ['protective', 'strategic'],
+        suitability: 0.85,
+      },
     ],
   },
   {
@@ -92,11 +161,39 @@ const INDUSTRY_VERTICALS: Vertical[] = [
     complianceFrameworks: ['HIPAA', 'FDA', 'HL7 FHIR', '21 CFR Part 11'],
     suggestedAgents: ['claude', 'gpt-4o', 'gemini'],
     costTier: 'enterprise',
-    keywords: ['health', 'medical', 'clinical', 'patient', 'treatment', 'diagnosis', 'healthcare', 'hipaa', 'fda'],
+    keywords: [
+      'health',
+      'medical',
+      'clinical',
+      'patient',
+      'treatment',
+      'diagnosis',
+      'healthcare',
+      'hipaa',
+      'fda',
+    ],
     personas: [
-      { id: 'clinical-analyst', name: 'Clinical Analyst', role: 'Medical review', traits: ['evidence-based', 'patient-focused'], suitability: 0.95 },
-      { id: 'bioethicist', name: 'Bioethicist', role: 'Ethics review', traits: ['principled', 'balanced'], suitability: 0.9 },
-      { id: 'researcher', name: 'Medical Researcher', role: 'Literature synthesis', traits: ['thorough', 'critical'], suitability: 0.85 },
+      {
+        id: 'clinical-analyst',
+        name: 'Clinical Analyst',
+        role: 'Medical review',
+        traits: ['evidence-based', 'patient-focused'],
+        suitability: 0.95,
+      },
+      {
+        id: 'bioethicist',
+        name: 'Bioethicist',
+        role: 'Ethics review',
+        traits: ['principled', 'balanced'],
+        suitability: 0.9,
+      },
+      {
+        id: 'researcher',
+        name: 'Medical Researcher',
+        role: 'Literature synthesis',
+        traits: ['thorough', 'critical'],
+        suitability: 0.85,
+      },
     ],
   },
   {
@@ -108,11 +205,39 @@ const INDUSTRY_VERTICALS: Vertical[] = [
     complianceFrameworks: ['PCI-DSS', 'SOC2', 'AML/KYC', 'MiFID II', 'Basel III'],
     suggestedAgents: ['claude', 'gpt-4o', 'deepseek'],
     costTier: 'enterprise',
-    keywords: ['payment', 'trading', 'bank', 'fintech', 'transaction', 'fraud', 'kyc', 'aml', 'pci'],
+    keywords: [
+      'payment',
+      'trading',
+      'bank',
+      'fintech',
+      'transaction',
+      'fraud',
+      'kyc',
+      'aml',
+      'pci',
+    ],
     personas: [
-      { id: 'risk-analyst', name: 'Risk Analyst', role: 'Risk assessment', traits: ['quantitative', 'cautious'], suitability: 0.95 },
-      { id: 'compliance-specialist', name: 'Compliance Specialist', role: 'Regulatory adherence', traits: ['regulatory-expert', 'detail-oriented'], suitability: 0.9 },
-      { id: 'fraud-analyst', name: 'Fraud Analyst', role: 'Threat detection', traits: ['pattern-recognition', 'suspicious'], suitability: 0.85 },
+      {
+        id: 'risk-analyst',
+        name: 'Risk Analyst',
+        role: 'Risk assessment',
+        traits: ['quantitative', 'cautious'],
+        suitability: 0.95,
+      },
+      {
+        id: 'compliance-specialist',
+        name: 'Compliance Specialist',
+        role: 'Regulatory adherence',
+        traits: ['regulatory-expert', 'detail-oriented'],
+        suitability: 0.9,
+      },
+      {
+        id: 'fraud-analyst',
+        name: 'Fraud Analyst',
+        role: 'Threat detection',
+        traits: ['pattern-recognition', 'suspicious'],
+        suitability: 0.85,
+      },
     ],
   },
   {
@@ -126,9 +251,27 @@ const INDUSTRY_VERTICALS: Vertical[] = [
     costTier: 'professional',
     keywords: ['finance', 'accounting', 'tax', 'audit', 'budget', 'revenue', 'cost', 'sox', 'gaap'],
     personas: [
-      { id: 'auditor', name: 'Auditor', role: 'Compliance verification', traits: ['skeptical', 'methodical'], suitability: 0.95 },
-      { id: 'tax-advisor', name: 'Tax Advisor', role: 'Tax strategy', traits: ['optimization-focused', 'regulatory-aware'], suitability: 0.9 },
-      { id: 'financial-analyst', name: 'Financial Analyst', role: 'Financial modeling', traits: ['quantitative', 'forward-looking'], suitability: 0.85 },
+      {
+        id: 'auditor',
+        name: 'Auditor',
+        role: 'Compliance verification',
+        traits: ['skeptical', 'methodical'],
+        suitability: 0.95,
+      },
+      {
+        id: 'tax-advisor',
+        name: 'Tax Advisor',
+        role: 'Tax strategy',
+        traits: ['optimization-focused', 'regulatory-aware'],
+        suitability: 0.9,
+      },
+      {
+        id: 'financial-analyst',
+        name: 'Financial Analyst',
+        role: 'Financial modeling',
+        traits: ['quantitative', 'forward-looking'],
+        suitability: 0.85,
+      },
     ],
   },
   {
@@ -136,15 +279,49 @@ const INDUSTRY_VERTICALS: Vertical[] = [
     displayName: 'Academic Research',
     description: 'Scientific analysis, literature review, methodology',
     icon: '\uD83C\uDF93', // Graduation cap
-    expertiseAreas: ['Research Methods', 'Literature Review', 'Data Analysis', 'Peer Review', 'Ethics'],
+    expertiseAreas: [
+      'Research Methods',
+      'Literature Review',
+      'Data Analysis',
+      'Peer Review',
+      'Ethics',
+    ],
     complianceFrameworks: ['IRB', 'NIH Guidelines', 'CONSORT', 'PRISMA'],
     suggestedAgents: ['claude', 'gpt-4o', 'gemini'],
     costTier: 'professional',
-    keywords: ['research', 'study', 'analysis', 'data', 'hypothesis', 'methodology', 'academic', 'peer-review', 'publication'],
+    keywords: [
+      'research',
+      'study',
+      'analysis',
+      'data',
+      'hypothesis',
+      'methodology',
+      'academic',
+      'peer-review',
+      'publication',
+    ],
     personas: [
-      { id: 'methodologist', name: 'Methodologist', role: 'Research design', traits: ['rigorous', 'systematic'], suitability: 0.95 },
-      { id: 'statistician', name: 'Statistician', role: 'Data analysis', traits: ['quantitative', 'precise'], suitability: 0.9 },
-      { id: 'peer-reviewer', name: 'Peer Reviewer', role: 'Critical assessment', traits: ['constructive', 'thorough'], suitability: 0.85 },
+      {
+        id: 'methodologist',
+        name: 'Methodologist',
+        role: 'Research design',
+        traits: ['rigorous', 'systematic'],
+        suitability: 0.95,
+      },
+      {
+        id: 'statistician',
+        name: 'Statistician',
+        role: 'Data analysis',
+        traits: ['quantitative', 'precise'],
+        suitability: 0.9,
+      },
+      {
+        id: 'peer-reviewer',
+        name: 'Peer Reviewer',
+        role: 'Critical assessment',
+        traits: ['constructive', 'thorough'],
+        suitability: 0.85,
+      },
     ],
   },
 ];
@@ -194,7 +371,8 @@ export function VerticalSelector({
   const [_loadingBackend, setLoadingBackend] = useState(false);
 
   // Get selected vertical config
-  const currentVertical = INDUSTRY_VERTICALS.find(v => v.id === selectedVertical) || INDUSTRY_VERTICALS[0];
+  const currentVertical =
+    INDUSTRY_VERTICALS.find((v) => v.id === selectedVertical) || INDUSTRY_VERTICALS[0];
 
   // Auto-detect vertical from question text
   useEffect(() => {
@@ -240,10 +418,7 @@ export function VerticalSelector({
         if (tokens?.access_token) {
           headers['Authorization'] = `Bearer ${tokens.access_token}`;
         }
-        const response = await fetch(`${apiBase}/api/verticals`, {
-          method: 'GET',
-          headers,
-        });
+        const response = await fetch(`${apiBase}/api/verticals`, { method: 'GET', headers });
 
         if (response.ok) {
           // Backend verticals could extend the list
@@ -260,15 +435,18 @@ export function VerticalSelector({
   }, [apiBase, authLoading, isAuthenticated, tokens?.access_token]);
 
   // Apply suggested agents when vertical changes
-  const handleVerticalSelect = useCallback((verticalId: string) => {
-    onVerticalChange(verticalId);
-    setIsOpen(false);
+  const handleVerticalSelect = useCallback(
+    (verticalId: string) => {
+      onVerticalChange(verticalId);
+      setIsOpen(false);
 
-    const vertical = INDUSTRY_VERTICALS.find(v => v.id === verticalId);
-    if (vertical && onAgentsChange) {
-      onAgentsChange(vertical.suggestedAgents.join(','));
-    }
-  }, [onVerticalChange, onAgentsChange]);
+      const vertical = INDUSTRY_VERTICALS.find((v) => v.id === verticalId);
+      if (vertical && onAgentsChange) {
+        onAgentsChange(vertical.suggestedAgents.join(','));
+      }
+    },
+    [onVerticalChange, onAgentsChange],
+  );
 
   // Compact mode - just a chip
   if (compact) {
@@ -305,16 +483,14 @@ export function VerticalSelector({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <label className="block text-xs font-theme-data text-text-muted">
-          INDUSTRY VERTICAL
-        </label>
+        <label className="block text-xs font-theme-data text-text-muted">INDUSTRY VERTICAL</label>
         {suggestedVertical && suggestedVertical !== selectedVertical && (
           <button
             type="button"
             onClick={() => handleVerticalSelect(suggestedVertical)}
             className="text-xs font-theme-data text-[var(--acid-cyan)] hover:text-[var(--accent)] transition-colors"
           >
-            [Detected: {INDUSTRY_VERTICALS.find(v => v.id === suggestedVertical)?.displayName}]
+            [Detected: {INDUSTRY_VERTICALS.find((v) => v.id === suggestedVertical)?.displayName}]
           </button>
         )}
       </div>
@@ -337,9 +513,11 @@ export function VerticalSelector({
 
           <div className="flex items-center gap-2">
             {/* Cost tier badge */}
-            <span className={`px-2 py-0.5 text-[10px] font-theme-data rounded
+            <span
+              className={`px-2 py-0.5 text-[10px] font-theme-data rounded
                             ${COST_TIER_STYLES[currentVertical.costTier].bgColor}
-                            ${COST_TIER_STYLES[currentVertical.costTier].color}`}>
+                            ${COST_TIER_STYLES[currentVertical.costTier].color}`}
+            >
               {COST_TIER_STYLES[currentVertical.costTier].label}
             </span>
 
@@ -510,9 +688,7 @@ function VerticalDropdown({
                     Suggested
                   </span>
                 )}
-                {isSelected && (
-                  <span className="text-[var(--accent)]">\u2713</span>
-                )}
+                {isSelected && <span className="text-[var(--accent)]">\u2713</span>}
               </div>
 
               <div className="text-[10px] text-text-muted mt-0.5">{vertical.description}</div>
@@ -530,9 +706,7 @@ function VerticalDropdown({
                       </span>
                     ))}
                     {vertical.complianceFrameworks.length > 0 && (
-                      <span
-                        className="px-1 py-0.5 text-[10px] font-theme-data bg-warning/10 text-warning rounded"
-                      >
+                      <span className="px-1 py-0.5 text-[10px] font-theme-data bg-warning/10 text-warning rounded">
                         +{vertical.complianceFrameworks.length} compliance
                       </span>
                     )}
@@ -561,8 +735,10 @@ function VerticalDropdown({
               )}
             </div>
 
-            <span className={`px-2 py-0.5 text-[10px] font-theme-data rounded flex-shrink-0
-                            ${tierStyle.bgColor} ${tierStyle.color}`}>
+            <span
+              className={`px-2 py-0.5 text-[10px] font-theme-data rounded flex-shrink-0
+                            ${tierStyle.bgColor} ${tierStyle.color}`}
+            >
               {tierStyle.label}
             </span>
           </button>

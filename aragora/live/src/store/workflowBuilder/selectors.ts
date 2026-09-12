@@ -16,4 +16,5 @@ export const selectWorkflows = (state: WorkflowBuilderStore) => state.workflows;
 export const selectTemplates = (state: WorkflowBuilderStore) => state.templates;
 export const selectExecutionPreview = (state: WorkflowBuilderStore) => state.executionPreview;
 export const selectCanUndo = (state: WorkflowBuilderStore) => state._historyIndex > 0;
-export const selectCanRedo = (state: WorkflowBuilderStore) => state._historyIndex < state._history.length - 1;
+export const selectCanRedo = (state: WorkflowBuilderStore) =>
+  state._historyIndex < state._history.length - 1;

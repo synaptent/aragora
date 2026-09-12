@@ -38,8 +38,20 @@ jest.mock('../src/hooks/useKnowledgeQuery', () => ({
     queryResults: [],
     queryError: null,
     browserNodes: [
-      { id: 'node-1', type: 'concept', title: 'Test Concept', summary: 'A test concept node', created_at: '2024-01-01T00:00:00Z' },
-      { id: 'node-2', type: 'fact', title: 'Test Fact', summary: 'A test fact node', created_at: '2024-01-02T00:00:00Z' },
+      {
+        id: 'node-1',
+        type: 'concept',
+        title: 'Test Concept',
+        summary: 'A test concept node',
+        created_at: '2024-01-01T00:00:00Z',
+      },
+      {
+        id: 'node-2',
+        type: 'fact',
+        title: 'Test Fact',
+        summary: 'A test fact node',
+        created_at: '2024-01-02T00:00:00Z',
+      },
     ],
     browserLoading: false,
     totalNodes: 100,
@@ -61,10 +73,7 @@ jest.mock('../src/hooks/useKnowledgeQuery', () => ({
 }));
 
 jest.mock('../src/store/knowledgeExplorerStore', () => ({
-  useKnowledgeExplorerStore: () => ({
-    activeTab: mockActiveTab,
-    setActiveTab: mockSetActiveTab,
-  }),
+  useKnowledgeExplorerStore: () => ({ activeTab: mockActiveTab, setActiveTab: mockSetActiveTab }),
 }));
 
 // Import after mocks are set up
@@ -100,7 +109,9 @@ describe('KnowledgeExplorer', () => {
 
       // Find the tab button (has specific class structure from PanelTemplate)
       const searchTabs = screen.getAllByText('Search');
-      const searchTabButton = searchTabs.find(el => el.tagName === 'BUTTON' && el.classList.contains('bg-accent'));
+      const searchTabButton = searchTabs.find(
+        (el) => el.tagName === 'BUTTON' && el.classList.contains('bg-accent'),
+      );
       expect(searchTabButton).toBeTruthy();
     });
 

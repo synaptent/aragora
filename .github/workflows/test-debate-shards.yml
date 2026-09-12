@@ -1,0 +1,90 @@
+name: Tests (debate shards)
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-debate-shards-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  test-debate-shards:
+    name: ${{ matrix.category.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ matrix.category.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        category:
+          # Four balanced shards, formerly in test.yml (~11.5 min pytest each).
+          # Keep the versioned boundaries in scripts/ci_resolve_test_shard.py.
+          - name: debate-phases
+            pytest_args: ""
+            resolver: debate-phases
+            scope: debate
+            timeout: 30
+          - name: debate-1
+            pytest_args: ""
+            resolver: debate-1
+            scope: debate
+            timeout: 30
+          - name: debate-2
+            pytest_args: ""
+            resolver: debate-2
+            scope: debate
+            timeout: 30
+          - name: debate-3
+            pytest_args: ""
+            resolver: debate-3
+            scope: debate
+            timeout: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          bash scripts/ci_install_project.sh --extras test
+          python -m pip install pytest-timeout pytest-xdist
+
+      - name: Resolve shard test paths
+        id: shard_paths
+        shell: bash
+        env:
+          RESOLVER: ${{ matrix.category.resolver }}
+        run: |
+          args=$(python3 scripts/ci_resolve_test_shard.py "$RESOLVER" --check)
+          echo "args=$args" >> "$GITHUB_OUTPUT"
+          echo "Resolved pytest args: $args"
+
+      - name: Run debate shard tests
+        env:
+          PYTHONPATH: .:aragora-debate/src
+        run: |
+          pytest ${{ steps.shard_paths.outputs.args }} \
+            -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
+            --timeout=120 \
+            -n 4 \
+            --dist loadscope \
+            -v \
+            --tb=short \
+            --durations=20 \
+            --durations-min=1.0

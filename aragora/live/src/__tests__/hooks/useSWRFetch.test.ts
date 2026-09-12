@@ -48,33 +48,27 @@ describe('useSWRFetch', () => {
   describe('swrFetcher', () => {
     it('fetches and returns JSON data', async () => {
       const mockData = { id: 1, name: 'test' };
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => mockData });
 
       const result = await swrFetcher('https://api.example.com/data');
 
-      expect(mockFetch).toHaveBeenCalledWith('https://api.example.com/data', expect.objectContaining({
-        headers: { 'Content-Type': 'application/json' },
-      }));
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/data',
+        expect.objectContaining({ headers: { 'Content-Type': 'application/json' } }),
+      );
       expect(result).toEqual(mockData);
     });
 
     it('throws error on non-ok response', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 404,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
 
-      await expect(swrFetcher('https://api.example.com/data')).rejects.toThrow('API request failed');
+      await expect(swrFetcher('https://api.example.com/data')).rejects.toThrow(
+        'API request failed',
+      );
     });
 
     it('includes status code in error', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       try {
         await swrFetcher('https://api.example.com/data');
@@ -86,10 +80,7 @@ describe('useSWRFetch', () => {
     it('sends auth headers to the selected backend api origin', async () => {
       localStorage.setItem('aragora-backend', 'production');
       localStorage.setItem('aragora_tokens', JSON.stringify({ access_token: 'token-123' }));
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ ok: true }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
 
       await swrFetcher('https://api.aragora.ai/api/test');
 
@@ -119,9 +110,7 @@ describe('useSWRFetch', () => {
     });
 
     it('returns null when disabled', () => {
-      const { result } = renderHook(() =>
-        useSWRFetch('/api/test', { enabled: false })
-      );
+      const { result } = renderHook(() => useSWRFetch('/api/test', { enabled: false }));
 
       expect(result.current.data).toBeNull();
     });
@@ -147,10 +136,7 @@ describe('useSWRFetch', () => {
 
   describe('cache utilities', () => {
     it('prefetchData calls mutate', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: 'prefetched' }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: 'prefetched' }) });
 
       await prefetchData('/api/test');
 
@@ -158,7 +144,6 @@ describe('useSWRFetch', () => {
     });
 
     it('invalidateCache calls mutate with correct URL', () => {
-
       const { mutate } = require('swr');
 
       invalidateCache('/api/test');
@@ -167,7 +152,6 @@ describe('useSWRFetch', () => {
     });
 
     it('updateCache calls mutate with updater', () => {
-
       const { mutate } = require('swr');
       const updater = (current: unknown[]) => [...(current || []), { new: true }];
 
@@ -178,22 +162,15 @@ describe('useSWRFetch', () => {
 
     it('prefetchData uses the selected backend api base by default', async () => {
       localStorage.setItem('aragora-backend', 'production');
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: 'prefetched' }),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: 'prefetched' }) });
 
       await prefetchData('/api/test');
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.aragora.ai/api/test',
-        expect.any(Object),
-      );
+      expect(mockFetch).toHaveBeenCalledWith('https://api.aragora.ai/api/test', expect.any(Object));
     });
   });
 
   describe('pre-configured hooks', () => {
-
     const { useDebates, useLeaderboard, useAgents } = require('@/hooks/useSWRFetch');
 
     it('useDebates uses correct endpoint', () => {

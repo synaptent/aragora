@@ -24,11 +24,7 @@ interface SlackAppWizardProps {
 
 type WizardStep = 'check' | 'install' | 'channels' | 'test' | 'complete';
 
-export function SlackAppWizard({
-  onClose,
-  onComplete,
-  apiBaseUrl = ''
-}: SlackAppWizardProps) {
+export function SlackAppWizard({ onClose, onComplete, apiBaseUrl = '' }: SlackAppWizardProps) {
   const [step, setStep] = useState<WizardStep>('check');
   const [error, setError] = useState<string | null>(null);
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
@@ -123,7 +119,7 @@ export function SlackAppWizard({
     const popup = window.open(
       `${apiBaseUrl}/api/integrations/slack/install?host=${encodeURIComponent(window.location.host)}`,
       'slack-oauth',
-      `width=${width},height=${height},left=${left},top=${top},popup=yes`
+      `width=${width},height=${height},left=${left},top=${top},popup=yes`,
     );
 
     if (!popup) {
@@ -132,10 +128,8 @@ export function SlackAppWizard({
   };
 
   const handleChannelToggle = (channelId: string) => {
-    setSelectedChannels(prev =>
-      prev.includes(channelId)
-        ? prev.filter(id => id !== channelId)
-        : [...prev, channelId]
+    setSelectedChannels((prev) =>
+      prev.includes(channelId) ? prev.filter((id) => id !== channelId) : [...prev, channelId],
     );
   };
 
@@ -166,9 +160,7 @@ export function SlackAppWizard({
     setError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/integrations/slack/test`, {
-        method: 'POST',
-      });
+      const response = await fetch(`${apiBaseUrl}/api/integrations/slack/test`, { method: 'POST' });
 
       if (!response.ok) {
         throw new Error('Test message failed');
@@ -203,8 +195,8 @@ export function SlackAppWizard({
                   Slack OAuth Not Configured
                 </h3>
                 <p className="font-theme-data text-sm text-text-muted mb-4">
-                  The server needs SLACK_CLIENT_ID and SLACK_CLIENT_SECRET
-                  environment variables to enable app installation.
+                  The server needs SLACK_CLIENT_ID and SLACK_CLIENT_SECRET environment variables to
+                  enable app installation.
                 </p>
                 <div className="bg-bg/50 border border-[var(--accent)]/20 p-4 rounded text-left">
                   <p className="font-theme-data text-xs text-text-muted mb-2">
@@ -222,7 +214,7 @@ export function SlackAppWizard({
                     2. Add the following environment variables:
                   </p>
                   <pre className="font-theme-data text-xs text-[var(--accent)] bg-bg p-2 rounded overflow-x-auto">
-{`SLACK_CLIENT_ID=your_client_id
+                    {`SLACK_CLIENT_ID=your_client_id
 SLACK_CLIENT_SECRET=your_client_secret
 SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
                   </pre>
@@ -243,12 +235,10 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
         return (
           <div className="text-center py-8">
             <div className="font-theme-data text-[var(--acid-cyan)] text-4xl mb-4">#</div>
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Install Aragora Slack App
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Install Aragora Slack App</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
-              Click the button below to authorize Aragora in your Slack workspace.
-              You&apos;ll be redirected to Slack to approve the installation.
+              Click the button below to authorize Aragora in your Slack workspace. You&apos;ll be
+              redirected to Slack to approve the installation.
             </p>
             <button
               onClick={startOAuth}
@@ -272,9 +262,7 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
                   <span className="font-theme-data text-text">{workspace.name}</span>
                 </div>
               )}
-              <h3 className="font-theme-data text-lg text-text mb-2">
-                Select Channels
-              </h3>
+              <h3 className="font-theme-data text-lg text-text mb-2">Select Channels</h3>
               <p className="font-theme-data text-sm text-text-muted">
                 Choose which channels should receive debate notifications:
               </p>
@@ -298,7 +286,7 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
               </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                {channels.map(channel => (
+                {channels.map((channel) => (
                   <label
                     key={channel.id}
                     className={`flex items-center gap-3 p-3 border rounded cursor-pointer transition-colors ${
@@ -314,7 +302,8 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
                       className="form-checkbox bg-bg border-[var(--accent)]/30"
                     />
                     <span className="font-theme-data text-sm text-text">
-                      {channel.is_private ? '🔒 ' : '#'}{channel.name}
+                      {channel.is_private ? '🔒 ' : '#'}
+                      {channel.name}
                     </span>
                     {!channel.is_member && (
                       <span className="font-theme-data text-xs text-warning ml-auto">
@@ -331,9 +320,7 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
       case 'test':
         return (
           <div className="text-center py-8">
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Test Connection
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Test Connection</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
               Send a test message to verify the integration is working.
             </p>
@@ -345,8 +332,8 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
                 testStatus === 'success'
                   ? 'bg-[var(--accent)]/20 border-[var(--accent)] text-[var(--accent)]'
                   : testStatus === 'failed'
-                  ? 'bg-warning/20 border-warning text-warning'
-                  : 'bg-[var(--acid-cyan)]/20 border-[var(--acid-cyan)] text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/30'
+                    ? 'bg-warning/20 border-warning text-warning'
+                    : 'bg-[var(--acid-cyan)]/20 border-[var(--acid-cyan)] text-[var(--acid-cyan)] hover:bg-[var(--acid-cyan)]/30'
               }`}
             >
               {testStatus === 'testing' && '[SENDING TEST MESSAGE...]'}
@@ -367,12 +354,10 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
         return (
           <div className="text-center py-8">
             <div className="font-theme-data text-[var(--accent)] text-4xl mb-4">✓</div>
-            <h3 className="font-theme-data text-lg text-text mb-2">
-              Slack Integration Complete!
-            </h3>
+            <h3 className="font-theme-data text-lg text-text mb-2">Slack Integration Complete!</h3>
             <p className="font-theme-data text-sm text-text-muted mb-6">
-              Aragora is now connected to your Slack workspace.
-              Debate results and notifications will be posted to your selected channels.
+              Aragora is now connected to your Slack workspace. Debate results and notifications
+              will be posted to your selected channels.
             </p>
             <div className="space-y-2">
               <p className="font-theme-data text-xs text-text-muted">
@@ -410,10 +395,7 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-bg/80 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-bg/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative bg-surface border border-[var(--accent)]/30 rounded-lg w-full max-w-xl max-h-[90vh] overflow-hidden">
@@ -422,18 +404,13 @@ SLACK_REDIRECT_URI=https://your-domain/api/integrations/slack/callback`}
           <div className="flex items-center gap-3">
             <span className="font-theme-data text-[var(--acid-cyan)] text-xl">#</span>
             <div>
-              <h2 className="font-theme-data text-[var(--accent)] text-lg">
-                Slack App Setup
-              </h2>
+              <h2 className="font-theme-data text-[var(--accent)] text-lg">Slack App Setup</h2>
               <p className="font-theme-data text-xs text-text-muted">
                 Connect Aragora to your Slack workspace
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-text-muted hover:text-text font-theme-data"
-          >
+          <button onClick={onClose} className="text-text-muted hover:text-text font-theme-data">
             [X]
           </button>
         </div>

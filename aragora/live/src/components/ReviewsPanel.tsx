@@ -18,17 +18,9 @@ interface ReviewDetails {
   agents: string[];
   pr_url?: string;
   findings: {
-    unanimous_critiques: Array<{
-      issue: string;
-      severity: string;
-      agents: string[];
-    }>;
+    unanimous_critiques: Array<{ issue: string; severity: string; agents: string[] }>;
     agreement_score: number;
-    split_opinions?: Array<{
-      topic: string;
-      for_agents: string[];
-      against_agents: string[];
-    }>;
+    split_opinions?: Array<{ topic: string; for_agents: string[]; against_agents: string[] }>;
   };
 }
 
@@ -179,7 +171,9 @@ export function ReviewsPanel({ apiBase }: ReviewsPanelProps) {
                           {review.unanimous_count} UNANIMOUS
                         </span>
                       )}
-                      <div className={`text-lg font-theme-data ${getScoreColor(review.agreement_score)}`}>
+                      <div
+                        className={`text-lg font-theme-data ${getScoreColor(review.agreement_score)}`}
+                      >
                         {(review.agreement_score * 100).toFixed(0)}%
                       </div>
                       <div className="text-xs text-text-muted font-theme-data">agreement</div>
@@ -193,33 +187,44 @@ export function ReviewsPanel({ apiBase }: ReviewsPanelProps) {
                     {expandedDetails.findings.unanimous_critiques.length > 0 && (
                       <div className="mb-4">
                         <h4 className="text-sm font-theme-data text-red-500 mb-2">
-                          ⚠️ Unanimous Issues ({expandedDetails.findings.unanimous_critiques.length})
+                          ⚠️ Unanimous Issues ({expandedDetails.findings.unanimous_critiques.length}
+                          )
                         </h4>
                         <ul className="space-y-2">
-                          {expandedDetails.findings.unanimous_critiques.slice(0, 5).map((critique, i) => (
-                            <li key={i} className="text-xs font-theme-data text-text-muted pl-4 border-l-2 border-red-500/30">
-                              <span className="text-red-400">[{critique.severity}]</span> {critique.issue}
-                            </li>
-                          ))}
+                          {expandedDetails.findings.unanimous_critiques
+                            .slice(0, 5)
+                            .map((critique, i) => (
+                              <li
+                                key={i}
+                                className="text-xs font-theme-data text-text-muted pl-4 border-l-2 border-red-500/30"
+                              >
+                                <span className="text-red-400">[{critique.severity}]</span>{' '}
+                                {critique.issue}
+                              </li>
+                            ))}
                         </ul>
                       </div>
                     )}
 
                     {/* Split Opinions */}
-                    {expandedDetails.findings.split_opinions && expandedDetails.findings.split_opinions.length > 0 && (
-                      <div className="mb-4">
-                        <h4 className="text-sm font-theme-data text-amber-400 mb-2">
-                          ⚖️ Split Opinions ({expandedDetails.findings.split_opinions.length})
-                        </h4>
-                        <ul className="space-y-2">
-                          {expandedDetails.findings.split_opinions.slice(0, 3).map((split, i) => (
-                            <li key={i} className="text-xs font-theme-data text-text-muted pl-4 border-l-2 border-amber-500/30">
-                              {split.topic}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    {expandedDetails.findings.split_opinions &&
+                      expandedDetails.findings.split_opinions.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-theme-data text-amber-400 mb-2">
+                            ⚖️ Split Opinions ({expandedDetails.findings.split_opinions.length})
+                          </h4>
+                          <ul className="space-y-2">
+                            {expandedDetails.findings.split_opinions.slice(0, 3).map((split, i) => (
+                              <li
+                                key={i}
+                                className="text-xs font-theme-data text-text-muted pl-4 border-l-2 border-amber-500/30"
+                              >
+                                {split.topic}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 pt-3 border-t border-border">

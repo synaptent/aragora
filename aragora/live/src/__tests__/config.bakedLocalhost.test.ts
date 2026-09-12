@@ -68,14 +68,11 @@ describe('config resolution for a localhost-baked bundle served from a productio
 
   it('derives the control-plane WebSocket URL from the serving host too', async () => {
     bakeLocalhostDefaults();
-    process.env.NEXT_PUBLIC_CONTROL_PLANE_WS_URL =
-      'ws://localhost:8766/api/control-plane/stream';
+    process.env.NEXT_PUBLIC_CONTROL_PLANE_WS_URL = 'ws://localhost:8766/api/control-plane/stream';
 
     const config = await import('../config');
 
-    expect(config.CONTROL_PLANE_WS_URL).toBe(
-      'wss://api.aragora.ai/api/control-plane/stream',
-    );
+    expect(config.CONTROL_PLANE_WS_URL).toBe('wss://api.aragora.ai/api/control-plane/stream');
   });
 
   it('carries the correction through URLs derived from WS_URL', async () => {

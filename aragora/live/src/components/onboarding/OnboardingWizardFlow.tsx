@@ -35,14 +35,8 @@ const STEP_LABELS: Record<string, string> = {
  * Steps 4-8 guide the user through their first debate experience.
  */
 export function OnboardingWizardFlow({ onComplete, onSkip }: OnboardingWizardFlowProps) {
-  const {
-    currentStep,
-    isFirstStep,
-    isLastStep,
-    canProceed,
-    stepIndex,
-    totalSteps,
-  } = useOnboardingStep();
+  const { currentStep, isFirstStep, isLastStep, canProceed, stepIndex, totalSteps } =
+    useOnboardingStep();
 
   const { isAuthenticated } = useAuth();
 
@@ -67,7 +61,15 @@ export function OnboardingWizardFlow({ onComplete, onSkip }: OnboardingWizardFlo
     } else {
       nextStep();
     }
-  }, [currentStep, isAuthenticated, isLastStep, completeOnboarding, onComplete, nextStep, updateChecklist]);
+  }, [
+    currentStep,
+    isAuthenticated,
+    isLastStep,
+    completeOnboarding,
+    onComplete,
+    nextStep,
+    updateChecklist,
+  ]);
 
   const handleBack = useCallback(() => {
     previousStep();
@@ -113,7 +115,9 @@ export function OnboardingWizardFlow({ onComplete, onSkip }: OnboardingWizardFlo
         {/* Header */}
         <div className="border-b border-[var(--accent)]/20 px-6 py-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-theme-data text-[var(--accent)]">GET STARTED WITH ARAGORA</h2>
+            <h2 className="text-lg font-theme-data text-[var(--accent)]">
+              GET STARTED WITH ARAGORA
+            </h2>
             <button
               onClick={handleSkip}
               className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
@@ -131,8 +135,8 @@ export function OnboardingWizardFlow({ onComplete, onSkip }: OnboardingWizardFlo
                   i < stepIndex
                     ? 'text-[var(--accent)] border-[var(--accent)]'
                     : i === stepIndex
-                    ? 'text-[var(--accent)] border-[var(--accent)]'
-                    : 'text-text-muted border-border'
+                      ? 'text-[var(--accent)] border-[var(--accent)]'
+                      : 'text-text-muted border-border'
                 }`}
               >
                 {label}
@@ -144,9 +148,7 @@ export function OnboardingWizardFlow({ onComplete, onSkip }: OnboardingWizardFlo
         </div>
 
         {/* Content */}
-        <div className="p-6 min-h-[300px] max-h-[60vh] overflow-y-auto">
-          {renderStep()}
-        </div>
+        <div className="p-6 min-h-[300px] max-h-[60vh] overflow-y-auto">{renderStep()}</div>
 
         {/* Footer */}
         {currentStep !== 'launch' && (
@@ -192,9 +194,7 @@ function CreateAccountStep({ isAuthenticated }: { isAuthenticated: boolean }) {
     return (
       <div className="space-y-4 text-center py-6">
         <div className="text-3xl">&#10003;</div>
-        <h2 className="text-lg font-theme-data text-[var(--acid-green)]">
-          You&apos;re Signed In
-        </h2>
+        <h2 className="text-lg font-theme-data text-[var(--acid-green)]">You&apos;re Signed In</h2>
         <p className="text-sm font-theme-data text-[var(--text-muted)]">
           Great -- you&apos;re ready to choose a template and run your first debate.
         </p>
@@ -205,9 +205,7 @@ function CreateAccountStep({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-theme-data text-[var(--acid-green)] mb-2">
-          Save Your Results
-        </h2>
+        <h2 className="text-lg font-theme-data text-[var(--acid-green)] mb-2">Save Your Results</h2>
         <p className="text-sm font-theme-data text-[var(--text-muted)]">
           Create a free account to unlock real AI models and save your debate history.
         </p>
@@ -273,15 +271,13 @@ function LaunchStep({
   const arenaUrl = chosenTemplateId
     ? `/arena?template=${encodeURIComponent(chosenTemplateId)}${selectedIndustry ? `&vertical=${selectedIndustry}` : ''}`
     : trialTopic
-    ? `/arena?topic=${encodeURIComponent(trialTopic)}${selectedIndustry ? `&vertical=${selectedIndustry}` : ''}`
-    : `/arena${selectedIndustry ? `?vertical=${selectedIndustry}` : ''}`;
+      ? `/arena?topic=${encodeURIComponent(trialTopic)}${selectedIndustry ? `&vertical=${selectedIndustry}` : ''}`
+      : `/arena${selectedIndustry ? `?vertical=${selectedIndustry}` : ''}`;
 
   return (
     <div className="space-y-6 py-4">
       <div className="text-center">
-        <h2 className="text-xl font-theme-data text-[var(--acid-green)] mb-2">
-          Ready to Launch
-        </h2>
+        <h2 className="text-xl font-theme-data text-[var(--acid-green)] mb-2">Ready to Launch</h2>
         <p className="text-sm font-theme-data text-[var(--text-muted)]">
           Everything is set up. Here is your onboarding progress.
         </p>

@@ -72,11 +72,7 @@ const BarChart: React.FC<{
   }
 
   const maxValue = Math.max(...entries.map(([, v]) => v));
-  const colors = {
-    green: '#00ff00',
-    cyan: '#00ffff',
-    orange: '#ff6600',
-  };
+  const colors = { green: '#00ff00', cyan: '#00ffff', orange: '#ff6600' };
   const color = colors[colorScheme];
 
   return (
@@ -111,7 +107,13 @@ const BarChart: React.FC<{
             />
           </div>
           <div
-            style={{ width: '50px', textAlign: 'right', color: '#aaa', fontFamily: 'monospace', fontSize: '12px' }}
+            style={{
+              width: '50px',
+              textAlign: 'right',
+              color: '#aaa',
+              fontFamily: 'monospace',
+              fontSize: '12px',
+            }}
           >
             {value.toLocaleString()}
           </div>
@@ -217,7 +219,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
   if (loading && !moundStats) {
     return (
-      <div className={`analytics-dashboard ${className}`} style={{ padding: '40px', textAlign: 'center' }}>
+      <div
+        className={`analytics-dashboard ${className}`}
+        style={{ padding: '40px', textAlign: 'center' }}
+      >
         <div style={{ color: '#00ff00', fontFamily: 'monospace' }}>Loading analytics...</div>
       </div>
     );
@@ -319,7 +324,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         />
         <MetricCard
           label="AVG CONFIDENCE"
-          value={moundStats?.average_confidence ? `${(moundStats.average_confidence * 100).toFixed(1)}%` : 'N/A'}
+          value={
+            moundStats?.average_confidence
+              ? `${(moundStats.average_confidence * 100).toFixed(1)}%`
+              : 'N/A'
+          }
           color="#00ff00"
         />
         <MetricCard
@@ -369,24 +378,36 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         )}
 
         {/* Nodes by Validation */}
-        {moundStats?.nodes_by_validation && Object.keys(moundStats.nodes_by_validation).length > 0 && (
-          <div style={{ background: '#0f0f0f', padding: '16px', borderRadius: '4px' }}>
-            <BarChart data={moundStats.nodes_by_validation} title="VALIDATION STATUS" colorScheme="orange" />
-          </div>
-        )}
+        {moundStats?.nodes_by_validation &&
+          Object.keys(moundStats.nodes_by_validation).length > 0 && (
+            <div style={{ background: '#0f0f0f', padding: '16px', borderRadius: '4px' }}>
+              <BarChart
+                data={moundStats.nodes_by_validation}
+                title="VALIDATION STATUS"
+                colorScheme="orange"
+              />
+            </div>
+          )}
 
         {/* Relationships by Type */}
-        {moundStats?.relationships_by_type && Object.keys(moundStats.relationships_by_type).length > 0 && (
-          <div style={{ background: '#0f0f0f', padding: '16px', borderRadius: '4px' }}>
-            <BarChart data={moundStats.relationships_by_type} title="RELATIONSHIPS BY TYPE" colorScheme="green" />
-          </div>
-        )}
+        {moundStats?.relationships_by_type &&
+          Object.keys(moundStats.relationships_by_type).length > 0 && (
+            <div style={{ background: '#0f0f0f', padding: '16px', borderRadius: '4px' }}>
+              <BarChart
+                data={moundStats.relationships_by_type}
+                title="RELATIONSHIPS BY TYPE"
+                colorScheme="green"
+              />
+            </div>
+          )}
       </div>
 
       {/* Sharing Section */}
       {sharingStats && (
         <div style={{ marginTop: '32px' }}>
-          <div style={{ color: '#00ffff', fontSize: '14px', marginBottom: '16px' }}>SHARING ACTIVITY</div>
+          <div style={{ color: '#00ffff', fontSize: '14px', marginBottom: '16px' }}>
+            SHARING ACTIVITY
+          </div>
           <div
             style={{
               display: 'grid',
@@ -394,8 +415,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               gap: '12px',
             }}
           >
-            <MetricCard label="SHARED WITH ME" value={sharingStats.items_shared_with_me} color="#00ffff" />
-            <MetricCard label="SHARED BY ME" value={sharingStats.items_shared_by_me} color="#00ffff" />
+            <MetricCard
+              label="SHARED WITH ME"
+              value={sharingStats.items_shared_with_me}
+              color="#00ffff"
+            />
+            <MetricCard
+              label="SHARED BY ME"
+              value={sharingStats.items_shared_by_me}
+              color="#00ffff"
+            />
             <MetricCard label="ACTIVE GRANTS" value={sharingStats.active_grants} color="#00ff00" />
             <MetricCard label="EXPIRED GRANTS" value={sharingStats.expired_grants} color="#666" />
           </div>
@@ -405,7 +434,9 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       {/* Federation Section */}
       {federationStats && (
         <div style={{ marginTop: '32px' }}>
-          <div style={{ color: '#00ffff', fontSize: '14px', marginBottom: '16px' }}>FEDERATION SYNC</div>
+          <div style={{ color: '#00ffff', fontSize: '14px', marginBottom: '16px' }}>
+            FEDERATION SYNC
+          </div>
           <div
             style={{
               display: 'grid',
@@ -414,9 +445,21 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             }}
           >
             <MetricCard label="TOTAL SYNCS" value={federationStats.total_syncs} color="#00ffff" />
-            <MetricCard label="ACTIVE SCHEDULES" value={federationStats.active_schedules} color="#00ff00" />
-            <MetricCard label="PUSHED TODAY" value={federationStats.items_pushed_today} color="#00ff00" />
-            <MetricCard label="PULLED TODAY" value={federationStats.items_pulled_today} color="#00ffff" />
+            <MetricCard
+              label="ACTIVE SCHEDULES"
+              value={federationStats.active_schedules}
+              color="#00ff00"
+            />
+            <MetricCard
+              label="PUSHED TODAY"
+              value={federationStats.items_pushed_today}
+              color="#00ff00"
+            />
+            <MetricCard
+              label="PULLED TODAY"
+              value={federationStats.items_pulled_today}
+              color="#00ffff"
+            />
           </div>
           {federationStats.last_sync_at && (
             <div style={{ color: '#666', fontSize: '11px', marginTop: '12px' }}>

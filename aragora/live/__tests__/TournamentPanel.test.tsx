@@ -36,8 +36,24 @@ const mockTournamentsData = {
 
 const mockStandingsData = {
   standings: [
-    { agent: 'claude-3-opus', wins: 6, losses: 1, draws: 0, points: 18, total_score: 42, win_rate: 0.86 },
-    { agent: 'gemini-2.0-flash', wins: 5, losses: 2, draws: 0, points: 15, total_score: 38, win_rate: 0.71 },
+    {
+      agent: 'claude-3-opus',
+      wins: 6,
+      losses: 1,
+      draws: 0,
+      points: 18,
+      total_score: 42,
+      win_rate: 0.86,
+    },
+    {
+      agent: 'gemini-2.0-flash',
+      wins: 5,
+      losses: 2,
+      draws: 0,
+      points: 15,
+      total_score: 38,
+      win_rate: 0.71,
+    },
     { agent: 'grok-2', wins: 4, losses: 3, draws: 0, points: 12, total_score: 32, win_rate: 0.57 },
     { agent: 'llama-3', wins: 2, losses: 5, draws: 0, points: 6, total_score: 20, win_rate: 0.29 },
   ],
@@ -236,7 +252,15 @@ describe('TournamentPanel', () => {
 
       const secondStandingsData = {
         standings: [
-          { agent: 'different-agent', wins: 4, losses: 2, draws: 0, points: 12, total_score: 30, win_rate: 0.67 },
+          {
+            agent: 'different-agent',
+            wins: 4,
+            losses: 2,
+            draws: 0,
+            points: 12,
+            total_score: 30,
+            win_rate: 0.67,
+          },
         ],
       };
 
@@ -341,9 +365,7 @@ describe('TournamentPanel', () => {
   describe('Error Handling', () => {
     it('shows error message when fetch fails', async () => {
       jest.useRealTimers(); // Use real timers for this test
-      mockFetch.mockImplementation(() =>
-        Promise.reject(new Error('Network error'))
-      );
+      mockFetch.mockImplementation(() => Promise.reject(new Error('Network error')));
 
       renderWithProviders(<TournamentPanel apiBase="http://localhost:8080" />);
 

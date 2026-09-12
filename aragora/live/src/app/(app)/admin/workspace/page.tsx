@@ -2,9 +2,18 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
-import { WorkspaceMemberManager, WorkspaceMember, WorkspaceRole } from '@/components/admin/WorkspaceMemberManager';
+import {
+  WorkspaceMemberManager,
+  WorkspaceMember,
+  WorkspaceRole,
+} from '@/components/admin/WorkspaceMemberManager';
 import { RoleMatrixViewer, Role, Permission } from '@/components/admin/RoleMatrixViewer';
-import { CostBreakdownChart, CostItem, BreakdownType, TimeRange } from '@/components/admin/CostBreakdownChart';
+import {
+  CostBreakdownChart,
+  CostItem,
+  BreakdownType,
+  TimeRange,
+} from '@/components/admin/CostBreakdownChart';
 import { useAuthenticatedFetch, useAuthFetch } from '@/hooks/useAuthenticatedFetch';
 import { useAuth } from '@/context/AuthContext';
 
@@ -41,13 +50,7 @@ interface WorkspaceMemberResponse {
 }
 
 interface CostDataResponse {
-  items: Array<{
-    id: string;
-    label: string;
-    cost: number;
-    category: string;
-    subcategory?: string;
-  }>;
+  items: Array<{ id: string; label: string; cost: number; category: string; subcategory?: string }>;
   total: number;
   period: string;
 }
@@ -109,7 +112,7 @@ export default function WorkspaceAdminPage() {
     refetch: refetchMembers,
   } = useAuthenticatedFetch<{ members: WorkspaceMemberResponse[] }>(
     `/api/v1/workspaces/${workspaceId}/members`,
-    { defaultData: { members: [] } }
+    { defaultData: { members: [] } },
   );
 
   // Fetch RBAC roles
@@ -117,30 +120,19 @@ export default function WorkspaceAdminPage() {
     data: rolesData,
     loading: rolesLoading,
     error: rolesError,
-  } = useAuthenticatedFetch<{ roles: RBACRole[] }>(
-    '/api/v1/rbac/roles',
-    { defaultData: { roles: [] } }
-  );
+  } = useAuthenticatedFetch<{ roles: RBACRole[] }>('/api/v1/rbac/roles', {
+    defaultData: { roles: [] },
+  });
 
   // Fetch RBAC permissions
-  const {
-    data: permissionsData,
-    loading: permissionsLoading,
-  } = useAuthenticatedFetch<{ permissions: RBACPermission[] }>(
-    '/api/v1/rbac/permissions',
-    { defaultData: { permissions: [] } }
-  );
+  const { data: permissionsData, loading: permissionsLoading } = useAuthenticatedFetch<{
+    permissions: RBACPermission[];
+  }>('/api/v1/rbac/permissions', { defaultData: { permissions: [] } });
 
   // Fetch cost breakdown
-  const {
-    data: costData,
-    loading: costLoading,
-  } = useAuthenticatedFetch<CostDataResponse>(
+  const { data: costData, loading: costLoading } = useAuthenticatedFetch<CostDataResponse>(
     `/api/v1/billing/costs?workspace_id=${workspaceId}&period=${timeRange}`,
-    {
-      defaultData: { items: [], total: 0, period: timeRange },
-      deps: [timeRange, workspaceId],
-    }
+    { defaultData: { items: [], total: 0, period: timeRange }, deps: [timeRange, workspaceId] },
   );
 
   // Fetch workspace settings
@@ -163,17 +155,16 @@ export default function WorkspaceAdminPage() {
         },
       },
       deps: [workspaceId],
-    }
+    },
   );
 
   // Fetch recent activity
-  const {
-    data: activityData,
-    loading: activityLoading,
-  } = useAuthenticatedFetch<{ events: ActivityEvent[] }>(
-    `/api/v1/workspaces/${workspaceId}/activity?limit=50`,
-    { defaultData: { events: [] }, deps: [workspaceId] }
-  );
+  const { data: activityData, loading: activityLoading } = useAuthenticatedFetch<{
+    events: ActivityEvent[];
+  }>(`/api/v1/workspaces/${workspaceId}/activity?limit=50`, {
+    defaultData: { events: [] },
+    deps: [workspaceId],
+  });
 
   // Fetch pending invites
   const {
@@ -182,7 +173,7 @@ export default function WorkspaceAdminPage() {
     refetch: refetchInvites,
   } = useAuthenticatedFetch<{ invites: PendingInvite[] }>(
     `/api/v1/workspaces/${workspaceId}/invites`,
-    { defaultData: { invites: [] }, deps: [workspaceId] }
+    { defaultData: { invites: [] }, deps: [workspaceId] },
   );
 
   // =========================================================================
@@ -328,40 +319,47 @@ export default function WorkspaceAdminPage() {
     }
   }, [settingsForm, authFetch, workspaceId, refetchSettings]);
 
-  const handleRevokeInvite = useCallback(async (inviteId: string) => {
-    try {
-      await authFetch(`/api/v1/workspaces/${workspaceId}/invites/${inviteId}`, {
-        method: 'DELETE',
-      });
-      await refetchInvites();
-    } catch (error) {
-      console.error('Failed to revoke invite:', error);
-    }
-  }, [authFetch, workspaceId, refetchInvites]);
+  const handleRevokeInvite = useCallback(
+    async (inviteId: string) => {
+      try {
+        await authFetch(`/api/v1/workspaces/${workspaceId}/invites/${inviteId}`, {
+          method: 'DELETE',
+        });
+        await refetchInvites();
+      } catch (error) {
+        console.error('Failed to revoke invite:', error);
+      }
+    },
+    [authFetch, workspaceId, refetchInvites],
+  );
 
-  const handleResendInvite = useCallback(async (inviteId: string) => {
-    try {
-      await authFetch(`/api/v1/workspaces/${workspaceId}/invites/${inviteId}/resend`, {
-        method: 'POST',
-      });
-    } catch (error) {
-      console.error('Failed to resend invite:', error);
-    }
-  }, [authFetch, workspaceId]);
+  const handleResendInvite = useCallback(
+    async (inviteId: string) => {
+      try {
+        await authFetch(`/api/v1/workspaces/${workspaceId}/invites/${inviteId}/resend`, {
+          method: 'POST',
+        });
+      } catch (error) {
+        console.error('Failed to resend invite:', error);
+      }
+    },
+    [authFetch, workspaceId],
+  );
 
   // =========================================================================
   // Loading states
   // =========================================================================
 
-  const loading = activeTab === 'members'
-    ? membersLoading || invitesLoading
-    : activeTab === 'roles'
-    ? rolesLoading || permissionsLoading
-    : activeTab === 'costs'
-    ? costLoading
-    : activeTab === 'settings'
-    ? settingsLoading
-    : activityLoading;
+  const loading =
+    activeTab === 'members'
+      ? membersLoading || invitesLoading
+      : activeTab === 'roles'
+        ? rolesLoading || permissionsLoading
+        : activeTab === 'costs'
+          ? costLoading
+          : activeTab === 'settings'
+            ? settingsLoading
+            : activityLoading;
 
   const error = membersError || rolesError;
 
@@ -393,9 +391,7 @@ export default function WorkspaceAdminPage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-3 font-theme-data text-sm transition-colors relative ${
-              activeTab === tab.id
-                ? 'text-[var(--accent)]'
-                : 'text-text-muted hover:text-text'
+              activeTab === tab.id ? 'text-[var(--accent)]' : 'text-text-muted hover:text-text'
             }`}
           >
             {tab.label}
@@ -573,7 +569,9 @@ export default function WorkspaceAdminPage() {
                   <input
                     type="text"
                     value={settingsForm?.name || ''}
-                    onChange={(e) => setSettingsForm((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                    onChange={(e) =>
+                      setSettingsForm((prev) => (prev ? { ...prev, name: e.target.value } : prev))
+                    }
                     className="w-full bg-bg border border-[var(--accent)]/30 px-3 py-2 font-theme-data text-sm text-text focus:border-[var(--accent)] focus:outline-none"
                   />
                 ) : (
@@ -582,11 +580,17 @@ export default function WorkspaceAdminPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">DESCRIPTION</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  DESCRIPTION
+                </label>
                 {editing ? (
                   <textarea
                     value={settingsForm?.description || ''}
-                    onChange={(e) => setSettingsForm((prev) => prev ? { ...prev, description: e.target.value } : prev)}
+                    onChange={(e) =>
+                      setSettingsForm((prev) =>
+                        prev ? { ...prev, description: e.target.value } : prev,
+                      )
+                    }
                     rows={3}
                     className="w-full bg-bg border border-[var(--accent)]/30 px-3 py-2 font-theme-data text-sm text-text focus:border-[var(--accent)] focus:outline-none resize-none"
                   />
@@ -606,27 +610,39 @@ export default function WorkspaceAdminPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-theme-data text-sm text-text">Default role for new members</p>
-                  <p className="text-xs font-theme-data text-text-muted">Assigned when someone joins via invite</p>
+                  <p className="text-xs font-theme-data text-text-muted">
+                    Assigned when someone joins via invite
+                  </p>
                 </div>
                 {editing ? (
                   <select
                     value={settingsForm?.default_role || 'member'}
-                    onChange={(e) => setSettingsForm((prev) => prev ? { ...prev, default_role: e.target.value } : prev)}
+                    onChange={(e) =>
+                      setSettingsForm((prev) =>
+                        prev ? { ...prev, default_role: e.target.value } : prev,
+                      )
+                    }
                     className="bg-bg border border-[var(--accent)]/30 px-3 py-2 font-theme-data text-sm text-text focus:border-[var(--accent)] focus:outline-none"
                   >
                     {workspaceRoles.map((r) => (
-                      <option key={r.id} value={r.name}>{r.name}</option>
+                      <option key={r.id} value={r.name}>
+                        {r.name}
+                      </option>
                     ))}
                   </select>
                 ) : (
-                  <span className="font-theme-data text-sm text-[var(--acid-cyan)]">{settings.default_role}</span>
+                  <span className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                    {settings.default_role}
+                  </span>
                 )}
               </div>
 
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-theme-data text-sm text-text">Maximum members</p>
-                  <p className="text-xs font-theme-data text-text-muted">Limit on workspace membership</p>
+                  <p className="text-xs font-theme-data text-text-muted">
+                    Limit on workspace membership
+                  </p>
                 </div>
                 {editing ? (
                   <input
@@ -634,7 +650,11 @@ export default function WorkspaceAdminPage() {
                     min={1}
                     max={1000}
                     value={settingsForm?.max_members || 25}
-                    onChange={(e) => setSettingsForm((prev) => prev ? { ...prev, max_members: parseInt(e.target.value) || 25 } : prev)}
+                    onChange={(e) =>
+                      setSettingsForm((prev) =>
+                        prev ? { ...prev, max_members: parseInt(e.target.value) || 25 } : prev,
+                      )
+                    }
                     className="w-20 bg-bg border border-[var(--accent)]/30 px-3 py-2 font-theme-data text-sm text-text text-right focus:border-[var(--accent)] focus:outline-none"
                   />
                 ) : (
@@ -645,40 +665,53 @@ export default function WorkspaceAdminPage() {
               <ToggleSetting
                 label="Require MFA"
                 description="All members must enable multi-factor authentication"
-                checked={editing ? (settingsForm?.require_mfa || false) : settings.require_mfa}
+                checked={editing ? settingsForm?.require_mfa || false : settings.require_mfa}
                 disabled={!editing}
-                onChange={(v) => setSettingsForm((prev) => prev ? { ...prev, require_mfa: v } : prev)}
+                onChange={(v) =>
+                  setSettingsForm((prev) => (prev ? { ...prev, require_mfa: v } : prev))
+                }
               />
 
               <ToggleSetting
                 label="Debate approval required"
                 description="New debates require admin approval before starting"
-                checked={editing ? (settingsForm?.debate_approval_required || false) : settings.debate_approval_required}
+                checked={
+                  editing
+                    ? settingsForm?.debate_approval_required || false
+                    : settings.debate_approval_required
+                }
                 disabled={!editing}
-                onChange={(v) => setSettingsForm((prev) => prev ? { ...prev, debate_approval_required: v } : prev)}
+                onChange={(v) =>
+                  setSettingsForm((prev) =>
+                    prev ? { ...prev, debate_approval_required: v } : prev,
+                  )
+                }
               />
 
               <ToggleSetting
                 label="Allow self-signup"
                 description="Anyone with the workspace URL can request to join"
-                checked={editing ? (settingsForm?.allow_self_signup || false) : settings.allow_self_signup}
+                checked={
+                  editing ? settingsForm?.allow_self_signup || false : settings.allow_self_signup
+                }
                 disabled={!editing}
-                onChange={(v) => setSettingsForm((prev) => prev ? { ...prev, allow_self_signup: v } : prev)}
+                onChange={(v) =>
+                  setSettingsForm((prev) => (prev ? { ...prev, allow_self_signup: v } : prev))
+                }
               />
             </div>
           </div>
 
           {/* Workspace Stats */}
           <div className="border border-[var(--accent)]/20 p-6">
-            <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">WORKSPACE OVERVIEW</h3>
+            <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+              WORKSPACE OVERVIEW
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <StatCard label="MEMBERS" value={members.length} />
               <StatCard label="PENDING" value={pendingInvites.length} />
               <StatCard label="ROLES" value={matrixRoles.length} />
-              <StatCard
-                label="COST (30D)"
-                value={`$${(costData?.total || 0).toFixed(2)}`}
-              />
+              <StatCard label="COST (30D)" value={`$${(costData?.total || 0).toFixed(2)}`} />
             </div>
           </div>
         </div>
@@ -701,19 +734,25 @@ export default function WorkspaceAdminPage() {
                 <div
                   key={event.id}
                   className={`flex items-start gap-4 p-4 border-l-2 ${
-                    i === 0
-                      ? 'border-l-acid-green'
-                      : 'border-l-acid-green/20'
+                    i === 0 ? 'border-l-acid-green' : 'border-l-acid-green/20'
                   } ${i < activityEvents.length - 1 ? 'border-b border-b-surface' : ''}`}
                 >
                   <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center border border-[var(--accent)]/20 bg-surface/50 font-theme-data text-xs text-[var(--accent)]">
-                    {event.type === 'member_joined' ? '+' :
-                     event.type === 'member_removed' ? '-' :
-                     event.type === 'debate_created' ? 'D' :
-                     event.type === 'debate_completed' ? '>' :
-                     event.type === 'role_changed' ? 'R' :
-                     event.type === 'settings_updated' ? 'S' :
-                     event.type === 'invite_sent' ? '@' : '?'}
+                    {event.type === 'member_joined'
+                      ? '+'
+                      : event.type === 'member_removed'
+                        ? '-'
+                        : event.type === 'debate_created'
+                          ? 'D'
+                          : event.type === 'debate_completed'
+                            ? '>'
+                            : event.type === 'role_changed'
+                              ? 'R'
+                              : event.type === 'settings_updated'
+                                ? 'S'
+                                : event.type === 'invite_sent'
+                                  ? '@'
+                                  : '?'}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-theme-data text-sm text-text">{event.description}</p>

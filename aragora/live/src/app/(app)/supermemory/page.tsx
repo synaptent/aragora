@@ -47,7 +47,7 @@ export default function SupermemoryPage() {
 
   const { data, isLoading } = useSWRFetch<{ data: SupermemoryResponse }>(
     '/api/v1/memory/supermemory/stats',
-    { refreshInterval: 30000, baseUrl: config.api }
+    { refreshInterval: 30000, baseUrl: config.api },
   );
 
   const stats = data?.data?.stats;
@@ -86,10 +86,16 @@ export default function SupermemoryPage() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <div className="flex items-center gap-3">
-              <Link href="/memory" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/memory"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [MEMORY]
               </Link>
-              <Link href="/memory-gateway" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/memory-gateway"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [GATEWAY]
               </Link>
               <BackendSelector compact />
@@ -105,26 +111,35 @@ export default function SupermemoryPage() {
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
               Cross-session external memory. Browse, search, and inspect long-term memories
-              persisted across debate sessions via <code className="text-[var(--accent)]">enable_supermemory</code>.
+              persisted across debate sessions via{' '}
+              <code className="text-[var(--accent)]">enable_supermemory</code>.
             </p>
           </div>
 
           <PanelErrorBoundary panelName="Supermemory">
             {/* Stats */}
             {isLoading ? (
-              <div className="text-[var(--accent)] font-theme-data animate-pulse text-center py-6">Loading...</div>
+              <div className="text-[var(--accent)] font-theme-data animate-pulse text-center py-6">
+                Loading...
+              </div>
             ) : stats ? (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                  <div className="text-3xl font-theme-data font-bold text-[var(--accent)]">{stats.total_memories}</div>
+                  <div className="text-3xl font-theme-data font-bold text-[var(--accent)]">
+                    {stats.total_memories}
+                  </div>
                   <div className="text-xs text-text-muted uppercase">Total Memories</div>
                 </div>
                 <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                  <div className="text-3xl font-theme-data font-bold text-blue-400">{stats.sessions}</div>
+                  <div className="text-3xl font-theme-data font-bold text-blue-400">
+                    {stats.sessions}
+                  </div>
                   <div className="text-xs text-text-muted uppercase">Sessions</div>
                 </div>
                 <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                  <div className="text-3xl font-theme-data font-bold text-purple-400">{stats.avg_surprise.toFixed(2)}</div>
+                  <div className="text-3xl font-theme-data font-bold text-purple-400">
+                    {stats.avg_surprise.toFixed(2)}
+                  </div>
                   <div className="text-xs text-text-muted uppercase">Avg Surprise</div>
                 </div>
                 <div className="p-4 bg-surface border border-border rounded-lg text-center">
@@ -137,7 +152,8 @@ export default function SupermemoryPage() {
             ) : (
               <div className="p-4 bg-surface border border-border rounded-lg text-center mb-6">
                 <p className="text-text-muted font-theme-data text-sm">
-                  No supermemory data. Enable <code className="text-[var(--accent)]">enable_supermemory</code> in ArenaConfig.
+                  No supermemory data. Enable{' '}
+                  <code className="text-[var(--accent)]">enable_supermemory</code> in ArenaConfig.
                 </p>
               </div>
             )}
@@ -208,9 +224,11 @@ export default function SupermemoryPage() {
                         <span className="text-xs text-text-muted">
                           session: {entry.session_id.substring(0, 8)}
                         </span>
-                        <span className={`text-xs font-theme-data ${
-                          entry.surprise_score > 0.5 ? 'text-yellow-400' : 'text-text-muted'
-                        }`}>
+                        <span
+                          className={`text-xs font-theme-data ${
+                            entry.surprise_score > 0.5 ? 'text-yellow-400' : 'text-text-muted'
+                          }`}
+                        >
                           surprise: {entry.surprise_score.toFixed(2)}
                         </span>
                         <span className="text-xs text-text-muted">
@@ -221,7 +239,10 @@ export default function SupermemoryPage() {
                       {entry.tags.length > 0 && (
                         <div className="flex gap-1 mt-1">
                           {entry.tags.map((tag) => (
-                            <span key={tag} className="px-1 py-0.5 text-xs bg-surface rounded text-text-muted">
+                            <span
+                              key={tag}
+                              className="px-1 py-0.5 text-xs bg-surface rounded text-text-muted"
+                            >
                               {tag}
                             </span>
                           ))}

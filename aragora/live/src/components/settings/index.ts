@@ -5,12 +5,7 @@
  */
 
 // Types
-export type {
-  FeatureConfig,
-  UserPreferences,
-  SlackNotifications,
-  SettingsTab,
-} from './types';
+export type { FeatureConfig, UserPreferences, SlackNotifications, SettingsTab } from './types';
 
 export {
   DEFAULT_FEATURE_CONFIG,

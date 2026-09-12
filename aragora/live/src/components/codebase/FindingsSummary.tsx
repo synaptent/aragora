@@ -23,13 +23,7 @@ interface ScanResult {
   files_scanned: number;
   lines_scanned?: number;
   risk_score?: number;
-  summary: {
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-    info?: number;
-  };
+  summary: { critical: number; high: number; medium: number; low: number; info?: number };
   findings: Finding[];
 }
 
@@ -40,9 +34,21 @@ interface FindingsSummaryProps {
 type SeverityFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
 
 const SEVERITY_CONFIG: Record<string, { color: string; bgColor: string; label: string }> = {
-  critical: { color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40', label: 'Critical' },
-  high: { color: 'text-orange-400', bgColor: 'bg-orange-500/20 border-orange-500/40', label: 'High' },
-  medium: { color: 'text-yellow-400', bgColor: 'bg-yellow-500/20 border-yellow-500/40', label: 'Medium' },
+  critical: {
+    color: 'text-red-400',
+    bgColor: 'bg-red-500/20 border-red-500/40',
+    label: 'Critical',
+  },
+  high: {
+    color: 'text-orange-400',
+    bgColor: 'bg-orange-500/20 border-orange-500/40',
+    label: 'High',
+  },
+  medium: {
+    color: 'text-yellow-400',
+    bgColor: 'bg-yellow-500/20 border-yellow-500/40',
+    label: 'Medium',
+  },
   low: { color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40', label: 'Low' },
   info: { color: 'text-gray-400', bgColor: 'bg-gray-500/20 border-gray-500/40', label: 'Info' },
 };
@@ -52,12 +58,15 @@ export function FindingsSummary({ result }: FindingsSummaryProps) {
   const [expandedFinding, setExpandedFinding] = useState<string | null>(null);
 
   const filteredFindings = result.findings.filter(
-    f => severityFilter === 'all' || f.severity === severityFilter
+    (f) => severityFilter === 'all' || f.severity === severityFilter,
   );
 
-  const totalFindings = result.summary.critical + result.summary.high +
-                        result.summary.medium + result.summary.low +
-                        (result.summary.info || 0);
+  const totalFindings =
+    result.summary.critical +
+    result.summary.high +
+    result.summary.medium +
+    result.summary.low +
+    (result.summary.info || 0);
 
   const getRiskLevel = (score: number): { label: string; color: string } => {
     if (score >= 70) return { label: 'High Risk', color: 'text-red-400' };
@@ -113,7 +122,9 @@ export function FindingsSummary({ result }: FindingsSummaryProps) {
           <StatCard
             label="Critical/High"
             value={result.summary.critical + result.summary.high}
-            color={result.summary.critical + result.summary.high > 0 ? 'text-red-400' : 'text-green-400'}
+            color={
+              result.summary.critical + result.summary.high > 0 ? 'text-red-400' : 'text-green-400'
+            }
             pulse={result.summary.critical > 0}
           />
           <StatCard
@@ -127,7 +138,9 @@ export function FindingsSummary({ result }: FindingsSummaryProps) {
 
       {/* Severity Breakdown */}
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
-        <h4 className="text-sm font-theme-data text-[var(--acid-green)] mb-4">Severity Breakdown</h4>
+        <h4 className="text-sm font-theme-data text-[var(--acid-green)] mb-4">
+          Severity Breakdown
+        </h4>
         <div className="flex gap-2 flex-wrap">
           <FilterButton
             active={severityFilter === 'all'}
@@ -196,19 +209,19 @@ export function FindingsSummary({ result }: FindingsSummaryProps) {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${config.bgColor} ${config.color}`}>
+                          <span
+                            className={`px-2 py-0.5 text-xs font-theme-data rounded border ${config.bgColor} ${config.color}`}
+                          >
                             {config.label.toUpperCase()}
                           </span>
-                          <span className="text-xs text-[var(--text-muted)]">
-                            {finding.id}
-                          </span>
+                          <span className="text-xs text-[var(--text-muted)]">{finding.id}</span>
                           {finding.cwe_id && (
-                            <span className="text-xs text-purple-400">
-                              {finding.cwe_id}
-                            </span>
+                            <span className="text-xs text-purple-400">{finding.cwe_id}</span>
                           )}
                         </div>
-                        <h5 className="font-theme-data text-sm text-[var(--text)]">{finding.title}</h5>
+                        <h5 className="font-theme-data text-sm text-[var(--text)]">
+                          {finding.title}
+                        </h5>
                         <p className="text-xs text-[var(--text-muted)] mt-1">
                           {finding.file_path}:{finding.line_number}
                         </p>
@@ -216,10 +229,15 @@ export function FindingsSummary({ result }: FindingsSummaryProps) {
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className="text-xs text-[var(--text-muted)]">Confidence</div>
-                          <div className={`text-sm font-theme-data ${
-                            finding.confidence >= 0.9 ? 'text-green-400' :
-                            finding.confidence >= 0.7 ? 'text-yellow-400' : 'text-red-400'
-                          }`}>
+                          <div
+                            className={`text-sm font-theme-data ${
+                              finding.confidence >= 0.9
+                                ? 'text-green-400'
+                                : finding.confidence >= 0.7
+                                  ? 'text-yellow-400'
+                                  : 'text-red-400'
+                            }`}
+                          >
                             {Math.round(finding.confidence * 100)}%
                           </div>
                         </div>
@@ -233,7 +251,9 @@ export function FindingsSummary({ result }: FindingsSummaryProps) {
                   {isExpanded && (
                     <div className="px-4 pb-4 space-y-3 border-t border-[var(--border)]/30 pt-3">
                       <div>
-                        <span className="text-xs text-[var(--text-muted)] block mb-1">Description</span>
+                        <span className="text-xs text-[var(--text-muted)] block mb-1">
+                          Description
+                        </span>
                         <p className="text-sm">{finding.description}</p>
                       </div>
 
@@ -287,7 +307,9 @@ interface StatCardProps {
 function StatCard({ label, value, color, pulse, small }: StatCardProps) {
   return (
     <div className="text-center">
-      <div className={`${small ? 'text-lg' : 'text-2xl'} font-theme-data ${color} ${pulse ? 'animate-pulse' : ''}`}>
+      <div
+        className={`${small ? 'text-lg' : 'text-2xl'} font-theme-data ${color} ${pulse ? 'animate-pulse' : ''}`}
+      >
         {value}
       </div>
       <div className="text-xs text-[var(--text-muted)]">{label}</div>
@@ -304,11 +326,21 @@ interface FilterButtonProps {
 
 function FilterButton({ active, onClick, color, children }: FilterButtonProps) {
   const colorClasses: Record<string, string> = {
-    default: active ? 'bg-[var(--acid-green)]/20 border-[var(--acid-green)] text-[var(--acid-green)]' : 'border-[var(--border)] text-[var(--text-muted)]',
-    critical: active ? 'bg-red-500/20 border-red-500 text-red-400' : 'border-[var(--border)] text-[var(--text-muted)]',
-    high: active ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'border-[var(--border)] text-[var(--text-muted)]',
-    medium: active ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400' : 'border-[var(--border)] text-[var(--text-muted)]',
-    low: active ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'border-[var(--border)] text-[var(--text-muted)]',
+    default: active
+      ? 'bg-[var(--acid-green)]/20 border-[var(--acid-green)] text-[var(--acid-green)]'
+      : 'border-[var(--border)] text-[var(--text-muted)]',
+    critical: active
+      ? 'bg-red-500/20 border-red-500 text-red-400'
+      : 'border-[var(--border)] text-[var(--text-muted)]',
+    high: active
+      ? 'bg-orange-500/20 border-orange-500 text-orange-400'
+      : 'border-[var(--border)] text-[var(--text-muted)]',
+    medium: active
+      ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
+      : 'border-[var(--border)] text-[var(--text-muted)]',
+    low: active
+      ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+      : 'border-[var(--border)] text-[var(--text-muted)]',
   };
 
   return (

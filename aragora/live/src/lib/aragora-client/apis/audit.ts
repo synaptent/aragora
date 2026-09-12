@@ -12,12 +12,7 @@ import { BaseAPI, HttpClient } from './base';
 // =============================================================================
 
 export type AuditSessionStatus =
-  | 'created'
-  | 'running'
-  | 'paused'
-  | 'completed'
-  | 'cancelled'
-  | 'failed';
+  'created' | 'running' | 'paused' | 'completed' | 'cancelled' | 'failed';
 
 export type FindingSeverity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 export type FindingStatus = 'open' | 'acknowledged' | 'in_progress' | 'resolved' | 'dismissed';
@@ -62,12 +57,7 @@ export interface Finding {
   status: FindingStatus;
   title: string;
   description: string;
-  location?: {
-    document_id: string;
-    line?: number;
-    column?: number;
-    path?: string;
-  };
+  location?: { document_id: string; line?: number; column?: number; path?: string };
   recommendation?: string;
   evidence?: string[];
   metadata?: Record<string, unknown>;

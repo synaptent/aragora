@@ -71,7 +71,9 @@ function UtilizationBar({ spent, limit }: { spent: number; limit: number }) {
           style={{ width: `${pct}%` }}
         />
       </div>
-      <span className={`text-xs font-theme-data ${pct >= 100 ? 'text-red-400' : pct >= 80 ? 'text-yellow-400' : 'text-[var(--acid-green)]'}`}>
+      <span
+        className={`text-xs font-theme-data ${pct >= 100 ? 'text-red-400' : pct >= 80 ? 'text-yellow-400' : 'text-[var(--acid-green)]'}`}
+      >
         {pct.toFixed(0)}%
       </span>
     </div>
@@ -125,32 +127,29 @@ export default function BudgetsPage() {
   const [selectedBudget, setSelectedBudget] = useState<string | null>(null);
 
   // Fetch budget summary
-  const { data: summaryData, isLoading: summaryLoading, error: summaryError } =
-    useSWRFetch<{ data: BudgetSummary }>(
-      '/api/v1/budgets/summary',
-      { refreshInterval: 30000 },
-    );
+  const {
+    data: summaryData,
+    isLoading: summaryLoading,
+    error: summaryError,
+  } = useSWRFetch<{ data: BudgetSummary }>('/api/v1/budgets/summary', { refreshInterval: 30000 });
 
   // Fetch budgets list
-  const { data: budgetsData, isLoading: budgetsLoading } =
-    useSWRFetch<BudgetsListResponse>(
-      '/api/v1/budgets?limit=50',
-      { refreshInterval: 30000 },
-    );
+  const { data: budgetsData, isLoading: budgetsLoading } = useSWRFetch<BudgetsListResponse>(
+    '/api/v1/budgets?limit=50',
+    { refreshInterval: 30000 },
+  );
 
   // Fetch alerts for selected budget
-  const { data: alertsData, isLoading: alertsLoading } =
-    useSWRFetch<{ data: { alerts: BudgetAlert[] } }>(
-      selectedBudget ? `/api/v1/budgets/${selectedBudget}/alerts` : null,
-      { refreshInterval: 15000 },
-    );
+  const { data: alertsData, isLoading: alertsLoading } = useSWRFetch<{
+    data: { alerts: BudgetAlert[] };
+  }>(selectedBudget ? `/api/v1/budgets/${selectedBudget}/alerts` : null, {
+    refreshInterval: 15000,
+  });
 
   // Fetch org-wide trends
-  const { data: trendsData, isLoading: trendsLoading } =
-    useSWRFetch<{ data: { trends: SpendingTrend[] } }>(
-      activeTab === 'trends' ? '/api/v1/budgets/trends' : null,
-      { refreshInterval: 60000 },
-    );
+  const { data: trendsData, isLoading: trendsLoading } = useSWRFetch<{
+    data: { trends: SpendingTrend[] };
+  }>(activeTab === 'trends' ? '/api/v1/budgets/trends' : null, { refreshInterval: 60000 });
 
   const summary = summaryData?.data;
   const budgets = budgetsData?.budgets ?? [];
@@ -160,9 +159,7 @@ export default function BudgetsPage() {
   // Acknowledge an alert
   const handleAcknowledgeAlert = useCallback(async (budgetId: string, alertId: string) => {
     try {
-      await fetch(`/api/v1/budgets/${budgetId}/alerts/${alertId}/acknowledge`, {
-        method: 'POST',
-      });
+      await fetch(`/api/v1/budgets/${budgetId}/alerts/${alertId}/acknowledge`, { method: 'POST' });
     } catch {
       // acknowledgment failed silently
     }
@@ -194,8 +191,8 @@ export default function BudgetsPage() {
               {'>'} BUDGET MANAGEMENT
             </h1>
             <p className="text-xs text-[var(--text-muted)] font-theme-data mt-1">
-              Track spending against budgets, monitor utilization, manage alerts,
-              and view spending trends across the organization.
+              Track spending against budgets, monitor utilization, manage alerts, and view spending
+              trends across the organization.
             </p>
           </div>
 
@@ -208,12 +205,12 @@ export default function BudgetsPage() {
 
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
-            {([
+            {[
               { key: 'overview' as const, label: 'OVERVIEW' },
               { key: 'list' as const, label: 'BUDGETS' },
               { key: 'alerts' as const, label: 'ALERTS' },
               { key: 'trends' as const, label: 'TRENDS' },
-            ]).map(({ key, label }) => (
+            ].map(({ key, label }) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
@@ -236,45 +233,75 @@ export default function BudgetsPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
                     <div className="text-2xl font-theme-data text-[var(--acid-green)]">
-                      {summaryLoading ? '-' : summary?.total_budgets ?? 0}
+                      {summaryLoading ? '-' : (summary?.total_budgets ?? 0)}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Budgets</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Budgets
+                    </div>
                   </div>
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
                     <div className="text-lg font-theme-data text-[var(--acid-cyan)]">
-                      {summaryLoading ? '-' : summary ? formatCurrency(summary.total_limit, summary.currency) : '--'}
+                      {summaryLoading
+                        ? '-'
+                        : summary
+                          ? formatCurrency(summary.total_limit, summary.currency)
+                          : '--'}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Total Limit</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Total Limit
+                    </div>
                   </div>
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
                     <div className="text-lg font-theme-data text-purple-400">
-                      {summaryLoading ? '-' : summary ? formatCurrency(summary.total_spent, summary.currency) : '--'}
+                      {summaryLoading
+                        ? '-'
+                        : summary
+                          ? formatCurrency(summary.total_spent, summary.currency)
+                          : '--'}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Total Spent</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Total Spent
+                    </div>
                   </div>
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                    <div className={`text-2xl font-theme-data ${
-                      (summary?.utilization_pct ?? 0) >= 100 ? 'text-red-400' :
-                      (summary?.utilization_pct ?? 0) >= 80 ? 'text-yellow-400' :
-                      'text-[var(--acid-green)]'
-                    }`}>
-                      {summaryLoading ? '-' : summary?.utilization_pct != null
-                        ? `${summary.utilization_pct.toFixed(0)}%`
-                        : '--'}
+                    <div
+                      className={`text-2xl font-theme-data ${
+                        (summary?.utilization_pct ?? 0) >= 100
+                          ? 'text-red-400'
+                          : (summary?.utilization_pct ?? 0) >= 80
+                            ? 'text-yellow-400'
+                            : 'text-[var(--acid-green)]'
+                      }`}
+                    >
+                      {summaryLoading
+                        ? '-'
+                        : summary?.utilization_pct != null
+                          ? `${summary.utilization_pct.toFixed(0)}%`
+                          : '--'}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Utilization</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Utilization
+                    </div>
                   </div>
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                    <div className={`text-2xl font-theme-data ${(summary?.budgets_at_risk ?? 0) > 0 ? 'text-yellow-400' : 'text-[var(--acid-green)]'}`}>
-                      {summaryLoading ? '-' : summary?.budgets_at_risk ?? 0}
+                    <div
+                      className={`text-2xl font-theme-data ${(summary?.budgets_at_risk ?? 0) > 0 ? 'text-yellow-400' : 'text-[var(--acid-green)]'}`}
+                    >
+                      {summaryLoading ? '-' : (summary?.budgets_at_risk ?? 0)}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">At Risk</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      At Risk
+                    </div>
                   </div>
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                    <div className={`text-2xl font-theme-data ${(summary?.budgets_exceeded ?? 0) > 0 ? 'text-red-400' : 'text-[var(--acid-green)]'}`}>
-                      {summaryLoading ? '-' : summary?.budgets_exceeded ?? 0}
+                    <div
+                      className={`text-2xl font-theme-data ${(summary?.budgets_exceeded ?? 0) > 0 ? 'text-red-400' : 'text-[var(--acid-green)]'}`}
+                    >
+                      {summaryLoading ? '-' : (summary?.budgets_exceeded ?? 0)}
                     </div>
-                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">Exceeded</div>
+                    <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
+                      Exceeded
+                    </div>
                   </div>
                 </div>
 
@@ -297,10 +324,14 @@ export default function BudgetsPage() {
                             ? 'border-[var(--acid-green)]'
                             : 'border-[var(--border)] hover:border-[var(--acid-green)]/30'
                         }`}
-                        onClick={() => setSelectedBudget(selectedBudget === budget.id ? null : budget.id)}
+                        onClick={() =>
+                          setSelectedBudget(selectedBudget === budget.id ? null : budget.id)
+                        }
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-theme-data text-sm text-[var(--text)] font-bold">{budget.name}</span>
+                          <span className="font-theme-data text-sm text-[var(--text)] font-bold">
+                            {budget.name}
+                          </span>
                           <StatusBadge status={budget.status} />
                         </div>
                         <div className="mb-3">
@@ -312,7 +343,9 @@ export default function BudgetsPage() {
                         </div>
                         <div className="flex justify-between text-[10px] font-theme-data text-[var(--text-muted)] mt-1">
                           <span>Period: {budget.period}</span>
-                          {budget.reset_at && <span>Resets: {formatTimestamp(budget.reset_at)}</span>}
+                          {budget.reset_at && (
+                            <span>Resets: {formatTimestamp(budget.reset_at)}</span>
+                          )}
                         </div>
                       </div>
                     ))
@@ -339,13 +372,19 @@ export default function BudgetsPage() {
                     <tbody>
                       {budgetsLoading ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse">
+                          <td
+                            colSpan={6}
+                            className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data animate-pulse"
+                          >
                             Loading budgets...
                           </td>
                         </tr>
                       ) : budgets.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data">
+                          <td
+                            colSpan={6}
+                            className="px-4 py-12 text-center text-[var(--text-muted)] font-theme-data"
+                          >
                             No budgets found.
                           </td>
                         </tr>
@@ -357,20 +396,31 @@ export default function BudgetsPage() {
                             onClick={() => setSelectedBudget(budget.id)}
                           >
                             <td className="px-4 py-3">
-                              <span className="font-theme-data text-xs text-[var(--acid-cyan)]">{budget.name}</span>
+                              <span className="font-theme-data text-xs text-[var(--acid-cyan)]">
+                                {budget.name}
+                              </span>
                             </td>
                             <td className="px-4 py-3">
                               <StatusBadge status={budget.status} />
                             </td>
                             <td className="px-4 py-3 text-xs font-theme-data">
-                              <span className="text-purple-400">{formatCurrency(budget.spent_amount, budget.currency)}</span>
+                              <span className="text-purple-400">
+                                {formatCurrency(budget.spent_amount, budget.currency)}
+                              </span>
                               <span className="text-[var(--text-muted)]"> / </span>
-                              <span className="text-[var(--text)]">{formatCurrency(budget.limit_amount, budget.currency)}</span>
+                              <span className="text-[var(--text)]">
+                                {formatCurrency(budget.limit_amount, budget.currency)}
+                              </span>
                             </td>
                             <td className="px-4 py-3 w-40">
-                              <UtilizationBar spent={budget.spent_amount} limit={budget.limit_amount} />
+                              <UtilizationBar
+                                spent={budget.spent_amount}
+                                limit={budget.limit_amount}
+                              />
                             </td>
-                            <td className="px-4 py-3 text-xs font-theme-data text-[var(--text-muted)]">{budget.period}</td>
+                            <td className="px-4 py-3 text-xs font-theme-data text-[var(--text-muted)]">
+                              {budget.period}
+                            </td>
                             <td className="px-4 py-3 text-xs font-theme-data text-[var(--text-muted)]">
                               {formatTimestamp(budget.created_at)}
                             </td>
@@ -407,7 +457,8 @@ export default function BudgetsPage() {
                   <div>
                     <div className="flex items-center gap-3 mb-4">
                       <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
-                        Alerts for: {budgets.find((b) => b.id === selectedBudget)?.name ?? selectedBudget}
+                        Alerts for:{' '}
+                        {budgets.find((b) => b.id === selectedBudget)?.name ?? selectedBudget}
                       </span>
                       <button
                         onClick={() => setSelectedBudget(null)}
@@ -438,7 +489,9 @@ export default function BudgetsPage() {
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
-                                <span className={`text-sm font-theme-data font-bold ${alert.acknowledged ? 'text-[var(--text-muted)]' : 'text-yellow-400'}`}>
+                                <span
+                                  className={`text-sm font-theme-data font-bold ${alert.acknowledged ? 'text-[var(--text-muted)]' : 'text-yellow-400'}`}
+                                >
                                   {alert.threshold_pct}% Threshold
                                 </span>
                                 <span className="text-xs font-theme-data text-[var(--text-muted)]">
@@ -450,7 +503,9 @@ export default function BudgetsPage() {
                               </div>
                               {!alert.acknowledged && (
                                 <button
-                                  onClick={() => handleAcknowledgeAlert(selectedBudget, alert.alert_id)}
+                                  onClick={() =>
+                                    handleAcknowledgeAlert(selectedBudget, alert.alert_id)
+                                  }
                                   className="px-3 py-1 text-[10px] font-theme-data text-[var(--acid-green)] border border-[var(--acid-green)]/30 hover:bg-[var(--acid-green)]/10 transition-colors"
                                 >
                                   ACK
@@ -484,7 +539,8 @@ export default function BudgetsPage() {
                   <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
                     <div className="space-y-1">
                       {trends.map((point) => {
-                        const barWidth = maxTrendAmount > 0 ? (point.amount / maxTrendAmount) * 100 : 0;
+                        const barWidth =
+                          maxTrendAmount > 0 ? (point.amount / maxTrendAmount) * 100 : 0;
                         return (
                           <div key={point.date} className="flex items-center gap-3">
                             <span className="text-[10px] font-theme-data text-[var(--text-muted)] w-20 shrink-0">
@@ -540,9 +596,7 @@ export default function BudgetsPage() {
           <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // BUDGET MANAGEMENT
-          </p>
+          <p className="text-[var(--text-muted)]">{'>'} ARAGORA // BUDGET MANAGEMENT</p>
         </footer>
       </main>
     </>

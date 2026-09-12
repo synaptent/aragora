@@ -122,10 +122,7 @@ export const USE_CASES: UseCase[] = [
     icon: '📝',
     title: 'Contract Negotiation',
     subtitle: 'Adversarial clause analysis',
-    examples: [
-      'Multi-agent risk identification',
-      'Precedent recall from organizational memory',
-    ],
+    examples: ['Multi-agent risk identification', 'Precedent recall from organizational memory'],
   },
   {
     icon: '🐛',
@@ -141,7 +138,7 @@ export const USE_CASES: UseCase[] = [
     title: 'Accounting Reconciliation',
     subtitle: 'Transaction verification',
     examples: [
-      'Benford\'s Law fraud detection and anomaly flagging',
+      "Benford's Law fraud detection and anomaly flagging",
       'Journal entry balance verification and duplicate detection',
     ],
   },
@@ -167,10 +164,7 @@ export const USE_CASES: UseCase[] = [
     icon: '📑',
     title: 'Regulatory Filings',
     subtitle: 'SOX, GDPR, PCI-DSS verification',
-    examples: [
-      'Control requirement pattern matching',
-      'Multi-framework compliance gap analysis',
-    ],
+    examples: ['Control requirement pattern matching', 'Multi-framework compliance gap analysis'],
   },
   {
     icon: '⚙️',
@@ -250,14 +244,30 @@ export const DOC_CATEGORIES: DocCategory[] = [
 // =============================================================================
 
 export const CAPABILITIES: Capability[] = [
-  { label: 'AI Providers', value: '20+', desc: 'Claude, GPT, Gemini, Mistral, Grok, DeepSeek, Qwen, Kimi, Llama...' },
-  { label: 'Consensus Algorithms', value: '8', desc: 'Majority, unanimous, judge, weighted, supermajority, any, byzantine, none' },
+  {
+    label: 'AI Providers',
+    value: '20+',
+    desc: 'Claude, GPT, Gemini, Mistral, Grok, DeepSeek, Qwen, Kimi, Llama...',
+  },
+  {
+    label: 'Consensus Algorithms',
+    value: '8',
+    desc: 'Majority, unanimous, judge, weighted, supermajority, any, byzantine, none',
+  },
   { label: 'Debate Types', value: '3', desc: 'Standard, graph, matrix' },
   { label: 'Memory Tiers', value: '4', desc: 'Fast, medium, slow, glacial' },
   { label: 'REST Endpoints', value: '987+', desc: 'Full API coverage' },
   { label: 'Tests', value: '43,500+', desc: 'Comprehensive coverage' },
-  { label: 'Data Connectors', value: '24', desc: 'GitHub, S3, SharePoint, FHIR, PostgreSQL, ArXiv, Confluence...' },
-  { label: 'WebSocket Events', value: '80+', desc: 'Real-time streaming with audience participation' },
+  {
+    label: 'Data Connectors',
+    value: '24',
+    desc: 'GitHub, S3, SharePoint, FHIR, PostgreSQL, ArXiv, Confluence...',
+  },
+  {
+    label: 'WebSocket Events',
+    value: '80+',
+    desc: 'Real-time streaming with audience participation',
+  },
   { label: 'Compliance Presets', value: '5', desc: 'GDPR, HIPAA, SOX, AI Act, Security gauntlets' },
   { label: 'API Handlers', value: '182', desc: 'Modular endpoint handlers' },
 ];

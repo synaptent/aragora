@@ -68,11 +68,7 @@ async function captureConsoleErrors() {
     const pagePath = new URL(currentUrl).pathname;
 
     if (allErrors.length < MAX_TOTAL_ERRORS) {
-      allErrors.push({
-        page: pagePath,
-        type: 'pageerror',
-        message: error.message.slice(0, 500),
-      });
+      allErrors.push({ page: pagePath, type: 'pageerror', message: error.message.slice(0, 500) });
     }
   });
 
@@ -88,17 +84,13 @@ async function captureConsoleErrors() {
     console.log(`\nVisiting: ${url}`);
 
     try {
-      await page.goto(url, {
-        waitUntil: 'networkidle',
-        timeout: 30000
-      });
+      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
 
       // Wait a bit for any async errors
       await page.waitForTimeout(2000);
 
-      const pageErrors = allErrors.filter(e => e.page === pagePath);
+      const pageErrors = allErrors.filter((e) => e.page === pagePath);
       console.log(`  → Found ${pageErrors.length} errors/warnings`);
-
     } catch (error) {
       console.log(`  → Failed to load: ${(error as Error).message.slice(0, 100)}`);
     }

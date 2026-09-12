@@ -1,0 +1,7 @@
+{
+  "_comment": "Shrink-only baseline of selected tracked and untracked (not ignored) files longer than 2000 lines at adoption, frozen by scripts/ci/check_file_sizes.py --freeze. A NEW oversized file not listed here fails the checker (fail-on-new); this baseline may only shrink -- split a god file, re-export from its original path, then re-freeze.",
+  "limit": 2000,
+  "frozen_from_ref": "fe5858f588a6243c272788c8909026d50b663e38",
+  "frozen_at": "2026-09-06T08:24:36Z",
+  "files": {}
+}

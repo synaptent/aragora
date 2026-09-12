@@ -62,7 +62,9 @@ describe('LiveDebatePanel', () => {
         }),
       });
 
-    render(<LiveDebatePanel apiBase="https://api.example.test" wsUrl="wss://api.example.test/ws" />);
+    render(
+      <LiveDebatePanel apiBase="https://api.example.test" wsUrl="wss://api.example.test/ws" />,
+    );
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -77,12 +79,11 @@ describe('LiveDebatePanel', () => {
 
   it('uses the slower refresh cadence for the live preview poll loop', () => {
     const setIntervalSpy = jest.spyOn(window, 'setInterval');
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ events: [] }),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ events: [] }) });
 
-    render(<LiveDebatePanel apiBase="https://api.example.test" wsUrl="wss://api.example.test/ws" />);
+    render(
+      <LiveDebatePanel apiBase="https://api.example.test" wsUrl="wss://api.example.test/ws" />,
+    );
 
     expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 12000);
     setIntervalSpy.mockRestore();

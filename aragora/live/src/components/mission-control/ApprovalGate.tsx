@@ -29,13 +29,18 @@ export const ApprovalGate = memo(function ApprovalGate({
   const [approveNotes, setApproveNotes] = useState('');
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" data-testid="approval-gate">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      data-testid="approval-gate"
+    >
       <div className="w-full max-w-2xl max-h-[80vh] bg-[var(--surface)] border border-[var(--border)] rounded-lg shadow-xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
           <div className="flex items-center gap-2">
             <span className="text-base">🔔</span>
-            <span className="text-sm font-theme-data font-bold text-amber-400">Approval Required</span>
+            <span className="text-sm font-theme-data font-bold text-amber-400">
+              Approval Required
+            </span>
           </div>
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)]">
             ✕
@@ -60,8 +65,12 @@ export const ApprovalGate = memo(function ApprovalGate({
               <div className="text-xs font-theme-data text-[var(--text-muted)]">Test Results</div>
               <div className="flex gap-3 text-xs font-theme-data">
                 <span className="text-emerald-400">✓ {testResults.passed} passed</span>
-                {testResults.failed > 0 && <span className="text-red-400">✗ {testResults.failed} failed</span>}
-                {testResults.skipped > 0 && <span className="text-gray-400">○ {testResults.skipped} skipped</span>}
+                {testResults.failed > 0 && (
+                  <span className="text-red-400">✗ {testResults.failed} failed</span>
+                )}
+                {testResults.skipped > 0 && (
+                  <span className="text-gray-400">○ {testResults.skipped} skipped</span>
+                )}
               </div>
             </div>
           )}
@@ -72,7 +81,9 @@ export const ApprovalGate = memo(function ApprovalGate({
           {/* Reject feedback */}
           {mode === 'reject' && (
             <div className="space-y-1.5">
-              <div className="text-xs font-theme-data text-[var(--text-muted)]">Rejection Feedback</div>
+              <div className="text-xs font-theme-data text-[var(--text-muted)]">
+                Rejection Feedback
+              </div>
               <textarea
                 className="w-full text-sm font-theme-data bg-[var(--bg)] text-[var(--text)] border border-[var(--border)] rounded p-3 resize-none"
                 placeholder="Explain what needs to change..."
@@ -87,7 +98,9 @@ export const ApprovalGate = memo(function ApprovalGate({
           {/* Approve notes (optional) */}
           {mode === 'review' && (
             <div className="space-y-1.5">
-              <div className="text-xs font-theme-data text-[var(--text-muted)]">Notes (optional)</div>
+              <div className="text-xs font-theme-data text-[var(--text-muted)]">
+                Notes (optional)
+              </div>
               <input
                 className="w-full text-sm font-theme-data bg-[var(--bg)] text-[var(--text)] border border-[var(--border)] rounded px-3 py-2"
                 placeholder="Any notes for the record..."

@@ -76,7 +76,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
   const filteredOptions = allOptions.filter(
     (opt) =>
       opt.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      opt.subtitle?.toLowerCase().includes(searchQuery.toLowerCase())
+      opt.subtitle?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handlePermissionToggle = useCallback((perm: Permission) => {
@@ -127,7 +127,9 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 id="share-dialog-title" className="text-lg font-semibold text-gray-900">Share Knowledge Item</h2>
+          <h2 id="share-dialog-title" className="text-lg font-semibold text-gray-900">
+            Share Knowledge Item
+          </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600"
@@ -154,9 +156,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
         {/* Grantee search */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Share with
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Share with</label>
           <div className="relative">
             <input
               type="text"
@@ -173,10 +173,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
             {showDropdown && filteredOptions.length > 0 && !selectedGrantee && (
               <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowDropdown(false)}
-                />
+                <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
                 <ul className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
                   {filteredOptions.map((opt) => (
                     <li
@@ -188,9 +185,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
                       }}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">
-                          {opt.type === 'workspace' ? '👥' : '👤'}
-                        </span>
+                        <span className="text-lg">{opt.type === 'workspace' ? '👥' : '👤'}</span>
                         <div>
                           <div className="text-sm font-medium text-gray-900">{opt.name}</div>
                           {opt.subtitle && (
@@ -208,9 +203,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
         {/* Permissions */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Permissions
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
           <div className="flex gap-3">
             {(['read', 'write', 'admin'] as Permission[]).map((perm) => (
               <label
@@ -238,9 +231,7 @@ export const ShareDialog: React.FC<ShareDialogProps> = ({
 
         {/* Expiration */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Expires (optional)
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Expires (optional)</label>
           <input
             type="datetime-local"
             value={expiresAt}

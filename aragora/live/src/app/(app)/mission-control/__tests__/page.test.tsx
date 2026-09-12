@@ -14,9 +14,7 @@ const mockUseBudgetStatus = jest.fn();
 const mockUseAuth = jest.fn();
 const mockFetch = jest.fn();
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
 jest.mock('@/components/BackendSelector', () => ({
   useBackend: () => ({ config: { api: 'http://backend.test' } }),
@@ -26,9 +24,7 @@ jest.mock('@/context/ToastContext', () => ({
   useToastContext: () => ({ showToast: mockShowToast }),
 }));
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => mockUseAuth(),
-}));
+jest.mock('@/context/AuthContext', () => ({ useAuth: () => mockUseAuth() }));
 
 jest.mock('@/hooks/useSystemHealth', () => ({
   useSystemHealth: () => mockUseSystemHealth(),
@@ -51,9 +47,7 @@ describe('MissionControlPage', () => {
     jest.clearAllMocks();
     global.fetch = mockFetch as typeof global.fetch;
 
-    mockUseAuth.mockReturnValue({
-      tokens: { access_token: 'token-123' },
-    });
+    mockUseAuth.mockReturnValue({ tokens: { access_token: 'token-123' } });
 
     mockUseSystemHealth.mockReturnValue({
       health: {
@@ -63,25 +57,30 @@ describe('MissionControlPage', () => {
         collection_time_ms: 18,
       },
     });
-    mockUseCircuitBreakers.mockReturnValue({
-      breakers: [],
-    });
-    mockUseAgentPoolHealth.mockReturnValue({
-      agents: [],
-      total: 4,
-      active: 3,
-    });
+    mockUseCircuitBreakers.mockReturnValue({ breakers: [] });
+    mockUseAgentPoolHealth.mockReturnValue({ agents: [], total: 4, active: 3 });
     mockUseBudgetStatus.mockReturnValue({
-      budget: {
-        utilization: 0.42,
-        forecast: { eom: 321, trend: 'stable' },
-      },
+      budget: { utilization: 0.42, forecast: { eom: 321, trend: 'stable' } },
     });
 
     mockUseSWRFetch.mockImplementation((endpoint: string) => {
       if (endpoint === '/api/debates?status=running&limit=10') {
         return {
-          data: { data: { debates: [{ id: 'deb-1', task: 'Test debate', status: 'running', agents: 3, round: 1, total_rounds: 3, created_at: '2026-03-25T00:00:00Z' }] } },
+          data: {
+            data: {
+              debates: [
+                {
+                  id: 'deb-1',
+                  task: 'Test debate',
+                  status: 'running',
+                  agents: 3,
+                  round: 1,
+                  total_rounds: 3,
+                  created_at: '2026-03-25T00:00:00Z',
+                },
+              ],
+            },
+          },
           error: null,
           isLoading: false,
         };
@@ -113,10 +112,7 @@ describe('MissionControlPage', () => {
       return { data: null, error: null, isLoading: false };
     });
 
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({}),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
   });
 
   it('reads queue metrics and history events from current endpoints', () => {
@@ -167,6 +163,9 @@ describe('MissionControlPage', () => {
         }),
       );
     });
-    expect(mockShowToast).toHaveBeenCalledWith('Circuit breaker reset initiated successfully', 'success');
+    expect(mockShowToast).toHaveBeenCalledWith(
+      'Circuit breaker reset initiated successfully',
+      'success',
+    );
   });
 });

@@ -3,13 +3,9 @@ import { useApi } from '@/hooks/useApi';
 import { fetchWithRetry } from '@/lib/retry';
 
 // Mock the retry module
-jest.mock('@/lib/retry', () => ({
-  fetchWithRetry: jest.fn(),
-}));
+jest.mock('@/lib/retry', () => ({ fetchWithRetry: jest.fn() }));
 
-const mockFetchWithRetry = fetchWithRetry as jest.MockedFunction<
-  typeof fetchWithRetry
->;
+const mockFetchWithRetry = fetchWithRetry as jest.MockedFunction<typeof fetchWithRetry>;
 
 describe('useApi', () => {
   const baseUrl = 'https://api.test.com';
@@ -55,11 +51,8 @@ describe('useApi', () => {
 
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         'https://api.test.com/api/data',
-        expect.objectContaining({
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        }),
-        expect.any(Object)
+        expect.objectContaining({ method: 'GET', headers: { 'Content-Type': 'application/json' } }),
+        expect.any(Object),
       );
       expect(response).toEqual(mockData);
       expect(result.current.data).toEqual(mockData);
@@ -72,7 +65,7 @@ describe('useApi', () => {
       mockFetchWithRetry.mockReturnValueOnce(
         new Promise<Response>((resolve) => {
           resolvePromise = resolve;
-        })
+        }),
       );
 
       const { result } = renderHook(() => useApi(baseUrl));
@@ -84,9 +77,7 @@ describe('useApi', () => {
       expect(result.current.loading).toBe(true);
 
       await act(async () => {
-        resolvePromise!({
-          json: () => Promise.resolve({ data: 'test' }),
-        } as Response);
+        resolvePromise!({ json: () => Promise.resolve({ data: 'test' }) } as Response);
       });
 
       expect(result.current.loading).toBe(false);
@@ -133,7 +124,7 @@ describe('useApi', () => {
           body: JSON.stringify(body),
           headers: { 'Content-Type': 'application/json' },
         }),
-        expect.any(Object)
+        expect.any(Object),
       );
       expect(result.current.data).toEqual(mockData);
     });
@@ -151,11 +142,8 @@ describe('useApi', () => {
 
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         'https://api.test.com/api/trigger',
-        expect.objectContaining({
-          method: 'POST',
-          body: undefined,
-        }),
-        expect.any(Object)
+        expect.objectContaining({ method: 'POST', body: undefined }),
+        expect.any(Object),
       );
     });
   });
@@ -176,11 +164,8 @@ describe('useApi', () => {
 
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         'https://api.test.com/api/update/1',
-        expect.objectContaining({
-          method: 'PUT',
-          body: JSON.stringify(body),
-        }),
-        expect.any(Object)
+        expect.objectContaining({ method: 'PUT', body: JSON.stringify(body) }),
+        expect.any(Object),
       );
       expect(result.current.data).toEqual(mockData);
     });
@@ -201,10 +186,8 @@ describe('useApi', () => {
 
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         'https://api.test.com/api/delete/1',
-        expect.objectContaining({
-          method: 'DELETE',
-        }),
-        expect.any(Object)
+        expect.objectContaining({ method: 'DELETE' }),
+        expect.any(Object),
       );
       expect(result.current.data).toEqual(mockData);
     });
@@ -216,7 +199,7 @@ describe('useApi', () => {
       mockFetchWithRetry.mockReturnValue(
         new Promise<Response>((resolve) => {
           resolvePromise = resolve;
-        })
+        }),
       );
 
       const { result } = renderHook(() => useApi(baseUrl));
@@ -234,9 +217,7 @@ describe('useApi', () => {
 
       // Resolve and clean up
       await act(async () => {
-        resolvePromise!({
-          json: () => Promise.resolve({ data: 'test' }),
-        } as Response);
+        resolvePromise!({ json: () => Promise.resolve({ data: 'test' }) } as Response);
         await Promise.all([promise1!, promise2!]);
       });
     });
@@ -249,10 +230,7 @@ describe('useApi', () => {
       const { result } = renderHook(() => useApi(baseUrl));
 
       await act(async () => {
-        await Promise.all([
-          result.current.get('/api/data1'),
-          result.current.get('/api/data2'),
-        ]);
+        await Promise.all([result.current.get('/api/data1'), result.current.get('/api/data2')]);
       });
 
       expect(mockFetchWithRetry).toHaveBeenCalledTimes(2);
@@ -266,10 +244,7 @@ describe('useApi', () => {
       const { result } = renderHook(() => useApi(baseUrl));
 
       await act(async () => {
-        await Promise.all([
-          result.current.get('/api/data'),
-          result.current.post('/api/data', {}),
-        ]);
+        await Promise.all([result.current.get('/api/data'), result.current.post('/api/data', {})]);
       });
 
       expect(mockFetchWithRetry).toHaveBeenCalledTimes(2);
@@ -302,9 +277,7 @@ describe('useApi', () => {
         json: () => Promise.resolve(mockData),
       } as Response);
 
-      const { result } = renderHook(() =>
-        useApi(baseUrl, { onSuccess })
-      );
+      const { result } = renderHook(() => useApi(baseUrl, { onSuccess }));
 
       await act(async () => {
         await result.current.get('/api/data');
@@ -318,9 +291,7 @@ describe('useApi', () => {
       const error = new Error('Request failed');
       mockFetchWithRetry.mockRejectedValueOnce(error);
 
-      const { result } = renderHook(() =>
-        useApi(baseUrl, { onError })
-      );
+      const { result } = renderHook(() => useApi(baseUrl, { onError }));
 
       await act(async () => {
         try {
@@ -338,9 +309,7 @@ describe('useApi', () => {
       // The hook converts non-Error to "Request failed" message
       mockFetchWithRetry.mockRejectedValueOnce('string error');
 
-      const { result } = renderHook(() =>
-        useApi(baseUrl, { onError })
-      );
+      const { result } = renderHook(() => useApi(baseUrl, { onError }));
 
       await act(async () => {
         try {
@@ -400,12 +369,9 @@ describe('useApi', () => {
         'https://api.test.com/api/custom',
         expect.objectContaining({
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Custom-Header': 'value',
-          },
+          headers: { 'Content-Type': 'application/json', 'X-Custom-Header': 'value' },
         }),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
 
@@ -414,10 +380,7 @@ describe('useApi', () => {
         json: () => Promise.resolve({ ok: true }),
       } as Response);
 
-      const customRetryConfig = {
-        maxAttempts: 5,
-        initialDelayMs: 500,
-      };
+      const customRetryConfig = { maxAttempts: 5, initialDelayMs: 500 };
 
       const { result } = renderHook(() => useApi(baseUrl));
 
@@ -428,7 +391,7 @@ describe('useApi', () => {
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(Object),
-        expect.objectContaining(customRetryConfig)
+        expect.objectContaining(customRetryConfig),
       );
     });
   });
@@ -439,10 +402,7 @@ describe('useApi', () => {
         json: () => Promise.resolve({ ok: true }),
       } as Response);
 
-      const hookOptions = {
-        maxAttempts: 10,
-        initialDelayMs: 2000,
-      };
+      const hookOptions = { maxAttempts: 10, initialDelayMs: 2000 };
 
       const { result } = renderHook(() => useApi(baseUrl, hookOptions));
 
@@ -453,7 +413,7 @@ describe('useApi', () => {
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(Object),
-        expect.objectContaining(hookOptions)
+        expect.objectContaining(hookOptions),
       );
     });
 
@@ -474,10 +434,7 @@ describe('useApi', () => {
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(Object),
-        expect.objectContaining({
-          maxAttempts: 10,
-          initialDelayMs: 500,
-        })
+        expect.objectContaining({ maxAttempts: 10, initialDelayMs: 500 }),
       );
     });
   });
@@ -551,7 +508,7 @@ describe('useApi', () => {
       expect(mockFetchWithRetry).toHaveBeenCalledWith(
         expect.stringContaining('/api/test'),
         expect.any(Object),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });

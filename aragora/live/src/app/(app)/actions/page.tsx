@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-const PipelineCanvas = dynamic(
-  () => import('@/components/pipeline-canvas/PipelineCanvas'),
-  { ssr: false }
-);
+const PipelineCanvas = dynamic(() => import('@/components/pipeline-canvas/PipelineCanvas'), {
+  ssr: false,
+});
 
 interface CanvasMeta {
   id: string;
@@ -108,9 +107,7 @@ export default function ActionsPage() {
         </button>
       </div>
 
-      {loading && (
-        <p className="text-xs text-[var(--text-muted)]">Loading...</p>
-      )}
+      {loading && <p className="text-xs text-[var(--text-muted)]">Loading...</p>}
 
       {!loading && canvases.length === 0 && (
         <div className="text-center py-12">
@@ -134,9 +131,7 @@ export default function ActionsPage() {
             onClick={() => setSelectedId(canvas.id)}
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-bold text-[var(--text)] truncate">
-                {canvas.name}
-              </h3>
+              <h3 className="text-sm font-bold text-[var(--text)] truncate">{canvas.name}</h3>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -153,9 +148,7 @@ export default function ActionsPage() {
               </p>
             )}
             {canvas.source_canvas_id && (
-              <div className="text-[9px] text-amber-400 mb-1">
-                From goals canvas
-              </div>
+              <div className="text-[9px] text-amber-400 mb-1">From goals canvas</div>
             )}
             <div className="text-[9px] text-[var(--text-muted)]">
               {new Date(canvas.updated_at).toLocaleDateString()}

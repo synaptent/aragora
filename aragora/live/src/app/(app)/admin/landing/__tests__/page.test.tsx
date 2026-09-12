@@ -29,9 +29,7 @@ jest.mock('@/components/BackendSelector', () => ({
   useBackend: () => ({ config: { api: 'http://localhost:8080' } }),
 }));
 
-jest.mock('@/hooks/useSWRFetch', () => ({
-  useSWRFetch: jest.fn(),
-}));
+jest.mock('@/hooks/useSWRFetch', () => ({ useSWRFetch: jest.fn() }));
 
 const mockUseSWRFetch = useSWRFetch as jest.Mock;
 const mockFetch = jest.fn();
@@ -66,19 +64,9 @@ function buildSummary() {
       share_rate: 0,
       retry_rate: null,
     },
-    question_length: {
-      samples: 2,
-      avg: 88,
-      max: 120,
-    },
-    preview: {
-      rendered_count: 2,
-      avg_participant_count: 3,
-    },
-    timeouts: {
-      count: 0,
-      avg_timeout_seconds: null,
-    },
+    question_length: { samples: 2, avg: 88, max: 120 },
+    preview: { rendered_count: 2, avg_participant_count: 3 },
+    timeouts: { count: 0, avg_timeout_seconds: null },
     top_options: [],
   };
 }
@@ -96,12 +84,7 @@ function buildFeedback() {
       rewritten_rate: 1,
       preview_mode_count: 1,
       preview_mode_rate: 1,
-      review_status_counts: {
-        pending: 1,
-        reviewed: 0,
-        resolved: 0,
-        dismissed: 0,
-      },
+      review_status_counts: { pending: 1, reviewed: 0, resolved: 0, dismissed: 0 },
     },
     reports: [
       {
@@ -131,11 +114,7 @@ describe('LandingReviewPage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({ ok: true }),
-    });
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) });
 
     mockUseSWRFetch.mockImplementation((endpoint: string) => {
       if (endpoint.startsWith('/api/v1/playground/landing/events/summary')) {
@@ -158,13 +137,7 @@ describe('LandingReviewPage', () => {
         };
       }
 
-      return {
-        data: null,
-        error: null,
-        isLoading: false,
-        isValidating: false,
-        mutate: jest.fn(),
-      };
+      return { data: null, error: null, isLoading: false, isValidating: false, mutate: jest.fn() };
     });
   });
 
@@ -176,7 +149,9 @@ describe('LandingReviewPage', () => {
     expect(screen.getByText('Reviewed 0')).toBeInTheDocument();
     expect(screen.getByText('Resolved 0')).toBeInTheDocument();
     expect(screen.getByText('Dismissed 0')).toBeInTheDocument();
-    expect(screen.getByText('Should I microwave chicken nuggets for my child?')).toBeInTheDocument();
+    expect(
+      screen.getByText('Should I microwave chicken nuggets for my child?'),
+    ).toBeInTheDocument();
   });
 
   it('posts review updates and refreshes the feedback queue', async () => {
@@ -221,13 +196,7 @@ describe('LandingReviewPage', () => {
         };
       }
 
-      return {
-        data: null,
-        error: null,
-        isLoading: false,
-        isValidating: false,
-        mutate: jest.fn(),
-      };
+      return { data: null, error: null, isLoading: false, isValidating: false, mutate: jest.fn() };
     });
 
     render(<LandingReviewPage />);
@@ -246,9 +215,7 @@ describe('LandingReviewPage', () => {
     const reportsCard = screen.getByText('admin auth required').closest('.card');
     expect(reportsCard).not.toBeNull();
     expect(within(reportsCard as HTMLElement).getByText('--')).toBeInTheDocument();
-    expect(
-      within(reportsCard as HTMLElement).getByText('admin auth required'),
-    ).toBeInTheDocument();
+    expect(within(reportsCard as HTMLElement).getByText('admin auth required')).toBeInTheDocument();
   });
 
   it('shows a load failure state when the feedback fetch fails without an auth status', () => {
@@ -273,21 +240,13 @@ describe('LandingReviewPage', () => {
         };
       }
 
-      return {
-        data: null,
-        error: null,
-        isLoading: false,
-        isValidating: false,
-        mutate: jest.fn(),
-      };
+      return { data: null, error: null, isLoading: false, isValidating: false, mutate: jest.fn() };
     });
 
     render(<LandingReviewPage />);
 
     expect(
-      screen.getByText(
-        /Failed to load raw wrong-answer reports\. Summary cards remain visible/i,
-      ),
+      screen.getByText(/Failed to load raw wrong-answer reports\. Summary cards remain visible/i),
     ).toBeInTheDocument();
     expect(
       screen.getByText('Wrong-answer review queue failed to load for this session.'),
@@ -325,12 +284,7 @@ describe('LandingReviewPage', () => {
               rewritten_rate: null,
               preview_mode_count: 0,
               preview_mode_rate: null,
-              review_status_counts: {
-                pending: 0,
-                reviewed: 0,
-                resolved: 0,
-                dismissed: 0,
-              },
+              review_status_counts: { pending: 0, reviewed: 0, resolved: 0, dismissed: 0 },
             },
             reports: [],
           },
@@ -341,13 +295,7 @@ describe('LandingReviewPage', () => {
         };
       }
 
-      return {
-        data: null,
-        error: null,
-        isLoading: false,
-        isValidating: false,
-        mutate: jest.fn(),
-      };
+      return { data: null, error: null, isLoading: false, isValidating: false, mutate: jest.fn() };
     });
 
     render(<LandingReviewPage />);

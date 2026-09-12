@@ -21,10 +21,10 @@ const BUCKET_COLORS: Record<string, string> = {
   '1-7 days': 'bg-cyan-400',
   '1-4 weeks': 'bg-yellow-400',
   '> 1 month': 'bg-red-400',
-  'fresh': 'bg-[var(--accent)]',
-  'recent': 'bg-cyan-400',
-  'aging': 'bg-yellow-400',
-  'stale': 'bg-red-400',
+  fresh: 'bg-[var(--accent)]',
+  recent: 'bg-cyan-400',
+  aging: 'bg-yellow-400',
+  stale: 'bg-red-400',
 };
 
 function getBucketColor(bucket: string): string {
@@ -52,10 +52,11 @@ export function KnowledgeAgeHistogram({
   }, [distribution]);
 
   const stalePercentage = useMemo(() => {
-    const staleBuckets = distribution.filter((d) =>
-      d.bucket.toLowerCase().includes('month') ||
-      d.bucket.toLowerCase().includes('stale') ||
-      d.bucket.toLowerCase().includes('week')
+    const staleBuckets = distribution.filter(
+      (d) =>
+        d.bucket.toLowerCase().includes('month') ||
+        d.bucket.toLowerCase().includes('stale') ||
+        d.bucket.toLowerCase().includes('week'),
     );
     return staleBuckets.reduce((sum, d) => sum + d.percentage, 0);
   }, [distribution]);
@@ -66,7 +67,7 @@ export function KnowledgeAgeHistogram({
       (d) =>
         d.bucket.toLowerCase().includes('day') ||
         d.bucket.toLowerCase().includes('fresh') ||
-        d.bucket.toLowerCase().includes('recent')
+        d.bucket.toLowerCase().includes('recent'),
     );
     const freshPercentage = freshBuckets.reduce((sum, d) => sum + d.percentage, 0);
     return Math.round(freshPercentage);
@@ -96,8 +97,8 @@ export function KnowledgeAgeHistogram({
               healthScore >= 70
                 ? 'text-[var(--accent)]'
                 : healthScore >= 40
-                ? 'text-yellow-400'
-                : 'text-red-400'
+                  ? 'text-yellow-400'
+                  : 'text-red-400'
             }`}
           >
             {healthScore}%
@@ -141,9 +142,7 @@ export function KnowledgeAgeHistogram({
           >
             {stalePercentage.toFixed(1)}%
           </div>
-          <div className="text-xs text-text-muted">
-            &gt;{staleThresholdDays}d old
-          </div>
+          <div className="text-xs text-text-muted">&gt;{staleThresholdDays}d old</div>
         </div>
       </div>
 

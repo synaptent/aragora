@@ -5,11 +5,7 @@ import { useAragoraClient } from '@/hooks/useAragoraClient';
 import { useGauntletWebSocket } from '@/hooks/useGauntletWebSocket';
 import { LoadingSpinner } from './LoadingSpinner';
 import { ApiError } from './ApiError';
-import type {
-  GauntletPersona,
-  GauntletResult,
-  GauntletReceipt,
-} from '@/lib/aragora-client';
+import type { GauntletPersona, GauntletResult, GauntletReceipt } from '@/lib/aragora-client';
 
 interface GauntletRunnerProps {
   initialDecision?: string;
@@ -75,19 +71,24 @@ export function GauntletRunner({ initialDecision }: GauntletRunnerProps) {
 
     if (wsStatus === 'complete' || wsStatus === 'error') {
       // Fetch final result
-      client?.gauntlet.get(activeGauntletId).then((res) => {
-        setSelectedResult(res.gauntlet);
-        setActiveTab('results');
-        // Refresh results list
-        return client.gauntlet.results({ limit: 10 });
-      }).then((resultsRes) => {
-        setResults(resultsRes?.results || []);
-      }).catch((e) => {
-        setError(e instanceof Error ? e.message : 'Failed to fetch result');
-      }).finally(() => {
-        setIsRunning(false);
-        setActiveGauntletId(null);
-      });
+      client?.gauntlet
+        .get(activeGauntletId)
+        .then((res) => {
+          setSelectedResult(res.gauntlet);
+          setActiveTab('results');
+          // Refresh results list
+          return client.gauntlet.results({ limit: 10 });
+        })
+        .then((resultsRes) => {
+          setResults(resultsRes?.results || []);
+        })
+        .catch((e) => {
+          setError(e instanceof Error ? e.message : 'Failed to fetch result');
+        })
+        .finally(() => {
+          setIsRunning(false);
+          setActiveGauntletId(null);
+        });
     }
 
     if (wsError) {
@@ -135,9 +136,7 @@ export function GauntletRunner({ initialDecision }: GauntletRunnerProps) {
 
   const togglePersona = (personaId: string) => {
     setSelectedPersonas((prev) =>
-      prev.includes(personaId)
-        ? prev.filter((id) => id !== personaId)
-        : [...prev, personaId]
+      prev.includes(personaId) ? prev.filter((id) => id !== personaId) : [...prev, personaId],
     );
   };
 
@@ -241,7 +240,10 @@ export function GauntletRunner({ initialDecision }: GauntletRunnerProps) {
             {/* Configuration */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label htmlFor="gauntlet-rounds" className="block text-sm font-medium text-slate-300 mb-2">
+                <label
+                  htmlFor="gauntlet-rounds"
+                  className="block text-sm font-medium text-slate-300 mb-2"
+                >
                   Rounds: {rounds}
                 </label>
                 <input
@@ -256,7 +258,10 @@ export function GauntletRunner({ initialDecision }: GauntletRunnerProps) {
                 />
               </div>
               <div>
-                <label htmlFor="gauntlet-stress" className="block text-sm font-medium text-slate-300 mb-2">
+                <label
+                  htmlFor="gauntlet-stress"
+                  className="block text-sm font-medium text-slate-300 mb-2"
+                >
                   Stress Level: {stressLevel}
                 </label>
                 <input
@@ -302,9 +307,7 @@ export function GauntletRunner({ initialDecision }: GauntletRunnerProps) {
               </div>
             )}
 
-            {error && (
-              <p className="text-red-400 text-sm text-center">{error}</p>
-            )}
+            {error && <p className="text-red-400 text-sm text-center">{error}</p>}
           </div>
         )}
 
@@ -319,9 +322,7 @@ export function GauntletRunner({ initialDecision }: GauntletRunnerProps) {
               />
             ) : (
               <div className="space-y-2">
-                <h3 className="text-sm font-medium text-slate-300 mb-3">
-                  Recent Results
-                </h3>
+                <h3 className="text-sm font-medium text-slate-300 mb-3">Recent Results</h3>
                 {results.length === 0 ? (
                   <p className="text-slate-400 text-center py-4">No results yet</p>
                 ) : (
@@ -379,20 +380,10 @@ function DifficultyBadge({ difficulty }: { difficulty: string }) {
     extreme: 'bg-red-600 text-white',
   };
   const color = colors[difficulty as keyof typeof colors] || colors.medium;
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>
-      {difficulty}
-    </span>
-  );
+  return <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>{difficulty}</span>;
 }
 
-function ResultCard({
-  result,
-  onView,
-}: {
-  result: GauntletResult;
-  onView: () => void;
-}) {
+function ResultCard({ result, onView }: { result: GauntletResult; onView: () => void }) {
   return (
     <button
       onClick={onView}
@@ -445,10 +436,7 @@ function ResultDetail({
           <h4 className="text-sm font-medium text-slate-300 mb-2">Personas Used</h4>
           <div className="flex flex-wrap gap-1">
             {result.personas_used.map((persona) => (
-              <span
-                key={persona}
-                className="px-2 py-1 bg-slate-700 rounded text-xs text-white"
-              >
+              <span key={persona} className="px-2 py-1 bg-slate-700 rounded text-xs text-white">
                 {persona}
               </span>
             ))}
@@ -475,10 +463,7 @@ function ResultDetail({
           <h4 className="text-sm font-medium text-slate-300 mb-2">Vulnerabilities</h4>
           <div className="space-y-2">
             {result.vulnerabilities.map((vuln, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-3 p-2 bg-slate-900 rounded"
-              >
+              <div key={i} className="flex items-start gap-3 p-2 bg-slate-900 rounded">
                 <SeverityBadge severity={vuln.severity} />
                 <div>
                   <p className="text-white text-sm">{vuln.category}</p>
@@ -529,10 +514,10 @@ function ReceiptView({ receipt }: { receipt: GauntletReceipt }) {
       <div className="bg-slate-800 rounded-lg p-4 border-l-4 border-blue-500">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-white">Decision Receipt</h3>
-          <span
-            className={`px-3 py-1 rounded font-medium ${verdictClass}`}
-          >
-            {String(receipt.verdict || 'unknown').replace('_', ' ').toUpperCase()}
+          <span className={`px-3 py-1 rounded font-medium ${verdictClass}`}>
+            {String(receipt.verdict || 'unknown')
+              .replace('_', ' ')
+              .toUpperCase()}
           </span>
         </div>
         <p className="text-slate-300">{summaryText}</p>
@@ -549,10 +534,7 @@ function ReceiptView({ receipt }: { receipt: GauntletReceipt }) {
           <h4 className="text-sm font-medium text-slate-300 mb-3">Risk Factors</h4>
           <div className="space-y-2">
             {riskFactors.map((factor, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-2 bg-slate-900 rounded"
-              >
+              <div key={i} className="flex items-center justify-between p-2 bg-slate-900 rounded">
                 <div>
                   <p className="text-white text-sm">{factor.factor}</p>
                   <p className="text-xs text-slate-400">{factor.assessment}</p>
@@ -575,7 +557,9 @@ function ReceiptView({ receipt }: { receipt: GauntletReceipt }) {
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <span className="text-sm font-medium text-white">{response.agent}</span>
                   {response.llm_label && (
-                    <span className="text-xs font-theme-data text-cyan-300">{response.llm_label}</span>
+                    <span className="text-xs font-theme-data text-cyan-300">
+                      {response.llm_label}
+                    </span>
                   )}
                   {response.role && (
                     <span className="text-xs text-slate-400 uppercase">{response.role}</span>
@@ -615,19 +599,17 @@ function RiskScore({ score, large }: { score: number; large?: boolean }) {
     score < 0.3
       ? 'text-green-400'
       : score < 0.6
-      ? 'text-yellow-400'
-      : score < 0.8
-      ? 'text-orange-400'
-      : 'text-red-400';
+        ? 'text-yellow-400'
+        : score < 0.8
+          ? 'text-orange-400'
+          : 'text-red-400';
 
   return (
     <div className={`text-right ${large ? '' : ''}`}>
       <span className={`${large ? 'text-2xl' : 'text-lg'} font-bold ${color}`}>
         {(score * 100).toFixed(0)}
       </span>
-      <span className={`${large ? 'text-sm' : 'text-xs'} text-slate-400 ml-1`}>
-        risk
-      </span>
+      <span className={`${large ? 'text-sm' : 'text-xs'} text-slate-400 ml-1`}>risk</span>
     </div>
   );
 }
@@ -640,11 +622,7 @@ function StatusBadge({ status }: { status: string }) {
     failed: 'bg-red-600 text-white',
   };
   const color = colors[status as keyof typeof colors] || colors.pending;
-  return (
-    <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
-      {status}
-    </span>
-  );
+  return <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>{status}</span>;
 }
 
 function SeverityBadge({ severity }: { severity: string }) {
@@ -655,11 +633,7 @@ function SeverityBadge({ severity }: { severity: string }) {
     critical: 'bg-red-600 text-white',
   };
   const color = colors[severity.toLowerCase() as keyof typeof colors] || colors.medium;
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>
-      {severity}
-    </span>
-  );
+  return <span className={`px-2 py-0.5 rounded text-xs font-medium ${color}`}>{severity}</span>;
 }
 
 export default GauntletRunner;

@@ -35,13 +35,16 @@ export default function BatchPage() {
               <div className="mt-4 p-4 bg-surface/50 border border-[var(--accent)]/20 text-xs font-theme-data text-text-muted space-y-4">
                 <div>
                   <div className="text-[var(--accent)] mb-1">TEXT MODE</div>
-                  <p>Enter one question per line. Each line becomes a separate debate with default settings.</p>
+                  <p>
+                    Enter one question per line. Each line becomes a separate debate with default
+                    settings.
+                  </p>
                 </div>
                 <div>
                   <div className="text-[var(--accent)] mb-1">JSON MODE</div>
                   <p>For advanced configuration, use JSON format:</p>
                   <pre className="mt-2 p-2 bg-bg rounded overflow-x-auto">
-{`[
+                    {`[
   {
     "question": "What is the best database?",
     "agents": "claude,gpt-4o,gemini",
@@ -57,7 +60,9 @@ export default function BatchPage() {
                 </div>
                 <div>
                   <div className="text-[var(--accent)] mb-1">WEBHOOK NOTIFICATIONS</div>
-                  <p>Configure a webhook URL to receive POST notifications when the batch completes.</p>
+                  <p>
+                    Configure a webhook URL to receive POST notifications when the batch completes.
+                  </p>
                 </div>
                 <div>
                   <div className="text-[var(--accent)] mb-1">LIMITS</div>

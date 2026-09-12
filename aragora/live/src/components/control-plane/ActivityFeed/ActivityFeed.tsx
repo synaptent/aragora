@@ -33,30 +33,15 @@ export interface ActivityFeedProps {
 }
 
 const filterPresets: { label: string; types: ActivityEventType[] }[] = [
-  {
-    label: 'All',
-    types: [],
-  },
-  {
-    label: 'Agents',
-    types: ['agent_registered', 'agent_offline', 'agent_error'],
-  },
-  {
-    label: 'Tasks',
-    types: ['task_completed', 'task_failed'],
-  },
+  { label: 'All', types: [] },
+  { label: 'Agents', types: ['agent_registered', 'agent_offline', 'agent_error'] },
+  { label: 'Tasks', types: ['task_completed', 'task_failed'] },
   {
     label: 'Debates',
     types: ['deliberation_started', 'deliberation_consensus', 'deliberation_failed'],
   },
-  {
-    label: 'Connectors',
-    types: ['connector_sync', 'connector_error'],
-  },
-  {
-    label: 'Alerts',
-    types: ['policy_violation', 'sla_warning', 'sla_violation', 'agent_error'],
-  },
+  { label: 'Connectors', types: ['connector_sync', 'connector_error'] },
+  { label: 'Alerts', types: ['policy_violation', 'sla_warning', 'sla_violation', 'agent_error'] },
 ];
 
 /**
@@ -85,7 +70,7 @@ export function ActivityFeed({
 }: ActivityFeedProps) {
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [internalFilterTypes, setInternalFilterTypes] = useState<ActivityEventType[] | null>(
-    filterTypes
+    filterTypes,
   );
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevEventsLengthRef = useRef(events.length);
@@ -98,7 +83,7 @@ export function ActivityFeed({
       setInternalFilterTypes(newTypes);
       onFilterChange?.(newTypes);
     },
-    [onFilterChange]
+    [onFilterChange],
   );
 
   // Filter events
@@ -195,10 +180,7 @@ export function ActivityFeed({
       </div>
 
       {/* Events List */}
-      <div
-        ref={scrollRef}
-        className="max-h-[400px] overflow-y-auto"
-      >
+      <div ref={scrollRef} className="max-h-[400px] overflow-y-auto">
         {visibleEvents.length === 0 ? (
           <div className="p-6 text-center text-text-muted font-theme-data text-sm">
             No activity to display

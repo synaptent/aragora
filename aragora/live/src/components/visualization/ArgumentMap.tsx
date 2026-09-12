@@ -8,20 +8,9 @@ import * as d3Force from 'd3-force';
 // ============================================================================
 
 export type NodeType =
-  | 'proposal'
-  | 'critique'
-  | 'evidence'
-  | 'concession'
-  | 'rebuttal'
-  | 'vote'
-  | 'consensus';
+  'proposal' | 'critique' | 'evidence' | 'concession' | 'rebuttal' | 'vote' | 'consensus';
 
-export type EdgeRelation =
-  | 'supports'
-  | 'refutes'
-  | 'modifies'
-  | 'responds_to'
-  | 'concedes_to';
+export type EdgeRelation = 'supports' | 'refutes' | 'modifies' | 'responds_to' | 'concedes_to';
 
 export interface ArgumentNode {
   id: string;
@@ -47,11 +36,7 @@ export interface GraphData {
   topic: string;
   nodes: ArgumentNode[];
   edges: ArgumentEdge[];
-  metadata?: {
-    node_count: number;
-    edge_count: number;
-    exported_at: number;
-  };
+  metadata?: { node_count: number; edge_count: number; exported_at: number };
 }
 
 interface SimNode extends d3Force.SimulationNodeDatum {
@@ -130,11 +115,7 @@ export function ArgumentMap({
     // Create simulation links
     const links: SimLink[] = data.edges
       .filter((e) => nodeMap.has(e.source_id) && nodeMap.has(e.target_id))
-      .map((edge) => ({
-        source: edge.source_id,
-        target: edge.target_id,
-        edge,
-      }));
+      .map((edge) => ({ source: edge.source_id, target: edge.target_id, edge }));
 
     // Create force simulation
     const simulation = d3Force
@@ -145,15 +126,12 @@ export function ArgumentMap({
           .forceLink<SimNode, SimLink>(links)
           .id((d) => d.id)
           .distance(120)
-          .strength(0.5)
+          .strength(0.5),
       )
       .force('charge', d3Force.forceManyBody<SimNode>().strength(-400).distanceMax(500))
       .force('collide', d3Force.forceCollide<SimNode>(60).strength(0.7))
       .force('x', d3Force.forceX<SimNode>(width / 2).strength(0.03))
-      .force(
-        'y',
-        d3Force.forceY<SimNode>((d) => d.node.round_num * 100 + 80).strength(0.2)
-      );
+      .force('y', d3Force.forceY<SimNode>((d) => d.node.round_num * 100 + 80).strength(0.2));
 
     // Run simulation
     simulation.tick(200);
@@ -171,10 +149,7 @@ export function ArgumentMap({
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setTransform((t) => ({
-      ...t,
-      k: Math.max(0.3, Math.min(3, t.k * delta)),
-    }));
+    setTransform((t) => ({ ...t, k: Math.max(0.3, Math.min(3, t.k * delta)) }));
   }, []);
 
   // Handle drag for panning
@@ -196,7 +171,7 @@ export function ArgumentMap({
       setTransform((t) => ({ ...t, x: t.x + dx, y: t.y + dy }));
       setDragStart({ x: e.clientX, y: e.clientY });
     },
-    [isDragging, dragStart]
+    [isDragging, dragStart],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -223,7 +198,10 @@ export function ArgumentMap({
   }
 
   return (
-    <div className="relative border border-[var(--accent)]/30 bg-bg overflow-hidden" style={{ width, height }}>
+    <div
+      className="relative border border-[var(--accent)]/30 bg-bg overflow-hidden"
+      style={{ width, height }}
+    >
       {/* Legend */}
       <div className="absolute top-2 left-2 z-10 bg-surface/90 border border-[var(--accent)]/20 p-2 text-xs font-theme-data">
         <div className="text-[var(--acid-cyan)] mb-2">Node Types</div>
@@ -277,8 +255,10 @@ export function ArgumentMap({
         <g transform={`translate(${transform.x},${transform.y}) scale(${transform.k})`}>
           {/* Edges */}
           {simLinks.map((link, i) => {
-            const source = typeof link.source === 'object' ? link.source : getNodePos(link.source as string);
-            const target = typeof link.target === 'object' ? link.target : getNodePos(link.target as string);
+            const source =
+              typeof link.source === 'object' ? link.source : getNodePos(link.source as string);
+            const target =
+              typeof link.target === 'object' ? link.target : getNodePos(link.target as string);
             const color = EDGE_COLORS[link.edge.relation];
 
             return (

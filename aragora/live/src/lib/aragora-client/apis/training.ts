@@ -30,22 +30,14 @@ export interface TrainingStatsResponse {
 export interface SFTExample {
   prompt: string;
   completion: string;
-  metadata?: {
-    debate_id: string;
-    domain: string;
-    confidence: number;
-  };
+  metadata?: { debate_id: string; domain: string; confidence: number };
 }
 
 export interface DPOExample {
   prompt: string;
   chosen: string;
   rejected: string;
-  metadata?: {
-    debate_id: string;
-    domain: string;
-    preference_strength: number;
-  };
+  metadata?: { debate_id: string; domain: string; preference_strength: number };
 }
 
 export interface GauntletExample {
@@ -55,10 +47,7 @@ export interface GauntletExample {
   outcome: 'defended' | 'exploited' | 'partial';
   severity: 'critical' | 'high' | 'medium' | 'low';
   attack_type: string;
-  metadata?: {
-    debate_id?: string;
-    agent_name?: string;
-  };
+  metadata?: { debate_id?: string; agent_name?: string };
 }
 
 export interface TrainingExportOptions {
@@ -139,7 +128,9 @@ export class TrainingAPI extends BaseAPI {
    *
    * Returns attack/defense pairs from security gauntlet runs.
    */
-  async exportGauntlet(options?: TrainingExportOptions): Promise<TrainingExportResponse<GauntletExample>> {
+  async exportGauntlet(
+    options?: TrainingExportOptions,
+  ): Promise<TrainingExportResponse<GauntletExample>> {
     return this.http.post('/api/v1/training/export/gauntlet', options || {});
   }
 

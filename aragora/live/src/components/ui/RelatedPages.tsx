@@ -208,10 +208,7 @@ export function RelatedPages({
   }
 
   return (
-    <nav
-      aria-label="Related pages"
-      className={`flex flex-col gap-2 ${className}`}
-    >
+    <nav aria-label="Related pages" className={`flex flex-col gap-2 ${className}`}>
       <span className="text-xs font-theme-data text-text-muted uppercase tracking-wider">
         {title}
       </span>
@@ -226,9 +223,7 @@ export function RelatedPages({
                          transition-colors group"
               title={page.description}
             >
-              <span className="text-[var(--accent)]/60 group-hover:text-[var(--accent)]">
-                &gt;
-              </span>
+              <span className="text-[var(--accent)]/60 group-hover:text-[var(--accent)]">&gt;</span>
               <span className="text-text-secondary group-hover:text-text-primary">
                 {page.label}
               </span>

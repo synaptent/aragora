@@ -2,7 +2,15 @@ import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: { children: ReactNode; href: string; [key: string]: unknown }) => (
+  return ({
+    children,
+    href,
+    ...props
+  }: {
+    children: ReactNode;
+    href: string;
+    [key: string]: unknown;
+  }) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -21,9 +29,7 @@ jest.mock('../src/components/MatrixRain', () => ({
 
 jest.mock('../src/components/BackendSelector', () => ({
   BackendSelector: () => <div>Backend</div>,
-  useBackend: () => ({
-    config: { api: 'http://localhost:8080', ws: 'ws://localhost:8765' },
-  }),
+  useBackend: () => ({ config: { api: 'http://localhost:8080', ws: 'ws://localhost:8765' } }),
 }));
 
 jest.mock('../src/components/ErrorWithRetry', () => ({
@@ -35,9 +41,7 @@ jest.mock('../src/components/ErrorWithRetry', () => ({
   ),
 }));
 
-jest.mock('../src/components/receipts', () => ({
-  DeliveryModal: () => null,
-}));
+jest.mock('../src/components/receipts', () => ({ DeliveryModal: () => null }));
 
 jest.mock('../src/utils/logger', () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn(), debug: jest.fn() },
@@ -73,13 +77,7 @@ const originalRevokeObjectUrl = URL.revokeObjectURL;
 const originalAnchorClick = HTMLAnchorElement.prototype.click;
 
 function hookResult(overrides: Partial<HookResult> = {}): HookResult {
-  return {
-    data: null,
-    error: null,
-    isLoading: false,
-    mutate: mockMutate,
-    ...overrides,
-  };
+  return { data: null, error: null, isLoading: false, mutate: mockMutate, ...overrides };
 }
 
 function queueHookResponses(responses: [HookResult, HookResult, HookResult]) {
@@ -133,10 +131,7 @@ describe('ReceiptsPage', () => {
 
     expect(mockUseSWRFetch).toHaveBeenCalledWith(
       '/api/v1/gauntlet/receipts?limit=50',
-      expect.objectContaining({
-        refreshInterval: 30000,
-        baseUrl: 'http://localhost:8080',
-      })
+      expect.objectContaining({ refreshInterval: 30000, baseUrl: 'http://localhost:8080' }),
     );
 
     await waitFor(() => {
@@ -280,7 +275,7 @@ describe('ReceiptsPage', () => {
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
         'http://localhost:8080/api/v2/receipts/receipt-123',
-        expect.any(Object)
+        expect.any(Object),
       );
       expect(screen.getByText('Decision Receipt')).toBeInTheDocument();
       expect(screen.getByText('Sandbox escape')).toBeInTheDocument();
@@ -334,12 +329,12 @@ describe('ReceiptsPage', () => {
       expect(global.fetch).toHaveBeenNthCalledWith(
         1,
         'http://localhost:8080/api/v2/receipts/receipt-456',
-        expect.any(Object)
+        expect.any(Object),
       );
       expect(global.fetch).toHaveBeenNthCalledWith(
         2,
         'http://localhost:8080/api/v2/receipts/receipt-456/export?format=json&raw=true',
-        expect.any(Object)
+        expect.any(Object),
       );
       expect(URL.createObjectURL).toHaveBeenCalled();
       expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();

@@ -58,18 +58,8 @@ export function AsciiCard({
 }
 
 // Terminal-style header for sections
-export function AsciiHeader({
-  children,
-  level = 2,
-}: {
-  children: ReactNode;
-  level?: 1 | 2 | 3;
-}) {
-  const sizes = {
-    1: 'text-lg',
-    2: 'text-base',
-    3: 'text-sm',
-  };
+export function AsciiHeader({ children, level = 2 }: { children: ReactNode; level?: 1 | 2 | 3 }) {
+  const sizes = { 1: 'text-lg', 2: 'text-base', 3: 'text-sm' };
 
   return (
     <div className="flex items-center gap-2 mb-3">
@@ -188,9 +178,7 @@ export function TypewriterText({
   return (
     <span className={className}>
       {displayed}
-      <span className={`${showCursor ? 'opacity-100' : 'opacity-0'} text-[var(--accent)]`}>
-        _
-      </span>
+      <span className={`${showCursor ? 'opacity-100' : 'opacity-0'} text-[var(--accent)]`}>_</span>
     </span>
   );
 }

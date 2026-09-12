@@ -16,16 +16,10 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { usePipelineCanvas } from '../usePipelineCanvas';
 import type { PipelineResultResponse } from '../../components/pipeline-canvas/types';
 
-const mockBackendConfig = {
-  api: 'https://backend.test',
-  ws: 'wss://backend.test/ws',
-};
+const mockBackendConfig = { api: 'https://backend.test', ws: 'wss://backend.test/ws' };
 
 jest.mock('../../components/BackendSelector', () => ({
-  useBackend: () => ({
-    backend: 'production',
-    config: mockBackendConfig,
-  }),
+  useBackend: () => ({ backend: 'production', config: mockBackendConfig }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -40,7 +34,10 @@ const mockOnEdgesChange = jest.fn();
 jest.mock('@xyflow/react', () => ({
   useNodesState: (initial: unknown[]) => [initial, mockSetNodes, mockOnNodesChange],
   useEdgesState: (initial: unknown[]) => [initial, mockSetEdges, mockOnEdgesChange],
-  addEdge: jest.fn((connection: unknown, edges: unknown[]) => [...edges, { id: 'e-new', ...connection as object }]),
+  addEdge: jest.fn((connection: unknown, edges: unknown[]) => [
+    ...edges,
+    { id: 'e-new', ...(connection as object) },
+  ]),
 }));
 
 const mockFetch = jest.fn();
@@ -68,9 +65,7 @@ class MockWebSocket {
 const MOCK_API_RESPONSE: PipelineResultResponse = {
   pipeline_id: 'test-1',
   ideas: {
-    nodes: [
-      { id: 'i1', type: 'ideaNode', position: { x: 0, y: 0 }, data: { label: 'Test Idea' } },
-    ],
+    nodes: [{ id: 'i1', type: 'ideaNode', position: { x: 0, y: 0 }, data: { label: 'Test Idea' } }],
     edges: [],
     metadata: {},
   },
@@ -151,10 +146,7 @@ describe('usePipelineCanvas', () => {
   });
 
   it('fetches from API when pipelineId is set and no initialData', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(MOCK_API_RESPONSE),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(MOCK_API_RESPONSE) });
 
     await act(async () => {
       renderHook(() => usePipelineCanvas('test-1'));
@@ -173,32 +165,23 @@ describe('usePipelineCanvas', () => {
     const { rerender } = renderHook(
       ({ pipelineId, initialData }: { pipelineId: string; initialData: PipelineResultResponse }) =>
         usePipelineCanvas(pipelineId, initialData),
-      {
-        initialProps: {
-          pipelineId: 'test-1',
-          initialData: MOCK_API_RESPONSE,
-        },
-      },
+      { initialProps: { pipelineId: 'test-1', initialData: MOCK_API_RESPONSE } },
     );
 
     expect(mockFetch).not.toHaveBeenCalled();
 
     mockBackendConfig.api = 'https://backend-2.test';
     mockBackendConfig.ws = 'wss://backend-2.test/ws';
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(MOCK_API_RESPONSE),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(MOCK_API_RESPONSE) });
 
     await act(async () => {
-      rerender({
-        pipelineId: 'test-1',
-        initialData: MOCK_API_RESPONSE,
-      });
+      rerender({ pipelineId: 'test-1', initialData: MOCK_API_RESPONSE });
     });
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith('https://backend-2.test/api/v1/canvas/pipeline/test-1');
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://backend-2.test/api/v1/canvas/pipeline/test-1',
+      );
     });
     expect(MockWebSocket.instances[1]?.url).toBe(
       'wss://backend-2.test/ws/pipeline?pipeline_id=test-1',
@@ -259,10 +242,7 @@ describe('usePipelineCanvas', () => {
       { id: 'node-2', data: { label: 'Other' } },
     ];
     const updated = updater(testNodes);
-    expect(updated[0].data).toEqual({
-      label: 'Updated Label',
-      priority: 'high',
-    });
+    expect(updated[0].data).toEqual({ label: 'Updated Label', priority: 'high' });
     // Other nodes remain unchanged
     expect(updated[1]).toBe(testNodes[1]);
   });
@@ -290,10 +270,7 @@ describe('usePipelineCanvas', () => {
     expect(typeof nodeFilter).toBe('function');
 
     // Verify the filter removes the selected node
-    const testNodes = [
-      { id: 'node-to-delete' },
-      { id: 'keep-node' },
-    ];
+    const testNodes = [{ id: 'node-to-delete' }, { id: 'keep-node' }];
     expect(nodeFilter(testNodes)).toEqual([{ id: 'keep-node' }]);
 
     // setEdges should be called with a filter that removes connected edges
@@ -307,9 +284,7 @@ describe('usePipelineCanvas', () => {
       { id: 'e3', source: 'keep-node', target: 'other-node' },
     ];
     const remainingEdges = edgeFilter(testEdges);
-    expect(remainingEdges).toEqual([
-      { id: 'e3', source: 'keep-node', target: 'other-node' },
-    ]);
+    expect(remainingEdges).toEqual([{ id: 'e3', source: 'keep-node', target: 'other-node' }]);
 
     // selectedNodeId should be cleared
     expect(result.current.selectedNodeId).toBeNull();
@@ -369,10 +344,7 @@ describe('usePipelineCanvas', () => {
     it('sends ideas text as POST to /from-ideas endpoint', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          pipeline_id: 'pipe-new',
-          result: MOCK_API_RESPONSE,
-        }),
+        json: () => Promise.resolve({ pipeline_id: 'pipe-new', result: MOCK_API_RESPONSE }),
       });
 
       const { result } = renderHook(() => usePipelineCanvas(null));
@@ -398,10 +370,7 @@ describe('usePipelineCanvas', () => {
     });
 
     it('returns null and sets error when API returns non-ok', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       const { result } = renderHook(() => usePipelineCanvas(null));
 
@@ -449,11 +418,12 @@ describe('usePipelineCanvas', () => {
     it('sends input_text as POST to /run endpoint', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          pipeline_id: 'pipe-run-1',
-          status: 'running',
-          stages: ['ideation', 'goals', 'workflow', 'orchestration'],
-        }),
+        json: () =>
+          Promise.resolve({
+            pipeline_id: 'pipe-run-1',
+            status: 'running',
+            stages: ['ideation', 'goals', 'workflow', 'orchestration'],
+          }),
       });
 
       const { result } = renderHook(() => usePipelineCanvas(null));
@@ -477,10 +447,7 @@ describe('usePipelineCanvas', () => {
     });
 
     it('returns null and sets error when API returns non-ok', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 503,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 503 });
 
       const { result } = renderHook(() => usePipelineCanvas(null));
 

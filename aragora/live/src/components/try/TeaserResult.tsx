@@ -29,9 +29,7 @@ function verdictColor(verdict: string): string {
 }
 
 function verdictLabel(verdict: string): string {
-  return verdict
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return verdict.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 const AGENT_COLORS = [
@@ -71,18 +69,14 @@ export function TeaserResult({
 
   const shareText = topic
     ? `I stress-tested "${topic}" with AI agents on Aragora. Here's what they decided:`
-    : 'I stress-tested a decision with AI agents on Aragora. Here\'s what they decided:';
+    : "I stress-tested a decision with AI agents on Aragora. Here's what they decided:";
 
   const handleShare = async () => {
     if (!shareUrl) return;
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
-        await navigator.share({
-          title: 'Aragora Debate Result',
-          text: shareText,
-          url: shareUrl,
-        });
+        await navigator.share({ title: 'Aragora Debate Result', text: shareText, url: shareUrl });
         return;
       } catch {
         // User cancelled or share failed — fall through to clipboard
@@ -118,10 +112,7 @@ export function TeaserResult({
             <p className="text-xs font-theme-data text-[var(--text-muted)] mb-1 uppercase tracking-wider">
               VERDICT
             </p>
-            <span
-              className="text-xl font-theme-data font-bold"
-              style={{ color: vColor }}
-            >
+            <span className="text-xl font-theme-data font-bold" style={{ color: vColor }}>
               {verdictLabel(verdict)}
             </span>
           </div>
@@ -136,7 +127,12 @@ export function TeaserResult({
                   className="h-full transition-all duration-700"
                   style={{
                     width: `${confidencePercent}%`,
-                    backgroundColor: confidencePercent >= 70 ? 'var(--acid-green)' : confidencePercent >= 50 ? '#f59e0b' : 'var(--crimson, #ff0040)',
+                    backgroundColor:
+                      confidencePercent >= 70
+                        ? 'var(--acid-green)'
+                        : confidencePercent >= 50
+                          ? '#f59e0b'
+                          : 'var(--crimson, #ff0040)',
                   }}
                 />
               </div>
@@ -177,16 +173,16 @@ export function TeaserResult({
               const preview = raw.length > 160 ? raw.slice(0, 160) + '...' : raw;
               const color = agentColor(idx);
               return (
-                <div
-                  key={agent}
-                  className="border border-[var(--border)] bg-[var(--bg)]/30"
-                >
+                <div key={agent} className="border border-[var(--border)] bg-[var(--bg)]/30">
                   <button
                     onClick={() => toggleAgent(agent)}
                     className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[var(--acid-green)]/5 transition-colors"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: color }}
+                      />
                       <span className="text-xs font-theme-data font-bold" style={{ color }}>
                         {agent.toUpperCase()}
                       </span>
@@ -216,7 +212,8 @@ export function TeaserResult({
           </div>
           {(participants?.length ?? 0) > 4 && (
             <p className="text-xs font-theme-data text-[var(--text-muted)]/60 mt-2">
-              + {(participants?.length ?? 0) - 4} more agent{(participants?.length ?? 0) - 4 > 1 ? 's' : ''} in full transcript
+              + {(participants?.length ?? 0) - 4} more agent
+              {(participants?.length ?? 0) - 4 > 1 ? 's' : ''} in full transcript
             </p>
           )}
         </div>
@@ -237,10 +234,13 @@ export function TeaserResult({
             onClick={() => {
               const text = `I analyzed "${topic || 'a decision'}" with AI agents on Aragora.ai`;
               if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                navigator.clipboard.writeText(text).then(() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }).catch(() => {});
+                navigator.clipboard
+                  .writeText(text)
+                  .then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  })
+                  .catch(() => {});
               }
             }}
             className="w-full py-2.5 font-theme-data font-bold text-sm border border-[var(--acid-green)]/50 text-[var(--acid-green)]/70
@@ -257,8 +257,13 @@ export function TeaserResult({
           <div className="flex items-center gap-3 p-2 bg-[var(--bg)]/50 border border-[var(--border)]">
             <span className="text-xs font-theme-data text-[var(--acid-green)]">&#10003;</span>
             <div className="min-w-0 flex-1">
-              <span className="text-xs font-theme-data text-[var(--text-muted)] block">SHA-256 DECISION RECEIPT</span>
-              <p className="text-xs font-theme-data text-[var(--text-muted)]/60 truncate" title={receiptHash}>
+              <span className="text-xs font-theme-data text-[var(--text-muted)] block">
+                SHA-256 DECISION RECEIPT
+              </span>
+              <p
+                className="text-xs font-theme-data text-[var(--text-muted)]/60 truncate"
+                title={receiptHash}
+              >
                 {receiptHash}
               </p>
             </div>
@@ -279,7 +284,9 @@ export function TeaserResult({
         </p>
         <p className="text-center text-xs font-theme-data text-[var(--text-muted)] mt-1">
           Already have an account?{' '}
-          <Link href="/login" className="text-[var(--acid-cyan)] hover:underline">Sign in</Link>
+          <Link href="/login" className="text-[var(--acid-cyan)] hover:underline">
+            Sign in
+          </Link>
         </p>
       </div>
     </div>

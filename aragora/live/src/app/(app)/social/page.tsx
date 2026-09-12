@@ -54,14 +54,18 @@ export default function SocialPage() {
   const fetchConnectorStatus = useCallback(async () => {
     try {
       const [youtube, twitter] = await Promise.all([
-        fetch(`${backendUrl}/api/youtube/status`).then(r => r.ok ? r.json() : null).catch((err) => {
-          logger.warn('Failed to fetch YouTube status:', err);
-          return null;
-        }),
-        fetch(`${backendUrl}/api/connectors`).then(r => r.ok ? r.json() : null).catch((err) => {
-          logger.warn('Failed to fetch connector status:', err);
-          return null;
-        }),
+        fetch(`${backendUrl}/api/youtube/status`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch((err) => {
+            logger.warn('Failed to fetch YouTube status:', err);
+            return null;
+          }),
+        fetch(`${backendUrl}/api/connectors`)
+          .then((r) => (r.ok ? r.json() : null))
+          .catch((err) => {
+            logger.warn('Failed to fetch connector status:', err);
+            return null;
+          }),
       ]);
 
       const connectorList: ConnectorStatus[] = [];
@@ -75,19 +79,11 @@ export default function SocialPage() {
           last_error: youtube.error,
         });
       } else {
-        connectorList.push({
-          name: 'YouTube',
-          is_configured: false,
-          is_connected: false,
-        });
+        connectorList.push({ name: 'YouTube', is_configured: false, is_connected: false });
       }
 
       // Add Twitter placeholder
-      connectorList.push({
-        name: 'Twitter/X',
-        is_configured: false,
-        is_connected: false,
-      });
+      connectorList.push({ name: 'Twitter/X', is_configured: false, is_connected: false });
 
       // Add Slack from connectors if available
       if (twitter?.connectors) {
@@ -113,18 +109,22 @@ export default function SocialPage() {
       const response = await fetch(`${backendUrl}/api/debates?limit=20`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      setRecentDebates(data.debates?.map((d: {
-        id: string;
-        task?: string;
-        created_at?: string;
-        metadata?: { has_audio?: boolean; has_video?: boolean };
-      }) => ({
-        id: d.id,
-        task: d.task || 'Untitled debate',
-        created_at: d.created_at || new Date().toISOString(),
-        has_audio: d.metadata?.has_audio || false,
-        has_video: d.metadata?.has_video || false,
-      })) || []);
+      setRecentDebates(
+        data.debates?.map(
+          (d: {
+            id: string;
+            task?: string;
+            created_at?: string;
+            metadata?: { has_audio?: boolean; has_video?: boolean };
+          }) => ({
+            id: d.id,
+            task: d.task || 'Untitled debate',
+            created_at: d.created_at || new Date().toISOString(),
+            has_audio: d.metadata?.has_audio || false,
+            has_video: d.metadata?.has_video || false,
+          }),
+        ) || [],
+      );
     } catch (err) {
       logger.error('Failed to fetch debates:', err);
     }
@@ -155,7 +155,7 @@ export default function SocialPage() {
     try {
       const response = await fetch(
         `${backendUrl}/api/debates/${selectedDebate}/publish/${selectedPlatform}`,
-        { method: 'POST' }
+        { method: 'POST' },
       );
 
       if (!response.ok) {
@@ -164,15 +164,18 @@ export default function SocialPage() {
       }
 
       const result = await response.json();
-      setPublishHistory(prev => [{
-        id: result.job_id || Date.now().toString(),
-        debate_id: selectedDebate,
-        platform: selectedPlatform,
-        status: 'completed',
-        created_at: new Date().toISOString(),
-        completed_at: new Date().toISOString(),
-        result_url: result.url,
-      }, ...prev]);
+      setPublishHistory((prev) => [
+        {
+          id: result.job_id || Date.now().toString(),
+          debate_id: selectedDebate,
+          platform: selectedPlatform,
+          status: 'completed',
+          created_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
+          result_url: result.url,
+        },
+        ...prev,
+      ]);
 
       setSelectedDebate('');
       setSelectedPlatform('');
@@ -200,14 +203,13 @@ export default function SocialPage() {
 
   const renderStatusTab = () => (
     <div className="space-y-6">
-      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">Platform Connections</h2>
+      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">
+        Platform Connections
+      </h2>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {connectors.map((connector) => (
-          <div
-            key={connector.name}
-            className="p-4 bg-surface border border-border rounded-lg"
-          >
+          <div key={connector.name} className="p-4 bg-surface border border-border rounded-lg">
             <div className="flex items-center justify-between mb-3">
               <span className="font-theme-data font-bold text-text">{connector.name}</span>
               <span
@@ -215,11 +217,15 @@ export default function SocialPage() {
                   connector.is_connected
                     ? 'bg-[var(--accent)]/20 text-[var(--accent)] border border-[var(--accent)]/30'
                     : connector.is_configured
-                    ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
-                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                      ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30'
                 }`}
               >
-                {connector.is_connected ? 'Connected' : connector.is_configured ? 'Configured' : 'Not configured'}
+                {connector.is_connected
+                  ? 'Connected'
+                  : connector.is_configured
+                    ? 'Configured'
+                    : 'Not configured'}
               </span>
             </div>
 
@@ -230,9 +236,7 @@ export default function SocialPage() {
             )}
 
             {connector.last_error && (
-              <div className="text-xs text-red-400 mb-2">
-                Error: {connector.last_error}
-              </div>
+              <div className="text-xs text-red-400 mb-2">Error: {connector.last_error}</div>
             )}
 
             {!connector.is_connected && connector.name === 'YouTube' && (
@@ -254,9 +258,12 @@ export default function SocialPage() {
       </div>
 
       <div className="p-4 bg-surface border border-border rounded-lg">
-        <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Configuration</h3>
+        <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+          Configuration
+        </h3>
         <p className="text-sm text-text-muted mb-4">
-          Social media integrations require API credentials. Configure them in the environment or settings.
+          Social media integrations require API credentials. Configure them in the environment or
+          settings.
         </p>
         <div className="grid gap-2 text-xs font-theme-data text-text-muted">
           <div>YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET</div>
@@ -269,7 +276,9 @@ export default function SocialPage() {
 
   const renderPublishTab = () => (
     <div className="space-y-6">
-      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">Publish Debate</h2>
+      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">
+        Publish Debate
+      </h2>
 
       <div className="p-4 bg-surface border border-border rounded-lg">
         <div className="space-y-4">
@@ -286,7 +295,8 @@ export default function SocialPage() {
               <option value="">Choose a debate...</option>
               {recentDebates.map((debate) => (
                 <option key={debate.id} value={debate.id}>
-                  {debate.task.substring(0, 60)}{debate.task.length > 60 ? '...' : ''}
+                  {debate.task.substring(0, 60)}
+                  {debate.task.length > 60 ? '...' : ''}
                   {debate.has_audio && ' [audio]'}
                 </option>
               ))}
@@ -300,9 +310,7 @@ export default function SocialPage() {
             </label>
             <div className="flex gap-2">
               {['twitter', 'youtube'].map((platform) => {
-                const connector = connectors.find(
-                  c => c.name.toLowerCase().includes(platform)
-                );
+                const connector = connectors.find((c) => c.name.toLowerCase().includes(platform));
                 const isAvailable = connector?.is_connected;
 
                 return (
@@ -314,8 +322,8 @@ export default function SocialPage() {
                       selectedPlatform === platform
                         ? 'border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent)]'
                         : isAvailable
-                        ? 'border-border text-text hover:border-[var(--accent)]/50'
-                        : 'border-border/50 text-text-muted cursor-not-allowed opacity-50'
+                          ? 'border-border text-text hover:border-[var(--accent)]/50'
+                          : 'border-border/50 text-text-muted cursor-not-allowed opacity-50'
                     }`}
                   >
                     {platform === 'twitter' && 'Twitter/X'}
@@ -357,17 +365,16 @@ export default function SocialPage() {
 
   const renderHistoryTab = () => (
     <div className="space-y-6">
-      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">Publish History</h2>
+      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)] mb-4">
+        Publish History
+      </h2>
 
       {publishHistory.length === 0 ? (
         <HistoryEmptyState />
       ) : (
         <div className="space-y-3">
           {publishHistory.map((job) => (
-            <div
-              key={job.id}
-              className="p-4 bg-surface border border-border rounded-lg"
-            >
+            <div key={job.id} className="p-4 bg-surface border border-border rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
                   <span className="px-2 py-1 text-xs font-theme-data uppercase bg-blue-500/20 text-blue-400 rounded">
@@ -382,8 +389,8 @@ export default function SocialPage() {
                     job.status === 'completed'
                       ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
                       : job.status === 'failed'
-                      ? 'bg-red-500/20 text-red-400'
-                      : 'bg-yellow-500/20 text-yellow-400'
+                        ? 'bg-red-500/20 text-red-400'
+                        : 'bg-yellow-500/20 text-yellow-400'
                   }`}
                 >
                   {job.status}
@@ -405,11 +412,7 @@ export default function SocialPage() {
                 </a>
               )}
 
-              {job.error && (
-                <div className="mt-2 text-xs text-red-400">
-                  Error: {job.error}
-                </div>
-              )}
+              {job.error && <div className="mt-2 text-xs text-red-400">Error: {job.error}</div>}
             </div>
           ))}
         </div>
@@ -436,7 +439,9 @@ export default function SocialPage() {
 
         {/* Title */}
         <div className="mb-8">
-          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">Social Media</h1>
+          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">
+            Social Media
+          </h1>
           <p className="text-text-muted font-theme-data text-sm">
             Publish debates to social platforms and manage integrations
           </p>
@@ -445,10 +450,7 @@ export default function SocialPage() {
         {/* Error */}
         {error && (
           <div className="mb-6">
-            <ErrorWithRetry
-              error={error}
-              onRetry={loadData}
-            />
+            <ErrorWithRetry error={error} onRetry={loadData} />
           </div>
         )}
 

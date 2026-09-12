@@ -28,13 +28,11 @@ export function AgentPanel({ events }: AgentPanelProps) {
   // Memoize agent message contents for deduplication
   const agentMessageContents = useMemo(() => {
     return new Set(
-      events
-        .filter(isAgentMessage)
-        .map((e) => {
-          const content = e.data.content || '';
-          // Normalize: first 2000 chars, lowercase, trimmed for better deduplication accuracy
-          return content.slice(0, 2000).toLowerCase().trim();
-        })
+      events.filter(isAgentMessage).map((e) => {
+        const content = e.data.content || '';
+        // Normalize: first 2000 chars, lowercase, trimmed for better deduplication accuracy
+        return content.slice(0, 2000).toLowerCase().trim();
+      }),
     );
   }, [events]);
 
@@ -124,9 +122,14 @@ export function AgentPanel({ events }: AgentPanelProps) {
       <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--accent)]/20 bg-bg/50">
         <div className="flex items-center gap-2">
           <span className="text-[var(--accent)]">[</span>
-          <span className="text-xs text-[var(--accent)] uppercase tracking-wider">AGENT_STREAM</span>
+          <span className="text-xs text-[var(--accent)] uppercase tracking-wider">
+            AGENT_STREAM
+          </span>
           <span className="text-[var(--accent)]">]</span>
-          <span className="text-text-muted text-xs">{'// '}{agentEvents.length} events</span>
+          <span className="text-text-muted text-xs">
+            {'// '}
+            {agentEvents.length} events
+          </span>
         </div>
         <div className="flex gap-1">
           <button
@@ -145,14 +148,11 @@ export function AgentPanel({ events }: AgentPanelProps) {
           </button>
         </div>
       </div>
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-3 space-y-2"
-      >
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-3 space-y-2">
         {agentEvents.length === 0 ? (
           <div className="text-center text-text-muted py-8 font-theme-data text-sm">
-            <span className="text-[var(--accent)] animate-pulse">{'>'}</span> Awaiting agent activity...
+            <span className="text-[var(--accent)] animate-pulse">{'>'}</span> Awaiting agent
+            activity...
           </div>
         ) : (
           agentEvents.map((event, index) => (
@@ -216,7 +216,9 @@ const EventCard = memo(function EventCard({ id, event, isExpanded, onToggle }: E
       const target = event.data.target as string;
       const critiqueContent = event.data.content as string;
       // Use full content if available, otherwise format issues
-      content = critiqueContent || `Issues with ${target}:\n${issues.map((i) => `• ${i}`).join('\n')}\n\nSeverity: ${severity.toFixed(1)}`;
+      content =
+        critiqueContent ||
+        `Issues with ${target}:\n${issues.map((i) => `• ${i}`).join('\n')}\n\nSeverity: ${severity.toFixed(1)}`;
       preview = `→ ${target}: ${issues.length} issues (severity ${severity.toFixed(1)})`;
       icon = '🔍';
       role = 'critic';
@@ -266,13 +268,15 @@ const EventCard = memo(function EventCard({ id, event, isExpanded, onToggle }: E
                 R{event.round}
               </span>
             )}
-            <span className="text-[10px] text-text-muted/70 ml-auto font-theme-data">{timestamp}</span>
+            <span className="text-[10px] text-text-muted/70 ml-auto font-theme-data">
+              {timestamp}
+            </span>
           </div>
-          <p className="agent-output text-text-muted text-xs whitespace-pre-wrap break-words line-clamp-4">{preview}</p>
+          <p className="agent-output text-text-muted text-xs whitespace-pre-wrap break-words line-clamp-4">
+            {preview}
+          </p>
         </div>
-        <span className={`text-xs flex-shrink-0 ${colors.text}`}>
-          {isExpanded ? '[-]' : '[+]'}
-        </span>
+        <span className={`text-xs flex-shrink-0 ${colors.text}`}>{isExpanded ? '[-]' : '[+]'}</span>
       </button>
       {isExpanded && (
         <div className="px-2 pb-2 pt-0">

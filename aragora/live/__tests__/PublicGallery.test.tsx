@@ -12,16 +12,9 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { PublicGallery } from '../src/components/PublicGallery';
 
 // Mock the useAragoraClient hook
-jest.mock('../src/hooks/useAragoraClient', () => ({
-  useAragoraClient: () => mockClient,
-}));
+jest.mock('../src/hooks/useAragoraClient', () => ({ useAragoraClient: () => mockClient }));
 
-const mockClient = {
-  gallery: {
-    list: jest.fn(),
-    embed: jest.fn(),
-  },
-};
+const mockClient = { gallery: { list: jest.fn(), embed: jest.fn() } };
 
 const mockGalleryEntries = {
   entries: [

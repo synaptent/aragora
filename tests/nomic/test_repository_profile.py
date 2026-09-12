@@ -336,6 +336,33 @@ def test_context_pack_serializes_complete_metadata_contract(tmp_path: Path) -> N
     assert isinstance(hash(pack), int)
 
 
+def test_context_pack_reference_renders_relative_nomic_path(tmp_path: Path) -> None:
+    profile = NomicRepositoryProfile(
+        repository_name="Example",
+        repository_id="example/project",
+    )
+    commit_sha = "0123456789abcdef0123456789abcdef01234567"
+    revision = RepositoryRevision(
+        commit_sha=commit_sha,
+        tree_sha="b" * 40,
+        branch="main",
+        remote_url=None,
+    )
+    pack = ContextPack(
+        pack_id="pack-id",
+        objective="Improve the roadmap",
+        repository=profile,
+        revision=revision,
+        profile_hash=profile.profile_hash,
+        evidence=(),
+        artifact_digests={},
+        pack_path=tmp_path,
+    )
+
+    assert pack.reference == f".nomic/context/packs/{commit_sha}/pack-id"
+    assert pack.to_dict()["reference"] == pack.reference
+
+
 @pytest.mark.parametrize("pack_id", ["", ".", "..", "nested/pack", r"nested\\pack", "pack id"])
 def test_context_pack_rejects_path_unsafe_pack_ids(tmp_path: Path, pack_id: str) -> None:
     profile = NomicRepositoryProfile(

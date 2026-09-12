@@ -25,11 +25,7 @@ export interface ActivityEvent {
   description?: string;
   metadata?: Record<string, unknown>;
   severity?: 'info' | 'warning' | 'error' | 'success';
-  actor?: {
-    type: 'agent' | 'connector' | 'system' | 'user';
-    id: string;
-    name?: string;
-  };
+  actor?: { type: 'agent' | 'connector' | 'system' | 'user'; id: string; name?: string };
 }
 
 export interface ActivityEventItemProps {
@@ -38,35 +34,12 @@ export interface ActivityEventItemProps {
   onClick?: (event: ActivityEvent) => void;
 }
 
-const eventConfig: Record<
-  ActivityEventType,
-  { icon: string; color: string; bgColor: string }
-> = {
-  agent_registered: {
-    icon: '+',
-    color: 'text-green-400',
-    bgColor: 'bg-green-900/20',
-  },
-  agent_offline: {
-    icon: '-',
-    color: 'text-gray-400',
-    bgColor: 'bg-gray-900/20',
-  },
-  agent_error: {
-    icon: '!',
-    color: 'text-[var(--crimson)]',
-    bgColor: 'bg-red-900/20',
-  },
-  task_completed: {
-    icon: '\u2713',
-    color: 'text-green-400',
-    bgColor: 'bg-green-900/20',
-  },
-  task_failed: {
-    icon: '\u2717',
-    color: 'text-[var(--crimson)]',
-    bgColor: 'bg-red-900/20',
-  },
+const eventConfig: Record<ActivityEventType, { icon: string; color: string; bgColor: string }> = {
+  agent_registered: { icon: '+', color: 'text-green-400', bgColor: 'bg-green-900/20' },
+  agent_offline: { icon: '-', color: 'text-gray-400', bgColor: 'bg-gray-900/20' },
+  agent_error: { icon: '!', color: 'text-[var(--crimson)]', bgColor: 'bg-red-900/20' },
+  task_completed: { icon: '\u2713', color: 'text-green-400', bgColor: 'bg-green-900/20' },
+  task_failed: { icon: '\u2717', color: 'text-[var(--crimson)]', bgColor: 'bg-red-900/20' },
   deliberation_started: {
     icon: '\u25B6',
     color: 'text-[var(--acid-cyan)]',
@@ -77,46 +50,18 @@ const eventConfig: Record<
     color: 'text-[var(--accent)]',
     bgColor: 'bg-green-900/20',
   },
-  deliberation_failed: {
-    icon: '\u2716',
-    color: 'text-[var(--crimson)]',
-    bgColor: 'bg-red-900/20',
-  },
-  connector_sync: {
-    icon: '\u21BB',
-    color: 'text-[var(--acid-cyan)]',
-    bgColor: 'bg-blue-900/20',
-  },
-  connector_error: {
-    icon: '!',
-    color: 'text-[var(--crimson)]',
-    bgColor: 'bg-red-900/20',
-  },
-  policy_violation: {
-    icon: '\u26A0',
-    color: 'text-yellow-400',
-    bgColor: 'bg-yellow-900/20',
-  },
-  sla_warning: {
-    icon: '\u23F1',
-    color: 'text-yellow-400',
-    bgColor: 'bg-yellow-900/20',
-  },
-  sla_violation: {
-    icon: '\u23F1',
-    color: 'text-[var(--crimson)]',
-    bgColor: 'bg-red-900/20',
-  },
+  deliberation_failed: { icon: '\u2716', color: 'text-[var(--crimson)]', bgColor: 'bg-red-900/20' },
+  connector_sync: { icon: '\u21BB', color: 'text-[var(--acid-cyan)]', bgColor: 'bg-blue-900/20' },
+  connector_error: { icon: '!', color: 'text-[var(--crimson)]', bgColor: 'bg-red-900/20' },
+  policy_violation: { icon: '\u26A0', color: 'text-yellow-400', bgColor: 'bg-yellow-900/20' },
+  sla_warning: { icon: '\u23F1', color: 'text-yellow-400', bgColor: 'bg-yellow-900/20' },
+  sla_violation: { icon: '\u23F1', color: 'text-[var(--crimson)]', bgColor: 'bg-red-900/20' },
 };
 
 /**
  * Single event item in the activity feed.
  */
-export function ActivityEventItem({
-  event,
-  compact = false,
-  onClick,
-}: ActivityEventItemProps) {
+export function ActivityEventItem({ event, compact = false, onClick }: ActivityEventItemProps) {
   const config = eventConfig[event.type] || {
     icon: '\u2022',
     color: 'text-text-muted',
@@ -153,9 +98,7 @@ export function ActivityEventItem({
         >
           {config.icon}
         </span>
-        <span className="text-xs font-theme-data text-text truncate flex-1">
-          {event.title}
-        </span>
+        <span className="text-xs font-theme-data text-text truncate flex-1">{event.title}</span>
         <span className="text-xs font-theme-data text-text-muted">{formattedTime}</span>
       </div>
     );
@@ -185,9 +128,7 @@ export function ActivityEventItem({
         </div>
 
         {event.description && (
-          <p className="text-xs text-text-muted mt-1 line-clamp-2">
-            {event.description}
-          </p>
+          <p className="text-xs text-text-muted mt-1 line-clamp-2">{event.description}</p>
         )}
 
         {event.actor && (

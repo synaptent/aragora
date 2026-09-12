@@ -96,9 +96,7 @@ function EmptyState({ message, sub }: { message: string; sub?: string }) {
   return (
     <div className="p-8 border border-[var(--accent)]/20 rounded text-center">
       <p className="font-theme-data text-text-muted">{message}</p>
-      {sub && (
-        <p className="font-theme-data text-text-muted/60 text-xs mt-2">{sub}</p>
-      )}
+      {sub && <p className="font-theme-data text-text-muted/60 text-xs mt-2">{sub}</p>}
     </div>
   );
 }
@@ -223,9 +221,7 @@ function ConsensusTab({
           </div>
           <div className="p-3 border border-[var(--accent)]/20 rounded bg-surface/30 text-center">
             <div className="text-2xl font-theme-data text-text">
-              {consensus.avg_confidence
-                ? `${(consensus.avg_confidence * 100).toFixed(0)}%`
-                : '-'}
+              {consensus.avg_confidence ? `${(consensus.avg_confidence * 100).toFixed(0)}%` : '-'}
             </div>
             <div className="text-xs font-theme-data text-text-muted">Avg Confidence</div>
           </div>
@@ -245,19 +241,12 @@ function ConsensusTab({
             Recent Settled Topics
           </h3>
           {topics.length === 0 ? (
-            <p className="text-xs font-theme-data text-text-muted">
-              No settled topics yet.
-            </p>
+            <p className="text-xs font-theme-data text-text-muted">No settled topics yet.</p>
           ) : (
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {topics.map((t, i) => (
-                <div
-                  key={i}
-                  className="p-2 bg-bg/50 rounded border border-[var(--accent)]/10"
-                >
-                  <div className="font-theme-data text-sm text-text truncate">
-                    {t.topic}
-                  </div>
+                <div key={i} className="p-2 bg-bg/50 rounded border border-[var(--accent)]/10">
+                  <div className="font-theme-data text-sm text-text truncate">{t.topic}</div>
                   <div className="flex items-center gap-3 mt-1 text-xs font-theme-data text-text-muted">
                     <span>
                       Confidence:{' '}
@@ -290,9 +279,7 @@ function ConsensusTab({
             Consensus Strength Distribution
           </h3>
           {strengthEntries.length === 0 ? (
-            <p className="text-xs font-theme-data text-text-muted">
-              No strength data available.
-            </p>
+            <p className="text-xs font-theme-data text-text-muted">No strength data available.</p>
           ) : (
             <div className="space-y-2">
               {strengthEntries.map(([strength, count]) => {
@@ -305,9 +292,7 @@ function ConsensusTab({
                     <div className="flex-1 h-4 bg-bg rounded overflow-hidden">
                       <div
                         className="h-full bg-[var(--accent)]/40 rounded"
-                        style={{
-                          width: `${Math.min(100, (count / total) * 100)}%`,
-                        }}
+                        style={{ width: `${Math.min(100, (count / total) * 100)}%` }}
                       />
                     </div>
                     <span className="text-xs font-theme-data text-text-muted w-8 text-right">
@@ -366,9 +351,7 @@ function ComplianceTab({
                 {Math.round(compliance.overall_score * 100)}%
               </div>
             </div>
-            <StatusDot
-              status={scoreToStatus(Math.round(compliance.overall_score * 100))}
-            />
+            <StatusDot status={scoreToStatus(Math.round(compliance.overall_score * 100))} />
           </div>
         </div>
       )}
@@ -376,9 +359,7 @@ function ComplianceTab({
       {/* Framework status grid */}
       {frameworks.length > 0 ? (
         <div>
-          <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
-            Framework Status
-          </h3>
+          <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">Framework Status</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {frameworks.map((fw, i) => (
               <div
@@ -390,9 +371,7 @@ function ComplianceTab({
                 <div className="font-bold truncate">{fw.name}</div>
                 <div className="text-xs uppercase mt-1">{fw.status.replace('_', ' ')}</div>
                 {fw.score != null && (
-                  <div className="text-xs mt-1">
-                    Score: {Math.round(fw.score * 100)}%
-                  </div>
+                  <div className="text-xs mt-1">Score: {Math.round(fw.score * 100)}%</div>
                 )}
                 {fw.last_assessed && (
                   <div className="text-xs text-text-muted/70 mt-1">
@@ -413,9 +392,7 @@ function ComplianceTab({
       {/* Recent findings */}
       {findings.length > 0 && (
         <div>
-          <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
-            Recent Findings
-          </h3>
+          <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">Recent Findings</h3>
           <div className="space-y-2 max-h-60 overflow-y-auto">
             {findings.slice(0, 10).map((f, i) => {
               const sevColor: Record<string, string> = {
@@ -438,9 +415,7 @@ function ComplianceTab({
                       {f.severity}
                     </span>
                     {f.framework && (
-                      <span className="text-xs font-theme-data text-text-muted">
-                        {f.framework}
-                      </span>
+                      <span className="text-xs font-theme-data text-text-muted">{f.framework}</span>
                     )}
                   </div>
                   <p className="font-theme-data text-sm text-text">{f.description}</p>
@@ -513,9 +488,7 @@ function AuditTab({
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-theme-data text-sm text-text">
-                      {ev.action}
-                    </span>
+                    <span className="font-theme-data text-sm text-text">{ev.action}</span>
                     <span className="text-xs font-theme-data text-text-muted">
                       {formatDate(ev.timestamp)}
                     </span>
@@ -559,25 +532,17 @@ function AuditTab({
                 <div className="text-lg font-theme-data text-[var(--accent)]">
                   {receipts.delivered ?? 0}
                 </div>
-                <div className="text-[10px] font-theme-data text-text-muted">
-                  Delivered
-                </div>
+                <div className="text-[10px] font-theme-data text-text-muted">Delivered</div>
               </div>
               <div className="p-2 border border-yellow-400/20 rounded bg-surface/30 text-center">
                 <div className="text-lg font-theme-data text-yellow-400">
                   {receipts.pending ?? 0}
                 </div>
-                <div className="text-[10px] font-theme-data text-text-muted">
-                  Pending
-                </div>
+                <div className="text-[10px] font-theme-data text-text-muted">Pending</div>
               </div>
               <div className="p-2 border border-red-500/20 rounded bg-surface/30 text-center">
-                <div className="text-lg font-theme-data text-red-500">
-                  {receipts.failed ?? 0}
-                </div>
-                <div className="text-[10px] font-theme-data text-text-muted">
-                  Failed
-                </div>
+                <div className="text-lg font-theme-data text-red-500">{receipts.failed ?? 0}</div>
+                <div className="text-[10px] font-theme-data text-text-muted">Failed</div>
               </div>
             </div>
           )}
@@ -591,10 +556,8 @@ function AuditTab({
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {recentReceipts.slice(0, 10).map((r, i) => {
                 const statusStyle: Record<string, string> = {
-                  delivered:
-                    'text-[var(--accent)] border-[var(--accent)]/30 bg-[var(--accent)]/10',
-                  pending:
-                    'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
+                  delivered: 'text-[var(--accent)] border-[var(--accent)]/30 bg-[var(--accent)]/10',
+                  pending: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10',
                   failed: 'text-red-400 border-red-400/30 bg-red-400/10',
                 };
                 return (
@@ -652,8 +615,7 @@ function AgentsTab({
   isLoading: boolean;
 }) {
   const agents: AgentRanking[] = useMemo(() => {
-    const raw =
-      leaderboard?.agents ?? leaderboard?.rankings ?? leaderboard?.leaderboard ?? [];
+    const raw = leaderboard?.agents ?? leaderboard?.rankings ?? leaderboard?.leaderboard ?? [];
     return [...raw].sort((a, b) => b.elo - a.elo);
   }, [leaderboard]);
 
@@ -675,24 +637,16 @@ function AgentsTab({
         <table className="w-full">
           <thead className="bg-surface/50 border-b border-[var(--accent)]/20">
             <tr>
-              <th className="p-3 text-left font-theme-data text-xs text-text-muted">
-                RANK
-              </th>
-              <th className="p-3 text-left font-theme-data text-xs text-text-muted">
-                AGENT
-              </th>
-              <th className="p-3 text-right font-theme-data text-xs text-text-muted">
-                ELO
-              </th>
+              <th className="p-3 text-left font-theme-data text-xs text-text-muted">RANK</th>
+              <th className="p-3 text-left font-theme-data text-xs text-text-muted">AGENT</th>
+              <th className="p-3 text-right font-theme-data text-xs text-text-muted">ELO</th>
               <th className="p-3 text-right font-theme-data text-xs text-text-muted hidden md:table-cell">
                 WINS
               </th>
               <th className="p-3 text-right font-theme-data text-xs text-text-muted hidden md:table-cell">
                 LOSSES
               </th>
-              <th className="p-3 text-right font-theme-data text-xs text-text-muted">
-                WIN RATE
-              </th>
+              <th className="p-3 text-right font-theme-data text-xs text-text-muted">WIN RATE</th>
               <th className="p-3 text-right font-theme-data text-xs text-text-muted hidden lg:table-cell">
                 DEBATES
               </th>
@@ -704,23 +658,16 @@ function AgentsTab({
                 agent.win_rate != null
                   ? `${Math.round(agent.win_rate * 100)}%`
                   : agent.wins != null && agent.losses != null
-                    ? `${Math.round(
-                        (agent.wins / Math.max(agent.wins + agent.losses, 1)) *
-                          100,
-                      )}%`
+                    ? `${Math.round((agent.wins / Math.max(agent.wins + agent.losses, 1)) * 100)}%`
                     : '-';
               return (
                 <tr
                   key={agent.agent_id ?? agent.name}
                   className="hover:bg-surface/30 transition-colors"
                 >
-                  <td className="p-3 font-theme-data text-sm text-text-muted">
-                    {idx + 1}
-                  </td>
+                  <td className="p-3 font-theme-data text-sm text-text-muted">{idx + 1}</td>
                   <td className="p-3">
-                    <div className="font-theme-data text-sm text-[var(--accent)]">
-                      {agent.name}
-                    </div>
+                    <div className="font-theme-data text-sm text-[var(--accent)]">{agent.name}</div>
                     {agent.domains && agent.domains.length > 0 && (
                       <div className="flex gap-1 mt-1 flex-wrap">
                         {agent.domains.slice(0, 3).map((d) => (
@@ -743,9 +690,7 @@ function AgentsTab({
                   <td className="p-3 text-right font-theme-data text-sm text-text hidden md:table-cell">
                     {agent.losses ?? '-'}
                   </td>
-                  <td className="p-3 text-right font-theme-data text-sm text-text">
-                    {winRate}
-                  </td>
+                  <td className="p-3 text-right font-theme-data text-sm text-text">{winRate}</td>
                   <td className="p-3 text-right font-theme-data text-sm text-text-muted hidden lg:table-cell">
                     {agent.debates_participated ?? '-'}
                   </td>
@@ -789,8 +734,8 @@ export default function DecisionIntegrityPage() {
               {'>'} DECISION INTEGRITY WORKBENCH
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Unified view across debates, consensus, compliance, audit trails,
-              receipts, and agent performance.
+              Unified view across debates, consensus, compliance, audit trails, receipts, and agent
+              performance.
             </p>
           </div>
 
@@ -830,41 +775,27 @@ export default function DecisionIntegrityPage() {
 
           <PanelErrorBoundary panelName="Compliance">
             {activeTab === 'compliance' && (
-              <ComplianceTab
-                compliance={di.compliance}
-                isLoading={di.isLoading}
-              />
+              <ComplianceTab compliance={di.compliance} isLoading={di.isLoading} />
             )}
           </PanelErrorBoundary>
 
           <PanelErrorBoundary panelName="Audit Trail">
             {activeTab === 'audit' && (
-              <AuditTab
-                audit={di.audit}
-                receipts={di.receipts}
-                isLoading={di.isLoading}
-              />
+              <AuditTab audit={di.audit} receipts={di.receipts} isLoading={di.isLoading} />
             )}
           </PanelErrorBoundary>
 
           <PanelErrorBoundary panelName="Agent Performance">
             {activeTab === 'agents' && (
-              <AgentsTab
-                leaderboard={di.leaderboard}
-                isLoading={di.isLoading}
-              />
+              <AgentsTab leaderboard={di.leaderboard} isLoading={di.isLoading} />
             )}
           </PanelErrorBoundary>
         </div>
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // DECISION INTEGRITY WORKBENCH
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // DECISION INTEGRITY WORKBENCH</p>
           <div className="flex justify-center gap-4 mt-2">
             <Link
               href="/debates"

@@ -256,11 +256,7 @@ describe('debateStore', () => {
     it('clearMessages clears all messages and resets deduplication', () => {
       const { result } = renderHook(() => useDebateStore());
 
-      const message = {
-        agent: 'Claude',
-        content: 'Hello',
-        timestamp: 1234567890,
-      };
+      const message = { agent: 'Claude', content: 'Hello', timestamp: 1234567890 };
 
       act(() => {
         result.current.addMessage(message);

@@ -35,18 +35,12 @@ export interface OpenApiSchema {
 export interface OpenApiRequestBody {
   description?: string;
   required?: boolean;
-  content?: Record<string, {
-    schema?: OpenApiSchema;
-    example?: unknown;
-  }>;
+  content?: Record<string, { schema?: OpenApiSchema; example?: unknown }>;
 }
 
 export interface OpenApiResponse {
   description?: string;
-  content?: Record<string, {
-    schema?: OpenApiSchema;
-    example?: unknown;
-  }>;
+  content?: Record<string, { schema?: OpenApiSchema; example?: unknown }>;
 }
 
 export type OpenApiStability = 'stable' | 'beta' | 'experimental' | 'internal' | 'deprecated';
@@ -66,11 +60,7 @@ export interface OpenApiOperation {
 
 export interface OpenApiSpec {
   openapi: string;
-  info: {
-    title: string;
-    version: string;
-    description?: string;
-  };
+  info: { title: string; version: string; description?: string };
   paths: Record<string, Record<string, OpenApiOperation>>;
   components?: {
     schemas?: Record<string, OpenApiSchema>;
@@ -150,7 +140,10 @@ function resolveRef(spec: OpenApiSpec, ref: string): OpenApiSchema | null {
   return current as OpenApiSchema;
 }
 
-function resolveSchema(spec: OpenApiSpec, schema: OpenApiSchema | undefined): OpenApiSchema | undefined {
+function resolveSchema(
+  spec: OpenApiSpec,
+  schema: OpenApiSchema | undefined,
+): OpenApiSchema | undefined {
   if (!schema) return undefined;
   if (schema.$ref) {
     const resolved = resolveRef(spec, schema.$ref);
@@ -182,9 +175,9 @@ function parseEndpoints(spec: OpenApiSpec): ParsedEndpoint[] {
         deprecated: op.deprecated || stability === 'deprecated',
         stability,
         requiresAuth: !!(op.security && op.security.length > 0),
-        pathParams: params.filter(p => p.in === 'path'),
-        queryParams: params.filter(p => p.in === 'query'),
-        headerParams: params.filter(p => p.in === 'header'),
+        pathParams: params.filter((p) => p.in === 'path'),
+        queryParams: params.filter((p) => p.in === 'query'),
+        headerParams: params.filter((p) => p.in === 'header'),
         requestBody: op.requestBody,
         responses: op.responses || {},
       });
@@ -292,7 +285,11 @@ function buildExampleFromSchema(spec: OpenApiSpec, schema: OpenApiSchema, depth 
 // Schema display helpers
 // ---------------------------------------------------------------------------
 
-export function schemaToTypeString(spec: OpenApiSpec, schema: OpenApiSchema | undefined, depth = 0): string {
+export function schemaToTypeString(
+  spec: OpenApiSpec,
+  schema: OpenApiSchema | undefined,
+  depth = 0,
+): string {
   if (!schema) return 'unknown';
   if (depth > 4) return '...';
 
@@ -300,7 +297,7 @@ export function schemaToTypeString(spec: OpenApiSpec, schema: OpenApiSchema | un
   if (!resolved) return schema.$ref?.split('/').pop() || 'unknown';
 
   if (resolved.enum) {
-    return resolved.enum.map(v => JSON.stringify(v)).join(' | ');
+    return resolved.enum.map((v) => JSON.stringify(v)).join(' | ');
   }
 
   switch (resolved.type) {
@@ -403,7 +400,7 @@ export function useApiExplorer(): UseApiExplorerReturn {
 
   // Request builder state
   const [baseUrl, setBaseUrl] = useState(
-    typeof window !== 'undefined' ? window.location.origin : API_BASE_URL
+    typeof window !== 'undefined' ? window.location.origin : API_BASE_URL,
   );
   const [pathValues, setPathValues] = useState<Record<string, string>>({});
   const [queryValues, setQueryValues] = useState<Record<string, string>>({});
@@ -453,9 +450,7 @@ export function useApiExplorer(): UseApiExplorerReturn {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const res = await fetch(`${API_BASE_URL}/api/openapi.json`, {
-        signal: controller.signal,
-      });
+      const res = await fetch(`${API_BASE_URL}/api/openapi.json`, { signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (!res.ok) {
@@ -487,7 +482,7 @@ export function useApiExplorer(): UseApiExplorerReturn {
 
   const groups = useMemo(() => groupEndpoints(allEndpoints), [allEndpoints]);
 
-  const allTags = useMemo(() => groups.map(g => g.tag), [groups]);
+  const allTags = useMemo(() => groups.map((g) => g.tag), [groups]);
 
   // ---------------------------------------------------------------------------
   // Filtering
@@ -498,22 +493,23 @@ export function useApiExplorer(): UseApiExplorerReturn {
     const query = searchQuery.toLowerCase().trim();
 
     if (query) {
-      filtered = filtered.filter(ep =>
-        ep.path.toLowerCase().includes(query) ||
-        ep.summary.toLowerCase().includes(query) ||
-        ep.method.toLowerCase().includes(query) ||
-        ep.tag.toLowerCase().includes(query) ||
-        (ep.description || '').toLowerCase().includes(query) ||
-        (ep.operation.operationId || '').toLowerCase().includes(query)
+      filtered = filtered.filter(
+        (ep) =>
+          ep.path.toLowerCase().includes(query) ||
+          ep.summary.toLowerCase().includes(query) ||
+          ep.method.toLowerCase().includes(query) ||
+          ep.tag.toLowerCase().includes(query) ||
+          (ep.description || '').toLowerCase().includes(query) ||
+          (ep.operation.operationId || '').toLowerCase().includes(query),
       );
     }
 
     if (methodFilter) {
-      filtered = filtered.filter(ep => ep.method === methodFilter);
+      filtered = filtered.filter((ep) => ep.method === methodFilter);
     }
 
     if (tagFilter) {
-      filtered = filtered.filter(ep => ep.tag === tagFilter);
+      filtered = filtered.filter((ep) => ep.tag === tagFilter);
     }
 
     return groupEndpoints(filtered);
@@ -521,7 +517,7 @@ export function useApiExplorer(): UseApiExplorerReturn {
 
   const filteredCount = useMemo(
     () => filteredGroups.reduce((sum, g) => sum + g.endpoints.length, 0),
-    [filteredGroups]
+    [filteredGroups],
   );
 
   const totalCount = allEndpoints.length;
@@ -530,41 +526,44 @@ export function useApiExplorer(): UseApiExplorerReturn {
   // Selection
   // ---------------------------------------------------------------------------
 
-  const selectEndpoint = useCallback((ep: ParsedEndpoint | null) => {
-    setSelectedEndpoint(ep);
-    setResponse(null);
-    setRequestError(null);
+  const selectEndpoint = useCallback(
+    (ep: ParsedEndpoint | null) => {
+      setSelectedEndpoint(ep);
+      setResponse(null);
+      setRequestError(null);
 
-    if (ep && spec) {
-      // Reset form values
-      setPathValues({});
-      setQueryValues({});
-      setBodyValue(generateExampleBody(spec, ep.requestBody));
-    }
-  }, [spec]);
+      if (ep && spec) {
+        // Reset form values
+        setPathValues({});
+        setQueryValues({});
+        setBodyValue(generateExampleBody(spec, ep.requestBody));
+      }
+    },
+    [spec],
+  );
 
   // ---------------------------------------------------------------------------
   // Request builder helpers
   // ---------------------------------------------------------------------------
 
   const setPathValue = useCallback((name: string, value: string) => {
-    setPathValues(prev => ({ ...prev, [name]: value }));
+    setPathValues((prev) => ({ ...prev, [name]: value }));
   }, []);
 
   const setQueryValue = useCallback((name: string, value: string) => {
-    setQueryValues(prev => ({ ...prev, [name]: value }));
+    setQueryValues((prev) => ({ ...prev, [name]: value }));
   }, []);
 
   const addHeader = useCallback(() => {
-    setCustomHeaders(prev => [...prev, { key: '', value: '' }]);
+    setCustomHeaders((prev) => [...prev, { key: '', value: '' }]);
   }, []);
 
   const removeHeader = useCallback((idx: number) => {
-    setCustomHeaders(prev => prev.filter((_, i) => i !== idx));
+    setCustomHeaders((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
   const updateHeader = useCallback((idx: number, field: 'key' | 'value', val: string) => {
-    setCustomHeaders(prev => {
+    setCustomHeaders((prev) => {
       const next = [...prev];
       next[idx] = { ...next[idx], [field]: val };
       return next;
@@ -613,9 +612,7 @@ export function useApiExplorer(): UseApiExplorerReturn {
     const start = performance.now();
 
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
@@ -667,7 +664,7 @@ export function useApiExplorer(): UseApiExplorerReturn {
         elapsed,
       };
 
-      setHistory(prev => {
+      setHistory((prev) => {
         const next = [entry, ...prev].slice(0, MAX_HISTORY);
         try {
           localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
@@ -701,20 +698,29 @@ export function useApiExplorer(): UseApiExplorerReturn {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  const getExampleBody = useCallback((ep: ParsedEndpoint): string => {
-    if (!spec) return '';
-    return generateExampleBody(spec, ep.requestBody);
-  }, [spec]);
+  const getExampleBody = useCallback(
+    (ep: ParsedEndpoint): string => {
+      if (!spec) return '';
+      return generateExampleBody(spec, ep.requestBody);
+    },
+    [spec],
+  );
 
-  const resolveSchemaRef = useCallback((schema: OpenApiSchema | undefined): OpenApiSchema | undefined => {
-    if (!spec || !schema) return undefined;
-    return resolveSchema(spec, schema);
-  }, [spec]);
+  const resolveSchemaRef = useCallback(
+    (schema: OpenApiSchema | undefined): OpenApiSchema | undefined => {
+      if (!spec || !schema) return undefined;
+      return resolveSchema(spec, schema);
+    },
+    [spec],
+  );
 
-  const getSchemaTypeString = useCallback((schema: OpenApiSchema | undefined): string => {
-    if (!spec) return 'unknown';
-    return schemaToTypeString(spec, schema);
-  }, [spec]);
+  const getSchemaTypeString = useCallback(
+    (schema: OpenApiSchema | undefined): string => {
+      if (!spec) return 'unknown';
+      return schemaToTypeString(spec, schema);
+    },
+    [spec],
+  );
 
   // ---------------------------------------------------------------------------
   // Cleanup

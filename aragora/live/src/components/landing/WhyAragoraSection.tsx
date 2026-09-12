@@ -22,7 +22,7 @@ const CARDS = [
     accent: 'acid-green',
     indicator: 'acid-cyan',
     content:
-      "We track prediction accuracy over time. Know which agents are confidently wrong vs genuinely uncertain. Trust earned through track record, not marketing.",
+      'We track prediction accuracy over time. Know which agents are confidently wrong vs genuinely uncertain. Trust earned through track record, not marketing.',
   },
 ];
 
@@ -33,17 +33,22 @@ export function WhyAragoraSection() {
         <SectionHeader title="WHY ARAGORA?" />
 
         <p className="text-text-muted font-theme-data text-xs text-center mb-8 max-w-xl mx-auto">
-          Unlike single-model chatbots, Aragora orchestrates 15+ AI models to debate every angle of your question
-          and deliver a verdict with confidence scores, minority opinions, and a full audit trail.
+          Unlike single-model chatbots, Aragora orchestrates 15+ AI models to debate every angle of
+          your question and deliver a verdict with confidence scores, minority opinions, and a full
+          audit trail.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl mx-auto">
           {CARDS.map((card) => (
             <div key={card.title} className={`border border-${card.accent}/30 p-4 bg-surface/30`}>
-              <h3 className={`text-${card.accent} font-theme-data text-sm mb-3 flex items-center gap-2`}>
+              <h3
+                className={`text-${card.accent} font-theme-data text-sm mb-3 flex items-center gap-2`}
+              >
                 <span className={`text-${card.indicator}`}>{'>'}</span> {card.title}
               </h3>
-              <p className="text-text-muted text-xs font-theme-data leading-relaxed">{card.content}</p>
+              <p className="text-text-muted text-xs font-theme-data leading-relaxed">
+                {card.content}
+              </p>
             </div>
           ))}
         </div>

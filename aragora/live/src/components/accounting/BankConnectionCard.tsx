@@ -51,7 +51,7 @@ export function BankConnectionCard() {
               type: 'depository',
               subtype: 'checking',
               balanceCurrent: 45672.89,
-              balanceAvailable: 44500.00,
+              balanceAvailable: 44500.0,
               institution: 'Chase',
               lastSync: new Date().toISOString(),
             },
@@ -61,8 +61,8 @@ export function BankConnectionCard() {
               mask: '7832',
               type: 'depository',
               subtype: 'savings',
-              balanceCurrent: 125000.00,
-              balanceAvailable: 125000.00,
+              balanceCurrent: 125000.0,
+              balanceAvailable: 125000.0,
               institution: 'Chase',
               lastSync: new Date().toISOString(),
             },
@@ -160,7 +160,8 @@ export function BankConnectionCard() {
           <div>
             <h3 className="text-sm font-theme-data text-[var(--acid-green)]">Bank Accounts</h3>
             <p className="text-xs text-[var(--text-muted)]">
-              {status.accounts.length} account{status.accounts.length !== 1 ? 's' : ''} connected via Plaid
+              {status.accounts.length} account{status.accounts.length !== 1 ? 's' : ''} connected
+              via Plaid
             </p>
           </div>
         </div>
@@ -183,13 +184,15 @@ export function BankConnectionCard() {
       {error && (
         <div className="m-4 p-3 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
           {error}
-          <button onClick={() => setError(null)} className="ml-2 hover:text-red-300">×</button>
+          <button onClick={() => setError(null)} className="ml-2 hover:text-red-300">
+            ×
+          </button>
         </div>
       )}
 
       {/* Accounts List */}
       <div className="divide-y divide-[var(--border)]">
-        {status.accounts.map(account => (
+        {status.accounts.map((account) => (
           <div key={account.id} className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-[var(--bg)] rounded flex items-center justify-center text-sm font-theme-data">
@@ -221,7 +224,10 @@ export function BankConnectionCard() {
         <div className="flex items-center justify-between">
           <span className="text-xs text-[var(--text-muted)]">Total Balance</span>
           <span className="text-lg font-theme-data text-[var(--acid-green)]">
-            ${status.accounts.reduce((sum, acc) => sum + acc.balanceCurrent, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            $
+            {status.accounts
+              .reduce((sum, acc) => sum + acc.balanceCurrent, 0)
+              .toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </span>
         </div>
         {status.lastSync && (

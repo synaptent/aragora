@@ -11,7 +11,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   Verification: 'text-emerald-400 border-emerald-400/40 bg-emerald-400/10',
   Workflow: 'text-blue-400 border-blue-400/40 bg-blue-400/10',
   Evidence: 'text-orange-400 border-orange-400/40 bg-orange-400/10',
-  'Platform': 'text-rose-400 border-rose-400/40 bg-rose-400/10',
+  Platform: 'text-rose-400 border-rose-400/40 bg-rose-400/10',
   Canvas: 'text-pink-400 border-pink-400/40 bg-pink-400/10',
   Pipeline: 'text-indigo-400 border-indigo-400/40 bg-indigo-400/10',
   Codebase: 'text-yellow-400 border-yellow-400/40 bg-yellow-400/10',
@@ -26,7 +26,9 @@ interface ToolCardProps {
 
 export function ToolCard({ tool, expanded, onToggle }: ToolCardProps) {
   const [copied, setCopied] = useState(false);
-  const colorClass = CATEGORY_COLORS[tool.category] || 'text-[var(--text-muted)] border-[var(--border)] bg-[var(--surface)]';
+  const colorClass =
+    CATEGORY_COLORS[tool.category] ||
+    'text-[var(--text-muted)] border-[var(--border)] bg-[var(--surface)]';
 
   const requiredParams = tool.parameters.filter((p) => p.required);
   const optionalParams = tool.parameters.filter((p) => !p.required);
@@ -46,7 +48,9 @@ export function ToolCard({ tool, expanded, onToggle }: ToolCardProps) {
   return (
     <div
       className={`border bg-[var(--surface)]/50 rounded transition-colors ${
-        expanded ? 'border-[var(--acid-green)]/50' : 'border-[var(--border)] hover:border-[var(--acid-green)]/30'
+        expanded
+          ? 'border-[var(--acid-green)]/50'
+          : 'border-[var(--border)] hover:border-[var(--acid-green)]/30'
       }`}
     >
       {/* Collapsed header — always visible */}
@@ -59,7 +63,9 @@ export function ToolCard({ tool, expanded, onToggle }: ToolCardProps) {
             <span className="font-theme-data text-sm text-[var(--acid-green)] font-bold truncate">
               {tool.name}
             </span>
-            <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-theme-data border rounded ${colorClass}`}>
+            <span
+              className={`shrink-0 px-1.5 py-0.5 text-[10px] font-theme-data border rounded ${colorClass}`}
+            >
               {tool.category}
             </span>
           </div>
@@ -80,9 +86,7 @@ export function ToolCard({ tool, expanded, onToggle }: ToolCardProps) {
       {/* Expanded details */}
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-[var(--border)]">
-          <p className="text-xs font-theme-data text-[var(--text)] pt-3">
-            {tool.description}
-          </p>
+          <p className="text-xs font-theme-data text-[var(--text)] pt-3">{tool.description}</p>
 
           {/* Parameter table */}
           {tool.parameters.length > 0 && (
@@ -120,7 +124,9 @@ export function ToolCard({ tool, expanded, onToggle }: ToolCardProps) {
 
           {/* SDK snippet */}
           <div className="relative group">
-            <div className="text-[10px] font-theme-data text-[var(--text-muted)] mb-1">SDK Usage</div>
+            <div className="text-[10px] font-theme-data text-[var(--text-muted)] mb-1">
+              SDK Usage
+            </div>
             <pre className="bg-[var(--bg)] border border-[var(--border)] rounded p-3 text-xs font-theme-data text-[var(--text)] overflow-x-auto">
               {snippet}
             </pre>

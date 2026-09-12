@@ -11,7 +11,7 @@ import type { TranscriptMessageCardProps, CruxClaim } from './types';
  */
 function findCruxMatches(
   content: string,
-  cruxes: CruxClaim[]
+  cruxes: CruxClaim[],
 ): Array<{ start: number; end: number; crux: CruxClaim }> {
   const matches: Array<{ start: number; end: number; crux: CruxClaim }> = [];
   const contentLower = content.toLowerCase();
@@ -61,13 +61,7 @@ function findCruxMatches(
 /**
  * Render content with crux highlighting.
  */
-function HighlightedContent({
-  content,
-  cruxes,
-}: {
-  content: string;
-  cruxes?: CruxClaim[];
-}) {
+function HighlightedContent({ content, cruxes }: { content: string; cruxes?: CruxClaim[] }) {
   const parts = useMemo(() => {
     if (!cruxes || cruxes.length === 0) {
       return [{ text: content, isHighlight: false, crux: undefined }];
@@ -84,10 +78,7 @@ function HighlightedContent({
     for (const match of matches) {
       // Add text before the match
       if (match.start > lastEnd) {
-        result.push({
-          text: content.slice(lastEnd, match.start),
-          isHighlight: false,
-        });
+        result.push({ text: content.slice(lastEnd, match.start), isHighlight: false });
       }
       // Add the highlighted match
       result.push({
@@ -100,10 +91,7 @@ function HighlightedContent({
 
     // Add remaining text
     if (lastEnd < content.length) {
-      result.push({
-        text: content.slice(lastEnd),
-        isHighlight: false,
-      });
+      result.push({ text: content.slice(lastEnd), isHighlight: false });
     }
 
     return result;
@@ -125,13 +113,17 @@ function HighlightedContent({
           </span>
         ) : (
           <span key={i}>{part.text}</span>
-        )
+        ),
       )}
     </>
   );
 }
 
-export function TranscriptMessageCard({ message, cruxes, onChallenge }: TranscriptMessageCardProps) {
+export function TranscriptMessageCard({
+  message,
+  cruxes,
+  onChallenge,
+}: TranscriptMessageCardProps) {
   const colors = getAgentColors(message.agent || 'system');
   const [showThinking, setShowThinking] = useState(false);
 
@@ -202,7 +194,10 @@ export function TranscriptMessageCard({ message, cruxes, onChallenge }: Transcri
           </span>
           {/* Confidence indicator: colored dot + percentage */}
           {hasConfidence && (
-            <span className="flex items-center gap-1" title={`Confidence: ${Math.round(confidenceValue * 100)}%`}>
+            <span
+              className="flex items-center gap-1"
+              title={`Confidence: ${Math.round(confidenceValue * 100)}%`}
+            >
               <span className={`w-1.5 h-1.5 rounded-full ${confidenceDotColor}`} />
               <span className="text-[10px] font-theme-data text-text-muted">
                 {Math.round(confidenceValue * 100)}%
@@ -211,7 +206,9 @@ export function TranscriptMessageCard({ message, cruxes, onChallenge }: Transcri
           )}
           {message.calibration && <TrustBadge calibration={message.calibration} size="sm" />}
           {message.role && (
-            <span className="text-xs text-text-muted border border-text-muted/30 px-1">{message.role}</span>
+            <span className="text-xs text-text-muted border border-text-muted/30 px-1">
+              {message.role}
+            </span>
           )}
           {/* Reasoning phase label */}
           {message.reasoning_phase && (
@@ -253,7 +250,9 @@ export function TranscriptMessageCard({ message, cruxes, onChallenge }: Transcri
       {/* Collapsible thinking section */}
       {showThinking && message.thinking && (
         <div className="mb-3 border border-[var(--acid-cyan)]/20 bg-bg/50 p-2">
-          <div className="text-[10px] font-theme-data text-[var(--acid-cyan)] uppercase mb-1">Agent Thinking</div>
+          <div className="text-[10px] font-theme-data text-[var(--acid-cyan)] uppercase mb-1">
+            Agent Thinking
+          </div>
           <div className="text-xs text-text-muted font-theme-data whitespace-pre-wrap pl-2 border-l border-[var(--acid-cyan)]/30">
             {message.thinking}
           </div>

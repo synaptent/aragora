@@ -23,17 +23,13 @@ describe('AgentPanel', () => {
   const createAgentMessageEvent = (
     agent: string,
     content: string,
-    options: Partial<StreamEvent> = {}
+    options: Partial<StreamEvent> = {},
   ): StreamEvent => ({
     type: 'agent_message',
     timestamp: Date.now() / 1000,
     agent,
     round: 1,
-    data: {
-      content,
-      role: 'proposer',
-      ...options.data,
-    },
+    data: { content, role: 'proposer', ...options.data },
     ...options,
   });
 
@@ -41,50 +37,34 @@ describe('AgentPanel', () => {
     agent: string,
     target: string,
     issues: string[],
-    options: Partial<StreamEvent> = {}
+    options: Partial<StreamEvent> = {},
   ): StreamEvent => ({
     type: 'critique',
     timestamp: Date.now() / 1000,
     agent,
     round: 1,
-    data: {
-      target,
-      issues,
-      severity: 0.7,
-      ...options.data,
-    },
+    data: { target, issues, severity: 0.7, ...options.data },
     ...options,
   });
 
-  const createVoteEvent = (
-    agent: string,
-    vote: string,
-    confidence: number
-  ): StreamEvent => ({
+  const createVoteEvent = (agent: string, vote: string, confidence: number): StreamEvent => ({
     type: 'vote',
     timestamp: Date.now() / 1000,
     agent,
     round: 1,
-    data: {
-      vote,
-      confidence,
-    },
+    data: { vote, confidence },
   });
 
   const createConsensusEvent = (
     reached: boolean,
     confidence: number,
-    answer: string
+    answer: string,
   ): StreamEvent => ({
     type: 'consensus',
     timestamp: Date.now() / 1000,
     agent: null,
     round: 1,
-    data: {
-      reached,
-      confidence,
-      answer,
-    },
+    data: { reached, confidence, answer },
   });
 
   describe('empty state', () => {
@@ -154,9 +134,7 @@ describe('AgentPanel', () => {
   });
 
   describe('expand/collapse functionality', () => {
-    const events: StreamEvent[] = [
-      createAgentMessageEvent('claude', 'Expandable content here'),
-    ];
+    const events: StreamEvent[] = [createAgentMessageEvent('claude', 'Expandable content here')];
 
     it('shows expand button on event cards', () => {
       render(<AgentPanel events={events} />);
@@ -168,9 +146,7 @@ describe('AgentPanel', () => {
       const user = userEvent.setup();
       render(<AgentPanel events={events} />);
 
-      const expandButton = screen.getByRole('button', {
-        name: /Expand claude event details/i,
-      });
+      const expandButton = screen.getByRole('button', { name: /Expand claude event details/i });
       await actUser(() => user.click(expandButton));
 
       expect(screen.getByText('[-]')).toBeInTheDocument();
@@ -181,9 +157,7 @@ describe('AgentPanel', () => {
       const longContent = 'A'.repeat(500);
       render(<AgentPanel events={[createAgentMessageEvent('claude', longContent)]} />);
 
-      const expandButton = screen.getByRole('button', {
-        name: /Expand claude event details/i,
-      });
+      const expandButton = screen.getByRole('button', { name: /Expand claude event details/i });
       await actUser(() => user.click(expandButton));
 
       // The full content should be visible in the expanded section
@@ -225,9 +199,7 @@ describe('AgentPanel', () => {
 
   describe('event types', () => {
     it('renders critique events with issue count', () => {
-      const events = [
-        createCritiqueEvent('claude', 'gpt4', ['Issue 1', 'Issue 2', 'Issue 3']),
-      ];
+      const events = [createCritiqueEvent('claude', 'gpt4', ['Issue 1', 'Issue 2', 'Issue 3'])];
       render(<AgentPanel events={events} />);
 
       expect(screen.getByText(/3 issues/)).toBeInTheDocument();
@@ -242,9 +214,7 @@ describe('AgentPanel', () => {
     });
 
     it('renders consensus events with status', () => {
-      const events = [
-        createConsensusEvent(true, 0.85, 'The agreed conclusion'),
-      ];
+      const events = [createConsensusEvent(true, 0.85, 'The agreed conclusion')];
       render(<AgentPanel events={events} />);
 
       expect(screen.getByText(/Consensus reached/)).toBeInTheDocument();
@@ -252,9 +222,7 @@ describe('AgentPanel', () => {
     });
 
     it('renders consensus not reached', () => {
-      const events = [
-        createConsensusEvent(false, 0.45, 'No agreement'),
-      ];
+      const events = [createConsensusEvent(false, 0.45, 'No agreement')];
       render(<AgentPanel events={events} />);
 
       expect(screen.getByText(/not reached/)).toBeInTheDocument();
@@ -340,9 +308,7 @@ describe('AgentPanel', () => {
       const events = [createAgentMessageEvent('claude', 'Message')];
       render(<AgentPanel events={events} />);
 
-      const button = screen.getByRole('button', {
-        name: /Expand claude event details/i,
-      });
+      const button = screen.getByRole('button', { name: /Expand claude event details/i });
       expect(button).toHaveAttribute('aria-expanded', 'false');
     });
 
@@ -351,9 +317,7 @@ describe('AgentPanel', () => {
       const events = [createAgentMessageEvent('claude', 'Message')];
       render(<AgentPanel events={events} />);
 
-      const button = screen.getByRole('button', {
-        name: /Expand claude event details/i,
-      });
+      const button = screen.getByRole('button', { name: /Expand claude event details/i });
       await actUser(() => user.click(button));
 
       expect(button).toHaveAttribute('aria-expanded', 'true');
@@ -375,9 +339,7 @@ describe('AgentPanel', () => {
   describe('timestamp display', () => {
     it('formats timestamps correctly', () => {
       const timestamp = new Date('2026-01-12T15:30:45').getTime() / 1000;
-      const events = [
-        createAgentMessageEvent('claude', 'Message', { timestamp }),
-      ];
+      const events = [createAgentMessageEvent('claude', 'Message', { timestamp })];
 
       render(<AgentPanel events={events} />);
 

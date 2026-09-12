@@ -61,20 +61,14 @@ export function DeliberationTracker({
   // Calculate stats
   const stats = useMemo(() => {
     const active = deliberations.filter(
-      (d) => d.status === 'pending' || d.status === 'in_progress'
+      (d) => d.status === 'pending' || d.status === 'in_progress',
     ).length;
-    const consensus = deliberations.filter(
-      (d) => d.status === 'consensus_reached'
-    ).length;
-    const noConsensus = deliberations.filter(
-      (d) => d.status === 'no_consensus'
-    ).length;
+    const consensus = deliberations.filter((d) => d.status === 'consensus_reached').length;
+    const noConsensus = deliberations.filter((d) => d.status === 'no_consensus').length;
     const failed = deliberations.filter(
-      (d) => d.status === 'failed' || d.status === 'timeout'
+      (d) => d.status === 'failed' || d.status === 'timeout',
     ).length;
-    const slaViolations = deliberations.filter(
-      (d) => d.sla_status === 'violated'
-    ).length;
+    const slaViolations = deliberations.filter((d) => d.sla_status === 'violated').length;
 
     return { active, consensus, noConsensus, failed, slaViolations, total: deliberations.length };
   }, [deliberations]);
@@ -130,9 +124,7 @@ export function DeliberationTracker({
               <span className="w-2 h-2 rounded-full bg-[var(--acid-cyan)] animate-pulse" />
             )}
             <h3 className="font-theme-data text-sm text-[var(--accent)]">{title}</h3>
-            <span className="text-xs text-text-muted font-theme-data">
-              ({stats.active} active)
-            </span>
+            <span className="text-xs text-text-muted font-theme-data">({stats.active} active)</span>
           </div>
 
           {onViewAll && (

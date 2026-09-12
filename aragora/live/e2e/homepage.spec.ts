@@ -17,9 +17,9 @@ async function openResponsiveHeaderNav(page: Page): Promise<Locator> {
     await mobileMenuButton.click();
   }
 
-  const mobileNav = page.locator('nav').filter({
-    has: page.getByRole('link', { name: 'Sign up free' }),
-  });
+  const mobileNav = page
+    .locator('nav')
+    .filter({ has: page.getByRole('link', { name: 'Sign up free' }) });
   await expect(mobileNav).toBeVisible();
   return mobileNav;
 }
@@ -88,7 +88,7 @@ test.describe('Homepage', () => {
         !err.includes('ERR_FAILED') &&
         !err.includes('404') &&
         !err.includes('429') &&
-        !err.includes('Too Many Requests')
+        !err.includes('Too Many Requests'),
     );
 
     expect(unexpectedErrors).toHaveLength(0);

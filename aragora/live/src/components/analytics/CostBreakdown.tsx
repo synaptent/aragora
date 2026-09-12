@@ -73,7 +73,9 @@ export function CostBreakdown({
   if (loading) {
     return (
       <div className={`card p-4 ${className}`}>
-        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">{'>'} {title}</h3>
+        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">
+          {'>'} {title}
+        </h3>
         <div className="animate-pulse space-y-4">
           <div className="h-24 bg-surface rounded" />
           <div className="space-y-2">
@@ -89,7 +91,9 @@ export function CostBreakdown({
   if (data.length === 0) {
     return (
       <div className={`card p-4 ${className}`}>
-        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">{'>'} {title}</h3>
+        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">
+          {'>'} {title}
+        </h3>
         <div className="text-center text-text-muted font-theme-data text-sm py-8">
           No cost data available
         </div>
@@ -122,12 +126,16 @@ export function CostBreakdown({
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="font-theme-data text-sm text-[var(--accent)]">{'>'} {title}</h3>
+          <h3 className="font-theme-data text-sm text-[var(--accent)]">
+            {'>'} {title}
+          </h3>
           {subtitle && <p className="text-text-muted text-xs font-theme-data">{subtitle}</p>}
         </div>
         <div className="text-right">
           <div className="text-text-muted text-xs font-theme-data">Total</div>
-          <div className="text-[var(--accent)] font-theme-data text-xl">{formatCurrency(totalCost)}</div>
+          <div className="text-[var(--accent)] font-theme-data text-xl">
+            {formatCurrency(totalCost)}
+          </div>
         </div>
       </div>
 
@@ -148,12 +156,7 @@ export function CostBreakdown({
               />
             ))}
             {/* Center hole for donut effect */}
-            <circle
-              cx="50"
-              cy="50"
-              r="25"
-              className="fill-bg"
-            />
+            <circle cx="50" cy="50" r="25" className="fill-bg" />
           </svg>
           {/* Center label */}
           {hoveredIndex !== null && processedData[hoveredIndex] && (

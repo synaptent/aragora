@@ -28,29 +28,16 @@ test.describe('Multi-Tenant Data Isolation', () => {
   };
 
   test.describe('Debate Data Isolation', () => {
-    test('tenant A cannot access tenant B debates via API', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('tenant A cannot access tenant B debates via API', async ({ page, aragoraPage }) => {
       // Login as Tenant A
       await page.addInitScript((tenantA) => {
         localStorage.setItem('auth_token', tenantA.token);
-        localStorage.setItem(
-          'user',
-          JSON.stringify({
-            id: tenantA.userId,
-            org_id: tenantA.orgId,
-          })
-        );
+        localStorage.setItem('user', JSON.stringify({ id: tenantA.userId, org_id: tenantA.orgId }));
       }, tenantA);
 
       // Mock /me endpoint for Tenant A
       await mockApiResponse(page, '**/api/auth/me', {
-        user: {
-          id: tenantA.userId,
-          email: tenantA.email,
-          org_id: tenantA.orgId,
-        },
+        user: { id: tenantA.userId, email: tenantA.email, org_id: tenantA.orgId },
       });
 
       // Mock debates list - should only return Tenant A debates
@@ -65,10 +52,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
       await page.route('**/api/debates/debate-b-1', async (route) => {
         await route.fulfill({
           status: 403,
-          body: JSON.stringify({
-            error: 'Access denied',
-            code: 'TENANT_ISOLATION_VIOLATION',
-          }),
+          body: JSON.stringify({ error: 'Access denied', code: 'TENANT_ISOLATION_VIOLATION' }),
         });
       });
 
@@ -81,19 +65,14 @@ test.describe('Multi-Tenant Data Isolation', () => {
 
       // Attempt to directly access Tenant B's debate
       const response = await page.request.get('/api/debates/debate-b-1', {
-        headers: {
-          Authorization: `Bearer ${tenantA.token}`,
-        },
+        headers: { Authorization: `Bearer ${tenantA.token}` },
       });
 
       // Should be forbidden
       expect(response.status()).toBe(403);
     });
 
-    test('debate list is scoped to current tenant', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('debate list is scoped to current tenant', async ({ page, aragoraPage }) => {
       // Login as Tenant B
       await page.addInitScript((tenantB) => {
         localStorage.setItem('auth_token', tenantB.token);
@@ -101,18 +80,12 @@ test.describe('Multi-Tenant Data Isolation', () => {
 
       // Mock /me for Tenant B
       await mockApiResponse(page, '**/api/auth/me', {
-        user: {
-          id: tenantB.userId,
-          email: tenantB.email,
-          org_id: tenantB.orgId,
-        },
+        user: { id: tenantB.userId, email: tenantB.email, org_id: tenantB.orgId },
       });
 
       // Tenant B's debates only
       await mockApiResponse(page, '**/api/debates*', {
-        debates: [
-          { id: 'debate-b-1', topic: 'Tenant B Analysis', org_id: tenantB.orgId },
-        ],
+        debates: [{ id: 'debate-b-1', topic: 'Tenant B Analysis', org_id: tenantB.orgId }],
       });
 
       await page.goto('/debates');
@@ -125,10 +98,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
   });
 
   test.describe('Knowledge Mound Isolation', () => {
-    test('knowledge queries are scoped to tenant', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('knowledge queries are scoped to tenant', async ({ page, aragoraPage }) => {
       await page.addInitScript((tenantA) => {
         localStorage.setItem('auth_token', tenantA.token);
       }, tenantA);
@@ -139,13 +109,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
 
       // Mock knowledge search - should only return Tenant A's knowledge
       await mockApiResponse(page, '**/api/knowledge/search*', {
-        results: [
-          {
-            id: 'km-a-1',
-            content: 'Tenant A internal knowledge',
-            org_id: tenantA.orgId,
-          },
-        ],
+        results: [{ id: 'km-a-1', content: 'Tenant A internal knowledge', org_id: tenantA.orgId }],
       });
 
       await page.goto('/knowledge');
@@ -155,10 +119,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
       expect(page.url()).toContain('knowledge');
     });
 
-    test('tenant B cannot see tenant A knowledge via search', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('tenant B cannot see tenant A knowledge via search', async ({ page, aragoraPage }) => {
       await page.addInitScript((tenantB) => {
         localStorage.setItem('auth_token', tenantB.token);
       }, tenantB);
@@ -176,9 +137,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
       await page.route('**/api/knowledge/km-a-1', async (route) => {
         await route.fulfill({
           status: 403,
-          body: JSON.stringify({
-            error: 'Knowledge item not found or access denied',
-          }),
+          body: JSON.stringify({ error: 'Knowledge item not found or access denied' }),
         });
       });
 
@@ -190,10 +149,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
       expect(pageContent).not.toContain('Tenant A internal');
     });
 
-    test('knowledge ingestion is tenant-scoped', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('knowledge ingestion is tenant-scoped', async ({ page, aragoraPage }) => {
       let _capturedOrgId: string | null = null;
 
       await page.addInitScript((tenantA) => {
@@ -226,10 +182,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
   });
 
   test.describe('Budget Usage Isolation', () => {
-    test('budget usage shows only current tenant data', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('budget usage shows only current tenant data', async ({ page, aragoraPage }) => {
       await page.addInitScript((tenantA) => {
         localStorage.setItem('auth_token', tenantA.token);
       }, tenantA);
@@ -268,20 +221,13 @@ test.describe('Multi-Tenant Data Isolation', () => {
       await page.route('**/api/billing/usage?org_id=' + tenantB.orgId, async (route) => {
         await route.fulfill({
           status: 403,
-          body: JSON.stringify({
-            error: 'Cannot access other tenant budget data',
-          }),
+          body: JSON.stringify({ error: 'Cannot access other tenant budget data' }),
         });
       });
 
-      const response = await page.request.get(
-        `/api/billing/usage?org_id=${tenantB.orgId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${tenantA.token}`,
-          },
-        }
-      );
+      const response = await page.request.get(`/api/billing/usage?org_id=${tenantB.orgId}`, {
+        headers: { Authorization: `Bearer ${tenantA.token}` },
+      });
 
       expect(response.status()).toBe(403);
     });
@@ -316,9 +262,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
       await page.route('**/api/debates', async (route) => {
         await route.fulfill({
           status: 401,
-          body: JSON.stringify({
-            error: 'Authentication required',
-          }),
+          body: JSON.stringify({ error: 'Authentication required' }),
         });
       });
 
@@ -328,10 +272,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
   });
 
   test.describe('Cross-Tenant Resource Access', () => {
-    test('cannot access debate via direct URL with wrong tenant', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('cannot access debate via direct URL with wrong tenant', async ({ page, aragoraPage }) => {
       // Login as Tenant A
       await page.addInitScript((tenantA) => {
         localStorage.setItem('auth_token', tenantA.token);
@@ -345,9 +286,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
       await page.route('**/api/debates/debate-b-123', async (route) => {
         await route.fulfill({
           status: 403,
-          body: JSON.stringify({
-            error: 'You do not have access to this debate',
-          }),
+          body: JSON.stringify({ error: 'You do not have access to this debate' }),
         });
       });
 
@@ -365,29 +304,24 @@ test.describe('Multi-Tenant Data Isolation', () => {
         pageContent.toLowerCase().includes('not found') ||
         pageContent.toLowerCase().includes('403') ||
         pageContent.toLowerCase().includes('error') ||
-        currentUrl.includes('debates') && !currentUrl.includes('debate-b-123');
+        (currentUrl.includes('debates') && !currentUrl.includes('debate-b-123'));
 
       expect(accessDenied).toBeTruthy();
     });
 
-    test('tenant switching clears cached data', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('tenant switching clears cached data', async ({ page, aragoraPage }) => {
       // Start as Tenant A
       await page.addInitScript((tenantA) => {
         localStorage.setItem('auth_token', tenantA.token);
-        localStorage.setItem('cached_debates', JSON.stringify([
-          { id: 'debate-a-1', topic: 'Cached Tenant A Debate' },
-        ]));
+        localStorage.setItem(
+          'cached_debates',
+          JSON.stringify([{ id: 'debate-a-1', topic: 'Cached Tenant A Debate' }]),
+        );
       }, tenantA);
 
       // Mock logout and new login as Tenant B
       await page.route('**/api/auth/logout', async (route) => {
-        await route.fulfill({
-          status: 200,
-          body: JSON.stringify({ success: true }),
-        });
+        await route.fulfill({ status: 200, body: JSON.stringify({ success: true }) });
       });
 
       await page.goto('/');
@@ -410,10 +344,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
   });
 
   test.describe('Shared Resource Handling', () => {
-    test('public debates are accessible across tenants', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('public debates are accessible across tenants', async ({ page, aragoraPage }) => {
       await page.addInitScript((tenantB) => {
         localStorage.setItem('auth_token', tenantB.token);
       }, tenantB);
@@ -424,11 +355,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
 
       // Mock public debate access
       await mockApiResponse(page, '**/api/debates/public-debate-1', {
-        debate: {
-          id: 'public-debate-1',
-          topic: 'Public Debate Topic',
-          visibility: 'public',
-        },
+        debate: { id: 'public-debate-1', topic: 'Public Debate Topic', visibility: 'public' },
       });
 
       await page.goto('/debates/public-debate-1');
@@ -439,9 +366,7 @@ test.describe('Multi-Tenant Data Isolation', () => {
       expect(pageContent.toLowerCase()).not.toContain('access denied');
     });
 
-    test('shared knowledge requires explicit permission', async ({
-      page,
-    }) => {
+    test('shared knowledge requires explicit permission', async ({ page }) => {
       await page.addInitScript((tenantB) => {
         localStorage.setItem('auth_token', tenantB.token);
       }, tenantB);
@@ -453,18 +378,13 @@ test.describe('Multi-Tenant Data Isolation', () => {
           body: JSON.stringify({
             id: 'shared-km-1',
             content: 'Shared knowledge content',
-            sharing: {
-              type: 'explicit',
-              shared_with: [tenantB.orgId],
-            },
+            sharing: { type: 'explicit', shared_with: [tenantB.orgId] },
           }),
         });
       });
 
       const response = await page.request.get('/api/knowledge/shared-km-1', {
-        headers: {
-          Authorization: `Bearer ${tenantB.token}`,
-        },
+        headers: { Authorization: `Bearer ${tenantB.token}` },
       });
 
       expect(response.status()).toBe(200);

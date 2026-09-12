@@ -8,8 +8,14 @@ interface CollaborationOverlayProps {
 }
 
 const CURSOR_COLORS = [
-  '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
-  '#3b82f6', '#8b5cf6', '#ec4899',
+  '#ef4444',
+  '#f97316',
+  '#eab308',
+  '#22c55e',
+  '#06b6d4',
+  '#3b82f6',
+  '#8b5cf6',
+  '#ec4899',
 ];
 
 function getUserColor(userId: string): string {
@@ -23,10 +29,7 @@ function getUserColor(userId: string): string {
 /**
  * Overlay showing remote user cursors and presence.
  */
-export function CollaborationOverlay({
-  cursors,
-  onlineUsers,
-}: CollaborationOverlayProps) {
+export function CollaborationOverlay({ cursors, onlineUsers }: CollaborationOverlayProps) {
   return (
     <>
       {/* Remote cursors */}
@@ -34,10 +37,7 @@ export function CollaborationOverlay({
         <div
           key={cursor.userId}
           className="absolute pointer-events-none z-50 transition-all duration-75"
-          style={{
-            left: cursor.position.x,
-            top: cursor.position.y,
-          }}
+          style={{ left: cursor.position.x, top: cursor.position.y }}
         >
           <div
             className="w-3 h-3 rounded-full"
@@ -45,10 +45,7 @@ export function CollaborationOverlay({
           />
           <span
             className="text-[9px] font-theme-data px-1 rounded whitespace-nowrap ml-2"
-            style={{
-              backgroundColor: cursor.color || getUserColor(cursor.userId),
-              color: '#fff',
-            }}
+            style={{ backgroundColor: cursor.color || getUserColor(cursor.userId), color: '#fff' }}
           >
             {cursor.userId.slice(0, 8)}
           </span>

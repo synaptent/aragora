@@ -13,11 +13,7 @@ jest.mock('next/link', () => {
 const mockPush = jest.fn();
 let mockPathname = '/debate';
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    replace: jest.fn(),
-    prefetch: jest.fn(),
-  }),
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), prefetch: jest.fn() }),
   usePathname: () => mockPathname,
 }));
 
@@ -51,14 +47,14 @@ jest.mock('@/components/debate-viewer', () => ({
   ),
 }));
 
-jest.mock('../[[...id]]/fetchDebate', () => ({
-  fetchDebateClient: jest.fn(),
-}));
+jest.mock('../[[...id]]/fetchDebate', () => ({ fetchDebateClient: jest.fn() }));
 
 // Mock analysis panel components
 jest.mock('@/components/CruxPanel', () => ({
   CruxPanel: ({ debateId }: { debateId: string }) => (
-    <div data-testid="crux-panel" data-debate-id={debateId}>Crux Panel</div>
+    <div data-testid="crux-panel" data-debate-id={debateId}>
+      Crux Panel
+    </div>
   ),
 }));
 
@@ -68,7 +64,9 @@ jest.mock('@/components/AnalyticsPanel', () => ({
 
 jest.mock('@/components/VoiceInput', () => ({
   VoiceInput: ({ debateId }: { debateId: string }) => (
-    <div data-testid="voice-input" data-debate-id={debateId}>Voice Input</div>
+    <div data-testid="voice-input" data-debate-id={debateId}>
+      Voice Input
+    </div>
   ),
 }));
 
@@ -141,10 +139,7 @@ describe('DebateViewerPage (via DebateViewerWrapper)', () => {
     jest.clearAllMocks();
     setMockPathname('/debate');
     mockFetchDebateClient.mockResolvedValue(null);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
   });
 
   afterEach(() => {
@@ -159,8 +154,7 @@ describe('DebateViewerPage (via DebateViewerWrapper)', () => {
 
       await waitFor(() => {
         const hasContent =
-          screen.queryByText(/ARAGORA DEBATE VIEWER/i) ||
-          screen.queryByTestId('debate-viewer');
+          screen.queryByText(/ARAGORA DEBATE VIEWER/i) || screen.queryByTestId('debate-viewer');
         expect(hasContent).toBeTruthy();
       });
     });
@@ -176,7 +170,10 @@ describe('DebateViewerPage (via DebateViewerWrapper)', () => {
         verdict: 'Yes, with caveats',
         duration_seconds: 12.5,
         participants: ['claude', 'gpt-4'],
-        proposals: { claude: 'Microservices offer scalability...', 'gpt-4': 'Monoliths are simpler...' },
+        proposals: {
+          claude: 'Microservices offer scalability...',
+          'gpt-4': 'Monoliths are simpler...',
+        },
         critiques: [],
         votes: [
           { agent: 'claude', choice: 'Yes', confidence: 0.9 },
@@ -215,14 +212,7 @@ describe('DebateViewerPage (via DebateViewerWrapper)', () => {
         votes: [],
         final_answer: fullFinalAnswer,
         receipt_hash: 'sha256:shared',
-        messages: [
-          {
-            agent: 'critic',
-            role: 'critic',
-            round: 2,
-            content: transcriptLine,
-          },
-        ],
+        messages: [{ agent: 'critic', role: 'critic', round: 2, content: transcriptLine }],
       };
 
       renderWithProviders(<DebateViewerWrapper savedDebate={mockDebate} />);
@@ -248,10 +238,7 @@ describe('DebateViewerWrapper', () => {
     jest.clearAllMocks();
     setMockPathname('/debate');
     mockFetchDebateClient.mockResolvedValue(null);
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
   });
 
   afterEach(() => {
@@ -440,10 +427,7 @@ describe('DebateViewerWrapper', () => {
       setMockPathname('/debate');
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          debate_id: 'new-debate-id',
-        }),
+        json: () => Promise.resolve({ success: true, debate_id: 'new-debate-id' }),
       });
 
       renderWithProviders(<DebateViewerWrapper />);
@@ -456,10 +440,7 @@ describe('DebateViewerWrapper', () => {
       setMockPathname('/debate');
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          debate_id: 'created-debate-123',
-        }),
+        json: () => Promise.resolve({ success: true, debate_id: 'created-debate-123' }),
       });
 
       renderWithProviders(<DebateViewerWrapper />);

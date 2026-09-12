@@ -13,9 +13,18 @@ interface RiskRegisterProps {
 }
 
 const SEVERITY_STYLES: Record<Severity, { badge: string; text: string }> = {
-  critical: { badge: 'bg-[var(--crimson)]/20 text-[var(--crimson)] border-[var(--crimson)]/40', text: 'text-[var(--crimson)]' },
-  high: { badge: 'bg-acid-yellow/20 text-[var(--acid-yellow)] border-acid-yellow/40', text: 'text-[var(--acid-yellow)]' },
-  medium: { badge: 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/40', text: 'text-[var(--acid-cyan)]' },
+  critical: {
+    badge: 'bg-[var(--crimson)]/20 text-[var(--crimson)] border-[var(--crimson)]/40',
+    text: 'text-[var(--crimson)]',
+  },
+  high: {
+    badge: 'bg-acid-yellow/20 text-[var(--acid-yellow)] border-acid-yellow/40',
+    text: 'text-[var(--acid-yellow)]',
+  },
+  medium: {
+    badge: 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/40',
+    text: 'text-[var(--acid-cyan)]',
+  },
   low: { badge: 'bg-surface text-text-muted border-border', text: 'text-text-muted' },
 };
 
@@ -43,9 +52,7 @@ export function RiskRegister({ risks }: RiskRegisterProps) {
               {risk.severity}
             </span>
             <div className="min-w-0">
-              <div className={`font-theme-data text-xs font-bold ${style.text}`}>
-                {risk.target}
-              </div>
+              <div className={`font-theme-data text-xs font-bold ${style.text}`}>{risk.target}</div>
               <div className="font-theme-data text-xs text-text-muted mt-0.5 break-words">
                 {risk.message}
               </div>

@@ -63,12 +63,15 @@ function resolveSourcePath(srcRelPath) {
     return null;
   }
 
-  const srcParts = normalized.split('/').slice(0, -1).filter(p => p !== '.' && p !== '..');
+  const srcParts = normalized
+    .split('/')
+    .slice(0, -1)
+    .filter((p) => p !== '.' && p !== '..');
   let filtered = candidates;
   if (srcParts.length > 0) {
-    const hinted = candidates.filter(candidate => {
+    const hinted = candidates.filter((candidate) => {
       const candidateParts = candidate.split('/');
-      return srcParts.every(part => candidateParts.includes(part));
+      return srcParts.every((part) => candidateParts.includes(part));
     });
     if (hinted.length > 0) {
       filtered = hinted;
@@ -77,13 +80,10 @@ function resolveSourcePath(srcRelPath) {
 
   // Prefer non-deprecated docs when multiple matches exist.
   const nonDeprecated = filtered.filter(
-    candidate => !candidate.startsWith('deprecated/') && !candidate.includes('/deprecated/')
+    (candidate) => !candidate.startsWith('deprecated/') && !candidate.includes('/deprecated/'),
   );
   if (nonDeprecated.length === 1) {
-    return {
-      srcPath: path.join(SOURCE_DIR, nonDeprecated[0]),
-      resolvedFrom: nonDeprecated[0],
-    };
+    return { srcPath: path.join(SOURCE_DIR, nonDeprecated[0]), resolvedFrom: nonDeprecated[0] };
   }
   if (nonDeprecated.length > 0) {
     filtered = nonDeprecated;
@@ -94,7 +94,7 @@ function resolveSourcePath(srcRelPath) {
   }
 
   // As a final fallback, pick exact-case basename match with shortest path.
-  const exactCase = filtered.filter(candidate => path.basename(candidate) === base);
+  const exactCase = filtered.filter((candidate) => path.basename(candidate) === base);
   if (exactCase.length > 0) {
     exactCase.sort((a, b) => a.length - b.length || a.localeCompare(b));
     return { srcPath: path.join(SOURCE_DIR, exactCase[0]), resolvedFrom: exactCase[0] };
@@ -385,8 +385,7 @@ const DOC_MAP = {
     'contributing/2026-03-26-pmf-14-day-execution-plan.md',
   'superpowers/specs/2026-06-26-strategy-as-bounded-mission-cadence-design.md':
     'contributing/strategy-as-bounded-mission-cadence-design.md',
-  'superpowers/plans/2026-06-26-mission-cadence-m0-m1.md':
-    'contributing/mission-cadence-m0-m1.md',
+  'superpowers/plans/2026-06-26-mission-cadence-m0-m1.md': 'contributing/mission-cadence-m0-m1.md',
   'guides/CONDUCTOR_WORKFLOW.md': 'guides/conductor-workflow.md',
   'guides/SWARM_DOGFOOD_OPERATOR.md': 'guides/swarm-dogfood-operator.md',
   'guides/WORKER_PROMPT_PACK.md': 'guides/worker-prompt-pack.md',
@@ -403,10 +402,8 @@ const DOC_MAP = {
   // files (e.g. 'TAMPER_EVIDENT_TRAIL.md' from OPEN_DECISION_RECEIPT.md) resolve
   // via the source-relative lookup below, not through this table directly.
   // =========================================================================
-  'specs/ADVISORY_REVIEW_RECOGNIZABLE_HEADER.md':
-    'specs/advisory-review-recognizable-header.md',
-  'specs/ARAGORA_ROADMAP_REVISION_ADVOCATES.md':
-    'specs/aragora-roadmap-revision-advocates.md',
+  'specs/ADVISORY_REVIEW_RECOGNIZABLE_HEADER.md': 'specs/advisory-review-recognizable-header.md',
+  'specs/ARAGORA_ROADMAP_REVISION_ADVOCATES.md': 'specs/aragora-roadmap-revision-advocates.md',
   'specs/CHINESE_ROUTED_REVIEWER_FAMILIES_9071.md':
     'specs/chinese-routed-reviewer-families-9071.md',
   'specs/ESSAY_REFINEMENT_PIPELINE.md': 'specs/essay-refinement-pipeline.md',
@@ -508,7 +505,13 @@ function addFrontmatter(content, title, description, slug) {
 
   // Escape title for YAML (quote if contains special chars)
   const escapeYaml = (str) => {
-    if (str.includes(':') || str.includes('#') || str.includes("'") || str.includes('"') || str.includes('\n')) {
+    if (
+      str.includes(':') ||
+      str.includes('#') ||
+      str.includes("'") ||
+      str.includes('"') ||
+      str.includes('\n')
+    ) {
       // Double-quote and escape internal double quotes
       return `"${str.replace(/"/g, '\\"')}"`;
     }
@@ -540,7 +543,7 @@ function escapeUrlParamBracesOutsideCodeFences(content) {
   let inBraceList = false;
   return content
     .split('\n')
-    .map(line => {
+    .map((line) => {
       if (/^\s*```/.test(line)) {
         if (fenceDepth === 0) {
           fenceDepth = 1;
@@ -636,14 +639,12 @@ const REPO_MARKDOWN_LINKS = {
   'RECEIPT_CONTRACT.md': `${REPO_BLOB_BASE}/docs/RECEIPT_CONTRACT.md`,
   // Neither is in DOC_MAP (charters.yaml isn't even markdown), so ARCHITECTURE.md's
   // bare links to its siblings would otherwise survive unrewritten and 404.
-  'architecture/INTENDED_ARCHITECTURE.md':
-    `${REPO_BLOB_BASE}/docs/architecture/INTENDED_ARCHITECTURE.md`,
+  'architecture/INTENDED_ARCHITECTURE.md': `${REPO_BLOB_BASE}/docs/architecture/INTENDED_ARCHITECTURE.md`,
   'architecture/charters.yaml': `${REPO_BLOB_BASE}/docs/architecture/charters.yaml`,
   // reference/INSTALL_MATRIX.md links to these files; none are in DOC_MAP
   // (two are outside docs/ entirely), so its links to them would otherwise
   // survive unrewritten and 404.
-  'architecture/PACKAGING_AND_DISTRIBUTION.md':
-    `${REPO_BLOB_BASE}/docs/architecture/PACKAGING_AND_DISTRIBUTION.md`,
+  'architecture/PACKAGING_AND_DISTRIBUTION.md': `${REPO_BLOB_BASE}/docs/architecture/PACKAGING_AND_DISTRIBUTION.md`,
   'PACKAGING.md': `${REPO_BLOB_BASE}/docs/PACKAGING.md`,
   'SDK_QUICKSTART_PYTHON.md': `${REPO_BLOB_BASE}/docs/SDK_QUICKSTART_PYTHON.md`,
   '../DEVELOPMENT.md': `${REPO_BLOB_BASE}/DEVELOPMENT.md`,
@@ -657,18 +658,15 @@ const REPO_MARKDOWN_LINKS = {
   // the mirror), so its links to them would otherwise survive unrewritten
   // and 404.
   'status/MIGRATION_V1_TO_V2.md': `${REPO_BLOB_BASE}/docs/status/MIGRATION_V1_TO_V2.md`,
-  'deprecated/migrations/MIGRATION_0.8_to_1.0.md':
-    `${REPO_BLOB_BASE}/docs/deprecated/migrations/MIGRATION_0.8_to_1.0.md`,
-  'templates/breaking_change_template.md':
-    `${REPO_BLOB_BASE}/docs/templates/breaking_change_template.md`,
+  'deprecated/migrations/MIGRATION_0.8_to_1.0.md': `${REPO_BLOB_BASE}/docs/deprecated/migrations/MIGRATION_0.8_to_1.0.md`,
+  'templates/breaking_change_template.md': `${REPO_BLOB_BASE}/docs/templates/breaking_change_template.md`,
   'deployment/RELEASE_NOTES.md': `${REPO_BLOB_BASE}/docs/deployment/RELEASE_NOTES.md`,
   '../CHANGELOG.md': `${REPO_BLOB_BASE}/CHANGELOG.md`,
   // reference/ERROR_HANDLING.md links to this; not in DOC_MAP, so its link
   // would otherwise survive unrewritten and 404.
   'resilience/RESILIENCE_PATTERNS.md': `${REPO_BLOB_BASE}/docs/resilience/RESILIENCE_PATTERNS.md`,
   // Atlas supporting artifacts stay in the repository rather than the mirror.
-  'artifacts/2026-07-reviewer-failure-taxonomy.md':
-    `${REPO_BLOB_BASE}/docs/artifacts/2026-07-reviewer-failure-taxonomy.md`,
+  'artifacts/2026-07-reviewer-failure-taxonomy.md': `${REPO_BLOB_BASE}/docs/artifacts/2026-07-reviewer-failure-taxonomy.md`,
   'atlas/manifest.json': `${REPO_BLOB_BASE}/docs/atlas/manifest.json`,
   '../LICENSE': `${REPO_BLOB_BASE}/LICENSE`,
 };
@@ -868,7 +866,7 @@ function fixContent(content, destPath, relSrcPath) {
 
       // If not found, keep original but log it
       return match;
-    }
+    },
   );
 
   // Also fix links without .md extension when they match known docs
@@ -885,7 +883,7 @@ function fixContent(content, destPath, relSrcPath) {
         return rewriteLinkTarget(newPath, currentDir, anchor);
       }
       return match;
-    }
+    },
   );
 
   return content;
@@ -958,7 +956,7 @@ function processFile(srcRelPath, destPath) {
       ? ` (${srcRelPath} -> ${resolved.resolvedFrom})`
       : '';
   console.log(
-    `  ✓ ${path.basename(srcPath)} -> ${destPath.replace(DEST_DIR + '/', '')}${sourceNote}`
+    `  ✓ ${path.basename(srcPath)} -> ${destPath.replace(DEST_DIR + '/', '')}${sourceNote}`,
   );
   return true;
 }
@@ -969,7 +967,9 @@ function createIndexFile(category, title, description, items = []) {
 
   let itemsList = '';
   if (items.length > 0) {
-    itemsList = '\n\n## In This Section\n\n' + items.map(item => `- [${item.title}](${item.path})`).join('\n');
+    itemsList =
+      '\n\n## In This Section\n\n' +
+      items.map((item) => `- [${item.title}](${item.path})`).join('\n');
   }
 
   const content = `---
@@ -1000,10 +1000,7 @@ function docsSpecsItems() {
       const resolved = resolveSourcePath(src);
       const content = resolved ? fs.readFileSync(resolved.srcPath, 'utf8') : '';
       const title = content ? extractTitle(content) : path.basename(dest, '.md');
-      return {
-        title,
-        path: `./${path.basename(dest, '.md')}`,
-      };
+      return { title, path: `./${path.basename(dest, '.md')}` };
     })
     .sort((left, right) => left.title.localeCompare(right.title));
 }
@@ -1015,10 +1012,7 @@ function docsReferenceItems() {
       const resolved = resolveSourcePath(src);
       const content = resolved ? fs.readFileSync(resolved.srcPath, 'utf8') : '';
       const title = content ? extractTitle(content) : path.basename(dest, '.md');
-      return {
-        title,
-        path: `./${path.basename(dest, '.md')}`,
-      };
+      return { title, path: `./${path.basename(dest, '.md')}` };
     })
     .sort((left, right) => left.title.localeCompare(right.title));
 }
@@ -1049,14 +1043,26 @@ function syncDocs() {
   console.log('\\n📁 Creating category index files...\\n');
 
   const categories = [
-    { path: 'getting-started', title: 'Getting Started', desc: 'Learn how to get started with Aragora' },
-    { path: 'core-concepts', title: 'Core Concepts', desc: 'Understand the key concepts of Aragora' },
+    {
+      path: 'getting-started',
+      title: 'Getting Started',
+      desc: 'Learn how to get started with Aragora',
+    },
+    {
+      path: 'core-concepts',
+      title: 'Core Concepts',
+      desc: 'Understand the key concepts of Aragora',
+    },
     { path: 'guides', title: 'Guides', desc: 'Step-by-step guides for common tasks' },
     { path: 'api', title: 'API Reference', desc: 'Complete API documentation' },
     { path: 'deployment', title: 'Deployment', desc: 'Deploy Aragora in production' },
     { path: 'operations', title: 'Operations', desc: 'Runbooks and operational procedures' },
     { path: 'enterprise', title: 'Enterprise', desc: 'Enterprise features and compliance' },
-    { path: 'security', title: 'Security & Compliance', desc: 'Security, authentication, and compliance' },
+    {
+      path: 'security',
+      title: 'Security & Compliance',
+      desc: 'Security, authentication, and compliance',
+    },
     { path: 'admin', title: 'Administration', desc: 'Administrative features and management' },
     { path: 'advanced', title: 'Advanced Topics', desc: 'Advanced features and internals' },
     { path: 'analysis', title: 'Analysis & Metrics', desc: 'Performance analysis and benchmarks' },

@@ -180,7 +180,9 @@ export function getFeatureFlag(feature: FeatureName): FeatureFlag | undefined {
 /**
  * Get all features with a specific status
  */
-export function getFeaturesByStatus(status: FeatureStatus): Array<{ name: FeatureName; flag: FeatureFlag }> {
+export function getFeaturesByStatus(
+  status: FeatureStatus,
+): Array<{ name: FeatureName; flag: FeatureFlag }> {
   return Object.entries(FEATURES)
     .filter(([, flag]) => flag.status === status)
     .map(([name, flag]) => ({ name: name as FeatureName, flag }));

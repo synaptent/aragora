@@ -54,15 +54,12 @@ export function CommandPaletteProvider({ children }: CommandPaletteProviderProps
     return () => document.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [isOpen, toggle, close, keyboardShortcutsEnabled]);
 
-  const value = useMemo<CommandPaletteContextValue>(() => ({
-    isOpen, open, close, toggle,
-  }), [isOpen, open, close, toggle]);
-
-  return (
-    <CommandPaletteContext.Provider value={value}>
-      {children}
-    </CommandPaletteContext.Provider>
+  const value = useMemo<CommandPaletteContextValue>(
+    () => ({ isOpen, open, close, toggle }),
+    [isOpen, open, close, toggle],
   );
+
+  return <CommandPaletteContext.Provider value={value}>{children}</CommandPaletteContext.Provider>;
 }
 
 /**

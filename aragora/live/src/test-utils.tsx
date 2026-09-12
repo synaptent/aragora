@@ -73,19 +73,14 @@ interface RenderWithProvidersOptions extends Omit<RenderOptions, 'wrapper'> {
  * });
  * ```
  */
-export function renderWithProviders(
-  ui: ReactElement,
-  options: RenderWithProvidersOptions = {},
-) {
+export function renderWithProviders(ui: ReactElement, options: RenderWithProvidersOptions = {}) {
   const { authOverrides = {}, ...renderOptions } = options;
   const authValue: AuthContextType = { ...defaultAuthValues, ...authOverrides };
 
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <ThemeProvider defaultPreference="dark">
-        <AuthContext.Provider value={authValue}>
-          {children}
-        </AuthContext.Provider>
+        <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
       </ThemeProvider>
     );
   }
@@ -102,9 +97,7 @@ export function createHookWrapper(authOverrides: Partial<AuthContextType> = {}) 
   return function HookWrapper({ children }: { children: ReactNode }) {
     return (
       <ThemeProvider defaultPreference="dark">
-        <AuthContext.Provider value={authValue}>
-          {children}
-        </AuthContext.Provider>
+        <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
       </ThemeProvider>
     );
   };

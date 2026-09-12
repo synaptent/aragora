@@ -95,9 +95,18 @@ function TypingIndicator({ agent }: { agent: string }) {
           {agent.toUpperCase()}
         </span>
         <div className="flex gap-0.5 ml-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce" style={{ animationDelay: '300ms' }} />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce"
+            style={{ animationDelay: '0ms' }}
+          />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce"
+            style={{ animationDelay: '150ms' }}
+          />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-bounce"
+            style={{ animationDelay: '300ms' }}
+          />
         </div>
         <span className="text-[10px] font-theme-data text-text-muted ml-1">generating</span>
       </div>
@@ -152,14 +161,14 @@ export function StreamRenderer({
       {isStreaming && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-bg/50">
           <span className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
-          <span className={`text-[10px] font-theme-data uppercase tracking-wider ${phaseInfo.color}`}>
+          <span
+            className={`text-[10px] font-theme-data uppercase tracking-wider ${phaseInfo.color}`}
+          >
             {phaseInfo.label}
           </span>
           <span className="text-[10px] font-theme-data text-text-muted">
             | {messages.length} messages
-            {streamingMessages.size > 0 && (
-              <> | {streamingMessages.size} streaming</>
-            )}
+            {streamingMessages.size > 0 && <> | {streamingMessages.size} streaming</>}
           </span>
         </div>
       )}
@@ -171,18 +180,21 @@ export function StreamRenderer({
         className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[300px]"
       >
         {/* Waiting state */}
-        {messages.length === 0 && activeStreams.length === 0 && typingAgents.length === 0 && isStreaming && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center space-y-2">
-              <div className="text-[var(--accent)] font-theme-data text-sm animate-pulse">
-                {'>'} WAITING FOR AGENTS...
-              </div>
-              <div className="text-[10px] font-theme-data text-text-muted">
-                Agents are analyzing your question
+        {messages.length === 0 &&
+          activeStreams.length === 0 &&
+          typingAgents.length === 0 &&
+          isStreaming && (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center space-y-2">
+                <div className="text-[var(--accent)] font-theme-data text-sm animate-pulse">
+                  {'>'} WAITING FOR AGENTS...
+                </div>
+                <div className="text-[10px] font-theme-data text-text-muted">
+                  Agents are analyzing your question
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
         {/* Completed messages */}
         {messages.map((msg, idx) => {

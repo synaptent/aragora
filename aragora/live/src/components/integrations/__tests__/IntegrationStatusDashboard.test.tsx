@@ -4,11 +4,7 @@ import { MASKED_SECRET_FIELD_VALUE } from '../IntegrationSetupWizard';
 import { IntegrationStatusDashboard } from '../IntegrationStatusDashboard';
 
 jest.mock('@/components/BackendSelector', () => ({
-  useBackend: () => ({
-    config: {
-      api: 'https://api.example.com',
-    },
-  }),
+  useBackend: () => ({ config: { api: 'https://api.example.com' } }),
 }));
 
 describe('IntegrationStatusDashboard', () => {
@@ -21,12 +17,10 @@ describe('IntegrationStatusDashboard', () => {
   });
 
   it('shows an honest auth error instead of demo integrations when signed out', async () => {
-    renderWithProviders(
-      <IntegrationStatusDashboard onConfigure={jest.fn()} onEdit={jest.fn()} />
-    );
+    renderWithProviders(<IntegrationStatusDashboard onConfigure={jest.fn()} onEdit={jest.fn()} />);
 
     expect(
-      await screen.findByText('Sign in to view and manage live integrations.')
+      await screen.findByText('Sign in to view and manage live integrations.'),
     ).toBeInTheDocument();
     expect(screen.getByText('No live integration status is available.')).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
@@ -68,19 +62,16 @@ describe('IntegrationStatusDashboard', () => {
         }),
       });
 
-    renderWithProviders(
-      <IntegrationStatusDashboard onConfigure={jest.fn()} onEdit={onEdit} />,
-      {
-        authOverrides: {
-          isAuthenticated: true,
-          tokens: {
-            access_token: 'token-123',
-            refresh_token: 'refresh-123',
-            expires_at: '2099-01-01T00:00:00Z',
-          },
+    renderWithProviders(<IntegrationStatusDashboard onConfigure={jest.fn()} onEdit={onEdit} />, {
+      authOverrides: {
+        isAuthenticated: true,
+        tokens: {
+          access_token: 'token-123',
+          refresh_token: 'refresh-123',
+          expires_at: '2099-01-01T00:00:00Z',
         },
-      }
-    );
+      },
+    });
 
     expect(await screen.findByText('Slack')).toBeInTheDocument();
 
@@ -98,7 +89,7 @@ describe('IntegrationStatusDashboard', () => {
           webhook_url: 'https://hooks.slack.com/services/T000/B000/test',
           channel: '#ops',
           bot_token: MASKED_SECRET_FIELD_VALUE,
-        })
+        }),
       );
     });
 
@@ -106,10 +97,8 @@ describe('IntegrationStatusDashboard', () => {
       2,
       'https://api.example.com/api/integrations/slack',
       expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer token-123',
-        }),
-      })
+        headers: expect.objectContaining({ Authorization: 'Bearer token-123' }),
+      }),
     );
   });
 });

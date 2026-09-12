@@ -110,13 +110,15 @@ export function VoiceInput({
 
       ws.onopen = () => {
         // Send config
-        ws.send(JSON.stringify({
-          type: 'config',
-          format: 'pcm',
-          sample_rate: 16000,
-          channels: 1,
-          bits_per_sample: 16,
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'config',
+            format: 'pcm',
+            sample_rate: 16000,
+            channels: 1,
+            bits_per_sample: 16,
+          }),
+        );
       };
 
       ws.onmessage = (event) => {
@@ -151,7 +153,6 @@ export function VoiceInput({
           stopRecordingRef.current();
         }
       };
-
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to access microphone';
       handleErrorRef.current(message);
@@ -159,79 +160,80 @@ export function VoiceInput({
   }, [disabled, status, getWsUrl]);
 
   // Handle server messages
-  const handleServerMessage = useCallback((data: Record<string, unknown>) => {
-    switch (data.type) {
-      case 'ready':
-        setSessionId(data.session_id as string);
-        setStatus('recording');
-        startTimeRef.current = Date.now();
-        startAudioCaptureRef.current();
-        startDurationTimerRef.current();
-        // Check TTS availability from config
-        const config = data.config as Record<string, unknown> | undefined;
-        if (config) {
-          setTtsAvailable(Boolean(config.tts_available));
-        }
-        break;
-
-      case 'transcript':
-        const text = data.text as string;
-        const isFinal = data.is_final as boolean;
-
-        if (isFinal) {
-          setTranscript((prev) => [...prev, {
-            text,
-            timestamp: Date.now(),
-            isFinal: true,
-          }]);
-          setCurrentText('');
-
-          // Auto-submit as debate suggestion if enabled
-          if (autoSubmitSuggestion && sendSuggestion && text.trim()) {
-            sendSuggestion(text.trim());
+  const handleServerMessage = useCallback(
+    (data: Record<string, unknown>) => {
+      switch (data.type) {
+        case 'ready':
+          setSessionId(data.session_id as string);
+          setStatus('recording');
+          startTimeRef.current = Date.now();
+          startAudioCaptureRef.current();
+          startDurationTimerRef.current();
+          // Check TTS availability from config
+          const config = data.config as Record<string, unknown> | undefined;
+          if (config) {
+            setTtsAvailable(Boolean(config.tts_available));
           }
-        } else {
-          setCurrentText(text);
-        }
+          break;
 
-        onTranscript?.(text, isFinal);
-        break;
+        case 'transcript':
+          const text = data.text as string;
+          const isFinal = data.is_final as boolean;
 
-      // TTS messages
-      case 'tts_start':
-        setTtsStatus('receiving');
-        setCurrentAgent(data.agent as string || '');
-        onTTSStart?.(data.agent as string || '');
-        break;
+          if (isFinal) {
+            setTranscript((prev) => [...prev, { text, timestamp: Date.now(), isFinal: true }]);
+            setCurrentText('');
 
-      case 'tts_audio_start':
-        audioChunksRef.current = [];
-        audioFormatRef.current = data.format as string || 'mp3';
-        break;
+            // Auto-submit as debate suggestion if enabled
+            if (autoSubmitSuggestion && sendSuggestion && text.trim()) {
+              sendSuggestion(text.trim());
+            }
+          } else {
+            setCurrentText(text);
+          }
 
-      case 'tts_audio_end':
-        // All chunks received, play the audio
-        playAudio();
-        break;
+          onTranscript?.(text, isFinal);
+          break;
 
-      case 'error':
-        handleErrorRef.current(data.message as string || 'Unknown error');
-        break;
+        // TTS messages
+        case 'tts_start':
+          setTtsStatus('receiving');
+          setCurrentAgent((data.agent as string) || '');
+          onTTSStart?.((data.agent as string) || '');
+          break;
 
-      case 'warning':
+        case 'tts_audio_start':
+          audioChunksRef.current = [];
+          audioFormatRef.current = (data.format as string) || 'mp3';
+          break;
 
-        logger.warn('Voice warning:', data.message);
-        break;
-    }
+        case 'tts_audio_end':
+          // All chunks received, play the audio
+          playAudio();
+          break;
+
+        case 'error':
+          handleErrorRef.current((data.message as string) || 'Unknown error');
+          break;
+
+        case 'warning':
+          logger.warn('Voice warning:', data.message);
+          break;
+      }
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onTranscript, autoSubmitSuggestion, sendSuggestion, onTTSStart]);
+    [onTranscript, autoSubmitSuggestion, sendSuggestion, onTTSStart],
+  );
 
   // Handle binary TTS audio chunks
-  const handleBinaryMessage = useCallback((data: ArrayBuffer) => {
-    if (ttsStatus === 'receiving' || audioChunksRef.current.length > 0) {
-      audioChunksRef.current.push(new Uint8Array(data));
-    }
-  }, [ttsStatus]);
+  const handleBinaryMessage = useCallback(
+    (data: ArrayBuffer) => {
+      if (ttsStatus === 'receiving' || audioChunksRef.current.length > 0) {
+        audioChunksRef.current.push(new Uint8Array(data));
+      }
+    },
+    [ttsStatus],
+  );
 
   // Play accumulated TTS audio
   const playAudio = useCallback(() => {
@@ -281,12 +283,15 @@ export function VoiceInput({
   }, [currentAgent, onTTSEnd]);
 
   // Handle errors
-  const handleError = useCallback((message: string) => {
-    setError(message);
-    setStatus('error');
-    onError?.(message);
-    stopRecordingRef.current();
-  }, [onError]);
+  const handleError = useCallback(
+    (message: string) => {
+      setError(message);
+      setStatus('error');
+      onError?.(message);
+      stopRecordingRef.current();
+    },
+    [onError],
+  );
 
   // Start audio capture using Web Audio API
   const startAudioCapture = useCallback(() => {
@@ -312,7 +317,7 @@ export function VoiceInput({
         const int16Data = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const s = Math.max(-1, Math.min(1, inputData[i]));
-          int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
         }
 
         // Send as binary
@@ -413,7 +418,7 @@ export function VoiceInput({
           {ttsStatus === 'playing' && (
             <span className="flex items-center gap-1 text-[var(--accent)] text-xs">
               <svg className="w-3 h-3 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
               </svg>
               Playing{currentAgent ? `: ${currentAgent}` : ''}
             </span>
@@ -436,9 +441,10 @@ export function VoiceInput({
               disabled={disabled}
               className={`
                 flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all
-                ${disabled
-                  ? 'bg-surface text-text-muted cursor-not-allowed'
-                  : 'bg-accent hover:bg-accent/80 text-white'
+                ${
+                  disabled
+                    ? 'bg-surface text-text-muted cursor-not-allowed'
+                    : 'bg-accent hover:bg-accent/80 text-white'
                 }
               `}
               aria-label="Start recording"
@@ -530,22 +536,16 @@ export function VoiceInput({
         {(transcript.length > 0 || currentText) && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="text-xs text-text-muted uppercase tracking-wider">
-                Transcript
-              </div>
+              <div className="text-xs text-text-muted uppercase tracking-wider">Transcript</div>
               {autoSubmitSuggestion && sendSuggestion && (
-                <div className="text-xs text-[var(--accent)]">
-                  Auto-submitting to debate
-                </div>
+                <div className="text-xs text-[var(--accent)]">Auto-submitting to debate</div>
               )}
             </div>
             <div className="bg-surface border border-border rounded p-3 max-h-48 overflow-y-auto">
               <p className="text-sm leading-relaxed">
                 {getFullTranscript()}
                 {currentText && (
-                  <span className="text-text-muted animate-pulse">
-                    {' '}{currentText}
-                  </span>
+                  <span className="text-text-muted animate-pulse"> {currentText}</span>
                 )}
               </p>
             </div>
@@ -577,7 +577,9 @@ export function VoiceInput({
         {status === 'idle' && transcript.length === 0 && (
           <div className="text-sm text-text-muted">
             <p>Click &quot;Start Recording&quot; to speak your argument.</p>
-            <p className="mt-1 text-xs">Your speech will be transcribed in real-time and can be added to the debate.</p>
+            <p className="mt-1 text-xs">
+              Your speech will be transcribed in real-time and can be added to the debate.
+            </p>
           </div>
         )}
 
@@ -586,7 +588,7 @@ export function VoiceInput({
           <div className="flex items-center justify-between pt-2 border-t border-border">
             <div className="flex items-center gap-2 text-xs text-text-muted">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
               </svg>
               {ttsAvailable ? (
                 <span className="text-[var(--accent)]">Voice responses enabled</span>

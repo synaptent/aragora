@@ -23,7 +23,9 @@ export function IntegrationsTab({
   onSave,
   saveStatus,
 }: IntegrationsTabProps) {
-  const [slackTestStatus, setSlackTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [slackTestStatus, setSlackTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>(
+    'idle',
+  );
   const [slackNotifications, setSlackNotifications] = useState<SlackNotifications>({
     notify_on_consensus: true,
     notify_on_debate_end: true,
@@ -48,7 +50,12 @@ export function IntegrationsTab({
   };
 
   return (
-    <div className="space-y-6" role="tabpanel" id="panel-integrations" aria-labelledby="tab-integrations">
+    <div
+      className="space-y-6"
+      role="tabpanel"
+      id="panel-integrations"
+      aria-labelledby="tab-integrations"
+    >
       <div className="card p-6">
         <h3 className="font-theme-data text-[var(--accent)] mb-4">Slack Integration</h3>
         <p className="font-theme-data text-xs text-text-muted mb-4">
@@ -56,7 +63,9 @@ export function IntegrationsTab({
         </p>
         <div className="space-y-4">
           <div>
-            <label className="font-theme-data text-xs text-text-muted block mb-2">Webhook URL</label>
+            <label className="font-theme-data text-xs text-text-muted block mb-2">
+              Webhook URL
+            </label>
             <div className="flex gap-2">
               <input
                 type="url"
@@ -70,45 +79,73 @@ export function IntegrationsTab({
                 onClick={handleSlackTest}
                 disabled={!slackWebhook || slackTestStatus === 'testing'}
                 className={`px-4 py-2 font-theme-data text-sm rounded transition-colors disabled:opacity-50 ${
-                  slackTestStatus === 'success' ? 'bg-[var(--accent)]/20 border border-[var(--accent)]/40 text-[var(--accent)]' :
-                  slackTestStatus === 'error' ? 'bg-acid-red/20 border border-acid-red/40 text-acid-red' :
-                  'bg-surface border border-[var(--accent)]/30 text-text hover:border-[var(--accent)]/50'
+                  slackTestStatus === 'success'
+                    ? 'bg-[var(--accent)]/20 border border-[var(--accent)]/40 text-[var(--accent)]'
+                    : slackTestStatus === 'error'
+                      ? 'bg-acid-red/20 border border-acid-red/40 text-acid-red'
+                      : 'bg-surface border border-[var(--accent)]/30 text-text hover:border-[var(--accent)]/50'
                 }`}
               >
-                {slackTestStatus === 'testing' ? '...' :
-                 slackTestStatus === 'success' ? 'Sent!' :
-                 slackTestStatus === 'error' ? 'Failed' : 'Test'}
+                {slackTestStatus === 'testing'
+                  ? '...'
+                  : slackTestStatus === 'success'
+                    ? 'Sent!'
+                    : slackTestStatus === 'error'
+                      ? 'Failed'
+                      : 'Test'}
               </button>
             </div>
           </div>
 
           {slackWebhook && (
             <div className="pt-4 border-t border-[var(--accent)]/20">
-              <h4 className="font-theme-data text-xs text-[var(--acid-cyan)] mb-3">NOTIFICATION SETTINGS</h4>
+              <h4 className="font-theme-data text-xs text-[var(--acid-cyan)] mb-3">
+                NOTIFICATION SETTINGS
+              </h4>
               <div className="space-y-3">
                 <ToggleSwitch
                   label="Consensus Reached"
                   description="Alert when debates reach consensus"
                   checked={slackNotifications.notify_on_consensus}
-                  onChange={() => setSlackNotifications(prev => ({ ...prev, notify_on_consensus: !prev.notify_on_consensus }))}
+                  onChange={() =>
+                    setSlackNotifications((prev) => ({
+                      ...prev,
+                      notify_on_consensus: !prev.notify_on_consensus,
+                    }))
+                  }
                 />
                 <ToggleSwitch
                   label="Debate Completed"
                   description="Post summaries when debates end"
                   checked={slackNotifications.notify_on_debate_end}
-                  onChange={() => setSlackNotifications(prev => ({ ...prev, notify_on_debate_end: !prev.notify_on_debate_end }))}
+                  onChange={() =>
+                    setSlackNotifications((prev) => ({
+                      ...prev,
+                      notify_on_debate_end: !prev.notify_on_debate_end,
+                    }))
+                  }
                 />
                 <ToggleSwitch
                   label="Error Alerts"
                   description="Notify on debate errors"
                   checked={slackNotifications.notify_on_error}
-                  onChange={() => setSlackNotifications(prev => ({ ...prev, notify_on_error: !prev.notify_on_error }))}
+                  onChange={() =>
+                    setSlackNotifications((prev) => ({
+                      ...prev,
+                      notify_on_error: !prev.notify_on_error,
+                    }))
+                  }
                 />
                 <ToggleSwitch
                   label="Leaderboard Updates"
                   description="Post agent ranking changes"
                   checked={slackNotifications.notify_on_leaderboard}
-                  onChange={() => setSlackNotifications(prev => ({ ...prev, notify_on_leaderboard: !prev.notify_on_leaderboard }))}
+                  onChange={() =>
+                    setSlackNotifications((prev) => ({
+                      ...prev,
+                      notify_on_leaderboard: !prev.notify_on_leaderboard,
+                    }))
+                  }
                 />
               </div>
             </div>
@@ -136,7 +173,11 @@ export function IntegrationsTab({
         disabled={saveStatus === 'saving'}
         className="px-6 py-2 bg-[var(--accent)]/20 border border-[var(--accent)]/40 text-[var(--accent)] font-theme-data text-sm rounded hover:bg-[var(--accent)]/30 transition-colors disabled:opacity-50"
       >
-        {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save Integrations'}
+        {saveStatus === 'saving'
+          ? 'Saving...'
+          : saveStatus === 'saved'
+            ? 'Saved!'
+            : 'Save Integrations'}
       </button>
     </div>
   );

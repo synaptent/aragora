@@ -43,7 +43,17 @@ interface TentacleState {
 
 /** A single debate event for the event log. */
 export interface DebateEvent {
-  type: 'agent_message' | 'critique' | 'vote' | 'consensus' | 'round_start' | 'debate_start' | 'debate_end' | 'agent_thinking' | 'agent_error' | 'phase_progress';
+  type:
+    | 'agent_message'
+    | 'critique'
+    | 'vote'
+    | 'consensus'
+    | 'round_start'
+    | 'debate_start'
+    | 'debate_end'
+    | 'agent_thinking'
+    | 'agent_error'
+    | 'phase_progress';
   agent?: string;
   content?: string;
   role?: string;
@@ -67,7 +77,11 @@ export interface UseOracleWebSocket {
   /** Whether the WebSocket is connected. */
   connected: boolean;
   /** Send a question to the Oracle (direct LLM streaming). */
-  ask: (question: string, mode: string, options?: { sessionId?: string; summaryDepth?: string }) => void;
+  ask: (
+    question: string,
+    mode: string,
+    options?: { sessionId?: string; summaryDepth?: string },
+  ) => void;
   /** Send a question to the Oracle (full debate mode). */
   debate: (question: string, mode: string, options?: { sessionId?: string }) => void;
   /** Stop the current Oracle response. */
@@ -110,11 +124,11 @@ const MAX_RECONNECT_ATTEMPTS = 3;
 const BASE_RECONNECT_DELAY_MS = 1000;
 const ORACLE_FIRST_TOKEN_TIMEOUT_MS = parseInt(
   process.env.NEXT_PUBLIC_ORACLE_FIRST_TOKEN_TIMEOUT_MS || '15000',
-  10
+  10,
 );
 const ORACLE_ACTIVITY_TIMEOUT_MS = parseInt(
   process.env.NEXT_PUBLIC_ORACLE_ACTIVITY_TIMEOUT_MS || '20000',
-  10
+  10,
 );
 
 function resolveOracleWsUrl(): string {
@@ -131,7 +145,9 @@ export function useOracleWebSocket(): UseOracleWebSocket {
   const [synthesis, setSynthesis] = useState('');
   const [fallbackMode, setFallbackMode] = useState(false);
   const [streamStalled, setStreamStalled] = useState(false);
-  const [stallReason, setStallReason] = useState<'waiting_first_token' | 'stream_inactive' | null>(null);
+  const [stallReason, setStallReason] = useState<'waiting_first_token' | 'stream_inactive' | null>(
+    null,
+  );
   const [timeToFirstTokenMs, setTimeToFirstTokenMs] = useState<number | null>(null);
   const [streamDurationMs, setStreamDurationMs] = useState<number | null>(null);
   const [isDebateMode, setIsDebateMode] = useState(false);
@@ -192,12 +208,12 @@ export function useOracleWebSocket(): UseOracleWebSocket {
 
   // Helper: add a debate event to the log
   const pushDebateEvent = useCallback((evt: DebateEvent) => {
-    setDebateEvents(prev => [...prev, evt]);
+    setDebateEvents((prev) => [...prev, evt]);
   }, []);
 
   // Helper: update a debate agent's state
   const updateDebateAgent = useCallback((name: string, updates: Partial<DebateAgentState>) => {
-    setDebateAgents(prev => {
+    setDebateAgents((prev) => {
       const next = new Map(prev);
       const existing = next.get(name) || {
         name,
@@ -224,8 +240,10 @@ export function useOracleWebSocket(): UseOracleWebSocket {
       wsRef.current.onerror = null;
       wsRef.current.onmessage = null;
       wsRef.current.onopen = null;
-      if (wsRef.current.readyState === WebSocket.OPEN ||
-          wsRef.current.readyState === WebSocket.CONNECTING) {
+      if (
+        wsRef.current.readyState === WebSocket.OPEN ||
+        wsRef.current.readyState === WebSocket.CONNECTING
+      ) {
         wsRef.current.close();
       }
       wsRef.current = null;
@@ -324,7 +342,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
               setTimeToFirstTokenMs(Math.round(performance.now() - askStartedAtRef.current));
             }
             markStreamProgress();
-            setTokens(prev => prev + (data.text || ''));
+            setTokens((prev) => prev + (data.text || ''));
             if (data.phase === 'deep' && phaseRef.current !== 'deep') {
               phaseRef.current = 'deep';
               setPhase('deep');
@@ -349,7 +367,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
             phaseRef.current = 'tentacles';
             setPhase('tentacles');
             markStreamProgress();
-            setTentacles(prev => {
+            setTentacles((prev) => {
               const next = new Map(prev);
               next.set(data.agent, { text: '', done: false });
               return next;
@@ -358,7 +376,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
 
           case 'tentacle_token':
             markStreamProgress();
-            setTentacles(prev => {
+            setTentacles((prev) => {
               const next = new Map(prev);
               const existing = next.get(data.agent);
               if (existing) {
@@ -372,7 +390,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
 
           case 'tentacle_done':
             markStreamProgress();
-            setTentacles(prev => {
+            setTentacles((prev) => {
               const next = new Map(prev);
               next.set(data.agent, { text: data.full_text || '', done: true });
               return next;
@@ -427,11 +445,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
           case 'round_start':
             markStreamProgress();
             setDebateRound(data.round || 0);
-            pushDebateEvent({
-              type: 'round_start',
-              round: data.round || 0,
-              timestamp: Date.now(),
-            });
+            pushDebateEvent({ type: 'round_start', round: data.round || 0, timestamp: Date.now() });
             break;
 
           case 'agent_thinking':
@@ -474,17 +488,14 @@ export function useOracleWebSocket(): UseOracleWebSocket {
           case 'token_start':
             markStreamProgress();
             if (data.agent) {
-              updateDebateAgent(data.agent, {
-                thinking: false,
-                streamingTokens: '',
-              });
+              updateDebateAgent(data.agent, { thinking: false, streamingTokens: '' });
             }
             break;
 
           case 'token_delta':
             markStreamProgress();
             if (data.agent) {
-              setDebateAgents(prev => {
+              setDebateAgents((prev) => {
                 const next = new Map(prev);
                 const existing = next.get(data.agent);
                 if (existing) {
@@ -516,11 +527,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
               content: data.content || '',
               round: data.round || 0,
               timestamp: Date.now(),
-              data: {
-                target: data.target,
-                issues: data.issues,
-                severity: data.severity,
-              },
+              data: { target: data.target, issues: data.issues, severity: data.severity },
             });
             break;
 
@@ -530,10 +537,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
               type: 'vote',
               agent: data.agent || '',
               timestamp: Date.now(),
-              data: {
-                vote: data.vote,
-                confidence: data.confidence,
-              },
+              data: { vote: data.vote, confidence: data.confidence },
             });
             break;
 
@@ -556,7 +560,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
           case 'debate_end':
             markStreamProgress();
             // Mark all agents as done
-            setDebateAgents(prev => {
+            setDebateAgents((prev) => {
               const next = new Map(prev);
               for (const [name, state] of next) {
                 next.set(name, { ...state, thinking: false, done: true });
@@ -566,10 +570,7 @@ export function useOracleWebSocket(): UseOracleWebSocket {
             pushDebateEvent({
               type: 'debate_end',
               timestamp: Date.now(),
-              data: {
-                duration: data.duration,
-                rounds: data.rounds,
-              },
+              data: { duration: data.duration, rounds: data.rounds },
             });
             break;
 
@@ -661,66 +662,72 @@ export function useOracleWebSocket(): UseOracleWebSocket {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const ask = useCallback((question: string, mode: string, options?: { sessionId?: string; summaryDepth?: string }) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+  const ask = useCallback(
+    (question: string, mode: string, options?: { sessionId?: string; summaryDepth?: string }) => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
-    // Reset state for new question
-    streamActiveRef.current = true;
-    debateModeRef.current = false;
-    askStartedAtRef.current = performance.now();
-    firstTokenSeenRef.current = false;
-    setTokens('');
-    setStreamStalled(false);
-    setStallReason(null);
-    setTimeToFirstTokenMs(null);
-    setStreamDurationMs(null);
-    phaseRef.current = 'idle';
-    setPhase('idle');
-    setTentacles(new Map());
-    setSynthesis('');
-    setIsDebateMode(false);
-    setDebateEvents([]);
-    setDebateAgents(new Map());
-    setDebateId(null);
-    setDebateRound(0);
-    audio.stop();
+      // Reset state for new question
+      streamActiveRef.current = true;
+      debateModeRef.current = false;
+      askStartedAtRef.current = performance.now();
+      firstTokenSeenRef.current = false;
+      setTokens('');
+      setStreamStalled(false);
+      setStallReason(null);
+      setTimeToFirstTokenMs(null);
+      setStreamDurationMs(null);
+      phaseRef.current = 'idle';
+      setPhase('idle');
+      setTentacles(new Map());
+      setSynthesis('');
+      setIsDebateMode(false);
+      setDebateEvents([]);
+      setDebateAgents(new Map());
+      setDebateId(null);
+      setDebateRound(0);
+      audio.stop();
 
-    const payload: Record<string, string> = { type: 'ask', question, mode };
-    if (options?.sessionId) payload.session_id = options.sessionId;
-    if (options?.summaryDepth) payload.summary_depth = options.summaryDepth;
-    wsRef.current.send(JSON.stringify(payload));
-    startFirstTokenTimeout();
-  }, [audio, startFirstTokenTimeout]);
+      const payload: Record<string, string> = { type: 'ask', question, mode };
+      if (options?.sessionId) payload.session_id = options.sessionId;
+      if (options?.summaryDepth) payload.summary_depth = options.summaryDepth;
+      wsRef.current.send(JSON.stringify(payload));
+      startFirstTokenTimeout();
+    },
+    [audio, startFirstTokenTimeout],
+  );
 
-  const debate = useCallback((question: string, mode: string, options?: { sessionId?: string }) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+  const debate = useCallback(
+    (question: string, mode: string, options?: { sessionId?: string }) => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
-    // Reset state for new debate
-    streamActiveRef.current = true;
-    debateModeRef.current = true;
-    askStartedAtRef.current = performance.now();
-    firstTokenSeenRef.current = false;
-    setTokens('');
-    setStreamStalled(false);
-    setStallReason(null);
-    setTimeToFirstTokenMs(null);
-    setStreamDurationMs(null);
-    phaseRef.current = 'idle';
-    setPhase('idle');
-    setTentacles(new Map());
-    setSynthesis('');
-    setIsDebateMode(true);
-    setDebateEvents([]);
-    setDebateAgents(new Map());
-    setDebateId(null);
-    setDebateRound(0);
-    audio.stop();
+      // Reset state for new debate
+      streamActiveRef.current = true;
+      debateModeRef.current = true;
+      askStartedAtRef.current = performance.now();
+      firstTokenSeenRef.current = false;
+      setTokens('');
+      setStreamStalled(false);
+      setStallReason(null);
+      setTimeToFirstTokenMs(null);
+      setStreamDurationMs(null);
+      phaseRef.current = 'idle';
+      setPhase('idle');
+      setTentacles(new Map());
+      setSynthesis('');
+      setIsDebateMode(true);
+      setDebateEvents([]);
+      setDebateAgents(new Map());
+      setDebateId(null);
+      setDebateRound(0);
+      audio.stop();
 
-    const payload: Record<string, string> = { type: 'debate', question, mode };
-    if (options?.sessionId) payload.session_id = options.sessionId;
-    wsRef.current.send(JSON.stringify(payload));
-    startFirstTokenTimeout();
-  }, [audio, startFirstTokenTimeout]);
+      const payload: Record<string, string> = { type: 'debate', question, mode };
+      if (options?.sessionId) payload.session_id = options.sessionId;
+      wsRef.current.send(JSON.stringify(payload));
+      startFirstTokenTimeout();
+    },
+    [audio, startFirstTokenTimeout],
+  );
 
   const stop = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

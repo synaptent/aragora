@@ -9,11 +9,20 @@ import { AgentComparePanel } from '../src/components/AgentComparePanel';
 jest.mock('@/context/AuthContext', () => ({
   ...jest.requireActual('@/context/AuthContext'),
   useAuth: () => ({
-    user: null, organization: null, organizations: [], tokens: { access_token: 'test-token', refresh_token: 'r', token_type: 'bearer' },
-    isLoading: false, isAuthenticated: true, isLoadingOrganizations: false,
-    login: jest.fn(), register: jest.fn(), logout: jest.fn(),
-    refreshToken: jest.fn(), setTokens: jest.fn(),
-    switchOrganization: jest.fn(), refreshOrganizations: jest.fn(),
+    user: null,
+    organization: null,
+    organizations: [],
+    tokens: { access_token: 'test-token', refresh_token: 'r', token_type: 'bearer' },
+    isLoading: false,
+    isAuthenticated: true,
+    isLoadingOrganizations: false,
+    login: jest.fn(),
+    register: jest.fn(),
+    logout: jest.fn(),
+    refreshToken: jest.fn(),
+    setTokens: jest.fn(),
+    switchOrganization: jest.fn(),
+    refreshOrganizations: jest.fn(),
     getCurrentOrgRole: jest.fn(),
   }),
 }));
@@ -59,28 +68,17 @@ describe('AgentComparePanel', () => {
         domains: ['coding', 'creative', 'math'],
       },
     ],
-    head_to_head: {
-      matches: 8,
-      agent1_wins: 5,
-      agent2_wins: 3,
-      draws: 0,
-    },
+    head_to_head: { matches: 8, agent1_wins: 5, agent2_wins: 3, draws: 0 },
   };
 
   describe('Agent Selection', () => {
     beforeEach(() => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/rankings')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockRankings),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRankings) });
         }
         if (url.includes('/api/agent/compare')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockComparison),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparison) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -124,7 +122,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['agent-a', 'agent-b', 'agent-c']}
           initialAgents={['agent-a', 'agent-c']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -139,11 +137,13 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'claude']}
-        />
+        />,
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Please select two different agents to compare')).toBeInTheDocument();
+        expect(
+          screen.getByText('Please select two different agents to compare'),
+        ).toBeInTheDocument();
       });
     });
   });
@@ -152,16 +152,10 @@ describe('AgentComparePanel', () => {
     beforeEach(() => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/rankings')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockRankings),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRankings) });
         }
         if (url.includes('/api/agent/compare')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockComparison),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparison) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -172,7 +166,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -186,7 +180,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -199,7 +193,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -215,7 +209,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -229,7 +223,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -243,7 +237,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -257,16 +251,10 @@ describe('AgentComparePanel', () => {
     beforeEach(() => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/rankings')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockRankings),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRankings) });
         }
         if (url.includes('/api/agent/compare')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockComparison),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparison) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -277,7 +265,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -291,7 +279,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -306,16 +294,10 @@ describe('AgentComparePanel', () => {
     beforeEach(() => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/rankings')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockRankings),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRankings) });
         }
         if (url.includes('/api/agent/compare')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockComparison),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockComparison) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -326,7 +308,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -339,7 +321,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -356,16 +338,10 @@ describe('AgentComparePanel', () => {
     it('displays error message when comparison fails', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/rankings')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockRankings),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRankings) });
         }
         if (url.includes('/api/agent/compare')) {
-          return Promise.resolve({
-            ok: false,
-            status: 500,
-          });
+          return Promise.resolve({ ok: false, status: 500 });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -374,7 +350,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {
@@ -387,10 +363,7 @@ describe('AgentComparePanel', () => {
     it('shows loading spinner during comparison', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/rankings')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockRankings),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockRankings) });
         }
         if (url.includes('/api/agent/compare')) {
           return new Promise(() => {}); // Never resolves
@@ -402,7 +375,7 @@ describe('AgentComparePanel', () => {
         <AgentComparePanel
           availableAgents={['claude', 'gemini']}
           initialAgents={['claude', 'gemini']}
-        />
+        />,
       );
 
       await waitFor(() => {

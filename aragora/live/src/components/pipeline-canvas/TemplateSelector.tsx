@@ -57,7 +57,9 @@ export const TemplateSelector = memo(function TemplateSelector({
 
     async function fetchTemplates() {
       try {
-        const res = await fetch(joinBackendPath(backendConfig.api, '/api/v1/canvas/pipeline/templates'));
+        const res = await fetch(
+          joinBackendPath(backendConfig.api, '/api/v1/canvas/pipeline/templates'),
+        );
         if (res.ok) {
           const data = await res.json();
           if (!cancelled) {
@@ -68,11 +70,51 @@ export const TemplateSelector = memo(function TemplateSelector({
         // Fallback: use hardcoded template list
         if (!cancelled) {
           setTemplates([
-            { name: 'hiring_decision', display_name: 'Hiring Decision', description: 'Evaluate candidates with diverse agent perspectives.', category: 'people', idea_count: 6, tags: ['hr', 'hiring'], vertical_profile: null },
-            { name: 'product_launch', display_name: 'Product Launch', description: 'Market analysis, go/no-go decision, and launch plan.', category: 'product', idea_count: 7, tags: ['product', 'launch'], vertical_profile: null },
-            { name: 'compliance_audit', display_name: 'Compliance Audit', description: 'Regulation review, gap analysis, and remediation.', category: 'compliance', idea_count: 6, tags: ['compliance', 'audit'], vertical_profile: 'compliance_sox' },
-            { name: 'market_entry', display_name: 'Market Entry Strategy', description: 'Competitive analysis, strategy, and execution roadmap.', category: 'strategy', idea_count: 7, tags: ['strategy', 'market'], vertical_profile: null },
-            { name: 'vendor_selection', display_name: 'Vendor Selection', description: 'Requirements, evaluation criteria, and selection.', category: 'procurement', idea_count: 7, tags: ['procurement', 'vendor'], vertical_profile: null },
+            {
+              name: 'hiring_decision',
+              display_name: 'Hiring Decision',
+              description: 'Evaluate candidates with diverse agent perspectives.',
+              category: 'people',
+              idea_count: 6,
+              tags: ['hr', 'hiring'],
+              vertical_profile: null,
+            },
+            {
+              name: 'product_launch',
+              display_name: 'Product Launch',
+              description: 'Market analysis, go/no-go decision, and launch plan.',
+              category: 'product',
+              idea_count: 7,
+              tags: ['product', 'launch'],
+              vertical_profile: null,
+            },
+            {
+              name: 'compliance_audit',
+              display_name: 'Compliance Audit',
+              description: 'Regulation review, gap analysis, and remediation.',
+              category: 'compliance',
+              idea_count: 6,
+              tags: ['compliance', 'audit'],
+              vertical_profile: 'compliance_sox',
+            },
+            {
+              name: 'market_entry',
+              display_name: 'Market Entry Strategy',
+              description: 'Competitive analysis, strategy, and execution roadmap.',
+              category: 'strategy',
+              idea_count: 7,
+              tags: ['strategy', 'market'],
+              vertical_profile: null,
+            },
+            {
+              name: 'vendor_selection',
+              display_name: 'Vendor Selection',
+              description: 'Requirements, evaluation criteria, and selection.',
+              category: 'procurement',
+              idea_count: 7,
+              tags: ['procurement', 'vendor'],
+              vertical_profile: null,
+            },
           ]);
         }
       } finally {
@@ -81,7 +123,9 @@ export const TemplateSelector = memo(function TemplateSelector({
     }
 
     fetchTemplates();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [backendConfig.api]);
 
   const categories = Array.from(new Set(templates.map((t) => t.category)));
@@ -90,7 +134,9 @@ export const TemplateSelector = memo(function TemplateSelector({
     : templates;
 
   const handleSelect = useCallback(
-    (name: string) => { onSelectTemplate(name); },
+    (name: string) => {
+      onSelectTemplate(name);
+    },
     [onSelectTemplate],
   );
 
@@ -161,9 +207,7 @@ export const TemplateSelector = memo(function TemplateSelector({
                 </span>
               </div>
             </div>
-            <p className="text-xs text-text-muted mb-3 line-clamp-2">
-              {template.description}
-            </p>
+            <p className="text-xs text-text-muted mb-3 line-clamp-2">{template.description}</p>
             <div className="flex items-center justify-between">
               <span className="text-xs font-theme-data text-text-muted">
                 {template.idea_count} ideas

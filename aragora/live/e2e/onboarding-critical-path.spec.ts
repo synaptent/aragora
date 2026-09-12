@@ -97,7 +97,9 @@ test.describe('Try Page → Demo → Signup CTA', () => {
     await analyzeBtn.click();
 
     // Wait for result to appear (verdict may be approved, rejected, approved_with_conditions, etc.)
-    const verdict = page.locator('text=/approved|rejected|analysis|consensus|verdict|confidence/i').first();
+    const verdict = page
+      .locator('text=/approved|rejected|analysis|consensus|verdict|confidence/i')
+      .first();
     await expect(verdict).toBeVisible({ timeout: 15000 });
 
     // Confidence bar should be visible
@@ -105,7 +107,10 @@ test.describe('Try Page → Demo → Signup CTA', () => {
     await expect(confidence).toBeVisible();
 
     // CTA to registration should be visible
-    const cta = page.locator('a').filter({ hasText: /sign up|unlock|get full/i }).first();
+    const cta = page
+      .locator('a')
+      .filter({ hasText: /sign up|unlock|get full/i })
+      .first();
     await expect(cta).toBeVisible();
     await expect(cta).toHaveAttribute('href', /register|onboarding|signup/);
   });
@@ -115,7 +120,10 @@ test.describe('Try Page → Demo → Signup CTA', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Click an example question
-    const example = page.locator('button').filter({ hasText: /microservices/i }).first();
+    const example = page
+      .locator('button')
+      .filter({ hasText: /microservices/i })
+      .first();
     await expect(example).toBeVisible({ timeout: 5000 });
     await example.click();
 
@@ -150,7 +158,10 @@ test.describe('Onboarding Wizard Flow', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Step 1: Role selection
-    const roleBtn = page.locator('button').filter({ hasText: /engineer|developer/i }).first();
+    const roleBtn = page
+      .locator('button')
+      .filter({ hasText: /engineer|developer/i })
+      .first();
     await expect(roleBtn).toBeVisible({ timeout: 5000 });
     await roleBtn.click();
 
@@ -168,7 +179,10 @@ test.describe('Onboarding Wizard Flow', () => {
     await expect(preview).toBeVisible({ timeout: 5000 });
 
     // Launch button visible
-    const launchBtn = page.locator('button').filter({ hasText: /launch|sign up/i }).first();
+    const launchBtn = page
+      .locator('button')
+      .filter({ hasText: /launch|sign up/i })
+      .first();
     await expect(launchBtn).toBeVisible();
   });
 
@@ -180,12 +194,18 @@ test.describe('Onboarding Wizard Flow', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Select CEO role
-    const ceoBtn = page.locator('button').filter({ hasText: /ceo|founder/i }).first();
+    const ceoBtn = page
+      .locator('button')
+      .filter({ hasText: /ceo|founder/i })
+      .first();
     await expect(ceoBtn).toBeVisible({ timeout: 5000 });
     await ceoBtn.click();
 
     // CEO-specific suggestions should appear
-    const suggestion = page.locator('button').filter({ hasText: /raise|round|european|acquire/i }).first();
+    const suggestion = page
+      .locator('button')
+      .filter({ hasText: /raise|round|european|acquire/i })
+      .first();
     await expect(suggestion).toBeVisible({ timeout: 5000 });
   });
 
@@ -231,7 +251,10 @@ test.describe('Receipt Visibility', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Receipt list header visible
-    const heading = page.locator('h1, h2').filter({ hasText: /receipt/i }).first();
+    const heading = page
+      .locator('h1, h2')
+      .filter({ hasText: /receipt/i })
+      .first();
     await expect(heading).toBeVisible({ timeout: 10000 });
   });
 });
@@ -257,7 +280,10 @@ test.describe('Templates from Backend', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Select a role to trigger template fetch
-    const roleBtn = page.locator('button').filter({ hasText: /engineer|developer/i }).first();
+    const roleBtn = page
+      .locator('button')
+      .filter({ hasText: /engineer|developer/i })
+      .first();
     if (await roleBtn.isVisible({ timeout: 3000 })) {
       await roleBtn.click();
     }

@@ -68,9 +68,7 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 export default function PacketsClient() {
   const params = useParams();
   const receiptIdRaw = params?.receiptId;
-  const receiptIdHint = Array.isArray(receiptIdRaw)
-    ? receiptIdRaw[0]
-    : (receiptIdRaw ?? '');
+  const receiptIdHint = Array.isArray(receiptIdRaw) ? receiptIdRaw[0] : (receiptIdRaw ?? '');
 
   const [receipt, setReceipt] = useState<SettlementReceipt | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -251,9 +249,7 @@ export default function PacketsClient() {
     if (samples.length === 0) return null;
     samples.sort((a, b) => a - b);
     const mid = Math.floor(samples.length / 2);
-    return samples.length % 2 === 0
-      ? (samples[mid - 1] + samples[mid]) / 2
-      : samples[mid];
+    return samples.length % 2 === 0 ? (samples[mid - 1] + samples[mid]) / 2 : samples[mid];
   }, [focusedAtByPr, decidedAtByPr]);
 
   const onDownload = useCallback(async () => {
@@ -265,17 +261,13 @@ export default function PacketsClient() {
       const decidedAt = decidedAtByPr[entry.number] ?? null;
       let decisionSeconds: number | null = null;
       if (focusedAt && decidedAt) {
-        const dt =
-          (new Date(decidedAt).getTime() - new Date(focusedAt).getTime()) / 1000;
+        const dt = (new Date(decidedAt).getTime() - new Date(focusedAt).getTime()) / 1000;
         decisionSeconds = Number.isFinite(dt) && dt >= 0 ? dt : null;
       }
       return {
         pr_number: entry.number,
         head_sha: String(entry.head_sha || ''),
-        tier:
-          entry.tier === null || entry.tier === undefined
-            ? null
-            : String(entry.tier),
+        tier: entry.tier === null || entry.tier === undefined ? null : String(entry.tier),
         decision: decisions[entry.number] ?? null,
         comment: comments[entry.number] ?? '',
         first_focused_at_utc: focusedAt,
@@ -351,17 +343,14 @@ export default function PacketsClient() {
             </span>
           </div>
           <p className="text-text-muted font-theme-data text-sm">
-            Load a settlement-packet receipt, record per-PR decisions, then
-            download a SHA-256-bound JSON. Read-only — nothing is sent.
+            Load a settlement-packet receipt, record per-PR decisions, then download a SHA-256-bound
+            JSON. Read-only — nothing is sent.
           </p>
         </div>
 
         <div
           className="mb-6 rounded-xl border p-4"
-          style={{
-            borderColor: 'var(--border)',
-            background: 'var(--panel)',
-          }}
+          style={{ borderColor: 'var(--border)', background: 'var(--panel)' }}
         >
           <label
             htmlFor="packets-file-input"
@@ -403,13 +392,15 @@ export default function PacketsClient() {
           >
             <div className="flex flex-wrap gap-x-6 gap-y-1">
               <span>
-                schema: <span style={{ color: 'var(--text)' }}>{receipt.schema_version ?? '—'}</span>
+                schema:{' '}
+                <span style={{ color: 'var(--text)' }}>{receipt.schema_version ?? '—'}</span>
               </span>
               <span>
                 repo: <span style={{ color: 'var(--text)' }}>{receipt.repo ?? '—'}</span>
               </span>
               <span>
-                generated: <span style={{ color: 'var(--text)' }}>{receipt.generated_at_utc ?? '—'}</span>
+                generated:{' '}
+                <span style={{ color: 'var(--text)' }}>{receipt.generated_at_utc ?? '—'}</span>
               </span>
               <span>
                 PRs:{' '}
@@ -426,9 +417,7 @@ export default function PacketsClient() {
               {medianDecisionSeconds !== null && (
                 <span data-testid="packets-median-decision-seconds">
                   median:{' '}
-                  <span style={{ color: 'var(--text)' }}>
-                    {medianDecisionSeconds.toFixed(1)}s
-                  </span>
+                  <span style={{ color: 'var(--text)' }}>{medianDecisionSeconds.toFixed(1)}s</span>
                 </span>
               )}
             </div>
@@ -439,8 +428,7 @@ export default function PacketsClient() {
                 style={{ color: shaCheck.matches ? 'var(--accent)' : 'var(--crimson)' }}
               >
                 sha256 payload {shaCheck.matches ? 'match ✓' : 'mismatch ✗'} —{' '}
-                {shaCheck.claimed.slice(0, 10) || '(none)'} vs{' '}
-                {shaCheck.recomputed.slice(0, 10)}
+                {shaCheck.claimed.slice(0, 10) || '(none)'} vs {shaCheck.recomputed.slice(0, 10)}
                 <div
                   data-testid="packets-hmac-check"
                   className="mt-1"
@@ -465,11 +453,15 @@ export default function PacketsClient() {
         )}
 
         {receipt && queue.prs.length > 0 && (
-          <div data-testid="packets-decision-list" role="listbox" aria-label="Settlement packet PRs">
+          <div
+            data-testid="packets-decision-list"
+            role="listbox"
+            aria-label="Settlement packet PRs"
+          >
             {queue.prs.map((pr, index) => {
               const recommended =
-                receipt.pinned_state.find((e) => e.number === pr.number)
-                  ?.recommended_action ?? null;
+                receipt.pinned_state.find((e) => e.number === pr.number)?.recommended_action ??
+                null;
               return (
                 <PacketDecisionCard
                   key={pr.number}
@@ -507,10 +499,7 @@ export default function PacketsClient() {
                 {remainingCount} PR{remainingCount === 1 ? '' : 's'} undecided
               </span>
               {downloadStatus && (
-                <span
-                  data-testid="packets-download-status"
-                  style={{ color: 'var(--text)' }}
-                >
+                <span data-testid="packets-download-status" style={{ color: 'var(--text)' }}>
                   {downloadStatus}
                 </span>
               )}
@@ -550,49 +539,64 @@ export default function PacketsClient() {
               <table className="w-full text-xs font-mono">
                 <tbody>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>j / ↓</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      j / ↓
+                    </td>
                     <td>next PR card</td>
                   </tr>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>k / ↑</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      k / ↑
+                    </td>
                     <td>prev PR card</td>
                   </tr>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>1</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      1
+                    </td>
                     <td>APPROVE this tier</td>
                   </tr>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>2</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      2
+                    </td>
                     <td>APPROVE downgraded</td>
                   </tr>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>3</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      3
+                    </td>
                     <td>REQUEST changes</td>
                   </tr>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>4</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      4
+                    </td>
                     <td>REJECT</td>
                   </tr>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>5</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      5
+                    </td>
                     <td>HOLD (operator-only)</td>
                   </tr>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>?</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      ?
+                    </td>
                     <td>toggle this help</td>
                   </tr>
                   <tr>
-                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>Esc</td>
+                    <td className="pr-3 py-0.5" style={{ color: 'var(--accent)' }}>
+                      Esc
+                    </td>
                     <td>close help</td>
                   </tr>
                 </tbody>
               </table>
-              <div
-                className="mt-3 text-xs"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                Every decision records the time from first-focused → decided.
-                Median shown live; per-PR timings exported in the JSON.
+              <div className="mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+                Every decision records the time from first-focused → decided. Median shown live;
+                per-PR timings exported in the JSON.
               </div>
             </div>
           </div>

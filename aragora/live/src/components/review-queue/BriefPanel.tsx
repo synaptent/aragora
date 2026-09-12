@@ -32,10 +32,7 @@ export interface BriefPanelProps {
   onRetry?: () => void;
 }
 
-const panelStyle = {
-  borderColor: 'var(--border)',
-  backgroundColor: 'var(--surface-elevated)',
-};
+const panelStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--surface-elevated)' };
 
 function ProgressRow({
   state,
@@ -54,11 +51,7 @@ function ProgressRow({
 }) {
   const parts: string[] = [];
   if (phase) parts.push(`${phase} phase`);
-  if (
-    typeof rolesComplete === 'number' &&
-    typeof rolesTotal === 'number' &&
-    rolesTotal > 0
-  ) {
+  if (typeof rolesComplete === 'number' && typeof rolesTotal === 'number' && rolesTotal > 0) {
     parts.push(`${rolesComplete}/${rolesTotal} roles done`);
   }
   if (typeof elapsedSeconds === 'number' && elapsedSeconds > 0) {
@@ -74,10 +67,7 @@ function ProgressRow({
         data-testid="brief-panel-spinner"
         aria-hidden="true"
         className="inline-block h-3 w-3 animate-spin rounded-full border-2"
-        style={{
-          borderColor: 'var(--border)',
-          borderTopColor: 'var(--accent)',
-        }}
+        style={{ borderColor: 'var(--border)', borderTopColor: 'var(--accent)' }}
       />
       <span data-testid="brief-panel-progress-detail">
         {state === 'queued' ? 'Queued — starting soon' : detail}
@@ -91,15 +81,12 @@ function EmptyPanelLegacy() {
     <div
       data-testid="brief-panel-empty"
       className="rounded-lg border px-4 py-3 text-xs italic"
-      style={{
-        ...panelStyle,
-        color: 'var(--text-muted)',
-      }}
+      style={{ ...panelStyle, color: 'var(--text-muted)' }}
     >
-      Brief generation is not enabled yet. The PDB pipeline — heterogeneous
-      debate, synthesis, and signed brief output — is on the roadmap (see
-      <code className="font-theme-data not-italic"> #6306 </code>).
-      Approve decisions currently rely on CI status + your own reading of the diff.
+      Brief generation is not enabled yet. The PDB pipeline — heterogeneous debate, synthesis, and
+      signed brief output — is on the roadmap (see
+      <code className="font-theme-data not-italic"> #6306 </code>). Approve decisions currently rely
+      on CI status + your own reading of the diff.
     </div>
   );
 }
@@ -109,10 +96,7 @@ function AbsentWithCTA({ onGenerate }: { onGenerate?: () => void }) {
     <div
       data-testid="brief-panel-absent"
       className="rounded-lg border px-4 py-4 text-sm"
-      style={{
-        ...panelStyle,
-        color: 'var(--text)',
-      }}
+      style={{ ...panelStyle, color: 'var(--text)' }}
     >
       <div className="mb-3 text-xs" style={{ color: 'var(--text-muted)' }}>
         No brief yet. Click Generate brief to start a panel debate (~2 min).
@@ -142,10 +126,7 @@ function QueuedPanel({ snapshot }: { snapshot: BriefStateSnapshot }) {
     <div
       data-testid="brief-panel-queued"
       className="rounded-lg border px-4 py-3"
-      style={{
-        ...panelStyle,
-        color: 'var(--text)',
-      }}
+      style={{ ...panelStyle, color: 'var(--text)' }}
     >
       <ProgressRow
         state={snapshot.state}
@@ -164,10 +145,7 @@ function RunningPanel({ snapshot }: { snapshot: BriefStateSnapshot }) {
     <div
       data-testid="brief-panel-running"
       className="rounded-lg border px-4 py-3"
-      style={{
-        ...panelStyle,
-        color: 'var(--text)',
-      }}
+      style={{ ...panelStyle, color: 'var(--text)' }}
     >
       <ProgressRow
         state={snapshot.state}
@@ -255,9 +233,8 @@ function StalePanel({
       }}
     >
       <div>
-        Brief is for a previous commit (<code className="font-theme-data">{oldSha}</code>{' '}
-        ≠ current <code className="font-theme-data">{newSha}</code>). Regenerate for the
-        current commit?
+        Brief is for a previous commit (<code className="font-theme-data">{oldSha}</code> ≠ current{' '}
+        <code className="font-theme-data">{newSha}</code>). Regenerate for the current commit?
       </div>
       {onRegenerate && (
         <button
@@ -291,10 +268,7 @@ function ReadyPanel({ brief }: { brief: ReviewQueueBrief }) {
     <div
       data-testid="brief-panel"
       className="rounded-lg border px-4 py-4 text-sm"
-      style={{
-        ...panelStyle,
-        color: 'var(--text)',
-      }}
+      style={{ ...panelStyle, color: 'var(--text)' }}
     >
       <div
         className="flex flex-wrap items-center gap-3 border-b pb-3"
@@ -318,10 +292,7 @@ function ReadyPanel({ brief }: { brief: ReviewQueueBrief }) {
             confidence {brief.confidence}/5
           </span>
         )}
-        <span
-          className="ml-auto font-theme-data text-xs"
-          style={{ color: 'var(--text-muted)' }}
-        >
+        <span className="ml-auto font-theme-data text-xs" style={{ color: 'var(--text-muted)' }}>
           head {brief.head_sha?.slice(0, 12) || '—'}
         </span>
       </div>
@@ -390,10 +361,7 @@ export function BriefPanel({
             <div
               data-testid="brief-panel-loading"
               className="rounded-lg border px-4 py-3 text-xs"
-              style={{
-                ...panelStyle,
-                color: 'var(--text-muted)',
-              }}
+              style={{ ...panelStyle, color: 'var(--text-muted)' }}
             >
               Loading brief…
             </div>
@@ -405,10 +373,7 @@ export function BriefPanel({
           <div
             data-testid="brief-panel-loading"
             className="rounded-lg border px-4 py-3 text-xs"
-            style={{
-              ...panelStyle,
-              color: 'var(--text-muted)',
-            }}
+            style={{ ...panelStyle, color: 'var(--text-muted)' }}
           >
             Loading brief…
           </div>
@@ -428,10 +393,7 @@ export function BriefPanel({
       <div
         data-testid="brief-panel-loading"
         className="rounded-lg border px-4 py-3 text-xs"
-        style={{
-          ...panelStyle,
-          color: 'var(--text-muted)',
-        }}
+        style={{ ...panelStyle, color: 'var(--text-muted)' }}
       >
         Loading brief…
       </div>

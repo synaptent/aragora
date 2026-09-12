@@ -82,7 +82,7 @@ export function getProviderKeyHeaders(): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const [id, value] of Object.entries(keys)) {
     if (value) {
-      const provider = LLM_PROVIDERS.find(p => p.id === id);
+      const provider = LLM_PROVIDERS.find((p) => p.id === id);
       if (provider) {
         headers[`X-Provider-Key-${provider.id}`] = value;
       }

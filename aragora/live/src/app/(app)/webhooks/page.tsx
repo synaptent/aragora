@@ -29,38 +29,115 @@ interface WebhookEvent {
 // Events that can trigger webhooks (from WEBHOOK_EVENTS)
 const EVENT_TYPES = [
   // Debate lifecycle
-  { id: 'debate_start', label: 'Debate Start', description: 'When a new debate begins', category: 'Debate' },
-  { id: 'debate_end', label: 'Debate End', description: 'When a debate concludes', category: 'Debate' },
-  { id: 'consensus', label: 'Consensus', description: 'When agents reach agreement', category: 'Debate' },
-  { id: 'round_start', label: 'Round Start', description: 'When a new round begins', category: 'Debate' },
+  {
+    id: 'debate_start',
+    label: 'Debate Start',
+    description: 'When a new debate begins',
+    category: 'Debate',
+  },
+  {
+    id: 'debate_end',
+    label: 'Debate End',
+    description: 'When a debate concludes',
+    category: 'Debate',
+  },
+  {
+    id: 'consensus',
+    label: 'Consensus',
+    description: 'When agents reach agreement',
+    category: 'Debate',
+  },
+  {
+    id: 'round_start',
+    label: 'Round Start',
+    description: 'When a new round begins',
+    category: 'Debate',
+  },
   // Agent events
-  { id: 'agent_message', label: 'Agent Message', description: 'When an agent sends a message', category: 'Agent' },
+  {
+    id: 'agent_message',
+    label: 'Agent Message',
+    description: 'When an agent sends a message',
+    category: 'Agent',
+  },
   { id: 'vote', label: 'Vote', description: 'When a vote is recorded', category: 'Agent' },
   // Memory/learning
-  { id: 'insight_extracted', label: 'Insight Extracted', description: 'When new insights are learned', category: 'Learning' },
+  {
+    id: 'insight_extracted',
+    label: 'Insight Extracted',
+    description: 'When new insights are learned',
+    category: 'Learning',
+  },
   // Verification
-  { id: 'claim_verification_result', label: 'Claim Verification', description: 'When a claim is verified', category: 'Verification' },
-  { id: 'formal_verification_result', label: 'Formal Verification', description: 'When formal proof completes', category: 'Verification' },
+  {
+    id: 'claim_verification_result',
+    label: 'Claim Verification',
+    description: 'When a claim is verified',
+    category: 'Verification',
+  },
+  {
+    id: 'formal_verification_result',
+    label: 'Formal Verification',
+    description: 'When formal proof completes',
+    category: 'Verification',
+  },
   // Gauntlet
-  { id: 'gauntlet_complete', label: 'Gauntlet Complete', description: 'When gauntlet stress-test finishes', category: 'Gauntlet' },
-  { id: 'gauntlet_verdict', label: 'Gauntlet Verdict', description: 'When verdict is issued', category: 'Gauntlet' },
+  {
+    id: 'gauntlet_complete',
+    label: 'Gauntlet Complete',
+    description: 'When gauntlet stress-test finishes',
+    category: 'Gauntlet',
+  },
+  {
+    id: 'gauntlet_verdict',
+    label: 'Gauntlet Verdict',
+    description: 'When verdict is issued',
+    category: 'Gauntlet',
+  },
   // Graph debates
-  { id: 'graph_branch_created', label: 'Branch Created', description: 'When discussion branches', category: 'Graph' },
-  { id: 'graph_branch_merged', label: 'Branch Merged', description: 'When branches merge', category: 'Graph' },
+  {
+    id: 'graph_branch_created',
+    label: 'Branch Created',
+    description: 'When discussion branches',
+    category: 'Graph',
+  },
+  {
+    id: 'graph_branch_merged',
+    label: 'Branch Merged',
+    description: 'When branches merge',
+    category: 'Graph',
+  },
   // Genesis evolution
-  { id: 'genesis_evolution', label: 'Genesis Evolution', description: 'When prompts evolve', category: 'Evolution' },
+  {
+    id: 'genesis_evolution',
+    label: 'Genesis Evolution',
+    description: 'When prompts evolve',
+    category: 'Evolution',
+  },
   // Breakpoints
-  { id: 'breakpoint', label: 'Breakpoint', description: 'Debug breakpoint triggered', category: 'Debug' },
-  { id: 'breakpoint_resolved', label: 'Breakpoint Resolved', description: 'Debug breakpoint resolved', category: 'Debug' },
+  {
+    id: 'breakpoint',
+    label: 'Breakpoint',
+    description: 'Debug breakpoint triggered',
+    category: 'Debug',
+  },
+  {
+    id: 'breakpoint_resolved',
+    label: 'Breakpoint Resolved',
+    description: 'Debug breakpoint resolved',
+    category: 'Debug',
+  },
 ];
 
-const EVENT_CATEGORIES = [...new Set(EVENT_TYPES.map(e => e.category))];
+const EVENT_CATEGORIES = [...new Set(EVENT_TYPES.map((e) => e.category))];
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${
-      active ? 'bg-[var(--accent)]/20 text-[var(--accent)]' : 'bg-text-muted/20 text-text-muted'
-    }`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded ${
+        active ? 'bg-[var(--accent)]/20 text-[var(--accent)]' : 'bg-text-muted/20 text-text-muted'
+      }`}
+    >
       {active ? 'ACTIVE' : 'INACTIVE'}
     </span>
   );
@@ -73,7 +150,9 @@ function DeliveryStatus({ status }: { status: string }) {
     pending: 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]',
   };
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${colors[status] || colors.pending}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded ${colors[status] || colors.pending}`}
+    >
       {status.toUpperCase()}
     </span>
   );
@@ -134,10 +213,7 @@ export default function WebhooksPage() {
       const res = await fetch(`${backendConfig.api}/api/webhooks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: newUrl,
-          events: selectedEvents,
-        }),
+        body: JSON.stringify({ url: newUrl, events: selectedEvents }),
       });
 
       if (res.ok) {
@@ -160,9 +236,7 @@ export default function WebhooksPage() {
     if (!confirm('Delete this webhook?')) return;
 
     try {
-      const res = await fetch(`${backendConfig.api}/api/webhooks/${id}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`${backendConfig.api}/api/webhooks/${id}`, { method: 'DELETE' });
 
       if (res.ok) {
         fetchData();
@@ -193,30 +267,32 @@ export default function WebhooksPage() {
     setTestResult(null);
 
     try {
-      const res = await fetch(`${backendConfig.api}/api/webhooks/${id}/test`, {
-        method: 'POST',
-      });
+      const res = await fetch(`${backendConfig.api}/api/webhooks/${id}/test`, { method: 'POST' });
 
       const data = await res.json();
 
       if (res.ok) {
-        setTestResult({ success: true, message: `Test sent! Response: HTTP ${data.response_status || 200}` });
+        setTestResult({
+          success: true,
+          message: `Test sent! Response: HTTP ${data.response_status || 200}`,
+        });
         fetchData(); // Refresh to show updated delivery log
       } else {
         setTestResult({ success: false, message: data.error || 'Test failed' });
       }
     } catch (err) {
-      setTestResult({ success: false, message: err instanceof Error ? err.message : 'Test failed' });
+      setTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Test failed',
+      });
     } finally {
       setTesting(null);
     }
   };
 
   const toggleEvent = (eventId: string) => {
-    setSelectedEvents(prev =>
-      prev.includes(eventId)
-        ? prev.filter(e => e !== eventId)
-        : [...prev, eventId]
+    setSelectedEvents((prev) =>
+      prev.includes(eventId) ? prev.filter((e) => e !== eventId) : [...prev, eventId],
     );
   };
 
@@ -228,12 +304,10 @@ export default function WebhooksPage() {
       <main className="min-h-screen bg-bg text-text relative z-10">
         <div className="container mx-auto px-4 py-6">
           <div className="mb-6">
-            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">
-              {'>'} WEBHOOKS
-            </h1>
+            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">{'>'} WEBHOOKS</h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Configure webhooks to receive real-time notifications for debate events.
-              Integrate with external systems, Slack, Discord, or custom applications.
+              Configure webhooks to receive real-time notifications for debate events. Integrate
+              with external systems, Slack, Discord, or custom applications.
             </p>
           </div>
 
@@ -286,7 +360,9 @@ export default function WebhooksPage() {
               <div className="space-y-4">
                 {webhooks.length === 0 ? (
                   <div className="p-8 border border-[var(--accent)]/20 rounded text-center">
-                    <p className="font-theme-data text-text-muted mb-4">No webhooks configured yet.</p>
+                    <p className="font-theme-data text-text-muted mb-4">
+                      No webhooks configured yet.
+                    </p>
                     <button
                       onClick={() => setActiveTab('create')}
                       className="px-4 py-2 border border-[var(--acid-cyan)]/50 text-[var(--acid-cyan)] font-theme-data text-sm hover:bg-[var(--acid-cyan)]/10 transition-colors"
@@ -295,11 +371,16 @@ export default function WebhooksPage() {
                     </button>
                   </div>
                 ) : (
-                  webhooks.map(webhook => (
-                    <div key={webhook.id} className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
+                  webhooks.map((webhook) => (
+                    <div
+                      key={webhook.id}
+                      className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30"
+                    >
                       <div className="flex items-start justify-between mb-3">
                         <div>
-                          <code className="text-[var(--acid-cyan)] text-sm break-all">{webhook.url}</code>
+                          <code className="text-[var(--acid-cyan)] text-sm break-all">
+                            {webhook.url}
+                          </code>
                           <div className="flex items-center gap-2 mt-1">
                             <StatusBadge active={webhook.active} />
                             {webhook.failure_count > 0 && (
@@ -334,18 +415,25 @@ export default function WebhooksPage() {
 
                       {/* Test result notification */}
                       {testResult && testing === null && (
-                        <div className={`mb-3 p-2 text-xs font-theme-data rounded ${
-                          testResult.success ? 'bg-[var(--accent)]/10 text-[var(--accent)]' : 'bg-warning/10 text-warning'
-                        }`}>
+                        <div
+                          className={`mb-3 p-2 text-xs font-theme-data rounded ${
+                            testResult.success
+                              ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
+                              : 'bg-warning/10 text-warning'
+                          }`}
+                        >
                           {testResult.message}
                         </div>
                       )}
 
                       <div className="flex flex-wrap gap-1">
-                        {webhook.events.map(event => {
-                          const eventType = EVENT_TYPES.find(e => e.id === event);
+                        {webhook.events.map((event) => {
+                          const eventType = EVENT_TYPES.find((e) => e.id === event);
                           return (
-                            <span key={event} className="px-2 py-0.5 text-xs font-theme-data bg-[var(--accent)]/10 text-[var(--accent)] rounded">
+                            <span
+                              key={event}
+                              className="px-2 py-0.5 text-xs font-theme-data bg-[var(--accent)]/10 text-[var(--accent)] rounded"
+                            >
                               {eventType?.label || event}
                             </span>
                           );
@@ -364,14 +452,21 @@ export default function WebhooksPage() {
               <div className="space-y-2">
                 {events.length === 0 ? (
                   <div className="p-8 border border-[var(--accent)]/20 rounded text-center">
-                    <p className="font-theme-data text-text-muted">No delivery events recorded yet.</p>
+                    <p className="font-theme-data text-text-muted">
+                      No delivery events recorded yet.
+                    </p>
                   </div>
                 ) : (
-                  events.map(event => (
-                    <div key={event.id} className="p-3 border border-[var(--accent)]/10 rounded bg-surface/20 flex items-center justify-between">
+                  events.map((event) => (
+                    <div
+                      key={event.id}
+                      className="p-3 border border-[var(--accent)]/10 rounded bg-surface/20 flex items-center justify-between"
+                    >
                       <div className="flex items-center gap-3">
                         <DeliveryStatus status={event.status} />
-                        <span className="font-theme-data text-sm text-[var(--acid-cyan)]">{event.event_type}</span>
+                        <span className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                          {event.event_type}
+                        </span>
                         {event.response_code && (
                           <span className="font-theme-data text-xs text-text-muted">
                             HTTP {event.response_code}
@@ -423,19 +518,29 @@ export default function WebhooksPage() {
                     </label>
                     <button
                       type="button"
-                      onClick={() => setSelectedEvents(selectedEvents.length === EVENT_TYPES.length ? [] : EVENT_TYPES.map(e => e.id))}
+                      onClick={() =>
+                        setSelectedEvents(
+                          selectedEvents.length === EVENT_TYPES.length
+                            ? []
+                            : EVENT_TYPES.map((e) => e.id),
+                        )
+                      }
                       className="text-xs font-theme-data text-[var(--acid-cyan)] hover:text-[var(--acid-cyan)]/80"
                     >
-                      {selectedEvents.length === EVENT_TYPES.length ? '[DESELECT ALL]' : '[SELECT ALL]'}
+                      {selectedEvents.length === EVENT_TYPES.length
+                        ? '[DESELECT ALL]'
+                        : '[SELECT ALL]'}
                     </button>
                   </div>
 
                   {/* Events grouped by category */}
-                  {EVENT_CATEGORIES.map(category => (
+                  {EVENT_CATEGORIES.map((category) => (
                     <div key={category} className="mb-4">
-                      <div className="text-xs font-theme-data text-text-muted mb-2 uppercase">{category}</div>
+                      <div className="text-xs font-theme-data text-text-muted mb-2 uppercase">
+                        {category}
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {EVENT_TYPES.filter(e => e.category === category).map(event => (
+                        {EVENT_TYPES.filter((e) => e.category === category).map((event) => (
                           <button
                             key={event.id}
                             type="button"
@@ -447,7 +552,9 @@ export default function WebhooksPage() {
                             }`}
                           >
                             <div className="font-theme-data text-sm text-text">{event.label}</div>
-                            <div className="font-theme-data text-xs text-text-muted">{event.description}</div>
+                            <div className="font-theme-data text-xs text-text-muted">
+                              {event.description}
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -469,12 +576,8 @@ export default function WebhooksPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // WEBHOOKS
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // WEBHOOKS</p>
         </footer>
       </main>
     </>
