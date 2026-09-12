@@ -100,7 +100,10 @@ export class AgentsAPI extends BaseAPI {
   /**
    * Update an agent's configuration
    */
-  async update(agentId: string, updates: Partial<AgentCreateRequest>): Promise<{ agent: AgentProfile }> {
+  async update(
+    agentId: string,
+    updates: Partial<AgentCreateRequest>,
+  ): Promise<{ agent: AgentProfile }> {
     return this.http.patch(`/api/agents/${agentId}`, updates);
   }
 
@@ -131,7 +134,12 @@ export class AgentsAPI extends BaseAPI {
   /**
    * Get agent's debate history
    */
-  async debates(agentId: string, limit = 10): Promise<{ debates: Array<{ debate_id: string; task: string; result: string; date: string }> }> {
+  async debates(
+    agentId: string,
+    limit = 10,
+  ): Promise<{
+    debates: Array<{ debate_id: string; task: string; result: string; date: string }>;
+  }> {
     return this.http.get(`/api/agents/${agentId}/debates?limit=${limit}`);
   }
 

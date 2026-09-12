@@ -25,9 +25,39 @@ global.fetch = mockFetch;
 
 const mockLeaderboardData = {
   agents: [
-    { name: 'claude-3-opus', elo: 1650, wins: 15, losses: 5, draws: 2, win_rate: 75, games: 22, consistency: 0.85, consistency_class: 'high' },
-    { name: 'gemini-2.0-flash', elo: 1580, wins: 12, losses: 8, draws: 3, win_rate: 60, games: 23, consistency: 0.72, consistency_class: 'medium' },
-    { name: 'grok-2', elo: 1520, wins: 10, losses: 10, draws: 2, win_rate: 50, games: 22, consistency: 0.55, consistency_class: 'low' },
+    {
+      name: 'claude-3-opus',
+      elo: 1650,
+      wins: 15,
+      losses: 5,
+      draws: 2,
+      win_rate: 75,
+      games: 22,
+      consistency: 0.85,
+      consistency_class: 'high',
+    },
+    {
+      name: 'gemini-2.0-flash',
+      elo: 1580,
+      wins: 12,
+      losses: 8,
+      draws: 3,
+      win_rate: 60,
+      games: 23,
+      consistency: 0.72,
+      consistency_class: 'medium',
+    },
+    {
+      name: 'grok-2',
+      elo: 1520,
+      wins: 10,
+      losses: 10,
+      draws: 2,
+      win_rate: 50,
+      games: 22,
+      consistency: 0.55,
+      consistency_class: 'low',
+    },
   ],
   domains: ['technology', 'philosophy', 'science'],
 };
@@ -47,13 +77,25 @@ const mockMatchesData = {
 
 const mockReputationData = {
   reputations: [
-    { agent: 'claude-3-opus', score: 0.85, vote_weight: 1.2, proposal_acceptance_rate: 0.75, critique_value: 0.9, debates_participated: 22 },
+    {
+      agent: 'claude-3-opus',
+      score: 0.85,
+      vote_weight: 1.2,
+      proposal_acceptance_rate: 0.75,
+      critique_value: 0.9,
+      debates_participated: 22,
+    },
   ],
 };
 
 const mockTeamsData = {
   combinations: [
-    { agents: ['claude-3-opus', 'gemini-2.0-flash'], success_rate: 0.78, total_debates: 9, wins: 7 },
+    {
+      agents: ['claude-3-opus', 'gemini-2.0-flash'],
+      success_rate: 0.78,
+      total_debates: 9,
+      wins: 7,
+    },
   ],
 };
 
@@ -86,16 +128,15 @@ const mockConsolidatedResponse = {
   data: {
     rankings: { agents: mockLeaderboardData.agents, count: mockLeaderboardData.agents.length },
     matches: { matches: mockMatchesData.matches, count: mockMatchesData.matches.length },
-    reputation: { reputations: mockReputationData.reputations, count: mockReputationData.reputations.length },
+    reputation: {
+      reputations: mockReputationData.reputations,
+      count: mockReputationData.reputations.length,
+    },
     teams: { combinations: mockTeamsData.combinations, count: mockTeamsData.combinations.length },
     stats: mockStatsData,
     introspection: mockIntrospectionData,
   },
-  errors: {
-    partial_failure: false,
-    failed_sections: [],
-    messages: {},
-  },
+  errors: { partial_failure: false, failed_sections: [], messages: {} },
 };
 
 function setupSuccessfulFetch() {
@@ -103,7 +144,10 @@ function setupSuccessfulFetch() {
     const baseResponse = { ok: true, status: 200, url };
     // Consolidated endpoint (primary) - must check before /api/leaderboard
     if (url.includes('/api/leaderboard-view')) {
-      return Promise.resolve({ ...baseResponse, json: () => Promise.resolve(mockConsolidatedResponse) });
+      return Promise.resolve({
+        ...baseResponse,
+        json: () => Promise.resolve(mockConsolidatedResponse),
+      });
     }
     // Legacy individual endpoints (fallback)
     if (url.includes('/api/leaderboard')) {
@@ -122,9 +166,17 @@ function setupSuccessfulFetch() {
       return Promise.resolve({ ...baseResponse, json: () => Promise.resolve(mockStatsData) });
     }
     if (url.includes('/api/introspection/all')) {
-      return Promise.resolve({ ...baseResponse, json: () => Promise.resolve(mockIntrospectionData) });
+      return Promise.resolve({
+        ...baseResponse,
+        json: () => Promise.resolve(mockIntrospectionData),
+      });
     }
-    return Promise.resolve({ ok: false, status: 404, url, text: () => Promise.resolve('Not found') });
+    return Promise.resolve({
+      ok: false,
+      status: 404,
+      url,
+      text: () => Promise.resolve('Not found'),
+    });
   });
 }
 
@@ -239,7 +291,10 @@ describe('LeaderboardPanel', () => {
         rankings: { agents: mockLeaderboardData.agents, count: mockLeaderboardData.agents.length },
         matches: { matches: [], count: 0 },
         reputation: { reputations: [], count: 0 },
-        teams: { combinations: mockTeamsData.combinations, count: mockTeamsData.combinations.length },
+        teams: {
+          combinations: mockTeamsData.combinations,
+          count: mockTeamsData.combinations.length,
+        },
         stats: mockStatsData,
         introspection: { agents: {}, count: 0 },
       },
@@ -249,12 +304,14 @@ describe('LeaderboardPanel', () => {
         messages: { matches: '503 Service Unavailable', reputation: '503 Service Unavailable' },
       },
     };
-    mockFetch.mockImplementation((url: string) => Promise.resolve({
-      ok: true,
-      status: 200,
-      url,
-      json: () => Promise.resolve(partialFailureResponse)
-    }));
+    mockFetch.mockImplementation((url: string) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        url,
+        json: () => Promise.resolve(partialFailureResponse),
+      }),
+    );
 
     await act(async () => {
       renderWithProviders(<LeaderboardPanel apiBase="http://localhost:3001" />);
@@ -270,12 +327,14 @@ describe('LeaderboardPanel', () => {
   });
 
   it('handles complete API failure', async () => {
-    mockFetch.mockImplementation((url: string) => Promise.resolve({
-      ok: false,
-      status: 500,
-      url,
-      text: () => Promise.resolve('500 Internal Server Error')
-    }));
+    mockFetch.mockImplementation((url: string) =>
+      Promise.resolve({
+        ok: false,
+        status: 500,
+        url,
+        text: () => Promise.resolve('500 Internal Server Error'),
+      }),
+    );
 
     await act(async () => {
       renderWithProviders(<LeaderboardPanel apiBase="http://localhost:3001" />);
@@ -303,12 +362,9 @@ describe('LeaderboardPanel', () => {
         messages: { rankings: '503: ELO system not available' },
       },
     };
-    mockFetch.mockImplementation((url: string) => Promise.resolve({
-      ok: true,
-      status: 200,
-      url,
-      json: () => Promise.resolve(errorResponse)
-    }));
+    mockFetch.mockImplementation((url: string) =>
+      Promise.resolve({ ok: true, status: 200, url, json: () => Promise.resolve(errorResponse) }),
+    );
 
     await act(async () => {
       renderWithProviders(<LeaderboardPanel apiBase="http://localhost:3001" />);
@@ -371,7 +427,9 @@ describe('LeaderboardPanel', () => {
   it('includes loopId in API requests when provided', async () => {
     setupSuccessfulFetch();
     await act(async () => {
-      renderWithProviders(<LeaderboardPanel apiBase="http://localhost:3001" loopId="test-loop-123" />);
+      renderWithProviders(
+        <LeaderboardPanel apiBase="http://localhost:3001" loopId="test-loop-123" />,
+      );
     });
 
     await waitFor(() => {
@@ -379,7 +437,7 @@ describe('LeaderboardPanel', () => {
     });
 
     const leaderboardCall = mockFetch.mock.calls.find((call: string[]) =>
-      call[0].includes('/api/leaderboard-view')
+      call[0].includes('/api/leaderboard-view'),
     );
     expect(leaderboardCall[0]).toContain('loop_id=test-loop-123');
   });

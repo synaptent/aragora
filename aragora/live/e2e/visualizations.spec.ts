@@ -45,11 +45,41 @@ const mockHeatmapData = {
   gauntlet_id: 'gauntlet-123',
   categories: ['Input Validation', 'Logic Errors', 'Security', 'Performance'],
   cells: [
-    { category: 'Input Validation', subcategory: 'Injection', severity: 'high', count: 2, examples: ['SQL injection in param'] },
-    { category: 'Input Validation', subcategory: 'XSS', severity: 'medium', count: 3, examples: ['Reflected XSS'] },
-    { category: 'Security', subcategory: 'Auth', severity: 'critical', count: 1, examples: ['Auth bypass'] },
-    { category: 'Logic Errors', subcategory: 'Edge Cases', severity: 'low', count: 5, examples: ['Empty array handling'] },
-    { category: 'Performance', subcategory: 'Memory', severity: 'info', count: 2, examples: ['Memory leak potential'] },
+    {
+      category: 'Input Validation',
+      subcategory: 'Injection',
+      severity: 'high',
+      count: 2,
+      examples: ['SQL injection in param'],
+    },
+    {
+      category: 'Input Validation',
+      subcategory: 'XSS',
+      severity: 'medium',
+      count: 3,
+      examples: ['Reflected XSS'],
+    },
+    {
+      category: 'Security',
+      subcategory: 'Auth',
+      severity: 'critical',
+      count: 1,
+      examples: ['Auth bypass'],
+    },
+    {
+      category: 'Logic Errors',
+      subcategory: 'Edge Cases',
+      severity: 'low',
+      count: 5,
+      examples: ['Empty array handling'],
+    },
+    {
+      category: 'Performance',
+      subcategory: 'Memory',
+      severity: 'info',
+      count: 2,
+      examples: ['Memory leak potential'],
+    },
   ],
   total_findings: 13,
   max_count: 5,
@@ -58,19 +88,40 @@ const mockHeatmapData = {
 // Mock belief network data
 const mockBeliefNetwork = {
   nodes: [
-    { id: 'node-1', claim_id: 'claim-1', statement: 'AI systems should be transparent', author: 'claude', centrality: 0.8, is_crux: true, crux_score: 0.9, entropy: 0.65 },
-    { id: 'node-2', claim_id: 'claim-2', statement: 'Transparency enables accountability', author: 'gpt4', centrality: 0.6, is_crux: false },
-    { id: 'node-3', claim_id: 'claim-3', statement: 'Some opacity is necessary for security', author: 'gemini', centrality: 0.5, is_crux: true, crux_score: 0.75, entropy: 0.8 },
+    {
+      id: 'node-1',
+      claim_id: 'claim-1',
+      statement: 'AI systems should be transparent',
+      author: 'claude',
+      centrality: 0.8,
+      is_crux: true,
+      crux_score: 0.9,
+      entropy: 0.65,
+    },
+    {
+      id: 'node-2',
+      claim_id: 'claim-2',
+      statement: 'Transparency enables accountability',
+      author: 'gpt4',
+      centrality: 0.6,
+      is_crux: false,
+    },
+    {
+      id: 'node-3',
+      claim_id: 'claim-3',
+      statement: 'Some opacity is necessary for security',
+      author: 'gemini',
+      centrality: 0.5,
+      is_crux: true,
+      crux_score: 0.75,
+      entropy: 0.8,
+    },
   ],
   links: [
     { source: 'node-1', target: 'node-2', weight: 0.8, type: 'supports' },
     { source: 'node-3', target: 'node-1', weight: 0.6, type: 'contradicts' },
   ],
-  metadata: {
-    debate_id: 'debate-123',
-    total_claims: 3,
-    crux_count: 2,
-  },
+  metadata: { debate_id: 'debate-123', total_claims: 3, crux_count: 2 },
 };
 
 // Mock cruxes data
@@ -100,8 +151,18 @@ const mockCruxes = {
 // Mock load-bearing claims
 const mockLoadBearing = {
   load_bearing_claims: [
-    { claim_id: 'claim-2', statement: 'Transparency enables accountability', author: 'gpt4', centrality: 0.75 },
-    { claim_id: 'claim-4', statement: 'Users deserve to know how decisions are made', author: 'claude', centrality: 0.68 },
+    {
+      claim_id: 'claim-2',
+      statement: 'Transparency enables accountability',
+      author: 'gpt4',
+      centrality: 0.75,
+    },
+    {
+      claim_id: 'claim-4',
+      statement: 'Users deserve to know how decisions are made',
+      author: 'claude',
+      centrality: 0.68,
+    },
   ],
 };
 
@@ -116,7 +177,9 @@ test.describe('Gauntlet Panel', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Find gauntlet panel (might be on main page or dedicated page)
-    const gauntletPanel = page.locator('[data-testid="gauntlet-panel"], :text("GAUNTLET"), :text("Stress Test")');
+    const gauntletPanel = page.locator(
+      '[data-testid="gauntlet-panel"], :text("GAUNTLET"), :text("Stress Test")',
+    );
 
     if (await gauntletPanel.isVisible().catch(() => false)) {
       await expect(gauntletPanel.first()).toBeVisible();
@@ -130,7 +193,7 @@ test.describe('Gauntlet Panel', () => {
     // Look for verdict indicators
     const verdicts = page.locator(':text("PASS"), :text("CONDITIONAL"), :text("FAIL")');
 
-    if (await verdicts.count() > 0) {
+    if ((await verdicts.count()) > 0) {
       await expect(verdicts.first()).toBeVisible();
     }
   });
@@ -146,7 +209,9 @@ test.describe('Gauntlet Panel', () => {
       await resultItem.click();
 
       // Heatmap should appear
-      const heatmap = page.locator('[data-testid="heatmap"], .heatmap, :text("Vulnerability Heatmap")');
+      const heatmap = page.locator(
+        '[data-testid="heatmap"], .heatmap, :text("Vulnerability Heatmap")',
+      );
       await expect(heatmap.first()).toBeVisible({ timeout: 5000 });
     }
   });
@@ -156,9 +221,16 @@ test.describe('Gauntlet Panel', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Find filter buttons
-    const filterButtons = page.locator('button:has-text("PASS"), button:has-text("FAIL"), button:has-text("CONDITIONAL")');
+    const filterButtons = page.locator(
+      'button:has-text("PASS"), button:has-text("FAIL"), button:has-text("CONDITIONAL")',
+    );
 
-    if (await filterButtons.first().isVisible().catch(() => false)) {
+    if (
+      await filterButtons
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
       await filterButtons.first().click();
 
       // Results should be filtered
@@ -181,7 +253,9 @@ test.describe('Gauntlet Heatmap', () => {
     const heatmap = page.locator('[data-testid="heatmap"], .heatmap');
 
     if (await heatmap.isVisible().catch(() => false)) {
-      const legend = page.locator(':text("CRITICAL"), :text("HIGH"), :text("MEDIUM"), :text("LOW"), :text("INFO")');
+      const legend = page.locator(
+        ':text("CRITICAL"), :text("HIGH"), :text("MEDIUM"), :text("LOW"), :text("INFO")',
+      );
       await expect(legend.first()).toBeVisible();
     }
   });
@@ -228,7 +302,7 @@ test.describe('Gauntlet Heatmap', () => {
       // Should show total findings or severity counts
       const stats = page.locator(':text("findings"), :text("total")');
 
-      if (await stats.count() > 0) {
+      if ((await stats.count()) > 0) {
         await expect(stats.first()).toBeVisible();
       }
     }
@@ -247,7 +321,9 @@ test.describe('CruxPanel', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Find crux panel
-    const cruxPanel = page.locator('[data-testid="crux-panel"], :text("CRUX"), :text("Belief Network")');
+    const cruxPanel = page.locator(
+      '[data-testid="crux-panel"], :text("CRUX"), :text("Belief Network")',
+    );
 
     if (await cruxPanel.isVisible().catch(() => false)) {
       await expect(cruxPanel.first()).toBeVisible();
@@ -271,7 +347,9 @@ test.describe('CruxPanel', () => {
 
     // Look for tab buttons
     const cruxesTab = page.locator('button:has-text("CRUX"), button:has-text("Cruxes")').first();
-    const loadBearingTab = page.locator('button:has-text("LOAD-BEARING"), button:has-text("Load-Bearing")').first();
+    const loadBearingTab = page
+      .locator('button:has-text("LOAD-BEARING"), button:has-text("Load-Bearing")')
+      .first();
     const graphTab = page.locator('button:has-text("GRAPH"), button:has-text("Graph")').first();
 
     if (await cruxesTab.isVisible().catch(() => false)) {
@@ -299,7 +377,7 @@ test.describe('CruxPanel', () => {
     // After fetching cruxes, should show crux cards
     const cruxCards = page.locator('[data-testid="crux-card"], .crux-card, :text("CRUX #")');
 
-    if (await cruxCards.count() > 0) {
+    if ((await cruxCards.count()) > 0) {
       await expect(cruxCards.first()).toBeVisible();
 
       // Should show score
@@ -315,7 +393,7 @@ test.describe('CruxPanel', () => {
     // Look for belief probability indicators
     const beliefs = page.locator(':text("T:"), :text("F:"), :text("?:"), .belief-prob');
 
-    if (await beliefs.count() > 0) {
+    if ((await beliefs.count()) > 0) {
       await expect(beliefs.first()).toBeVisible();
     }
   });
@@ -360,7 +438,7 @@ test.describe('Belief Network Graph', () => {
     // Look for graph nodes (circles in SVG)
     const nodes = page.locator('svg circle, [data-testid="graph-node"]');
 
-    if (await nodes.count() > 0) {
+    if ((await nodes.count()) > 0) {
       await expect(nodes.first()).toBeVisible();
     }
   });
@@ -378,7 +456,7 @@ test.describe('Belief Network Graph', () => {
     // Look for graph edges (lines in SVG)
     const edges = page.locator('svg line, svg path, [data-testid="graph-edge"]');
 
-    if (await edges.count() > 0) {
+    if ((await edges.count()) > 0) {
       await expect(edges.first()).toBeVisible();
     }
   });
@@ -396,7 +474,7 @@ test.describe('Belief Network Graph', () => {
     // Crux nodes should have special styling
     const cruxNodes = page.locator('[data-testid="crux-node"], .crux-node, :text("CRUX")');
 
-    if (await cruxNodes.count() > 0) {
+    if ((await cruxNodes.count()) > 0) {
       await expect(cruxNodes.first()).toBeVisible();
     }
   });
@@ -418,7 +496,9 @@ test.describe('Belief Network Graph', () => {
       await node.click();
 
       // Details panel should appear
-      const details = page.locator('[data-testid="node-details"], .node-details, :text("Centrality")');
+      const details = page.locator(
+        '[data-testid="node-details"], .node-details, :text("Centrality")',
+      );
 
       if (await details.isVisible({ timeout: 3000 }).catch(() => false)) {
         await expect(details.first()).toBeVisible();
@@ -457,7 +537,7 @@ test.describe('Belief Network Graph', () => {
     // Should show claims count and crux count
     const metadata = page.locator(':text("claims"), :text("cruxes")');
 
-    if (await metadata.count() > 0) {
+    if ((await metadata.count()) > 0) {
       await expect(metadata.first()).toBeVisible();
     }
   });
@@ -471,7 +551,7 @@ test.describe('Visualization Accessibility', () => {
     // Heatmap cells should have readable text
     const heatmapCells = page.locator('.heatmap-cell, td > div');
 
-    if (await heatmapCells.count() > 0) {
+    if ((await heatmapCells.count()) > 0) {
       // Cells should be visible with adequate contrast
       await expect(heatmapCells.first()).toBeVisible();
     }

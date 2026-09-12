@@ -2,11 +2,7 @@
  * Tests for agent colors utilities
  */
 
-import {
-  AGENT_COLORS,
-  getAgentColors,
-  getAgentTextColor,
-} from '@/utils/agentColors';
+import { AGENT_COLORS, getAgentColors, getAgentTextColor } from '@/utils/agentColors';
 
 describe('agentColors utilities', () => {
   describe('AGENT_COLORS constant', () => {

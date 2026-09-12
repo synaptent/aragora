@@ -67,9 +67,7 @@ function ProvenancePageContent() {
             <span className="text-xs text-[var(--text-muted)]">Consensus</span>
             <span
               className={`text-sm font-theme-data ${
-                selectedDebate.consensus_reached
-                  ? 'text-green-400'
-                  : 'text-yellow-400'
+                selectedDebate.consensus_reached ? 'text-green-400' : 'text-yellow-400'
               }`}
             >
               {selectedDebate.consensus_reached ? 'YES' : 'NO'}
@@ -162,9 +160,7 @@ function ProvenancePageContent() {
               className="w-full bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] font-theme-data text-sm p-2 focus:border-[var(--acid-green)] focus:outline-none"
               disabled={loading}
             >
-              <option value="">
-                {loading ? 'Loading debates...' : '-- Select a debate --'}
-              </option>
+              <option value="">{loading ? 'Loading debates...' : '-- Select a debate --'}</option>
               {debates.map((debate) => (
                 <option key={debate.id} value={debate.id}>
                   {debate.task.slice(0, 60)}
@@ -215,14 +211,10 @@ function ProvenancePageContent() {
                       <p className="mt-1">
                         <span
                           className={
-                            selectedDebate.consensus_reached
-                              ? 'text-green-400'
-                              : 'text-yellow-400'
+                            selectedDebate.consensus_reached ? 'text-green-400' : 'text-yellow-400'
                           }
                         >
-                          {selectedDebate.consensus_reached
-                            ? 'Consensus Reached'
-                            : 'No Consensus'}
+                          {selectedDebate.consensus_reached ? 'Consensus Reached' : 'No Consensus'}
                         </span>
                         <span className="text-[var(--text-muted)] ml-2">
                           ({Math.round(selectedDebate.confidence * 100)}% confidence)
@@ -262,7 +254,9 @@ function ProvenancePageContent() {
                   <span className="w-3 h-3 rounded-full bg-amber-400" />
                   <span className="text-[var(--text)]">Question</span>
                 </div>
-                <p className="text-[var(--text-muted)]">The original task or question being debated</p>
+                <p className="text-[var(--text-muted)]">
+                  The original task or question being debated
+                </p>
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-1">
@@ -304,13 +298,15 @@ function ProvenancePageContent() {
 
 export default function ProvenancePage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
-        <div className="text-[var(--acid-green)] font-theme-data animate-pulse">
-          Loading provenance data...
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center">
+          <div className="text-[var(--acid-green)] font-theme-data animate-pulse">
+            Loading provenance data...
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <ProvenancePageContent />
     </Suspense>
   );

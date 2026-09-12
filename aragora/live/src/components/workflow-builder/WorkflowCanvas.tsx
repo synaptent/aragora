@@ -70,12 +70,7 @@ function getDefaultNodeData(type: WorkflowStepType): WorkflowNodeData {
         rounds: 2,
       } as DebateNodeData;
     case 'task':
-      return {
-        ...base,
-        type: 'task',
-        label: 'New Task',
-        taskType: 'transform',
-      } as TaskNodeData;
+      return { ...base, type: 'task', label: 'New Task', taskType: 'transform' } as TaskNodeData;
     case 'decision':
       return {
         ...base,
@@ -121,12 +116,7 @@ function getDefaultNodeData(type: WorkflowStepType): WorkflowNodeData {
         condition: 'continue',
       } as LoopNodeData;
     default:
-      return {
-        ...base,
-        type: 'task',
-        label: 'New Node',
-        taskType: 'transform',
-      } as TaskNodeData;
+      return { ...base, type: 'task', label: 'New Node', taskType: 'transform' } as TaskNodeData;
   }
 }
 
@@ -165,16 +155,12 @@ export function WorkflowCanvas({
     (connection: Connection) => {
       setEdges((eds) =>
         addEdge(
-          {
-            ...connection,
-            animated: true,
-            style: { stroke: '#10b981', strokeWidth: 2 },
-          },
-          eds
-        )
+          { ...connection, animated: true, style: { stroke: '#10b981', strokeWidth: 2 } },
+          eds,
+        ),
       );
     },
-    [setEdges]
+    [setEdges],
   );
 
   // Handle node selection
@@ -223,7 +209,7 @@ export function WorkflowCanvas({
       setSelectedNodeId(newNode.id);
       setDraggedType(null);
     },
-    [setNodes]
+    [setNodes],
   );
 
   // Handle property updates
@@ -235,11 +221,11 @@ export function WorkflowCanvas({
         nds.map((node) =>
           node.id === selectedNodeId
             ? ({ ...node, data: { ...node.data, ...updates } } as WorkflowNode)
-            : node
-        )
+            : node,
+        ),
       );
     },
-    [selectedNodeId, setNodes]
+    [selectedNodeId, setNodes],
   );
 
   // Handle node deletion
@@ -248,7 +234,7 @@ export function WorkflowCanvas({
 
     setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
     setEdges((eds) =>
-      eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId)
+      eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId),
     );
     setSelectedNodeId(null);
   }, [selectedNodeId, setNodes, setEdges]);
@@ -273,12 +259,7 @@ export function WorkflowCanvas({
       )}
 
       {/* Canvas */}
-      <div
-        ref={reactFlowWrapper}
-        className="flex-1 h-full"
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-      >
+      <div ref={reactFlowWrapper} className="flex-1 h-full" onDragOver={onDragOver} onDrop={onDrop}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -291,18 +272,10 @@ export function WorkflowCanvas({
           fitView
           snapToGrid
           snapGrid={[16, 16]}
-          defaultEdgeOptions={{
-            animated: true,
-            style: { stroke: '#10b981', strokeWidth: 2 },
-          }}
+          defaultEdgeOptions={{ animated: true, style: { stroke: '#10b981', strokeWidth: 2 } }}
           proOptions={{ hideAttribution: true }}
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={16}
-            size={1}
-            color="#333"
-          />
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#333" />
           <Controls
             className="bg-surface border border-border rounded"
             showInteractive={!readOnly}
@@ -392,11 +365,7 @@ export function WorkflowCanvas({
       {/* Property Editor (right sidebar) */}
       {!readOnly && (
         <div className="w-72 flex-shrink-0">
-          <PropertyEditor
-            node={selectedNode}
-            onUpdate={onPropertyUpdate}
-            onDelete={onDeleteNode}
-          />
+          <PropertyEditor node={selectedNode} onUpdate={onPropertyUpdate} onDelete={onDeleteNode} />
         </div>
       )}
     </div>

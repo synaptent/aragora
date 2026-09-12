@@ -11,7 +11,10 @@ import { API_BASE_URL } from '@/config';
 import Link from 'next/link';
 
 // Template configurations for SME/Quickstart templates
-const TEMPLATE_CONFIGS: Record<string, { name: string; description: string; format: 'light' | 'full'; mode: string }> = {
+const TEMPLATE_CONFIGS: Record<
+  string,
+  { name: string; description: string; format: 'light' | 'full'; mode: string }
+> = {
   'quickstart/yes-no': {
     name: 'Quick Yes/No Decision',
     description: 'Fast binary decision with AI consensus',
@@ -106,7 +109,9 @@ function ArenaContent() {
   const topicParam = searchParams.get('topic');
   const templateConfig = templateId ? TEMPLATE_CONFIGS[templateId] : null;
   const [error, setError] = useState<string | null>(null);
-  const [recentDebates, setRecentDebates] = useState<{ id: string; question: string; created_at: string }[]>([]);
+  const [recentDebates, setRecentDebates] = useState<
+    { id: string; question: string; created_at: string }[]
+  >([]);
   const [fetchedTemplate, setFetchedTemplate] = useState<FetchedTemplate | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState('');
   const { setContext, clearContext } = useRightSidebar();
@@ -120,7 +125,9 @@ function ArenaContent() {
 
     async function fetchTemplate() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/templates/${encodeURIComponent(templateId!)}`);
+        const response = await fetch(
+          `${API_BASE_URL}/api/v1/templates/${encodeURIComponent(templateId!)}`,
+        );
         if (response.ok) {
           const data = await response.json();
           setFetchedTemplate(data);
@@ -139,10 +146,13 @@ function ArenaContent() {
   const defaultQuestion = topicParam ?? fetchedTemplate?.example_topics?.[0] ?? '';
 
   // Handle debate started - navigate to debate viewer
-  const handleDebateStarted = useCallback((debateId: string, _question: string) => {
-    showSuccess('Debate started! Redirecting to results...', 4000);
-    router.push(`/debates/${debateId}`);
-  }, [router, showSuccess]);
+  const handleDebateStarted = useCallback(
+    (debateId: string, _question: string) => {
+      showSuccess('Debate started! Redirecting to results...', 4000);
+      router.push(`/debates/${debateId}`);
+    },
+    [router, showSuccess],
+  );
 
   // Handle error
   const handleError = useCallback((err: string) => {
@@ -188,20 +198,21 @@ function ArenaContent() {
           </div>
         </div>
       ),
-      actionsContent: recentDebates.length > 0 ? (
-        <div className="space-y-2">
-          <span className="text-xs text-[var(--text-muted)] block mb-2">Recent Debates</span>
-          {recentDebates.map((debate) => (
-            <Link
-              key={debate.id}
-              href={`/debates/${debate.id}`}
-              className="block w-full px-2 py-1.5 text-xs font-theme-data text-left bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 hover:text-[var(--text)] transition-colors truncate"
-            >
-              {debate.question?.slice(0, 40) || debate.id.slice(0, 8)}...
-            </Link>
-          ))}
-        </div>
-      ) : null,
+      actionsContent:
+        recentDebates.length > 0 ? (
+          <div className="space-y-2">
+            <span className="text-xs text-[var(--text-muted)] block mb-2">Recent Debates</span>
+            {recentDebates.map((debate) => (
+              <Link
+                key={debate.id}
+                href={`/debates/${debate.id}`}
+                className="block w-full px-2 py-1.5 text-xs font-theme-data text-left bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--acid-green)]/30 hover:text-[var(--text)] transition-colors truncate"
+              >
+                {debate.question?.slice(0, 40) || debate.id.slice(0, 8)}...
+              </Link>
+            ))}
+          </div>
+        ) : null,
     });
 
     return () => clearContext();
@@ -220,8 +231,8 @@ function ArenaContent() {
               {'>'} {displayName ? displayName.toUpperCase() : 'DEBATE ARENA'}
             </h1>
             <p className="text-sm text-[var(--text-muted)] font-theme-data max-w-xl mx-auto">
-              {displayDescription
-                ?? 'Harness the collective intelligence of multiple AI models for better decisions. Choose your question and let Claude, GPT, Gemini, Grok & DeepSeek collaborate through debate.'}
+              {displayDescription ??
+                'Harness the collective intelligence of multiple AI models for better decisions. Choose your question and let Claude, GPT, Gemini, Grok & DeepSeek collaborate through debate.'}
             </p>
             {displayName && (
               <div className="mt-3 flex items-center justify-center gap-4">
@@ -246,9 +257,7 @@ function ArenaContent() {
                 onClick={() => setError(null)}
                 className="text-[var(--warning)] hover:text-[var(--warning)]/80"
                 aria-label="Dismiss error"
-              >
-
-              </button>
+              ></button>
             </div>
           )}
 
@@ -265,9 +274,7 @@ function ArenaContent() {
             />
 
             {/* Template Suggestions (Task 18B) */}
-            {!templateId && (
-              <TemplateSuggestions question={currentQuestion} />
-            )}
+            {!templateId && <TemplateSuggestions question={currentQuestion} />}
           </div>
 
           {/* Quick Info */}
@@ -281,7 +288,9 @@ function ArenaContent() {
             </div>
             <div className="bg-[var(--surface)]/50 border border-[var(--border)] p-4">
               <div className="text-[var(--acid-green)] font-theme-data text-lg mb-2">02</div>
-              <h3 className="text-sm font-theme-data text-[var(--text)] mb-1">AI Models Collaborate</h3>
+              <h3 className="text-sm font-theme-data text-[var(--text)] mb-1">
+                AI Models Collaborate
+              </h3>
               <p className="text-xs text-[var(--text-muted)]">
                 Watch as diverse AI models discuss, critique, and refine answers together
               </p>

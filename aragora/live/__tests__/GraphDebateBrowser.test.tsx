@@ -35,12 +35,8 @@ jest.mock('d3-force', () => {
       radius: jest.fn().mockReturnThis(),
       strength: jest.fn().mockReturnThis(),
     })),
-    forceX: jest.fn(() => ({
-      strength: jest.fn().mockReturnThis(),
-    })),
-    forceY: jest.fn(() => ({
-      strength: jest.fn().mockReturnThis(),
-    })),
+    forceX: jest.fn(() => ({ strength: jest.fn().mockReturnThis() })),
+    forceY: jest.fn(() => ({ strength: jest.fn().mockReturnThis() })),
   };
 });
 
@@ -157,10 +153,7 @@ describe('GraphDebateBrowser', () => {
   });
 
   it('renders the header and empty state', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ debates: [] }),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ debates: [] }) });
 
     render(<GraphDebateBrowser />);
 
@@ -170,9 +163,7 @@ describe('GraphDebateBrowser', () => {
       expect(screen.getByText(/no graph debates yet/i)).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText(/select or create a graph debate to visualize/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/select or create a graph debate to visualize/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create/i })).toBeDisabled();
   });
 
@@ -185,9 +176,7 @@ describe('GraphDebateBrowser', () => {
     render(<GraphDebateBrowser />);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/debates/graph')
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/api/debates/graph'));
     });
 
     const listItem = await screen.findByTestId('graph-debate-item-debate-1');
@@ -201,21 +190,14 @@ describe('GraphDebateBrowser', () => {
   });
 
   it('creates a new graph debate and renders it in the list', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ debates: [] }),
-    });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockGraphDebate),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ debates: [] }) });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockGraphDebate) });
 
     render(<GraphDebateBrowser />);
 
-    fireEvent.change(
-      screen.getByPlaceholderText(/enter a topic for graph debate/i),
-      { target: { value: 'Should AI be regulated?' } }
-    );
+    fireEvent.change(screen.getByPlaceholderText(/enter a topic for graph debate/i), {
+      target: { value: 'Should AI be regulated?' },
+    });
 
     const createButton = screen.getByRole('button', { name: /create/i });
     fireEvent.click(createButton);
@@ -223,7 +205,7 @@ describe('GraphDebateBrowser', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/debates/graph'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -237,20 +219,14 @@ describe('GraphDebateBrowser', () => {
   });
 
   it('loads an initial debate when initialDebateId is provided', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ debates: [] }),
-    });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockGraphDebate),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ debates: [] }) });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockGraphDebate) });
 
     render(<GraphDebateBrowser initialDebateId="debate-1" />);
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/debates/graph/debate-1')
+        expect.stringContaining('/api/debates/graph/debate-1'),
       );
     });
 
@@ -271,14 +247,8 @@ describe('GraphDebateBrowser', () => {
       status: 'disconnected',
     });
 
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ debates: [] }),
-    });
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockGraphDebate),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ debates: [] }) });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(mockGraphDebate) });
 
     render(<GraphDebateBrowser initialDebateId="debate-1" />);
 

@@ -111,15 +111,21 @@ export default function MarketplacePage() {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Listings</span>
-            <span className="text-sm font-theme-data text-[var(--acid-green)]">{catalogListings.length}</span>
+            <span className="text-sm font-theme-data text-[var(--acid-green)]">
+              {catalogListings.length}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Templates</span>
-            <span className="text-sm font-theme-data text-[var(--acid-cyan)]">{templates.length}</span>
+            <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+              {templates.length}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Featured</span>
-            <span className="text-sm font-theme-data text-[var(--acid-cyan)]">{featuredListings.length}</span>
+            <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+              {featuredListings.length}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Installed</span>
@@ -269,7 +275,9 @@ export default function MarketplacePage() {
                         onSelect={() => selectListing(listing)}
                         onInstall={() => setShowInstallConfirm(listing)}
                         onRate={() => setShowRateModal(listing)}
-                        onLaunchDebate={() => router.push(`/arena?template=${encodeURIComponent(listing.id)}`)}
+                        onLaunchDebate={() =>
+                          router.push(`/arena?template=${encodeURIComponent(listing.id)}`)
+                        }
                         featured
                       />
                     ))}
@@ -310,7 +318,9 @@ export default function MarketplacePage() {
                       onSelect={() => selectListing(listing)}
                       onInstall={() => setShowInstallConfirm(listing)}
                       onRate={() => setShowRateModal(listing)}
-                      onLaunchDebate={() => router.push(`/arena?template=${encodeURIComponent(listing.id)}`)}
+                      onLaunchDebate={() =>
+                        router.push(`/arena?template=${encodeURIComponent(listing.id)}`)
+                      }
                     />
                   ))}
                 </div>
@@ -380,28 +390,35 @@ export default function MarketplacePage() {
               </div>
 
               {/* Featured Section */}
-              {featuredTemplates.length > 0 && selectedCategory === 'all' && selectedType === 'all' && !searchQuery && (
-                <div className="mb-8">
-                  <h2 className="text-sm font-theme-data text-[var(--acid-cyan)] uppercase tracking-wider mb-4">
-                    Featured Templates
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {featuredTemplates.slice(0, 3).map((template) => (
-                      <TemplateCard
-                        key={template.metadata.id}
-                        template={template}
-                        isInstalled={installedTemplates.includes(template.metadata.id)}
-                        onSelect={() => selectTemplate(template)}
-                        onInstall={() => installTemplate(template.metadata.id)}
-                        onUninstall={() => uninstallTemplate(template.metadata.id)}
-                        onStar={() => starTemplate(template.metadata.id)}
-                        onUse={() => router.push(`/arena?template=${encodeURIComponent(template.metadata.name)}`)}
-                        featured
-                      />
-                    ))}
+              {featuredTemplates.length > 0 &&
+                selectedCategory === 'all' &&
+                selectedType === 'all' &&
+                !searchQuery && (
+                  <div className="mb-8">
+                    <h2 className="text-sm font-theme-data text-[var(--acid-cyan)] uppercase tracking-wider mb-4">
+                      Featured Templates
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {featuredTemplates.slice(0, 3).map((template) => (
+                        <TemplateCard
+                          key={template.metadata.id}
+                          template={template}
+                          isInstalled={installedTemplates.includes(template.metadata.id)}
+                          onSelect={() => selectTemplate(template)}
+                          onInstall={() => installTemplate(template.metadata.id)}
+                          onUninstall={() => uninstallTemplate(template.metadata.id)}
+                          onStar={() => starTemplate(template.metadata.id)}
+                          onUse={() =>
+                            router.push(
+                              `/arena?template=${encodeURIComponent(template.metadata.name)}`,
+                            )
+                          }
+                          featured
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* Templates Grid */}
               <div className="mb-4 flex items-center justify-between">
@@ -409,8 +426,8 @@ export default function MarketplacePage() {
                   {selectedCategory !== 'all'
                     ? `${CATEGORY_STYLES[selectedCategory]?.icon} ${selectedCategory}`
                     : selectedType !== 'all'
-                    ? `${selectedType} Templates`
-                    : 'All Templates'}
+                      ? `${selectedType} Templates`
+                      : 'All Templates'}
                   {` (${filteredTemplates.length})`}
                 </h2>
               </div>
@@ -440,7 +457,9 @@ export default function MarketplacePage() {
                       onInstall={() => installTemplate(template.metadata.id)}
                       onUninstall={() => uninstallTemplate(template.metadata.id)}
                       onStar={() => starTemplate(template.metadata.id)}
-                      onUse={() => router.push(`/arena?template=${encodeURIComponent(template.metadata.name)}`)}
+                      onUse={() =>
+                        router.push(`/arena?template=${encodeURIComponent(template.metadata.name)}`)
+                      }
                     />
                   ))}
                 </div>
@@ -551,13 +570,17 @@ function ListingCard({
             by {listing.author} &middot; v{listing.version}
           </div>
         </div>
-        <span className={`px-2 py-0.5 text-xs font-theme-data ${typeStyle.color} ${typeStyle.bgColor}`}>
+        <span
+          className={`px-2 py-0.5 text-xs font-theme-data ${typeStyle.color} ${typeStyle.bgColor}`}
+        >
           {LISTING_TYPE_LABELS[listing.type]}
         </span>
       </div>
 
       {/* Description */}
-      <p className="text-xs font-theme-data text-text-muted mb-3 line-clamp-2">{listing.description}</p>
+      <p className="text-xs font-theme-data text-text-muted mb-3 line-clamp-2">
+        {listing.description}
+      </p>
 
       {/* Tags */}
       <div className="flex flex-wrap gap-1 mb-3">
@@ -637,7 +660,13 @@ interface ListingDetailModalProps {
   onRate: () => void;
 }
 
-function ListingDetailModal({ listing, isInstalled, onClose, onInstall, onRate }: ListingDetailModalProps) {
+function ListingDetailModal({
+  listing,
+  isInstalled,
+  onClose,
+  onInstall,
+  onRate,
+}: ListingDetailModalProps) {
   const typeStyle = LISTING_TYPE_COLORS[listing.type];
 
   return (
@@ -647,11 +676,15 @@ function ListingDetailModal({ listing, isInstalled, onClose, onInstall, onRate }
         <div className="sticky top-0 bg-surface border-b border-[var(--accent)]/20 p-4 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className={`px-2 py-0.5 text-xs font-theme-data ${typeStyle.color} ${typeStyle.bgColor}`}>
+              <span
+                className={`px-2 py-0.5 text-xs font-theme-data ${typeStyle.color} ${typeStyle.bgColor}`}
+              >
                 {LISTING_TYPE_LABELS[listing.type]}
               </span>
               {listing.featured && (
-                <span className="text-xs font-theme-data text-[var(--accent)] uppercase">Featured</span>
+                <span className="text-xs font-theme-data text-[var(--accent)] uppercase">
+                  Featured
+                </span>
               )}
             </div>
             <h2 className="text-lg font-theme-data text-text font-bold">{listing.name}</h2>
@@ -659,7 +692,10 @@ function ListingDetailModal({ listing, isInstalled, onClose, onInstall, onRate }
               by {listing.author} &middot; v{listing.version}
             </div>
           </div>
-          <button onClick={onClose} className="text-text-muted hover:text-text transition-colors text-xl">
+          <button
+            onClick={onClose}
+            className="text-text-muted hover:text-text transition-colors text-xl"
+          >
             &times;
           </button>
         </div>
@@ -667,7 +703,9 @@ function ListingDetailModal({ listing, isInstalled, onClose, onInstall, onRate }
         {/* Content */}
         <div className="p-4 space-y-4">
           <div>
-            <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">Description</h3>
+            <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">
+              Description
+            </h3>
             <p className="text-sm font-theme-data text-text-muted">{listing.description}</p>
           </div>
 
@@ -675,7 +713,9 @@ function ListingDetailModal({ listing, isInstalled, onClose, onInstall, onRate }
           <div className="flex gap-6">
             <div>
               <span className="text-xs font-theme-data text-text-muted">Downloads</span>
-              <div className="text-lg font-theme-data text-[var(--accent)]">{listing.downloads}</div>
+              <div className="text-lg font-theme-data text-[var(--accent)]">
+                {listing.downloads}
+              </div>
             </div>
             <div>
               <span className="text-xs font-theme-data text-text-muted">Rating</span>
@@ -704,7 +744,9 @@ function ListingDetailModal({ listing, isInstalled, onClose, onInstall, onRate }
           {/* Install command */}
           {listing.install_command && (
             <div>
-              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">Install Command</h3>
+              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">
+                Install Command
+              </h3>
               <pre className="p-3 bg-bg/50 border border-[var(--accent)]/10 text-xs font-theme-data text-text">
                 {listing.install_command}
               </pre>
@@ -751,7 +793,9 @@ function InstallConfirmModal({ listing, onConfirm, onCancel }: InstallConfirmMod
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-bg/80 backdrop-blur-sm">
       <div className="w-full max-w-md bg-surface border border-[var(--accent)]/30 m-4 p-6">
-        <h3 className="text-lg font-theme-data text-[var(--accent)] font-bold mb-4">CONFIRM INSTALL</h3>
+        <h3 className="text-lg font-theme-data text-[var(--accent)] font-bold mb-4">
+          CONFIRM INSTALL
+        </h3>
         <p className="text-sm font-theme-data text-text-muted mb-2">
           Install <span className="text-text font-bold">{listing.name}</span>?
         </p>
@@ -794,14 +838,18 @@ function RateModal({ listing, onSubmit, onCancel }: RateModalProps) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-bg/80 backdrop-blur-sm">
       <div className="w-full max-w-md bg-surface border border-[var(--accent)]/30 m-4 p-6">
-        <h3 className="text-lg font-theme-data text-[var(--accent)] font-bold mb-4">RATE LISTING</h3>
+        <h3 className="text-lg font-theme-data text-[var(--accent)] font-bold mb-4">
+          RATE LISTING
+        </h3>
         <p className="text-sm font-theme-data text-text-muted mb-4">
           Rate <span className="text-text font-bold">{listing.name}</span>
         </p>
 
         {/* Score */}
         <div className="mb-4">
-          <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">Score</label>
+          <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">
+            Score
+          </label>
           <div className="flex gap-2">
             {[1, 2, 3, 4, 5].map((s) => (
               <button
@@ -899,7 +947,9 @@ function TemplateCard({
           <div className="text-xs font-theme-data text-text-muted">by {metadata.author}</div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className={`px-2 py-0.5 text-xs font-theme-data ${categoryStyle.color} ${categoryStyle.bgColor}`}>
+          <span
+            className={`px-2 py-0.5 text-xs font-theme-data ${categoryStyle.color} ${categoryStyle.bgColor}`}
+          >
             {categoryStyle.icon} {metadata.category}
           </span>
           <span className="text-xs font-theme-data text-text-muted uppercase">{templateType}</span>
@@ -907,7 +957,9 @@ function TemplateCard({
       </div>
 
       {/* Description */}
-      <p className="text-xs font-theme-data text-text-muted mb-3 line-clamp-2">{metadata.description}</p>
+      <p className="text-xs font-theme-data text-text-muted mb-3 line-clamp-2">
+        {metadata.description}
+      </p>
 
       {/* Tags */}
       <div className="flex flex-wrap gap-1 mb-3">
@@ -1002,10 +1054,14 @@ function TemplateDetailModal({
         <div className="sticky top-0 bg-surface border-b border-[var(--accent)]/20 p-4 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className={`px-2 py-0.5 text-xs font-theme-data ${categoryStyle.color} ${categoryStyle.bgColor}`}>
+              <span
+                className={`px-2 py-0.5 text-xs font-theme-data ${categoryStyle.color} ${categoryStyle.bgColor}`}
+              >
                 {categoryStyle.icon} {metadata.category}
               </span>
-              <span className="text-xs font-theme-data text-text-muted uppercase">{templateType}</span>
+              <span className="text-xs font-theme-data text-text-muted uppercase">
+                {templateType}
+              </span>
             </div>
             <h2 className="text-lg font-theme-data text-text font-bold">{metadata.name}</h2>
             <div className="text-xs font-theme-data text-text-muted">
@@ -1024,7 +1080,9 @@ function TemplateDetailModal({
         <div className="p-4 space-y-4">
           {/* Description */}
           <div>
-            <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">Description</h3>
+            <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">
+              Description
+            </h3>
             <p className="text-sm font-theme-data text-text-muted">{metadata.description}</p>
           </div>
 
@@ -1032,7 +1090,9 @@ function TemplateDetailModal({
           <div className="flex gap-6">
             <div>
               <span className="text-xs font-theme-data text-text-muted">Downloads</span>
-              <div className="text-lg font-theme-data text-[var(--accent)]">{metadata.downloads}</div>
+              <div className="text-lg font-theme-data text-[var(--accent)]">
+                {metadata.downloads}
+              </div>
             </div>
             <div>
               <span className="text-xs font-theme-data text-text-muted">Stars</span>
@@ -1062,7 +1122,9 @@ function TemplateDetailModal({
           {/* Template-specific content */}
           {templateType === 'agent' && 'system_prompt' in template && (
             <div>
-              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">System Prompt</h3>
+              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">
+                System Prompt
+              </h3>
               <pre className="p-3 bg-bg/50 border border-[var(--accent)]/10 text-xs font-theme-data text-text whitespace-pre-wrap max-h-48 overflow-auto">
                 {template.system_prompt}
               </pre>
@@ -1071,7 +1133,9 @@ function TemplateDetailModal({
 
           {templateType === 'debate' && 'protocol' in template && (
             <div>
-              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">Protocol</h3>
+              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">
+                Protocol
+              </h3>
               <pre className="p-3 bg-bg/50 border border-[var(--accent)]/10 text-xs font-theme-data text-text whitespace-pre-wrap max-h-48 overflow-auto">
                 {JSON.stringify(template.protocol, null, 2)}
               </pre>
@@ -1101,7 +1165,9 @@ function TemplateDetailModal({
           {/* Links */}
           {(metadata.repository_url || metadata.documentation_url) && (
             <div>
-              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">Links</h3>
+              <h3 className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase mb-2">
+                Links
+              </h3>
               <div className="flex gap-4">
                 {metadata.repository_url && (
                   <a
@@ -1179,7 +1245,10 @@ function PublishModal({ onClose }: PublishModalProps) {
       version: '1.0.0',
       author: user?.name || user?.email || 'anonymous',
       category,
-      tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+      tags: tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
       downloads: 0,
       stars: 0,
       license: 'MIT',
@@ -1194,8 +1263,14 @@ function PublishModal({ onClose }: PublishModalProps) {
       templateType === 'agent'
         ? { metadata, agent_type: 'claude', system_prompt: '', capabilities: [], constraints: [] }
         : templateType === 'debate'
-        ? { metadata, task_template: '', agent_roles: [], protocol: { rounds: 3 }, evaluation_criteria: [] }
-        : { metadata, nodes: [], edges: [], inputs: {}, outputs: {} };
+          ? {
+              metadata,
+              task_template: '',
+              agent_roles: [],
+              protocol: { rounds: 3 },
+              evaluation_criteria: [],
+            }
+          : { metadata, nodes: [], edges: [], inputs: {}, outputs: {} };
 
     await publishTemplate(template);
     onClose();
@@ -1205,8 +1280,13 @@ function PublishModal({ onClose }: PublishModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm">
       <div className="w-full max-w-lg bg-surface border border-[var(--accent)]/30 m-4">
         <div className="border-b border-[var(--accent)]/20 p-4 flex items-center justify-between">
-          <h2 className="text-lg font-theme-data text-[var(--accent)] font-bold">PUBLISH TEMPLATE</h2>
-          <button onClick={onClose} className="text-text-muted hover:text-text transition-colors text-xl">
+          <h2 className="text-lg font-theme-data text-[var(--accent)] font-bold">
+            PUBLISH TEMPLATE
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-text-muted hover:text-text transition-colors text-xl"
+          >
             &times;
           </button>
         </div>
@@ -1214,7 +1294,9 @@ function PublishModal({ onClose }: PublishModalProps) {
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           {/* Template Type */}
           <div>
-            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">Type</label>
+            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">
+              Type
+            </label>
             <div className="flex gap-2">
               {TYPES.filter((t) => t.value !== 'all').map((type) => (
                 <button
@@ -1235,7 +1317,9 @@ function PublishModal({ onClose }: PublishModalProps) {
 
           {/* Name */}
           <div>
-            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">Name</label>
+            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">
+              Name
+            </label>
             <input
               type="text"
               value={name}
@@ -1248,7 +1332,9 @@ function PublishModal({ onClose }: PublishModalProps) {
 
           {/* Description */}
           <div>
-            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">Description</label>
+            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">
+              Description
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -1261,7 +1347,9 @@ function PublishModal({ onClose }: PublishModalProps) {
 
           {/* Category */}
           <div>
-            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">Category</label>
+            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">
+              Category
+            </label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as TemplateCategory)}
@@ -1277,7 +1365,9 @@ function PublishModal({ onClose }: PublishModalProps) {
 
           {/* Tags */}
           <div>
-            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">Tags (comma-separated)</label>
+            <label className="text-xs font-theme-data text-[var(--acid-cyan)] uppercase block mb-2">
+              Tags (comma-separated)
+            </label>
             <input
               type="text"
               value={tags}

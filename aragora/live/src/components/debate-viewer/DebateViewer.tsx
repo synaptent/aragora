@@ -49,11 +49,7 @@ export function DebateViewer({ debateId, wsUrl = DEFAULT_WS_URL }: DebateViewerP
     sendSuggestion,
     registerAckCallback,
     registerErrorCallback,
-  } = useDebateWebSocket({
-    debateId,
-    wsUrl,
-    enabled: isLiveDebate,
-  });
+  } = useDebateWebSocket({ debateId, wsUrl, enabled: isLiveDebate });
 
   useEffect(() => {
     if (hasCitations) {
@@ -77,17 +73,26 @@ export function DebateViewer({ debateId, wsUrl = DEFAULT_WS_URL }: DebateViewerP
         }
         const response = await fetch(
           `${API_BASE_URL}/api/belief-network/${debateId}/cruxes?top_k=5`,
-          { headers }
+          { headers },
         );
         if (response.ok) {
           const data = await response.json();
           if (data.cruxes && data.cruxes.length > 0) {
-            setCruxes(data.cruxes.map((c: { claim_id?: string; statement?: string; author?: string; crux_score?: number }) => ({
-              claim_id: c.claim_id || '',
-              statement: c.statement || '',
-              author: c.author || '',
-              crux_score: c.crux_score,
-            })));
+            setCruxes(
+              data.cruxes.map(
+                (c: {
+                  claim_id?: string;
+                  statement?: string;
+                  author?: string;
+                  crux_score?: number;
+                }) => ({
+                  claim_id: c.claim_id || '',
+                  statement: c.statement || '',
+                  author: c.author || '',
+                  crux_score: c.crux_score,
+                }),
+              ),
+            );
           }
         }
       } catch (err) {
@@ -98,7 +103,14 @@ export function DebateViewer({ debateId, wsUrl = DEFAULT_WS_URL }: DebateViewerP
     // Delay fetch slightly to let debate settle
     const timer = setTimeout(fetchCruxes, 2000);
     return () => clearTimeout(timer);
-  }, [liveMessages.length, cruxes.length, debateId, isLiveDebate, tokens?.access_token, authLoading]);
+  }, [
+    liveMessages.length,
+    cruxes.length,
+    debateId,
+    isLiveDebate,
+    tokens?.access_token,
+    authLoading,
+  ]);
 
   // Detect when user manually scrolls up
   const handleScroll = useCallback(() => {
@@ -258,7 +270,9 @@ function Header() {
 function LoadingState() {
   return (
     <div className="flex items-center justify-center py-20">
-      <div className="text-[var(--accent)] font-theme-data animate-pulse">{'>'} LOADING DEBATE...</div>
+      <div className="text-[var(--accent)] font-theme-data animate-pulse">
+        {'>'} LOADING DEBATE...
+      </div>
     </div>
   );
 }
@@ -268,7 +282,10 @@ function ErrorState({ error }: { error: string }) {
     <div className="bg-warning/10 border border-warning/30 rounded-lg p-6 text-center">
       <div className="text-warning text-2xl mb-2">{'>'} ERROR</div>
       <div className="text-text-muted">{error}</div>
-      <Link href="/" className="inline-block mt-4 text-[var(--accent)] hover:underline font-theme-data">
+      <Link
+        href="/"
+        className="inline-block mt-4 text-[var(--accent)] hover:underline font-theme-data"
+      >
         [RETURN HOME]
       </Link>
     </div>

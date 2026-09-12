@@ -30,9 +30,27 @@ const DEMO_CLUSTERS: DuplicateCluster[] = [
     avg_similarity: 1.0,
     recommended_action: 'merge',
     duplicates: [
-      { node_id: 'node-a2', similarity: 1.0, content_preview: 'Rate limiter design for API gateway...', tier: 'slow', confidence: 0.99 },
-      { node_id: 'node-a3', similarity: 1.0, content_preview: 'Rate limiter design for API gateway...', tier: 'glacial', confidence: 0.95 },
-      { node_id: 'node-a4', similarity: 1.0, content_preview: 'Rate limiter design for API gateway...', tier: 'medium', confidence: 0.92 },
+      {
+        node_id: 'node-a2',
+        similarity: 1.0,
+        content_preview: 'Rate limiter design for API gateway...',
+        tier: 'slow',
+        confidence: 0.99,
+      },
+      {
+        node_id: 'node-a3',
+        similarity: 1.0,
+        content_preview: 'Rate limiter design for API gateway...',
+        tier: 'glacial',
+        confidence: 0.95,
+      },
+      {
+        node_id: 'node-a4',
+        similarity: 1.0,
+        content_preview: 'Rate limiter design for API gateway...',
+        tier: 'medium',
+        confidence: 0.92,
+      },
     ],
   },
   {
@@ -42,8 +60,20 @@ const DEMO_CLUSTERS: DuplicateCluster[] = [
     avg_similarity: 0.94,
     recommended_action: 'review',
     duplicates: [
-      { node_id: 'node-b2', similarity: 0.94, content_preview: 'Authentication flow using OIDC with refresh tokens...', tier: 'slow', confidence: 0.88 },
-      { node_id: 'node-b3', similarity: 0.91, content_preview: 'Auth flow for SSO using OIDC refresh grant...', tier: 'medium', confidence: 0.85 },
+      {
+        node_id: 'node-b2',
+        similarity: 0.94,
+        content_preview: 'Authentication flow using OIDC with refresh tokens...',
+        tier: 'slow',
+        confidence: 0.88,
+      },
+      {
+        node_id: 'node-b3',
+        similarity: 0.91,
+        content_preview: 'Auth flow for SSO using OIDC refresh grant...',
+        tier: 'medium',
+        confidence: 0.85,
+      },
     ],
   },
   {
@@ -53,8 +83,20 @@ const DEMO_CLUSTERS: DuplicateCluster[] = [
     avg_similarity: 0.97,
     recommended_action: 'merge',
     duplicates: [
-      { node_id: 'node-c2', similarity: 0.97, content_preview: 'CircuitBreaker half-open retry strategy...', tier: 'glacial', confidence: 0.96 },
-      { node_id: 'node-c3', similarity: 0.95, content_preview: 'Circuit breaker retry in half-open state...', tier: 'slow', confidence: 0.90 },
+      {
+        node_id: 'node-c2',
+        similarity: 0.97,
+        content_preview: 'CircuitBreaker half-open retry strategy...',
+        tier: 'glacial',
+        confidence: 0.96,
+      },
+      {
+        node_id: 'node-c3',
+        similarity: 0.95,
+        content_preview: 'Circuit breaker retry in half-open state...',
+        tier: 'slow',
+        confidence: 0.9,
+      },
     ],
   },
   {
@@ -64,10 +106,34 @@ const DEMO_CLUSTERS: DuplicateCluster[] = [
     avg_similarity: 1.0,
     recommended_action: 'merge',
     duplicates: [
-      { node_id: 'node-d2', similarity: 1.0, content_preview: 'Kafka consumer offset commit strategy...', tier: 'fast', confidence: 0.97 },
-      { node_id: 'node-d3', similarity: 1.0, content_preview: 'Kafka consumer offset commit strategy...', tier: 'medium', confidence: 0.94 },
-      { node_id: 'node-d4', similarity: 1.0, content_preview: 'Kafka consumer offset commit strategy...', tier: 'slow', confidence: 0.91 },
-      { node_id: 'node-d5', similarity: 1.0, content_preview: 'Kafka consumer offset commit strategy...', tier: 'glacial', confidence: 0.87 },
+      {
+        node_id: 'node-d2',
+        similarity: 1.0,
+        content_preview: 'Kafka consumer offset commit strategy...',
+        tier: 'fast',
+        confidence: 0.97,
+      },
+      {
+        node_id: 'node-d3',
+        similarity: 1.0,
+        content_preview: 'Kafka consumer offset commit strategy...',
+        tier: 'medium',
+        confidence: 0.94,
+      },
+      {
+        node_id: 'node-d4',
+        similarity: 1.0,
+        content_preview: 'Kafka consumer offset commit strategy...',
+        tier: 'slow',
+        confidence: 0.91,
+      },
+      {
+        node_id: 'node-d5',
+        similarity: 1.0,
+        content_preview: 'Kafka consumer offset commit strategy...',
+        tier: 'glacial',
+        confidence: 0.87,
+      },
     ],
   },
 ];
@@ -90,10 +156,14 @@ const matchTypeColor = (sim: number) => {
 
 const actionColor = (action: string) => {
   switch (action) {
-    case 'merge': return 'text-[var(--accent)]';
-    case 'review': return 'text-[var(--acid-yellow)]';
-    case 'keep_separate': return 'text-text-muted';
-    default: return 'text-text-muted';
+    case 'merge':
+      return 'text-[var(--accent)]';
+    case 'review':
+      return 'text-[var(--acid-yellow)]';
+    case 'keep_separate':
+      return 'text-text-muted';
+    default:
+      return 'text-text-muted';
   }
 };
 
@@ -122,10 +192,7 @@ export default function DedupExplorerPage() {
   const [autoMergeResult, setAutoMergeResult] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
-    const [rpt, cls] = await Promise.all([
-      generateReport(threshold),
-      findDuplicates(threshold),
-    ]);
+    const [rpt, cls] = await Promise.all([generateReport(threshold), findDuplicates(threshold)]);
     if (rpt) setLocalReport(rpt);
     if (cls.length > 0) setLocalClusters(cls);
     setInitialLoad(false);
@@ -137,10 +204,11 @@ export default function DedupExplorerPage() {
 
   // Prefer live data, fall back to demo
   const displayReport = report ?? localReport ?? DEMO_REPORT;
-  const displayClusters = (clusters.length > 0 ? clusters : localClusters.length > 0 ? localClusters : DEMO_CLUSTERS);
+  const displayClusters =
+    clusters.length > 0 ? clusters : localClusters.length > 0 ? localClusters : DEMO_CLUSTERS;
 
-  const exactCount = displayClusters.filter(c => c.avg_similarity >= 1.0).length;
-  const nearCount = displayClusters.filter(c => c.avg_similarity < 1.0).length;
+  const exactCount = displayClusters.filter((c) => c.avg_similarity >= 1.0).length;
+  const nearCount = displayClusters.filter((c) => c.avg_similarity < 1.0).length;
   const totalDupes = displayClusters.reduce((sum, c) => sum + c.duplicate_count, 0);
 
   const handleMerge = async (clusterId: string, primaryNodeId: string) => {
@@ -157,7 +225,7 @@ export default function DedupExplorerPage() {
       setAutoMergeResult(
         dryRun
           ? `Dry run: ${result.duplicates_found} duplicates found, ${result.merges_performed} would merge`
-          : `Merged ${result.merges_performed} of ${result.duplicates_found} duplicates`
+          : `Merged ${result.merges_performed} of ${result.duplicates_found} duplicates`,
       );
     }
     setAutoMergeRunning(false);
@@ -178,7 +246,10 @@ export default function DedupExplorerPage() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <div className="flex items-center gap-4">
-              <Link href="/admin" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)]">
+              <Link
+                href="/admin"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)]"
+              >
                 [ADMIN]
               </Link>
               <BackendSelector compact />
@@ -193,13 +264,18 @@ export default function DedupExplorerPage() {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <div className="text-xs font-theme-data text-text-muted mb-1">
-                  <Link href="/admin" className="hover:text-[var(--accent)]">Admin</Link>
+                  <Link href="/admin" className="hover:text-[var(--accent)]">
+                    Admin
+                  </Link>
                   <span className="mx-2">/</span>
                   <span className="text-[var(--accent)]">Deduplication Explorer</span>
                 </div>
-                <h1 className="text-2xl font-theme-data text-[var(--accent)]">Deduplication Explorer</h1>
+                <h1 className="text-2xl font-theme-data text-[var(--accent)]">
+                  Deduplication Explorer
+                </h1>
                 <p className="text-text-muted font-theme-data text-sm mt-1">
-                  Cross-system duplicate detection: SHA-256 exact match and Jaccard near-duplicate analysis
+                  Cross-system duplicate detection: SHA-256 exact match and Jaccard near-duplicate
+                  analysis
                 </p>
               </div>
               <div className="flex gap-2">
@@ -243,40 +319,54 @@ export default function DedupExplorerPage() {
 
             {initialLoad && isLoading ? (
               <div className="card p-8 text-center">
-                <div className="animate-pulse font-theme-data text-text-muted">Scanning for duplicates...</div>
+                <div className="animate-pulse font-theme-data text-text-muted">
+                  Scanning for duplicates...
+                </div>
               </div>
             ) : (
               <>
                 {/* Stats Overview */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
                   <div className="card p-4">
-                    <div className="text-xs font-theme-data text-text-muted mb-1">ENTRIES SCANNED</div>
+                    <div className="text-xs font-theme-data text-text-muted mb-1">
+                      ENTRIES SCANNED
+                    </div>
                     <div className="text-2xl font-theme-data text-[var(--accent)]">
                       {displayReport.total_nodes_analyzed.toLocaleString()}
                     </div>
                   </div>
                   <div className="card p-4">
-                    <div className="text-xs font-theme-data text-text-muted mb-1">EXACT DUPLICATES</div>
+                    <div className="text-xs font-theme-data text-text-muted mb-1">
+                      EXACT DUPLICATES
+                    </div>
                     <div className="text-2xl font-theme-data text-[var(--crimson)]">
                       {exactCount}
                     </div>
                     <div className="text-xs font-theme-data text-text-muted">SHA-256 match</div>
                   </div>
                   <div className="card p-4">
-                    <div className="text-xs font-theme-data text-text-muted mb-1">NEAR-DUPLICATES</div>
+                    <div className="text-xs font-theme-data text-text-muted mb-1">
+                      NEAR-DUPLICATES
+                    </div>
                     <div className="text-2xl font-theme-data text-[var(--acid-yellow)]">
                       {nearCount}
                     </div>
-                    <div className="text-xs font-theme-data text-text-muted">Jaccard similarity</div>
+                    <div className="text-xs font-theme-data text-text-muted">
+                      Jaccard similarity
+                    </div>
                   </div>
                   <div className="card p-4">
-                    <div className="text-xs font-theme-data text-text-muted mb-1">TOTAL DUPLICATE NODES</div>
+                    <div className="text-xs font-theme-data text-text-muted mb-1">
+                      TOTAL DUPLICATE NODES
+                    </div>
                     <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
                       {totalDupes}
                     </div>
                   </div>
                   <div className="card p-4">
-                    <div className="text-xs font-theme-data text-text-muted mb-1">SPACE SAVINGS</div>
+                    <div className="text-xs font-theme-data text-text-muted mb-1">
+                      SPACE SAVINGS
+                    </div>
                     <div className="text-2xl font-theme-data text-purple-400">
                       {displayReport.estimated_reduction_percent.toFixed(1)}%
                     </div>
@@ -286,7 +376,9 @@ export default function DedupExplorerPage() {
 
                 {/* Configuration */}
                 <div className="card p-4 mb-6">
-                  <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">Configuration</h3>
+                  <h3 className="font-theme-data text-sm text-[var(--accent)] mb-3">
+                    Configuration
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-theme-data text-text-muted mb-1">
@@ -309,14 +401,22 @@ export default function DedupExplorerPage() {
                     </div>
                     <div className="flex items-end">
                       <div>
-                        <div className="text-xs font-theme-data text-text-muted mb-1">Exact Match Algorithm</div>
-                        <div className="font-theme-data text-sm text-[var(--acid-cyan)]">SHA-256 Content Hash</div>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          Exact Match Algorithm
+                        </div>
+                        <div className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                          SHA-256 Content Hash
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-end">
                       <div>
-                        <div className="text-xs font-theme-data text-text-muted mb-1">Near-Dup Algorithm</div>
-                        <div className="font-theme-data text-sm text-[var(--acid-cyan)]">Jaccard Shingling</div>
+                        <div className="text-xs font-theme-data text-text-muted mb-1">
+                          Near-Dup Algorithm
+                        </div>
+                        <div className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                          Jaccard Shingling
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -332,9 +432,15 @@ export default function DedupExplorerPage() {
                       <thead>
                         <tr className="border-b border-border">
                           <th className="text-left py-2 pr-4 text-text-muted text-xs">CLUSTER</th>
-                          <th className="text-left py-2 pr-4 text-text-muted text-xs">CONTENT PREVIEW</th>
-                          <th className="text-left py-2 pr-4 text-text-muted text-xs">MATCH TYPE</th>
-                          <th className="text-center py-2 pr-4 text-text-muted text-xs">SIMILARITY</th>
+                          <th className="text-left py-2 pr-4 text-text-muted text-xs">
+                            CONTENT PREVIEW
+                          </th>
+                          <th className="text-left py-2 pr-4 text-text-muted text-xs">
+                            MATCH TYPE
+                          </th>
+                          <th className="text-center py-2 pr-4 text-text-muted text-xs">
+                            SIMILARITY
+                          </th>
                           <th className="text-center py-2 pr-4 text-text-muted text-xs">DUPES</th>
                           <th className="text-left py-2 pr-4 text-text-muted text-xs">TIERS</th>
                           <th className="text-left py-2 pr-4 text-text-muted text-xs">ACTION</th>
@@ -343,17 +449,22 @@ export default function DedupExplorerPage() {
                       </thead>
                       <tbody>
                         {displayClusters.map((cluster) => {
-                          const tiers = [...new Set(cluster.duplicates.map(d => d.tier))];
+                          const tiers = [...new Set(cluster.duplicates.map((d) => d.tier))];
                           const preview = cluster.duplicates[0]?.content_preview ?? '---';
                           return (
-                            <tr key={cluster.cluster_id} className="border-b border-border/50 hover:bg-surface/50">
+                            <tr
+                              key={cluster.cluster_id}
+                              className="border-b border-border/50 hover:bg-surface/50"
+                            >
                               <td className="py-2 pr-4 text-text-muted text-xs">
                                 {cluster.cluster_id}
                               </td>
                               <td className="py-2 pr-4 max-w-xs truncate" title={preview}>
                                 {preview}
                               </td>
-                              <td className={`py-2 pr-4 text-xs ${matchTypeColor(cluster.avg_similarity)}`}>
+                              <td
+                                className={`py-2 pr-4 text-xs ${matchTypeColor(cluster.avg_similarity)}`}
+                              >
                                 {matchTypeLabel(cluster.avg_similarity)}
                               </td>
                               <td className="py-2 pr-4 text-center">
@@ -363,19 +474,26 @@ export default function DedupExplorerPage() {
                                 {cluster.duplicate_count}
                               </td>
                               <td className="py-2 pr-4 text-xs">
-                                {tiers.map(t => (
-                                  <span key={t} className="inline-block mr-1 px-1.5 py-0.5 rounded bg-surface text-text-muted">
+                                {tiers.map((t) => (
+                                  <span
+                                    key={t}
+                                    className="inline-block mr-1 px-1.5 py-0.5 rounded bg-surface text-text-muted"
+                                  >
                                     {t}
                                   </span>
                                 ))}
                               </td>
-                              <td className={`py-2 pr-4 text-xs uppercase ${actionColor(cluster.recommended_action)}`}>
+                              <td
+                                className={`py-2 pr-4 text-xs uppercase ${actionColor(cluster.recommended_action)}`}
+                              >
                                 {cluster.recommended_action.replace('_', ' ')}
                               </td>
                               <td className="py-2 text-right">
                                 {cluster.recommended_action === 'merge' && (
                                   <button
-                                    onClick={() => handleMerge(cluster.cluster_id, cluster.primary_node_id)}
+                                    onClick={() =>
+                                      handleMerge(cluster.cluster_id, cluster.primary_node_id)
+                                    }
                                     disabled={merging === cluster.cluster_id}
                                     className="px-2 py-1 bg-[var(--accent)]/20 border border-[var(--accent)]/50 text-[var(--accent)] text-xs rounded hover:bg-[var(--accent)]/30 disabled:opacity-50"
                                   >
@@ -400,7 +518,10 @@ export default function DedupExplorerPage() {
 
                 {/* Report metadata */}
                 <div className="mt-4 text-xs font-theme-data text-text-muted text-right">
-                  Report generated: {displayReport.generated_at ? new Date(displayReport.generated_at).toLocaleString() : 'N/A'}
+                  Report generated:{' '}
+                  {displayReport.generated_at
+                    ? new Date(displayReport.generated_at).toLocaleString()
+                    : 'N/A'}
                   {' | '}Workspace: {displayReport.workspace_id}
                 </div>
               </>

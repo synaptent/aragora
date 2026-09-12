@@ -86,9 +86,7 @@ function InviteUserModal({
               />
             </div>
             <div>
-              <label className="block font-theme-data text-xs text-text-muted mb-2">
-                Role
-              </label>
+              <label className="block font-theme-data text-xs text-text-muted mb-2">Role</label>
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
@@ -174,9 +172,7 @@ function ChangeRoleModal({
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
-              <label className="block font-theme-data text-xs text-text-muted mb-2">
-                New Role
-              </label>
+              <label className="block font-theme-data text-xs text-text-muted mb-2">New Role</label>
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
@@ -253,14 +249,9 @@ function UsersAdminPageContent() {
       if (statusFilter === 'inactive') params.set('inactive_only', 'true');
       if (searchQuery) params.set('search', searchQuery);
 
-      const res = await fetch(
-        `${backendConfig.api}/api/v1/admin/users?${params}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${backendConfig.api}/api/v1/admin/users?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!res.ok) {
         if (res.status === 403) throw new Error('Admin access required');
@@ -268,19 +259,21 @@ function UsersAdminPageContent() {
       }
 
       const data: UsersResponse = await res.json();
-      setUsers(data.users.map(u => ({
-        id: u.id,
-        name: u.name || u.email.split('@')[0],
-        email: u.email,
-        role: u.role,
-        status: u.is_active ? 'active' : 'inactive',
-        joinedAt: u.created_at,
-        lastActive: u.last_login_at,
-        org_id: u.org_id,
-        email_verified: u.email_verified,
-        created_at: u.created_at,
-        last_login_at: u.last_login_at,
-      })));
+      setUsers(
+        data.users.map((u) => ({
+          id: u.id,
+          name: u.name || u.email.split('@')[0],
+          email: u.email,
+          role: u.role,
+          status: u.is_active ? 'active' : 'inactive',
+          joinedAt: u.created_at,
+          lastActive: u.last_login_at,
+          org_id: u.org_id,
+          email_verified: u.email_verified,
+          created_at: u.created_at,
+          last_login_at: u.last_login_at,
+        })),
+      );
       setTotal(data.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch users');
@@ -300,13 +293,10 @@ function UsersAdminPageContent() {
 
     try {
       const action = currentlyActive ? 'deactivate' : 'activate';
-      const res = await fetch(
-        `${backendConfig.api}/api/v1/admin/users/${userId}/${action}`,
-        {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-        }
-      );
+      const res = await fetch(`${backendConfig.api}/api/v1/admin/users/${userId}/${action}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!res.ok) throw new Error(`Failed to ${action} user`);
       fetchUsers();
@@ -321,13 +311,10 @@ function UsersAdminPageContent() {
     try {
       setLoading(true);
       for (const id of selectedIds) {
-        const res = await fetch(
-          `${backendConfig.api}/api/v1/admin/users/${id}/${action}`,
-          {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-          }
-        );
+        const res = await fetch(`${backendConfig.api}/api/v1/admin/users/${id}/${action}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!res.ok) throw new Error(`Failed to ${action} user ${id}`);
       }
       setSelectedIds([]);
@@ -344,10 +331,7 @@ function UsersAdminPageContent() {
 
     const res = await fetch(`${backendConfig.api}/api/v1/admin/users/invite`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, role }),
     });
 
@@ -364,10 +348,7 @@ function UsersAdminPageContent() {
 
     const res = await fetch(`${backendConfig.api}/api/v1/admin/users/${userId}/role`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: newRole }),
     });
 
@@ -414,23 +395,15 @@ function UsersAdminPageContent() {
         </div>
       ),
     },
-    {
-      key: 'role',
-      label: 'Role',
-      sortable: true,
-      width: '100px',
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      sortable: true,
-      width: '100px',
-    },
+    { key: 'role', label: 'Role', sortable: true, width: '100px' },
+    { key: 'status', label: 'Status', sortable: true, width: '100px' },
     {
       key: 'email_verified',
       label: 'Verified',
       render: (value) => (
-        <span className={`font-theme-data text-xs ${value ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+        <span
+          className={`font-theme-data text-xs ${value ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+        >
           {value ? 'YES' : 'NO'}
         </span>
       ),
@@ -460,7 +433,8 @@ function UsersAdminPageContent() {
     },
   ];
 
-  const isAdmin = isAuthenticated && (currentUser?.role === 'admin' || currentUser?.role === 'owner');
+  const isAdmin =
+    isAuthenticated && (currentUser?.role === 'admin' || currentUser?.role === 'owner');
 
   return (
     <AdminLayout
@@ -566,12 +540,14 @@ function UsersAdminPageContent() {
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted">Active</div>
           <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">
-            {users.filter(u => u.status === 'active').length}
+            {users.filter((u) => u.status === 'active').length}
           </div>
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted">Selected</div>
-          <div className="font-theme-data text-2xl text-[var(--acid-yellow)]">{selectedIds.length}</div>
+          <div className="font-theme-data text-2xl text-[var(--acid-yellow)]">
+            {selectedIds.length}
+          </div>
         </div>
       </div>
 
@@ -616,7 +592,9 @@ function UsersAdminPageContent() {
 
 export default function UsersAdminPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center font-theme-data text-text-muted">Loading...</div>}>
+    <Suspense
+      fallback={<div className="p-8 text-center font-theme-data text-text-muted">Loading...</div>}
+    >
       <UsersAdminPageContent />
     </Suspense>
   );

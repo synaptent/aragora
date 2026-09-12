@@ -69,10 +69,7 @@ interface MetricsResponse {
 }
 
 interface GoalsResponse {
-  data: {
-    goals: GoalEntry[];
-    total: number;
-  };
+  data: { goals: GoalEntry[]; total: number };
 }
 
 interface RunsResponse {
@@ -168,18 +165,29 @@ function activityColor(type: string): string {
 
 function outcomeLabel(status: string): { text: string; color: string } {
   const map: Record<string, { text: string; color: string }> = {
-    completed: { text: 'SUCCESS', color: 'text-emerald-400 border-emerald-400/40 bg-emerald-400/10' },
+    completed: {
+      text: 'SUCCESS',
+      color: 'text-emerald-400 border-emerald-400/40 bg-emerald-400/10',
+    },
     failed: { text: 'FAILED', color: 'text-red-400 border-red-400/40 bg-red-400/10' },
     cancelled: { text: 'CANCELLED', color: 'text-gray-400 border-gray-400/40 bg-gray-400/10' },
     running: { text: 'RUNNING', color: 'text-amber-400 border-amber-400/40 bg-amber-400/10' },
     pending: { text: 'PENDING', color: 'text-blue-400 border-blue-400/40 bg-blue-400/10' },
   };
-  return map[status] || { text: status.toUpperCase(), color: 'text-[var(--text-muted)] border-[var(--border)]' };
+  return (
+    map[status] || {
+      text: status.toUpperCase(),
+      color: 'text-[var(--text-muted)] border-[var(--border)]',
+    }
+  );
 }
 
 function autopilotStatus(summary?: AutopilotWorktreeSummary): { text: string; color: string } {
   if (!summary) {
-    return { text: 'UNAVAILABLE', color: 'text-[var(--text-muted)] border-[var(--border)] bg-[var(--bg)]' };
+    return {
+      text: 'UNAVAILABLE',
+      color: 'text-[var(--text-muted)] border-[var(--border)] bg-[var(--bg)]',
+    };
   }
   if (summary.error || summary.ok === false) {
     return { text: 'DEGRADED', color: 'text-red-400 border-red-400/40 bg-red-400/10' };
@@ -196,7 +204,12 @@ function autopilotStatus(summary?: AutopilotWorktreeSummary): { text: string; co
 // ---------------------------------------------------------------------------
 
 /** Stat card with label and value */
-function StatCard({ label, value, subtext, color }: {
+function StatCard({
+  label,
+  value,
+  subtext,
+  color,
+}: {
   label: string;
   value: string | number;
   subtext?: string;
@@ -211,9 +224,7 @@ function StatCard({ label, value, subtext, color }: {
         {value}
       </div>
       {subtext && (
-        <div className="text-[10px] font-theme-data text-[var(--text-muted)] mt-0.5">
-          {subtext}
-        </div>
+        <div className="text-[10px] font-theme-data text-[var(--text-muted)] mt-0.5">{subtext}</div>
       )}
     </div>
   );
@@ -238,8 +249,7 @@ function MiniBar({ value, color }: { value: number; color: string }) {
 
 function HealthAndMetricsSection({ summary }: { summary: MetricsSummary }) {
   const healthPct = Math.round(summary.health_score * 100);
-  const healthLabel =
-    healthPct >= 80 ? 'Excellent' : healthPct >= 50 ? 'Fair' : 'Needs Attention';
+  const healthLabel = healthPct >= 80 ? 'Excellent' : healthPct >= 50 ? 'Fair' : 'Needs Attention';
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] p-5">
@@ -247,9 +257,7 @@ function HealthAndMetricsSection({ summary }: { summary: MetricsSummary }) {
         <h2 className="text-sm font-theme-data text-[var(--acid-green)]">
           SELF-IMPROVEMENT HEALTH
         </h2>
-        <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
-          {healthLabel}
-        </span>
+        <span className="text-[10px] font-theme-data text-[var(--text-muted)]">{healthLabel}</span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
@@ -262,14 +270,22 @@ function HealthAndMetricsSection({ summary }: { summary: MetricsSummary }) {
         <div className="md:col-span-4 grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-theme-data text-[var(--text-muted)]">Cycle Success</span>
+              <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                Cycle Success
+              </span>
               <span className="text-[10px] font-theme-data text-[var(--text)]">
                 {(summary.cycle_success_rate * 100).toFixed(0)}%
               </span>
             </div>
             <MiniBar
               value={summary.cycle_success_rate}
-              color={summary.cycle_success_rate >= 0.7 ? 'bg-emerald-400' : summary.cycle_success_rate >= 0.4 ? 'bg-amber-400' : 'bg-red-400'}
+              color={
+                summary.cycle_success_rate >= 0.7
+                  ? 'bg-emerald-400'
+                  : summary.cycle_success_rate >= 0.4
+                    ? 'bg-amber-400'
+                    : 'bg-red-400'
+              }
             />
             <div className="text-[9px] font-theme-data text-[var(--text-muted)] mt-0.5">
               {summary.completed_cycles}/{summary.total_cycles} cycles
@@ -278,14 +294,22 @@ function HealthAndMetricsSection({ summary }: { summary: MetricsSummary }) {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-theme-data text-[var(--text-muted)]">Goal Completion</span>
+              <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                Goal Completion
+              </span>
               <span className="text-[10px] font-theme-data text-[var(--text)]">
                 {(summary.goal_completion_rate * 100).toFixed(0)}%
               </span>
             </div>
             <MiniBar
               value={summary.goal_completion_rate}
-              color={summary.goal_completion_rate >= 0.7 ? 'bg-emerald-400' : summary.goal_completion_rate >= 0.4 ? 'bg-amber-400' : 'bg-red-400'}
+              color={
+                summary.goal_completion_rate >= 0.7
+                  ? 'bg-emerald-400'
+                  : summary.goal_completion_rate >= 0.4
+                    ? 'bg-amber-400'
+                    : 'bg-red-400'
+              }
             />
             <div className="text-[9px] font-theme-data text-[var(--text-muted)] mt-0.5">
               {summary.completed_subtasks}/{summary.total_subtasks} subtasks
@@ -294,14 +318,22 @@ function HealthAndMetricsSection({ summary }: { summary: MetricsSummary }) {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-theme-data text-[var(--text-muted)]">Test Health</span>
+              <span className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                Test Health
+              </span>
               <span className="text-[10px] font-theme-data text-[var(--text)]">
                 {(summary.test_pass_rate * 100).toFixed(0)}%
               </span>
             </div>
             <MiniBar
               value={summary.test_pass_rate}
-              color={summary.test_pass_rate >= 0.8 ? 'bg-emerald-400' : summary.test_pass_rate >= 0.5 ? 'bg-amber-400' : 'bg-red-400'}
+              color={
+                summary.test_pass_rate >= 0.8
+                  ? 'bg-emerald-400'
+                  : summary.test_pass_rate >= 0.5
+                    ? 'bg-amber-400'
+                    : 'bg-red-400'
+              }
             />
             <div className="text-[9px] font-theme-data text-[var(--text-muted)] mt-0.5">
               inferred from findings
@@ -312,7 +344,11 @@ function HealthAndMetricsSection({ summary }: { summary: MetricsSummary }) {
             label="Goals Queued"
             value={summary.total_goals_queued}
             subtext="awaiting next cycle"
-            color={summary.total_goals_queued > 0 ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}
+            color={
+              summary.total_goals_queued > 0
+                ? 'text-[var(--acid-green)]'
+                : 'text-[var(--text-muted)]'
+            }
           />
         </div>
       </div>
@@ -533,7 +569,9 @@ function ActivityFeedSection({ activity }: { activity: ActivityEntry[] }) {
               className="flex items-start gap-2 py-1.5 border-b border-[var(--border)]/30 last:border-0"
             >
               {/* Icon */}
-              <span className={`text-[10px] font-theme-data shrink-0 mt-0.5 ${activityColor(entry.type)}`}>
+              <span
+                className={`text-[10px] font-theme-data shrink-0 mt-0.5 ${activityColor(entry.type)}`}
+              >
                 {activityIcon(entry.type)}
               </span>
 
@@ -569,7 +607,9 @@ function AutopilotWorktreesSection({ summary }: { summary?: AutopilotWorktreeSum
     <div className="bg-[var(--surface)] border border-[var(--border)] p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-theme-data text-[var(--acid-green)]">AUTOPILOT WORKTREES</h2>
-        <span className={`inline-block px-1.5 py-0.5 text-[9px] font-theme-data border rounded ${status.color}`}>
+        <span
+          className={`inline-block px-1.5 py-0.5 text-[9px] font-theme-data border rounded ${status.color}`}
+        >
           {status.text}
         </span>
       </div>
@@ -600,9 +640,7 @@ function AutopilotWorktreesSection({ summary }: { summary?: AutopilotWorktreeSum
       <div className="space-y-1">
         <MiniBar value={activeRatio} color={active > 0 ? 'bg-emerald-400' : 'bg-[var(--border)]'} />
         {summary?.error && (
-          <div className="text-[10px] font-theme-data text-red-400">
-            error: {summary.error}
-          </div>
+          <div className="text-[10px] font-theme-data text-red-400">error: {summary.error}</div>
         )}
       </div>
     </div>
@@ -615,28 +653,24 @@ function AutopilotWorktreesSection({ summary }: { summary?: AutopilotWorktreeSum
 
 export function NomicMetricsDashboard() {
   // Fetch metrics summary
-  const {
-    data: metricsRaw,
-    isLoading: metricsLoading,
-  } = useSWRFetch<MetricsResponse>('/api/self-improve/metrics/summary', {
-    refreshInterval: 15000, // Refresh every 15 seconds
-  });
+  const { data: metricsRaw, isLoading: metricsLoading } = useSWRFetch<MetricsResponse>(
+    '/api/self-improve/metrics/summary',
+    {
+      refreshInterval: 15000, // Refresh every 15 seconds
+    },
+  );
 
   // Fetch goal queue
-  const {
-    data: goalsRaw,
-    isLoading: goalsLoading,
-  } = useSWRFetch<GoalsResponse>('/api/self-improve/goals?limit=20', {
-    refreshInterval: 30000,
-  });
+  const { data: goalsRaw, isLoading: goalsLoading } = useSWRFetch<GoalsResponse>(
+    '/api/self-improve/goals?limit=20',
+    { refreshInterval: 30000 },
+  );
 
   // Fetch run history for the timeline
-  const {
-    data: runsRaw,
-    isLoading: runsLoading,
-  } = useSWRFetch<RunsResponse>('/api/self-improve/runs?limit=50', {
-    refreshInterval: 15000,
-  });
+  const { data: runsRaw, isLoading: runsLoading } = useSWRFetch<RunsResponse>(
+    '/api/self-improve/runs?limit=50',
+    { refreshInterval: 15000 },
+  );
 
   const summary = metricsRaw?.data ?? null;
   const goals = goalsRaw?.data?.goals ?? [];

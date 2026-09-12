@@ -17,8 +17,8 @@ export default function TemplatesPage() {
               {'>'} DEBATE TEMPLATES
             </h1>
             <p className="text-text-muted font-theme-data max-w-2xl mx-auto">
-              25 pre-built templates across 8 verticals. Choose a template,
-              customize it for your context, and let AI agents stress-test your thinking.
+              25 pre-built templates across 8 verticals. Choose a template, customize it for your
+              context, and let AI agents stress-test your thinking.
             </p>
           </div>
         </div>

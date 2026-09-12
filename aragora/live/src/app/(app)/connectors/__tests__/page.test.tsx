@@ -43,9 +43,7 @@ jest.mock('@/context/ToastContext', () => ({
 }));
 
 // Mock config
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'http://localhost:8080',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'http://localhost:8080' }));
 
 // Mock fetch globally
 const mockFetch = jest.fn();
@@ -63,10 +61,7 @@ const mockConnector: Connector = {
   type: 'github',
   name: 'aragora-repo',
   status: 'connected',
-  schedule: {
-    interval_minutes: 60,
-    enabled: true,
-  },
+  schedule: { interval_minutes: 60, enabled: true },
   last_run: new Date(Date.now() - 30 * 60 * 1000).toISOString(), // 30 min ago
   next_run: new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min from now
   consecutive_failures: 0,
@@ -138,31 +133,23 @@ describe('ConnectorsPage', () => {
   const setupSuccessfulFetch = (
     connectors: Connector[] = [],
     stats: SchedulerStats = mockStats,
-    history: SyncHistoryEntry[] = []
+    history: SyncHistoryEntry[] = [],
   ) => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/connectors/scheduler/stats')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(stats),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(stats) });
       }
       if (url.includes('/api/connectors/sync/history')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ history }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ history }) });
       }
-      if (url.includes('/api/connectors') && !url.includes('/sync') && !url.includes('/scheduler')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ connectors }),
-        });
+      if (
+        url.includes('/api/connectors') &&
+        !url.includes('/sync') &&
+        !url.includes('/scheduler')
+      ) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ connectors }) });
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
   };
 
@@ -216,10 +203,7 @@ describe('ConnectorsPage', () => {
 
     it('renders connectors with missing schedules using safe defaults', async () => {
       setupSuccessfulFetch([
-        {
-          ...mockConnector,
-          schedule: undefined as unknown as Connector['schedule'],
-        },
+        { ...mockConnector, schedule: undefined as unknown as Connector['schedule'] },
       ]);
 
       render(<ConnectorsPage />);
@@ -290,7 +274,9 @@ describe('ConnectorsPage', () => {
 
       await waitFor(() => {
         expect(screen.getByText('No connectors configured')).toBeInTheDocument();
-        expect(screen.getByText('Add your first connector to start syncing data')).toBeInTheDocument();
+        expect(
+          screen.getByText('Add your first connector to start syncing data'),
+        ).toBeInTheDocument();
       });
     });
 
@@ -373,10 +359,7 @@ describe('ConnectorsPage', () => {
     });
 
     it('displays failure count badge', async () => {
-      const connectorWithFailures: Connector = {
-        ...mockConnector,
-        consecutive_failures: 2,
-      };
+      const connectorWithFailures: Connector = { ...mockConnector, consecutive_failures: 2 };
       setupSuccessfulFetch([connectorWithFailures]);
 
       render(<ConnectorsPage />);
@@ -422,9 +405,7 @@ describe('ConnectorsPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/connectors/github:aragora-repo/sync',
-          expect.objectContaining({
-            method: 'POST',
-          })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -439,10 +420,7 @@ describe('ConnectorsPage', () => {
         expect(screen.getByRole('button', { name: 'DELETE' })).toBeInTheDocument();
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
       await act(async () => {
         await user.click(screen.getByRole('button', { name: 'DELETE' }));
@@ -452,7 +430,7 @@ describe('ConnectorsPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/connectors/github:aragora-repo',
-          expect.objectContaining({ method: 'DELETE' })
+          expect.objectContaining({ method: 'DELETE' }),
         );
       });
     });
@@ -476,7 +454,7 @@ describe('ConnectorsPage', () => {
       // Should not have made the DELETE call
       expect(mockFetch).not.toHaveBeenCalledWith(
         expect.stringContaining('DELETE'),
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -693,10 +671,7 @@ describe('ConnectorsPage', () => {
         await user.click(screen.getByRole('button', { name: 'EDIT' }));
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
       await act(async () => {
         await user.click(screen.getByRole('button', { name: 'Save Changes' }));
@@ -705,9 +680,7 @@ describe('ConnectorsPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/connectors/github:aragora-repo',
-          expect.objectContaining({
-            method: 'PATCH',
-          })
+          expect.objectContaining({ method: 'PATCH' }),
         );
       });
     });
@@ -755,10 +728,7 @@ describe('ConnectorsPage', () => {
         expect(screen.getByRole('button', { name: 'DELETE' })).toBeInTheDocument();
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       await act(async () => {
         await user.click(screen.getByRole('button', { name: 'DELETE' }));
@@ -798,10 +768,7 @@ describe('ConnectorsPage', () => {
         await user.type(repoInput, 'test-repo');
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       // Click the Add Connector button in the modal
       const modalAddButton = screen.getByRole('button', { name: 'Add Connector' });
@@ -828,10 +795,7 @@ describe('ConnectorsPage', () => {
         await user.click(screen.getByRole('button', { name: 'EDIT' }));
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
       await act(async () => {
         await user.click(screen.getByRole('button', { name: 'Save Changes' }));
@@ -851,8 +815,12 @@ describe('ConnectorsPage', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/api/connectors');
-        expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/api/connectors/scheduler/stats');
-        expect(mockFetch).toHaveBeenCalledWith('http://localhost:8080/api/connectors/sync/history?limit=10');
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:8080/api/connectors/scheduler/stats',
+        );
+        expect(mockFetch).toHaveBeenCalledWith(
+          'http://localhost:8080/api/connectors/sync/history?limit=10',
+        );
       });
     });
   });
@@ -892,10 +860,7 @@ describe('ConnectorsPage', () => {
         expect(screen.getByRole('button', { name: 'DELETE' })).toBeInTheDocument();
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
       await act(async () => {
         await user.click(screen.getByRole('button', { name: 'DELETE' }));
@@ -920,10 +885,7 @@ describe('ConnectorsPage', () => {
         await user.click(screen.getByRole('button', { name: 'EDIT' }));
       });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
 
       await act(async () => {
         await user.click(screen.getByRole('button', { name: 'Save Changes' }));

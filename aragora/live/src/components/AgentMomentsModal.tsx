@@ -22,7 +22,11 @@ interface AgentMomentsModalProps {
 
 const DEFAULT_API_BASE = API_BASE_URL;
 
-export function AgentMomentsModal({ agentName, onClose, apiBase = DEFAULT_API_BASE }: AgentMomentsModalProps) {
+export function AgentMomentsModal({
+  agentName,
+  onClose,
+  apiBase = DEFAULT_API_BASE,
+}: AgentMomentsModalProps) {
   const [moments, setMoments] = useState<Moment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,16 +58,26 @@ export function AgentMomentsModal({ agentName, onClose, apiBase = DEFAULT_API_BA
 
   const getMomentIcon = (type: string): string => {
     switch (type.toLowerCase()) {
-      case 'upset_victory': return '🏆';
-      case 'calibration_vindication': return '🎯';
-      case 'streak_achievement': return '🔥';
-      case 'domain_mastery': return '👑';
-      case 'consensus_breakthrough': return '⚡';
-      case 'position_reversal': return '🔄';
-      case 'breakthrough': return '⚡';
-      case 'first_win': return '🌟';
-      case 'comeback': return '💪';
-      default: return '📌';
+      case 'upset_victory':
+        return '🏆';
+      case 'calibration_vindication':
+        return '🎯';
+      case 'streak_achievement':
+        return '🔥';
+      case 'domain_mastery':
+        return '👑';
+      case 'consensus_breakthrough':
+        return '⚡';
+      case 'position_reversal':
+        return '🔄';
+      case 'breakthrough':
+        return '⚡';
+      case 'first_win':
+        return '🌟';
+      case 'comeback':
+        return '💪';
+      default:
+        return '📌';
     }
   };
 
@@ -103,13 +117,9 @@ export function AgentMomentsModal({ agentName, onClose, apiBase = DEFAULT_API_BA
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-          {loading && (
-            <div className="text-center text-text-muted py-8">Loading moments...</div>
-          )}
+          {loading && <div className="text-center text-text-muted py-8">Loading moments...</div>}
 
-          {error && (
-            <div className="text-center text-red-400 py-8">{error}</div>
-          )}
+          {error && <div className="text-center text-red-400 py-8">{error}</div>}
 
           {!loading && !error && moments.length === 0 && (
             <div className="text-center text-text-muted py-8">
@@ -129,15 +139,21 @@ export function AgentMomentsModal({ agentName, onClose, apiBase = DEFAULT_API_BA
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-medium text-text">
-                          {moment.moment_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                          {moment.moment_type
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, (c) => c.toUpperCase())}
                         </span>
-                        <span className={`text-xs ${getSignificanceColor(moment.significance_score)}`}>
+                        <span
+                          className={`text-xs ${getSignificanceColor(moment.significance_score)}`}
+                        >
                           {(moment.significance_score * 100).toFixed(0)}% significance
                         </span>
                       </div>
                       <p className="text-sm text-text-muted">{moment.description}</p>
                       {moment.debate_id && (
-                        <p className="text-xs text-text-muted/70 mt-1">Debate: {moment.debate_id}</p>
+                        <p className="text-xs text-text-muted/70 mt-1">
+                          Debate: {moment.debate_id}
+                        </p>
                       )}
                       {moment.timestamp && (
                         <p className="text-xs text-text-muted/50 mt-1">

@@ -38,7 +38,8 @@ const INDUSTRY_ICONS: Record<string, string> = {
 const PRESET_COLORS: Record<string, string> = {
   'Legal Due Diligence': 'border-acid-purple hover:border-acid-purple/80 hover:bg-acid-purple/5',
   'Financial Audit': 'border-acid-yellow hover:border-acid-yellow/80 hover:bg-acid-yellow/5',
-  'Code Security': 'border-[var(--accent)] hover:border-[var(--accent)]/80 hover:bg-[var(--accent)]/5',
+  'Code Security':
+    'border-[var(--accent)] hover:border-[var(--accent)]/80 hover:bg-[var(--accent)]/5',
 };
 
 export default function AuditTemplatesPage() {
@@ -54,10 +55,10 @@ export default function AuditTemplatesPage() {
     try {
       const [presetsRes, typesRes] = await Promise.all([
         fetch(`${backendConfig.api}/api/audit/presets`, {
-          headers: { 'Authorization': `Bearer ${tokens?.access_token || ''}` },
+          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
         }),
         fetch(`${backendConfig.api}/api/audit/types`, {
-          headers: { 'Authorization': `Bearer ${tokens?.access_token || ''}` },
+          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
         }),
       ]);
 
@@ -113,11 +114,17 @@ export default function AuditTemplatesPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-theme-data mb-1">AUDIT PRESETS</h1>
-            <p className="text-muted text-sm">Pre-configured audit templates for common use cases</p>
+            <p className="text-muted text-sm">
+              Pre-configured audit templates for common use cases
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/audit" className="btn btn-ghost">← Dashboard</Link>
-            <Link href="/audit/new" className="btn btn-primary">+ New Audit</Link>
+            <Link href="/audit" className="btn btn-ghost">
+              ← Dashboard
+            </Link>
+            <Link href="/audit/new" className="btn btn-primary">
+              + New Audit
+            </Link>
           </div>
         </div>
 
@@ -147,7 +154,9 @@ export default function AuditTemplatesPage() {
             <div className="card p-8 text-center">
               <div className="text-4xl mb-3">📋</div>
               <div className="text-muted font-theme-data">NO PRESETS AVAILABLE</div>
-              <div className="text-sm text-muted mt-2">Presets will appear here once configured</div>
+              <div className="text-sm text-muted mt-2">
+                Presets will appear here once configured
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -200,12 +209,18 @@ export default function AuditTemplatesPage() {
                   </div>
                   <div className="flex gap-1">
                     {type.capabilities.supports_cross_document && (
-                      <span className="px-2 py-0.5 text-xs bg-acid-purple/20 text-acid-purple rounded" title="Cross-document analysis">
+                      <span
+                        className="px-2 py-0.5 text-xs bg-acid-purple/20 text-acid-purple rounded"
+                        title="Cross-document analysis"
+                      >
                         CROSS-DOC
                       </span>
                     )}
                     {type.capabilities.requires_llm && (
-                      <span className="px-2 py-0.5 text-xs bg-acid-blue/20 text-acid-blue rounded" title="Uses LLM">
+                      <span
+                        className="px-2 py-0.5 text-xs bg-acid-blue/20 text-acid-blue rounded"
+                        title="Uses LLM"
+                      >
                         LLM
                       </span>
                     )}
@@ -223,21 +238,27 @@ export default function AuditTemplatesPage() {
             <h2 className="text-lg font-theme-data mb-4">QUICK START</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center font-theme-data">1</div>
+                <div className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center font-theme-data">
+                  1
+                </div>
                 <div>
                   <div className="font-theme-data text-sm">SELECT PRESET</div>
                   <div className="text-xs text-muted">Choose an industry-specific preset above</div>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center font-theme-data">2</div>
+                <div className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center font-theme-data">
+                  2
+                </div>
                 <div>
                   <div className="font-theme-data text-sm">ADD DOCUMENTS</div>
                   <div className="text-xs text-muted">Upload or select documents to audit</div>
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center font-theme-data">3</div>
+                <div className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center font-theme-data">
+                  3
+                </div>
                 <div>
                   <div className="font-theme-data text-sm">REVIEW FINDINGS</div>
                   <div className="text-xs text-muted">Triage, assign, and resolve issues</div>
@@ -252,8 +273,12 @@ export default function AuditTemplatesPage() {
         <div className="container mx-auto px-4 flex items-center justify-between text-xs text-muted font-theme-data">
           <span>ARAGORA ENTERPRISE AUDIT</span>
           <div className="flex items-center gap-4">
-            <Link href="/audit" className="hover:text-accent">DASHBOARD</Link>
-            <Link href="/documents" className="hover:text-accent">DOCUMENTS</Link>
+            <Link href="/audit" className="hover:text-accent">
+              DASHBOARD
+            </Link>
+            <Link href="/documents" className="hover:text-accent">
+              DOCUMENTS
+            </Link>
           </div>
         </div>
       </footer>

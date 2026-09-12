@@ -2,11 +2,7 @@
 
 import { useBudgetStatus } from '@/hooks/useSystemHealth';
 
-const TREND_ICON: Record<string, string> = {
-  increasing: '↗',
-  stable: '→',
-  decreasing: '↘',
-};
+const TREND_ICON: Record<string, string> = { increasing: '↗', stable: '→', decreasing: '↘' };
 
 const TREND_COLOR: Record<string, string> = {
   increasing: 'text-acid-red',
@@ -40,14 +36,14 @@ export function BudgetGauge() {
     budget.utilization > 0.95
       ? 'bg-acid-red'
       : budget.utilization > 0.8
-      ? 'bg-acid-yellow'
-      : 'bg-[var(--accent)]';
+        ? 'bg-acid-yellow'
+        : 'bg-[var(--accent)]';
   const pctColor =
     budget.utilization > 0.95
       ? 'text-acid-red'
       : budget.utilization > 0.8
-      ? 'text-[var(--acid-yellow)]'
-      : 'text-[var(--accent)]';
+        ? 'text-[var(--acid-yellow)]'
+        : 'text-[var(--accent)]';
 
   return (
     <div className="card p-6">
@@ -55,9 +51,7 @@ export function BudgetGauge() {
 
       {/* Big percentage */}
       <div className="flex items-end gap-2 mb-4">
-        <span className={`font-theme-data text-3xl font-bold ${pctColor}`}>
-          {pct.toFixed(1)}%
-        </span>
+        <span className={`font-theme-data text-3xl font-bold ${pctColor}`}>{pct.toFixed(1)}%</span>
         <span className="font-theme-data text-xs text-text-muted mb-1">utilized</span>
       </div>
 
@@ -71,9 +65,7 @@ export function BudgetGauge() {
         {budget.forecast && budget.total_budget > 0 && (
           <div
             className="absolute top-0 h-full w-0.5 bg-text-muted/60"
-            style={{
-              left: `${Math.min((budget.forecast.eom / budget.total_budget) * 100, 100)}%`,
-            }}
+            style={{ left: `${Math.min((budget.forecast.eom / budget.total_budget) * 100, 100)}%` }}
             title={`EOM forecast: $${budget.forecast.eom.toFixed(2)}`}
           />
         )}
@@ -84,9 +76,7 @@ export function BudgetGauge() {
         <span className="text-text">
           ${budget.spent.toFixed(2)} <span className="text-text-muted">spent</span>
         </span>
-        <span className="text-text-muted">
-          ${budget.total_budget.toFixed(2)} budget
-        </span>
+        <span className="text-text-muted">${budget.total_budget.toFixed(2)} budget</span>
       </div>
 
       {/* Forecast */}

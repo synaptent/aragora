@@ -48,7 +48,9 @@ export function FactsBrowser({
       <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">{'>'} KNOWLEDGE FACTS</h3>
 
       {facts.length === 0 ? (
-        <p className="text-text-muted text-sm font-theme-data text-center py-8">No data available</p>
+        <p className="text-text-muted text-sm font-theme-data text-center py-8">
+          No data available
+        </p>
       ) : (
         <>
           {/* Facts list */}

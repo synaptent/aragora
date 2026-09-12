@@ -20,7 +20,8 @@ test.describe('Landing Page - aragora.ai', () => {
         await expect(page.locator('body')).toBeVisible();
 
         // No critical errors (excluding React hydration issues which are known)
-        const criticalErrors = productionPage.errorCollector.getErrorsBySeverity('critical')
+        const criticalErrors = productionPage.errorCollector
+          .getErrorsBySeverity('critical')
           .filter((e) => !e.message.includes('Minified React error'));
         if (criticalErrors.length > 0) {
           console.log(`Critical errors on ${pageInfo.name}:`);
@@ -51,7 +52,7 @@ test.describe('Landing Page - aragora.ai', () => {
 
       // Should have key navigation items
       const aboutLink = page.locator('a[href*="about"]');
-      if (await aboutLink.count() > 0) {
+      if ((await aboutLink.count()) > 0) {
         await expect(aboutLink.first()).toBeVisible();
       }
     });
@@ -62,7 +63,7 @@ test.describe('Landing Page - aragora.ai', () => {
 
       // Should have footer
       const footer = page.locator('footer');
-      if (await footer.count() > 0) {
+      if ((await footer.count()) > 0) {
         await expect(footer).toBeVisible();
       }
     });
@@ -93,7 +94,10 @@ test.describe('Landing Page - aragora.ai', () => {
       }
     });
 
-    test('clicking Pricing link should navigate to Pricing page', async ({ page, productionPage }) => {
+    test('clicking Pricing link should navigate to Pricing page', async ({
+      page,
+      productionPage,
+    }) => {
       await productionPage.goto(PRODUCTION_DOMAINS.landing);
       await productionPage.waitForHydration();
 
@@ -106,7 +110,10 @@ test.describe('Landing Page - aragora.ai', () => {
       }
     });
 
-    test('clicking Security link should navigate to Security page', async ({ page, productionPage }) => {
+    test('clicking Security link should navigate to Security page', async ({
+      page,
+      productionPage,
+    }) => {
       await productionPage.goto(PRODUCTION_DOMAINS.landing);
       await productionPage.waitForHydration();
 
@@ -119,7 +126,10 @@ test.describe('Landing Page - aragora.ai', () => {
       }
     });
 
-    test('clicking Privacy link should navigate to Privacy page', async ({ page, productionPage }) => {
+    test('clicking Privacy link should navigate to Privacy page', async ({
+      page,
+      productionPage,
+    }) => {
       await productionPage.goto(PRODUCTION_DOMAINS.landing);
       await productionPage.waitForHydration();
 
@@ -277,14 +287,14 @@ test.describe('Landing Page - aragora.ai', () => {
 
       // OG title
       const ogTitle = page.locator('meta[property="og:title"]');
-      if (await ogTitle.count() > 0) {
+      if ((await ogTitle.count()) > 0) {
         const content = await ogTitle.getAttribute('content');
         expect(content).toBeTruthy();
       }
 
       // OG description
       const ogDescription = page.locator('meta[property="og:description"]');
-      if (await ogDescription.count() > 0) {
+      if ((await ogDescription.count()) > 0) {
         const content = await ogDescription.getAttribute('content');
         expect(content).toBeTruthy();
       }
@@ -295,7 +305,7 @@ test.describe('Landing Page - aragora.ai', () => {
       await productionPage.waitForHydration();
 
       const canonical = page.locator('link[rel="canonical"]');
-      if (await canonical.count() > 0) {
+      if ((await canonical.count()) > 0) {
         const href = await canonical.getAttribute('href');
         expect(href).toContain('aragora.ai');
       }
@@ -306,9 +316,7 @@ test.describe('Landing Page - aragora.ai', () => {
     test('should have reasonable initial load time', async ({ page }) => {
       const startTime = Date.now();
 
-      await page.goto(PRODUCTION_DOMAINS.landing, {
-        waitUntil: 'load',
-      });
+      await page.goto(PRODUCTION_DOMAINS.landing, { waitUntil: 'load' });
 
       const loadTime = Date.now() - startTime;
       console.log(`Landing page full load time: ${loadTime}ms`);

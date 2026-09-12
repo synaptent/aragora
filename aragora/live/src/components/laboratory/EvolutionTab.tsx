@@ -43,9 +43,7 @@ export function EvolutionTab({ evolution, genesisEvents, genomes }: EvolutionTab
 
   if (!evolution) {
     return (
-      <div className="text-sm font-theme-data text-text-muted">
-        No evolution data available.
-      </div>
+      <div className="text-sm font-theme-data text-text-muted">No evolution data available.</div>
     );
   }
 
@@ -88,11 +86,18 @@ export function EvolutionTab({ evolution, genesisEvents, genomes }: EvolutionTab
             <div className="text-text-muted">No genesis events available.</div>
           ) : (
             genesisEvents.map((event) => (
-              <div key={`${event.genome_id}-${event.created_at}`} className="border border-border p-2">
+              <div
+                key={`${event.genome_id}-${event.created_at}`}
+                className="border border-border p-2"
+              >
                 <div className="flex items-center justify-between">
                   <span>{event.event_type}</span>
                   {typeof event.fitness_change === 'number' && (
-                    <span className={event.fitness_change >= 0 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}>
+                    <span
+                      className={
+                        event.fitness_change >= 0 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'
+                      }
+                    >
                       {event.fitness_change >= 0 ? '+' : ''}
                       {event.fitness_change.toFixed(2)}
                     </span>

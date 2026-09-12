@@ -131,7 +131,9 @@ describe('StatsGrid', () => {
     it('applies stat item container styles', () => {
       const { container } = render(<StatsGrid stats={mockStats} />);
 
-      const statItems = container.querySelectorAll('.p-3.bg-bg.border.border-border.rounded-lg.text-center');
+      const statItems = container.querySelectorAll(
+        '.p-3.bg-bg.border.border-border.rounded-lg.text-center',
+      );
       expect(statItems).toHaveLength(3);
     });
 
@@ -152,16 +154,14 @@ describe('StatsGrid', () => {
 
   describe('custom className', () => {
     it('applies custom className to container', () => {
-      const { container } = render(
-        <StatsGrid stats={mockStats} className="my-custom-class" />
-      );
+      const { container } = render(<StatsGrid stats={mockStats} className="my-custom-class" />);
 
       expect(container.querySelector('.my-custom-class')).toBeInTheDocument();
     });
 
     it('preserves grid classes with custom className', () => {
       const { container } = render(
-        <StatsGrid stats={mockStats} className="my-custom-class" columns={2} />
+        <StatsGrid stats={mockStats} className="my-custom-class" columns={2} />,
       );
 
       const grid = container.querySelector('.grid');

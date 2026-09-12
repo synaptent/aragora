@@ -34,7 +34,12 @@ const VERTICALS: Vertical[] = [
     id: 'legal',
     displayName: 'Legal',
     description: 'Contract analysis, compliance review, and regulatory matters',
-    expertiseAreas: ['Contract Analysis', 'Regulatory Compliance', 'Risk Assessment', 'Privacy Law'],
+    expertiseAreas: [
+      'Contract Analysis',
+      'Regulatory Compliance',
+      'Risk Assessment',
+      'Privacy Law',
+    ],
     complianceFrameworks: ['GDPR', 'CCPA', 'HIPAA'],
     defaultModel: 'claude-sonnet-4',
     icon: '⚖️',
@@ -43,7 +48,12 @@ const VERTICALS: Vertical[] = [
     id: 'healthcare',
     displayName: 'Healthcare',
     description: 'Clinical analysis, HIPAA compliance, and medical research',
-    expertiseAreas: ['Clinical Documentation', 'Medical Research', 'HIPAA Compliance', 'PHI Protection'],
+    expertiseAreas: [
+      'Clinical Documentation',
+      'Medical Research',
+      'HIPAA Compliance',
+      'PHI Protection',
+    ],
     complianceFrameworks: ['HIPAA', 'HITECH', 'FDA 21 CFR 11'],
     defaultModel: 'claude-sonnet-4',
     icon: '🏥',
@@ -52,7 +62,12 @@ const VERTICALS: Vertical[] = [
     id: 'accounting',
     displayName: 'Accounting & Finance',
     description: 'Financial analysis, audit review, and SOX compliance',
-    expertiseAreas: ['Financial Statement Analysis', 'Audit', 'SOX Compliance', 'Internal Controls'],
+    expertiseAreas: [
+      'Financial Statement Analysis',
+      'Audit',
+      'SOX Compliance',
+      'Internal Controls',
+    ],
     complianceFrameworks: ['SOX', 'GAAP', 'PCAOB'],
     defaultModel: 'claude-sonnet-4',
     icon: '📊',
@@ -84,13 +99,14 @@ export function VerticalSelector({
   const [hoveredVertical, setHoveredVertical] = useState<string | null>(null);
 
   // Use external verticals if provided, otherwise fall back to defaults
-  const verticals = externalVerticals && externalVerticals.length > 0 ? externalVerticals : VERTICALS;
+  const verticals =
+    externalVerticals && externalVerticals.length > 0 ? externalVerticals : VERTICALS;
 
   const handleSelect = useCallback(
     (vertical: Vertical) => {
       onSelect(vertical);
     },
-    [onSelect]
+    [onSelect],
   );
 
   const selectedData = verticals.find((v) => v.id === selectedVertical);
@@ -105,9 +121,7 @@ export function VerticalSelector({
         <h3 className="text-sm font-theme-data font-bold text-[var(--accent)]">
           SELECT VERTICAL SPECIALIST
         </h3>
-        <p className="text-xs text-text-muted mt-1">
-          Choose a domain specialist for your task
-        </p>
+        <p className="text-xs text-text-muted mt-1">Choose a domain specialist for your task</p>
       </div>
 
       {/* Vertical Grid */}
@@ -142,12 +156,8 @@ export function VerticalSelector({
           <div className="flex items-start gap-4">
             <span className="text-4xl">{displayVertical.icon}</span>
             <div className="flex-1">
-              <h4 className="font-theme-data font-bold text-text">
-                {displayVertical.displayName}
-              </h4>
-              <p className="text-sm text-text-muted mt-1">
-                {displayVertical.description}
-              </p>
+              <h4 className="font-theme-data font-bold text-text">{displayVertical.displayName}</h4>
+              <p className="text-sm text-text-muted mt-1">{displayVertical.description}</p>
 
               {/* Expertise Areas */}
               <div className="mt-3">

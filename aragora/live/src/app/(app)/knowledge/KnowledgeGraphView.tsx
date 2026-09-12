@@ -3,7 +3,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_BASE_URL } from '@/config';
 import type { KnowledgeNode, KnowledgeRelationship } from './types';
-import type { GraphNode, GraphEdge, NodeType, RelationshipType } from '@/store/knowledge-explorer/types';
+import type {
+  GraphNode,
+  GraphEdge,
+  NodeType,
+  RelationshipType,
+} from '@/store/knowledge-explorer/types';
 import { GraphViewer } from '@/components/control-plane/KnowledgeExplorer/GraphViewer';
 import { logger } from '@/utils/logger';
 
@@ -143,13 +148,15 @@ export function KnowledgeGraphView({
             depth: n.depth || 0,
           }));
 
-          const apiGraphEdges: GraphEdge[] = ((data.links || data.edges || []) as ApiLink[]).map((l, i) => ({
-            id: l.id || `edge-${i}`,
-            source: typeof l.source === 'object' ? l.source.id : l.source,
-            target: typeof l.target === 'object' ? l.target.id : l.target,
-            type: (l.type || l.relationship_type || 'related_to') as RelationshipType,
-            strength: l.strength || l.value || 0.5,
-          }));
+          const apiGraphEdges: GraphEdge[] = ((data.links || data.edges || []) as ApiLink[]).map(
+            (l, i) => ({
+              id: l.id || `edge-${i}`,
+              source: typeof l.source === 'object' ? l.source.id : l.source,
+              target: typeof l.target === 'object' ? l.target.id : l.target,
+              type: (l.type || l.relationship_type || 'related_to') as RelationshipType,
+              strength: l.strength || l.value || 0.5,
+            }),
+          );
 
           setGraphNodes(apiGraphNodes);
           setGraphEdges(apiGraphEdges);
@@ -169,7 +176,7 @@ export function KnowledgeGraphView({
         for (const node of nodes.slice(0, 20)) {
           try {
             const relResponse = await fetch(
-              `${API_BASE_URL}/api/knowledge/mound/nodes/${node.id}/relationships`
+              `${API_BASE_URL}/api/knowledge/mound/nodes/${node.id}/relationships`,
             );
             if (relResponse.ok) {
               const relData = await relResponse.json();
@@ -182,7 +189,9 @@ export function KnowledgeGraphView({
                     id: rel.id,
                     source: rel.sourceId || rel.source_id,
                     target: rel.targetId || rel.target_id,
-                    type: (rel.relationshipType || rel.relationship_type || 'related_to') as RelationshipType,
+                    type: (rel.relationshipType ||
+                      rel.relationship_type ||
+                      'related_to') as RelationshipType,
                     strength: rel.strength || 0.5,
                   });
                 }
@@ -240,7 +249,7 @@ export function KnowledgeGraphView({
         });
       }
     },
-    [nodes, onNodeSelect]
+    [nodes, onNodeSelect],
   );
 
   // Handle node hover
@@ -255,7 +264,7 @@ export function KnowledgeGraphView({
     return graphNodes.filter(
       (n) =>
         n.content.toLowerCase().includes(query) ||
-        n.topics.some((t) => t.toLowerCase().includes(query))
+        n.topics.some((t) => t.toLowerCase().includes(query)),
     );
   }, [graphNodes, searchQuery]);
 

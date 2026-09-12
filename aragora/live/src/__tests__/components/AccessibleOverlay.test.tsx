@@ -17,7 +17,7 @@ describe('AccessibleOverlay', () => {
     render(
       <AccessibleOverlay onClose={mockOnClose} isOpen={true}>
         <div data-testid="content">Modal content</div>
-      </AccessibleOverlay>
+      </AccessibleOverlay>,
     );
 
     expect(screen.getByTestId('content')).toBeInTheDocument();
@@ -27,7 +27,7 @@ describe('AccessibleOverlay', () => {
     render(
       <AccessibleOverlay onClose={mockOnClose} isOpen={false}>
         <div data-testid="content">Modal content</div>
-      </AccessibleOverlay>
+      </AccessibleOverlay>,
     );
 
     expect(screen.queryByTestId('content')).not.toBeInTheDocument();
@@ -37,7 +37,7 @@ describe('AccessibleOverlay', () => {
     render(
       <AccessibleOverlay onClose={mockOnClose} ariaLabel="Test modal">
         <div>Content</div>
-      </AccessibleOverlay>
+      </AccessibleOverlay>,
     );
 
     const overlay = screen.getByRole('dialog');
@@ -49,7 +49,7 @@ describe('AccessibleOverlay', () => {
     render(
       <AccessibleOverlay onClose={mockOnClose}>
         <div>Content</div>
-      </AccessibleOverlay>
+      </AccessibleOverlay>,
     );
 
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -61,7 +61,7 @@ describe('AccessibleOverlay', () => {
     render(
       <AccessibleOverlay onClose={mockOnClose}>
         <div data-testid="content">Content</div>
-      </AccessibleOverlay>
+      </AccessibleOverlay>,
     );
 
     const overlay = screen.getByRole('dialog');
@@ -76,7 +76,7 @@ describe('AccessibleOverlay', () => {
         <div data-testid="content" onClick={(e) => e.stopPropagation()}>
           Content
         </div>
-      </AccessibleOverlay>
+      </AccessibleOverlay>,
     );
 
     fireEvent.click(screen.getByTestId('content'));
@@ -88,7 +88,7 @@ describe('AccessibleOverlay', () => {
     render(
       <AccessibleOverlay onClose={mockOnClose} className="custom-class">
         <div>Content</div>
-      </AccessibleOverlay>
+      </AccessibleOverlay>,
     );
 
     const overlay = screen.getByRole('dialog');
@@ -99,7 +99,7 @@ describe('AccessibleOverlay', () => {
     render(
       <AccessibleOverlay onClose={mockOnClose}>
         <div>Content</div>
-      </AccessibleOverlay>
+      </AccessibleOverlay>,
     );
 
     const overlay = screen.getByRole('dialog');

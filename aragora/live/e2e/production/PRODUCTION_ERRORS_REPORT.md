@@ -12,13 +12,14 @@
 Production E2E tests identified several issues. Most have been fixed in code - some require infrastructure deployment.
 
 | Severity | Original | Fixed | Remaining |
-|----------|----------|-------|-----------|
-| Critical | 2 | 2 | 0 |
-| High | 12+ | 12+ | 0 (code) |
-| Medium | 3 | 3 | 0 |
-| Low | 1 | 0 | 1 (DNS) |
+| -------- | -------- | ----- | --------- |
+| Critical | 2        | 2     | 0         |
+| High     | 12+      | 12+   | 0 (code)  |
+| Medium   | 3        | 3     | 0         |
+| Low      | 1        | 0     | 1 (DNS)   |
 
 ### Fixes Applied (Code Changes)
+
 - React hydration error on /pricing page (added mounted state check)
 - Privacy page created (`/privacy` route)
 - API endpoint 404s fixed (components now use `API_BASE_URL`)
@@ -26,6 +27,7 @@ Production E2E tests identified several issues. Most have been fixed in code - s
 - Accessibility issues fixed (aria-labels added to form elements)
 
 ### Requires Infrastructure Deployment
+
 - CORS fixes need server redeployment
 - WebSocket 502 requires nginx/proxy configuration
 - www.aragora.ai DNS record needs to be added
@@ -46,16 +48,19 @@ Error: Minified React error #423
 ```
 
 **Description:**
+
 - Error #418: "There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering."
 - Error #423: "There was an error while hydrating but React was able to recover by instead client rendering from the closest Suspense boundary."
 
 **Root Cause:** Server-rendered HTML doesn't match what React expects to render on the client. Common causes:
+
 - Date/time rendering differences
 - Browser-specific code running during SSR
 - Non-deterministic content
 
 **Fix Priority:** HIGH
 **Recommendation:** Investigate the pricing page component for SSR/client mismatches. Check for:
+
 - `Date` or time-based content without `suppressHydrationWarning`
 - Browser-only APIs used during render
 - Random or non-deterministic values
@@ -75,6 +80,7 @@ has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is pres
 ```
 
 **Affected API Routes:**
+
 - `/api/nomic/state`
 - `/api/history/cycles`
 - `/api/history/summary`
@@ -91,6 +97,7 @@ has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is pres
 
 **Fix Priority:** HIGH
 **Recommendation:** Update the API server CORS configuration to allow requests from:
+
 - `https://live.aragora.ai`
 - `https://aragora.ai`
 
@@ -108,6 +115,7 @@ Error during WebSocket handshake: Unexpected response code: 502
 
 **Fix Priority:** HIGH
 **Recommendation:** Check:
+
 - WebSocket server is running
 - Nginx/reverse proxy configuration for WebSocket upgrade
 - Load balancer timeout settings
@@ -148,10 +156,10 @@ HTTP 404: https://aragora.ai/privacy
 
 **Domain:** live.aragora.ai (Next.js API routes)
 
-| Endpoint | Status |
-|----------|--------|
-| `/api/replays` | 404 |
-| `/api/learning/evolution` | 404 |
+| Endpoint                  | Status |
+| ------------------------- | ------ |
+| `/api/replays`            | 404    |
+| `/api/learning/evolution` | 404    |
 
 **Root Cause:** These API routes are referenced by the frontend but don't exist.
 
@@ -181,15 +189,16 @@ net::ERR_NAME_NOT_RESOLVED
 
 ### live.aragora.ai Dashboard
 
-| Issue | Severity | Count |
-|-------|----------|-------|
-| `aria-required-children` | Critical | 1 |
-| `aria-valid-attr-value` | Critical | 1 |
-| `color-contrast` | Serious | 1 |
-| `label` | Critical | 6 |
-| `select-name` | Critical | 6 |
+| Issue                    | Severity | Count |
+| ------------------------ | -------- | ----- |
+| `aria-required-children` | Critical | 1     |
+| `aria-valid-attr-value`  | Critical | 1     |
+| `color-contrast`         | Serious  | 1     |
+| `label`                  | Critical | 6     |
+| `select-name`            | Critical | 6     |
 
 **Details:**
+
 - 6 form elements without labels
 - 6 select elements without accessible names
 - 1 color contrast issue
@@ -202,15 +211,15 @@ net::ERR_NAME_NOT_RESOLVED
 
 ## Infrastructure Issues Summary
 
-| Issue | Domain | Status | Priority |
-|-------|--------|--------|----------|
-| CORS not configured | api.aragora.ai | FIXED (code) - needs deploy | HIGH |
-| WebSocket 502 | api.aragora.ai | Open (nginx config) | HIGH |
-| React hydration | aragora.ai/pricing | FIXED | HIGH |
-| Missing /privacy page | aragora.ai | FIXED | MEDIUM |
-| Missing API routes | live.aragora.ai | FIXED | MEDIUM |
-| www DNS missing | www.aragora.ai | Open (DNS) | LOW |
-| A11y violations | live.aragora.ai | FIXED | MEDIUM |
+| Issue                 | Domain             | Status                      | Priority |
+| --------------------- | ------------------ | --------------------------- | -------- |
+| CORS not configured   | api.aragora.ai     | FIXED (code) - needs deploy | HIGH     |
+| WebSocket 502         | api.aragora.ai     | Open (nginx config)         | HIGH     |
+| React hydration       | aragora.ai/pricing | FIXED                       | HIGH     |
+| Missing /privacy page | aragora.ai         | FIXED                       | MEDIUM   |
+| Missing API routes    | live.aragora.ai    | FIXED                       | MEDIUM   |
+| www DNS missing       | www.aragora.ai     | Open (DNS)                  | LOW      |
+| A11y violations       | live.aragora.ai    | FIXED                       | MEDIUM   |
 
 ---
 
@@ -223,14 +232,15 @@ net::ERR_NAME_NOT_RESOLVED
 
 Add the following DNS record in your DNS provider (Cloudflare or similar):
 
-| Type | Name | Target |
-|------|------|--------|
-| CNAME | www | aragora.ai |
+| Type  | Name | Target     |
+| ----- | ---- | ---------- |
+| CNAME | www  | aragora.ai |
 
 Or alternatively (A record if CNAME doesn't work):
-| Type | Name | Target |
-|------|------|--------|
-| A | www | (same IP as aragora.ai) |
+
+| Type | Name | Target                  |
+| ---- | ---- | ----------------------- |
+| A    | www  | (same IP as aragora.ai) |
 
 **Why:** Without this record, visitors who type `www.aragora.ai` get a DNS resolution error. This hurts SEO and user experience.
 
@@ -242,6 +252,7 @@ Or alternatively (A record if CNAME doesn't work):
 The WebSocket endpoint at `wss://api.aragora.ai/ws` returns 502 Bad Gateway. Check:
 
 1. **Nginx configuration** needs WebSocket upgrade headers:
+
 ```nginx
 location /ws {
     proxy_pass http://backend:8765;
@@ -265,10 +276,12 @@ location /ws {
 **Owner:** Backend deployment
 
 The following files have been updated with enhanced CORS headers:
+
 - `aragora/server/unified_server.py`
 - `aragora/server/stream/servers.py`
 
 Changes include:
+
 - Dynamic origin validation against allowed origins
 - Credentials support (`Access-Control-Allow-Credentials: true`)
 - Extended methods (`DELETE, PUT, PATCH`)
@@ -322,13 +335,13 @@ npx playwright show-report playwright-report-production
 
 ## Files Created
 
-| File | Purpose |
-|------|---------|
-| `playwright.production.config.ts` | Production test configuration |
-| `e2e/production/fixtures.ts` | Test fixtures with error collection |
-| `e2e/production/smoke.prod.spec.ts` | Smoke tests for all domains |
-| `e2e/production/landing.prod.spec.ts` | Landing page tests |
-| `e2e/production/dashboard.prod.spec.ts` | Dashboard tests |
-| `e2e/production/api-health.prod.spec.ts` | API health tests |
-| `e2e/production/accessibility.prod.spec.ts` | WCAG accessibility tests |
-| `e2e/production/links.prod.spec.ts` | Broken link checker |
+| File                                        | Purpose                             |
+| ------------------------------------------- | ----------------------------------- |
+| `playwright.production.config.ts`           | Production test configuration       |
+| `e2e/production/fixtures.ts`                | Test fixtures with error collection |
+| `e2e/production/smoke.prod.spec.ts`         | Smoke tests for all domains         |
+| `e2e/production/landing.prod.spec.ts`       | Landing page tests                  |
+| `e2e/production/dashboard.prod.spec.ts`     | Dashboard tests                     |
+| `e2e/production/api-health.prod.spec.ts`    | API health tests                    |
+| `e2e/production/accessibility.prod.spec.ts` | WCAG accessibility tests            |
+| `e2e/production/links.prod.spec.ts`         | Broken link checker                 |

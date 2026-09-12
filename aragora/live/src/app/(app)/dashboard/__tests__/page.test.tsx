@@ -9,13 +9,9 @@ const mockUseDashboardEvents = jest.fn();
 const mockUseSWRFetch = jest.fn();
 const mockUseActiveDebates = jest.fn();
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => mockUseAuth(),
-}));
+jest.mock('@/context/AuthContext', () => ({ useAuth: () => mockUseAuth() }));
 
 jest.mock('@/components/MatrixRain', () => ({
   Scanlines: () => <div data-testid="scanlines" />,
@@ -23,15 +19,10 @@ jest.mock('@/components/MatrixRain', () => ({
 }));
 
 jest.mock('@/context/RightSidebarContext', () => ({
-  useRightSidebar: () => ({
-    setContext: jest.fn(),
-    clearContext: jest.fn(),
-  }),
+  useRightSidebar: () => ({ setContext: jest.fn(), clearContext: jest.fn() }),
 }));
 
-jest.mock('@/utils/supabase', () => ({
-  fetchRecentDebates: jest.fn(async () => []),
-}));
+jest.mock('@/utils/supabase', () => ({ fetchRecentDebates: jest.fn(async () => []) }));
 
 jest.mock('@/hooks/useDashboardEvents', () => ({
   useDashboardEvents: () => mockUseDashboardEvents(),
@@ -75,11 +66,7 @@ describe('DashboardPage', () => {
   });
 
   it('gates unauthenticated users before dashboard hooks mount', async () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: false,
-      isLoading: false,
-      organization: null,
-    });
+    mockUseAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, organization: null });
 
     render(<DashboardPage />);
 

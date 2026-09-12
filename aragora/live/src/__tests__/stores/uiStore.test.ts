@@ -146,11 +146,7 @@ describe('uiStore', () => {
       const { result } = renderHook(() => useUIStore());
 
       act(() => {
-        result.current.setPanels({
-          sidebar: false,
-          eventsPanel: true,
-          analyticsPanel: true,
-        });
+        result.current.setPanels({ sidebar: false, eventsPanel: true, analyticsPanel: true });
       });
 
       expect(result.current.panels.sidebar).toBe(false);
@@ -164,11 +160,7 @@ describe('uiStore', () => {
       const { result } = renderHook(() => useUIStore());
 
       act(() => {
-        result.current.setPanels({
-          sidebar: false,
-          eventsPanel: true,
-          analyticsPanel: true,
-        });
+        result.current.setPanels({ sidebar: false, eventsPanel: true, analyticsPanel: true });
       });
 
       act(() => {

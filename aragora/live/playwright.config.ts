@@ -144,10 +144,7 @@ export default defineConfig({
     // Production monitoring tests - run with: PLAYWRIGHT_INCLUDE_PROD=1 npx playwright test --project=production
     {
       name: 'production',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: 'https://aragora.ai',
-      },
+      use: { ...devices['Desktop Chrome'], baseURL: 'https://aragora.ai' },
       testDir: './e2e/production',
       testMatch: /\.prod\.spec\.ts/,
     },

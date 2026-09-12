@@ -52,12 +52,7 @@ export function Mode3LiveBanner() {
       <span
         aria-hidden="true"
         className="font-theme-data"
-        style={{
-          color: 'var(--accent)',
-          fontSize: '18px',
-          lineHeight: 1,
-          marginTop: '2px',
-        }}
+        style={{ color: 'var(--accent)', fontSize: '18px', lineHeight: 1, marginTop: '2px' }}
       >
         ◆
       </span>
@@ -74,17 +69,10 @@ export function Mode3LiveBanner() {
         >
           Mode 3 — heterogeneous brief generation is live
         </div>
-        <div
-          style={{
-            color: 'var(--text)',
-            fontSize: '14px',
-            lineHeight: 1.5,
-          }}
-        >
-          Click <span className="font-theme-data">Generate brief</span> on
-          any PR to run the full panel debate — findings, critique,
-          synthesis — and get a role-structured verdict with dissent
-          preserved. First brief typically takes ~90s.
+        <div style={{ color: 'var(--text)', fontSize: '14px', lineHeight: 1.5 }}>
+          Click <span className="font-theme-data">Generate brief</span> on any PR to run the full
+          panel debate — findings, critique, synthesis — and get a role-structured verdict with
+          dissent preserved. First brief typically takes ~90s.
         </div>
         <div
           style={{
@@ -94,8 +82,8 @@ export function Mode3LiveBanner() {
             fontStyle: 'italic',
           }}
         >
-          Requires <code className="font-theme-data">ARAGORA_PDB_BRIEF_GENERATION_ENABLED=1</code>
-          {' '}on the backend. If the button is hidden, that flag is off.
+          Requires <code className="font-theme-data">ARAGORA_PDB_BRIEF_GENERATION_ENABLED=1</code>{' '}
+          on the backend. If the button is hidden, that flag is off.
         </div>
       </div>
       <button

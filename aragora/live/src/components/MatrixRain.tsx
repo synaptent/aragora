@@ -114,11 +114,7 @@ export function MatrixRain({
   if (!mounted) return null;
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-0"
-      style={{ opacity }}
-    />
+    <canvas ref={canvasRef} className="fixed inset-0 pointer-events-none z-0" style={{ opacity }} />
   );
 }
 
@@ -159,9 +155,5 @@ export function CRTVignette() {
 
 // Subtle flicker effect wrapper
 export function FlickerWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="crt-flicker">
-      {children}
-    </div>
-  );
+  return <div className="crt-flicker">{children}</div>;
 }

@@ -1,6 +1,7 @@
 'use client';
 
-export type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'purple' | 'orange';
+export type BadgeVariant =
+  'success' | 'warning' | 'error' | 'info' | 'neutral' | 'purple' | 'orange';
 
 export interface StatusBadgeProps {
   label: string;
@@ -28,9 +29,7 @@ export function StatusBadge({
   const sizeClasses = size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-3 py-1';
 
   return (
-    <span
-      className={`rounded border ${variantColors[variant]} ${sizeClasses} ${className}`}
-    >
+    <span className={`rounded border ${variantColors[variant]} ${sizeClasses} ${className}`}>
       {label}
     </span>
   );

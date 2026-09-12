@@ -14,11 +14,11 @@ interface AgentChipStyle {
 }
 
 const AGENT_CHIP_COLORS: Record<string, AgentChipStyle> = {
-  claude:   { text: '#0369a1', bg: '#e0f2fe' },
-  gpt:      { text: '#92400e', bg: '#fef3c7' },
-  grok:     { text: '#9d174d', bg: '#fce7f3' },
-  gemini:   { text: '#7c3aed', bg: '#ede9fe' },
-  mistral:  { text: '#0f766e', bg: '#ccfbf1' },
+  claude: { text: '#0369a1', bg: '#e0f2fe' },
+  gpt: { text: '#92400e', bg: '#fef3c7' },
+  grok: { text: '#9d174d', bg: '#fce7f3' },
+  gemini: { text: '#7c3aed', bg: '#ede9fe' },
+  mistral: { text: '#0f766e', bg: '#ccfbf1' },
   deepseek: { text: '#dc2626', bg: '#fee2e2' },
 };
 
@@ -71,8 +71,8 @@ export function CompactDebateResult({ result, onWrongAnswer, onShare }: CompactD
   const participants = result.participants ?? [];
   const proposals = result.proposals ?? {};
 
-  const tldr = result.tldr
-    || (result.final_answer ? stripMarkdown(result.final_answer).slice(0, 200) : '');
+  const tldr =
+    result.tldr || (result.final_answer ? stripMarkdown(result.final_answer).slice(0, 200) : '');
 
   const originalQuestion = result.original_question || result.topic;
   const interpretedQuestion = result.interpreted_question;
@@ -111,10 +111,7 @@ export function CompactDebateResult({ result, onWrongAnswer, onShare }: CompactD
   }
 
   // Agents to show as chips: participants list, or fall back to proposal keys
-  const chipAgents =
-    participants.length > 0
-      ? participants
-      : Object.keys(proposals);
+  const chipAgents = participants.length > 0 ? participants : Object.keys(proposals);
 
   async function handleShare() {
     const shareUrl = result.id
@@ -155,16 +152,10 @@ export function CompactDebateResult({ result, onWrongAnswer, onShare }: CompactD
   }
 
   return (
-    <div
-      className="text-left mt-8 space-y-4"
-      style={{ fontFamily: 'var(--font-landing)' }}
-    >
+    <div className="text-left mt-8 space-y-4" style={{ fontFamily: 'var(--font-landing)' }}>
       {/* 1. Interpretation line */}
       {showInterpretation && (
-        <p
-          className="text-sm italic"
-          style={{ color: 'var(--text-muted)' }}
-        >
+        <p className="text-sm italic" style={{ color: 'var(--text-muted)' }}>
           Aragora interpreted this as:{' '}
           <span style={{ color: 'var(--text)' }}>{interpretedQuestion}</span>
         </p>
@@ -173,10 +164,7 @@ export function CompactDebateResult({ result, onWrongAnswer, onShare }: CompactD
       {/* 2. TL;DR answer card */}
       <div
         className="rounded-2xl p-5"
-        style={{
-          border: '2px solid var(--accent)',
-          backgroundColor: 'var(--surface)',
-        }}
+        style={{ border: '2px solid var(--accent)', backgroundColor: 'var(--surface)' }}
       >
         <span
           className="block text-[10px] uppercase tracking-widest font-bold mb-2"
@@ -184,19 +172,13 @@ export function CompactDebateResult({ result, onWrongAnswer, onShare }: CompactD
         >
           Aragora&apos;s Answer
         </span>
-        <p
-          className="text-sm leading-relaxed"
-          style={{ color: 'var(--text)' }}
-        >
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
           {tldr || 'See full debate for details.'}
         </p>
       </div>
 
       {/* 3. Metadata row */}
-      <p
-        className="text-xs"
-        style={{ color: 'var(--text-muted)' }}
-      >
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
         {confidencePct}% confidence
         {agentCount > 0 && ` · ${agentCount} agent${agentCount !== 1 ? 's' : ''}`}
         {rounds > 0 && ` · ${rounds} round${rounds !== 1 ? 's' : ''}`}
@@ -219,90 +201,80 @@ export function CompactDebateResult({ result, onWrongAnswer, onShare }: CompactD
                   type="button"
                   onClick={() => setExpandedAgent(isExpanded ? null : agent)}
                   className="rounded-full text-xs font-semibold px-3 py-1 transition-opacity hover:opacity-80 cursor-pointer"
-                  style={{
-                    color: chipStyle.text,
-                    backgroundColor: chipStyle.bg,
-                    border: 'none',
-                  }}
+                  style={{ color: chipStyle.text, backgroundColor: chipStyle.bg, border: 'none' }}
                 >
                   {displayName}
-                  {round !== null && (
-                    <span className="ml-1 opacity-60">r{round}</span>
-                  )}
+                  {round !== null && <span className="ml-1 opacity-60">r{round}</span>}
                 </button>
               );
             })}
           </div>
 
           {/* Collapsible proposal panel */}
-          {expandedAgent && (() => {
-            const chipStyle = agentChipStyle(expandedAgent);
-            const displayName = agentDisplayName(expandedAgent);
-            const round = proposalRound(expandedAgent);
-            const proposalText = getProposalText(expandedAgent);
+          {expandedAgent &&
+            (() => {
+              const chipStyle = agentChipStyle(expandedAgent);
+              const displayName = agentDisplayName(expandedAgent);
+              const round = proposalRound(expandedAgent);
+              const proposalText = getProposalText(expandedAgent);
 
-            return (
-              <div
-                className="mt-3 rounded-xl p-4 text-sm"
-                style={{
-                  backgroundColor: 'var(--surface)',
-                  border: `1px solid ${chipStyle.bg}`,
-                  borderLeft: `3px solid ${chipStyle.text}`,
-                }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <span
-                    className="text-xs font-bold uppercase tracking-wide"
-                    style={{ color: chipStyle.text }}
-                  >
-                    {displayName}
-                  </span>
-                  {round !== null && (
+              return (
+                <div
+                  className="mt-3 rounded-xl p-4 text-sm"
+                  style={{
+                    backgroundColor: 'var(--surface)',
+                    border: `1px solid ${chipStyle.bg}`,
+                    borderLeft: `3px solid ${chipStyle.text}`,
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
                     <span
-                      className="text-[10px] px-1.5 py-0.5 rounded"
-                      style={{ color: chipStyle.text, backgroundColor: chipStyle.bg }}
+                      className="text-xs font-bold uppercase tracking-wide"
+                      style={{ color: chipStyle.text }}
                     >
-                      Round {round}
+                      {displayName}
                     </span>
+                    {round !== null && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded"
+                        style={{ color: chipStyle.text, backgroundColor: chipStyle.bg }}
+                      >
+                        Round {round}
+                      </span>
+                    )}
+                  </div>
+                  {proposalText ? (
+                    <>
+                      <p style={{ color: 'var(--text)', lineHeight: 1.6 }}>
+                        {proposalText}
+                        {proposalText.length >= 200 && '…'}
+                      </p>
+                      {result.id && (
+                        <Link
+                          href={`/debate/${result.id}`}
+                          className="inline-block mt-2 text-xs font-semibold hover:opacity-70 transition-opacity"
+                          style={{ color: chipStyle.text }}
+                        >
+                          Read more →
+                        </Link>
+                      )}
+                    </>
+                  ) : (
+                    <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      No proposal text available.
+                    </p>
                   )}
                 </div>
-                {proposalText ? (
-                  <>
-                    <p style={{ color: 'var(--text)', lineHeight: 1.6 }}>
-                      {proposalText}
-                      {proposalText.length >= 200 && '…'}
-                    </p>
-                    {result.id && (
-                      <Link
-                        href={`/debate/${result.id}`}
-                        className="inline-block mt-2 text-xs font-semibold hover:opacity-70 transition-opacity"
-                        style={{ color: chipStyle.text }}
-                      >
-                        Read more →
-                      </Link>
-                    )}
-                  </>
-                ) : (
-                  <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                    No proposal text available.
-                  </p>
-                )}
-              </div>
-            );
-          })()}
+              );
+            })()}
         </div>
       )}
 
       {/* 5. Receipt row — omitted entirely when receipt_hash is null */}
       {result.receipt_hash && (
-        <p
-          className="text-xs font-theme-data"
-          style={{ color: 'var(--text-muted)' }}
-        >
+        <p className="text-xs font-theme-data" style={{ color: 'var(--text-muted)' }}>
           {result.receipt_hash.slice(0, 16)}…
-          {result.receipt?.timestamp && (
-            <span className="ml-2">{result.receipt.timestamp}</span>
-          )}
+          {result.receipt?.timestamp && <span className="ml-2">{result.receipt.timestamp}</span>}
         </p>
       )}
 
@@ -334,12 +306,7 @@ export function CompactDebateResult({ result, onWrongAnswer, onShare }: CompactD
             type="button"
             onClick={() => onWrongAnswer(result)}
             className="text-sm font-semibold transition-opacity hover:opacity-70 cursor-pointer"
-            style={{
-              color: 'var(--text-muted)',
-              background: 'none',
-              border: 'none',
-              padding: 0,
-            }}
+            style={{ color: 'var(--text-muted)', background: 'none', border: 'none', padding: 0 }}
           >
             Wrong answer?
           </button>

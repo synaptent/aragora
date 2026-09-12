@@ -63,14 +63,16 @@ export function useAgentBridgeRuns(): UseAgentBridgeRunsResult {
 
   const runs = useMemo(() => {
     const seenRunIds = new Set<string>();
-    return pages.flatMap((page) => page.response.runs).filter((run) => {
-      if (seenRunIds.has(run.run_id)) {
-        return false;
-      }
+    return pages
+      .flatMap((page) => page.response.runs)
+      .filter((run) => {
+        if (seenRunIds.has(run.run_id)) {
+          return false;
+        }
 
-      seenRunIds.add(run.run_id);
-      return true;
-    });
+        seenRunIds.add(run.run_id);
+        return true;
+      });
   }, [pages]);
 
   const lastPage = pages[pages.length - 1]?.response ?? null;

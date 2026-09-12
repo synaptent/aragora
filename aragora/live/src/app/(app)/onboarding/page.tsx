@@ -105,12 +105,15 @@ export default function OnboardingPage() {
 
   const suggestions = SUGGESTED_QUESTIONS[selectedRole || 'other'] || SUGGESTED_QUESTIONS.other;
 
-  const handleRoleSelect = useCallback((role: string) => {
-    setSelectedRole(role);
-    setSelectedIndustry(role);
-    initFlow(role);
-    setStep('question');
-  }, [setSelectedIndustry, initFlow]);
+  const handleRoleSelect = useCallback(
+    (role: string) => {
+      setSelectedRole(role);
+      setSelectedIndustry(role);
+      initFlow(role);
+      setStep('question');
+    },
+    [setSelectedIndustry, initFlow],
+  );
 
   const handleQuestionNext = useCallback(() => {
     if (question.trim().length >= 5) {
@@ -148,10 +151,7 @@ export default function OnboardingPage() {
           agents: ['anthropic-api', 'openai-api', 'mistral'],
           rounds: 3,
           enable_receipt_generation: true,
-          metadata: {
-            source: 'onboarding',
-            user_role: selectedRole,
-          },
+          metadata: { source: 'onboarding', user_role: selectedRole },
         }),
       });
 
@@ -175,7 +175,20 @@ export default function OnboardingPage() {
     } finally {
       setIsLaunching(false);
     }
-  }, [question, isAuthenticated, tokens, apiBase, selectedRole, markOnboardingComplete, router, setDebateStatus, setFirstDebateId, updateProgress, updateChecklist, completeOnboarding]);
+  }, [
+    question,
+    isAuthenticated,
+    tokens,
+    apiBase,
+    selectedRole,
+    markOnboardingComplete,
+    router,
+    setDebateStatus,
+    setFirstDebateId,
+    updateProgress,
+    updateChecklist,
+    completeOnboarding,
+  ]);
 
   const handleSkip = useCallback(() => {
     skipOnboarding();
@@ -188,7 +201,10 @@ export default function OnboardingPage() {
       {/* Minimal nav */}
       <nav className="border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="font-theme-data text-[var(--accent)] font-bold text-sm tracking-wider">
+          <Link
+            href="/"
+            className="font-theme-data text-[var(--accent)] font-bold text-sm tracking-wider"
+          >
             ARAGORA
           </Link>
           <div className="flex items-center gap-3">
@@ -223,8 +239,8 @@ export default function OnboardingPage() {
                   s === step
                     ? 'w-8 bg-[var(--accent)]'
                     : i < ['role', 'question', 'launch'].indexOf(step)
-                    ? 'w-2 bg-[var(--accent)]/60'
-                    : 'w-2 bg-border'
+                      ? 'w-2 bg-[var(--accent)]/60'
+                      : 'w-2 bg-border'
                 }`}
               />
             ))}
@@ -255,7 +271,9 @@ export default function OnboardingPage() {
                       }`}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-theme-data text-[var(--acid-cyan)] text-lg">{role.icon}</span>
+                        <span className="font-theme-data text-[var(--acid-cyan)] text-lg">
+                          {role.icon}
+                        </span>
                         <span className="font-theme-data text-sm text-text">{role.label}</span>
                       </div>
                     </button>
@@ -281,7 +299,8 @@ export default function OnboardingPage() {
                     What decision do you need help with?
                   </h2>
                   <p className="text-sm font-theme-data text-text-muted">
-                    Type a question or pick one of our suggestions. AI agents will debate it from every angle.
+                    Type a question or pick one of our suggestions. AI agents will debate it from
+                    every angle.
                   </p>
                 </div>
 
@@ -340,20 +359,24 @@ export default function OnboardingPage() {
                     Launch Your First Debate
                   </h2>
                   <p className="text-sm font-theme-data text-text-muted">
-                    Three AI agents will debate your question from different angles,
-                    then deliver a verdict with evidence.
+                    Three AI agents will debate your question from different angles, then deliver a
+                    verdict with evidence.
                   </p>
                 </div>
 
                 {/* Preview */}
                 <div className="border border-border bg-bg p-4">
-                  <div className="text-[10px] font-theme-data text-text-muted uppercase mb-1">YOUR QUESTION</div>
+                  <div className="text-[10px] font-theme-data text-text-muted uppercase mb-1">
+                    YOUR QUESTION
+                  </div>
                   <p className="text-sm font-theme-data text-text">{question}</p>
                 </div>
 
                 {/* What happens next */}
                 <div className="space-y-2">
-                  <div className="text-xs font-theme-data text-text-muted uppercase mb-1">WHAT HAPPENS NEXT:</div>
+                  <div className="text-xs font-theme-data text-text-muted uppercase mb-1">
+                    WHAT HAPPENS NEXT:
+                  </div>
                   {[
                     'Claude, GPT, and Mistral will each propose an answer',
                     'They will critique and red-team each other',
@@ -371,7 +394,8 @@ export default function OnboardingPage() {
                 {!isAuthenticated && (
                   <div className="border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 p-3">
                     <p className="text-xs font-theme-data text-[var(--acid-cyan)]">
-                      You will need to sign up (free) to launch the debate. Your question will be saved.
+                      You will need to sign up (free) to launch the debate. Your question will be
+                      saved.
                     </p>
                   </div>
                 )}
@@ -399,8 +423,8 @@ export default function OnboardingPage() {
                     {isLaunching
                       ? 'LAUNCHING...'
                       : isAuthenticated
-                      ? 'LAUNCH DEBATE'
-                      : 'SIGN UP & LAUNCH'}
+                        ? 'LAUNCH DEBATE'
+                        : 'SIGN UP & LAUNCH'}
                   </button>
                 </div>
               </div>

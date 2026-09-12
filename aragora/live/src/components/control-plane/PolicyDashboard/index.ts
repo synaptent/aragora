@@ -7,6 +7,14 @@
  */
 
 export { PolicyDashboard, type PolicyDashboardProps, type PolicyTab } from './PolicyDashboard';
-export { ComplianceFrameworkList, type ComplianceFrameworkListProps, type ComplianceFramework } from './ComplianceFrameworkList';
-export { ViolationTracker, type ViolationTrackerProps, type ComplianceViolation } from './ViolationTracker';
+export {
+  ComplianceFrameworkList,
+  type ComplianceFrameworkListProps,
+  type ComplianceFramework,
+} from './ComplianceFrameworkList';
+export {
+  ViolationTracker,
+  type ViolationTrackerProps,
+  type ComplianceViolation,
+} from './ViolationTracker';
 export { RiskOverview, type RiskOverviewProps } from './RiskOverview';

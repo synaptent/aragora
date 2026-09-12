@@ -82,7 +82,8 @@ const eventSeverityColors: Record<string, string> = {
 const breakerStateColors: Record<string, string> = {
   closed: 'text-[var(--accent)] bg-[var(--accent)]/10 border-[var(--accent)]/30',
   open: 'text-[var(--crimson)] bg-[var(--crimson)]/10 border-[var(--crimson)]/30',
-  'half-open': 'text-[var(--acid-yellow)] bg-[var(--acid-yellow)]/10 border-[var(--acid-yellow)]/30',
+  'half-open':
+    'text-[var(--acid-yellow)] bg-[var(--acid-yellow)]/10 border-[var(--acid-yellow)]/30',
 };
 
 function timeAgo(timestamp: string): string {
@@ -112,16 +113,30 @@ function humanizeEventType(eventType: string): string {
     .join(' ');
 }
 
-function inferEventSeverity(eventType: string, eventData: Record<string, unknown>): SystemEvent['severity'] {
+function inferEventSeverity(
+  eventType: string,
+  eventData: Record<string, unknown>,
+): SystemEvent['severity'] {
   const explicitSeverity = getOptionalString(eventData.severity);
-  if (explicitSeverity === 'critical' || explicitSeverity === 'error' || explicitSeverity === 'warning' || explicitSeverity === 'info') {
+  if (
+    explicitSeverity === 'critical' ||
+    explicitSeverity === 'error' ||
+    explicitSeverity === 'warning' ||
+    explicitSeverity === 'info'
+  ) {
     return explicitSeverity;
   }
 
   const normalized = eventType.toLowerCase();
   if (normalized.includes('critical')) return 'critical';
-  if (normalized.includes('error') || normalized.includes('fail') || normalized.includes('abort')) return 'error';
-  if (normalized.includes('warning') || normalized.includes('retry') || normalized.includes('degraded')) return 'warning';
+  if (normalized.includes('error') || normalized.includes('fail') || normalized.includes('abort'))
+    return 'error';
+  if (
+    normalized.includes('warning') ||
+    normalized.includes('retry') ||
+    normalized.includes('degraded')
+  )
+    return 'warning';
   return 'info';
 }
 
@@ -155,9 +170,16 @@ function mapHistoryEvent(event: HistoryEvent): SystemEvent {
 // ============================================================================
 
 function StatusIndicator({ status }: { status: string }) {
-  const color = status === 'healthy' ? 'bg-[var(--accent)]' : status === 'degraded' ? 'bg-[var(--acid-yellow)]' : 'bg-[var(--crimson)]';
+  const color =
+    status === 'healthy'
+      ? 'bg-[var(--accent)]'
+      : status === 'degraded'
+        ? 'bg-[var(--acid-yellow)]'
+        : 'bg-[var(--crimson)]';
   return (
-    <span className={`inline-block w-2 h-2 rounded-full ${color} ${status === 'healthy' ? 'animate-pulse' : ''}`} />
+    <span
+      className={`inline-block w-2 h-2 rounded-full ${color} ${status === 'healthy' ? 'animate-pulse' : ''}`}
+    />
   );
 }
 
@@ -199,15 +221,27 @@ function UtilizationMeter({
   critical?: number;
 }) {
   const ratio = max > 0 ? value / max : 0;
-  const color = ratio >= critical ? 'bg-[var(--crimson)]' : ratio >= warning ? 'bg-[var(--acid-yellow)]' : 'bg-[var(--accent)]';
-  const textColor = ratio >= critical ? 'text-[var(--crimson)]' : ratio >= warning ? 'text-[var(--acid-yellow)]' : 'text-[var(--accent)]';
+  const color =
+    ratio >= critical
+      ? 'bg-[var(--crimson)]'
+      : ratio >= warning
+        ? 'bg-[var(--acid-yellow)]'
+        : 'bg-[var(--accent)]';
+  const textColor =
+    ratio >= critical
+      ? 'text-[var(--crimson)]'
+      : ratio >= warning
+        ? 'text-[var(--acid-yellow)]'
+        : 'text-[var(--accent)]';
 
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <span className="text-xs font-theme-data text-text-muted">{label}</span>
         <span className={`text-xs font-theme-data ${textColor}`}>
-          {value}{unit} / {max}{unit}
+          {value}
+          {unit} / {max}
+          {unit}
         </span>
       </div>
       <div className="h-2 bg-surface border border-border rounded-full overflow-hidden">
@@ -300,9 +334,13 @@ function ActivityFeed({ events }: { events: SystemEvent[] }) {
           className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-surface/50 transition-colors"
         >
           <span className={`text-xs font-theme-data mt-0.5 ${eventSeverityColors[event.severity]}`}>
-            {event.severity === 'critical' ? '!!!' :
-             event.severity === 'error' ? '!!' :
-             event.severity === 'warning' ? '!' : '>'}
+            {event.severity === 'critical'
+              ? '!!!'
+              : event.severity === 'error'
+                ? '!!'
+                : event.severity === 'warning'
+                  ? '!'
+                  : '>'}
           </span>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-theme-data text-text truncate">{event.message}</div>
@@ -344,11 +382,15 @@ function DebateQueuePanel({
             <div className="text-xs font-theme-data text-text-muted">Running</div>
           </div>
           <div>
-            <div className="text-lg font-theme-data text-[var(--acid-cyan)]">{queue.completed_today}</div>
+            <div className="text-lg font-theme-data text-[var(--acid-cyan)]">
+              {queue.completed_today}
+            </div>
             <div className="text-xs font-theme-data text-text-muted">Done</div>
           </div>
           <div>
-            <div className="text-lg font-theme-data text-[var(--crimson)]">{queue.failed_today}</div>
+            <div className="text-lg font-theme-data text-[var(--crimson)]">
+              {queue.failed_today}
+            </div>
             <div className="text-xs font-theme-data text-text-muted">Failed</div>
           </div>
         </div>
@@ -361,9 +403,7 @@ function DebateQueuePanel({
               key={debate.id}
               className="flex items-center justify-between px-2 py-1.5 bg-surface/30 rounded text-xs font-theme-data"
             >
-              <div className="flex-1 min-w-0 truncate text-text">
-                {debate.task}
-              </div>
+              <div className="flex-1 min-w-0 truncate text-text">{debate.task}</div>
               <div className="flex items-center gap-2 ml-2 flex-shrink-0">
                 {debate.status === 'running' && (
                   <span className="text-text-muted">
@@ -415,10 +455,9 @@ export default function MissionControlPage() {
   );
 
   // Queue stats
-  const { data: queueData } = useSWRFetch<QueueStats>(
-    '/api/control-plane/queue/metrics',
-    { refreshInterval: 10000 },
-  );
+  const { data: queueData } = useSWRFetch<QueueStats>('/api/control-plane/queue/metrics', {
+    refreshInterval: 10000,
+  });
   const queueStats = queueData ?? null;
 
   // Recent events
@@ -435,12 +474,7 @@ export default function MissionControlPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const executeAction = useCallback(
-    async (
-      action: string,
-      endpoint: string,
-      method = 'POST',
-      body?: Record<string, unknown>,
-    ) => {
+    async (action: string, endpoint: string, method = 'POST', body?: Record<string, unknown>) => {
       setActionLoading(action);
       try {
         const headers: HeadersInit = { 'Content-Type': 'application/json' };
@@ -455,19 +489,18 @@ export default function MissionControlPage() {
         if (res.ok) {
           showToast(`${action} initiated successfully`, 'success');
         } else {
-          const errorText =
-            await res
-              .json()
-              .then((data: unknown) => {
-                if (data && typeof data === 'object') {
-                  const message =
-                    getOptionalString((data as Record<string, unknown>).error) ||
-                    getOptionalString((data as Record<string, unknown>).message);
-                  if (message) return message;
-                }
-                return null;
-              })
-              .catch(() => null);
+          const errorText = await res
+            .json()
+            .then((data: unknown) => {
+              if (data && typeof data === 'object') {
+                const message =
+                  getOptionalString((data as Record<string, unknown>).error) ||
+                  getOptionalString((data as Record<string, unknown>).message);
+                if (message) return message;
+              }
+              return null;
+            })
+            .catch(() => null);
           showToast(errorText || `Failed to initiate ${action}`, 'error');
         }
       } catch (err) {
@@ -480,33 +513,36 @@ export default function MissionControlPage() {
     [backendConfig.api, showToast, tokens?.access_token],
   );
 
-  const navigateTo = useCallback((href: string) => {
-    router.push(href);
-  }, [router]);
+  const navigateTo = useCallback(
+    (href: string) => {
+      router.push(href);
+    },
+    [router],
+  );
 
   const handleResetBreakers = useCallback(async () => {
     if (typeof window !== 'undefined' && !window.confirm('Reset all Nomic circuit breakers?')) {
       return;
     }
-    await executeAction('Circuit breaker reset', '/api/v1/admin/nomic/circuit-breakers/reset', 'POST');
+    await executeAction(
+      'Circuit breaker reset',
+      '/api/v1/admin/nomic/circuit-breakers/reset',
+      'POST',
+    );
   }, [executeAction]);
 
   // ---- Derived state ----
   const overallStatus = health?.overall_status ?? 'healthy';
-  const failingAgents = useMemo(
-    () => agents.filter((a) => a.status === 'failed'),
-    [agents],
-  );
-  const openBreakers = useMemo(
-    () => breakers.filter((b) => b.state === 'open'),
-    [breakers],
-  );
+  const failingAgents = useMemo(() => agents.filter((a) => a.status === 'failed'), [agents]);
+  const openBreakers = useMemo(() => breakers.filter((b) => b.state === 'open'), [breakers]);
   const hasAlerts = failingAgents.length > 0 || openBreakers.length > 0;
 
   return (
     <>
-      <div className="crt-effect"><Scanlines opacity={0.02} />
-      <CRTVignette /></div>
+      <div className="crt-effect">
+        <Scanlines opacity={0.02} />
+        <CRTVignette />
+      </div>
 
       <main className="min-h-screen bg-[var(--bg)] text-[var(--text)] relative z-10">
         <div className="container mx-auto px-4 py-6">
@@ -522,7 +558,9 @@ export default function MissionControlPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <div className={`flex items-center gap-2 px-3 py-1 border rounded-full ${statusBgColors[overallStatus]}`}>
+                <div
+                  className={`flex items-center gap-2 px-3 py-1 border rounded-full ${statusBgColors[overallStatus]}`}
+                >
                   <StatusIndicator status={overallStatus} />
                   <span className={`text-xs font-theme-data ${statusColors[overallStatus]}`}>
                     {overallStatus.toUpperCase()}
@@ -569,9 +607,11 @@ export default function MissionControlPage() {
               subValue={budget?.forecast ? `EOM: $${budget.forecast.eom.toFixed(0)}` : undefined}
               color={
                 budget
-                  ? budget.utilization > 0.9 ? 'text-[var(--crimson)]'
-                    : budget.utilization > 0.75 ? 'text-[var(--acid-yellow)]'
-                    : 'text-[var(--accent)]'
+                  ? budget.utilization > 0.9
+                    ? 'text-[var(--crimson)]'
+                    : budget.utilization > 0.75
+                      ? 'text-[var(--acid-yellow)]'
+                      : 'text-[var(--accent)]'
                   : 'text-text-muted'
               }
             />
@@ -645,7 +685,9 @@ export default function MissionControlPage() {
             <div className="space-y-6">
               {/* Alert Panel */}
               <div className={`card p-4 ${hasAlerts ? 'border-[var(--crimson)]/40' : ''}`}>
-                <h2 className={`text-sm font-theme-data font-bold mb-4 uppercase tracking-wide ${hasAlerts ? 'text-[var(--crimson)]' : 'text-[var(--acid-green)]'}`}>
+                <h2
+                  className={`text-sm font-theme-data font-bold mb-4 uppercase tracking-wide ${hasAlerts ? 'text-[var(--crimson)]' : 'text-[var(--acid-green)]'}`}
+                >
                   {'>'} {hasAlerts ? 'ALERTS' : 'Alert Panel'}
                 </h2>
 
@@ -728,8 +770,16 @@ export default function MissionControlPage() {
                 {Object.entries(health.subsystems).map(([name, status]) => {
                   const isHealthy = status === 'healthy' || status === 'ok';
                   const isDegraded = status === 'degraded' || status === 'warning';
-                  const color = isHealthy ? 'border-[var(--accent)]/30 text-[var(--accent)]' : isDegraded ? 'border-acid-yellow/30 text-[var(--acid-yellow)]' : 'border-[var(--crimson)]/30 text-[var(--crimson)]';
-                  const bg = isHealthy ? 'bg-[var(--accent)]/5' : isDegraded ? 'bg-acid-yellow/5' : 'bg-[var(--crimson)]/5';
+                  const color = isHealthy
+                    ? 'border-[var(--accent)]/30 text-[var(--accent)]'
+                    : isDegraded
+                      ? 'border-acid-yellow/30 text-[var(--acid-yellow)]'
+                      : 'border-[var(--crimson)]/30 text-[var(--crimson)]';
+                  const bg = isHealthy
+                    ? 'bg-[var(--accent)]/5'
+                    : isDegraded
+                      ? 'bg-acid-yellow/5'
+                      : 'bg-[var(--crimson)]/5';
 
                   return (
                     <div

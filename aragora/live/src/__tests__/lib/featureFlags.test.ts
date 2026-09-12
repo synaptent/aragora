@@ -63,9 +63,7 @@ describe('featureFlags', () => {
     });
 
     it('has beta features', () => {
-      const betaFeatures = Object.entries(FEATURES).filter(
-        ([, flag]) => flag.status === 'beta'
-      );
+      const betaFeatures = Object.entries(FEATURES).filter(([, flag]) => flag.status === 'beta');
       expect(betaFeatures.length).toBeGreaterThan(0);
     });
   });
@@ -98,9 +96,7 @@ describe('featureFlags', () => {
       const result = isFeatureEnabled('NONEXISTENT_FEATURE');
 
       expect(result).toBe(false);
-      expect(loggerSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Unknown feature flag')
-      );
+      expect(loggerSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown feature flag'));
       loggerSpy.mockRestore();
     });
   });
@@ -196,10 +192,7 @@ describe('featureFlags', () => {
     it('sets localStorage value to true', () => {
       enableFeature('CLI_AGENTS');
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'feature_CLI_AGENTS',
-        'true'
-      );
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('feature_CLI_AGENTS', 'true');
     });
   });
 
@@ -207,10 +200,7 @@ describe('featureFlags', () => {
     it('sets localStorage value to false', () => {
       disableFeature('STANDARD_DEBATES');
 
-      expect(localStorageMock.setItem).toHaveBeenCalledWith(
-        'feature_STANDARD_DEBATES',
-        'false'
-      );
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('feature_STANDARD_DEBATES', 'false');
     });
   });
 
@@ -218,9 +208,7 @@ describe('featureFlags', () => {
     it('removes localStorage value', () => {
       resetFeature('CLI_AGENTS');
 
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith(
-        'feature_CLI_AGENTS'
-      );
+      expect(localStorageMock.removeItem).toHaveBeenCalledWith('feature_CLI_AGENTS');
     });
   });
 
@@ -236,9 +224,7 @@ describe('featureFlags', () => {
       resetAllFeatures();
 
       Object.keys(FEATURES).forEach((feature) => {
-        expect(localStorageMock.removeItem).toHaveBeenCalledWith(
-          `feature_${feature}`
-        );
+        expect(localStorageMock.removeItem).toHaveBeenCalledWith(`feature_${feature}`);
       });
     });
   });

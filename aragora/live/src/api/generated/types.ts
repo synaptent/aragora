@@ -1,7 +1,19 @@
 // Auto-generated types from OpenAPI spec
 // DO NOT EDIT - regenerate with: npm run generate:sdk
 
-export type DebateStatus = 'created' | 'starting' | 'pending' | 'running' | 'in_progress' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'active' | 'concluded' | 'archived';
+export type DebateStatus =
+  | 'created'
+  | 'starting'
+  | 'pending'
+  | 'running'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'paused'
+  | 'active'
+  | 'concluded'
+  | 'archived';
 
 export interface ConsensusResult {
   reached?: boolean;
@@ -14,34 +26,34 @@ export interface ConsensusResult {
 }
 
 export interface DebateCreateRequest {
-    /** The topic or question to debate */
+  /** The topic or question to debate */
   task?: string;
-    /** Alias for task (legacy field) */
+  /** Alias for task (legacy field) */
   question?: string;
-    /** List of agent IDs to include */
+  /** List of agent IDs to include */
   agents?: string[];
-    /** Number of debate rounds */
+  /** Number of debate rounds */
   rounds?: number;
-    /** Consensus detection method */
+  /** Consensus detection method */
   consensus?: 'majority' | 'unanimous' | 'supermajority' | 'hybrid';
-    /** Whether to auto-select optimal agents */
+  /** Whether to auto-select optimal agents */
   auto_select?: boolean;
-    /** Optional auto-select configuration */
+  /** Optional auto-select configuration */
   auto_select_config?: Record<string, unknown>;
-    /** Use a trending topic instead of provided task */
+  /** Use a trending topic instead of provided task */
   use_trending?: boolean;
-    /** Trending category filter */
+  /** Trending category filter */
   trending_category?: string;
-    /** Additional context for the debate */
+  /** Additional context for the debate */
   context?: string;
 }
 
 export interface DebateCreateResponse {
   success?: boolean;
-    /** Unique identifier for the created debate */
+  /** Unique identifier for the created debate */
   debate_id?: string;
   status?: DebateStatus;
-    /** The debate topic */
+  /** The debate topic */
   task?: string;
   error?: string;
 }
@@ -119,11 +131,7 @@ export interface ConvergenceStatus {
 }
 
 export interface Citations {
-  citations?: {
-    claim?: string;
-    source?: string;
-    confidence?: number;
-  }[];
+  citations?: { claim?: string; source?: string; confidence?: number }[];
   grounded_verdict?: Record<string, unknown>;
 }
 
@@ -278,11 +286,7 @@ export interface Tournament {
 
 export interface TournamentStandings {
   tournament_id?: string;
-  standings?: {
-    rank?: number;
-    agent?: string;
-    points?: number;
-  }[];
+  standings?: { rank?: number; agent?: string; points?: number }[];
 }
 
 export interface ReplaySummary {
@@ -315,11 +319,7 @@ export interface Document {
 }
 
 export interface SupportedFormats {
-  formats?: {
-    ext?: string;
-    mime?: string;
-    available?: boolean;
-  }[];
+  formats?: { ext?: string; mime?: string; available?: boolean }[];
   max_size_mb?: number;
 }
 
@@ -353,15 +353,8 @@ export interface RelationshipSummary {
 }
 
 export interface RelationshipGraph {
-  nodes?: {
-    id?: string;
-    elo?: number;
-  }[];
-  edges?: {
-    source?: string;
-    target?: string;
-    weight?: number;
-  }[];
+  nodes?: { id?: string; elo?: number }[];
+  edges?: { source?: string; target?: string; weight?: number }[];
 }
 
 export interface Relationship {
@@ -380,7 +373,14 @@ export interface MomentsSummary {
 
 export interface Moment {
   id?: string;
-  type?: 'upset_victory' | 'position_reversal' | 'calibration_vindication' | 'alliance_shift' | 'consensus_breakthrough' | 'streak_achievement' | 'domain_mastery';
+  type?:
+    | 'upset_victory'
+    | 'position_reversal'
+    | 'calibration_vindication'
+    | 'alliance_shift'
+    | 'consensus_breakthrough'
+    | 'streak_achievement'
+    | 'domain_mastery';
   agent?: string;
   description?: string;
   significance?: number;
@@ -442,17 +442,26 @@ export interface ScheduledDebateRecord {
 
 export interface APIError {
   error?: {
-      /** Machine-readable error code */
-    code?: 'VALIDATION_ERROR' | 'INVALID_REQUEST' | 'NOT_FOUND' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'RATE_LIMITED' | 'INTERNAL_ERROR' | 'SERVICE_UNAVAILABLE' | 'TIMEOUT';
-      /** Human-readable error message */
+    /** Machine-readable error code */
+    code?:
+      | 'VALIDATION_ERROR'
+      | 'INVALID_REQUEST'
+      | 'NOT_FOUND'
+      | 'UNAUTHORIZED'
+      | 'FORBIDDEN'
+      | 'RATE_LIMITED'
+      | 'INTERNAL_ERROR'
+      | 'SERVICE_UNAVAILABLE'
+      | 'TIMEOUT';
+    /** Human-readable error message */
     message?: string;
-      /** HTTP status code */
+    /** HTTP status code */
     status?: number;
-      /** Trace ID for debugging */
+    /** Trace ID for debugging */
     trace_id?: string;
-      /** Additional error details */
+    /** Additional error details */
     details?: Record<string, unknown>;
-      /** Suggested action to resolve the error */
+    /** Suggested action to resolve the error */
     suggestion?: string;
   };
 }
@@ -464,17 +473,8 @@ export interface ProbeReport {
   vulnerabilities_found?: number;
   vulnerability_rate?: number;
   elo_penalty?: number;
-  by_type?: Record<string, {
-    passed?: number;
-    failed?: number;
-    severity?: string;
-  }>;
-  summary?: {
-    critical?: number;
-    high?: number;
-    medium?: number;
-    low?: number;
-  };
+  by_type?: Record<string, { passed?: number; failed?: number; severity?: string }>;
+  summary?: { critical?: number; high?: number; medium?: number; low?: number };
 }
 
 export interface EmergentTrait {
@@ -524,12 +524,12 @@ export interface AgentRecommendation {
 export interface EvolutionPattern {
   id?: string;
   type?: 'argument' | 'structure' | 'citation' | 'rhetorical';
-    /** The extracted pattern text */
+  /** The extracted pattern text */
   pattern?: string;
   success_rate?: number;
   usage_count?: number;
   agents_using?: string[];
-    /** Debate ID where pattern was first seen */
+  /** Debate ID where pattern was first seen */
   extracted_from?: string;
   created_at?: string;
 }
@@ -541,6 +541,6 @@ export interface EvolutionEvent {
   patterns_applied?: string[];
   success_rate_before?: number;
   success_rate_after?: number;
-    /** Summary of changes made */
+  /** Summary of changes made */
   prompt_diff?: string;
 }

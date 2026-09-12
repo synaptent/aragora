@@ -24,7 +24,7 @@ export function handleTokenStartEvent(data: ParsedEventData, ctx: EventHandlerCo
 
   const streamKey = makeStreamingKey(agent, taskId);
 
-  ctx.setStreamingMessages(prev => {
+  ctx.setStreamingMessages((prev) => {
     const updated = new Map(prev);
     updated.set(streamKey, {
       agent,
@@ -42,7 +42,7 @@ export function handleTokenStartEvent(data: ParsedEventData, ctx: EventHandlerCo
     return updated;
   });
 
-  ctx.setAgents(prev => prev.includes(agent) ? prev : [...prev, agent]);
+  ctx.setAgents((prev) => (prev.includes(agent) ? prev : [...prev, agent]));
 }
 
 /**
@@ -59,7 +59,7 @@ export function handleTokenDeltaEvent(data: ParsedEventData, ctx: EventHandlerCo
 
   const streamKey = makeStreamingKey(agent, taskId);
 
-  ctx.setStreamingMessages(prev => {
+  ctx.setStreamingMessages((prev) => {
     const updated = new Map(prev);
     const existing = updated.get(streamKey);
 
@@ -90,18 +90,12 @@ export function handleTokenDeltaEvent(data: ParsedEventData, ctx: EventHandlerCo
           // Token arrived out of order - buffer it
           const pending = new Map(existing.pendingTokens);
           pending.set(agentSeq, token);
-          updated.set(streamKey, {
-            ...existing,
-            pendingTokens: pending,
-          });
+          updated.set(streamKey, { ...existing, pendingTokens: pending });
         }
         // Ignore tokens with seq < expectedSeq (duplicate/old)
       } else {
         // No sequence info - fall back to simple append (backward compat)
-        updated.set(streamKey, {
-          ...existing,
-          content: existing.content + token,
-        });
+        updated.set(streamKey, { ...existing, content: existing.content + token });
       }
     } else {
       // First token for this agent+task (no token_start received)
@@ -136,7 +130,7 @@ export function handleTokenEndEvent(data: ParsedEventData, ctx: EventHandlerCont
 
   const streamKey = makeStreamingKey(agent, taskId);
 
-  ctx.setStreamingMessages(prev => {
+  ctx.setStreamingMessages((prev) => {
     const updated = new Map(prev);
     const existing = updated.get(streamKey);
 
@@ -171,7 +165,7 @@ export function handleTokenEndEvent(data: ParsedEventData, ctx: EventHandlerCont
           msg.reasoning_phase = existing.reasoningPhase;
         }
         if (existing.reasoning.length > 0) {
-          msg.thinking = existing.reasoning.map(r => r.thinking).join(' ');
+          msg.thinking = existing.reasoning.map((r) => r.thinking).join(' ');
         }
 
         // Use addMessageIfNew which handles deduplication
@@ -195,7 +189,7 @@ export function handleAgentThinkingEvent(data: ParsedEventData, ctx: EventHandle
 
   if (!agent || !thinking) return;
 
-  ctx.setStreamingMessages(prev => {
+  ctx.setStreamingMessages((prev) => {
     const updated = new Map(prev);
     for (const [key, msg] of updated.entries()) {
       if (msg.agent === agent && !msg.isComplete) {
@@ -223,18 +217,16 @@ export function handleAgentThinkingEvent(data: ParsedEventData, ctx: EventHandle
 export function handleAgentEvidenceEvent(data: ParsedEventData, ctx: EventHandlerContext): void {
   const eventData = data.data;
   const agent = (data.agent as string) || (eventData?.agent as string);
-  const sources = (eventData?.sources as Array<{ title: string; url?: string; relevance?: number }>) || [];
+  const sources =
+    (eventData?.sources as Array<{ title: string; url?: string; relevance?: number }>) || [];
 
   if (!agent || sources.length === 0) return;
 
-  ctx.setStreamingMessages(prev => {
+  ctx.setStreamingMessages((prev) => {
     const updated = new Map(prev);
     for (const [key, msg] of updated.entries()) {
       if (msg.agent === agent && !msg.isComplete) {
-        updated.set(key, {
-          ...msg,
-          evidence: [...msg.evidence, ...sources],
-        });
+        updated.set(key, { ...msg, evidence: [...msg.evidence, ...sources] });
         break;
       }
     }
@@ -259,14 +251,11 @@ export function handleAgentConfidenceEvent(data: ParsedEventData, ctx: EventHand
 
   if (!agent || confidence === null) return;
 
-  ctx.setStreamingMessages(prev => {
+  ctx.setStreamingMessages((prev) => {
     const updated = new Map(prev);
     for (const [key, msg] of updated.entries()) {
       if (msg.agent === agent && !msg.isComplete) {
-        updated.set(key, {
-          ...msg,
-          confidence,
-        });
+        updated.set(key, { ...msg, confidence });
         break;
       }
     }
@@ -292,14 +281,11 @@ export function handleAgentReasoningEvent(data: ParsedEventData, ctx: EventHandl
   if (!agent) return;
 
   if (phase) {
-    ctx.setStreamingMessages(prev => {
+    ctx.setStreamingMessages((prev) => {
       const updated = new Map(prev);
       for (const [key, msg] of updated.entries()) {
         if (msg.agent === agent && !msg.isComplete) {
-          updated.set(key, {
-            ...msg,
-            reasoningPhase: phase,
-          });
+          updated.set(key, { ...msg, reasoningPhase: phase });
           break;
         }
       }

@@ -9,7 +9,11 @@ import { getCurrentReturnUrl, normalizeReturnUrl } from '@/utils/returnUrl';
 import { useBackend, BACKENDS } from '../BackendSelector';
 import { DebateInput } from '../DebateInput';
 import { ConnectOpenRouterButton } from '../openrouter/ConnectOpenRouterButton';
-import type { HeroSectionProps, LandingDebatePreflight, LandingPreparedDebateOption } from './types';
+import type {
+  HeroSectionProps,
+  LandingDebatePreflight,
+  LandingPreparedDebateOption,
+} from './types';
 import { submitLandingFeedback, trackLandingEvent } from './landingTelemetry';
 import { useLandingDebateProgress } from '@/hooks/useLandingDebateProgress';
 
@@ -22,7 +26,6 @@ const ASCII_BANNER = `    \u2584\u2584\u2584       \u2588\u2588\u2580\u2588\u258
      \u2592   \u2592\u2592 \u2591  \u2591\u2592 \u2591 \u2592\u2591  \u2592   \u2592\u2592 \u2591  \u2591   \u2591   \u2591 \u2592 \u2592\u2591   \u2591\u2592 \u2591 \u2592\u2591  \u2592   \u2592\u2592 \u2591
      \u2591   \u2592     \u2591\u2591   \u2591   \u2591   \u2592   \u2591 \u2591   \u2591 \u2591 \u2591 \u2591 \u2592    \u2591\u2591   \u2591   \u2591   \u2592
          \u2591  \u2591   \u2591           \u2591  \u2591      \u2591     \u2591 \u2591     \u2591           \u2591  \u2591`;
-
 
 function parseRetryAfterSeconds(retryAfter: string | null): number {
   if (!retryAfter) return 60;
@@ -59,9 +62,9 @@ function buildLandingErrorMessage(status: number, data: Record<string, unknown> 
 
   if (code === 'landing_preview_needs_clarification') {
     return (
-      message
-      || error
-      || 'The fast preview drifted away from your question. Tighten the wording or pick one interpretation first.'
+      message ||
+      error ||
+      'The fast preview drifted away from your question. Tighten the wording or pick one interpretation first.'
     );
   }
 
@@ -95,7 +98,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
   const [error, setError] = useState<string | null>(null);
   const [editorNotice, setEditorNotice] = useState<string | null>(null);
   const [lastTopic, setLastTopic] = useState('');
-  const [lastPreparedOption, setLastPreparedOption] = useState<LandingPreparedDebateOption | null>(null);
+  const [lastPreparedOption, setLastPreparedOption] = useState<LandingPreparedDebateOption | null>(
+    null,
+  );
   const [pendingPreflight, setPendingPreflight] = useState<LandingDebatePreflight | null>(null);
   const [debateId, setDebateId] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
@@ -121,7 +126,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
   useEffect(() => {
     if (question || isRunning) return; // stop cycling when user types
     cycleTimer.current = setInterval(cyclePlaceholder, 3500);
-    return () => { if (cycleTimer.current) clearInterval(cycleTimer.current); };
+    return () => {
+      if (cycleTimer.current) clearInterval(cycleTimer.current);
+    };
   }, [question, isRunning, cyclePlaceholder]);
 
   // Scroll to results when they appear
@@ -132,28 +139,24 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
   }, [result]);
 
   const { config: backendConfig } = useBackend();
-  const apiBase =
-    isDashboardMode
-      ? (props.apiBase as string | undefined) ?? BACKENDS.production.api
-      : backendConfig.api;
+  const apiBase = isDashboardMode
+    ? ((props.apiBase as string | undefined) ?? BACKENDS.production.api)
+    : backendConfig.api;
   const playgroundDebateUrl =
-    apiBase === ''
-      ? '/api/v1/playground/debate/'
-      : `${apiBase}/api/v1/playground/debate`;
+    apiBase === '' ? '/api/v1/playground/debate/' : `${apiBase}/api/v1/playground/debate`;
   const spectateWsUrl = backendConfig.ws
     ? backendConfig.ws.replace(/\/ws\/?$/, '') + '/ws/spectate'
     : 'ws://localhost:8765/ws/spectate';
-  const progress = useLandingDebateProgress({
-    debateId,
-    wsUrl: spectateWsUrl,
-    enabled: isRunning,
-  });
-  const trackEvent = useCallback((
-    eventType: Parameters<typeof trackLandingEvent>[1],
-    data: Parameters<typeof trackLandingEvent>[2] = {},
-  ) => {
-    trackLandingEvent(apiBase, eventType, data);
-  }, [apiBase]);
+  const progress = useLandingDebateProgress({ debateId, wsUrl: spectateWsUrl, enabled: isRunning });
+  const trackEvent = useCallback(
+    (
+      eventType: Parameters<typeof trackLandingEvent>[1],
+      data: Parameters<typeof trackLandingEvent>[2] = {},
+    ) => {
+      trackLandingEvent(apiBase, eventType, data);
+    },
+    [apiBase],
+  );
   const focusComposer = useCallback(() => {
     const focus = () => {
       textareaRef.current?.focus();
@@ -165,41 +168,42 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
     }
     setTimeout(focus, 0);
   }, []);
-  const handleWrongAnswer = useCallback((currentResult: DebateResponse) => {
-    const sourceQuestion =
-      currentResult.original_question
-      || question
-      || lastTopic
-      || currentResult.topic;
-    const rewritten =
-      Boolean(currentResult.interpreted_question)
-      && currentResult.interpreted_question !== (currentResult.original_question || currentResult.topic);
+  const handleWrongAnswer = useCallback(
+    (currentResult: DebateResponse) => {
+      const sourceQuestion =
+        currentResult.original_question || question || lastTopic || currentResult.topic;
+      const rewritten =
+        Boolean(currentResult.interpreted_question) &&
+        currentResult.interpreted_question !==
+          (currentResult.original_question || currentResult.topic);
 
-    setQuestion(sourceQuestion);
-    setResult(null);
-    setError(null);
-    setLastTopic(sourceQuestion);
-    setLastPreparedOption(null);
-    setPendingPreflight(null);
-    setEditorNotice('Edit the wording below and rerun the debate with one more specific detail.');
+      setQuestion(sourceQuestion);
+      setResult(null);
+      setError(null);
+      setLastTopic(sourceQuestion);
+      setLastPreparedOption(null);
+      setPendingPreflight(null);
+      setEditorNotice('Edit the wording below and rerun the debate with one more specific detail.');
 
-    submitLandingFeedback(apiBase, {
-      question: sourceQuestion,
-      interpreted_question: currentResult.interpreted_question || currentResult.topic,
-      final_answer: currentResult.final_answer,
-      result_warning: currentResult.result_warning || null,
-      result_mode: currentResult.result_mode || 'full',
-      debate_id: currentResult.id || null,
-      verdict: currentResult.verdict || null,
-      participant_count: currentResult.participants.length,
-      rewritten,
-    });
-    trackEvent('wrong_answer_clicked', {
-      result_mode: currentResult.result_mode || 'full',
-      rewritten,
-    });
-    focusComposer();
-  }, [apiBase, focusComposer, lastTopic, question, trackEvent]);
+      submitLandingFeedback(apiBase, {
+        question: sourceQuestion,
+        interpreted_question: currentResult.interpreted_question || currentResult.topic,
+        final_answer: currentResult.final_answer,
+        result_warning: currentResult.result_warning || null,
+        result_mode: currentResult.result_mode || 'full',
+        debate_id: currentResult.id || null,
+        verdict: currentResult.verdict || null,
+        participant_count: currentResult.participants.length,
+        rewritten,
+      });
+      trackEvent('wrong_answer_clicked', {
+        result_mode: currentResult.result_mode || 'full',
+        rewritten,
+      });
+      focusComposer();
+    },
+    [apiBase, focusComposer, lastTopic, question, trackEvent],
+  );
 
   // Dashboard mode — preserves original behavior from old HeroSection
   if (isDashboardMode) {
@@ -214,22 +218,24 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
         </h1>
 
         <p className="text-[var(--acid-cyan)] font-theme-data text-xs sm:text-sm text-center mb-10 max-w-xl">
-          Ask any question. Multiple AI models will argue every angle and deliver a verdict with confidence scores.
+          Ask any question. Multiple AI models will argue every angle and deliver a verdict with
+          confidence scores.
         </p>
 
         {props.error && (
           <div className="w-full max-w-3xl mb-6 bg-warning/10 border border-warning/30 p-4 flex items-center justify-between">
             <span className="text-warning font-theme-data text-sm">
-              {(props.error as string).toLowerCase().includes('authentication') || (props.error as string).toLowerCase().includes('unauthorized') ? (
+              {(props.error as string).toLowerCase().includes('authentication') ||
+              (props.error as string).toLowerCase().includes('unauthorized') ? (
                 <>
                   Please{' '}
                   <a href="/login" className="underline hover:text-warning/80 font-bold">
                     Log In
-                  </a>
-                  {' '}to start debating with real AI models.
+                  </a>{' '}
+                  to start debating with real AI models.
                 </>
               ) : (
-                props.error as string
+                (props.error as string)
               )}
             </span>
             <button
@@ -246,9 +252,13 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
           <div className="w-full max-w-3xl mb-6 bg-[var(--accent)]/10 border border-[var(--accent)]/30 p-4">
             <div className="flex items-center gap-2 mb-2">
               <span className="w-2 h-2 bg-[var(--accent)] rounded-full animate-pulse"></span>
-              <span className="text-[var(--accent)] font-theme-data text-sm font-bold">DECISION IN PROGRESS</span>
+              <span className="text-[var(--accent)] font-theme-data text-sm font-bold">
+                DECISION IN PROGRESS
+              </span>
             </div>
-            <p className="text-text font-theme-data text-sm truncate">{props.activeQuestion as string}</p>
+            <p className="text-text font-theme-data text-sm truncate">
+              {props.activeQuestion as string}
+            </p>
             <p className="text-text-muted font-theme-data text-xs mt-2">
               ID: {props.activeDebateId as string} | Events streaming via WebSocket
             </p>
@@ -257,7 +267,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
 
         <DebateInput
           apiBase={props.apiBase as string}
-          onDebateStarted={props.onDebateStarted as ((debateId: string, question: string) => void) | undefined}
+          onDebateStarted={
+            props.onDebateStarted as ((debateId: string, question: string) => void) | undefined
+          }
           onError={props.onError as ((err: string) => void) | undefined}
         />
       </div>
@@ -269,7 +281,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
   function saveDebateBeforeLogin() {
     if (result) {
       sessionStorage.setItem(PENDING_DEBATE_KEY, JSON.stringify(result));
-      const debateDestination = result.id ? `/debates/${encodeURIComponent(result.id)}` : getCurrentReturnUrl();
+      const debateDestination = result.id
+        ? `/debates/${encodeURIComponent(result.id)}`
+        : getCurrentReturnUrl();
       sessionStorage.setItem(RETURN_URL_KEY, normalizeReturnUrl(debateDestination));
     }
   }
@@ -318,7 +332,8 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
 
       if (res.status === 429) {
         const retryAfter = parseRetryAfterSeconds(res.headers.get('Retry-After'));
-        const waitText = retryAfter > 60 ? `${Math.ceil(retryAfter / 60)} minutes` : `${retryAfter} seconds`;
+        const waitText =
+          retryAfter > 60 ? `${Math.ceil(retryAfter / 60)} minutes` : `${retryAfter} seconds`;
         setError(`Rate limit reached. Please try again in ${waitText}.`);
         return;
       }
@@ -349,8 +364,8 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
         original_question: option.originalQuestion,
         interpreted_question: option.interpretedQuestion,
         result_warning:
-          data.result_warning
-          || (option.interpretedQuestion !== option.originalQuestion
+          data.result_warning ||
+          (option.interpretedQuestion !== option.originalQuestion
             ? 'Aragora debated the focused interpretation you chose before opening the full transcript.'
             : undefined),
       };
@@ -363,7 +378,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
       setResult(nextResult);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        setError('The debate is taking longer than expected. Please try a shorter question or try again.');
+        setError(
+          'The debate is taking longer than expected. Please try a shorter question or try again.',
+        );
         return;
       }
       setError('Could not connect to the server. Check your connection and try again.');
@@ -392,9 +409,8 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
     };
 
     try {
-      const assessUrl = apiBase === ''
-        ? '/api/v1/playground/assess'
-        : `${apiBase}/api/v1/playground/assess`;
+      const assessUrl =
+        apiBase === '' ? '/api/v1/playground/assess' : `${apiBase}/api/v1/playground/assess`;
 
       const assessRes = await fetch(assessUrl, {
         method: 'POST',
@@ -453,7 +469,14 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
       const res = await fetch(playgroundDebateUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: DEMO_TOPIC, question: DEMO_TOPIC, rounds: 2, agents: 3, source: 'demo', debate_id: nextDebateId }),
+        body: JSON.stringify({
+          topic: DEMO_TOPIC,
+          question: DEMO_TOPIC,
+          rounds: 2,
+          agents: 3,
+          source: 'demo',
+          debate_id: nextDebateId,
+        }),
         signal: controller.signal,
       });
 
@@ -496,26 +519,22 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
   return (
     <section
       className="relative px-4 flex flex-col items-center justify-center"
-      style={{
-        minHeight: 'calc(100vh - 52px)',
-        fontFamily: 'var(--font-landing)',
-      }}
+      style={{ minHeight: 'calc(100vh - 52px)', fontFamily: 'var(--font-landing)' }}
     >
       {/* CRT scanline overlay — dark theme only */}
       {isDark && (
         <div
           className="pointer-events-none fixed inset-0 z-[9999]"
-          style={{
-            background: 'var(--scanline)',
-            opacity: 0.03,
-          }}
+          style={{ background: 'var(--scanline)', opacity: 0.03 }}
         />
       )}
 
       <div className="max-w-xl mx-auto text-center w-full">
         {/* Mobile-only brand text (ASCII banner is hidden on small screens) */}
         <div className="block sm:hidden text-center mb-4">
-          <span className="text-[var(--acid-green)] font-theme-data font-bold text-2xl tracking-[0.3em]">ARAGORA</span>
+          <span className="text-[var(--acid-green)] font-theme-data font-bold text-2xl tracking-[0.3em]">
+            ARAGORA
+          </span>
         </div>
 
         {/* ASCII banner — dark theme only, desktop */}
@@ -625,7 +644,11 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
               boxShadow: isDark ? '0 0 20px var(--accent-glow)' : '0 2px 8px var(--accent-glow)',
             }}
           >
-            {isRunning && !isDemoRunning ? 'Agents debating...' : isDark ? '> Start Debate' : 'Start Debate'}
+            {isRunning && !isDemoRunning
+              ? 'Agents debating...'
+              : isDark
+                ? '> Start Debate'
+                : 'Start Debate'}
           </button>
         </form>
 
@@ -692,7 +715,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
                 <button
                   key={option.id}
                   type="button"
-                  onClick={() => { void executeDebate(option); }}
+                  onClick={() => {
+                    void executeDebate(option);
+                  }}
                   className="w-full text-left transition-all hover:opacity-90 cursor-pointer"
                   style={{
                     backgroundColor: 'transparent',
@@ -785,7 +810,10 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
 
         {/* Loading state — real streaming progress */}
         {isRunning && (
-          <div className="mt-6 max-w-xl mx-auto p-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)]" style={{ fontFamily: 'var(--font-landing)' }}>
+          <div
+            className="mt-6 max-w-xl mx-auto p-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)]"
+            style={{ fontFamily: 'var(--font-landing)' }}
+          >
             {isDemoRunning && (
               <p
                 className="text-center mb-3"
@@ -815,7 +843,10 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
             </div>
             {/* Show streaming content preview if available */}
             {progress.latestEvent?.content && (
-              <div className="text-xs text-[var(--text-muted)] leading-relaxed mt-2 max-h-24 overflow-hidden" style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent)' }}>
+              <div
+                className="text-xs text-[var(--text-muted)] leading-relaxed mt-2 max-h-24 overflow-hidden"
+                style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent)' }}
+              >
                 {progress.latestEvent.content.slice(0, 300)}
               </div>
             )}
@@ -833,7 +864,10 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
               backgroundColor: isDark ? 'rgba(255,0,64,0.05)' : 'rgba(163,59,59,0.05)',
             }}
           >
-            <p className="text-sm mb-4" style={{ color: 'var(--crimson)', fontFamily: 'var(--font-landing)' }}>
+            <p
+              className="text-sm mb-4"
+              style={{ color: 'var(--crimson)', fontFamily: 'var(--font-landing)' }}
+            >
               {error}
             </p>
             <button
@@ -874,9 +908,7 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
               result={result}
               onWrongAnswer={handleWrongAnswer}
               onShare={(debateResult) => {
-                trackEvent('share_clicked', {
-                  result_mode: debateResult.result_mode || 'full',
-                });
+                trackEvent('share_clicked', { result_mode: debateResult.result_mode || 'full' });
               }}
             />
           </div>
@@ -887,10 +919,7 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
           <div className="mt-6 max-w-xl mx-auto space-y-3">
             <div
               className="rounded-2xl p-4 space-y-3"
-              style={{
-                border: '1px solid var(--border)',
-                backgroundColor: 'var(--surface)',
-              }}
+              style={{ border: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}
             >
               <div className="space-y-1">
                 <p
@@ -934,7 +963,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
                     backgroundColor: 'var(--accent)',
                     color: 'var(--bg)',
                     borderRadius: 'var(--radius-button)',
-                    boxShadow: isDark ? '0 0 20px var(--accent-glow)' : '0 2px 8px var(--accent-glow)',
+                    boxShadow: isDark
+                      ? '0 0 20px var(--accent-glow)'
+                      : '0 2px 8px var(--accent-glow)',
                   }}
                 >
                   {isDark ? '> Sign Up Free' : 'Sign Up Free'}
@@ -957,7 +988,9 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
                   backgroundColor: 'var(--accent)',
                   color: 'var(--bg)',
                   borderRadius: 'var(--radius-button)',
-                  boxShadow: isDark ? '0 0 20px var(--accent-glow)' : '0 2px 8px var(--accent-glow)',
+                  boxShadow: isDark
+                    ? '0 0 20px var(--accent-glow)'
+                    : '0 2px 8px var(--accent-glow)',
                 }}
               >
                 {isDark ? '> View Full Debate' : 'View Full Debate'}
@@ -1006,9 +1039,7 @@ export function HeroSection(props: Partial<HeroSectionProps> & Record<string, un
                   }
                   setShareCopied(true);
                   setTimeout(() => setShareCopied(false), 2000);
-                  trackEvent('share_clicked', {
-                    result_mode: result.result_mode || 'full',
-                  });
+                  trackEvent('share_clicked', { result_mode: result.result_mode || 'full' });
                 }}
                 className="flex-1 text-sm font-bold font-theme-data py-3 transition-all hover:opacity-80 cursor-pointer"
                 style={{

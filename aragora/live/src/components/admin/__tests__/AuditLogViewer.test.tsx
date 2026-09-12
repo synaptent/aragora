@@ -53,16 +53,10 @@ describe('AuditLogViewer', () => {
     // Default mock for events and stats
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/audit/stats')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockStats),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
       }
       if (url.includes('/audit/events')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ events: mockEvents }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: mockEvents }) });
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
@@ -125,16 +119,10 @@ describe('AuditLogViewer', () => {
     it('shows "No audit events found" when empty', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/audit/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/audit/events')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ events: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: [] }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -181,10 +169,7 @@ describe('AuditLogViewer', () => {
           });
         }
         if (url.includes('/audit/events')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ events: mockEvents }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: mockEvents }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -344,16 +329,10 @@ describe('AuditLogViewer', () => {
     it('shows error message on fetch failure', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/audit/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/audit/events')) {
-          return Promise.resolve({
-            ok: false,
-            status: 500,
-          });
+          return Promise.resolve({ ok: false, status: 500 });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -369,16 +348,10 @@ describe('AuditLogViewer', () => {
     it('shows retry button on error', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/audit/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/audit/events')) {
-          return Promise.resolve({
-            ok: false,
-            status: 500,
-          });
+          return Promise.resolve({ ok: false, status: 500 });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
@@ -394,20 +367,14 @@ describe('AuditLogViewer', () => {
       let eventCallCount = 0;
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/audit/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
         if (url.includes('/audit/events')) {
           eventCallCount++;
           if (eventCallCount === 1) {
             return Promise.resolve({ ok: false, status: 500 });
           }
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ events: mockEvents }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ events: mockEvents }) });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });

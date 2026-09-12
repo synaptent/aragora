@@ -32,7 +32,8 @@ interface DemoDebate {
 
 const DEMO_DEBATE: DemoDebate = {
   id: 'demo_showcase_001',
-  topic: 'Should our startup adopt AI-powered code review as a mandatory step in our CI/CD pipeline?',
+  topic:
+    'Should our startup adopt AI-powered code review as a mandatory step in our CI/CD pipeline?',
   agents: ['claude-sonnet', 'gpt-4o', 'gemini-pro', 'mistral-large', 'grok-2'],
   rounds: 2,
   consensus_reached: true,
@@ -104,7 +105,8 @@ const DEMO_DEBATE: DemoDebate = {
       type: 'vote',
       agent: 'gpt-4o',
       model: 'GPT-4o',
-      content: 'Agreed. Tiered enforcement addresses my velocity concern while maintaining security coverage.',
+      content:
+        'Agreed. Tiered enforcement addresses my velocity concern while maintaining security coverage.',
       round: 2,
       timestamp: 11000,
       vote: 'support',
@@ -114,7 +116,8 @@ const DEMO_DEBATE: DemoDebate = {
       type: 'vote',
       agent: 'gemini-pro',
       model: 'Gemini Pro',
-      content: 'Support, with the caveat that ROI should be measured after 90 days to validate the cost-benefit.',
+      content:
+        'Support, with the caveat that ROI should be measured after 90 days to validate the cost-benefit.',
       round: 2,
       timestamp: 12000,
       vote: 'support',
@@ -124,7 +127,8 @@ const DEMO_DEBATE: DemoDebate = {
       type: 'vote',
       agent: 'mistral-large',
       model: 'Mistral Large',
-      content: 'Conditional support. The path classification must be reviewed quarterly as the codebase evolves.',
+      content:
+        'Conditional support. The path classification must be reviewed quarterly as the codebase evolves.',
       round: 2,
       timestamp: 13000,
       vote: 'support',
@@ -185,7 +189,11 @@ function EventCard({
     proposal: { label: 'PROPOSAL', bg: 'bg-blue-500/20', text: 'text-blue-300' },
     critique: { label: 'CRITIQUE', bg: 'bg-red-500/20', text: 'text-red-300' },
     vote: { label: 'VOTE', bg: 'bg-green-500/20', text: 'text-green-300' },
-    consensus: { label: 'CONSENSUS', bg: 'bg-[var(--acid-green)]/20', text: 'text-[var(--acid-green)]' },
+    consensus: {
+      label: 'CONSENSUS',
+      bg: 'bg-[var(--acid-green)]/20',
+      text: 'text-[var(--acid-green)]',
+    },
   }[event.type];
 
   return (
@@ -195,10 +203,7 @@ function EventCard({
       }`}
       style={{ transitionDelay: `${index * 50}ms` }}
     >
-      <div
-        className="p-4 border bg-[var(--surface)] mb-3"
-        style={{ borderColor: `${color}40` }}
-      >
+      <div className="p-4 border bg-[var(--surface)] mb-3" style={{ borderColor: `${color}40` }}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span style={{ color }} className="text-sm">
@@ -233,7 +238,11 @@ function EventCard({
                     : 'text-yellow-400'
               }`}
             >
-              {event.vote === 'support' ? '\u2713 SUPPORT' : event.vote === 'oppose' ? '\u2717 OPPOSE' : '\u25CB NEUTRAL'}
+              {event.vote === 'support'
+                ? '\u2713 SUPPORT'
+                : event.vote === 'oppose'
+                  ? '\u2717 OPPOSE'
+                  : '\u25CB NEUTRAL'}
             </span>
           </div>
         )}
@@ -341,8 +350,9 @@ export default function InstantDemoPage() {
               MULTI-AGENT DECISION VETTING
             </h1>
             <p className="text-sm font-theme-data text-[var(--text-muted)] max-w-2xl mx-auto">
-              Watch a cached synthetic replay of five models debating a sample decision.
-              Live debates and canonical receipts are generated on the real debate path, not on this demo page.
+              Watch a cached synthetic replay of five models debating a sample decision. Live
+              debates and canonical receipts are generated on the real debate path, not on this demo
+              page.
             </p>
           </div>
 
@@ -361,9 +371,7 @@ export default function InstantDemoPage() {
             <div className="text-[10px] font-theme-data text-[var(--acid-green)] uppercase mb-1">
               Decision Question
             </div>
-            <div className="text-sm font-theme-data text-[var(--text)]">
-              {DEMO_DEBATE.topic}
-            </div>
+            <div className="text-sm font-theme-data text-[var(--text)]">{DEMO_DEBATE.topic}</div>
           </div>
 
           {/* Agent Roster */}
@@ -386,10 +394,8 @@ export default function InstantDemoPage() {
             </button>
             <span className="text-[10px] font-theme-data text-[var(--text-muted)] ml-auto">
               {visibleCount}/{events.length} events | Round{' '}
-              {visibleCount > 0
-                ? events[Math.min(visibleCount - 1, events.length - 1)].round
-                : 1}
-              /{DEMO_DEBATE.rounds}
+              {visibleCount > 0 ? events[Math.min(visibleCount - 1, events.length - 1)].round : 1}/
+              {DEMO_DEBATE.rounds}
             </span>
           </div>
 
@@ -418,7 +424,9 @@ export default function InstantDemoPage() {
                 {DEMO_DEBATE.verdict}
               </p>
               <div className="flex items-center gap-4 text-[10px] font-theme-data text-[var(--text-muted)]">
-                <span>Synthetic demo only. No canonical receipt or proof link is generated here.</span>
+                <span>
+                  Synthetic demo only. No canonical receipt or proof link is generated here.
+                </span>
                 <span>Agents: {DEMO_DEBATE.agents.length}</span>
                 <span>Rounds: {DEMO_DEBATE.rounds}</span>
                 <span>Confidence: {Math.round(DEMO_DEBATE.confidence * 100)}%</span>
@@ -441,9 +449,12 @@ export default function InstantDemoPage() {
               </p>
             </div>
             <div className="p-4 bg-[var(--surface)] border border-[var(--border)]">
-              <div className="text-sm font-theme-data text-[var(--acid-green)] mb-2">$ Live Proofs</div>
+              <div className="text-sm font-theme-data text-[var(--acid-green)] mb-2">
+                $ Live Proofs
+              </div>
               <p className="text-xs font-theme-data text-[var(--text-muted)]">
-                Live debates can publish canonical receipts and provenance. This replay is synthetic and does not.
+                Live debates can publish canonical receipts and provenance. This replay is synthetic
+                and does not.
               </p>
             </div>
           </div>

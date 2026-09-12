@@ -15,9 +15,7 @@ interface MetricsData {
     error_rate: number;
     top_endpoints: { endpoint: string; count: number }[];
   };
-  cache: {
-    entries: number;
-  };
+  cache: { entries: number };
   databases: Record<string, { bytes: number; human: string }>;
   timestamp: string;
 }
@@ -44,10 +42,7 @@ interface SystemData {
   machine: string;
   processor: string;
   pid: number;
-  memory?: {
-    rss_mb: number;
-    vms_mb: number;
-  } | { available: false; reason: string };
+  memory?: { rss_mb: number; vms_mb: number } | { available: false; reason: string };
 }
 
 interface MetricsPanelProps {
@@ -64,7 +59,9 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
   const [system, setSystem] = useState<SystemData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'cache' | 'system'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'health' | 'cache' | 'system'>(
+    'overview',
+  );
   const [expanded, setExpanded] = useState(true);
 
   // Memoize sorted cache entries to prevent re-sorting on every render
@@ -180,26 +177,38 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
           Uptime: <span className="text-[var(--acid-cyan)]">{metrics?.uptime_human || '-'}</span>
         </span>
         <span>
-          Requests: <span className="text-[var(--accent)]">{metrics?.requests.total.toLocaleString() || 0}</span>
+          Requests:{' '}
+          <span className="text-[var(--accent)]">
+            {metrics?.requests.total.toLocaleString() || 0}
+          </span>
         </span>
         <span>
-          Error Rate: <span className={metrics?.requests.error_rate && metrics.requests.error_rate > 0.01 ? 'text-red-400' : 'text-green-400'}>
+          Error Rate:{' '}
+          <span
+            className={
+              metrics?.requests.error_rate && metrics.requests.error_rate > 0.01
+                ? 'text-red-400'
+                : 'text-green-400'
+            }
+          >
             {((metrics?.requests.error_rate || 0) * 100).toFixed(2)}%
           </span>
         </span>
         <span>
-          Cache: <span className="text-purple-400">{cache?.hit_rate ? `${(cache.hit_rate * 100).toFixed(1)}% hit` : '-'}</span>
+          Cache:{' '}
+          <span className="text-purple-400">
+            {cache?.hit_rate ? `${(cache.hit_rate * 100).toFixed(1)}% hit` : '-'}
+          </span>
         </span>
         {health && (
           <span>
-            Health: <span className={getStatusColor(health.status)}>{health.status.toUpperCase()}</span>
+            Health:{' '}
+            <span className={getStatusColor(health.status)}>{health.status.toUpperCase()}</span>
           </span>
         )}
       </div>
 
-      {error && (
-        <ErrorWithRetry error={error} onRetry={fetchData} className="mb-4" />
-      )}
+      {error && <ErrorWithRetry error={error} onRetry={fetchData} className="mb-4" />}
 
       {expanded && (
         <>
@@ -261,12 +270,19 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
                   {/* Top Endpoints */}
                   {metrics.requests.top_endpoints.length > 0 && (
                     <div className="p-3 bg-bg border border-border rounded-lg">
-                      <div className="text-sm font-theme-data text-text-muted mb-3">Top Endpoints</div>
+                      <div className="text-sm font-theme-data text-text-muted mb-3">
+                        Top Endpoints
+                      </div>
                       <div className="space-y-2">
                         {metrics.requests.top_endpoints.slice(0, 5).map((ep) => (
-                          <div key={ep.endpoint} className="flex items-center justify-between text-xs font-theme-data">
+                          <div
+                            key={ep.endpoint}
+                            className="flex items-center justify-between text-xs font-theme-data"
+                          >
                             <span className="text-text truncate max-w-[200px]">{ep.endpoint}</span>
-                            <span className="text-[var(--acid-cyan)]">{ep.count.toLocaleString()}</span>
+                            <span className="text-[var(--acid-cyan)]">
+                              {ep.count.toLocaleString()}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -276,10 +292,15 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
                   {/* Database Sizes */}
                   {Object.keys(metrics.databases).length > 0 && (
                     <div className="p-3 bg-bg border border-border rounded-lg">
-                      <div className="text-sm font-theme-data text-text-muted mb-3">Database Sizes</div>
+                      <div className="text-sm font-theme-data text-text-muted mb-3">
+                        Database Sizes
+                      </div>
                       <div className="space-y-2">
                         {Object.entries(metrics.databases).map(([name, info]) => (
-                          <div key={name} className="flex items-center justify-between text-xs font-theme-data">
+                          <div
+                            key={name}
+                            className="flex items-center justify-between text-xs font-theme-data"
+                          >
                             <span className="text-text">{name.replace('.db', '')}</span>
                             <span className="text-yellow-400">{info.human}</span>
                           </div>
@@ -305,11 +326,20 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
                 <>
                   <div className="grid grid-cols-3 gap-3">
                     {Object.entries(health.checks).map(([name, check]) => (
-                      <div key={name} className="p-3 bg-bg border border-border rounded-lg text-center">
+                      <div
+                        key={name}
+                        className="p-3 bg-bg border border-border rounded-lg text-center"
+                      >
                         <div className={`text-lg font-theme-data ${getStatusColor(check.status)}`}>
-                          {check.status === 'healthy' ? 'OK' : check.status === 'unavailable' ? 'N/A' : 'ERR'}
+                          {check.status === 'healthy'
+                            ? 'OK'
+                            : check.status === 'unavailable'
+                              ? 'N/A'
+                              : 'ERR'}
                         </div>
-                        <div className="text-xs text-text-muted capitalize">{name.replace('_', ' ')}</div>
+                        <div className="text-xs text-text-muted capitalize">
+                          {name.replace('_', ' ')}
+                        </div>
                         {check.error && (
                           <div className="text-xs text-red-400 mt-1 truncate" title={check.error}>
                             {check.error.slice(0, 20)}...
@@ -375,10 +405,15 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
 
                   {sortedCacheEntries.length > 0 && (
                     <div className="p-3 bg-bg border border-border rounded-lg">
-                      <div className="text-sm font-theme-data text-text-muted mb-3">Entries by Type</div>
+                      <div className="text-sm font-theme-data text-text-muted mb-3">
+                        Entries by Type
+                      </div>
                       <div className="space-y-2">
                         {sortedCacheEntries.map(([prefix, count]) => (
-                          <div key={prefix} className="flex items-center justify-between text-xs font-theme-data">
+                          <div
+                            key={prefix}
+                            className="flex items-center justify-between text-xs font-theme-data"
+                          >
                             <span className="text-text">{prefix}</span>
                             <span className="text-purple-400">{count}</span>
                           </div>
@@ -390,7 +425,8 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
                   <div className="flex items-center justify-between p-2 bg-bg border border-border rounded-lg text-xs font-theme-data">
                     <span className="text-text-muted">Entry Age Range</span>
                     <span className="text-text">
-                      {formatAge(cache.newest_entry_age_seconds)} - {formatAge(cache.oldest_entry_age_seconds)}
+                      {formatAge(cache.newest_entry_age_seconds)} -{' '}
+                      {formatAge(cache.oldest_entry_age_seconds)}
                     </span>
                   </div>
                 </>
@@ -413,11 +449,15 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
                   {system.memory && 'rss_mb' in system.memory && (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-3 bg-bg border border-border rounded-lg text-center">
-                        <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{system.memory.rss_mb}</div>
+                        <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+                          {system.memory.rss_mb}
+                        </div>
                         <div className="text-xs text-text-muted">RSS (MB)</div>
                       </div>
                       <div className="p-3 bg-bg border border-border rounded-lg text-center">
-                        <div className="text-2xl font-theme-data text-yellow-400">{system.memory.vms_mb}</div>
+                        <div className="text-2xl font-theme-data text-yellow-400">
+                          {system.memory.vms_mb}
+                        </div>
                         <div className="text-xs text-text-muted">VMS (MB)</div>
                       </div>
                     </div>
@@ -426,7 +466,9 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
                   <div className="p-3 bg-bg border border-border rounded-lg space-y-2">
                     <div className="flex items-center justify-between text-xs font-theme-data">
                       <span className="text-text-muted">Python</span>
-                      <span className="text-text truncate max-w-[200px]">{system.python_version.split(' ')[0]}</span>
+                      <span className="text-text truncate max-w-[200px]">
+                        {system.python_version.split(' ')[0]}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-xs font-theme-data">
                       <span className="text-text-muted">Platform</span>
@@ -452,9 +494,11 @@ export function MetricsPanel({ apiBase = DEFAULT_API_BASE }: MetricsPanelProps) 
       {!expanded && (
         <div className="text-xs font-theme-data text-text-muted">
           <p>
-            <span className="text-[var(--acid-cyan)]">Uptime:</span> {metrics?.uptime_human || '-'} |{' '}
-            <span className="text-[var(--accent)]">Requests:</span> {metrics?.requests.total.toLocaleString() || 0} |{' '}
-            <span className="text-purple-400">Cache:</span> {cache?.hit_rate ? `${(cache.hit_rate * 100).toFixed(1)}%` : '-'}
+            <span className="text-[var(--acid-cyan)]">Uptime:</span> {metrics?.uptime_human || '-'}{' '}
+            | <span className="text-[var(--accent)]">Requests:</span>{' '}
+            {metrics?.requests.total.toLocaleString() || 0} |{' '}
+            <span className="text-purple-400">Cache:</span>{' '}
+            {cache?.hit_rate ? `${(cache.hit_rate * 100).toFixed(1)}%` : '-'}
           </p>
         </div>
       )}

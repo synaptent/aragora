@@ -14,15 +14,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { ProtectedRoute } from '../ProtectedRoute';
 
 // Mock dependencies
-jest.mock('next/navigation', () => ({
-  useRouter: jest.fn(() => ({
-    push: jest.fn(),
-  })),
-}));
+jest.mock('next/navigation', () => ({ useRouter: jest.fn(() => ({ push: jest.fn() })) }));
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: jest.fn(),
-}));
+jest.mock('@/context/AuthContext', () => ({ useAuth: jest.fn() }));
 
 jest.mock('@/components/MatrixRain', () => ({
   Scanlines: () => <div data-testid="scanlines" />,
@@ -45,16 +39,12 @@ describe('ProtectedRoute', () => {
 
   describe('Loading State', () => {
     it('shows loading state while auth is checking', () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        isLoading: true,
-        organization: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, isLoading: true, organization: null });
 
       render(
         <ProtectedRoute>
           <div>Protected Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       expect(screen.getByText('AUTHENTICATING...')).toBeInTheDocument();
@@ -65,18 +55,14 @@ describe('ProtectedRoute', () => {
 
   describe('Not Authenticated', () => {
     beforeEach(() => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        isLoading: false,
-        organization: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, organization: null });
     });
 
     it('shows authentication required message', () => {
       render(
         <ProtectedRoute>
           <div>Protected Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       expect(screen.getByText('AUTHENTICATION REQUIRED')).toBeInTheDocument();
@@ -87,7 +73,7 @@ describe('ProtectedRoute', () => {
       render(
         <ProtectedRoute>
           <div>Protected Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       await waitFor(() => {
@@ -100,13 +86,11 @@ describe('ProtectedRoute', () => {
       render(
         <ProtectedRoute redirectTo="/custom-return">
           <div>Protected Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith(
-          '/auth/login?returnUrl=%2Fcustom-return'
-        );
+        expect(mockPush).toHaveBeenCalledWith('/auth/login?returnUrl=%2Fcustom-return');
       });
     });
 
@@ -114,7 +98,7 @@ describe('ProtectedRoute', () => {
       render(
         <ProtectedRoute>
           <div>Protected Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
@@ -132,7 +116,7 @@ describe('ProtectedRoute', () => {
       render(
         <ProtectedRoute>
           <div>Protected Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       expect(screen.getByText('Protected Content')).toBeInTheDocument();
@@ -148,7 +132,7 @@ describe('ProtectedRoute', () => {
       render(
         <ProtectedRoute>
           <div>Protected Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       expect(mockPush).not.toHaveBeenCalled();
@@ -167,7 +151,7 @@ describe('ProtectedRoute', () => {
         render(
           <ProtectedRoute requiredTier="professional">
             <div>Pro Content</div>
-          </ProtectedRoute>
+          </ProtectedRoute>,
         );
 
         expect(screen.getByText('Pro Content')).toBeInTheDocument();
@@ -183,7 +167,7 @@ describe('ProtectedRoute', () => {
         render(
           <ProtectedRoute requiredTier="professional">
             <div>Pro Content</div>
-          </ProtectedRoute>
+          </ProtectedRoute>,
         );
 
         expect(screen.getByText('Pro Content')).toBeInTheDocument();
@@ -201,12 +185,12 @@ describe('ProtectedRoute', () => {
         render(
           <ProtectedRoute requiredTier="professional">
             <div>Pro Content</div>
-          </ProtectedRoute>
+          </ProtectedRoute>,
         );
 
         expect(screen.getByText('UPGRADE REQUIRED')).toBeInTheDocument();
         expect(
-          screen.getByText(/This feature requires the PROFESSIONAL tier or higher/)
+          screen.getByText(/This feature requires the PROFESSIONAL tier or higher/),
         ).toBeInTheDocument();
         expect(screen.getByText(/Your current tier: STARTER/)).toBeInTheDocument();
       });
@@ -221,7 +205,7 @@ describe('ProtectedRoute', () => {
         render(
           <ProtectedRoute requiredTier="starter">
             <div>Starter Content</div>
-          </ProtectedRoute>
+          </ProtectedRoute>,
         );
 
         expect(screen.getByText('UPGRADE REQUIRED')).toBeInTheDocument();
@@ -237,7 +221,7 @@ describe('ProtectedRoute', () => {
         render(
           <ProtectedRoute requiredTier="enterprise">
             <div>Enterprise Content</div>
-          </ProtectedRoute>
+          </ProtectedRoute>,
         );
 
         const button = screen.getByText('[VIEW PLANS]');
@@ -254,7 +238,7 @@ describe('ProtectedRoute', () => {
         render(
           <ProtectedRoute requiredTier="enterprise">
             <div>Enterprise Content</div>
-          </ProtectedRoute>
+          </ProtectedRoute>,
         );
 
         const button = screen.getByText('[VIEW PLANS]');
@@ -273,7 +257,7 @@ describe('ProtectedRoute', () => {
         render(
           <ProtectedRoute requiredTier="enterprise">
             <div>Enterprise Content</div>
-          </ProtectedRoute>
+          </ProtectedRoute>,
         );
 
         expect(screen.queryByText('Enterprise Content')).not.toBeInTheDocument();
@@ -283,16 +267,12 @@ describe('ProtectedRoute', () => {
 
   describe('Edge Cases', () => {
     it('renders children when no organization but no tier required', () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: true,
-        isLoading: false,
-        organization: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: true, isLoading: false, organization: null });
 
       render(
         <ProtectedRoute>
           <div>Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       expect(screen.getByText('Content')).toBeInTheDocument();
@@ -300,16 +280,12 @@ describe('ProtectedRoute', () => {
 
     it('renders children when tier required but no organization', () => {
       // Edge case: authenticated but no org data yet
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: true,
-        isLoading: false,
-        organization: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: true, isLoading: false, organization: null });
 
       render(
         <ProtectedRoute requiredTier="professional">
           <div>Content</div>
-        </ProtectedRoute>
+        </ProtectedRoute>,
       );
 
       // Should render since we can't check tier without org

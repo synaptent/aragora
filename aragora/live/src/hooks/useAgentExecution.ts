@@ -35,22 +35,22 @@ export function useAgentExecution(pipelineId: string | null): UseAgentExecutionR
     if (!pipelineId) return;
     setIsLoading(true);
     try {
-      const data = await apiFetch<{ agents?: Record<string, unknown>[] }>(`/api/v1/pipeline/${pipelineId}/agents`);
-      const agentList: AgentStatus[] = (data.agents || []).map(
-        (a: Record<string, unknown>) => ({
-          id: a.id as string,
-          name: a.name as string || a.agent_name as string || 'Unknown',
-          agentType: a.agent_type as string || 'default',
-          currentTask: a.current_task as string | undefined,
-          status: a.status as AgentStatus['status'] || 'pending',
-          progress: (a.progress as number) || 0,
-          worktreePath: a.worktree_path as string | undefined,
-          diffPreview: a.diff_preview as string | undefined,
-          phase: a.phase as AgentStatus['phase'] | undefined,
-          duration: a.duration as number | undefined,
-          error: a.error as string | undefined,
-        }),
+      const data = await apiFetch<{ agents?: Record<string, unknown>[] }>(
+        `/api/v1/pipeline/${pipelineId}/agents`,
       );
+      const agentList: AgentStatus[] = (data.agents || []).map((a: Record<string, unknown>) => ({
+        id: a.id as string,
+        name: (a.name as string) || (a.agent_name as string) || 'Unknown',
+        agentType: (a.agent_type as string) || 'default',
+        currentTask: a.current_task as string | undefined,
+        status: (a.status as AgentStatus['status']) || 'pending',
+        progress: (a.progress as number) || 0,
+        worktreePath: a.worktree_path as string | undefined,
+        diffPreview: a.diff_preview as string | undefined,
+        phase: a.phase as AgentStatus['phase'] | undefined,
+        duration: a.duration as number | undefined,
+        error: a.error as string | undefined,
+      }));
       setAgents(agentList);
 
       // Extract approval requests from agents awaiting approval

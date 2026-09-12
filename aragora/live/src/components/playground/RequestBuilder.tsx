@@ -64,9 +64,7 @@ export function RequestBuilder({ endpoint, onResponse }: RequestBuilderProps) {
 
   const checkRateLimit = useCallback(() => {
     const now = Date.now();
-    timestampsRef.current = timestampsRef.current.filter(
-      (t) => now - t < RATE_LIMIT_WINDOW_MS,
-    );
+    timestampsRef.current = timestampsRef.current.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
     setRemaining(RATE_LIMIT_MAX - timestampsRef.current.length);
     return timestampsRef.current.length < RATE_LIMIT_MAX;
   }, []);
@@ -80,17 +78,12 @@ export function RequestBuilder({ endpoint, onResponse }: RequestBuilderProps) {
 
     const start = performance.now();
     try {
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
       }
 
-      const init: RequestInit = {
-        method: endpoint.method,
-        headers,
-      };
+      const init: RequestInit = { method: endpoint.method, headers };
       if (['POST', 'PUT', 'PATCH'].includes(endpoint.method) && body) {
         init.body = body;
       }

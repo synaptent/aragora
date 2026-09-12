@@ -33,7 +33,11 @@ export interface FleetStatusWidgetProps {
 
 const statusConfig: Record<AgentStatus, { color: string; dotClass: string; label: string }> = {
   idle: { color: 'text-green-400', dotClass: 'bg-green-400', label: 'Idle' },
-  busy: { color: 'text-[var(--acid-cyan)]', dotClass: 'bg-[var(--acid-cyan)] animate-pulse', label: 'Busy' },
+  busy: {
+    color: 'text-[var(--acid-cyan)]',
+    dotClass: 'bg-[var(--acid-cyan)] animate-pulse',
+    label: 'Busy',
+  },
   offline: { color: 'text-gray-400', dotClass: 'bg-gray-500', label: 'Offline' },
   error: { color: 'text-[var(--crimson)]', dotClass: 'bg-[var(--crimson)]', label: 'Error' },
   rate_limited: { color: 'text-yellow-400', dotClass: 'bg-yellow-400', label: 'Rate Limited' },
@@ -70,12 +74,7 @@ export function FleetStatusWidget({
     const available = byStatus.idle + byStatus.busy;
     const healthy = total > 0 ? Math.round((available / total) * 100) : 0;
 
-    return {
-      total,
-      byStatus,
-      available,
-      healthy,
-    };
+    return { total, byStatus, available, healthy };
   }, [agents]);
 
   // Get busy agents for display
@@ -92,7 +91,7 @@ export function FleetStatusWidget({
       e.stopPropagation();
       onSelectAgent?.(agent);
     },
-    [onSelectAgent]
+    [onSelectAgent],
   );
 
   if (compact) {
@@ -154,7 +153,9 @@ export function FleetStatusWidget({
                 <span className={`w-2 h-2 rounded-full ${statusConfig.busy.dotClass}`} />
                 <span className="text-xs text-text-muted font-theme-data">Busy</span>
               </div>
-              <div className="text-lg font-theme-data text-[var(--acid-cyan)]">{stats.byStatus.busy}</div>
+              <div className="text-lg font-theme-data text-[var(--acid-cyan)]">
+                {stats.byStatus.busy}
+              </div>
             </div>
             <div className="bg-surface p-2 rounded">
               <div className="flex items-center gap-1.5">
@@ -168,7 +169,9 @@ export function FleetStatusWidget({
                 <span className={`w-2 h-2 rounded-full ${statusConfig.error.dotClass}`} />
                 <span className="text-xs text-text-muted font-theme-data">Error</span>
               </div>
-              <div className="text-lg font-theme-data text-[var(--crimson)]">{stats.byStatus.error}</div>
+              <div className="text-lg font-theme-data text-[var(--crimson)]">
+                {stats.byStatus.error}
+              </div>
             </div>
           </div>
         </div>

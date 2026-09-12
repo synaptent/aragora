@@ -10,11 +10,7 @@ export interface ChannelOption {
   icon: string;
   description: string;
   configured: boolean;
-  destinations?: Array<{
-    id: string;
-    name: string;
-    type: 'channel' | 'user' | 'email';
-  }>;
+  destinations?: Array<{ id: string; name: string; type: 'channel' | 'user' | 'email' }>;
 }
 
 export interface ChannelSelectorProps {
@@ -77,7 +73,7 @@ export function ChannelSelector({
 
   const selectedChannelData = useMemo(
     () => channels.find((c) => c.type === selectedChannel),
-    [channels, selectedChannel]
+    [channels, selectedChannel],
   );
 
   const handleChannelClick = (channel: ChannelOption) => {
@@ -90,13 +86,13 @@ export function ChannelSelector({
     ? MANUAL_DESTINATION_CONFIG[selectedChannel]
     : null;
   const hasDestinations = Boolean(
-    selectedChannelData?.destinations && selectedChannelData.destinations.length > 0
+    selectedChannelData?.destinations && selectedChannelData.destinations.length > 0,
   );
   const showManualDestinationInput = Boolean(
     selectedChannelData &&
-      selectedChannel === selectedChannelData.type &&
-      selectedChannelData.configured &&
-      !hasDestinations
+    selectedChannel === selectedChannelData.type &&
+    selectedChannelData.configured &&
+    !hasDestinations,
   );
 
   if (loading) {
@@ -131,18 +127,14 @@ export function ChannelSelector({
             <div className="flex items-center gap-3">
               <span className="text-2xl">{channel.icon}</span>
               <div>
-                <div className="font-theme-data text-sm font-medium">
-                  {channel.name}
-                </div>
+                <div className="font-theme-data text-sm font-medium">{channel.name}</div>
                 <div className="text-xs text-text-muted">
                   {channel.configured ? channel.description : 'Not configured'}
                 </div>
               </div>
             </div>
             {!channel.configured && (
-              <div className="mt-2 text-xs text-yellow-500">
-                Configure in settings
-              </div>
+              <div className="mt-2 text-xs text-yellow-500">Configure in settings</div>
             )}
           </button>
         ))}
@@ -151,9 +143,7 @@ export function ChannelSelector({
       {/* Destination Selector */}
       {showDestinations && selectedChannelData?.destinations && (
         <div className="p-4 bg-surface rounded-lg border border-border">
-          <div className="text-sm font-theme-data font-medium mb-3">
-            Select Destination
-          </div>
+          <div className="text-sm font-theme-data font-medium mb-3">Select Destination</div>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {selectedChannelData.destinations.map((dest) => (
               <button

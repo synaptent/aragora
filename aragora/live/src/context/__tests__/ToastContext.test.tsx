@@ -20,11 +20,16 @@ jest.mock('@/hooks/useToast', () => ({
 
 // Mock ToastContainer
 jest.mock('@/components/ToastContainer', () => ({
-  ToastContainer: ({ toasts, onRemove: _onRemove }: { toasts: unknown[]; onRemove: (id: string) => void }) => (
+  ToastContainer: ({
+    toasts,
+    onRemove: _onRemove,
+  }: {
+    toasts: unknown[];
+    onRemove: (id: string) => void;
+  }) => (
     <div data-testid="toast-container">
-      {toasts && (toasts as { id: string; message: string }[]).map((t) => (
-        <div key={t.id}>{t.message}</div>
-      ))}
+      {toasts &&
+        (toasts as { id: string; message: string }[]).map((t) => <div key={t.id}>{t.message}</div>)}
     </div>
   ),
 }));
@@ -48,7 +53,7 @@ describe('ToastContext', () => {
       render(
         <ToastProvider>
           <div data-testid="child">Child content</div>
-        </ToastProvider>
+        </ToastProvider>,
       );
 
       expect(screen.getByTestId('child')).toBeInTheDocument();
@@ -58,7 +63,7 @@ describe('ToastContext', () => {
       render(
         <ToastProvider>
           <div>Test</div>
-        </ToastProvider>
+        </ToastProvider>,
       );
 
       expect(screen.getByTestId('toast-container')).toBeInTheDocument();
@@ -68,7 +73,7 @@ describe('ToastContext', () => {
       render(
         <ToastProvider>
           <TestConsumer />
-        </ToastProvider>
+        </ToastProvider>,
       );
 
       // Verify all buttons render (functions are accessible)
@@ -82,7 +87,7 @@ describe('ToastContext', () => {
       render(
         <ToastProvider>
           <TestConsumer />
-        </ToastProvider>
+        </ToastProvider>,
       );
 
       // Click should not throw
@@ -93,7 +98,7 @@ describe('ToastContext', () => {
       render(
         <ToastProvider>
           <TestConsumer />
-        </ToastProvider>
+        </ToastProvider>,
       );
 
       fireEvent.click(screen.getByText('Show Error'));
@@ -103,7 +108,7 @@ describe('ToastContext', () => {
       render(
         <ToastProvider>
           <TestConsumer />
-        </ToastProvider>
+        </ToastProvider>,
       );
 
       fireEvent.click(screen.getByText('Show Success'));
@@ -113,7 +118,7 @@ describe('ToastContext', () => {
       render(
         <ToastProvider>
           <TestConsumer />
-        </ToastProvider>
+        </ToastProvider>,
       );
 
       fireEvent.click(screen.getByText('Clear'));

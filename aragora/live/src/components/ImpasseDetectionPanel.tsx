@@ -82,9 +82,11 @@ export function ImpasseDetectionPanel({
   }, [autoRefresh, refreshInterval, fetchImpasse]);
 
   const isImpasse = data?.is_impasse || data?.has_impasse || false;
-  const shouldBranch = data?.should_branch || (data?.pivot_claim?.importance_score && data.pivot_claim.importance_score > 0.5);
+  const shouldBranch =
+    data?.should_branch ||
+    (data?.pivot_claim?.importance_score && data.pivot_claim.importance_score > 0.5);
 
-  const getIndicatorIcon = (active: boolean) => active ? 'text-red-400' : 'text-green-400';
+  const getIndicatorIcon = (active: boolean) => (active ? 'text-red-400' : 'text-green-400');
   const getIndicatorLabel = (key: string): { label: string; description: string } => {
     const labels: Record<string, { label: string; description: string }> = {
       repeated_critiques: {
@@ -124,21 +126,27 @@ export function ImpasseDetectionPanel({
     : 0;
 
   return (
-    <div className={`panel transition-all ${
-      isImpasse
-        ? 'bg-gradient-to-br from-red-500/10 to-orange-500/10 border-red-500/40'
-        : ''
-    }`} style={{ padding: 0 }}>
+    <div
+      className={`panel transition-all ${
+        isImpasse ? 'bg-gradient-to-br from-red-500/10 to-orange-500/10 border-red-500/40' : ''
+      }`}
+      style={{ padding: 0 }}
+    >
       {/* Header */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="panel-collapsible-header w-full text-left"
       >
         <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${
-            loading ? 'bg-yellow-400 animate-pulse' :
-            isImpasse ? 'bg-red-500 animate-pulse' : 'bg-green-500'
-          }`} />
+          <div
+            className={`w-3 h-3 rounded-full ${
+              loading
+                ? 'bg-yellow-400 animate-pulse'
+                : isImpasse
+                  ? 'bg-red-500 animate-pulse'
+                  : 'bg-green-500'
+            }`}
+          />
           <div>
             <h3 className="text-sm font-semibold text-text flex items-center gap-2">
               Impasse Detection
@@ -149,8 +157,11 @@ export function ImpasseDetectionPanel({
               )}
             </h3>
             <p className="text-xs text-text-muted">
-              {loading ? 'Analyzing...' :
-               isImpasse ? 'Debate may be stuck' : 'Debate progressing normally'}
+              {loading
+                ? 'Analyzing...'
+                : isImpasse
+                  ? 'Debate may be stuck'
+                  : 'Debate progressing normally'}
             </p>
           </div>
         </div>
@@ -160,9 +171,7 @@ export function ImpasseDetectionPanel({
               {lastChecked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
-          <span className="panel-toggle">
-            {isCollapsed ? '[+]' : '[-]'}
-          </span>
+          <span className="panel-toggle">{isCollapsed ? '[+]' : '[-]'}</span>
         </div>
       </button>
 
@@ -171,29 +180,26 @@ export function ImpasseDetectionPanel({
         <div className="px-3 pb-3 space-y-3">
           {/* Indicators Grid */}
           <div className="grid grid-cols-2 gap-2">
-            {data.indicators && Object.entries(data.indicators).map(([key, active]) => {
-              const { label, description } = getIndicatorLabel(key);
-              return (
-                <div
-                  key={key}
-                  className={`p-2 rounded border transition-all ${
-                    active
-                      ? 'bg-red-500/10 border-red-500/30'
-                      : 'bg-bg border-border'
-                  }`}
-                  title={description}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={getIndicatorIcon(active)}>
-                      {active ? '⚠' : '✓'}
-                    </span>
-                    <span className={`text-xs ${active ? 'text-red-400' : 'text-text-muted'}`}>
-                      {label}
-                    </span>
+            {data.indicators &&
+              Object.entries(data.indicators).map(([key, active]) => {
+                const { label, description } = getIndicatorLabel(key);
+                return (
+                  <div
+                    key={key}
+                    className={`p-2 rounded border transition-all ${
+                      active ? 'bg-red-500/10 border-red-500/30' : 'bg-bg border-border'
+                    }`}
+                    title={description}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={getIndicatorIcon(active)}>{active ? '⚠' : '✓'}</span>
+                      <span className={`text-xs ${active ? 'text-red-400' : 'text-text-muted'}`}>
+                        {label}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
 
           {/* Indicator Summary */}
@@ -220,20 +226,14 @@ export function ImpasseDetectionPanel({
                 <span className="text-amber-400">🔀</span>
                 <span className="text-sm font-medium text-amber-400">Pivot Point Identified</span>
               </div>
-              <p className="text-sm text-text mb-2">
-                &quot;{data.pivot_claim.statement}&quot;
-              </p>
+              <p className="text-sm text-text mb-2">&quot;{data.pivot_claim.statement}&quot;</p>
               <div className="flex items-center justify-between text-xs">
                 <div className="flex gap-3 text-text-muted">
                   {data.pivot_claim.importance_score !== null && (
-                    <span>
-                      Importance: {Math.round(data.pivot_claim.importance_score * 100)}%
-                    </span>
+                    <span>Importance: {Math.round(data.pivot_claim.importance_score * 100)}%</span>
                   )}
                   {data.pivot_claim.contention_level && (
-                    <span>
-                      Contention: {data.pivot_claim.contention_level}
-                    </span>
+                    <span>Contention: {data.pivot_claim.contention_level}</span>
                   )}
                 </div>
                 {shouldBranch && onBranchRequest && (
@@ -326,7 +326,9 @@ export function ImpasseStatusBadge({
       }`}
       title={isImpasse ? 'Debate may be stuck' : 'Debate progressing'}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${isImpasse ? 'bg-red-400 animate-pulse' : 'bg-green-400'}`} />
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${isImpasse ? 'bg-red-400 animate-pulse' : 'bg-green-400'}`}
+      />
       {isImpasse ? 'Impasse' : 'Flowing'}
     </span>
   );

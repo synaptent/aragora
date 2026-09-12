@@ -50,14 +50,10 @@ export function UsageChart({
     if (data.length === 0) {
       return { maxValue: 100, minValue: 0, chartData: [] };
     }
-    const values = data.map(d => d.value);
+    const values = data.map((d) => d.value);
     const max = Math.max(...values);
     const min = Math.min(...values);
-    return {
-      maxValue: max || 100,
-      minValue: min,
-      chartData: data,
-    };
+    return { maxValue: max || 100, minValue: min, chartData: data };
   }, [data]);
 
   const colorClasses = {
@@ -113,10 +109,7 @@ export function UsageChart({
     return (
       <g>
         {/* Area fill */}
-        <path
-          d={areaPath}
-          className={`${colors.fill} opacity-10`}
-        />
+        <path d={areaPath} className={`${colors.fill} opacity-10`} />
         {/* Line */}
         <path
           d={linePath}
@@ -145,8 +138,8 @@ export function UsageChart({
   const renderBarChart = () => {
     if (chartData.length === 0) return null;
 
-    const barWidth = 100 / chartData.length * 0.7;
-    const gap = 100 / chartData.length * 0.15;
+    const barWidth = (100 / chartData.length) * 0.7;
+    const gap = (100 / chartData.length) * 0.15;
 
     return (
       <g>
@@ -198,7 +191,7 @@ export function UsageChart({
           >
             {formatValue(value)}
           </text>
-        </g>
+        </g>,
       );
     }
     return labels;
@@ -208,21 +201,23 @@ export function UsageChart({
     if (chartData.length === 0) return null;
 
     const step = Math.max(1, Math.floor(chartData.length / 6));
-    return chartData.filter((_, i) => i % step === 0 || i === chartData.length - 1).map((d, _i, _arr) => {
-      const originalIndex = chartData.indexOf(d);
-      const x = (originalIndex / Math.max(chartData.length - 1, 1)) * 100;
-      return (
-        <text
-          key={originalIndex}
-          x={`${x}%`}
-          y={chartHeight + 20}
-          className="text-text-muted font-theme-data text-[10px]"
-          textAnchor="middle"
-        >
-          {d.label}
-        </text>
-      );
-    });
+    return chartData
+      .filter((_, i) => i % step === 0 || i === chartData.length - 1)
+      .map((d, _i, _arr) => {
+        const originalIndex = chartData.indexOf(d);
+        const x = (originalIndex / Math.max(chartData.length - 1, 1)) * 100;
+        return (
+          <text
+            key={originalIndex}
+            x={`${x}%`}
+            y={chartHeight + 20}
+            className="text-text-muted font-theme-data text-[10px]"
+            textAnchor="middle"
+          >
+            {d.label}
+          </text>
+        );
+      });
   };
 
   return (
@@ -260,12 +255,7 @@ export function UsageChart({
         </div>
       ) : (
         <div className="relative">
-          <svg
-            width="100%"
-            height={height}
-            className="overflow-visible"
-            preserveAspectRatio="none"
-          >
+          <svg width="100%" height={height} className="overflow-visible" preserveAspectRatio="none">
             <g transform={`translate(${padding.left}, ${padding.top})`}>
               {renderYAxis()}
               {type === 'line' ? renderLineChart() : renderBarChart()}
@@ -303,7 +293,11 @@ export function UsageChart({
         <div>
           <div className="font-theme-data text-xs text-text-muted">Avg</div>
           <div className="font-theme-data text-sm text-text">
-            {formatValue(chartData.length > 0 ? chartData.reduce((a, b) => a + b.value, 0) / chartData.length : 0)}
+            {formatValue(
+              chartData.length > 0
+                ? chartData.reduce((a, b) => a + b.value, 0) / chartData.length
+                : 0,
+            )}
           </div>
         </div>
         <div>

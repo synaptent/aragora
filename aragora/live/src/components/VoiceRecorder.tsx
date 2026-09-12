@@ -52,11 +52,7 @@ export function VoiceRecorder({
     try {
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
       streamRef.current = stream;
 
@@ -84,8 +80,8 @@ export function VoiceRecorder({
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : 'audio/mp4';
+          ? 'audio/webm'
+          : 'audio/mp4';
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
@@ -251,7 +247,9 @@ export function VoiceRecorder({
         )}
         {state === 'recording' && (
           <div className="space-y-1">
-            <div className={`text-sm font-theme-data ${isNearLimit ? 'text-[var(--crimson)]' : 'text-text'}`}>
+            <div
+              className={`text-sm font-theme-data ${isNearLimit ? 'text-[var(--crimson)]' : 'text-text'}`}
+            >
               {formatDuration(duration)}
               {isNearLimit && (
                 <span className="text-text-muted ml-2">({formatDuration(remainingTime)} left)</span>
@@ -260,12 +258,8 @@ export function VoiceRecorder({
             <div className="text-xs text-text-muted">Recording... Click to stop</div>
           </div>
         )}
-        {state === 'processing' && (
-          <div className="text-sm text-text-muted">Processing...</div>
-        )}
-        {error && (
-          <div className="text-sm text-[var(--crimson)]">{error}</div>
-        )}
+        {state === 'processing' && <div className="text-sm text-text-muted">Processing...</div>}
+        {error && <div className="text-sm text-[var(--crimson)]">{error}</div>}
       </div>
 
       {/* Max duration hint */}

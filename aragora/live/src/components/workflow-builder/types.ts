@@ -242,27 +242,42 @@ export interface CanvasState {
 // =============================================================================
 
 export const AVAILABLE_PERSONAS = {
-  general: [
-    'claude', 'gpt4', 'gemini', 'deepseek', 'mistral',
-  ],
+  general: ['claude', 'gpt4', 'gemini', 'deepseek', 'mistral'],
   legal: [
-    'contract_analyst', 'compliance_officer', 'litigation_support', 'm_and_a_counsel',
-    'ip_counsel', 'employment_counsel', 'regulatory_counsel', 'ethics_counsel',
+    'contract_analyst',
+    'compliance_officer',
+    'litigation_support',
+    'm_and_a_counsel',
+    'ip_counsel',
+    'employment_counsel',
+    'regulatory_counsel',
+    'ethics_counsel',
   ],
   healthcare: [
-    'clinical_reviewer', 'hipaa_auditor', 'research_analyst_clinical', 'medical_coder',
-    'patient_safety_officer', 'quality_assurance_nurse',
+    'clinical_reviewer',
+    'hipaa_auditor',
+    'research_analyst_clinical',
+    'medical_coder',
+    'patient_safety_officer',
+    'quality_assurance_nurse',
   ],
   accounting: [
-    'financial_auditor', 'tax_specialist', 'forensic_accountant', 'internal_auditor',
-    'sox', 'pci_dss',
+    'financial_auditor',
+    'tax_specialist',
+    'forensic_accountant',
+    'internal_auditor',
+    'sox',
+    'pci_dss',
   ],
   code: [
-    'code_security_specialist', 'architecture_reviewer', 'code_quality_reviewer',
-    'api_design_reviewer', 'performance_engineer', 'devops_engineer', 'security_engineer',
+    'code_security_specialist',
+    'architecture_reviewer',
+    'code_quality_reviewer',
+    'api_design_reviewer',
+    'performance_engineer',
+    'devops_engineer',
+    'security_engineer',
     'data_architect',
   ],
-  academic: [
-    'research_methodologist', 'peer_reviewer', 'grant_reviewer', 'irb_reviewer',
-  ],
+  academic: ['research_methodologist', 'peer_reviewer', 'grant_reviewer', 'irb_reviewer'],
 };

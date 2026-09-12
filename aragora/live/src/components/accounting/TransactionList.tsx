@@ -30,7 +30,7 @@ export function TransactionList({ transactions }: TransactionListProps) {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Filter transactions
-  const filteredTransactions = transactions.filter(txn => {
+  const filteredTransactions = transactions.filter((txn) => {
     if (typeFilter !== 'all' && txn.type !== typeFilter) return false;
     if (statusFilter !== 'all' && txn.status !== statusFilter) return false;
     if (searchQuery) {
@@ -67,30 +67,39 @@ export function TransactionList({ transactions }: TransactionListProps) {
 
   const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'Paid': return 'text-green-400 bg-green-500/10';
-      case 'Overdue': return 'text-red-400 bg-red-500/10';
-      case 'Open': return 'text-yellow-400 bg-yellow-500/10';
-      default: return 'text-[var(--text-muted)] bg-[var(--surface)]';
+      case 'Paid':
+        return 'text-green-400 bg-green-500/10';
+      case 'Overdue':
+        return 'text-red-400 bg-red-500/10';
+      case 'Open':
+        return 'text-yellow-400 bg-yellow-500/10';
+      default:
+        return 'text-[var(--text-muted)] bg-[var(--surface)]';
     }
   };
 
   const getTypeIcon = (type: string): string => {
     switch (type) {
-      case 'Invoice': return '📄';
-      case 'Expense': return '💸';
-      case 'Payment': return '💰';
-      case 'Bill': return '📋';
-      default: return '📝';
+      case 'Invoice':
+        return '📄';
+      case 'Expense':
+        return '💸';
+      case 'Payment':
+        return '💰';
+      case 'Bill':
+        return '📋';
+      default:
+        return '📝';
     }
   };
 
   // Summary stats
   const totalReceivables = filteredTransactions
-    .filter(t => t.type === 'Invoice' && t.balance > 0)
+    .filter((t) => t.type === 'Invoice' && t.balance > 0)
     .reduce((sum, t) => sum + t.balance, 0);
 
   const totalPayables = filteredTransactions
-    .filter(t => (t.type === 'Expense' || t.type === 'Bill') && t.balance > 0)
+    .filter((t) => (t.type === 'Expense' || t.type === 'Bill') && t.balance > 0)
     .reduce((sum, t) => sum + t.balance, 0);
 
   return (
@@ -144,7 +153,9 @@ export function TransactionList({ transactions }: TransactionListProps) {
         <div className="flex items-center gap-6 mt-4 pt-4 border-t border-[var(--border)]">
           <div>
             <span className="text-xs text-[var(--text-muted)]">Showing: </span>
-            <span className="text-sm font-theme-data text-[var(--text)]">{sortedTransactions.length}</span>
+            <span className="text-sm font-theme-data text-[var(--text)]">
+              {sortedTransactions.length}
+            </span>
             <span className="text-xs text-[var(--text-muted)]"> of {transactions.length}</span>
           </div>
           {totalReceivables > 0 && (
@@ -178,18 +189,14 @@ export function TransactionList({ transactions }: TransactionListProps) {
             onClick={() => toggleSort('date')}
           >
             Date
-            {sortField === 'date' && (
-              <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-            )}
+            {sortField === 'date' && <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>}
           </div>
           <div
             className="col-span-2 text-right cursor-pointer hover:text-[var(--acid-green)] flex items-center justify-end gap-1"
             onClick={() => toggleSort('amount')}
           >
             Amount
-            {sortField === 'amount' && (
-              <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-            )}
+            {sortField === 'amount' && <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>}
           </div>
           <div className="col-span-2 text-right">Status</div>
         </div>
@@ -201,14 +208,16 @@ export function TransactionList({ transactions }: TransactionListProps) {
           </div>
         ) : (
           <div className="divide-y divide-[var(--border)]">
-            {sortedTransactions.map(txn => (
+            {sortedTransactions.map((txn) => (
               <div
                 key={txn.id}
                 className="grid grid-cols-12 gap-4 p-3 hover:bg-[var(--bg)] transition-colors items-center"
               >
                 <div className="col-span-1 text-lg">{getTypeIcon(txn.type)}</div>
                 <div className="col-span-2">
-                  <div className="font-theme-data text-sm text-[var(--text)]">{txn.docNumber || '-'}</div>
+                  <div className="font-theme-data text-sm text-[var(--text)]">
+                    {txn.docNumber || '-'}
+                  </div>
                   <div className="text-xs text-[var(--text-muted)]">{txn.type}</div>
                 </div>
                 <div className="col-span-3 truncate">
@@ -223,11 +232,15 @@ export function TransactionList({ transactions }: TransactionListProps) {
                   )}
                 </div>
                 <div className="col-span-2 text-right">
-                  <div className={`font-theme-data text-sm ${
-                    txn.type === 'Invoice' || txn.type === 'Payment' ? 'text-[var(--acid-green)]' : 'text-red-400'
-                  }`}>
-                    {txn.type === 'Invoice' || txn.type === 'Payment' ? '+' : '-'}
-                    ${txn.totalAmount.toLocaleString()}
+                  <div
+                    className={`font-theme-data text-sm ${
+                      txn.type === 'Invoice' || txn.type === 'Payment'
+                        ? 'text-[var(--acid-green)]'
+                        : 'text-red-400'
+                    }`}
+                  >
+                    {txn.type === 'Invoice' || txn.type === 'Payment' ? '+' : '-'}$
+                    {txn.totalAmount.toLocaleString()}
                   </div>
                   {txn.balance > 0 && txn.balance !== txn.totalAmount && (
                     <div className="text-xs text-[var(--text-muted)]">
@@ -236,7 +249,9 @@ export function TransactionList({ transactions }: TransactionListProps) {
                   )}
                 </div>
                 <div className="col-span-2 text-right">
-                  <span className={`px-2 py-1 text-xs font-theme-data rounded ${getStatusColor(txn.status)}`}>
+                  <span
+                    className={`px-2 py-1 text-xs font-theme-data rounded ${getStatusColor(txn.status)}`}
+                  >
                     {txn.status}
                   </span>
                 </div>

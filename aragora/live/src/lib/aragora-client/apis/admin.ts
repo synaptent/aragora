@@ -77,11 +77,7 @@ export interface UsersResponse {
 
 export interface SystemHealth {
   status: string;
-  components: Record<string, {
-    status: string;
-    latency_ms?: number;
-    error?: string;
-  }>;
+  components: Record<string, { status: string; latency_ms?: number; error?: string }>;
   uptime_seconds: number;
   version: string;
 }

@@ -26,9 +26,7 @@ jest.mock('@/utils/agentColors', () => ({
   }),
 }));
 
-const createMessage = (
-  overrides: Partial<TranscriptMessage> = {}
-): TranscriptMessage => ({
+const createMessage = (overrides: Partial<TranscriptMessage> = {}): TranscriptMessage => ({
   agent: 'claude',
   content: 'This is a test message.',
   timestamp: 1705420800,
@@ -37,9 +35,7 @@ const createMessage = (
   ...overrides,
 });
 
-const createStreamEvent = (
-  overrides: Partial<StreamEvent> = {}
-): StreamEvent => ({
+const createStreamEvent = (overrides: Partial<StreamEvent> = {}): StreamEvent => ({
   type: 'agent_message' as const,
   data: { content: 'Event data' },
   timestamp: 1705420800,
@@ -50,31 +46,21 @@ const createStreamEvent = (
 describe('DebateTimeline', () => {
   describe('basic rendering', () => {
     it('renders timeline header with event count', () => {
-      render(
-        <DebateTimeline
-          messages={[createMessage()]}
-          streamEvents={[]}
-          agents={['claude']}
-        />
-      );
+      render(<DebateTimeline messages={[createMessage()]} streamEvents={[]} agents={['claude']} />);
 
       expect(screen.getByText(/DEBATE TIMELINE/)).toBeInTheDocument();
       expect(screen.getByText(/1 events/)).toBeInTheDocument();
     });
 
     it('renders with empty data showing 0 events', () => {
-      render(
-        <DebateTimeline messages={[]} streamEvents={[]} agents={[]} />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={[]} agents={[]} />);
 
       expect(screen.getByText(/DEBATE TIMELINE/)).toBeInTheDocument();
       expect(screen.getByText(/0 events/)).toBeInTheDocument();
     });
 
     it('shows no events message when no data', () => {
-      render(
-        <DebateTimeline messages={[]} streamEvents={[]} agents={[]} />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={[]} agents={[]} />);
 
       expect(screen.getByText('No timeline events to display')).toBeInTheDocument();
     });
@@ -87,13 +73,7 @@ describe('DebateTimeline', () => {
         createMessage({ agent: 'gpt-4', content: 'Second message', timestamp: 1705420810 }),
       ];
 
-      render(
-        <DebateTimeline
-          messages={messages}
-          streamEvents={[]}
-          agents={['claude', 'gpt-4']}
-        />
-      );
+      render(<DebateTimeline messages={messages} streamEvents={[]} agents={['claude', 'gpt-4']} />);
 
       // Agent names in timeline entries are displayed lowercase
       expect(screen.getAllByText('claude').length).toBeGreaterThan(0);
@@ -106,7 +86,7 @@ describe('DebateTimeline', () => {
           messages={[createMessage({ content: 'Short message' })]}
           streamEvents={[]}
           agents={['claude']}
-        />
+        />,
       );
 
       expect(screen.getByText('Short message')).toBeInTheDocument();
@@ -119,7 +99,7 @@ describe('DebateTimeline', () => {
           messages={[createMessage({ content: longContent })]}
           streamEvents={[]}
           agents={['claude']}
-        />
+        />,
       );
 
       // Should see truncated content with ellipsis
@@ -128,13 +108,7 @@ describe('DebateTimeline', () => {
     });
 
     it('shows [MESSAGE] type label for message entries', () => {
-      render(
-        <DebateTimeline
-          messages={[createMessage()]}
-          streamEvents={[]}
-          agents={['claude']}
-        />
-      );
+      render(<DebateTimeline messages={[createMessage()]} streamEvents={[]} agents={['claude']} />);
 
       expect(screen.getByText('[MESSAGE]')).toBeInTheDocument();
     });
@@ -150,9 +124,7 @@ describe('DebateTimeline', () => {
         }),
       ];
 
-      render(
-        <DebateTimeline messages={[]} streamEvents={events} agents={['claude']} />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={events} agents={['claude']} />);
 
       expect(screen.getByText('[DEBATE STARTED]')).toBeInTheDocument();
       expect(screen.getByText('Design a rate limiter')).toBeInTheDocument();
@@ -160,16 +132,10 @@ describe('DebateTimeline', () => {
 
     it('renders round_start events', () => {
       const events = [
-        createStreamEvent({
-          type: 'round_start',
-          data: { round: 2 },
-          timestamp: 1705420800,
-        }),
+        createStreamEvent({ type: 'round_start', data: { round: 2 }, timestamp: 1705420800 }),
       ];
 
-      render(
-        <DebateTimeline messages={[]} streamEvents={events} agents={['claude']} />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={events} agents={['claude']} />);
 
       expect(screen.getByText('[ROUND]')).toBeInTheDocument();
       expect(screen.getByText('Round 2')).toBeInTheDocument();
@@ -185,9 +151,7 @@ describe('DebateTimeline', () => {
         }),
       ];
 
-      render(
-        <DebateTimeline messages={[]} streamEvents={events} agents={['claude']} />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={events} agents={['claude']} />);
 
       expect(screen.getByText('[THINKING]')).toBeInTheDocument();
       expect(screen.getByText('Analyzing trade-offs')).toBeInTheDocument();
@@ -203,9 +167,7 @@ describe('DebateTimeline', () => {
         }),
       ];
 
-      render(
-        <DebateTimeline messages={[]} streamEvents={events} agents={['gpt-4']} />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={events} agents={['gpt-4']} />);
 
       expect(screen.getByText('[EVIDENCE]')).toBeInTheDocument();
       expect(screen.getByText('Considering 2 source(s)')).toBeInTheDocument();
@@ -221,9 +183,7 @@ describe('DebateTimeline', () => {
         }),
       ];
 
-      render(
-        <DebateTimeline messages={[]} streamEvents={events} agents={['claude']} />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={events} agents={['claude']} />);
 
       expect(screen.getByText('[CONFIDENCE]')).toBeInTheDocument();
       expect(screen.getByText('Confidence: 85%')).toBeInTheDocument();
@@ -231,12 +191,14 @@ describe('DebateTimeline', () => {
 
     it('filters out non-timeline event types', () => {
       const events = [
-        createStreamEvent({ type: 'log_message' as 'agent_message', data: {}, timestamp: 1705420800 }),
+        createStreamEvent({
+          type: 'log_message' as 'agent_message',
+          data: {},
+          timestamp: 1705420800,
+        }),
       ];
 
-      render(
-        <DebateTimeline messages={[]} streamEvents={events} agents={[]} />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={events} agents={[]} />);
 
       expect(screen.getByText('No timeline events to display')).toBeInTheDocument();
     });
@@ -244,25 +206,13 @@ describe('DebateTimeline', () => {
 
   describe('agent filtering', () => {
     it('shows agent filter dropdown with All Agents option', () => {
-      render(
-        <DebateTimeline
-          messages={[]}
-          streamEvents={[]}
-          agents={['claude', 'gpt-4']}
-        />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={[]} agents={['claude', 'gpt-4']} />);
 
       expect(screen.getByText('All Agents')).toBeInTheDocument();
     });
 
     it('shows agents as options in dropdown', () => {
-      render(
-        <DebateTimeline
-          messages={[]}
-          streamEvents={[]}
-          agents={['claude', 'gpt-4']}
-        />
-      );
+      render(<DebateTimeline messages={[]} streamEvents={[]} agents={['claude', 'gpt-4']} />);
 
       const select = screen.getByRole('combobox');
       expect(select).toBeInTheDocument();
@@ -276,13 +226,7 @@ describe('DebateTimeline', () => {
         createMessage({ agent: 'gpt-4', content: 'GPT message', timestamp: 1705420810 }),
       ];
 
-      render(
-        <DebateTimeline
-          messages={messages}
-          streamEvents={[]}
-          agents={['claude', 'gpt-4']}
-        />
-      );
+      render(<DebateTimeline messages={messages} streamEvents={[]} agents={['claude', 'gpt-4']} />);
 
       const select = screen.getByRole('combobox');
       fireEvent.change(select, { target: { value: 'claude' } });
@@ -294,13 +238,7 @@ describe('DebateTimeline', () => {
 
   describe('event type filtering', () => {
     it('shows type filter buttons for each timeline event type', () => {
-      render(
-        <DebateTimeline
-          messages={[createMessage()]}
-          streamEvents={[]}
-          agents={['claude']}
-        />
-      );
+      render(<DebateTimeline messages={[createMessage()]} streamEvents={[]} agents={['claude']} />);
 
       expect(screen.getByText('MESSAGE')).toBeInTheDocument();
       expect(screen.getByText('THINKING')).toBeInTheDocument();
@@ -314,7 +252,7 @@ describe('DebateTimeline', () => {
           messages={[createMessage({ content: 'Visible message' })]}
           streamEvents={[]}
           agents={['claude']}
-        />
+        />,
       );
 
       // Click MESSAGE filter to toggle it off
@@ -330,9 +268,7 @@ describe('DebateTimeline', () => {
       const longContent = 'A'.repeat(250);
       const messages = [createMessage({ content: longContent, timestamp: 1705420800 })];
 
-      render(
-        <DebateTimeline messages={messages} streamEvents={[]} agents={['claude']} />
-      );
+      render(<DebateTimeline messages={messages} streamEvents={[]} agents={['claude']} />);
 
       // Click on the entry area to expand
       const entryContent = screen.getByText(/^A{200}\.\.\./);
@@ -351,7 +287,7 @@ describe('DebateTimeline', () => {
       ];
 
       const { container } = render(
-        <DebateTimeline messages={messages} streamEvents={[]} agents={['claude', 'gpt-4']} />
+        <DebateTimeline messages={messages} streamEvents={[]} agents={['claude', 'gpt-4']} />,
       );
 
       const entries = container.querySelectorAll('.cursor-pointer');

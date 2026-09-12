@@ -36,10 +36,7 @@ export default function MomentsLoading() {
         {/* Moment Cards */}
         <div className="grid grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="p-4 bg-surface border border-border rounded-lg space-y-3"
-            >
+            <div key={i} className="p-4 bg-surface border border-border rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Skeleton width={24} height={24} rounded="sm" />

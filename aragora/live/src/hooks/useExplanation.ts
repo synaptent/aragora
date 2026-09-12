@@ -120,7 +120,7 @@ export function useExplanation(debateId: string) {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/debates/${encodeURIComponent(debateId)}/explanation`
+        `${API_BASE_URL}/api/v1/debates/${encodeURIComponent(debateId)}/explanation`,
       );
 
       if (response.status === 404) {
@@ -149,8 +149,5 @@ export function useExplanation(debateId: string) {
     fetchExplanation();
   }, [fetchExplanation]);
 
-  return {
-    ...state,
-    fetchExplanation,
-  };
+  return { ...state, fetchExplanation };
 }

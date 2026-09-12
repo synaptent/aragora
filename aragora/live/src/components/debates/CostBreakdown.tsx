@@ -30,9 +30,7 @@ export function CostBreakdown({ costBreakdown, totalCost }: CostBreakdownProps) 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] p-6">
       <div className="flex items-center justify-between mb-4">
-        <div className="text-xs font-theme-data text-[var(--acid-green)]">
-          {'>'} COST BREAKDOWN
-        </div>
+        <div className="text-xs font-theme-data text-[var(--acid-green)]">{'>'} COST BREAKDOWN</div>
         <div className="text-sm font-theme-data text-[var(--acid-green)]">
           TOTAL: ${typeof totalCost === 'number' ? totalCost.toFixed(4) : '--'}
         </div>

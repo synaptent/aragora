@@ -47,7 +47,9 @@ export const ExplainabilityPanel = memo(function ExplainabilityPanel({
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
         <div>
           <div className="text-xs font-theme-data text-[var(--text-muted)]">Explainability</div>
-          <div className="text-sm font-theme-data text-[var(--text)] truncate max-w-[200px]">{nodeLabel}</div>
+          <div className="text-sm font-theme-data text-[var(--text)] truncate max-w-[200px]">
+            {nodeLabel}
+          </div>
         </div>
         <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text)]">
           ✕
@@ -57,7 +59,9 @@ export const ExplainabilityPanel = memo(function ExplainabilityPanel({
       <div className="flex-1 overflow-y-auto">
         {/* Factor breakdown */}
         <div className="p-4 space-y-2">
-          <div className="text-xs font-theme-data font-bold text-[var(--text-muted)]">Decision Factors</div>
+          <div className="text-xs font-theme-data font-bold text-[var(--text-muted)]">
+            Decision Factors
+          </div>
           {factors.map((factor) => {
             const style = DIRECTION_STYLES[factor.direction] || DIRECTION_STYLES.neutral;
             const barPercent = Math.round((Math.abs(factor.weight) / maxWeight) * 100);
@@ -65,8 +69,12 @@ export const ExplainabilityPanel = memo(function ExplainabilityPanel({
               <div key={factor.name} className="space-y-1">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className={`text-xs font-theme-data font-bold ${style.text}`}>{style.icon}</span>
-                    <span className="text-xs font-theme-data text-[var(--text)]">{factor.name}</span>
+                    <span className={`text-xs font-theme-data font-bold ${style.text}`}>
+                      {style.icon}
+                    </span>
+                    <span className="text-xs font-theme-data text-[var(--text)]">
+                      {factor.name}
+                    </span>
                   </div>
                   <span className={`text-xs font-theme-data ${style.text}`}>
                     {factor.weight > 0 ? '+' : ''}
@@ -88,7 +96,9 @@ export const ExplainabilityPanel = memo(function ExplainabilityPanel({
         {/* Evidence chain */}
         {evidenceChain && evidenceChain.length > 0 && (
           <div className="p-4 border-t border-[var(--border)] space-y-2">
-            <div className="text-xs font-theme-data font-bold text-[var(--text-muted)]">Evidence Chain</div>
+            <div className="text-xs font-theme-data font-bold text-[var(--text-muted)]">
+              Evidence Chain
+            </div>
             {evidenceChain.map((node, i) => (
               <div key={node.nodeId} className="flex items-center gap-2">
                 {i > 0 && <span className="text-xs text-[var(--text-muted)]">→</span>}
@@ -104,7 +114,9 @@ export const ExplainabilityPanel = memo(function ExplainabilityPanel({
         {/* Counterfactuals */}
         {counterfactuals && counterfactuals.length > 0 && (
           <div className="p-4 border-t border-[var(--border)] space-y-2">
-            <div className="text-xs font-theme-data font-bold text-[var(--text-muted)]">Counterfactuals</div>
+            <div className="text-xs font-theme-data font-bold text-[var(--text-muted)]">
+              Counterfactuals
+            </div>
             {counterfactuals.map((cf, i) => (
               <div key={i} className="p-2 bg-[var(--bg)] rounded border border-[var(--border)]">
                 <p className="text-xs text-[var(--text)]">{cf.description}</p>

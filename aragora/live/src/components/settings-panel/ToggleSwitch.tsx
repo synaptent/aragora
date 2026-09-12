@@ -38,9 +38,11 @@ export function ToggleSwitch({
           checked ? 'bg-[var(--accent)]' : 'bg-surface'
         } ${disabled ? 'cursor-not-allowed' : ''}`}
       >
-        <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-          checked ? 'translate-x-6' : 'translate-x-0.5'
-        }`} />
+        <div
+          className={`w-5 h-5 rounded-full bg-white transition-transform ${
+            checked ? 'translate-x-6' : 'translate-x-0.5'
+          }`}
+        />
       </button>
     </label>
   );

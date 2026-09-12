@@ -12,6 +12,12 @@ from typing import Any, Mapping
 from urllib.parse import ParseResult, quote, urlparse
 
 
+# Name of the runtime artifact directory at the repository root. Context-pack
+# references are rendered relative to the repo root (never via get_nomic_dir())
+# so they stay portable across checkouts.
+NOMIC_DIR_NAME = ".nomic"
+
+
 class NomicProfileError(ValueError):
     """Raised when a repository planning profile is invalid."""
 
@@ -459,7 +465,7 @@ class ContextPack:
 
     @property
     def reference(self) -> str:
-        return f".nomic/context/packs/{self.revision.commit_sha}/{self.pack_id}"
+        return f"{NOMIC_DIR_NAME}/context/packs/{self.revision.commit_sha}/{self.pack_id}"
 
     def to_dict(self) -> dict[str, Any]:
         return {

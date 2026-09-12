@@ -37,13 +37,21 @@ export default function SettlementsPage() {
     setError(null);
     try {
       if (tab === 'pending') {
-        const data = await apiFetch<{ data?: { settlements?: Settlement[] }; settlements?: Settlement[] }>('/api/v1/settlements');
+        const data = await apiFetch<{
+          data?: { settlements?: Settlement[] };
+          settlements?: Settlement[];
+        }>('/api/v1/settlements');
         setSettlements(data.data?.settlements || data.settlements || []);
       } else if (tab === 'history') {
-        const data = await apiFetch<{ data?: { settlements?: Settlement[] }; settlements?: Settlement[] }>('/api/v1/settlements/history');
+        const data = await apiFetch<{
+          data?: { settlements?: Settlement[] };
+          settlements?: Settlement[];
+        }>('/api/v1/settlements/history');
         setSettlements(data.data?.settlements || data.settlements || []);
       } else if (tab === 'stats') {
-        const data = await apiFetch<{ data?: SettlementSummary } & SettlementSummary>('/api/v1/settlements/summary');
+        const data = await apiFetch<{ data?: SettlementSummary } & SettlementSummary>(
+          '/api/v1/settlements/summary',
+        );
         setSummary(data.data || data);
       }
     } catch (err) {
@@ -74,7 +82,10 @@ export default function SettlementsPage() {
 
       {/* Ops telemetry strip */}
       <PanelErrorBoundary panelName="Settlement Telemetry">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6" aria-label="Settlement ops health">
+        <div
+          className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6"
+          aria-label="Settlement ops health"
+        >
           <div className="p-3 bg-[var(--surface)] border border-[var(--border)] rounded-md">
             <div className="text-xs font-theme-data text-[var(--text-muted)] uppercase tracking-wider">
               Settlement Review
@@ -126,7 +137,10 @@ export default function SettlementsPage() {
                   Active: {oracleStream.active_sessions} | Stalls: {oracleStream.stalls_total}
                 </div>
                 <div className="text-xs font-theme-data text-[var(--text-muted)] mt-1">
-                  TTFT: {oracleStream.ttft_avg_ms != null ? `${Math.round(oracleStream.ttft_avg_ms)}ms` : '-'}
+                  TTFT:{' '}
+                  {oracleStream.ttft_avg_ms != null
+                    ? `${Math.round(oracleStream.ttft_avg_ms)}ms`
+                    : '-'}
                 </div>
               </>
             ) : (
@@ -173,10 +187,7 @@ export default function SettlementsPage() {
         {loading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="h-20 bg-[var(--surface-elevated)] rounded-md animate-pulse"
-              />
+              <div key={i} className="h-20 bg-[var(--surface-elevated)] rounded-md animate-pulse" />
             ))}
           </div>
         )}
@@ -246,26 +257,16 @@ function StatCard({
   );
 }
 
-function SettlementCard({
-  settlement,
-  isPending,
-}: {
-  settlement: Settlement;
-  isPending: boolean;
-}) {
+function SettlementCard({ settlement, isPending }: { settlement: Settlement; isPending: boolean }) {
   return (
     <div className="p-4 bg-[var(--surface)] border border-[var(--border)] rounded-md hover:border-[var(--acid-green)]/30 transition-colors">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-theme-data text-[var(--text)] truncate">
-            {settlement.claim}
-          </p>
+          <p className="text-sm font-theme-data text-[var(--text)] truncate">{settlement.claim}</p>
           <div className="flex items-center gap-3 mt-2 text-xs text-[var(--text-muted)]">
             <span>Agent: {settlement.agent_name}</span>
             <span>Confidence: {(settlement.confidence * 100).toFixed(0)}%</span>
-            <span>
-              {new Date(settlement.created_at).toLocaleDateString()}
-            </span>
+            <span>{new Date(settlement.created_at).toLocaleDateString()}</span>
           </div>
         </div>
         <div className="flex-shrink-0">

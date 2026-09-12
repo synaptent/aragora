@@ -39,9 +39,7 @@ function isInternalApiRequest(url: string): boolean {
 }
 
 function getAuthHeaders(url: string): HeadersInit {
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
   const token = getAccessToken();
   if (token && isInternalApiRequest(url)) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -58,10 +56,7 @@ export async function swrFetcher<T>(url: string): Promise<T> {
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   let response: Response;
   try {
-    response = await fetch(url, {
-      headers: getAuthHeaders(url),
-      signal: controller.signal,
-    });
+    response = await fetch(url, { headers: getAuthHeaders(url), signal: controller.signal });
   } finally {
     clearTimeout(timeoutId);
   }
@@ -110,13 +105,9 @@ export interface UseSWRFetchOptions<T> extends SWRConfiguration<T> {
  */
 export function useSWRFetch<T = unknown>(
   endpoint: string | null,
-  options: UseSWRFetchOptions<T> = {}
+  options: UseSWRFetchOptions<T> = {},
 ) {
-  const {
-    baseUrl,
-    enabled = true,
-    ...swrOptions
-  } = options;
+  const { baseUrl, enabled = true, ...swrOptions } = options;
 
   const url = endpoint && enabled ? `${resolveApiBaseUrl(baseUrl)}${endpoint}` : null;
 
@@ -164,7 +155,7 @@ export function useSWRFetch<T = unknown>(
  */
 export function useSWRFetchMultiple<T = unknown>(
   endpoints: (string | null)[],
-  options: UseSWRFetchOptions<T> = {}
+  options: UseSWRFetchOptions<T> = {},
 ) {
   const { baseUrl, enabled = true } = options;
   const resolvedBaseUrl = resolveApiBaseUrl(baseUrl);
@@ -221,11 +212,9 @@ export function invalidateCache(endpoint: string, baseUrl?: string) {
  * invalidateCachePattern(/\/api\/debates/);
  */
 export function invalidateCachePattern(pattern: RegExp) {
-  return mutate(
-    (key) => typeof key === 'string' && pattern.test(key),
-    undefined,
-    { revalidate: true }
-  );
+  return mutate((key) => typeof key === 'string' && pattern.test(key), undefined, {
+    revalidate: true,
+  });
 }
 
 /**
@@ -239,7 +228,7 @@ export function invalidateCachePattern(pattern: RegExp) {
 export function updateCache<T>(
   endpoint: string,
   updater: (current: T | undefined) => T,
-  baseUrl?: string
+  baseUrl?: string,
 ) {
   const url = `${resolveApiBaseUrl(baseUrl)}${endpoint}`;
   return mutate(url, updater, { revalidate: false });
@@ -298,17 +287,11 @@ export function useLeaderboard(options?: UseSWRFetchOptions<unknown>) {
 }
 
 export function useAgents(options?: UseSWRFetchOptions<unknown>) {
-  return useSWRFetch('/api/agents', {
-    refreshInterval: 60000,
-    ...options,
-  });
+  return useSWRFetch('/api/agents', { refreshInterval: 60000, ...options });
 }
 
 export function useConnectors(options?: UseSWRFetchOptions<unknown>) {
-  return useSWRFetch('/api/scheduler/jobs', {
-    refreshInterval: 30000,
-    ...options,
-  });
+  return useSWRFetch('/api/scheduler/jobs', { refreshInterval: 30000, ...options });
 }
 
 export function useSchedulerStats(options?: UseSWRFetchOptions<unknown>) {
@@ -319,15 +302,9 @@ export function useSchedulerStats(options?: UseSWRFetchOptions<unknown>) {
 }
 
 export function usePulseTopics(options?: UseSWRFetchOptions<unknown>) {
-  return useSWRFetch('/api/pulse/topics', {
-    refreshInterval: 60000,
-    ...options,
-  });
+  return useSWRFetch('/api/pulse/topics', { refreshInterval: 60000, ...options });
 }
 
 export function useMemoryStats(options?: UseSWRFetchOptions<unknown>) {
-  return useSWRFetch('/api/memory/stats', {
-    refreshInterval: 30000,
-    ...options,
-  });
+  return useSWRFetch('/api/memory/stats', { refreshInterval: 30000, ...options });
 }

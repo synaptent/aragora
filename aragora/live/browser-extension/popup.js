@@ -1,50 +1,61 @@
-const STATE_KEY = "aragoraPopupState";
+const STATE_KEY = 'aragoraPopupState';
 const DEFAULT_SETTINGS = {
-  apiUrl: "https://api.aragora.ai",
-  apiKey: "",
-  agents: "",
+  apiUrl: 'https://api.aragora.ai',
+  apiKey: '',
+  agents: '',
   rounds: 3,
-  consensus: "majority",
+  consensus: 'majority',
 };
-const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled", "error", "done", "consensus_reached"]);
+const TERMINAL_STATUSES = new Set([
+  'completed',
+  'failed',
+  'cancelled',
+  'error',
+  'done',
+  'consensus_reached',
+]);
 
 const elements = {};
 let pollTimer = null;
 
 function normalizeApiUrl(apiUrl) {
-  return String(apiUrl || DEFAULT_SETTINGS.apiUrl).trim().replace(/\/+$/, "");
+  return String(apiUrl || DEFAULT_SETTINGS.apiUrl)
+    .trim()
+    .replace(/\/+$/, '');
 }
 
 function buildAuthorizationHeader(apiKey) {
-  const trimmed = String(apiKey || "").trim();
+  const trimmed = String(apiKey || '').trim();
   if (!trimmed) {
-    return "";
+    return '';
   }
 
   return /^Bearer\s+/i.test(trimmed) ? trimmed : `Bearer ${trimmed}`;
 }
 
 function humanizeStatus(status) {
-  const normalized = String(status || "idle").trim().toLowerCase();
+  const normalized = String(status || 'idle')
+    .trim()
+    .toLowerCase();
 
   switch (normalized) {
-    case "submitting":
-      return "Submitting";
-    case "running":
-      return "Running";
-    case "completed":
-    case "consensus_reached":
-      return "Completed";
-    case "failed":
-    case "error":
-      return "Error";
+    case 'submitting':
+      return 'Submitting';
+    case 'running':
+      return 'Running';
+    case 'completed':
+    case 'consensus_reached':
+      return 'Completed';
+    case 'failed':
+    case 'error':
+      return 'Error';
     default:
-      return normalized ? normalized[0].toUpperCase() + normalized.slice(1) : "Idle";
+      return normalized ? normalized[0].toUpperCase() + normalized.slice(1) : 'Idle';
   }
 }
 
 function isTerminalState(state) {
-  const normalized = String(state?.status || "").toLowerCase();
+  const normalized = String(state?.status || '').toLowerCase();
   return TERMINAL_STATUSES.has(normalized) || Boolean(resolveFinalAnswer(state?.result));
 }
 
@@ -60,21 +71,16 @@ function resolveFinalAnswer(result) {
     result?.consensus?.finalAnswer ||
     result?.consensus?.summary ||
     result?.consensus?.answer ||
-    ""
+    ''
   );
 }
 
 function resolveConfidence(result) {
   const rawConfidence =
-    result?.confidence ??
-    result?.consensus?.confidence ??
-    result?.consensus?.agreement;
-  const confidence =
-    typeof rawConfidence === "string" ? Number(rawConfidence) : rawConfidence;
+    result?.confidence ?? result?.consensus?.confidence ?? result?.consensus?.agreement;
+  const confidence = typeof rawConfidence === 'string' ? Number(rawConfidence) : rawConfidence;
 
-  return typeof confidence === "number" && !Number.isNaN(confidence)
-    ? confidence
-    : null;
+  return typeof confidence === 'number' && !Number.isNaN(confidence) ? confidence : null;
 }
 
 async function getStoredState() {
@@ -83,78 +89,77 @@ async function getStoredState() {
 }
 
 function setStatusPill(status) {
-  const normalized = String(status || "idle").toLowerCase();
+  const normalized = String(status || 'idle').toLowerCase();
   elements.statusPill.textContent = humanizeStatus(status);
-  elements.statusPill.className = "status-pill";
+  elements.statusPill.className = 'status-pill';
 
-  if (normalized === "submitting" || normalized === "running") {
+  if (normalized === 'submitting' || normalized === 'running') {
     elements.statusPill.classList.add(`is-${normalized}`);
     return;
   }
 
-  if (normalized === "completed" || normalized === "consensus_reached") {
-    elements.statusPill.classList.add("is-completed");
+  if (normalized === 'completed' || normalized === 'consensus_reached') {
+    elements.statusPill.classList.add('is-completed');
     return;
   }
 
-  if (normalized === "error" || normalized === "failed") {
-    elements.statusPill.classList.add("is-error");
+  if (normalized === 'error' || normalized === 'failed') {
+    elements.statusPill.classList.add('is-error');
     return;
   }
 
-  elements.statusPill.classList.add("is-idle");
+  elements.statusPill.classList.add('is-idle');
 }
 
 function renderSource(source) {
   if (source?.pageUrl) {
     elements.sourceLink.href = source.pageUrl;
-    elements.sourceLink.textContent = source.pageTitle || "Open source page";
-    elements.sourceLink.classList.remove("hidden");
+    elements.sourceLink.textContent = source.pageTitle || 'Open source page';
+    elements.sourceLink.classList.remove('hidden');
     return;
   }
 
-  elements.sourceLink.href = "#";
-  elements.sourceLink.textContent = "";
-  elements.sourceLink.classList.add("hidden");
+  elements.sourceLink.href = '#';
+  elements.sourceLink.textContent = '';
+  elements.sourceLink.classList.add('hidden');
 }
 
 function renderError(errorMessage) {
   if (!errorMessage) {
-    elements.resultError.textContent = "";
-    elements.resultError.classList.add("hidden");
+    elements.resultError.textContent = '';
+    elements.resultError.classList.add('hidden');
     return;
   }
 
   elements.resultError.textContent = errorMessage;
-  elements.resultError.classList.remove("hidden");
+  elements.resultError.classList.remove('hidden');
 }
 
 function renderState(state) {
   const activeState = state || {};
   const result = activeState.result || {};
-  setStatusPill(activeState.status || "idle");
+  setStatusPill(activeState.status || 'idle');
 
-  elements.selectionPreview.textContent =
-    activeState.selectionText || "No text has been sent yet.";
+  elements.selectionPreview.textContent = activeState.selectionText || 'No text has been sent yet.';
   renderSource(activeState.source);
 
-  elements.debateId.textContent = activeState.debateId || "-";
-  elements.resultStatus.textContent = humanizeStatus(result.status || activeState.status || "idle");
+  elements.debateId.textContent = activeState.debateId || '-';
+  elements.resultStatus.textContent = humanizeStatus(result.status || activeState.status || 'idle');
 
   const confidence = resolveConfidence(result);
   elements.resultConfidence.textContent =
-    typeof confidence === "number" && !Number.isNaN(confidence)
+    typeof confidence === 'number' && !Number.isNaN(confidence)
       ? `${Math.round(confidence * 100)}%`
-      : "-";
+      : '-';
 
   const answer =
     resolveFinalAnswer(result) ||
     result.message ||
-    (activeState.status === "submitting"
-      ? "Submitting selection to Aragora."
-      : activeState.status === "running"
-        ? "Debate is still running. Keep this popup open or refresh."
-        : "No result yet.");
+    (activeState.status === 'submitting'
+      ? 'Submitting selection to Aragora.'
+      : activeState.status === 'running'
+        ? 'Debate is still running. Keep this popup open or refresh.'
+        : 'No result yet.');
   elements.resultAnswer.textContent = answer;
 
   renderError(activeState.error);
@@ -162,8 +167,8 @@ function renderState(state) {
 
 function populateSettings(settings) {
   elements.apiUrl.value = settings.apiUrl || DEFAULT_SETTINGS.apiUrl;
-  elements.apiKey.value = settings.apiKey || "";
-  elements.agents.value = settings.agents || "";
+  elements.apiKey.value = settings.apiKey || '';
+  elements.agents.value = settings.agents || '';
   elements.rounds.value = String(settings.rounds || DEFAULT_SETTINGS.rounds);
 }
 
@@ -179,10 +184,10 @@ async function saveSettings() {
   await chrome.storage.sync.set(nextSettings);
   populateSettings(nextSettings);
 
-  elements.settingsStatus.textContent = "Saved";
+  elements.settingsStatus.textContent = 'Saved';
   window.setTimeout(() => {
-    if (elements.settingsStatus.textContent === "Saved") {
-      elements.settingsStatus.textContent = "";
+    if (elements.settingsStatus.textContent === 'Saved') {
+      elements.settingsStatus.textContent = '';
     }
   }, 1200);
 }
@@ -206,7 +211,7 @@ async function readErrorMessage(response) {
 async function fetchDebate(apiUrl, apiKey, debateId) {
   const response = await fetch(`${normalizeApiUrl(apiUrl)}/api/v2/debates/${debateId}`, {
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: buildAuthorizationHeader(apiKey),
     },
   });
@@ -220,7 +225,7 @@ async function fetchDebate(apiUrl, apiKey, debateId) {
 
 function buildResultState(previousState, debate) {
   const confidence = resolveConfidence(debate);
-  const nextStatus = String(debate?.status || previousState.status || "running").toLowerCase();
+  const nextStatus = String(debate?.status || previousState.status || 'running').toLowerCase();
   const finalAnswer = resolveFinalAnswer(debate);
 
   return {
@@ -229,10 +234,10 @@ function buildResultState(previousState, debate) {
     error: null,
     result: {
       debateId: debate.id || debate.debate_id || previousState.debateId,
-      status: debate.status || previousState.status || "running",
+      status: debate.status || previousState.status || 'running',
       finalAnswer,
       confidence,
-      task: debate.task || debate.environment?.task || "",
+      task: debate.task || debate.environment?.task || '',
     },
     updatedAt: new Date().toISOString(),
   };
@@ -249,11 +254,11 @@ async function refreshDebateState() {
     return;
   }
 
-  if (!String(settings.apiKey || "").trim()) {
+  if (!String(settings.apiKey || '').trim()) {
     renderState({
       ...state,
-      status: "error",
-      error: "Add an Aragora API key before refreshing a debate result.",
+      status: 'error',
+      error: 'Add an Aragora API key before refreshing a debate result.',
     });
     return;
   }
@@ -270,7 +275,7 @@ async function refreshDebateState() {
   } catch (error) {
     const nextState = {
       ...state,
-      status: "error",
+      status: 'error',
       error: error instanceof Error ? error.message : String(error),
       updatedAt: new Date().toISOString(),
     };
@@ -307,21 +312,21 @@ function maybePoll(state) {
 }
 
 function cacheElements() {
-  elements.statusPill = document.getElementById("status-pill");
-  elements.selectionPreview = document.getElementById("selection-preview");
-  elements.sourceLink = document.getElementById("source-link");
-  elements.apiUrl = document.getElementById("api-url");
-  elements.apiKey = document.getElementById("api-key");
-  elements.agents = document.getElementById("agents");
-  elements.rounds = document.getElementById("rounds");
-  elements.saveSettings = document.getElementById("save-settings");
-  elements.refreshResult = document.getElementById("refresh-result");
-  elements.settingsStatus = document.getElementById("settings-status");
-  elements.debateId = document.getElementById("debate-id");
-  elements.resultStatus = document.getElementById("result-status");
-  elements.resultConfidence = document.getElementById("result-confidence");
-  elements.resultAnswer = document.getElementById("result-answer");
-  elements.resultError = document.getElementById("result-error");
+  elements.statusPill = document.getElementById('status-pill');
+  elements.selectionPreview = document.getElementById('selection-preview');
+  elements.sourceLink = document.getElementById('source-link');
+  elements.apiUrl = document.getElementById('api-url');
+  elements.apiKey = document.getElementById('api-key');
+  elements.agents = document.getElementById('agents');
+  elements.rounds = document.getElementById('rounds');
+  elements.saveSettings = document.getElementById('save-settings');
+  elements.refreshResult = document.getElementById('refresh-result');
+  elements.settingsStatus = document.getElementById('settings-status');
+  elements.debateId = document.getElementById('debate-id');
+  elements.resultStatus = document.getElementById('result-status');
+  elements.resultConfidence = document.getElementById('result-confidence');
+  elements.resultAnswer = document.getElementById('result-answer');
+  elements.resultError = document.getElementById('result-error');
 }
 
 async function initializePopup() {
@@ -336,27 +341,30 @@ async function initializePopup() {
   renderState(state);
   maybePoll(state);
 
-  elements.saveSettings.addEventListener("click", () => {
+  elements.saveSettings.addEventListener('click', () => {
     void saveSettings();
   });
-  elements.refreshResult.addEventListener("click", () => {
+  elements.refreshResult.addEventListener('click', () => {
     void refreshDebateState();
   });
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === "local" && changes[STATE_KEY]) {
+    if (areaName === 'local' && changes[STATE_KEY]) {
       const nextState = changes[STATE_KEY].newValue || null;
       renderState(nextState);
       maybePoll(nextState);
       return;
     }
 
-    if (areaName === "sync" && (changes.apiUrl || changes.apiKey || changes.agents || changes.rounds)) {
+    if (
+      areaName === 'sync' &&
+      (changes.apiUrl || changes.apiKey || changes.agents || changes.rounds)
+    ) {
       void chrome.storage.sync.get(DEFAULT_SETTINGS).then(populateSettings);
     }
   });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener('DOMContentLoaded', () => {
   void initializePopup();
 });

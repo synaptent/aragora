@@ -13,6 +13,7 @@ from aragora.nomic.context_builder import (
     IndexedFile,
     NomicContextBuilder,
 )
+from aragora.nomic.repository_profile import RepositoryStateError
 
 
 @pytest.fixture
@@ -242,3 +243,35 @@ class TestNomicContextBuilder:
         index = await builder.build_index()
         assert index.total_files == 1
         assert index.get_file("aragora/example.py") is not None
+
+
+class TestArtifactPathGuard:
+    """Tests for the runtime-artifact ignore guard."""
+
+    def _git(self, repo: Path, *args: str) -> None:
+        subprocess.run(
+            ["git", "-C", str(repo), *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    def test_unignored_nomic_runtime_path_raises_repository_state_error(self, tmp_path: Path):
+        self._git(tmp_path, "init")
+        self._git(tmp_path, "config", "user.email", "guard@example.test")
+        self._git(tmp_path, "config", "user.name", "Guard Test")
+        (tmp_path / "README.md").write_text("# Example\n", encoding="utf-8")
+        self._git(tmp_path, "add", "README.md")
+        self._git(tmp_path, "commit", "-m", "initial")
+        runtime_path = ".nomic/context/packs"
+
+        with pytest.raises(
+            RepositoryStateError, match=r"must ignore \.nomic runtime artifact path"
+        ):
+            NomicContextBuilder._assert_artifact_paths_ignored(tmp_path, [runtime_path])
+
+    def test_ignored_nomic_runtime_path_passes_guard(self, tmp_path: Path):
+        self._git(tmp_path, "init")
+        (tmp_path / ".gitignore").write_text(".nomic/\n", encoding="utf-8")
+
+        NomicContextBuilder._assert_artifact_paths_ignored(tmp_path, [".nomic/context/packs"])

@@ -32,7 +32,7 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>({
   const getFocusableElements = useCallback(() => {
     if (!containerRef.current) return [];
     return Array.from(
-      containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)
+      containerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS),
     ).filter((el) => el.offsetParent !== null); // Filter out hidden elements
   }, []);
 

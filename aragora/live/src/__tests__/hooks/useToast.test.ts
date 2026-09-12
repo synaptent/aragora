@@ -69,7 +69,7 @@ describe('useToast', () => {
         result.current.showToast('Toast 3');
       });
 
-      const ids = result.current.toasts.map(t => t.id);
+      const ids = result.current.toasts.map((t) => t.id);
       const uniqueIds = new Set(ids);
       expect(uniqueIds.size).toBe(3);
     });
@@ -182,7 +182,7 @@ describe('useToast', () => {
       });
 
       expect(result.current.toasts).toHaveLength(2);
-      expect(result.current.toasts.map(t => t.message)).toEqual(['Toast 1', 'Toast 3']);
+      expect(result.current.toasts.map((t) => t.message)).toEqual(['Toast 1', 'Toast 3']);
     });
 
     it('should clear timeout when removing toast', () => {
@@ -288,7 +288,7 @@ describe('useToast', () => {
   describe('toast types', () => {
     const types: ToastType[] = ['success', 'error', 'warning', 'info'];
 
-    types.forEach(type => {
+    types.forEach((type) => {
       it(`should support ${type} toast type`, () => {
         const { result } = renderHook(() => useToast());
 
@@ -311,11 +311,7 @@ describe('useToast', () => {
         result.current.showToast('Third');
       });
 
-      expect(result.current.toasts.map(t => t.message)).toEqual([
-        'First',
-        'Second',
-        'Third',
-      ]);
+      expect(result.current.toasts.map((t) => t.message)).toEqual(['First', 'Second', 'Third']);
     });
   });
 });

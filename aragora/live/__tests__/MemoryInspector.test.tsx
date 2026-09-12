@@ -22,10 +22,34 @@ global.fetch = mockFetch;
 // Mock data
 const mockTierStats = {
   tiers: {
-    fast: { count: 50, avg_importance: 0.75, avg_consolidation: 0.4, oldest_entry: '2026-01-01', newest_entry: '2026-01-05' },
-    medium: { count: 120, avg_importance: 0.6, avg_consolidation: 0.6, oldest_entry: '2025-12-15', newest_entry: '2026-01-05' },
-    slow: { count: 300, avg_importance: 0.5, avg_consolidation: 0.8, oldest_entry: '2025-11-01', newest_entry: '2026-01-04' },
-    glacial: { count: 80, avg_importance: 0.45, avg_consolidation: 0.9, oldest_entry: '2025-06-01', newest_entry: '2026-01-01' },
+    fast: {
+      count: 50,
+      avg_importance: 0.75,
+      avg_consolidation: 0.4,
+      oldest_entry: '2026-01-01',
+      newest_entry: '2026-01-05',
+    },
+    medium: {
+      count: 120,
+      avg_importance: 0.6,
+      avg_consolidation: 0.6,
+      oldest_entry: '2025-12-15',
+      newest_entry: '2026-01-05',
+    },
+    slow: {
+      count: 300,
+      avg_importance: 0.5,
+      avg_consolidation: 0.8,
+      oldest_entry: '2025-11-01',
+      newest_entry: '2026-01-04',
+    },
+    glacial: {
+      count: 80,
+      avg_importance: 0.45,
+      avg_consolidation: 0.9,
+      oldest_entry: '2025-06-01',
+      newest_entry: '2026-01-01',
+    },
   },
 };
 
@@ -65,22 +89,13 @@ const mockConsolidationResult = {
 function setupSuccessfulFetch() {
   mockFetch.mockImplementation((url: string, options?: RequestInit) => {
     if (url.includes('/api/memory/tier-stats')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockTierStats),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockTierStats) });
     }
     if (url.includes('/api/memory/continuum/retrieve')) {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ memories: mockMemories }),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ memories: mockMemories }) });
     }
     if (url.includes('/api/memory/continuum/consolidate') && options?.method === 'POST') {
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve(mockConsolidationResult),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(mockConsolidationResult) });
     }
     return Promise.resolve({ ok: false });
   });
@@ -110,9 +125,7 @@ describe('MemoryInspector', () => {
       await renderWithTierStats();
 
       await waitFor(() => {
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/memory/tier-stats')
-        );
+        expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/api/memory/tier-stats'));
       });
     });
   });
@@ -236,7 +249,7 @@ describe('MemoryInspector', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/memory/continuum/retrieve?query=reasoning')
+          expect.stringContaining('/api/memory/continuum/retrieve?query=reasoning'),
         );
       });
     });
@@ -251,7 +264,7 @@ describe('MemoryInspector', () => {
 
       await waitFor(() => {
         const searchCall = mockFetch.mock.calls.find((call: string[]) =>
-          call[0].includes('/api/memory/continuum/retrieve')
+          call[0].includes('/api/memory/continuum/retrieve'),
         );
         expect(searchCall[0]).toContain('tiers=fast,medium');
       });
@@ -355,7 +368,7 @@ describe('MemoryInspector', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/memory/continuum/consolidate'),
-          expect.objectContaining({ method: 'POST' })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -419,14 +432,14 @@ describe('MemoryInspector', () => {
       });
 
       const initialCalls = mockFetch.mock.calls.filter((call: string[]) =>
-        call[0].includes('/api/memory/tier-stats')
+        call[0].includes('/api/memory/tier-stats'),
       ).length;
 
       fireEvent.click(screen.getByText('CONSOLIDATE'));
 
       await waitFor(() => {
         const afterCalls = mockFetch.mock.calls.filter((call: string[]) =>
-          call[0].includes('/api/memory/tier-stats')
+          call[0].includes('/api/memory/tier-stats'),
         ).length;
         expect(afterCalls).toBeGreaterThan(initialCalls);
       });

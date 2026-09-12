@@ -27,14 +27,9 @@ jest.mock('next/link', () => {
   };
 });
 
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
-jest.mock('@/components/ThemeToggle', () => ({
-  ThemeToggle: () => <div>ThemeToggle</div>,
-}));
+jest.mock('@/components/ThemeToggle', () => ({ ThemeToggle: () => <div>ThemeToggle</div> }));
 
 jest.mock('@/components/BackendSelector', () => ({
   BackendSelector: () => <div>BackendSelector</div>,
@@ -45,9 +40,7 @@ function jsonResponse(data: unknown, ok = true, status = ok ? 200 : 500): Respon
   return {
     ok,
     status,
-    headers: {
-      get: () => 'application/json',
-    },
+    headers: { get: () => 'application/json' },
     json: async () => data,
   } as Response;
 }
@@ -67,19 +60,13 @@ function mockSecurityBootstrap() {
       encryption_service: { available: true, latency_ms: 12 },
       key_age_days: 7,
       rotation_recommended: false,
-      compliance: {
-        soc2_compliant: true,
-        key_rotation_policy: '90 days',
-      },
+      compliance: { soc2_compliant: true, key_rotation_policy: '90 days' },
     },
     keys: { keys: [] },
   };
 }
 
-function installFetchMock(options?: {
-  startResponse?: unknown;
-  pollResponse?: unknown;
-}) {
+function installFetchMock(options?: { startResponse?: unknown; pollResponse?: unknown }) {
   const bootstrap = mockSecurityBootstrap();
   const startResponse = options?.startResponse ?? { scan_id: 'scan-123' };
   const pollResponse = options?.pollResponse ?? {
@@ -140,10 +127,10 @@ describe('SecurityAdminPage', () => {
 
   it('builds secrets scan URLs with the required repo segment', () => {
     expect(buildSecretsScanUrl('http://backend.test')).toBe(
-      'http://backend.test/api/v1/codebase/default/scan/secrets'
+      'http://backend.test/api/v1/codebase/default/scan/secrets',
     );
     expect(buildSecretsScanUrl('http://backend.test', 'scan-123')).toBe(
-      'http://backend.test/api/v1/codebase/default/scan/secrets/scan-123'
+      'http://backend.test/api/v1/codebase/default/scan/secrets/scan-123',
     );
   });
 
@@ -166,7 +153,7 @@ describe('SecurityAdminPage', () => {
             include_history: false,
             history_depth: 100,
           }),
-        })
+        }),
       );
     });
 
@@ -178,10 +165,8 @@ describe('SecurityAdminPage', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         buildSecretsScanUrl('http://backend.test', 'scan-123'),
         expect.objectContaining({
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-          }),
-        })
+          headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        }),
       );
     });
 

@@ -42,9 +42,7 @@ export function GmailConnectionCard({
       {status?.connected ? (
         <div className="space-y-2">
           <p className="text-text-muted text-xs">{status.email_address}</p>
-          <p className="text-text-muted text-xs">
-            {status.indexed_count || 0} messages indexed
-          </p>
+          <p className="text-text-muted text-xs">{status.indexed_count || 0} messages indexed</p>
           <div className="flex gap-2">
             {onSync && (
               <button

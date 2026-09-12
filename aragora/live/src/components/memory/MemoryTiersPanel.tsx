@@ -26,10 +26,7 @@ interface TiersResponse {
 interface PressureResponse {
   pressure: number;
   status: string;
-  tier_utilization: Record<
-    string,
-    { count: number; limit: number; utilization: number }
-  >;
+  tier_utilization: Record<string, { count: number; limit: number; utilization: number }>;
   total_memories: number;
   cleanup_recommended: boolean;
 }
@@ -72,7 +69,11 @@ const PRESSURE_STATUS_STYLES: Record<string, { text: string; bg: string }> = {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function PressureIndicator({ pressure, status, cleanupRecommended }: {
+function PressureIndicator({
+  pressure,
+  status,
+  cleanupRecommended,
+}: {
   pressure: number;
   status: string;
   cleanupRecommended: boolean;
@@ -80,16 +81,21 @@ function PressureIndicator({ pressure, status, cleanupRecommended }: {
   const pct = Math.round(pressure * 100);
   const statusStyle = PRESSURE_STATUS_STYLES[status] ?? PRESSURE_STATUS_STYLES.normal;
   const barColor =
-    pct > 90 ? 'bg-red-500' :
-    pct > 70 ? 'bg-orange-500' :
-    pct > 50 ? 'bg-yellow-500' :
-    'bg-green-500';
+    pct > 90
+      ? 'bg-red-500'
+      : pct > 70
+        ? 'bg-orange-500'
+        : pct > 50
+          ? 'bg-yellow-500'
+          : 'bg-green-500';
 
   return (
     <div className="p-4 bg-surface border border-border rounded-lg">
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-xs font-theme-data text-text-muted uppercase">Overall Pressure</h4>
-        <span className={`px-2 py-0.5 text-[10px] font-theme-data rounded ${statusStyle.bg} ${statusStyle.text}`}>
+        <span
+          className={`px-2 py-0.5 text-[10px] font-theme-data rounded ${statusStyle.bg} ${statusStyle.text}`}
+        >
           {status.toUpperCase()}
         </span>
       </div>
@@ -124,26 +130,27 @@ function TierCard({ tier }: { tier: TierInfo }) {
 
   // Determine utilization urgency
   const urgencyColor =
-    pct > 90 ? 'text-red-400' :
-    pct > 70 ? 'text-orange-400' :
-    pct > 50 ? 'text-yellow-400' :
-    'text-green-400';
+    pct > 90
+      ? 'text-red-400'
+      : pct > 70
+        ? 'text-orange-400'
+        : pct > 50
+          ? 'text-yellow-400'
+          : 'text-green-400';
 
   return (
-    <div className={`p-4 bg-surface border ${colors.border} rounded-lg hover:shadow-lg ${colors.glow} transition-all`}>
+    <div
+      className={`p-4 bg-surface border ${colors.border} rounded-lg hover:shadow-lg ${colors.glow} transition-all`}
+    >
       {/* Tier header */}
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h4 className={`text-sm font-theme-data font-bold ${colors.text}`}>
-            {tier.name}
-          </h4>
+          <h4 className={`text-sm font-theme-data font-bold ${colors.text}`}>{tier.name}</h4>
           <p className="text-[10px] text-text-muted">{tier.description}</p>
         </div>
         <div className="text-right">
           <div className="text-xs font-theme-data text-text-muted">TTL</div>
-          <div className={`text-sm font-theme-data font-bold ${colors.text}`}>
-            {tier.ttl_human}
-          </div>
+          <div className={`text-sm font-theme-data font-bold ${colors.text}`}>{tier.ttl_human}</div>
         </div>
       </div>
 
@@ -190,7 +197,10 @@ function TierCard({ tier }: { tier: TierInfo }) {
   );
 }
 
-function TiersSummary({ totalMemories, transitions }: {
+function TiersSummary({
+  totalMemories,
+  transitions,
+}: {
   totalMemories: number;
   transitions: number;
 }) {
@@ -217,18 +227,14 @@ export function MemoryTiersPanel() {
     error: tiersError,
     isLoading: tiersLoading,
     mutate: refreshTiers,
-  } = useSWRFetch<TiersResponse>('/api/v1/memory/tiers', {
-    refreshInterval: 30000,
-  });
+  } = useSWRFetch<TiersResponse>('/api/v1/memory/tiers', { refreshInterval: 30000 });
 
   // Fetch memory pressure
   const {
     data: pressureData,
     error: pressureError,
     isLoading: pressureLoading,
-  } = useSWRFetch<PressureResponse>('/api/v1/memory/pressure', {
-    refreshInterval: 30000,
-  });
+  } = useSWRFetch<PressureResponse>('/api/v1/memory/pressure', { refreshInterval: 30000 });
 
   const tiers = tiersData?.tiers ?? [];
   const isLoading = tiersLoading || pressureLoading;

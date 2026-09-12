@@ -28,8 +28,9 @@ export function QuickDebatePanel() {
 
   const [result, setResult] = useState<string | null>(null);
 
-  const defaultQuestion =
-    selectedTemplate?.id ? DEFAULT_QUESTIONS[selectedTemplate.id] ?? '' : '';
+  const defaultQuestion = selectedTemplate?.id
+    ? (DEFAULT_QUESTIONS[selectedTemplate.id] ?? '')
+    : '';
   const question = firstDebateTopic || defaultQuestion;
 
   const handleStartDebate = async () => {
@@ -82,7 +83,7 @@ export function QuickDebatePanel() {
               data.final_answer ||
               data.consensus?.final_answer ||
               data.consensus?.conclusion ||
-              'Debate completed.'
+              'Debate completed.',
           );
           setDebateStatus('completed');
           updateProgress({ firstDebateCompleted: true, receiptViewed: true });
@@ -141,9 +142,7 @@ export function QuickDebatePanel() {
       ) : debateStatus === 'creating' || debateStatus === 'running' ? (
         <div className="py-8 text-center">
           <div className="text-sm font-theme-data text-[var(--acid-green)] animate-pulse mb-2">
-            {debateStatus === 'creating'
-              ? '> ASSEMBLING AGENTS...'
-              : '> AGENTS ARE DEBATING...'}
+            {debateStatus === 'creating' ? '> ASSEMBLING AGENTS...' : '> AGENTS ARE DEBATING...'}
           </div>
           <p className="text-xs font-theme-data text-[var(--text-muted)]">
             {debateStatus === 'running'
@@ -171,7 +170,8 @@ export function QuickDebatePanel() {
             </div>
           )}
           <p className="text-xs font-theme-data text-[var(--text-muted)]">
-            You can review full results, agent arguments, and the decision receipt from the dashboard.
+            You can review full results, agent arguments, and the decision receipt from the
+            dashboard.
           </p>
         </div>
       )}

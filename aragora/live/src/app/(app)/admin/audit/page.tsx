@@ -43,22 +43,40 @@ export default function AuditAdminPage() {
         <div className="border-b border-[var(--accent)]/20 bg-surface/40">
           <div className="container mx-auto px-4">
             <div className="flex gap-4 overflow-x-auto">
-              <Link href="/admin" className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors">
+              <Link
+                href="/admin"
+                className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors"
+              >
                 SYSTEM
               </Link>
-              <Link href="/admin/organizations" className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors">
+              <Link
+                href="/admin/organizations"
+                className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors"
+              >
                 ORGANIZATIONS
               </Link>
-              <Link href="/admin/users" className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors">
+              <Link
+                href="/admin/users"
+                className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors"
+              >
                 USERS
               </Link>
-              <Link href="/admin/personas" className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors">
+              <Link
+                href="/admin/personas"
+                className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors"
+              >
                 PERSONAS
               </Link>
-              <Link href="/admin/audit" className="px-4 py-2 font-theme-data text-sm text-[var(--accent)] border-b-2 border-[var(--accent)]">
+              <Link
+                href="/admin/audit"
+                className="px-4 py-2 font-theme-data text-sm text-[var(--accent)] border-b-2 border-[var(--accent)]"
+              >
                 AUDIT
               </Link>
-              <Link href="/admin/training" className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors">
+              <Link
+                href="/admin/training"
+                className="px-4 py-2 font-theme-data text-sm text-text-muted hover:text-text transition-colors"
+              >
                 TRAINING
               </Link>
             </div>
@@ -68,9 +86,7 @@ export default function AuditAdminPage() {
         {/* Content */}
         <div className="container mx-auto px-4 py-6">
           <div className="mb-6">
-            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">
-              Audit Log Viewer
-            </h1>
+            <h1 className="text-2xl font-theme-data text-[var(--accent)] mb-2">Audit Log Viewer</h1>
             <p className="text-text-muted font-theme-data text-sm">
               View, filter, and export system audit events for compliance and security.
             </p>
@@ -92,12 +108,8 @@ export default function AuditAdminPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // AUDIT ADMINISTRATION
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // AUDIT ADMINISTRATION</p>
         </footer>
       </main>
     </>

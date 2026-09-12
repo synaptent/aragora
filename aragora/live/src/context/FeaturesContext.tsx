@@ -43,11 +43,7 @@ interface FeaturesProviderProps {
 export function FeaturesProvider({ children, apiBase }: FeaturesProviderProps) {
   const featuresState = useFeatures(apiBase);
 
-  return (
-    <FeaturesContext.Provider value={featuresState}>
-      {children}
-    </FeaturesContext.Provider>
-  );
+  return <FeaturesContext.Provider value={featuresState}>{children}</FeaturesContext.Provider>;
 }
 
 /**

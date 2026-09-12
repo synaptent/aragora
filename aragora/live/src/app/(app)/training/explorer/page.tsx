@@ -15,20 +15,13 @@ interface TrainingStats {
   average_confidence: number;
   topic_distribution: Record<string, number>;
   agent_distribution: Record<string, number>;
-  date_range: {
-    earliest: string;
-    latest: string;
-  };
+  date_range: { earliest: string; latest: string };
 }
 
 interface FormatSchema {
   name: string;
   description: string;
-  fields: Array<{
-    name: string;
-    type: string;
-    description: string;
-  }>;
+  fields: Array<{ name: string; type: string; description: string }>;
   example: Record<string, unknown>;
 }
 
@@ -131,9 +124,7 @@ export default function TrainingExplorerPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const params = new URLSearchParams({
-        min_confidence: confidenceThreshold.toString(),
-      });
+      const params = new URLSearchParams({ min_confidence: confidenceThreshold.toString() });
       const response = await fetch(`${backendUrl}/api/training/export/${selectedFormat}?${params}`);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -164,15 +155,21 @@ export default function TrainingExplorerPage() {
           {/* Overview Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="p-4 bg-surface border border-border rounded-lg text-center">
-              <div className="text-3xl font-theme-data font-bold text-[var(--accent)]">{stats.total_debates}</div>
+              <div className="text-3xl font-theme-data font-bold text-[var(--accent)]">
+                {stats.total_debates}
+              </div>
               <div className="text-xs text-text-muted mt-1">Total Debates</div>
             </div>
             <div className="p-4 bg-surface border border-border rounded-lg text-center">
-              <div className="text-3xl font-theme-data font-bold text-text">{stats.total_messages}</div>
+              <div className="text-3xl font-theme-data font-bold text-text">
+                {stats.total_messages}
+              </div>
               <div className="text-xs text-text-muted mt-1">Total Messages</div>
             </div>
             <div className="p-4 bg-surface border border-border rounded-lg text-center">
-              <div className="text-3xl font-theme-data font-bold text-text">{stats.debates_with_consensus}</div>
+              <div className="text-3xl font-theme-data font-bold text-text">
+                {stats.debates_with_consensus}
+              </div>
               <div className="text-xs text-text-muted mt-1">With Consensus</div>
             </div>
             <div className="p-4 bg-surface border border-border rounded-lg text-center">
@@ -186,9 +183,12 @@ export default function TrainingExplorerPage() {
           {/* Date Range */}
           {stats.date_range && (
             <div className="p-4 bg-surface border border-border rounded-lg">
-              <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-2">Date Range</h3>
+              <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-2">
+                Date Range
+              </h3>
               <div className="text-sm font-theme-data text-text">
-                {new Date(stats.date_range.earliest).toLocaleDateString()} - {new Date(stats.date_range.latest).toLocaleDateString()}
+                {new Date(stats.date_range.earliest).toLocaleDateString()} -{' '}
+                {new Date(stats.date_range.latest).toLocaleDateString()}
               </div>
             </div>
           )}
@@ -196,7 +196,9 @@ export default function TrainingExplorerPage() {
           {/* Topic Distribution */}
           {stats.topic_distribution && Object.keys(stats.topic_distribution).length > 0 && (
             <div className="p-4 bg-surface border border-border rounded-lg">
-              <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Topic Distribution</h3>
+              <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+                Topic Distribution
+              </h3>
               <div className="space-y-2">
                 {Object.entries(stats.topic_distribution)
                   .sort(([, a], [, b]) => b - a)
@@ -226,7 +228,9 @@ export default function TrainingExplorerPage() {
           {/* Agent Distribution */}
           {stats.agent_distribution && Object.keys(stats.agent_distribution).length > 0 && (
             <div className="p-4 bg-surface border border-border rounded-lg">
-              <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Agent Distribution</h3>
+              <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+                Agent Distribution
+              </h3>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(stats.agent_distribution)
                   .sort(([, a], [, b]) => b - a)
@@ -274,7 +278,9 @@ export default function TrainingExplorerPage() {
               onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
               className="w-20"
             />
-            <span className="text-xs font-theme-data text-text">{(confidenceThreshold * 100).toFixed(0)}%</span>
+            <span className="text-xs font-theme-data text-text">
+              {(confidenceThreshold * 100).toFixed(0)}%
+            </span>
           </div>
         </div>
       </div>
@@ -301,7 +307,9 @@ export default function TrainingExplorerPage() {
       {/* Preview Records */}
       {previewLoading ? (
         <div className="flex items-center justify-center py-8">
-          <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading preview...</div>
+          <div className="text-[var(--accent)] font-theme-data animate-pulse">
+            Loading preview...
+          </div>
         </div>
       ) : previewData.length === 0 ? (
         <div className="p-8 bg-surface border border-border rounded-lg text-center">
@@ -313,16 +321,16 @@ export default function TrainingExplorerPage() {
             <div key={record.id || idx} className="p-4 bg-surface border border-border rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${
-                    record.type === 'sft'
-                      ? 'bg-blue-500/20 text-blue-400'
-                      : 'bg-purple-500/20 text-purple-400'
-                  }`}>
+                  <span
+                    className={`px-2 py-0.5 text-xs font-theme-data rounded ${
+                      record.type === 'sft'
+                        ? 'bg-blue-500/20 text-blue-400'
+                        : 'bg-purple-500/20 text-purple-400'
+                    }`}
+                  >
                     {record.type?.toUpperCase() || selectedFormat.toUpperCase()}
                   </span>
-                  {record.topic && (
-                    <span className="text-xs text-text-muted">{record.topic}</span>
-                  )}
+                  {record.topic && <span className="text-xs text-text-muted">{record.topic}</span>}
                 </div>
                 <span className="text-xs font-theme-data text-text-muted">
                   Confidence: {(record.confidence * 100).toFixed(0)}%
@@ -336,7 +344,8 @@ export default function TrainingExplorerPage() {
                     <div>
                       <div className="text-xs text-text-muted mb-1">Input:</div>
                       <div className="text-sm text-text bg-bg p-2 rounded font-theme-data overflow-x-auto">
-                        {record.input.substring(0, 300)}{record.input.length > 300 ? '...' : ''}
+                        {record.input.substring(0, 300)}
+                        {record.input.length > 300 ? '...' : ''}
                       </div>
                     </div>
                   )}
@@ -344,7 +353,8 @@ export default function TrainingExplorerPage() {
                     <div>
                       <div className="text-xs text-text-muted mb-1">Output:</div>
                       <div className="text-sm text-text bg-bg p-2 rounded font-theme-data overflow-x-auto">
-                        {record.output.substring(0, 300)}{record.output.length > 300 ? '...' : ''}
+                        {record.output.substring(0, 300)}
+                        {record.output.length > 300 ? '...' : ''}
                       </div>
                     </div>
                   )}
@@ -358,7 +368,8 @@ export default function TrainingExplorerPage() {
                     <div>
                       <div className="text-xs text-[var(--accent)] mb-1">Chosen:</div>
                       <div className="text-sm text-text bg-bg p-2 rounded font-theme-data overflow-x-auto">
-                        {record.chosen.substring(0, 200)}{record.chosen.length > 200 ? '...' : ''}
+                        {record.chosen.substring(0, 200)}
+                        {record.chosen.length > 200 ? '...' : ''}
                       </div>
                     </div>
                   )}
@@ -366,7 +377,8 @@ export default function TrainingExplorerPage() {
                     <div>
                       <div className="text-xs text-red-400 mb-1">Rejected:</div>
                       <div className="text-sm text-text bg-bg p-2 rounded font-theme-data overflow-x-auto">
-                        {record.rejected.substring(0, 200)}{record.rejected.length > 200 ? '...' : ''}
+                        {record.rejected.substring(0, 200)}
+                        {record.rejected.length > 200 ? '...' : ''}
                       </div>
                     </div>
                   )}
@@ -381,15 +393,21 @@ export default function TrainingExplorerPage() {
 
   const renderExportTab = () => (
     <div className="space-y-6">
-      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">Export Training Data</h2>
+      <h2 className="text-xl font-theme-data font-bold text-[var(--accent)]">
+        Export Training Data
+      </h2>
 
       <div className="p-4 bg-surface border border-border rounded-lg">
-        <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-4">Export Settings</h3>
+        <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-4">
+          Export Settings
+        </h3>
 
         <div className="space-y-4">
           {/* Format Selection */}
           <div>
-            <label className="block text-xs font-theme-data text-text-muted uppercase mb-2">Format</label>
+            <label className="block text-xs font-theme-data text-text-muted uppercase mb-2">
+              Format
+            </label>
             <div className="flex gap-2">
               {(['sft', 'dpo', 'gauntlet'] as FormatType[]).map((fmt) => (
                 <button
@@ -450,19 +468,30 @@ export default function TrainingExplorerPage() {
 
       {/* Format Info */}
       <div className="p-4 bg-surface border border-border rounded-lg">
-        <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">Format Details</h3>
+        <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase mb-3">
+          Format Details
+        </h3>
         <div className="space-y-3 text-sm text-text-muted">
           <div>
             <div className="font-theme-data text-text">SFT (Supervised Fine-Tuning)</div>
-            <p>Input-output pairs from winning debate responses. Best for teaching models debate patterns.</p>
+            <p>
+              Input-output pairs from winning debate responses. Best for teaching models debate
+              patterns.
+            </p>
           </div>
           <div>
             <div className="font-theme-data text-text">DPO (Direct Preference Optimization)</div>
-            <p>Chosen/rejected pairs showing which responses won debates. Best for alignment training.</p>
+            <p>
+              Chosen/rejected pairs showing which responses won debates. Best for alignment
+              training.
+            </p>
           </div>
           <div>
             <div className="font-theme-data text-text">Gauntlet (Adversarial)</div>
-            <p>Attack patterns and vulnerabilities from red-team testing. Best for robustness training.</p>
+            <p>
+              Attack patterns and vulnerabilities from red-team testing. Best for robustness
+              training.
+            </p>
           </div>
         </div>
       </div>
@@ -495,13 +524,18 @@ export default function TrainingExplorerPage() {
         {/* Title */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <Link href="/training" className="text-[var(--accent)] hover:underline font-theme-data text-sm">
+            <Link
+              href="/training"
+              className="text-[var(--accent)] hover:underline font-theme-data text-sm"
+            >
               Training
             </Link>
             <span className="text-text-muted">/</span>
             <span className="text-text font-theme-data text-sm">Explorer</span>
           </div>
-          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">Training Data Explorer</h1>
+          <h1 className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-2">
+            Training Data Explorer
+          </h1>
           <p className="text-text-muted font-theme-data text-sm">
             Browse, preview, and export debate data for model fine-tuning
           </p>

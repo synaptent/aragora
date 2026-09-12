@@ -5,13 +5,7 @@
  */
 
 export type SearchCategory =
-  | 'all'
-  | 'debates'
-  | 'agents'
-  | 'documents'
-  | 'knowledge'
-  | 'pages'
-  | 'actions';
+  'all' | 'debates' | 'agents' | 'documents' | 'knowledge' | 'pages' | 'actions';
 
 export interface SearchResult {
   id: string;

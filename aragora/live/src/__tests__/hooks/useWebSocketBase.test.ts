@@ -120,9 +120,7 @@ describe('validateWsUrl', () => {
 describe('useWebSocketBase', () => {
   describe('initial state', () => {
     it('starts disconnected when enabled', () => {
-      const { result } = renderHook(() =>
-        useWebSocketBase({ wsUrl: 'wss://test.com/ws' })
-      );
+      const { result } = renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws' }));
 
       // Initially connecting
       expect(result.current.status).toBe('connecting');
@@ -133,7 +131,7 @@ describe('useWebSocketBase', () => {
 
     it('stays disconnected when disabled', () => {
       const { result } = renderHook(() =>
-        useWebSocketBase({ wsUrl: 'wss://test.com/ws', enabled: false })
+        useWebSocketBase({ wsUrl: 'wss://test.com/ws', enabled: false }),
       );
 
       expect(result.current.status).toBe('disconnected');
@@ -142,9 +140,7 @@ describe('useWebSocketBase', () => {
     });
 
     it('shows error status for invalid URL', () => {
-      const { result } = renderHook(() =>
-        useWebSocketBase({ wsUrl: 'invalid-url' })
-      );
+      const { result } = renderHook(() => useWebSocketBase({ wsUrl: 'invalid-url' }));
 
       expect(result.current.status).toBe('error');
       expect(result.current.error).toBe('Invalid WebSocket URL protocol (must be ws:// or wss://)');
@@ -155,10 +151,7 @@ describe('useWebSocketBase', () => {
     it('transitions to connected on open', () => {
       const onConnect = jest.fn();
       const { result } = renderHook(() =>
-        useWebSocketBase({
-          wsUrl: 'wss://test.com/ws',
-          onConnect,
-        })
+        useWebSocketBase({ wsUrl: 'wss://test.com/ws', onConnect }),
       );
 
       expect(result.current.status).toBe('connecting');
@@ -174,12 +167,7 @@ describe('useWebSocketBase', () => {
 
     it('sends subscribe message on connect', () => {
       const subscribeMessage = { type: 'subscribe', channel: 'test' };
-      renderHook(() =>
-        useWebSocketBase({
-          wsUrl: 'wss://test.com/ws',
-          subscribeMessage,
-        })
-      );
+      renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws', subscribeMessage }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -192,12 +180,7 @@ describe('useWebSocketBase', () => {
 
     it('calls onDisconnect when connection closes', () => {
       const onDisconnect = jest.fn();
-      renderHook(() =>
-        useWebSocketBase({
-          wsUrl: 'wss://test.com/ws',
-          onDisconnect,
-        })
-      );
+      renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws', onDisconnect }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -212,12 +195,7 @@ describe('useWebSocketBase', () => {
 
     it('calls onError when WebSocket errors', () => {
       const onError = jest.fn();
-      renderHook(() =>
-        useWebSocketBase({
-          wsUrl: 'wss://test.com/ws',
-          onError,
-        })
-      );
+      renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws', onError }));
 
       act(() => {
         getLatestWs().simulateError();
@@ -230,12 +208,7 @@ describe('useWebSocketBase', () => {
   describe('message handling', () => {
     it('calls onEvent with parsed message', () => {
       const onEvent = jest.fn();
-      renderHook(() =>
-        useWebSocketBase({
-          wsUrl: 'wss://test.com/ws',
-          onEvent,
-        })
-      );
+      renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws', onEvent }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -247,12 +220,7 @@ describe('useWebSocketBase', () => {
 
     it('deduplicates messages with same seq', () => {
       const onEvent = jest.fn();
-      renderHook(() =>
-        useWebSocketBase({
-          wsUrl: 'wss://test.com/ws',
-          onEvent,
-        })
-      );
+      renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws', onEvent }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -267,9 +235,7 @@ describe('useWebSocketBase', () => {
 
   describe('send', () => {
     it('sends message when connected', () => {
-      const { result } = renderHook(() =>
-        useWebSocketBase({ wsUrl: 'wss://test.com/ws' })
-      );
+      const { result } = renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -285,7 +251,7 @@ describe('useWebSocketBase', () => {
 
     it('does not send when disconnected', () => {
       const { result } = renderHook(() =>
-        useWebSocketBase({ wsUrl: 'wss://test.com/ws', enabled: false })
+        useWebSocketBase({ wsUrl: 'wss://test.com/ws', enabled: false }),
       );
 
       act(() => {
@@ -299,9 +265,7 @@ describe('useWebSocketBase', () => {
 
   describe('manual controls', () => {
     it('disconnect closes the connection', () => {
-      const { result } = renderHook(() =>
-        useWebSocketBase({ wsUrl: 'wss://test.com/ws' })
-      );
+      const { result } = renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -317,9 +281,7 @@ describe('useWebSocketBase', () => {
     });
 
     it('reconnect resets attempt counter and triggers connection', () => {
-      const { result } = renderHook(() =>
-        useWebSocketBase({ wsUrl: 'wss://test.com/ws' })
-      );
+      const { result } = renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws' }));
 
       // Simulate some failed attempts
       act(() => {
@@ -343,9 +305,7 @@ describe('useWebSocketBase', () => {
 
   describe('reconnection', () => {
     it('schedules reconnect on abnormal close', () => {
-      renderHook(() =>
-        useWebSocketBase({ wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws' }));
 
       const initialWsCount = MockWebSocket.instances.length;
 
@@ -367,9 +327,7 @@ describe('useWebSocketBase', () => {
     });
 
     it('does not reconnect on normal close (code 1000)', () => {
-      const { result } = renderHook(() =>
-        useWebSocketBase({ wsUrl: 'wss://test.com/ws' })
-      );
+      const { result } = renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -392,12 +350,7 @@ describe('useWebSocketBase', () => {
     });
 
     it('does not reconnect when autoReconnect is false', () => {
-      renderHook(() =>
-        useWebSocketBase({
-          wsUrl: 'wss://test.com/ws',
-          autoReconnect: false,
-        })
-      );
+      renderHook(() => useWebSocketBase({ wsUrl: 'wss://test.com/ws', autoReconnect: false }));
 
       const initialWsCount = MockWebSocket.instances.length;
 

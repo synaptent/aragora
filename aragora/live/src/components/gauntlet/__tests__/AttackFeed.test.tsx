@@ -9,7 +9,10 @@ const mockHookReturn = {
   error: null as string | null,
   phase: 'init',
   progress: 0,
-  agents: new Map() as Map<string, { name: string; status: string; attackCount: number; probeCount: number }>,
+  agents: new Map() as Map<
+    string,
+    { name: string; status: string; attackCount: number; probeCount: number }
+  >,
   findings: [] as Array<{
     finding_id: string;
     severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
@@ -39,15 +42,10 @@ const mockHookReturn = {
   reconnectAttempt: 0,
 };
 
-jest.mock('@/hooks/useGauntletWebSocket', () => ({
-  useGauntletWebSocket: () => mockHookReturn,
-}));
+jest.mock('@/hooks/useGauntletWebSocket', () => ({ useGauntletWebSocket: () => mockHookReturn }));
 
 describe('AttackFeed', () => {
-  const defaultProps = {
-    gauntletId: 'gauntlet-456',
-    wsUrl: 'wss://test.com/ws',
-  };
+  const defaultProps = { gauntletId: 'gauntlet-456', wsUrl: 'wss://test.com/ws' };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -135,18 +133,8 @@ describe('AttackFeed', () => {
     beforeEach(() => {
       mockHookReturn.status = 'streaming';
       mockHookReturn.events = [
-        {
-          type: 'gauntlet_start',
-          data: { input_type: 'prompt' },
-          timestamp: Date.now(),
-          seq: 1,
-        },
-        {
-          type: 'gauntlet_phase',
-          data: { phase: 'attack' },
-          timestamp: Date.now(),
-          seq: 2,
-        },
+        { type: 'gauntlet_start', data: { input_type: 'prompt' }, timestamp: Date.now(), seq: 1 },
+        { type: 'gauntlet_phase', data: { phase: 'attack' }, timestamp: Date.now(), seq: 2 },
         {
           type: 'gauntlet_agent_active',
           data: { agent: 'claude', role: 'attacker' },
@@ -245,7 +233,7 @@ describe('AttackFeed', () => {
           finding_id: 'f-1',
           severity: 'CRITICAL',
           title: 'Prompt Injection',
-        })
+        }),
       );
     });
   });
@@ -347,18 +335,8 @@ describe('AttackFeed', () => {
     beforeEach(() => {
       mockHookReturn.status = 'streaming';
       mockHookReturn.events = [
-        {
-          type: 'gauntlet_progress',
-          data: { progress: 0.5 },
-          timestamp: Date.now(),
-          seq: 1,
-        },
-        {
-          type: 'gauntlet_attack',
-          data: { agent: 'claude' },
-          timestamp: Date.now(),
-          seq: 2,
-        },
+        { type: 'gauntlet_progress', data: { progress: 0.5 }, timestamp: Date.now(), seq: 1 },
+        { type: 'gauntlet_attack', data: { agent: 'claude' }, timestamp: Date.now(), seq: 2 },
       ];
     });
 

@@ -25,7 +25,8 @@ const SETUP_PATHS: Array<{
     icon: '⚡',
     title: 'Automate Business Processes',
     subtitle: 'Save hours every week',
-    description: 'Set up automated workflows for recurring tasks like invoicing, follow-ups, and reports.',
+    description:
+      'Set up automated workflows for recurring tasks like invoicing, follow-ups, and reports.',
     features: [
       'Invoice generation workflows',
       'Customer follow-up automation',
@@ -40,7 +41,8 @@ const SETUP_PATHS: Array<{
     icon: '🎯',
     title: 'Make Better Decisions',
     subtitle: 'AI-powered consensus',
-    description: 'Run debates with multiple AI agents to stress-test ideas and reach informed decisions.',
+    description:
+      'Run debates with multiple AI agents to stress-test ideas and reach informed decisions.',
     features: [
       'Architecture reviews',
       'Feature prioritization',
@@ -56,12 +58,7 @@ const SETUP_PATHS: Array<{
     title: 'Ensure Compliance',
     subtitle: 'Security & audit ready',
     description: 'Run security assessments and compliance reviews with full audit trails.',
-    features: [
-      'Security assessments',
-      'Policy reviews',
-      'Risk analysis',
-      'Audit documentation',
-    ],
+    features: ['Security assessments', 'Policy reviews', 'Risk analysis', 'Audit documentation'],
     timeEstimate: '~8 min setup',
     recommended: ['healthcare', 'finance', 'saas'],
   },
@@ -91,7 +88,7 @@ export function SetupPathSelector({
 
   // Get recommended path based on business type
   const recommendedPath = SETUP_PATHS.find((p) =>
-    p.recommended?.includes(businessType || '')
+    p.recommended?.includes(businessType || ''),
   )?.path;
 
   return (

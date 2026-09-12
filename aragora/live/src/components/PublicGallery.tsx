@@ -23,7 +23,9 @@ export function PublicGallery() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [selectedEntry, setSelectedEntry] = useState<GalleryEntry | null>(null);
-  const [embedData, setEmbedData] = useState<{ embed_url: string; embed_html: string } | null>(null);
+  const [embedData, setEmbedData] = useState<{ embed_url: string; embed_html: string } | null>(
+    null,
+  );
   const [showEmbedModal, setShowEmbedModal] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -57,7 +59,7 @@ export function PublicGallery() {
         (entry) =>
           entry.title.toLowerCase().includes(query) ||
           entry.summary.toLowerCase().includes(query) ||
-          entry.agents.some((agent) => agent.toLowerCase().includes(query))
+          entry.agents.some((agent) => agent.toLowerCase().includes(query)),
       );
     }
 
@@ -104,11 +106,7 @@ export function PublicGallery() {
   // Format date for display
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   // Format view count
@@ -674,7 +672,7 @@ export function PublicGallery() {
                     onClick={() =>
                       copyToClipboard(
                         `${window.location.origin}/debate/${selectedEntry.debate_id}`,
-                        'link'
+                        'link',
                       )
                     }
                   >
@@ -705,11 +703,7 @@ export function PublicGallery() {
 
                   <div className="embed-section">
                     <label>Embed HTML</label>
-                    <textarea
-                      className="embed-textarea"
-                      value={embedData.embed_html}
-                      readOnly
-                    />
+                    <textarea className="embed-textarea" value={embedData.embed_html} readOnly />
                     <button
                       className={`copy-btn ${copiedField === 'embedHtml' ? 'copied' : ''}`}
                       onClick={() => copyToClipboard(embedData.embed_html, 'embedHtml')}

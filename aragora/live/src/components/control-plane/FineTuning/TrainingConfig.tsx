@@ -37,11 +37,7 @@ const DEFAULT_PARAMS: TrainingParameters = {
   gradientCheckpointing: true,
 };
 
-export function TrainingConfig({
-  model,
-  onStartTraining,
-  className = '',
-}: TrainingConfigProps) {
+export function TrainingConfig({ model, onStartTraining, className = '' }: TrainingConfigProps) {
   const [params, setParams] = useState<TrainingParameters>({
     ...DEFAULT_PARAMS,
     jobName: `${model.vertical}_specialist_v1`,
@@ -50,9 +46,9 @@ export function TrainingConfig({
 
   const updateParam = <K extends keyof TrainingParameters>(
     key: K,
-    value: TrainingParameters[K]
+    value: TrainingParameters[K],
   ) => {
-    setParams(prev => ({ ...prev, [key]: value }));
+    setParams((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -62,7 +58,8 @@ export function TrainingConfig({
 
   const estimatedVRAM = () => {
     const baseVRAM = model.size.includes('34B') ? 40 : model.size.includes('7B') ? 8 : 2;
-    const quantMult = params.quantization === '4bit' ? 0.25 : params.quantization === '8bit' ? 0.5 : 1;
+    const quantMult =
+      params.quantization === '4bit' ? 0.25 : params.quantization === '8bit' ? 0.5 : 1;
     return Math.round(baseVRAM * quantMult);
   };
 
@@ -74,9 +71,7 @@ export function TrainingConfig({
         {/* Basic Settings */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-theme-data text-text-muted mb-1">
-              JOB NAME
-            </label>
+            <label className="block text-xs font-theme-data text-text-muted mb-1">JOB NAME</label>
             <input
               type="text"
               value={params.jobName}
@@ -102,9 +97,7 @@ export function TrainingConfig({
 
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-theme-data text-text-muted mb-1">
-              EPOCHS
-            </label>
+            <label className="block text-xs font-theme-data text-text-muted mb-1">EPOCHS</label>
             <select
               value={params.numEpochs}
               onChange={(e) => updateParam('numEpochs', Number(e.target.value))}
@@ -118,9 +111,7 @@ export function TrainingConfig({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-theme-data text-text-muted mb-1">
-              BATCH SIZE
-            </label>
+            <label className="block text-xs font-theme-data text-text-muted mb-1">BATCH SIZE</label>
             <select
               value={params.batchSize}
               onChange={(e) => updateParam('batchSize', Number(e.target.value))}
@@ -139,7 +130,9 @@ export function TrainingConfig({
             </label>
             <select
               value={params.quantization}
-              onChange={(e) => updateParam('quantization', e.target.value as TrainingParameters['quantization'])}
+              onChange={(e) =>
+                updateParam('quantization', e.target.value as TrainingParameters['quantization'])
+              }
               className="w-full px-3 py-2 bg-surface border border-border rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
             >
               <option value="4bit">4-bit (QLoRA)</option>
@@ -171,9 +164,7 @@ export function TrainingConfig({
             <h5 className="font-theme-data text-xs text-text-muted mb-3">LoRA CONFIGURATION</h5>
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">
-                  LoRA R
-                </label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">LoRA R</label>
                 <select
                   value={params.loraR}
                   onChange={(e) => updateParam('loraR', Number(e.target.value))}
@@ -217,7 +208,9 @@ export function TrainingConfig({
               </div>
             </div>
 
-            <h5 className="font-theme-data text-xs text-text-muted mt-4 mb-3">TRAINING PARAMETERS</h5>
+            <h5 className="font-theme-data text-xs text-text-muted mt-4 mb-3">
+              TRAINING PARAMETERS
+            </h5>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-theme-data text-text-muted mb-1">

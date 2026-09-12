@@ -20,10 +20,7 @@ import type {
   ProvenanceLink,
   ExecutionStatus,
 } from '../components/pipeline-canvas/types';
-import {
-  getNodeTypeForStage,
-  PIPELINE_STAGE_CONFIG,
-} from '../components/pipeline-canvas/types';
+import { getNodeTypeForStage, PIPELINE_STAGE_CONFIG } from '../components/pipeline-canvas/types';
 import {
   usePipelineWebSocket,
   type PipelineStageEvent,
@@ -38,17 +35,18 @@ import {
 const API_PREFIX = '/api/v1/canvas/pipeline';
 
 const ALL_STAGES: PipelineStageType[] = [
-  'ideas', 'principles', 'goals', 'actions', 'orchestration',
+  'ideas',
+  'principles',
+  'goals',
+  'actions',
+  'orchestration',
 ];
 
 const EXECUTION_STAGE = 'execution';
 
 type MissionStageType = PipelineStageType | typeof EXECUTION_STAGE;
 
-const _ALL_MISSION_STAGES: MissionStageType[] = [
-  ...ALL_STAGES,
-  EXECUTION_STAGE,
-];
+const _ALL_MISSION_STAGES: MissionStageType[] = [...ALL_STAGES, EXECUTION_STAGE];
 
 const EMPTY_STAGE_NODES: Record<PipelineStageType, Node[]> = {
   ideas: [],
@@ -104,7 +102,10 @@ export const STAGE_OFFSET_X: Record<string, number> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseStageNodes(stage: PipelineStageType, data: ReactFlowData | Record<string, unknown> | null): Node[] {
+function parseStageNodes(
+  stage: PipelineStageType,
+  data: ReactFlowData | Record<string, unknown> | null,
+): Node[] {
   if (!data) return [];
 
   const rawNodes: Array<Record<string, unknown>> =
@@ -120,15 +121,22 @@ function parseStageNodes(stage: PipelineStageType, data: ReactFlowData | Record<
     type: (n.type as string) || nodeType,
     position: (n.position as { x: number; y: number }) || { x: 0, y: 0 },
     data: {
-      ...(n.data as Record<string, unknown> ?? {}),
-      label: (n.data as Record<string, unknown>)?.label ?? (n as Record<string, unknown>).label ?? (n as Record<string, unknown>).title ?? '',
+      ...((n.data as Record<string, unknown>) ?? {}),
+      label:
+        (n.data as Record<string, unknown>)?.label ??
+        (n as Record<string, unknown>).label ??
+        (n as Record<string, unknown>).title ??
+        '',
       stage,
     },
     style: (n.style as Record<string, string>) ?? {},
   }));
 }
 
-function parseStageEdges(stage: PipelineStageType, data: ReactFlowData | Record<string, unknown> | null): Edge[] {
+function parseStageEdges(
+  stage: PipelineStageType,
+  data: ReactFlowData | Record<string, unknown> | null,
+): Edge[] {
   if (!data) return [];
 
   const rawEdges: Array<Record<string, unknown>> = (data as ReactFlowData).edges ?? [];
@@ -136,12 +144,12 @@ function parseStageEdges(stage: PipelineStageType, data: ReactFlowData | Record<
 
   return rawEdges.map((e) => ({
     id: (e.id as string) || `e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    source: ((e.source || e.source_id) as string),
-    target: ((e.target || e.target_id) as string),
+    source: (e.source || e.source_id) as string,
+    target: (e.target || e.target_id) as string,
     type: (e.type as string) || 'default',
     label: e.label as string | undefined,
     animated: e.animated !== undefined ? !!e.animated : true,
-    style: { stroke: stageColor, ...(e.style as Record<string, string> ?? {}) },
+    style: { stroke: stageColor, ...((e.style as Record<string, string>) ?? {}) },
   }));
 }
 
@@ -223,9 +231,7 @@ export interface UseMissionControlReturn {
 // Hook
 // ---------------------------------------------------------------------------
 
-export function useMissionControl(
-  initialPipelineId?: string | null,
-): UseMissionControlReturn {
+export function useMissionControl(initialPipelineId?: string | null): UseMissionControlReturn {
   const [pipelineId, setPipelineId] = useState<string | null>(initialPipelineId ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,9 +240,15 @@ export function useMissionControl(
   // Per-stage caches
   const stageNodesRef = useRef<Record<PipelineStageType, Node[]>>({ ...EMPTY_STAGE_NODES });
   const stageEdgesRef = useRef<Record<PipelineStageType, Edge[]>>({ ...EMPTY_STAGE_EDGES });
-  const [stageNodes, setStageNodes] = useState<Record<PipelineStageType, Node[]>>({ ...EMPTY_STAGE_NODES });
-  const [stageEdges, setStageEdges] = useState<Record<PipelineStageType, Edge[]>>({ ...EMPTY_STAGE_EDGES });
-  const [stageStatus, setStageStatus] = useState<Record<PipelineStageType, string>>({ ...DEFAULT_STATUS });
+  const [stageNodes, setStageNodes] = useState<Record<PipelineStageType, Node[]>>({
+    ...EMPTY_STAGE_NODES,
+  });
+  const [stageEdges, setStageEdges] = useState<Record<PipelineStageType, Edge[]>>({
+    ...EMPTY_STAGE_EDGES,
+  });
+  const [stageStatus, setStageStatus] = useState<Record<PipelineStageType, string>>({
+    ...DEFAULT_STATUS,
+  });
   const [provenance, setProvenance] = useState<ProvenanceLink[]>([]);
 
   // Selection
@@ -255,7 +267,8 @@ export function useMissionControl(
       }
 
       for (const stage of ALL_STAGES) {
-        const stageData = (result as unknown as Record<string, unknown>)[stage] as ReactFlowData | Record<string, unknown> | null;
+        const stageData = (result as unknown as Record<string, unknown>)[stage] as
+          ReactFlowData | Record<string, unknown> | null;
         stageNodesRef.current[stage] = parseStageNodes(stage, stageData);
         stageEdgesRef.current[stage] = parseStageEdges(stage, stageData);
       }
@@ -303,7 +316,10 @@ export function useMissionControl(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            ideas: text.split('\n').map((s) => s.trim()).filter(Boolean),
+            ideas: text
+              .split('\n')
+              .map((s) => s.trim())
+              .filter(Boolean),
             auto_advance: automationLevel === 'full',
           }),
         });
@@ -349,10 +365,7 @@ export function useMissionControl(
         const res = await fetch(`${API_PREFIX}/advance`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            pipeline_id: pipelineId,
-            target_stage: targetStage,
-          }),
+          body: JSON.stringify({ pipeline_id: pipelineId, target_stage: targetStage }),
         });
 
         if (!res.ok) {
@@ -384,10 +397,7 @@ export function useMissionControl(
     if (!selectedNodeId) return null;
     const result = findNodeInStages(stageNodes, selectedNodeId);
     if (!result) return null;
-    return {
-      stage: result.stage,
-      data: result.node.data as Record<string, unknown>,
-    };
+    return { stage: result.stage, data: result.node.data as Record<string, unknown> };
   }, [selectedNodeId, stageNodes]);
 
   const selectedNodeData = selectedNode?.data ?? null;
@@ -411,7 +421,8 @@ export function useMissionControl(
 
       chain.unshift({
         nodeId: link.source_node_id,
-        nodeLabel: (sourceNode?.data as Record<string, unknown>)?.label as string || link.source_node_id,
+        nodeLabel:
+          ((sourceNode?.data as Record<string, unknown>)?.label as string) || link.source_node_id,
         stage: sourceStage,
         contentHash: link.content_hash || '',
         method: link.method || '',
@@ -456,14 +467,16 @@ export function useMissionControl(
               ? (data.elapsed_ms as number)
               : undefined,
         outputPreview:
-          (data.outputPreview as string | undefined) ??
-          (data.output_preview as string | undefined),
+          (data.outputPreview as string | undefined) ?? (data.output_preview as string | undefined),
         navigable: options?.navigable ?? true,
         isSelectedNode: options?.isSelectedNode ?? false,
       });
     };
 
-    if (selectedNodeData && (selectedNodeStage === 'actions' || selectedNodeStage === 'orchestration')) {
+    if (
+      selectedNodeData &&
+      (selectedNodeStage === 'actions' || selectedNodeStage === 'orchestration')
+    ) {
       addExecutionState(selectedNodeId, selectedNodeStage, selectedNodeData, {
         isSelectedNode: true,
       });
@@ -536,20 +549,13 @@ export function useMissionControl(
     for (const stage of ALL_STAGES) {
       const offsetX = STAGE_OFFSET_X[stage];
       for (const n of stageNodes[stage]) {
-        allNodes.push({
-          ...n,
-          position: { x: n.position.x + offsetX, y: n.position.y },
-        });
+        allNodes.push({ ...n, position: { x: n.position.x + offsetX, y: n.position.y } });
       }
       for (const e of stageEdges[stage]) {
         const stageColor = PIPELINE_STAGE_CONFIG[stage].primary;
         allEdges.push({
           ...e,
-          style: {
-            stroke: stageColor,
-            strokeWidth: 2,
-            ...(e.style || {}),
-          },
+          style: { stroke: stageColor, strokeWidth: 2, ...(e.style || {}) },
           animated: e.animated ?? true,
         });
       }
@@ -575,7 +581,7 @@ export function useMissionControl(
       // Reload stage data
       if (pipelineId) {
         fetch(`${API_PREFIX}/${pipelineId}/stage/${stage}`)
-          .then((res) => res.ok ? res.json() : null)
+          .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
             if (!data) return;
             const stageData = data.data ?? data;
@@ -583,7 +589,9 @@ export function useMissionControl(
             stageEdgesRef.current[stage] = parseStageEdges(stage, stageData);
             syncCacheToState();
           })
-          .catch(() => { /* retain cache */ });
+          .catch(() => {
+            /* retain cache */
+          });
       }
     },
     [pipelineId, syncCacheToState],

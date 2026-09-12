@@ -10,24 +10,19 @@ export const testData = {
     simple: {
       topic: 'Should AI systems be open source?',
       agents: ['claude', 'gpt'],
-      rounds: 8,  // 9-round format default
+      rounds: 8, // 9-round format default
     },
     complex: {
       topic: 'What is the best approach to implementing rate limiting in distributed systems?',
       agents: ['claude', 'gpt', 'gemini'],
-      rounds: 8,  // 9-round format default
+      rounds: 8, // 9-round format default
       options: {
-        consensus: 'judge',  // Judge-based consensus default
+        consensus: 'judge', // Judge-based consensus default
         enableEvidence: true,
       },
     },
   },
-  user: {
-    test: {
-      email: 'test@aragora.ai',
-      password: 'test-password-123',
-    },
-  },
+  user: { test: { email: 'test@aragora.ai', password: 'test-password-123' } },
 };
 
 // Custom page object helpers
@@ -45,7 +40,11 @@ export class AragoraPage {
     /token\s*[:=]\s*\S+/i,
   ];
 
-  private async isVisible(locator: import('@playwright/test').Locator, label: string, timeout = 1000) {
+  private async isVisible(
+    locator: import('@playwright/test').Locator,
+    label: string,
+    timeout = 1000,
+  ) {
     if ((await locator.count()) === 0) {
       return false;
     }
@@ -57,7 +56,11 @@ export class AragoraPage {
     }
   }
 
-  private async clickIfVisible(locator: import('@playwright/test').Locator, label: string, timeout = 1000) {
+  private async clickIfVisible(
+    locator: import('@playwright/test').Locator,
+    label: string,
+    timeout = 1000,
+  ) {
     if (!(await this.isVisible(locator, label, timeout))) {
       return false;
     }
@@ -70,7 +73,11 @@ export class AragoraPage {
     }
   }
 
-  private async waitForHidden(locator: import('@playwright/test').Locator, label: string, timeout = 3000) {
+  private async waitForHidden(
+    locator: import('@playwright/test').Locator,
+    label: string,
+    timeout = 3000,
+  ) {
     try {
       await locator.waitFor({ state: 'hidden', timeout });
     } catch (error) {
@@ -80,7 +87,7 @@ export class AragoraPage {
 
   private async assertNoSensitiveWarningContent(
     locator: import('@playwright/test').Locator,
-    label: string
+    label: string,
   ) {
     if ((await locator.count()) === 0) {
       return;
@@ -89,7 +96,9 @@ export class AragoraPage {
     if (!warningText) {
       return;
     }
-    const matchedPattern = this.sensitiveWarningPatterns.find((pattern) => pattern.test(warningText));
+    const matchedPattern = this.sensitiveWarningPatterns.find((pattern) =>
+      pattern.test(warningText),
+    );
     if (matchedPattern) {
       throw new Error(`[e2e] Potential sensitive content exposed in ${label}: ${matchedPattern}`);
     }
@@ -123,7 +132,10 @@ export class AragoraPage {
    */
   async dismissConnectivityWarning() {
     const dismissButton = this.page.locator('button[aria-label="Dismiss connectivity warning"]');
-    const connectivityWarning = this.page.locator('[role="alert"]').filter({ has: dismissButton }).first();
+    const connectivityWarning = this.page
+      .locator('[role="alert"]')
+      .filter({ has: dismissButton })
+      .first();
     if (await this.isVisible(dismissButton, 'connectivity warning dismiss button')) {
       await this.assertNoSensitiveWarningContent(connectivityWarning, 'connectivity warning');
       await this.clickIfVisible(dismissButton, 'connectivity warning dismiss button');
@@ -148,7 +160,7 @@ export class AragoraPage {
     }
 
     const dismissButton = configurationWarning.locator(
-      'button[aria-label="Dismiss configuration warning"], button[aria-label="Dismiss warnings"]'
+      'button[aria-label="Dismiss configuration warning"], button[aria-label="Dismiss warnings"]',
     );
     if (await this.isVisible(dismissButton, 'configuration warning dismiss button')) {
       await this.assertNoSensitiveWarningContent(configurationWarning, 'configuration warning');
@@ -191,21 +203,25 @@ export class AragoraPage {
   }
 
   async waitForToast(text: string) {
-    await expect(this.page.locator('[data-testid="toast"]').filter({ hasText: text })).toBeVisible();
+    await expect(
+      this.page.locator('[data-testid="toast"]').filter({ hasText: text }),
+    ).toBeVisible();
   }
 
   async dismissToast() {
     const toast = await this.getToast();
     if (await this.isVisible(toast, 'toast', 0)) {
-      await this.clickIfVisible(toast.locator('button[aria-label="Close"]'), 'toast close button', 0);
+      await this.clickIfVisible(
+        toast.locator('button[aria-label="Close"]'),
+        'toast close button',
+        0,
+      );
     }
   }
 }
 
 // Extended test with Aragora fixtures
-export const test = base.extend<{
-  aragoraPage: AragoraPage;
-}>({
+export const test = base.extend<{ aragoraPage: AragoraPage }>({
   aragoraPage: async ({ page }, use) => {
     const aragoraPage = new AragoraPage(page);
     await use(aragoraPage);
@@ -286,7 +302,7 @@ export async function mockApiResponse(
   page: import('@playwright/test').Page,
   url: string | RegExp,
   response: object,
-  status = 200
+  status = 200,
 ) {
   await page.route(url, async (route) => {
     await route.fulfill({
@@ -305,26 +321,10 @@ export const mockDebate = {
   created_at: new Date().toISOString(),
   agents: ['claude', 'gpt'],
   messages: [
-    {
-      id: 'msg-1',
-      agent: 'claude',
-      role: 'proposer',
-      content: 'I propose that...',
-      round: 1,
-    },
-    {
-      id: 'msg-2',
-      agent: 'gpt',
-      role: 'critic',
-      content: 'I critique this because...',
-      round: 1,
-    },
+    { id: 'msg-1', agent: 'claude', role: 'proposer', content: 'I propose that...', round: 1 },
+    { id: 'msg-2', agent: 'gpt', role: 'critic', content: 'I critique this because...', round: 1 },
   ],
-  consensus: {
-    reached: true,
-    type: 'majority',
-    summary: 'Agents agreed on the main points.',
-  },
+  consensus: { reached: true, type: 'majority', summary: 'Agents agreed on the main points.' },
 };
 
 // Mock agents data
@@ -388,8 +388,6 @@ export const mockBeliefNetwork = {
     { id: 'node-1', statement: 'Test claim', author: 'claude', centrality: 0.8, is_crux: true },
     { id: 'node-2', statement: 'Supporting claim', author: 'gpt4', centrality: 0.6 },
   ],
-  links: [
-    { source: 'node-1', target: 'node-2', weight: 0.8, type: 'supports' },
-  ],
+  links: [{ source: 'node-1', target: 'node-2', weight: 0.8, type: 'supports' }],
   metadata: { debate_id: 'test', total_claims: 2, crux_count: 1 },
 };

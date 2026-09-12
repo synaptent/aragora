@@ -13,9 +13,7 @@ jest.mock('@/hooks/useSystemIntelligence', () => ({
         { id: 'claude-opus', elo: 1650, wins: 30 },
         { id: 'gpt-4', elo: 1520, wins: 22 },
       ],
-      recentImprovements: [
-        { id: 'imp-1', goal: 'Improve test coverage', status: 'completed' },
-      ],
+      recentImprovements: [{ id: 'imp-1', goal: 'Improve test coverage', status: 'completed' }],
     },
     isLoading: false,
     error: null,
@@ -44,12 +42,8 @@ jest.mock('@/hooks/useSystemIntelligence', () => ({
     memory: {
       totalInjections: 50,
       retrievalCount: 200,
-      topPatterns: [
-        { pattern: 'debate-consensus', frequency: 15, confidence: 0.9 },
-      ],
-      confidenceChanges: [
-        { topic: 'architecture', before: 0.7, after: 0.85 },
-      ],
+      topPatterns: [{ pattern: 'debate-consensus', frequency: 15, confidence: 0.9 }],
+      confidenceChanges: [{ topic: 'architecture', before: 0.7, after: 0.85 }],
     },
     isLoading: false,
     error: null,

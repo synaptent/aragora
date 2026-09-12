@@ -122,9 +122,7 @@ export function IdeaPropertyEditor({
 
       {/* KM link */}
       {data.kmNodeId && (
-        <div className="mb-3 text-[10px] text-[var(--text-muted)]">
-          KM: {data.kmNodeId}
-        </div>
+        <div className="mb-3 text-[10px] text-[var(--text-muted)]">KM: {data.kmNodeId}</div>
       )}
 
       {/* Actions */}
@@ -138,9 +136,7 @@ export function IdeaPropertyEditor({
           </button>
         )}
         {data.promotedToGoalId && (
-          <div className="text-[10px] text-emerald-400">
-            Promoted to goal
-          </div>
+          <div className="text-[10px] text-emerald-400">Promoted to goal</div>
         )}
         <button
           onClick={onDelete}

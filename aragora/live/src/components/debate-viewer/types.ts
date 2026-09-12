@@ -64,7 +64,7 @@ export interface EvidenceSource {
 
 export interface StreamingMessage {
   agent: string;
-  taskId?: string;  // Task ID for composite React key support
+  taskId?: string; // Task ID for composite React key support
   content: string;
   startTime: number;
   reasoning?: ReasoningStep[];

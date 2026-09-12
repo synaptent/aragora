@@ -93,12 +93,31 @@ interface SecurityDashboardProps {
   authToken?: string;
 }
 
-const SEVERITY_CONFIG: Record<VulnerabilitySeverity, { color: string; bgColor: string; label: string }> = {
-  critical: { color: 'text-red-400', bgColor: 'bg-red-500/20 border-red-500/40', label: 'Critical' },
-  high: { color: 'text-orange-400', bgColor: 'bg-orange-500/20 border-orange-500/40', label: 'High' },
-  medium: { color: 'text-yellow-400', bgColor: 'bg-yellow-500/20 border-yellow-500/40', label: 'Medium' },
+const SEVERITY_CONFIG: Record<
+  VulnerabilitySeverity,
+  { color: string; bgColor: string; label: string }
+> = {
+  critical: {
+    color: 'text-red-400',
+    bgColor: 'bg-red-500/20 border-red-500/40',
+    label: 'Critical',
+  },
+  high: {
+    color: 'text-orange-400',
+    bgColor: 'bg-orange-500/20 border-orange-500/40',
+    label: 'High',
+  },
+  medium: {
+    color: 'text-yellow-400',
+    bgColor: 'bg-yellow-500/20 border-yellow-500/40',
+    label: 'Medium',
+  },
   low: { color: 'text-blue-400', bgColor: 'bg-blue-500/20 border-blue-500/40', label: 'Low' },
-  unknown: { color: 'text-gray-400', bgColor: 'bg-gray-500/20 border-gray-500/40', label: 'Unknown' },
+  unknown: {
+    color: 'text-gray-400',
+    bgColor: 'bg-gray-500/20 border-gray-500/40',
+    label: 'Unknown',
+  },
 };
 
 // Demo data for when API is unavailable
@@ -122,7 +141,8 @@ const DEMO_SCAN_RESULT: ScanResult = {
         {
           id: 'CVE-2021-23337',
           title: 'Command Injection in lodash',
-          description: 'Lodash versions prior to 4.17.21 are vulnerable to Command Injection via the template function.',
+          description:
+            'Lodash versions prior to 4.17.21 are vulnerable to Command Injection via the template function.',
           severity: 'high',
           cvss_score: 7.2,
           package_name: 'lodash',
@@ -130,7 +150,9 @@ const DEMO_SCAN_RESULT: ScanResult = {
           vulnerable_versions: ['< 4.17.21'],
           patched_versions: ['4.17.21'],
           source: 'nvd',
-          references: [{ url: 'https://nvd.nist.gov/vuln/detail/CVE-2021-23337', source: 'NVD', tags: [] }],
+          references: [
+            { url: 'https://nvd.nist.gov/vuln/detail/CVE-2021-23337', source: 'NVD', tags: [] },
+          ],
           cwe_ids: ['CWE-94'],
           fix_available: true,
           recommended_version: '4.17.21',
@@ -295,9 +317,7 @@ export function SecurityDashboard({
     try {
       const response = await fetch(
         `${apiBase}/api/v1/codebase/${repositoryId || 'default'}/scan/latest`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
+        { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
       );
 
       if (!response.ok) {
@@ -322,9 +342,7 @@ export function SecurityDashboard({
     try {
       const response = await fetch(
         `${apiBase}/api/v1/codebase/${repositoryId || 'default'}/hotspots`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
+        { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
       );
 
       if (!response.ok) {
@@ -344,16 +362,13 @@ export function SecurityDashboard({
     setError(null);
 
     try {
-      const response = await fetch(
-        `${apiBase}/api/v1/codebase/${repositoryId || 'default'}/scan`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-          },
-        }
-      );
+      const response = await fetch(`${apiBase}/api/v1/codebase/${repositoryId || 'default'}/scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+      });
 
       if (!response.ok) {
         // Simulate scan completion
@@ -373,9 +388,7 @@ export function SecurityDashboard({
       const pollInterval = setInterval(async () => {
         const statusResponse = await fetch(
           `${apiBase}/api/v1/codebase/${repositoryId || 'default'}/scan/latest`,
-          {
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-          }
+          { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
         );
 
         if (statusResponse.ok) {
@@ -427,7 +440,7 @@ export function SecurityDashboard({
 
   const getVulnerableDependencies = (): DependencyInfo[] => {
     if (!scanResult) return [];
-    return scanResult.dependencies.filter(d => d.has_vulnerabilities);
+    return scanResult.dependencies.filter((d) => d.has_vulnerabilities);
   };
 
   const getAllVulnerabilities = (): VulnerabilityFinding[] => {
@@ -435,18 +448,14 @@ export function SecurityDashboard({
     const vulns: VulnerabilityFinding[] = [];
     for (const dep of scanResult.dependencies) {
       for (const vuln of dep.vulnerabilities) {
-        vulns.push({
-          ...vuln,
-          package_name: dep.name,
-          package_ecosystem: dep.ecosystem,
-        });
+        vulns.push({ ...vuln, package_name: dep.name, package_ecosystem: dep.ecosystem });
       }
     }
     return vulns;
   };
 
   const filteredVulnerabilities = getAllVulnerabilities().filter(
-    v => severityFilter === 'all' || v.severity === severityFilter
+    (v) => severityFilter === 'all' || v.severity === severityFilter,
   );
 
   if (isLoading) {
@@ -471,7 +480,9 @@ export function SecurityDashboard({
                 Repository: <span className="text-[var(--acid-cyan)]">{scanResult.repository}</span>
                 {scanResult.branch && <span> / {scanResult.branch}</span>}
                 {scanResult.commit_sha && (
-                  <span className="ml-2 font-theme-data">({scanResult.commit_sha.slice(0, 7)})</span>
+                  <span className="ml-2 font-theme-data">
+                    ({scanResult.commit_sha.slice(0, 7)})
+                  </span>
                 )}
               </div>
             )}
@@ -498,7 +509,7 @@ export function SecurityDashboard({
 
         {/* Tabs */}
         <div className="flex gap-2">
-          {(['overview', 'vulnerabilities', 'dependencies', 'hotspots'] as TabType[]).map(tab => (
+          {(['overview', 'vulnerabilities', 'dependencies', 'hotspots'] as TabType[]).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -541,13 +552,13 @@ export function SecurityDashboard({
               </div>
               <div className="p-4 border border-[var(--accent)]/30 rounded bg-surface/30">
                 <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
-                  {scanResult.dependencies.filter(d => d.direct).length}
+                  {scanResult.dependencies.filter((d) => d.direct).length}
                 </div>
                 <div className="text-xs text-text-muted mt-1">Direct Dependencies</div>
               </div>
               <div className="p-4 border border-[var(--accent)]/30 rounded bg-surface/30">
                 <div className="text-2xl font-theme-data text-purple-400">
-                  {new Set(scanResult.dependencies.map(d => d.ecosystem)).size}
+                  {new Set(scanResult.dependencies.map((d) => d.ecosystem)).size}
                 </div>
                 <div className="text-xs text-text-muted mt-1">Ecosystems</div>
               </div>
@@ -555,7 +566,9 @@ export function SecurityDashboard({
 
             {/* Severity Breakdown */}
             <div className="border border-[var(--accent)]/30 rounded p-4 bg-surface/30">
-              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">Vulnerability Severity</h3>
+              <h3 className="text-sm font-theme-data text-[var(--accent)] mb-4">
+                Vulnerability Severity
+              </h3>
               <div className="grid grid-cols-4 gap-4">
                 <div className="text-center">
                   <div className={`text-3xl font-theme-data ${SEVERITY_CONFIG.critical.color}`}>
@@ -587,26 +600,34 @@ export function SecurityDashboard({
             {/* Quick Actions */}
             {scanResult.summary.vulnerable_dependencies > 0 && (
               <div className="border border-orange-500/30 rounded p-4 bg-orange-500/5">
-                <h3 className="text-sm font-theme-data text-orange-400 mb-3">Recommended Actions</h3>
+                <h3 className="text-sm font-theme-data text-orange-400 mb-3">
+                  Recommended Actions
+                </h3>
                 <div className="space-y-2">
-                  {getVulnerableDependencies().slice(0, 3).map(dep => (
-                    <div
-                      key={`${dep.name}-${dep.version}`}
-                      className="flex items-center justify-between p-2 bg-surface/50 rounded"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 text-xs rounded border ${SEVERITY_CONFIG[dep.highest_severity || 'unknown'].bgColor}`}>
-                          {dep.highest_severity}
-                        </span>
-                        <span className="font-theme-data text-sm">{dep.name}@{dep.version}</span>
+                  {getVulnerableDependencies()
+                    .slice(0, 3)
+                    .map((dep) => (
+                      <div
+                        key={`${dep.name}-${dep.version}`}
+                        className="flex items-center justify-between p-2 bg-surface/50 rounded"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 text-xs rounded border ${SEVERITY_CONFIG[dep.highest_severity || 'unknown'].bgColor}`}
+                          >
+                            {dep.highest_severity}
+                          </span>
+                          <span className="font-theme-data text-sm">
+                            {dep.name}@{dep.version}
+                          </span>
+                        </div>
+                        {dep.vulnerabilities[0]?.fix_available && (
+                          <span className="text-xs text-[var(--accent)]">
+                            Upgrade to {dep.vulnerabilities[0].recommended_version}
+                          </span>
+                        )}
                       </div>
-                      {dep.vulnerabilities[0]?.fix_available && (
-                        <span className="text-xs text-[var(--accent)]">
-                          Upgrade to {dep.vulnerabilities[0].recommended_version}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
             )}
@@ -621,10 +642,15 @@ export function SecurityDashboard({
                 </div>
                 <div>
                   <span className="text-text-muted">Status:</span>
-                  <span className={`ml-2 font-theme-data ${
-                    scanResult.status === 'completed' ? 'text-green-400' :
-                    scanResult.status === 'failed' ? 'text-red-400' : 'text-yellow-400'
-                  }`}>
+                  <span
+                    className={`ml-2 font-theme-data ${
+                      scanResult.status === 'completed'
+                        ? 'text-green-400'
+                        : scanResult.status === 'failed'
+                          ? 'text-red-400'
+                          : 'text-yellow-400'
+                    }`}
+                  >
                     {scanResult.status}
                   </span>
                 </div>
@@ -658,8 +684,8 @@ export function SecurityDashboard({
                 >
                   All ({getAllVulnerabilities().length})
                 </button>
-                {(['critical', 'high', 'medium', 'low'] as VulnerabilitySeverity[]).map(sev => {
-                  const count = getAllVulnerabilities().filter(v => v.severity === sev).length;
+                {(['critical', 'high', 'medium', 'low'] as VulnerabilitySeverity[]).map((sev) => {
+                  const count = getAllVulnerabilities().filter((v) => v.severity === sev).length;
                   return (
                     <button
                       key={sev}
@@ -698,10 +724,14 @@ export function SecurityDashboard({
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${SEVERITY_CONFIG[vuln.severity].bgColor} ${SEVERITY_CONFIG[vuln.severity].color}`}>
+                              <span
+                                className={`px-2 py-0.5 text-xs font-theme-data rounded border ${SEVERITY_CONFIG[vuln.severity].bgColor} ${SEVERITY_CONFIG[vuln.severity].color}`}
+                              >
                                 {vuln.severity.toUpperCase()}
                               </span>
-                              <span className="font-theme-data text-sm text-[var(--acid-cyan)]">{vuln.id}</span>
+                              <span className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                                {vuln.id}
+                              </span>
                               {vuln.cvss_score && (
                                 <span className="text-xs text-text-muted">
                                   CVSS: {vuln.cvss_score.toFixed(1)}
@@ -710,7 +740,8 @@ export function SecurityDashboard({
                             </div>
                             <h4 className="text-sm font-theme-data">{vuln.title}</h4>
                             <div className="text-xs text-text-muted mt-1">
-                              Package: <span className="text-[var(--accent)]">{vuln.package_name}</span>
+                              Package:{' '}
+                              <span className="text-[var(--accent)]">{vuln.package_name}</span>
                               <span className="mx-1">|</span>
                               Ecosystem: {vuln.package_ecosystem}
                             </div>
@@ -730,7 +761,9 @@ export function SecurityDashboard({
 
                           {vuln.vulnerable_versions.length > 0 && (
                             <div>
-                              <span className="text-xs text-text-muted block mb-1">Vulnerable Versions</span>
+                              <span className="text-xs text-text-muted block mb-1">
+                                Vulnerable Versions
+                              </span>
                               <p className="text-sm font-theme-data text-red-400">
                                 {vuln.vulnerable_versions.join(', ')}
                               </p>
@@ -739,9 +772,12 @@ export function SecurityDashboard({
 
                           {vuln.fix_available && vuln.recommended_version && (
                             <div className="p-3 bg-green-500/10 border border-green-500/30 rounded">
-                              <span className="text-xs text-green-400 block mb-1">Fix Available</span>
+                              <span className="text-xs text-green-400 block mb-1">
+                                Fix Available
+                              </span>
                               <p className="text-sm font-theme-data">
-                                Upgrade to version <span className="text-green-400">{vuln.recommended_version}</span>
+                                Upgrade to version{' '}
+                                <span className="text-green-400">{vuln.recommended_version}</span>
                               </p>
                             </div>
                           )}
@@ -750,8 +786,11 @@ export function SecurityDashboard({
                             <div>
                               <span className="text-xs text-text-muted block mb-1">CWE</span>
                               <div className="flex gap-2">
-                                {vuln.cwe_ids.map(cwe => (
-                                  <span key={cwe} className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded">
+                                {vuln.cwe_ids.map((cwe) => (
+                                  <span
+                                    key={cwe}
+                                    className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded"
+                                  >
                                     {cwe}
                                   </span>
                                 ))}
@@ -791,65 +830,72 @@ export function SecurityDashboard({
         {activeTab === 'dependencies' && scanResult && (
           <div className="space-y-4">
             {/* Group by ecosystem */}
-            {Array.from(new Set(scanResult.dependencies.map(d => d.ecosystem))).map(ecosystem => {
-              const deps = scanResult.dependencies.filter(d => d.ecosystem === ecosystem);
-              const vulnCount = deps.filter(d => d.has_vulnerabilities).length;
+            {Array.from(new Set(scanResult.dependencies.map((d) => d.ecosystem))).map(
+              (ecosystem) => {
+                const deps = scanResult.dependencies.filter((d) => d.ecosystem === ecosystem);
+                const vulnCount = deps.filter((d) => d.has_vulnerabilities).length;
 
-              return (
-                <div key={ecosystem} className="border border-[var(--accent)]/30 rounded">
-                  <div className="p-3 bg-surface/50 border-b border-[var(--accent)]/20 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="font-theme-data text-sm text-[var(--accent)]">{ecosystem}</span>
-                      <span className="text-xs text-text-muted">({deps.length} packages)</span>
+                return (
+                  <div key={ecosystem} className="border border-[var(--accent)]/30 rounded">
+                    <div className="p-3 bg-surface/50 border-b border-[var(--accent)]/20 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-theme-data text-sm text-[var(--accent)]">
+                          {ecosystem}
+                        </span>
+                        <span className="text-xs text-text-muted">({deps.length} packages)</span>
+                      </div>
+                      {vulnCount > 0 && (
+                        <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
+                          {vulnCount} vulnerable
+                        </span>
+                      )}
                     </div>
-                    {vulnCount > 0 && (
-                      <span className="px-2 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
-                        {vulnCount} vulnerable
-                      </span>
-                    )}
-                  </div>
-                  <div className="divide-y divide-acid-green/10">
-                    {deps.map(dep => (
-                      <div
-                        key={`${dep.name}-${dep.version}`}
-                        className={`p-3 flex items-center justify-between ${
-                          dep.has_vulnerabilities ? 'bg-red-500/5' : ''
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-theme-data text-sm">{dep.name}</span>
-                            <span className="text-xs text-text-muted">@{dep.version}</span>
-                            {dep.dev_dependency && (
-                              <span className="px-1.5 py-0.5 text-xs bg-gray-500/20 text-gray-400 rounded">
-                                dev
-                              </span>
-                            )}
-                            {!dep.direct && (
-                              <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded">
-                                transitive
-                              </span>
+                    <div className="divide-y divide-acid-green/10">
+                      {deps.map((dep) => (
+                        <div
+                          key={`${dep.name}-${dep.version}`}
+                          className={`p-3 flex items-center justify-between ${
+                            dep.has_vulnerabilities ? 'bg-red-500/5' : ''
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-theme-data text-sm">{dep.name}</span>
+                              <span className="text-xs text-text-muted">@{dep.version}</span>
+                              {dep.dev_dependency && (
+                                <span className="px-1.5 py-0.5 text-xs bg-gray-500/20 text-gray-400 rounded">
+                                  dev
+                                </span>
+                              )}
+                              {!dep.direct && (
+                                <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded">
+                                  transitive
+                                </span>
+                              )}
+                            </div>
+                            {dep.license && (
+                              <div className="text-xs text-text-muted mt-1">{dep.license}</div>
                             )}
                           </div>
-                          {dep.license && (
-                            <div className="text-xs text-text-muted mt-1">{dep.license}</div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {dep.has_vulnerabilities ? (
+                              <span
+                                className={`px-2 py-0.5 text-xs rounded border ${SEVERITY_CONFIG[dep.highest_severity || 'unknown'].bgColor} ${SEVERITY_CONFIG[dep.highest_severity || 'unknown'].color}`}
+                              >
+                                {dep.vulnerabilities.length} vuln
+                                {dep.vulnerabilities.length !== 1 ? 's' : ''}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-green-400">Secure</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {dep.has_vulnerabilities ? (
-                            <span className={`px-2 py-0.5 text-xs rounded border ${SEVERITY_CONFIG[dep.highest_severity || 'unknown'].bgColor} ${SEVERITY_CONFIG[dep.highest_severity || 'unknown'].color}`}>
-                              {dep.vulnerabilities.length} vuln{dep.vulnerabilities.length !== 1 ? 's' : ''}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-green-400">Secure</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              },
+            )}
           </div>
         )}
 
@@ -857,7 +903,8 @@ export function SecurityDashboard({
         {activeTab === 'hotspots' && (
           <div className="space-y-4">
             <p className="text-sm text-text-muted mb-4">
-              Code hotspots are areas with high complexity and frequent changes, which often indicate security risk.
+              Code hotspots are areas with high complexity and frequent changes, which often
+              indicate security risk.
             </p>
 
             {hotspots.length === 0 ? (
@@ -867,9 +914,14 @@ export function SecurityDashboard({
             ) : (
               <div className="space-y-3">
                 {hotspots.map((hotspot, idx) => {
-                  const riskColor = hotspot.risk_score >= 70 ? 'text-red-400' :
-                    hotspot.risk_score >= 50 ? 'text-orange-400' :
-                    hotspot.risk_score >= 30 ? 'text-yellow-400' : 'text-green-400';
+                  const riskColor =
+                    hotspot.risk_score >= 70
+                      ? 'text-red-400'
+                      : hotspot.risk_score >= 50
+                        ? 'text-orange-400'
+                        : hotspot.risk_score >= 30
+                          ? 'text-yellow-400'
+                          : 'text-green-400';
 
                   return (
                     <div
@@ -883,8 +935,11 @@ export function SecurityDashboard({
                           </div>
                           {hotspot.function_name && (
                             <div className="text-xs text-text-muted mt-1">
-                              Function: <span className="text-[var(--accent)]">{hotspot.function_name}</span>
-                              {hotspot.class_name && <span className="ml-2">in {hotspot.class_name}</span>}
+                              Function:{' '}
+                              <span className="text-[var(--accent)]">{hotspot.function_name}</span>
+                              {hotspot.class_name && (
+                                <span className="ml-2">in {hotspot.class_name}</span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -903,7 +958,9 @@ export function SecurityDashboard({
                         </div>
                         <div>
                           <div className="text-text-muted text-xs">Cognitive</div>
-                          <div className="font-theme-data">{hotspot.cognitive_complexity || 'N/A'}</div>
+                          <div className="font-theme-data">
+                            {hotspot.cognitive_complexity || 'N/A'}
+                          </div>
                         </div>
                         <div>
                           <div className="text-text-muted text-xs">Lines</div>
@@ -918,7 +975,7 @@ export function SecurityDashboard({
                       {hotspot.contributors.length > 0 && (
                         <div className="mt-3 flex items-center gap-2">
                           <span className="text-xs text-text-muted">Contributors:</span>
-                          {hotspot.contributors.map(contributor => (
+                          {hotspot.contributors.map((contributor) => (
                             <span
                               key={contributor}
                               className="px-2 py-0.5 text-xs bg-[var(--accent)]/10 text-[var(--accent)] rounded"

@@ -77,7 +77,7 @@ export function useDedup({ workspaceId = 'default' }: UseDedupOptions = {}) {
         });
 
         const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/dedup/clusters?${params}`
+          `${getBaseUrl()}/api/knowledge/mound/dedup/clusters?${params}`,
         );
 
         if (!response.ok) {
@@ -95,7 +95,7 @@ export function useDedup({ workspaceId = 'default' }: UseDedupOptions = {}) {
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl]
+    [workspaceId, getBaseUrl],
   );
 
   /**
@@ -112,9 +112,7 @@ export function useDedup({ workspaceId = 'default' }: UseDedupOptions = {}) {
           similarity_threshold: similarityThreshold.toString(),
         });
 
-        const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/dedup/report?${params}`
-        );
+        const response = await fetch(`${getBaseUrl()}/api/knowledge/mound/dedup/report?${params}`);
 
         if (!response.ok) {
           throw new Error(`Failed to generate report: ${response.statusText}`);
@@ -131,7 +129,7 @@ export function useDedup({ workspaceId = 'default' }: UseDedupOptions = {}) {
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl]
+    [workspaceId, getBaseUrl],
   );
 
   /**
@@ -141,25 +139,22 @@ export function useDedup({ workspaceId = 'default' }: UseDedupOptions = {}) {
     async (
       clusterId: string,
       primaryNodeId?: string,
-      archive = true
+      archive = true,
     ): Promise<MergeResult | null> => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/dedup/merge`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              workspace_id: workspaceId,
-              cluster_id: clusterId,
-              primary_node_id: primaryNodeId,
-              archive,
-            }),
-          }
-        );
+        const response = await fetch(`${getBaseUrl()}/api/knowledge/mound/dedup/merge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspace_id: workspaceId,
+            cluster_id: clusterId,
+            primary_node_id: primaryNodeId,
+            archive,
+          }),
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to merge cluster: ${response.statusText}`);
@@ -181,7 +176,7 @@ export function useDedup({ workspaceId = 'default' }: UseDedupOptions = {}) {
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl]
+    [workspaceId, getBaseUrl],
   );
 
   /**
@@ -193,17 +188,11 @@ export function useDedup({ workspaceId = 'default' }: UseDedupOptions = {}) {
       setError(null);
 
       try {
-        const response = await fetch(
-          `${getBaseUrl()}/api/knowledge/mound/dedup/auto-merge`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              workspace_id: workspaceId,
-              dry_run: dryRun,
-            }),
-          }
-        );
+        const response = await fetch(`${getBaseUrl()}/api/knowledge/mound/dedup/auto-merge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspace_id: workspaceId, dry_run: dryRun }),
+        });
 
         if (!response.ok) {
           throw new Error(`Failed to auto-merge: ${response.statusText}`);
@@ -225,7 +214,7 @@ export function useDedup({ workspaceId = 'default' }: UseDedupOptions = {}) {
         setIsLoading(false);
       }
     },
-    [workspaceId, getBaseUrl, findDuplicates]
+    [workspaceId, getBaseUrl, findDuplicates],
   );
 
   /**

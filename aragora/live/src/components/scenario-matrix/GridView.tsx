@@ -8,14 +8,11 @@ export interface GridViewProps {
   onSelectCompare: (left: number, right: number) => void;
 }
 
-export function GridView({
-  results,
-  onSelectCompare,
-}: GridViewProps) {
+export function GridView({ results, onSelectCompare }: GridViewProps) {
   // Extract all unique parameter keys
   const allParamKeys = useMemo(() => {
     const keys = new Set<string>();
-    results.forEach(r => Object.keys(r.parameters).forEach(k => keys.add(k)));
+    results.forEach((r) => Object.keys(r.parameters).forEach((k) => keys.add(k)));
     return Array.from(keys);
   }, [results]);
 
@@ -34,7 +31,14 @@ export function GridView({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
-    const cols = window.innerWidth >= 1280 ? 4 : window.innerWidth >= 1024 ? 3 : window.innerWidth >= 640 ? 2 : 1;
+    const cols =
+      window.innerWidth >= 1280
+        ? 4
+        : window.innerWidth >= 1024
+          ? 3
+          : window.innerWidth >= 640
+            ? 2
+            : 1;
     let newIndex = index;
 
     switch (e.key) {
@@ -79,7 +83,8 @@ export function GridView({
         Click or press Enter on two scenarios to compare them. Use arrow keys to navigate.
         {selectedForCompare !== null && (
           <span className="text-purple ml-2">
-            Selected: {results[selectedForCompare]?.scenario_name} - select another to compare (Esc to cancel)
+            Selected: {results[selectedForCompare]?.scenario_name} - select another to compare (Esc
+            to cancel)
           </span>
         )}
       </div>
@@ -102,14 +107,16 @@ export function GridView({
               selectedForCompare === i
                 ? 'border-purple bg-purple/20 scale-105'
                 : r.is_baseline
-                ? 'border-gold/40 hover:border-gold'
-                : r.consensus_reached
-                ? 'border-[var(--accent)]/40 hover:border-[var(--accent)]'
-                : 'border-[var(--crimson)]/40 hover:border-[var(--crimson)]'
+                  ? 'border-gold/40 hover:border-gold'
+                  : r.consensus_reached
+                    ? 'border-[var(--accent)]/40 hover:border-[var(--accent)]'
+                    : 'border-[var(--crimson)]/40 hover:border-[var(--crimson)]'
             }`}
           >
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-xs font-theme-data ${r.is_baseline ? 'text-gold' : 'text-text'}`}>
+              <span
+                className={`text-xs font-theme-data ${r.is_baseline ? 'text-gold' : 'text-text'}`}
+              >
                 {r.scenario_name}
               </span>
               <span
@@ -119,10 +126,12 @@ export function GridView({
 
             {/* Mini parameter grid */}
             <div className="space-y-1 mb-2">
-              {allParamKeys.slice(0, 3).map(key => (
+              {allParamKeys.slice(0, 3).map((key) => (
                 <div key={key} className="flex justify-between text-[10px] font-theme-data">
                   <span className="text-text-muted">{key}:</span>
-                  <span className="text-[var(--acid-cyan)]">{String(r.parameters[key] || '-')}</span>
+                  <span className="text-[var(--acid-cyan)]">
+                    {String(r.parameters[key] || '-')}
+                  </span>
                 </div>
               ))}
             </div>

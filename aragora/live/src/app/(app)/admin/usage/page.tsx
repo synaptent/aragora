@@ -23,11 +23,13 @@ function UsageChart({ data, label }: { data: { date: string; cost: number }[]; l
     return (
       <div className="space-y-1">
         <div className="text-sm font-medium text-gray-700">{label}</div>
-        <div className="flex items-center justify-center h-20 text-gray-400 text-sm">No data available</div>
+        <div className="flex items-center justify-center h-20 text-gray-400 text-sm">
+          No data available
+        </div>
       </div>
     );
   }
-  const max = Math.max(...data.map(d => d.cost), 1);
+  const max = Math.max(...data.map((d) => d.cost), 1);
   return (
     <div className="space-y-1">
       <div className="text-sm font-medium text-gray-700">{label}</div>
@@ -45,7 +47,17 @@ function UsageChart({ data, label }: { data: { date: string; cost: number }[]; l
   );
 }
 
-function MetricCard({ title, value, unit, loading }: { title: string; value: number; unit?: string; loading?: boolean }) {
+function MetricCard({
+  title,
+  value,
+  unit,
+  loading,
+}: {
+  title: string;
+  value: number;
+  unit?: string;
+  loading?: boolean;
+}) {
   return (
     <div className="bg-white p-4 rounded-lg border">
       <div className="text-sm text-gray-500">{title}</div>
@@ -54,14 +66,22 @@ function MetricCard({ title, value, unit, loading }: { title: string; value: num
       ) : (
         <div className="text-2xl font-bold">
           {unit === 'USD' ? `$${value.toFixed(2)}` : value.toLocaleString()}
-          {unit && unit !== 'USD' && <span className="text-sm font-normal text-gray-500 ml-1">{unit}</span>}
+          {unit && unit !== 'USD' && (
+            <span className="text-sm font-normal text-gray-500 ml-1">{unit}</span>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function BreakdownTable({ data, title }: { data: { name: string; cost: number; percentage: number }[]; title: string }) {
+function BreakdownTable({
+  data,
+  title,
+}: {
+  data: { name: string; cost: number; percentage: number }[];
+  title: string;
+}) {
   if (!data || data.length === 0) {
     return (
       <div className="bg-white rounded-lg border p-6">
@@ -180,8 +200,8 @@ export default function UsageDashboard() {
                 alert.severity === 'critical'
                   ? 'bg-red-50 border-red-200 text-red-700'
                   : alert.severity === 'warning'
-                  ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-                  : 'bg-blue-50 border-blue-200 text-blue-700'
+                    ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+                    : 'bg-blue-50 border-blue-200 text-blue-700'
               }`}
             >
               <span className="font-medium">{alert.type}:</span> {alert.message}
@@ -210,8 +230,8 @@ export default function UsageDashboard() {
                     budgetUsedPercent >= 90
                       ? 'bg-red-500'
                       : budgetUsedPercent >= 70
-                      ? 'bg-yellow-500'
-                      : 'bg-green-500'
+                        ? 'bg-yellow-500'
+                        : 'bg-green-500'
                   }`}
                   style={{ width: `${Math.min(budgetUsedPercent, 100)}%` }}
                 />

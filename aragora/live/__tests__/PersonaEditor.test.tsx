@@ -301,10 +301,7 @@ describe('PersonaEditor', () => {
 
   describe('Empty State', () => {
     it('shows empty message when no personas', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ personas: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ personas: [] }) });
 
       render(<PersonaEditor />);
 
@@ -316,10 +313,7 @@ describe('PersonaEditor', () => {
 
   describe('Custom API Base', () => {
     it('uses custom apiBase for fetch', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ personas: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ personas: [] }) });
 
       render(<PersonaEditor apiBase="/custom/api" />);
 

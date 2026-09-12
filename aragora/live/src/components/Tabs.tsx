@@ -63,7 +63,7 @@ export function Tabs({
 }: TabsProps) {
   const baseId = useId();
   const [uncontrolledActiveTab, setUncontrolledActiveTab] = useState(
-    defaultTab || tabs[0]?.id || ''
+    defaultTab || tabs[0]?.id || '',
   );
 
   const isControlled = controlledActiveTab !== undefined;
@@ -76,12 +76,12 @@ export function Tabs({
       }
       onChange?.(tabId);
     },
-    [isControlled, onChange]
+    [isControlled, onChange],
   );
 
   const contextValue = useMemo(
     () => ({ activeTab, setActiveTab, baseId }),
-    [activeTab, setActiveTab, baseId]
+    [activeTab, setActiveTab, baseId],
   );
 
   return (
@@ -145,11 +145,7 @@ function TabList({ tabs, ariaLabel, size, variant }: TabListProps) {
   };
 
   return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className={`${containerClasses[variant]} mb-4`}
-    >
+    <div role="tablist" aria-label={ariaLabel} className={`${containerClasses[variant]} mb-4`}>
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
@@ -164,9 +160,7 @@ function TabList({ tabs, ariaLabel, size, variant }: TabListProps) {
             className={getTabClasses(tab, isActive)}
           >
             {tab.label}
-            {tab.badge !== undefined && (
-              <span className="ml-1 opacity-80">({tab.badge})</span>
-            )}
+            {tab.badge !== undefined && <span className="ml-1 opacity-80">({tab.badge})</span>}
           </button>
         );
       })}

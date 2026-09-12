@@ -54,11 +54,7 @@ export interface PopulationData {
   size: number;
   average_fitness: number;
   genomes: PopulationGenome[];
-  best_genome: {
-    genome_id: string;
-    agent_name: string;
-    fitness_score: number;
-  } | null;
+  best_genome: { genome_id: string; agent_name: string; fitness_score: number } | null;
   debate_history_count: number;
 }
 

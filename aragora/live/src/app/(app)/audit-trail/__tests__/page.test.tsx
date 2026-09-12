@@ -13,22 +13,15 @@ jest.mock('next/link', () => ({
   ),
 }));
 
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
 jest.mock('@/components/PanelErrorBoundary', () => ({
   PanelErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-jest.mock('@/hooks/useSWRFetch', () => ({
-  useSWRFetch: jest.fn(),
-}));
+jest.mock('@/hooks/useSWRFetch', () => ({ useSWRFetch: jest.fn() }));
 
-jest.mock('@/lib/api', () => ({
-  apiPost: jest.fn(),
-}));
+jest.mock('@/lib/api', () => ({ apiPost: jest.fn() }));
 
 const mockUseSWRFetch = useSWRFetch as jest.Mock;
 const mockApiPost = apiPost as jest.Mock;
@@ -152,7 +145,9 @@ describe('AuditTrailPage', () => {
     expect(await screen.findByText('[UNAVAILABLE]')).toBeInTheDocument();
     expect(screen.getAllByText('trail-123')).toHaveLength(2);
     expect(
-      screen.getByText('Verification could not reach the backend, so no checksum comparison was performed.'),
+      screen.getByText(
+        'Verification could not reach the backend, so no checksum comparison was performed.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('Failed to fetch')).toBeInTheDocument();
   });
@@ -174,7 +169,9 @@ describe('AuditTrailPage', () => {
     expect(await screen.findByText('[ERROR]')).toBeInTheDocument();
     expect(screen.getByText('Audit trail not found: trail-123')).toBeInTheDocument();
     expect(
-      screen.queryByText('Verification could not reach the backend, so no checksum comparison was performed.'),
+      screen.queryByText(
+        'Verification could not reach the backend, so no checksum comparison was performed.',
+      ),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Stored:')).not.toBeInTheDocument();
     expect(screen.queryByText('Computed:')).not.toBeInTheDocument();

@@ -25,21 +25,13 @@ jest.mock('@/utils/supabase', () => ({
 const mockIsSupabaseConfigured = isSupabaseConfigured as jest.MockedFunction<
   typeof isSupabaseConfigured
 >;
-const mockFetchRecentLoops = fetchRecentLoops as jest.MockedFunction<
-  typeof fetchRecentLoops
->;
-const mockFetchCyclesForLoop = fetchCyclesForLoop as jest.MockedFunction<
-  typeof fetchCyclesForLoop
->;
-const mockFetchEventsForLoop = fetchEventsForLoop as jest.MockedFunction<
-  typeof fetchEventsForLoop
->;
+const mockFetchRecentLoops = fetchRecentLoops as jest.MockedFunction<typeof fetchRecentLoops>;
+const mockFetchCyclesForLoop = fetchCyclesForLoop as jest.MockedFunction<typeof fetchCyclesForLoop>;
+const mockFetchEventsForLoop = fetchEventsForLoop as jest.MockedFunction<typeof fetchEventsForLoop>;
 const mockFetchDebatesForLoop = fetchDebatesForLoop as jest.MockedFunction<
   typeof fetchDebatesForLoop
 >;
-const mockSubscribeToEvents = subscribeToEvents as jest.MockedFunction<
-  typeof subscribeToEvents
->;
+const mockSubscribeToEvents = subscribeToEvents as jest.MockedFunction<typeof subscribeToEvents>;
 const mockSubscribeToAllEvents = subscribeToAllEvents as jest.MockedFunction<
   typeof subscribeToAllEvents
 >;
@@ -55,9 +47,7 @@ const mockEvents = [
   { id: '2', loop_id: 'loop-1', event_type: 'debate_start', created_at: new Date().toISOString() },
 ];
 
-const mockDebates = [
-  { id: '1', loop_id: 'loop-1', topic: 'AI Ethics', status: 'completed' },
-];
+const mockDebates = [{ id: '1', loop_id: 'loop-1', topic: 'AI Ethics', status: 'completed' }];
 
 describe('useSupabaseHistory', () => {
   beforeEach(() => {
@@ -417,7 +407,7 @@ describe('useSupabaseHistory', () => {
       });
 
       // Should not duplicate
-      expect(result.current.recentLoops.filter(l => l === 'loop-1').length).toBe(1);
+      expect(result.current.recentLoops.filter((l) => l === 'loop-1').length).toBe(1);
     });
 
     it('should unsubscribe from events on unmount', async () => {

@@ -45,10 +45,10 @@ export default function OrganizationMembersPage() {
     try {
       const [membersRes, orgRes] = await Promise.all([
         fetch(`${API_BASE}/api/org/${orgId}/members`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` },
+          headers: { Authorization: `Bearer ${accessToken}` },
         }),
         fetch(`${API_BASE}/api/org/${orgId}`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` },
+          headers: { Authorization: `Bearer ${accessToken}` },
         }),
       ]);
 
@@ -87,10 +87,7 @@ export default function OrganizationMembersPage() {
     try {
       const response = await fetch(`${API_BASE}/api/org/${orgId}/invite`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
       });
 
@@ -113,17 +110,11 @@ export default function OrganizationMembersPage() {
     setError(null);
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/org/${orgId}/members/${memberId}/role`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ role: newRole }),
-        }
-      );
+      const response = await fetch(`${API_BASE}/api/org/${orgId}/members/${memberId}/role`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ role: newRole }),
+      });
 
       if (!response.ok) {
         const data = await response.json();
@@ -142,13 +133,10 @@ export default function OrganizationMembersPage() {
     setError(null);
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/org/${orgId}/members/${memberId}`,
-        {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${accessToken}` },
-        }
-      );
+      const response = await fetch(`${API_BASE}/api/org/${orgId}/members/${memberId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
       if (!response.ok) {
         const data = await response.json();
@@ -162,13 +150,16 @@ export default function OrganizationMembersPage() {
   };
 
   const isOwner = user?.id === orgDetails?.owner_id;
-  const isAdmin = members.find(m => m.id === user?.id)?.role === 'admin' || isOwner;
+  const isAdmin = members.find((m) => m.id === user?.id)?.role === 'admin' || isOwner;
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
-      case 'owner': return 'text-warning border-warning/30 bg-warning/10';
-      case 'admin': return 'text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/10';
-      default: return 'text-text-muted border-text-muted/30';
+      case 'owner':
+        return 'text-warning border-warning/30 bg-warning/10';
+      case 'admin':
+        return 'text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/10';
+      default:
+        return 'text-text-muted border-text-muted/30';
     }
   };
 
@@ -196,9 +187,7 @@ export default function OrganizationMembersPage() {
         {/* Content */}
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-theme-data text-[var(--accent)]">
-              ORGANIZATION SETTINGS
-            </h1>
+            <h1 className="text-2xl font-theme-data text-[var(--accent)]">ORGANIZATION SETTINGS</h1>
           </div>
 
           {/* Sub-navigation */}
@@ -244,10 +233,14 @@ export default function OrganizationMembersPage() {
               {/* Invite Form - Admin/Owner Only */}
               {isAdmin && (
                 <div className="border border-[var(--accent)]/30 bg-surface/30 p-6">
-                  <h2 className="text-lg font-theme-data text-[var(--acid-cyan)] mb-4">INVITE MEMBER</h2>
+                  <h2 className="text-lg font-theme-data text-[var(--acid-cyan)] mb-4">
+                    INVITE MEMBER
+                  </h2>
                   <form onSubmit={handleInvite} className="flex flex-col md:flex-row gap-4">
                     <div className="flex-1">
-                      <label htmlFor="invite-email" className="sr-only">Email address</label>
+                      <label htmlFor="invite-email" className="sr-only">
+                        Email address
+                      </label>
                       <input
                         id="invite-email"
                         type="email"
@@ -260,7 +253,9 @@ export default function OrganizationMembersPage() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="invite-role" className="sr-only">Role</label>
+                      <label htmlFor="invite-role" className="sr-only">
+                        Role
+                      </label>
                       <select
                         id="invite-role"
                         value={inviteRole}
@@ -282,7 +277,9 @@ export default function OrganizationMembersPage() {
                   </form>
                   {orgDetails && (
                     <div className="mt-3 text-xs font-theme-data text-text-muted">
-                      {members.length} / {orgDetails.member_limit === 999999 ? 'Unlimited' : orgDetails.member_limit} members
+                      {members.length} /{' '}
+                      {orgDetails.member_limit === 999999 ? 'Unlimited' : orgDetails.member_limit}{' '}
+                      members
                     </div>
                   )}
                 </div>
@@ -319,7 +316,9 @@ export default function OrganizationMembersPage() {
                         </div>
 
                         <div className="flex items-center gap-4">
-                          <span className={`px-2 py-1 border font-theme-data text-xs uppercase ${getRoleBadgeColor(member.role)}`}>
+                          <span
+                            className={`px-2 py-1 border font-theme-data text-xs uppercase ${getRoleBadgeColor(member.role)}`}
+                          >
                             {member.role}
                           </span>
 
@@ -327,7 +326,9 @@ export default function OrganizationMembersPage() {
                           {isAdmin && member.role !== 'owner' && member.id !== user?.id && (
                             <select
                               value={member.role}
-                              onChange={(e) => handleRoleChange(member.id, e.target.value as 'admin' | 'member')}
+                              onChange={(e) =>
+                                handleRoleChange(member.id, e.target.value as 'admin' | 'member')
+                              }
                               className="bg-bg border border-[var(--accent)]/30 px-2 py-1 font-theme-data text-xs text-text focus:border-[var(--accent)] focus:outline-none"
                               aria-label={`Change role for ${member.email}`}
                             >
@@ -348,7 +349,9 @@ export default function OrganizationMembersPage() {
                           )}
 
                           {member.id === user?.id && (
-                            <span className="text-xs font-theme-data text-[var(--acid-cyan)]">(you)</span>
+                            <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                              (you)
+                            </span>
                           )}
                         </div>
                       </div>
@@ -359,11 +362,22 @@ export default function OrganizationMembersPage() {
 
               {/* Info Box */}
               <div className="border border-[var(--accent)]/20 bg-surface/20 p-4">
-                <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">ROLE PERMISSIONS</h3>
+                <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+                  ROLE PERMISSIONS
+                </h3>
                 <div className="space-y-1 text-xs font-theme-data text-text-muted">
-                  <div><span className="text-warning">Owner:</span> Full access, billing, delete organization</div>
-                  <div><span className="text-[var(--acid-cyan)]">Admin:</span> Manage members, settings, create debates</div>
-                  <div><span className="text-text">Member:</span> View organization, participate in debates</div>
+                  <div>
+                    <span className="text-warning">Owner:</span> Full access, billing, delete
+                    organization
+                  </div>
+                  <div>
+                    <span className="text-[var(--acid-cyan)]">Admin:</span> Manage members,
+                    settings, create debates
+                  </div>
+                  <div>
+                    <span className="text-text">Member:</span> View organization, participate in
+                    debates
+                  </div>
                 </div>
               </div>
             </div>

@@ -65,7 +65,7 @@ export interface UseAsyncDataReturn<T> {
 
 export function useAsyncData<T>(
   fetcher: (signal?: AbortSignal) => Promise<T>,
-  options: UseAsyncDataOptions<T> = {}
+  options: UseAsyncDataOptions<T> = {},
 ): UseAsyncDataReturn<T> {
   const {
     immediate = false,
@@ -211,7 +211,7 @@ export function useAsyncData<T>(
  */
 export function useFetch<T>(
   url: string | null,
-  options: UseAsyncDataOptions<T> & { fetchOptions?: RequestInit } = {}
+  options: UseAsyncDataOptions<T> & { fetchOptions?: RequestInit } = {},
 ): UseAsyncDataReturn<T> {
   const { fetchOptions, ...asyncOptions } = options;
 
@@ -221,10 +221,7 @@ export function useFetch<T>(
         throw new Error('No URL provided');
       }
 
-      const response = await fetch(url, {
-        ...fetchOptions,
-        signal,
-      });
+      const response = await fetch(url, { ...fetchOptions, signal });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -233,7 +230,7 @@ export function useFetch<T>(
 
       return response.json();
     },
-    [url, fetchOptions]
+    [url, fetchOptions],
   );
 
   return useAsyncData(fetcher, {
@@ -281,7 +278,7 @@ export interface UseMutationReturn<T, V> {
 
 export function useMutation<T, V = void>(
   mutationFn: (variables: V) => Promise<T>,
-  options: UseMutationOptions<T, V> = {}
+  options: UseMutationOptions<T, V> = {},
 ): UseMutationReturn<T, V> {
   const { onSuccess, onError, onSettled } = options;
 
@@ -331,7 +328,7 @@ export function useMutation<T, V = void>(
         }
       }
     },
-    [mutationFn, onSuccess, onError, onSettled]
+    [mutationFn, onSuccess, onError, onSettled],
   );
 
   const reset = useCallback(() => {
@@ -341,14 +338,7 @@ export function useMutation<T, V = void>(
     setErrorObject(null);
   }, []);
 
-  return {
-    data,
-    loading,
-    error,
-    errorObject,
-    mutate,
-    reset,
-  };
+  return { data, loading, error, errorObject, mutate, reset };
 }
 
 export default useAsyncData;

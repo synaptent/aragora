@@ -64,7 +64,9 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
   // Fetch recent debates that could have checkpoints
   const fetchDebates = useCallback(async () => {
     try {
-      const response = await fetchWithRetry(`${apiBase}/api/debates?limit=50`, undefined, { maxRetries: 2 });
+      const response = await fetchWithRetry(`${apiBase}/api/debates?limit=50`, undefined, {
+        maxRetries: 2,
+      });
       if (response.ok) {
         const data = await response.json();
         setDebates(data.debates || []);
@@ -78,15 +80,15 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
   const generateCheckpoints = useCallback((debatesList: DebateSummary[]) => {
     // Create simulated checkpoints based on debate state
     const mockCheckpoints: Checkpoint[] = debatesList
-      .filter(d => d.cycle_number > 1 || d.phase !== 'complete')
-      .map(d => ({
+      .filter((d) => d.cycle_number > 1 || d.phase !== 'complete')
+      .map((d) => ({
         checkpoint_id: `chk-${d.id.slice(0, 8)}`,
         debate_id: d.id,
         task: d.task,
         current_round: d.cycle_number,
         total_rounds: 5,
         phase: d.phase,
-        status: d.consensus_reached ? 'complete' : (d.phase === 'voting' ? 'creating' : 'complete'),
+        status: d.consensus_reached ? 'complete' : d.phase === 'voting' ? 'creating' : 'complete',
         created_at: d.created_at,
         message_count: d.cycle_number * d.agents.length * 2,
         consensus_confidence: d.confidence,
@@ -109,7 +111,7 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
   }, [debates, generateCheckpoints]);
 
   const filteredCheckpoints = selectedDebate
-    ? checkpoints.filter(c => c.debate_id === selectedDebate)
+    ? checkpoints.filter((c) => c.debate_id === selectedDebate)
     : checkpoints;
 
   const handleResume = (checkpoint: Checkpoint) => {
@@ -133,14 +135,18 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
             </p>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{checkpoints.length}</div>
+            <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+              {checkpoints.length}
+            </div>
             <div className="text-xs font-theme-data text-text-muted">checkpoints</div>
           </div>
         </div>
 
         {/* Debate Filter */}
         <div className="flex gap-4">
-          <label htmlFor="debate-filter" className="sr-only">Filter by debate</label>
+          <label htmlFor="debate-filter" className="sr-only">
+            Filter by debate
+          </label>
           <select
             id="debate-filter"
             value={selectedDebate || ''}
@@ -149,9 +155,10 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
             className="flex-1 bg-surface border border-[var(--accent)]/30 rounded px-3 py-2 font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
           >
             <option value="">All Debates</option>
-            {debates.map(d => (
+            {debates.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.task.slice(0, 50)}{d.task.length > 50 ? '...' : ''} - {d.id.slice(0, 8)}
+                {d.task.slice(0, 50)}
+                {d.task.length > 50 ? '...' : ''} - {d.id.slice(0, 8)}
               </option>
             ))}
           </select>
@@ -160,7 +167,9 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
 
       {loading ? (
         <div className="text-center py-12">
-          <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading checkpoints...</div>
+          <div className="text-[var(--accent)] font-theme-data animate-pulse">
+            Loading checkpoints...
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -195,14 +204,18 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
                           {checkpoint.checkpoint_id}
                         </div>
                       </div>
-                      <span className={`px-2 py-0.5 rounded text-xs font-theme-data ${style.bg} ${style.text}`}>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-theme-data ${style.bg} ${style.text}`}
+                      >
                         {checkpoint.status}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-xs font-theme-data">
                       <div>
                         <span className="text-text-muted">Round:</span>
-                        <span className="text-[var(--acid-cyan)] ml-1">{checkpoint.current_round}/{checkpoint.total_rounds}</span>
+                        <span className="text-[var(--acid-cyan)] ml-1">
+                          {checkpoint.current_round}/{checkpoint.total_rounds}
+                        </span>
                       </div>
                       <div>
                         <span className="text-text-muted">Phase:</span>
@@ -221,17 +234,23 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
 
           {/* Checkpoint Details */}
           <div className="card p-4">
-            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-4">CHECKPOINT DETAILS</div>
+            <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-4">
+              CHECKPOINT DETAILS
+            </div>
             {selectedCheckpoint ? (
               <div className="space-y-4">
                 <div>
                   <div className="text-xs text-text-muted mb-1">CHECKPOINT ID</div>
-                  <div className="font-theme-data text-sm text-[var(--accent)]">{selectedCheckpoint.checkpoint_id}</div>
+                  <div className="font-theme-data text-sm text-[var(--accent)]">
+                    {selectedCheckpoint.checkpoint_id}
+                  </div>
                 </div>
 
                 <div>
                   <div className="text-xs text-text-muted mb-1">DEBATE</div>
-                  <div className="font-theme-data text-sm text-text line-clamp-2">{selectedCheckpoint.task}</div>
+                  <div className="font-theme-data text-sm text-text line-clamp-2">
+                    {selectedCheckpoint.task}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -243,7 +262,9 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
                     <div className="w-full bg-surface rounded-full h-2 mt-2">
                       <div
                         className="bg-[var(--accent)] h-2 rounded-full"
-                        style={{ width: `${(selectedCheckpoint.current_round / selectedCheckpoint.total_rounds) * 100}%` }}
+                        style={{
+                          width: `${(selectedCheckpoint.current_round / selectedCheckpoint.total_rounds) * 100}%`,
+                        }}
                       />
                     </div>
                   </div>
@@ -257,15 +278,21 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
 
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div className="p-2 bg-surface rounded">
-                    <div className="text-lg font-theme-data text-[var(--accent)]">{selectedCheckpoint.message_count}</div>
+                    <div className="text-lg font-theme-data text-[var(--accent)]">
+                      {selectedCheckpoint.message_count}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">messages</div>
                   </div>
                   <div className="p-2 bg-surface rounded">
-                    <div className="text-lg font-theme-data text-[var(--acid-cyan)]">{selectedCheckpoint.agent_count}</div>
+                    <div className="text-lg font-theme-data text-[var(--acid-cyan)]">
+                      {selectedCheckpoint.agent_count}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">agents</div>
                   </div>
                   <div className="p-2 bg-surface rounded">
-                    <div className="text-lg font-theme-data text-text">{selectedCheckpoint.phase}</div>
+                    <div className="text-lg font-theme-data text-text">
+                      {selectedCheckpoint.phase}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">phase</div>
                   </div>
                 </div>
@@ -281,13 +308,18 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
                 <div className="flex gap-3 pt-4 border-t border-[var(--accent)]/20">
                   <button
                     onClick={() => handleResume(selectedCheckpoint)}
-                    disabled={selectedCheckpoint.status === 'corrupted' || selectedCheckpoint.status === 'expired'}
+                    disabled={
+                      selectedCheckpoint.status === 'corrupted' ||
+                      selectedCheckpoint.status === 'expired'
+                    }
                     className="flex-1 px-4 py-2 bg-[var(--accent)]/20 border border-[var(--accent)]/40 text-[var(--accent)] font-theme-data text-sm rounded hover:bg-[var(--accent)]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     [RESUME DEBATE]
                   </button>
                   <button
-                    onClick={() => window.open(`/debates/${selectedCheckpoint.debate_id}`, '_blank')}
+                    onClick={() =>
+                      window.open(`/debates/${selectedCheckpoint.debate_id}`, '_blank')
+                    }
                     className="px-4 py-2 bg-surface border border-[var(--accent)]/30 text-text font-theme-data text-sm rounded hover:border-[var(--accent)]/50 transition-colors"
                   >
                     [VIEW]
@@ -305,7 +337,9 @@ export function CheckpointPanel({ backendConfig, debateId, onResume }: Checkpoin
 
       {/* Storage Info */}
       <div className="card p-4">
-        <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-2">CHECKPOINT STORAGE</div>
+        <div className="text-xs font-theme-data text-[var(--acid-cyan)] mb-2">
+          CHECKPOINT STORAGE
+        </div>
         <div className="grid grid-cols-4 gap-4 text-center text-xs font-theme-data">
           <div className="p-2 bg-surface rounded">
             <div className="text-[var(--accent)]">FILE</div>

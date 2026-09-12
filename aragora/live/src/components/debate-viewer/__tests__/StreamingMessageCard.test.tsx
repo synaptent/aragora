@@ -24,9 +24,7 @@ jest.mock('@/utils/agentColors', () => ({
   }),
 }));
 
-const createStreamingMessage = (
-  overrides: Partial<StreamingMessage> = {}
-): StreamingMessage => ({
+const createStreamingMessage = (overrides: Partial<StreamingMessage> = {}): StreamingMessage => ({
   agent: 'claude',
   taskId: '',
   content: 'This is a streaming response...',
@@ -45,7 +43,9 @@ describe('StreamingMessageCard', () => {
     });
 
     it('renders message content', () => {
-      render(<StreamingMessageCard message={createStreamingMessage({ content: 'Test response' })} />);
+      render(
+        <StreamingMessageCard message={createStreamingMessage({ content: 'Test response' })} />,
+      );
       expect(screen.getByText('Test response')).toBeInTheDocument();
     });
 
@@ -65,9 +65,7 @@ describe('StreamingMessageCard', () => {
   describe('reasoning phase label', () => {
     it('shows explicit reasoning phase', () => {
       render(
-        <StreamingMessageCard
-          message={createStreamingMessage({ reasoningPhase: 'EVALUATING' })}
-        />
+        <StreamingMessageCard message={createStreamingMessage({ reasoningPhase: 'EVALUATING' })} />,
       );
       expect(screen.getByText('EVALUATING')).toBeInTheDocument();
     });
@@ -75,10 +73,8 @@ describe('StreamingMessageCard', () => {
     it('shows CITING EVIDENCE when evidence present', () => {
       render(
         <StreamingMessageCard
-          message={createStreamingMessage({
-            evidence: [{ title: 'Paper A' }],
-          })}
-        />
+          message={createStreamingMessage({ evidence: [{ title: 'Paper A' }] })}
+        />,
       );
       expect(screen.getByText('CITING EVIDENCE')).toBeInTheDocument();
     });
@@ -89,37 +85,25 @@ describe('StreamingMessageCard', () => {
           message={createStreamingMessage({
             reasoning: [{ thinking: 'Step 1', timestamp: Date.now() }],
           })}
-        />
+        />,
       );
       expect(screen.getByText('FORMING ARGUMENT')).toBeInTheDocument();
     });
 
     it('shows ANALYZING for short content', () => {
-      render(
-        <StreamingMessageCard
-          message={createStreamingMessage({ content: 'Short' })}
-        />
-      );
+      render(<StreamingMessageCard message={createStreamingMessage({ content: 'Short' })} />);
       expect(screen.getByText('ANALYZING')).toBeInTheDocument();
     });
   });
 
   describe('confidence badge', () => {
     it('shows confidence percentage when available', () => {
-      render(
-        <StreamingMessageCard
-          message={createStreamingMessage({ confidence: 0.85 })}
-        />
-      );
+      render(<StreamingMessageCard message={createStreamingMessage({ confidence: 0.85 })} />);
       expect(screen.getByText('85% conf')).toBeInTheDocument();
     });
 
     it('does not show confidence badge when null', () => {
-      render(
-        <StreamingMessageCard
-          message={createStreamingMessage({ confidence: null })}
-        />
-      );
+      render(<StreamingMessageCard message={createStreamingMessage({ confidence: null })} />);
       expect(screen.queryByText(/conf$/)).not.toBeInTheDocument();
     });
   });
@@ -131,7 +115,7 @@ describe('StreamingMessageCard', () => {
           message={createStreamingMessage({
             reasoning: [{ thinking: 'Step 1', timestamp: Date.now() }],
           })}
-        />
+        />,
       );
       expect(screen.getByText('[SHOW REASONING]')).toBeInTheDocument();
     });
@@ -142,7 +126,7 @@ describe('StreamingMessageCard', () => {
           message={createStreamingMessage({
             reasoning: [{ thinking: 'Evaluating trade-offs', timestamp: Date.now(), step: 1 }],
           })}
-        />
+        />,
       );
 
       const button = screen.getByText('[SHOW REASONING]');
@@ -160,7 +144,7 @@ describe('StreamingMessageCard', () => {
           message={createStreamingMessage({
             reasoning: [{ thinking: 'First step', timestamp: Date.now(), step: 1 }],
           })}
-        />
+        />,
       );
 
       fireEvent.click(screen.getByText('[SHOW REASONING]'));
@@ -171,12 +155,9 @@ describe('StreamingMessageCard', () => {
       render(
         <StreamingMessageCard
           message={createStreamingMessage({
-            evidence: [
-              { title: 'Research Paper A', relevance: 0.95 },
-              { title: 'Blog Post B' },
-            ],
+            evidence: [{ title: 'Research Paper A', relevance: 0.95 }, { title: 'Blog Post B' }],
           })}
-        />
+        />,
       );
 
       fireEvent.click(screen.getByText('[SHOW REASONING]'));
@@ -189,9 +170,7 @@ describe('StreamingMessageCard', () => {
 
     it('shows confidence bar in panel', () => {
       const { container } = render(
-        <StreamingMessageCard
-          message={createStreamingMessage({ confidence: 0.75 })}
-        />
+        <StreamingMessageCard message={createStreamingMessage({ confidence: 0.75 })} />,
       );
 
       fireEvent.click(screen.getByText('[SHOW REASONING]'));
@@ -206,12 +185,8 @@ describe('StreamingMessageCard', () => {
     it('does not show reasoning button when no reasoning data', () => {
       render(
         <StreamingMessageCard
-          message={createStreamingMessage({
-            reasoning: [],
-            evidence: [],
-            confidence: null,
-          })}
-        />
+          message={createStreamingMessage({ reasoning: [], evidence: [], confidence: null })}
+        />,
       );
 
       expect(screen.queryByText('[SHOW REASONING]')).not.toBeInTheDocument();
@@ -232,7 +207,7 @@ describe('StreamingMessageCard', () => {
             evidence: undefined,
             confidence: undefined,
           })}
-        />
+        />,
       );
       expect(screen.getByText('CLAUDE')).toBeInTheDocument();
     });
@@ -247,7 +222,7 @@ describe('StreamingMessageCard', () => {
               { thinking: 'Step C', timestamp: Date.now(), step: 3 },
             ],
           })}
-        />
+        />,
       );
 
       fireEvent.click(screen.getByText('[SHOW REASONING]'));

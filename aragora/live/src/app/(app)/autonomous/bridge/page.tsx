@@ -65,8 +65,8 @@ export default function AgentBridgeRunsPage() {
             </div>
             <h1 className="text-3xl font-bold text-white">Agent Bridge Runs</h1>
             <p className="mt-2 max-w-3xl text-sm text-white/55">
-              Inspect persistent bridge runs, role-keyed session state, and operator-gated
-              one-step dispatch controls for local harness cross-check loops.
+              Inspect persistent bridge runs, role-keyed session state, and operator-gated one-step
+              dispatch controls for local harness cross-check loops.
             </p>
           </div>
 

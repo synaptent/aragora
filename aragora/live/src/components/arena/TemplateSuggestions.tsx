@@ -28,11 +28,11 @@ export function TemplateSuggestions({ question }: TemplateSuggestionsProps) {
     }
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/templates/recommend?question=${encodeURIComponent(q)}`
+        `${API_BASE_URL}/api/v1/templates/recommend?question=${encodeURIComponent(q)}`,
       );
       if (response.ok) {
         const data = await response.json();
-        const items = Array.isArray(data) ? data : data.templates ?? [];
+        const items = Array.isArray(data) ? data : (data.templates ?? []);
         setSuggestions(items.slice(0, 3));
         setDismissed(false);
       }
@@ -54,7 +54,9 @@ export function TemplateSuggestions({ question }: TemplateSuggestionsProps) {
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-theme-data text-[var(--text-muted)]">SUGGESTED TEMPLATES</span>
+        <span className="text-xs font-theme-data text-[var(--text-muted)]">
+          SUGGESTED TEMPLATES
+        </span>
         <button
           onClick={() => setDismissed(true)}
           className="text-xs font-theme-data text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"

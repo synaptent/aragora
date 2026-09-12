@@ -105,9 +105,16 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [usingDemoData, setUsingDemoData] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'search' | 'critiques' | 'transitions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'search' | 'critiques' | 'transitions'>(
+    'overview',
+  );
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTiers, setSelectedTiers] = useState<string[]>(['fast', 'medium', 'slow', 'glacial']);
+  const [selectedTiers, setSelectedTiers] = useState<string[]>([
+    'fast',
+    'medium',
+    'slow',
+    'glacial',
+  ]);
   const [minImportance, setMinImportance] = useState(0);
   const [critiqueFilter, setCritiqueFilter] = useState({ agent: '', debateId: '' });
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -209,7 +216,7 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
       const response = await fetchWithRetry(
         `${apiBase}/api/memory/search?q=${encodeURIComponent(searchQuery)}&tier=${tiersParam}&limit=20&min_importance=${minImportance}`,
         undefined,
-        { maxRetries: 2 }
+        { maxRetries: 2 },
       );
 
       if (response.ok) {
@@ -234,7 +241,7 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
       const response = await fetchWithRetry(
         `${apiBase}/api/memory/critiques?${params.toString()}`,
         undefined,
-        { maxRetries: 2 }
+        { maxRetries: 2 },
       );
 
       if (response.ok) {
@@ -284,10 +291,7 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
 
   if (error && !stats) {
     return (
-      <ErrorWithRetry
-        error={error || "Failed to load memory statistics"}
-        onRetry={fetchStats}
-      />
+      <ErrorWithRetry error={error || 'Failed to load memory statistics'} onRetry={fetchStats} />
     );
   }
 
@@ -338,11 +342,15 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
             <h3 className="font-theme-data text-[var(--accent)] mb-4">Memory System Status</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
-                <div className="text-3xl font-theme-data text-[var(--accent)]">{stats.total_memories}</div>
+                <div className="text-3xl font-theme-data text-[var(--accent)]">
+                  {stats.total_memories}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Total Memories</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">{tiers.length}</div>
+                <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">
+                  {tiers.length}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Active Tiers</div>
               </div>
               <div className="text-center">
@@ -365,15 +373,13 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
             {tiers.map((tier) => {
               const tierStats = stats.tiers?.[tier] || { count: 0, avg_importance: 0 };
               const tierPressure = pressure?.[tier as keyof MemoryPressure];
-              const usagePercent = tierPressure && typeof tierPressure === 'object'
-                ? Math.round((tierPressure.usage / tierPressure.limit) * 100)
-                : 0;
+              const usagePercent =
+                tierPressure && typeof tierPressure === 'object'
+                  ? Math.round((tierPressure.usage / tierPressure.limit) * 100)
+                  : 0;
 
               return (
-                <div
-                  key={tier}
-                  className={`card p-4 border ${TIER_BG_COLORS[tier]}`}
-                >
+                <div key={tier} className={`card p-4 border ${TIER_BG_COLORS[tier]}`}>
                   <div className="flex items-center justify-between mb-3">
                     <h4 className={`font-theme-data font-bold uppercase ${TIER_COLORS[tier]}`}>
                       {tier}
@@ -419,12 +425,16 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
               <h3 className="font-theme-data text-[var(--acid-cyan)] mb-4">Archive Statistics</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{archiveStats.total_archived}</div>
+                  <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+                    {archiveStats.total_archived}
+                  </div>
                   <div className="text-xs font-theme-data text-text-muted">Archived</div>
                 </div>
                 {Object.entries(archiveStats.by_tier || {}).map(([tier, count]) => (
                   <div key={tier} className="text-center">
-                    <div className={`text-2xl font-theme-data ${TIER_COLORS[tier.toLowerCase()] || 'text-text'}`}>
+                    <div
+                      className={`text-2xl font-theme-data ${TIER_COLORS[tier.toLowerCase()] || 'text-text'}`}
+                    >
                       {count}
                     </div>
                     <div className="text-xs font-theme-data text-text-muted capitalize">{tier}</div>
@@ -466,18 +476,14 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
 
             <div className="flex flex-wrap gap-4">
               <div>
-                <label className="block font-theme-data text-xs text-text-muted mb-2">
-                  Tiers
-                </label>
+                <label className="block font-theme-data text-xs text-text-muted mb-2">Tiers</label>
                 <div className="flex gap-2">
                   {tiers.map((tier) => (
                     <button
                       key={tier}
                       onClick={() => {
                         setSelectedTiers((prev) =>
-                          prev.includes(tier)
-                            ? prev.filter((t) => t !== tier)
-                            : [...prev, tier]
+                          prev.includes(tier) ? prev.filter((t) => t !== tier) : [...prev, tier],
                         );
                       }}
                       className={`px-3 py-1 font-theme-data text-xs rounded border transition-colors ${
@@ -531,7 +537,9 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
                     className={`p-3 rounded border ${TIER_BG_COLORS[memory.tier] || 'border-text-muted/30'}`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`font-theme-data text-xs uppercase ${TIER_COLORS[memory.tier]}`}>
+                      <span
+                        className={`font-theme-data text-xs uppercase ${TIER_COLORS[memory.tier]}`}
+                      >
                         {memory.tier}
                       </span>
                       <span className="font-theme-data text-xs text-text-muted">
@@ -567,7 +575,9 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
                 <input
                   type="text"
                   value={critiqueFilter.agent}
-                  onChange={(e) => setCritiqueFilter(prev => ({ ...prev, agent: e.target.value }))}
+                  onChange={(e) =>
+                    setCritiqueFilter((prev) => ({ ...prev, agent: e.target.value }))
+                  }
                   placeholder="Agent name..."
                   className="w-full bg-surface border border-[var(--accent)]/30 rounded px-3 py-2 font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 />
@@ -579,7 +589,9 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
                 <input
                   type="text"
                   value={critiqueFilter.debateId}
-                  onChange={(e) => setCritiqueFilter(prev => ({ ...prev, debateId: e.target.value }))}
+                  onChange={(e) =>
+                    setCritiqueFilter((prev) => ({ ...prev, debateId: e.target.value }))
+                  }
                   placeholder="Debate ID..."
                   className="w-full bg-surface border border-[var(--accent)]/30 rounded px-3 py-2 font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 />
@@ -599,8 +611,8 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
             )}
             {!critiqueError && critiques.length === 0 ? (
               <p className="text-text-muted font-theme-data text-sm">
-                No critiques found. Critiques are recorded when agents analyze and critique
-                each other&apos;s arguments during debates.
+                No critiques found. Critiques are recorded when agents analyze and critique each
+                other&apos;s arguments during debates.
               </p>
             ) : (
               <div className="space-y-3">
@@ -608,9 +620,11 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
                   <div
                     key={critique.id || idx}
                     className={`p-4 bg-surface rounded border ${
-                      critique.severity === 'high' ? 'border-acid-red/40' :
-                      critique.severity === 'medium' ? 'border-acid-yellow/40' :
-                      'border-[var(--accent)]/30'
+                      critique.severity === 'high'
+                        ? 'border-acid-red/40'
+                        : critique.severity === 'medium'
+                          ? 'border-acid-yellow/40'
+                          : 'border-[var(--accent)]/30'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
@@ -634,11 +648,15 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
                           </span>
                         )}
                         {critique.severity && (
-                          <span className={`px-2 py-0.5 rounded text-xs font-theme-data ${
-                            critique.severity === 'high' ? 'bg-acid-red/20 text-acid-red' :
-                            critique.severity === 'medium' ? 'bg-acid-yellow/20 text-[var(--acid-yellow)]' :
-                            'bg-[var(--accent)]/20 text-[var(--accent)]'
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-theme-data ${
+                              critique.severity === 'high'
+                                ? 'bg-acid-red/20 text-acid-red'
+                                : critique.severity === 'medium'
+                                  ? 'bg-acid-yellow/20 text-[var(--acid-yellow)]'
+                                  : 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                            }`}
+                          >
                             {critique.severity}
                           </span>
                         )}
@@ -669,10 +687,10 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
       {activeTab === 'transitions' && stats && (
         <div className="card p-4">
           <h3 className="font-theme-data text-[var(--accent)] mb-4">Tier Transitions</h3>
-          {(!stats.transitions || stats.transitions.length === 0) ? (
+          {!stats.transitions || stats.transitions.length === 0 ? (
             <p className="text-text-muted font-theme-data text-sm">
-              No tier transitions recorded yet. Transitions occur when memories
-              are promoted or demoted based on importance and access patterns.
+              No tier transitions recorded yet. Transitions occur when memories are promoted or
+              demoted based on importance and access patterns.
             </p>
           ) : (
             <div className="space-y-2">
@@ -681,16 +699,10 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
                   key={idx}
                   className="flex items-center gap-3 p-2 bg-surface rounded font-theme-data text-sm"
                 >
-                  <span className={TIER_COLORS[transition.from_tier]}>
-                    {transition.from_tier}
-                  </span>
+                  <span className={TIER_COLORS[transition.from_tier]}>{transition.from_tier}</span>
                   <span className="text-text-muted">→</span>
-                  <span className={TIER_COLORS[transition.to_tier]}>
-                    {transition.to_tier}
-                  </span>
-                  <span className="text-text-muted ml-auto">
-                    {transition.count} entries
-                  </span>
+                  <span className={TIER_COLORS[transition.to_tier]}>{transition.to_tier}</span>
+                  <span className="text-text-muted ml-auto">{transition.count} entries</span>
                 </div>
               ))}
             </div>
@@ -702,9 +714,20 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
               How Transitions Work
             </h4>
             <ul className="font-theme-data text-xs text-text-muted space-y-1">
-              <li>• <span className="text-acid-red">Fast</span> → <span className="text-[var(--acid-yellow)]">Medium</span>: Frequently accessed memories promote up</li>
-              <li>• <span className="text-[var(--acid-yellow)]">Medium</span> → <span className="text-[var(--acid-cyan)]">Slow</span>: Important patterns persist longer</li>
-              <li>• <span className="text-[var(--acid-cyan)]">Slow</span> → <span className="text-acid-blue">Glacial</span>: Critical insights archive long-term</li>
+              <li>
+                • <span className="text-acid-red">Fast</span> →{' '}
+                <span className="text-[var(--acid-yellow)]">Medium</span>: Frequently accessed
+                memories promote up
+              </li>
+              <li>
+                • <span className="text-[var(--acid-yellow)]">Medium</span> →{' '}
+                <span className="text-[var(--acid-cyan)]">Slow</span>: Important patterns persist
+                longer
+              </li>
+              <li>
+                • <span className="text-[var(--acid-cyan)]">Slow</span> →{' '}
+                <span className="text-acid-blue">Glacial</span>: Critical insights archive long-term
+              </li>
               <li>• Reverse transitions occur when TTL expires or limits exceed</li>
             </ul>
           </div>
@@ -726,4 +749,7 @@ function MemoryExplorerPanelComponent({ backendConfig }: MemoryExplorerPanelProp
 }
 
 // Wrap with error boundary for graceful error handling
-export const MemoryExplorerPanel = withErrorBoundary(MemoryExplorerPanelComponent, 'Memory Explorer');
+export const MemoryExplorerPanel = withErrorBoundary(
+  MemoryExplorerPanelComponent,
+  'Memory Explorer',
+);

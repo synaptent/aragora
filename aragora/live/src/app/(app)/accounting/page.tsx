@@ -44,14 +44,12 @@ export default function AccountingPage() {
       <div className="container mx-auto px-4 py-6 max-w-7xl">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-theme-data text-[var(--acid-green)]">
-            {'>'} ACCOUNTING
-          </h1>
+          <h1 className="text-xl font-theme-data text-[var(--acid-green)]">{'>'} ACCOUNTING</h1>
         </div>
 
         {/* Tab Navigation */}
         <div className="flex border-b border-[var(--border)] mb-6">
-          {tabs.map(tab => (
+          {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -218,7 +216,9 @@ function IntegrationBadge({ name, status }: IntegrationBadgeProps) {
   const config = statusConfig[status];
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded border ${config.bg} ${config.border}`}>
+    <div
+      className={`flex items-center gap-2 px-3 py-2 rounded border ${config.bg} ${config.border}`}
+    >
       <span className={`w-2 h-2 rounded-full ${config.dot}`} />
       <span className={`text-xs font-theme-data ${config.text}`}>{name}</span>
     </div>

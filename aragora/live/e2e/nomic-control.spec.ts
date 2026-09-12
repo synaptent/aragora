@@ -42,12 +42,7 @@ const mockStatePaused = {
 };
 
 // Mock health data
-const mockHealthNotRunning = {
-  status: 'not_running',
-  cycle: 0,
-  phase: 'unknown',
-  warnings: [],
-};
+const mockHealthNotRunning = { status: 'not_running', cycle: 0, phase: 'unknown', warnings: [] };
 
 const mockHealthHealthy = {
   status: 'healthy',
@@ -90,9 +85,7 @@ const mockProposals = {
   ],
 };
 
-const mockNoProposals = {
-  proposals: [],
-};
+const mockNoProposals = { proposals: [] };
 
 // Mock logs
 const mockLogs = {
@@ -143,7 +136,10 @@ test.describe('Nomic Control Page', () => {
   });
 
   test.describe('Loop Status Display', () => {
-    test('should display not running status when loop is stopped', async ({ page, aragoraPage }) => {
+    test('should display not running status when loop is stopped', async ({
+      page,
+      aragoraPage,
+    }) => {
       await mockApiResponse(page, '**/api/nomic/state', mockStateNotRunning);
       await mockApiResponse(page, '**/api/nomic/health', mockHealthNotRunning);
       await mockApiResponse(page, '**/api/nomic/proposals', mockNoProposals);
@@ -236,7 +232,10 @@ test.describe('Nomic Control Page', () => {
       await expect(page.locator('text=Auto-approve')).toBeVisible();
     });
 
-    test('should show pause and stop buttons when loop is running', async ({ page, aragoraPage }) => {
+    test('should show pause and stop buttons when loop is running', async ({
+      page,
+      aragoraPage,
+    }) => {
       await mockApiResponse(page, '**/api/nomic/state', mockStateRunning);
       await mockApiResponse(page, '**/api/nomic/health', mockHealthHealthy);
       await mockApiResponse(page, '**/api/nomic/proposals', mockNoProposals);
@@ -292,7 +291,10 @@ test.describe('Nomic Control Page', () => {
       await expect(page.locator('text=Optimize memory usage')).toBeVisible();
     });
 
-    test('should show approve and reject buttons for each proposal', async ({ page, aragoraPage }) => {
+    test('should show approve and reject buttons for each proposal', async ({
+      page,
+      aragoraPage,
+    }) => {
       await mockApiResponse(page, '**/api/nomic/state', mockStateRunning);
       await mockApiResponse(page, '**/api/nomic/health', mockHealthHealthy);
       await mockApiResponse(page, '**/api/nomic/proposals', mockProposals);

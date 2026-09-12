@@ -45,11 +45,7 @@ export interface WorkflowDefinition {
   category?: string;
   steps: StepDefinition[];
   transitions: TransitionRule[];
-  config?: {
-    timeout_seconds?: number;
-    max_tokens?: number;
-    max_cost_usd?: number;
-  };
+  config?: { timeout_seconds?: number; max_tokens?: number; max_cost_usd?: number };
   version?: string;
   created_at?: string;
   updated_at?: string;
@@ -143,7 +139,9 @@ export interface WorkflowBuilderActions {
   // Workflow CRUD
   setCurrentWorkflow: (workflow: WorkflowDefinition | null) => void;
   createNewWorkflow: (name: string, description?: string) => WorkflowDefinition;
-  updateWorkflowMetadata: (updates: Partial<Pick<WorkflowDefinition, 'name' | 'description' | 'category' | 'config'>>) => void;
+  updateWorkflowMetadata: (
+    updates: Partial<Pick<WorkflowDefinition, 'name' | 'description' | 'category' | 'config'>>,
+  ) => void;
 
   // Node operations
   addNode: (type: StepType, position: Position) => string;

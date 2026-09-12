@@ -7,11 +7,7 @@ const mockFetch = jest.fn();
 
 global.fetch = mockFetch as typeof fetch;
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-  }),
-}));
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 
 jest.mock('@/store/onboardingStore', () => ({
   useOnboardingStore: (selector?: (state: Record<string, unknown>) => unknown) =>
@@ -38,10 +34,7 @@ import { QuickDebatePanel } from '../QuickDebatePanel';
 import { TryDebateStep } from '../steps/TryDebateStep';
 
 jest.mock('@/hooks/debate-websocket/useDebateWebSocket', () => ({
-  useDebateWebSocket: () => ({
-    status: 'connecting',
-    messages: [],
-  }),
+  useDebateWebSocket: () => ({ status: 'connecting', messages: [] }),
 }));
 
 describe('Onboarding backend selection', () => {
@@ -87,10 +80,7 @@ describe('Onboarding backend selection', () => {
   });
 
   it('OnboardingFlow creates the first debate against the selected backend', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ debate_id: 'debate-123' }),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ debate_id: 'debate-123' }) });
 
     render(<OnboardingFlow />);
     fireEvent.click(screen.getByText('Use template'));
@@ -104,10 +94,7 @@ describe('Onboarding backend selection', () => {
   });
 
   it('QuickDebatePanel starts debates against the selected backend', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ id: 'debate-quick' }),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'debate-quick' }) });
 
     render(<QuickDebatePanel />);
     fireEvent.click(screen.getByText('START DEBATE'));
@@ -125,10 +112,7 @@ describe('Onboarding backend selection', () => {
     jest.useFakeTimers();
     try {
       mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ id: 'debate-quick' }),
-        })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'debate-quick' }) })
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({
@@ -196,12 +180,7 @@ describe('Onboarding backend selection', () => {
     mockStoreState = {
       ...mockStoreState,
       firstDebateTopic: 'Should we launch on the production backend?',
-      selectedTemplate: {
-        id: 'hiring',
-        name: 'Hiring',
-        rounds: 5,
-        agentsCount: 2,
-      },
+      selectedTemplate: { id: 'hiring', name: 'Hiring', rounds: 5, agentsCount: 2 },
     };
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -220,17 +199,12 @@ describe('Onboarding backend selection', () => {
   });
 
   it('IntegrationSelector checks integrations against the selected backend', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ integrations: {} }),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ integrations: {} }) });
 
     render(<IntegrationSelector onComplete={jest.fn()} />);
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.aragora.ai/api/v1/integrations/status',
-      );
+      expect(mockFetch).toHaveBeenCalledWith('https://api.aragora.ai/api/v1/integrations/status');
     });
   });
 });

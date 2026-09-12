@@ -45,17 +45,28 @@ function StatCard({ label, value, sublabel, color = 'green' }: StatCardProps) {
   return (
     <div className={`border ${colorClasses[color]} p-3 rounded`}>
       <div className="text-text-muted text-xs">{label}</div>
-      <div className={`text-xl font-theme-data ${colorClasses[color].split(' ')[2]}`}>
-        {value}
-      </div>
+      <div className={`text-xl font-theme-data ${colorClasses[color].split(' ')[2]}`}>{value}</div>
       {sublabel && <div className="text-text-muted text-[10px] mt-1">{sublabel}</div>}
     </div>
   );
 }
 
-function ProgressBar({ value, max = 100, color = 'green' }: { value: number; max?: number; color?: string }) {
+function ProgressBar({
+  value,
+  max = 100,
+  color = 'green',
+}: {
+  value: number;
+  max?: number;
+  color?: string;
+}) {
   const percentage = Math.min((value / max) * 100, 100);
-  const colorClass = color === 'green' ? 'bg-[var(--accent)]' : color === 'red' ? 'bg-[var(--crimson)]' : 'bg-[var(--acid-cyan)]';
+  const colorClass =
+    color === 'green'
+      ? 'bg-[var(--accent)]'
+      : color === 'red'
+        ? 'bg-[var(--crimson)]'
+        : 'bg-[var(--acid-cyan)]';
 
   return (
     <div className="h-2 bg-surface rounded-full overflow-hidden">
@@ -106,43 +117,47 @@ export function AnalyticsDashboard() {
     return res.stats;
   }, [client]);
 
-  const { data: summary, loading: summaryLoading, error: summaryError } = useAsyncData<AnalyticsSummary>(
-    summaryFetcher,
-    { immediate: true }
-  );
+  const {
+    data: summary,
+    loading: summaryLoading,
+    error: summaryError,
+  } = useAsyncData<AnalyticsSummary>(summaryFetcher, { immediate: true });
 
-  const { data: trends, loading: trendsLoading } = useAsyncData<FindingsTrend[]>(
-    trendsFetcher,
-    { immediate: true }
-  );
+  const { data: trends, loading: trendsLoading } = useAsyncData<FindingsTrend[]>(trendsFetcher, {
+    immediate: true,
+  });
 
   const { data: remediation, loading: remediationLoading } = useAsyncData<RemediationMetrics>(
     remediationFetcher,
-    { immediate: true }
+    { immediate: true },
   );
 
-  const { data: agents, loading: agentsLoading } = useAsyncData<AgentMetrics[]>(
-    agentsFetcher,
-    { immediate: true }
-  );
+  const { data: agents, loading: agentsLoading } = useAsyncData<AgentMetrics[]>(agentsFetcher, {
+    immediate: true,
+  });
 
-  const { data: cost, loading: costLoading } = useAsyncData<CostAnalysis>(
-    costFetcher,
-    { immediate: true }
-  );
+  const { data: cost, loading: costLoading } = useAsyncData<CostAnalysis>(costFetcher, {
+    immediate: true,
+  });
 
   const { data: compliance, loading: complianceLoading } = useAsyncData<ComplianceScore>(
     complianceFetcher,
-    { immediate: true }
+    { immediate: true },
   );
 
   const { data: disagreements, loading: disagreementsLoading } = useAsyncData<DisagreementStats>(
     disagreementsFetcher,
-    { immediate: true }
+    { immediate: true },
   );
 
-  const isLoading = summaryLoading || trendsLoading || remediationLoading ||
-                    agentsLoading || costLoading || complianceLoading || disagreementsLoading;
+  const isLoading =
+    summaryLoading ||
+    trendsLoading ||
+    remediationLoading ||
+    agentsLoading ||
+    costLoading ||
+    complianceLoading ||
+    disagreementsLoading;
 
   if (summaryError) {
     return (
@@ -159,16 +174,8 @@ export function AnalyticsDashboard() {
       <section>
         <h2 className="text-lg font-theme-data text-[var(--accent)] mb-3">{'>'} OVERVIEW</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard
-            label="Total Debates"
-            value={summary?.total_debates ?? '-'}
-            color="green"
-          />
-          <StatCard
-            label="Total Messages"
-            value={summary?.total_messages ?? '-'}
-            color="cyan"
-          />
+          <StatCard label="Total Debates" value={summary?.total_debates ?? '-'} color="green" />
+          <StatCard label="Total Messages" value={summary?.total_messages ?? '-'} color="cyan" />
           <StatCard
             label="Consensus Rate"
             value={summary ? `${(summary.consensus_rate * 100).toFixed(1)}%` : '-'}
@@ -187,21 +194,9 @@ export function AnalyticsDashboard() {
         <section>
           <h2 className="text-lg font-theme-data text-[var(--accent)] mb-3">{'>'} REMEDIATION</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-            <StatCard
-              label="Total Findings"
-              value={remediation.total_findings}
-              color="yellow"
-            />
-            <StatCard
-              label="Remediated"
-              value={remediation.remediated}
-              color="green"
-            />
-            <StatCard
-              label="Pending"
-              value={remediation.pending}
-              color="red"
-            />
+            <StatCard label="Total Findings" value={remediation.total_findings} color="yellow" />
+            <StatCard label="Remediated" value={remediation.remediated} color="green" />
+            <StatCard label="Pending" value={remediation.pending} color="red" />
             <StatCard
               label="Avg Time (hrs)"
               value={remediation.avg_remediation_time_hours.toFixed(1)}
@@ -211,7 +206,9 @@ export function AnalyticsDashboard() {
           <div className="border border-[var(--accent)]/30 bg-surface p-3 rounded">
             <div className="flex justify-between text-xs text-text-muted mb-2">
               <span>Remediation Progress</span>
-              <span className="text-[var(--accent)]">{(remediation.remediation_rate * 100).toFixed(1)}%</span>
+              <span className="text-[var(--accent)]">
+                {(remediation.remediation_rate * 100).toFixed(1)}%
+              </span>
             </div>
             <ProgressBar value={remediation.remediation_rate * 100} />
           </div>
@@ -229,7 +226,10 @@ export function AnalyticsDashboard() {
                 {compliance.overall_score}%
               </div>
               <div className="text-text-muted text-[10px]">
-                Last audit: {compliance.last_audit ? new Date(compliance.last_audit).toLocaleDateString() : 'N/A'}
+                Last audit:{' '}
+                {compliance.last_audit
+                  ? new Date(compliance.last_audit).toLocaleDateString()
+                  : 'N/A'}
               </div>
             </div>
             <div className="border border-[var(--accent)]/30 bg-surface p-3 rounded">
@@ -270,12 +270,16 @@ export function AnalyticsDashboard() {
             <div className="border border-[var(--accent)]/30 bg-surface p-3 rounded col-span-2 md:col-span-1">
               <div className="text-text-muted text-xs mb-2">Cost by Model</div>
               <div className="space-y-1">
-                {Object.entries(cost.cost_by_model).slice(0, 3).map(([model, amount]) => (
-                  <div key={model} className="flex justify-between text-xs">
-                    <span className="text-text truncate max-w-[100px]">{model}</span>
-                    <span className="text-[var(--accent)] font-theme-data">${(amount as number).toFixed(2)}</span>
-                  </div>
-                ))}
+                {Object.entries(cost.cost_by_model)
+                  .slice(0, 3)
+                  .map(([model, amount]) => (
+                    <div key={model} className="flex justify-between text-xs">
+                      <span className="text-text truncate max-w-[100px]">{model}</span>
+                      <span className="text-[var(--accent)] font-theme-data">
+                        ${(amount as number).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
@@ -285,7 +289,9 @@ export function AnalyticsDashboard() {
       {/* Agent Performance Section */}
       {agents && agents.length > 0 && (
         <section>
-          <h2 className="text-lg font-theme-data text-[var(--accent)] mb-3">{'>'} AGENT PERFORMANCE</h2>
+          <h2 className="text-lg font-theme-data text-[var(--accent)] mb-3">
+            {'>'} AGENT PERFORMANCE
+          </h2>
           <div className="border border-[var(--accent)]/30 bg-surface rounded overflow-hidden">
             <table className="w-full text-xs">
               <thead>
@@ -299,16 +305,19 @@ export function AnalyticsDashboard() {
               </thead>
               <tbody>
                 {agents.slice(0, 5).map((agent) => (
-                  <tr key={agent.agent_id} className="border-b border-[var(--accent)]/10 hover:bg-[var(--accent)]/5">
-                    <td className="p-2 font-theme-data text-[var(--acid-cyan)]">{agent.name || agent.agent_id}</td>
+                  <tr
+                    key={agent.agent_id}
+                    className="border-b border-[var(--accent)]/10 hover:bg-[var(--accent)]/5"
+                  >
+                    <td className="p-2 font-theme-data text-[var(--acid-cyan)]">
+                      {agent.name || agent.agent_id}
+                    </td>
                     <td className="p-2 text-right text-text">{agent.debates_participated}</td>
                     <td className="p-2 text-right text-text">{agent.avg_message_length}</td>
                     <td className="p-2 text-right text-[var(--accent)]">
                       {(agent.consensus_contribution * 100).toFixed(0)}%
                     </td>
-                    <td className="p-2 text-right text-purple-400">
-                      {agent.elo_rating ?? '-'}
-                    </td>
+                    <td className="p-2 text-right text-purple-400">{agent.elo_rating ?? '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -355,7 +364,9 @@ export function AnalyticsDashboard() {
       {/* Findings Trends Mini Chart */}
       {trends && trends.length > 0 && (
         <section>
-          <h2 className="text-lg font-theme-data text-[var(--accent)] mb-3">{'>'} FINDINGS TREND (30D)</h2>
+          <h2 className="text-lg font-theme-data text-[var(--accent)] mb-3">
+            {'>'} FINDINGS TREND (30D)
+          </h2>
           <div className="border border-[var(--accent)]/30 bg-surface p-4 rounded">
             <div className="flex items-end gap-1 h-20">
               {trends.slice(-14).map((day) => {
@@ -370,7 +381,10 @@ export function AnalyticsDashboard() {
                   >
                     <div
                       className="w-full bg-[var(--accent)]/60 hover:bg-[var(--accent)] transition-colors rounded-t"
-                      style={{ height: `${height}%`, minHeight: day.findings_count > 0 ? '4px' : '0' }}
+                      style={{
+                        height: `${height}%`,
+                        minHeight: day.findings_count > 0 ? '4px' : '0',
+                      }}
                     />
                   </div>
                 );
@@ -381,9 +395,13 @@ export function AnalyticsDashboard() {
               <span>{trends[trends.length - 1]?.date}</span>
             </div>
             <div className="flex gap-4 mt-3 text-xs">
-              <span className="text-[var(--crimson)]">Critical: {trends.reduce((a, t) => a + t.critical, 0)}</span>
+              <span className="text-[var(--crimson)]">
+                Critical: {trends.reduce((a, t) => a + t.critical, 0)}
+              </span>
               <span className="text-warning">High: {trends.reduce((a, t) => a + t.high, 0)}</span>
-              <span className="text-[var(--acid-yellow)]">Medium: {trends.reduce((a, t) => a + t.medium, 0)}</span>
+              <span className="text-[var(--acid-yellow)]">
+                Medium: {trends.reduce((a, t) => a + t.medium, 0)}
+              </span>
               <span className="text-text-muted">Low: {trends.reduce((a, t) => a + t.low, 0)}</span>
             </div>
           </div>
@@ -393,7 +411,9 @@ export function AnalyticsDashboard() {
       {/* Loading overlay */}
       {isLoading && (
         <div className="fixed inset-0 bg-bg/50 flex items-center justify-center z-50 pointer-events-none">
-          <div className="text-[var(--accent)] font-theme-data animate-pulse">Loading analytics...</div>
+          <div className="text-[var(--accent)] font-theme-data animate-pulse">
+            Loading analytics...
+          </div>
         </div>
       )}
     </div>

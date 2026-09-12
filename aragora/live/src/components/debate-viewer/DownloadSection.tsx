@@ -29,40 +29,41 @@ export function DownloadSection({ debateId, isCompleted = true }: DownloadSectio
   const [downloading, setDownloading] = useState<ExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const downloadFormat = useCallback(async (format: ExportFormat) => {
-    setDownloading(format);
-    setError(null);
+  const downloadFormat = useCallback(
+    async (format: ExportFormat) => {
+      setDownloading(format);
+      setError(null);
 
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/debates/${debateId}/export/${format}`
-      );
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/debates/${debateId}/export/${format}`);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Export failed (${response.status})`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Export failed (${response.status})`);
+        }
+
+        // Get the content
+        const content = await response.text();
+        const config = EXPORT_FORMATS[format];
+
+        // Create blob and download
+        const blob = new Blob([content], { type: config.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `debate-${debateId}.${config.extension}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Download failed');
+      } finally {
+        setDownloading(null);
       }
-
-      // Get the content
-      const content = await response.text();
-      const config = EXPORT_FORMATS[format];
-
-      // Create blob and download
-      const blob = new Blob([content], { type: config.mimeType });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `debate-${debateId}.${config.extension}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Download failed');
-    } finally {
-      setDownloading(null);
-    }
-  }, [debateId]);
+    },
+    [debateId],
+  );
 
   if (!isCompleted) {
     return (
@@ -96,16 +97,17 @@ export function DownloadSection({ debateId, isCompleted = true }: DownloadSectio
               disabled={downloading !== null}
               className={`
                 px-3 py-1.5 text-xs font-theme-data border transition-colors
-                ${downloading === format
-                  ? 'bg-accent/20 border-accent text-accent animate-pulse'
-                  : 'bg-bg border-border text-text-muted hover:border-accent/40 hover:text-accent'
+                ${
+                  downloading === format
+                    ? 'bg-accent/20 border-accent text-accent animate-pulse'
+                    : 'bg-bg border-border text-text-muted hover:border-accent/40 hover:text-accent'
                 }
                 disabled:opacity-50 disabled:cursor-not-allowed
               `}
             >
               {downloading === format ? `[${config.label}...]` : `[${config.label}]`}
             </button>
-          )
+          ),
         )}
       </div>
 

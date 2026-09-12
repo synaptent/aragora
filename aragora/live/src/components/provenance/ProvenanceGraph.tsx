@@ -55,13 +55,13 @@ interface ProvenanceGraphProps {
 }
 
 const NODE_COLORS: Record<NodeType, string> = {
-  question: '#fbbf24',    // amber
-  agent: '#a855f7',       // purple
-  argument: '#3b82f6',    // blue
-  evidence: '#22c55e',    // green
-  vote: '#f97316',        // orange
-  consensus: '#00ff00',   // acid green
-  synthesis: '#06b6d4',   // cyan
+  question: '#fbbf24', // amber
+  agent: '#a855f7', // purple
+  argument: '#3b82f6', // blue
+  evidence: '#22c55e', // green
+  vote: '#f97316', // orange
+  consensus: '#00ff00', // acid green
+  synthesis: '#06b6d4', // cyan
 };
 
 const EDGE_COLORS: Record<string, string> = {
@@ -115,9 +115,10 @@ export function ProvenanceGraph({
   const fetchProvenance = useCallback(async () => {
     try {
       setLoading(true);
-      const endpoint = viewMode === 'timeline'
-        ? `${apiBase}/api/debates/${debateId}/provenance/timeline`
-        : `${apiBase}/api/debates/${debateId}/provenance`;
+      const endpoint =
+        viewMode === 'timeline'
+          ? `${apiBase}/api/debates/${debateId}/provenance/timeline`
+          : `${apiBase}/api/debates/${debateId}/provenance`;
 
       const response = await fetch(endpoint);
 
@@ -153,7 +154,7 @@ export function ProvenanceGraph({
     const nodesByDepth: Map<number, ProvenanceNode[]> = new Map();
 
     // Group by depth
-    nodes.forEach(node => {
+    nodes.forEach((node) => {
       const depth = node.depth ?? 0;
       if (!nodesByDepth.has(depth)) {
         nodesByDepth.set(depth, []);
@@ -178,7 +179,7 @@ export function ProvenanceGraph({
 
   // Toggle node expansion
   const toggleExpand = (nodeId: string) => {
-    setExpandedNodes(prev => {
+    setExpandedNodes((prev) => {
       const next = new Set(prev);
       if (next.has(nodeId)) {
         next.delete(nodeId);
@@ -198,7 +199,7 @@ export function ProvenanceGraph({
   // Build node lookup for edge rendering
   const nodeMap = useMemo(() => {
     const map = new Map<string, ProvenanceNode>();
-    data?.nodes.forEach(node => map.set(node.id, node));
+    data?.nodes.forEach((node) => map.set(node.id, node));
     return map;
   }, [data]);
 
@@ -211,13 +212,11 @@ export function ProvenanceGraph({
 
     try {
       const response = await fetch(
-        `${apiBase}/api/debates/${debateId}/provenance/export?format=json`
+        `${apiBase}/api/debates/${debateId}/provenance/export?format=json`,
       );
       const exportData = await response.json();
 
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json',
-      });
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -232,14 +231,12 @@ export function ProvenanceGraph({
   // Verify chain handler
   const handleVerify = async () => {
     try {
-      const response = await fetch(
-        `${apiBase}/api/debates/${debateId}/provenance/verify`
-      );
+      const response = await fetch(`${apiBase}/api/debates/${debateId}/provenance/verify`);
       const result = await response.json();
       alert(
         result.chain_valid
           ? 'Provenance chain verified successfully!'
-          : `Verification failed: ${result.errors?.join(', ') || 'Unknown error'}`
+          : `Verification failed: ${result.errors?.join(', ') || 'Unknown error'}`,
       );
     } catch {
       alert('Failed to verify provenance chain');
@@ -317,10 +314,7 @@ export function ProvenanceGraph({
       <div className="flex items-center gap-4 px-3 py-2 bg-[var(--surface)]/50 border-b border-[var(--border)] text-xs font-theme-data flex-wrap">
         {Object.entries(NODE_COLORS).map(([type, color]) => (
           <span key={type} className="flex items-center gap-1">
-            <span
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: color }}
-            />
+            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
             <span className="text-[var(--text-muted)] capitalize">{type}</span>
           </span>
         ))}
@@ -362,7 +356,7 @@ export function ProvenanceGraph({
 
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {/* Edges */}
-          {data.edges.map(edge => {
+          {data.edges.map((edge) => {
             const source = nodeMap.get(edge.source);
             const target = nodeMap.get(edge.target);
 
@@ -387,7 +381,7 @@ export function ProvenanceGraph({
           })}
 
           {/* Nodes */}
-          {data.nodes.map(node => {
+          {data.nodes.map((node) => {
             const radius = NODE_RADIUS[node.type] || 12;
             const color = NODE_COLORS[node.type] || '#6b7280';
             const isSelected = selectedNode?.id === node.id;
@@ -450,16 +444,16 @@ export function ProvenanceGraph({
                   {node.type === 'consensus'
                     ? ''
                     : node.type === 'question'
-                    ? '?'
-                    : node.type === 'agent'
-                    ? node.agent?.[0].toUpperCase()
-                    : node.type === 'evidence'
-                    ? ''
-                    : node.type === 'vote'
-                    ? ''
-                    : node.type === 'synthesis'
-                    ? ''
-                    : ''}
+                      ? '?'
+                      : node.type === 'agent'
+                        ? node.agent?.[0].toUpperCase()
+                        : node.type === 'evidence'
+                          ? ''
+                          : node.type === 'vote'
+                            ? ''
+                            : node.type === 'synthesis'
+                              ? ''
+                              : ''}
                 </text>
 
                 {/* Agent name label */}
@@ -481,7 +475,13 @@ export function ProvenanceGraph({
                     y={radius + (node.agent ? 26 : 14)}
                     textAnchor="middle"
                     fontSize={9}
-                    fill={node.confidence >= 0.8 ? '#22c55e' : node.confidence >= 0.5 ? '#fbbf24' : '#ef4444'}
+                    fill={
+                      node.confidence >= 0.8
+                        ? '#22c55e'
+                        : node.confidence >= 0.5
+                          ? '#fbbf24'
+                          : '#ef4444'
+                    }
                     fontFamily="monospace"
                   >
                     {Math.round(node.confidence * 100)}%
@@ -505,9 +505,7 @@ export function ProvenanceGraph({
               <span className="text-xs font-theme-data uppercase text-[var(--text-muted)]">
                 {selectedNode.type}
               </span>
-              {selectedNode.verified && (
-                <span className="text-green-400 text-xs"></span>
-              )}
+              {selectedNode.verified && <span className="text-green-400 text-xs"></span>}
             </div>
             <button
               onClick={() => setSelectedNode(null)}
@@ -521,9 +519,7 @@ export function ProvenanceGraph({
             {selectedNode.label}
           </h4>
 
-          <p className="text-xs text-[var(--text)] leading-relaxed mb-3">
-            {selectedNode.content}
-          </p>
+          <p className="text-xs text-[var(--text)] leading-relaxed mb-3">{selectedNode.content}</p>
 
           <div className="space-y-1 text-xs font-theme-data text-[var(--text-muted)]">
             {selectedNode.agent && (
@@ -546,8 +542,8 @@ export function ProvenanceGraph({
                     selectedNode.confidence >= 0.8
                       ? 'text-green-400'
                       : selectedNode.confidence >= 0.5
-                      ? 'text-yellow-400'
-                      : 'text-red-400'
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
                   }
                 >
                   {Math.round(selectedNode.confidence * 100)}%

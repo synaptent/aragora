@@ -4,9 +4,7 @@ import { DebateForkPanel } from '../DebateForkPanel';
 
 // Mock BackendSelector
 jest.mock('@/components/BackendSelector', () => ({
-  useBackend: () => ({
-    config: { api: 'http://localhost:8080' },
-  }),
+  useBackend: () => ({ config: { api: 'http://localhost:8080' } }),
 }));
 
 // Mock fetch
@@ -30,7 +28,7 @@ describe('DebateForkPanel', () => {
       render(<DebateForkPanel debateId="debate-123" messageCount={10} />);
 
       expect(
-        screen.getByText(/Create a counterfactual branch from this debate/)
+        screen.getByText(/Create a counterfactual branch from this debate/),
       ).toBeInTheDocument();
     });
 
@@ -52,9 +50,7 @@ describe('DebateForkPanel', () => {
       render(<DebateForkPanel debateId="debate-123" messageCount={10} />);
 
       expect(screen.getByText('MODIFIED CONTEXT (optional)')).toBeInTheDocument();
-      expect(
-        screen.getByPlaceholderText(/What if we assumed X instead of Y/)
-      ).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/What if we assumed X instead of Y/)).toBeInTheDocument();
     });
 
     it('renders create fork button', () => {
@@ -92,7 +88,7 @@ describe('DebateForkPanel', () => {
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-        })
+        }),
       );
     });
 
@@ -101,11 +97,7 @@ describe('DebateForkPanel', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
-          Promise.resolve({
-            success: true,
-            branch_id: 'branch-456',
-            messages_inherited: 5,
-          }),
+          Promise.resolve({ success: true, branch_id: 'branch-456', messages_inherited: 5 }),
       });
 
       const user = userEvent.setup();
@@ -128,11 +120,7 @@ describe('DebateForkPanel', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
-          Promise.resolve({
-            success: true,
-            branch_id: 'branch-456',
-            messages_inherited: 5,
-          }),
+          Promise.resolve({ success: true, branch_id: 'branch-456', messages_inherited: 5 }),
       });
 
       const user = userEvent.setup();
@@ -159,19 +147,12 @@ describe('DebateForkPanel', () => {
         status: 'created',
         message: 'Fork created',
       };
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(forkResult),
-      });
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(forkResult) });
 
       const onForkCreated = jest.fn();
       const user = userEvent.setup();
       render(
-        <DebateForkPanel
-          debateId="debate-123"
-          messageCount={10}
-          onForkCreated={onForkCreated}
-        />
+        <DebateForkPanel debateId="debate-123" messageCount={10} onForkCreated={onForkCreated} />,
       );
 
       await act(async () => {
@@ -217,7 +198,7 @@ describe('DebateForkPanel', () => {
       });
 
       expect(
-        screen.getByText(/Create a follow-up debate to explore unresolved/)
+        screen.getByText(/Create a follow-up debate to explore unresolved/),
       ).toBeInTheDocument();
     });
 
@@ -256,11 +237,8 @@ describe('DebateForkPanel', () => {
         () =>
           new Promise((resolve) => {
             resolvePromise = () =>
-              resolve({
-                ok: true,
-                json: () => Promise.resolve({ suggestions: [] }),
-              });
-          })
+              resolve({ ok: true, json: () => Promise.resolve({ suggestions: [] }) });
+          }),
       );
 
       const user = userEvent.setup();
@@ -292,9 +270,7 @@ describe('DebateForkPanel', () => {
 
       await waitFor(() => {
         expect(screen.getByText('OR ENTER CUSTOM TASK')).toBeInTheDocument();
-        expect(
-          screen.getByPlaceholderText(/What specific question should/)
-        ).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/What specific question should/)).toBeInTheDocument();
       });
     });
 
@@ -376,10 +352,7 @@ describe('DebateForkPanel', () => {
 
     it('creates follow-up with custom task', async () => {
       mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ suggestions: [] }),
-        })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ suggestions: [] }) })
         .mockResolvedValueOnce({
           ok: true,
           json: () =>
@@ -448,14 +421,8 @@ describe('DebateForkPanel', () => {
       };
 
       mockFetch
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve({ suggestions: [] }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: () => Promise.resolve(followupResult),
-        });
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ suggestions: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(followupResult) });
 
       const onFollowupCreated = jest.fn();
       const user = userEvent.setup();
@@ -464,7 +431,7 @@ describe('DebateForkPanel', () => {
           debateId="debate-123"
           messageCount={10}
           onFollowupCreated={onFollowupCreated}
-        />
+        />,
       );
 
       await act(async () => {

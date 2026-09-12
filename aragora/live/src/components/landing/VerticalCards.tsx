@@ -18,7 +18,8 @@ const VERTICALS: Vertical[] = [
     icon: '{}',
     path: '/verticals/legal',
     description: 'Contract analysis, case research, compliance',
-    color: 'text-[var(--acid-cyan)] hover:text-[var(--acid-cyan)]/80 hover:bg-[var(--acid-cyan)]/10',
+    color:
+      'text-[var(--acid-cyan)] hover:text-[var(--acid-cyan)]/80 hover:bg-[var(--acid-cyan)]/10',
   },
   {
     id: 'healthcare',

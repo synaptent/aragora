@@ -59,9 +59,7 @@ describe('RoundProgress', () => {
     });
 
     it('shows active round detail panel', () => {
-      const events: StreamEvent[] = [
-        createEvent({ round: 2, type: 'agent_message' }),
-      ];
+      const events: StreamEvent[] = [createEvent({ round: 2, type: 'agent_message' })];
 
       render(<RoundProgress events={events} />);
 
@@ -84,9 +82,7 @@ describe('RoundProgress', () => {
     });
 
     it('shows singular message count for single message', () => {
-      const events: StreamEvent[] = [
-        createEvent({ round: 1, type: 'agent_message' }),
-      ];
+      const events: StreamEvent[] = [createEvent({ round: 1, type: 'agent_message' })];
 
       render(<RoundProgress events={events} />);
 
@@ -135,9 +131,7 @@ describe('RoundProgress', () => {
     });
 
     it('handles events beyond totalRounds', () => {
-      const events: StreamEvent[] = [
-        createEvent({ round: 5, type: 'agent_message' }),
-      ];
+      const events: StreamEvent[] = [createEvent({ round: 5, type: 'agent_message' })];
 
       render(<RoundProgress events={events} totalRounds={4} />);
 
@@ -165,9 +159,7 @@ describe('RoundIndicator', () => {
   });
 
   it('highlights current round', () => {
-    const events: StreamEvent[] = [
-      createEvent({ round: 2, type: 'agent_message' }),
-    ];
+    const events: StreamEvent[] = [createEvent({ round: 2, type: 'agent_message' })];
 
     render(<RoundIndicator events={events} />);
 
@@ -177,9 +169,7 @@ describe('RoundIndicator', () => {
   });
 
   it('marks completed rounds', () => {
-    const events: StreamEvent[] = [
-      createEvent({ round: 3, type: 'agent_message' }),
-    ];
+    const events: StreamEvent[] = [createEvent({ round: 3, type: 'agent_message' })];
 
     render(<RoundIndicator events={events} />);
 

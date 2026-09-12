@@ -236,7 +236,10 @@ export default function SpectateClient() {
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-3">
-                <Link href="/spectate" className="text-text-muted hover:text-[var(--accent)] transition-colors">
+                <Link
+                  href="/spectate"
+                  className="text-text-muted hover:text-[var(--accent)] transition-colors"
+                >
                   ← Back
                 </Link>
                 <div className="flex items-center gap-2">
@@ -294,11 +297,13 @@ export default function SpectateClient() {
             <div className="flex items-center border-b border-border bg-surface-elevated/80">
               {/* Tab buttons */}
               <div className="flex">
-                {([
-                  { key: 'feed', label: 'FEED' },
-                  { key: 'timeline', label: 'TIMELINE' },
-                  { key: 'summary', label: 'SUMMARY' },
-                ] as const).map((tab) => (
+                {(
+                  [
+                    { key: 'feed', label: 'FEED' },
+                    { key: 'timeline', label: 'TIMELINE' },
+                    { key: 'summary', label: 'SUMMARY' },
+                  ] as const
+                ).map((tab) => (
                   <button
                     key={tab.key}
                     onClick={() => setViewMode(tab.key)}
@@ -333,7 +338,8 @@ export default function SpectateClient() {
                 className="h-[500px] overflow-y-auto p-4 space-y-2 font-theme-data text-sm"
                 onScroll={(e) => {
                   const target = e.target as HTMLDivElement;
-                  const atBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 50;
+                  const atBottom =
+                    target.scrollHeight - target.scrollTop <= target.clientHeight + 50;
                   if (!atBottom && autoScroll) {
                     setAutoScroll(false);
                   }
@@ -402,23 +408,33 @@ function EventLine({
   showTimestamp: boolean;
   formatTimestamp: (ts: number) => string;
 }) {
-  const style = EVENT_STYLES[event.type] || { icon: '•', color: 'text-text-muted', label: 'UNKNOWN' };
+  const style = EVENT_STYLES[event.type] || {
+    icon: '•',
+    color: 'text-text-muted',
+    label: 'UNKNOWN',
+  };
 
   return (
     <div className="flex items-start gap-2 py-1 hover:bg-[var(--accent)]/5 px-2 -mx-2 rounded">
       {/* Timestamp */}
       {showTimestamp && (
-        <span className="text-text-muted/50 text-xs shrink-0 w-20">[{formatTimestamp(event.timestamp)}]</span>
+        <span className="text-text-muted/50 text-xs shrink-0 w-20">
+          [{formatTimestamp(event.timestamp)}]
+        </span>
       )}
 
       {/* Round */}
-      {event.round !== null && <span className="text-[var(--acid-cyan)]/70 text-xs shrink-0">R{event.round}</span>}
+      {event.round !== null && (
+        <span className="text-[var(--acid-cyan)]/70 text-xs shrink-0">R{event.round}</span>
+      )}
 
       {/* Icon */}
       <span className="shrink-0">{style.icon}</span>
 
       {/* Agent */}
-      {event.agent && <span className="text-[var(--accent)] font-bold shrink-0">{event.agent}</span>}
+      {event.agent && (
+        <span className="text-[var(--accent)] font-bold shrink-0">{event.agent}</span>
+      )}
 
       {/* Details */}
       {event.details && <span className="text-text truncate">{event.details}</span>}

@@ -130,7 +130,12 @@ export const ACTION_CONFIGS: Record<
     requiresTarget: boolean;
     targetLabel?: string;
     targetPlaceholder?: string;
-    paramFields?: { key: string; label: string; type: 'text' | 'number' | 'select'; options?: { value: string; label: string }[] }[];
+    paramFields?: {
+      key: string;
+      label: string;
+      type: 'text' | 'number' | 'select';
+      options?: { value: string; label: string }[];
+    }[];
   }
 > = {
   route_to_channel: {
@@ -156,9 +161,7 @@ export const ACTION_CONFIGS: Record<
     requiresTarget: true,
     targetLabel: 'Recipient',
     targetPlaceholder: 'e.g., admin, all, user@example.com',
-    paramFields: [
-      { key: 'message', label: 'Message', type: 'text' },
-    ],
+    paramFields: [{ key: 'message', label: 'Message', type: 'text' }],
   },
   tag: {
     label: 'Add Tag',
@@ -181,18 +184,14 @@ export const ACTION_CONFIGS: Record<
     icon: '⏰',
     description: 'Delay before delivery',
     requiresTarget: false,
-    paramFields: [
-      { key: 'seconds', label: 'Delay (seconds)', type: 'number' },
-    ],
+    paramFields: [{ key: 'seconds', label: 'Delay (seconds)', type: 'number' }],
   },
   block: {
     label: 'Block Delivery',
     icon: '🚫',
     description: 'Prevent decision delivery',
     requiresTarget: false,
-    paramFields: [
-      { key: 'reason', label: 'Reason', type: 'text' },
-    ],
+    paramFields: [{ key: 'reason', label: 'Reason', type: 'text' }],
   },
   require_approval: {
     label: 'Require Approval',
@@ -216,11 +215,16 @@ export const ACTION_CONFIGS: Record<
     description: 'Log for auditing',
     requiresTarget: false,
     paramFields: [
-      { key: 'level', label: 'Log Level', type: 'select', options: [
-        { value: 'info', label: 'Info' },
-        { value: 'warning', label: 'Warning' },
-        { value: 'error', label: 'Error' },
-      ]},
+      {
+        key: 'level',
+        label: 'Log Level',
+        type: 'select',
+        options: [
+          { value: 'info', label: 'Info' },
+          { value: 'warning', label: 'Warning' },
+          { value: 'error', label: 'Error' },
+        ],
+      },
       { key: 'message', label: 'Message', type: 'text' },
     ],
   },

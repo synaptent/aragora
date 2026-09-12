@@ -11,7 +11,10 @@
  */
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { WorkspaceManager, type Workspace } from '../src/components/control-plane/WorkspaceManager/WorkspaceManager';
+import {
+  WorkspaceManager,
+  type Workspace,
+} from '../src/components/control-plane/WorkspaceManager/WorkspaceManager';
 import type { Workspace as HookWorkspace } from '../src/hooks/useWorkspaces';
 
 // Mock the useWorkspaces hook
@@ -55,9 +58,29 @@ const mockWorkspaces: Workspace[] = [
     createdAt: '2024-01-01T00:00:00Z',
     updatedAt: '2024-01-16T10:00:00Z',
     members: [
-      { id: 'u1', name: 'Alice Chen', email: 'alice@company.com', role: 'owner', joinedAt: '2024-01-01T00:00:00Z', lastActive: '2024-01-16T12:00:00Z' },
-      { id: 'u2', name: 'Bob Smith', email: 'bob@company.com', role: 'admin', joinedAt: '2024-01-02T00:00:00Z', lastActive: '2024-01-16T10:00:00Z' },
-      { id: 'u3', name: 'Carol Jones', email: 'carol@company.com', role: 'member', joinedAt: '2024-01-05T00:00:00Z' },
+      {
+        id: 'u1',
+        name: 'Alice Chen',
+        email: 'alice@company.com',
+        role: 'owner',
+        joinedAt: '2024-01-01T00:00:00Z',
+        lastActive: '2024-01-16T12:00:00Z',
+      },
+      {
+        id: 'u2',
+        name: 'Bob Smith',
+        email: 'bob@company.com',
+        role: 'admin',
+        joinedAt: '2024-01-02T00:00:00Z',
+        lastActive: '2024-01-16T10:00:00Z',
+      },
+      {
+        id: 'u3',
+        name: 'Carol Jones',
+        email: 'carol@company.com',
+        role: 'member',
+        joinedAt: '2024-01-05T00:00:00Z',
+      },
     ],
     settings: {
       defaultVertical: 'software',
@@ -75,7 +98,13 @@ const mockWorkspaces: Workspace[] = [
     createdAt: '2024-01-05T00:00:00Z',
     updatedAt: '2024-01-15T14:00:00Z',
     members: [
-      { id: 'u4', name: 'David Lee', email: 'david@company.com', role: 'owner', joinedAt: '2024-01-05T00:00:00Z' },
+      {
+        id: 'u4',
+        name: 'David Lee',
+        email: 'david@company.com',
+        role: 'owner',
+        joinedAt: '2024-01-05T00:00:00Z',
+      },
     ],
     settings: {
       defaultVertical: 'legal',
@@ -94,11 +123,16 @@ const toHookWorkspace = (ws: Workspace): HookWorkspace => ({
   description: ws.description,
   owner: ws.owner,
   organization_id: 'org_default',
-  members: ws.members.map(m => ({
+  members: ws.members.map((m) => ({
     ...m,
-    permissions: m.role === 'owner' ? ['read', 'write', 'admin', 'manage'] :
-                 m.role === 'admin' ? ['read', 'write', 'admin'] :
-                 m.role === 'member' ? ['read', 'write'] : ['read'],
+    permissions:
+      m.role === 'owner'
+        ? ['read', 'write', 'admin', 'manage']
+        : m.role === 'admin'
+          ? ['read', 'write', 'admin']
+          : m.role === 'member'
+            ? ['read', 'write']
+            : ['read'],
   })),
   createdAt: ws.createdAt,
   updatedAt: ws.updatedAt,
@@ -240,7 +274,7 @@ describe('WorkspaceManager', () => {
 
     it('respects currentWorkspaceId prop', () => {
       // Set selected workspace to Legal (ws_002)
-      mockSelectedWorkspace = mockHookWorkspaces.find(ws => ws.id === 'ws_002') || null;
+      mockSelectedWorkspace = mockHookWorkspaces.find((ws) => ws.id === 'ws_002') || null;
       render(<WorkspaceManager currentWorkspaceId="ws_002" />);
 
       // Legal workspace should be marked active
@@ -257,10 +291,7 @@ describe('WorkspaceManager', () => {
       });
 
       expect(mockOnSelect).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 'ws_002',
-          name: 'Legal',
-        })
+        expect.objectContaining({ id: 'ws_002', name: 'Legal' }),
       );
     });
 
@@ -415,9 +446,7 @@ describe('WorkspaceManager', () => {
 
   describe('CSS Classes', () => {
     it('applies custom className', () => {
-      const { container } = render(
-        <WorkspaceManager className="custom-class" />
-      );
+      const { container } = render(<WorkspaceManager className="custom-class" />);
 
       expect(container.firstChild).toHaveClass('custom-class');
     });
