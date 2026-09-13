@@ -4734,30 +4734,47 @@ def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses(
     assert waves[-1][0] == live_digest
 
 
-def test_first_typescript_paydown_is_resolved_in_legacy_inventory():
+@pytest.mark.parametrize(
+    ("wave_index", "expected_counts", "resolved_on"),
+    [
+        (1, {"typescript_sdk_drift": 59}, "2026-09-04"),
+        (2, {"python_sdk_drift": 20, "typescript_sdk_drift": 31}, "2026-09-06"),
+    ],
+)
+def test_sdk_paydowns_are_resolved_in_legacy_inventory(
+    wave_index: int, expected_counts: dict[str, int], resolved_on: str
+):
     root = Path(ratchet.__file__).parents[1]
     authority = _accepted_authority()
-    # The historical 257-record wave precedes batch 1; later batches must not
-    # redirect coverage away from the 59 legacy rows reconciled by #9979.
-    batch_one_ids = set(_paydown_waves(authority)[1][1])
-    assert len(batch_one_ids) == 59
+    # Skip only the historical wave; retain batch 1 coverage alongside batch 2.
+    retired_ids = set(_paydown_waves(authority)[wave_index][1])
+    assert len(retired_ids) == sum(expected_counts.values())
     cohort_records = {
         record["original_record_id"]: record
         for record in authority["canonical_artifacts"]["original_cohort"]["original_records"]
     }
-    retired_literals = {
-        cohort_records[record_id]["exact_historical_literal_record"]
-        for record_id in batch_one_ids
-        if cohort_records[record_id]["source_json_key"] == "typescript_sdk_drift"
+    dispositions = {
+        item["original_record_id"]: item["disposition_history"][-1]
+        for item in authority["active_inventory"]
     }
     inventory = json.loads((root / "scripts/baselines/contract_drift_inventory.json").read_text())
     rows = {item["id"]: item for item in inventory["items"]}
 
-    assert len(retired_literals) == 59
-    for literal in retired_literals:
-        row = rows[f"typescript_sdk_drift:{literal}"]
-        assert row["status"] == "resolved"
-        assert row["resolved_on"] == "2026-09-04"
+    for source, count in expected_counts.items():
+        source_ids = {
+            record_id
+            for record_id in retired_ids
+            if cohort_records[record_id]["source_json_key"] == source
+        }
+        assert len(source_ids) == count
+        for record_id in source_ids:
+            literal = gen.normalize_key(
+                cohort_records[record_id]["exact_historical_literal_record"]
+            )
+            row = rows[f"{source}:{literal}"]
+            assert row["status"] == "resolved", row["id"]
+            assert row["resolved_on"] == resolved_on
+            assert row["resolved_on"] == dispositions[record_id]["as_of"]
 
 
 def test_accepted_authority_rejects_unbound_paydown_and_bundle():
