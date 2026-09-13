@@ -61,9 +61,9 @@ from aragora.observability.slo import (
 )
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import BaseHandler, HandlerResult, error_response, json_response
+from ..base import BaseHandler, HandlerResult, error_response, json_response
 from aragora.rbac.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 if TYPE_CHECKING:
     pass

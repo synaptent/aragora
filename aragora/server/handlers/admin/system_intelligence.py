@@ -27,13 +27,13 @@ from typing import Any
 from aragora.server.versioning.compat import strip_version_prefix
 from aragora.server.validation.query_params import safe_query_int
 
-from .base import (
+from ..base import (
     HandlerResult,
     json_response,
 )
-from .secure import SecureHandler
-from .utils.auth_mixins import SecureEndpointMixin
-from .utils.rate_limit import rate_limit
+from ..secure import SecureHandler
+from ..utils.auth_mixins import SecureEndpointMixin
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +191,8 @@ class SystemIntelligenceHandler(SecureEndpointMixin, SecureHandler):  # type: ig
             get_stats = getattr(km, "get_stats", None)
             stats: Any = await _maybe_await(get_stats()) if callable(get_stats) else {}
             if isinstance(stats, dict):
-                knowledge_items = int(stats.get("total_items", stats.get("total_nodes", 0)))
+                raw_items: Any = stats.get("total_items", stats.get("total_nodes", 0))
+                knowledge_items = int(raw_items)
             else:
                 knowledge_items = int(getattr(stats, "total_nodes", 0))
         except (ImportError, RuntimeError, ValueError, OSError, AttributeError):
@@ -395,8 +396,10 @@ class SystemIntelligenceHandler(SecureEndpointMixin, SecureHandler):  # type: ig
                 legacy_stats_getter = getattr(cdm, "get_stats", None)
                 stats = legacy_stats_getter() if callable(legacy_stats_getter) else {}
             if isinstance(stats, dict):
-                total_injections = int(stats.get("total_injections", stats.get("total_entries", 0)))
-                retrieval_count = int(stats.get("retrieval_count", stats.get("total_tokens", 0)))
+                raw_injections: Any = stats.get("total_injections", stats.get("total_entries", 0))
+                raw_retrievals: Any = stats.get("retrieval_count", stats.get("total_tokens", 0))
+                total_injections = int(raw_injections)
+                retrieval_count = int(raw_retrievals)
         except (ImportError, RuntimeError, AttributeError):
             logger.debug("CrossDebateMemory not available")
 
@@ -561,9 +564,8 @@ class SystemIntelligenceHandler(SecureEndpointMixin, SecureHandler):  # type: ig
                                 continue
                             event_data = raw.get("event_data")
                             if not isinstance(event_data, dict):
-                                event_data = (
-                                    raw.get("data") if isinstance(raw.get("data"), dict) else {}
-                                )
+                                raw_data = raw.get("data")
+                                event_data = raw_data if isinstance(raw_data, dict) else {}
 
                             event_type = str(raw.get("event_type") or raw.get("type") or "event")
                             source = str(
@@ -617,7 +619,7 @@ class SystemIntelligenceHandler(SecureEndpointMixin, SecureHandler):  # type: ig
         sync_healthy = False
 
         try:
-            from aragora.server.handlers.system_health import SystemHealthDashboardHandler
+            from aragora.server.handlers.admin.system_health import SystemHealthDashboardHandler
 
             adapter_snapshot = SystemHealthDashboardHandler(self.ctx)._collect_adapters()
             adapters_active = int(adapter_snapshot.get("active", 0))
@@ -634,7 +636,7 @@ class SystemIntelligenceHandler(SecureEndpointMixin, SecureHandler):  # type: ig
             history = scheduler.get_history(limit=1)
 
             if history:
-                started_at = getattr(history[0], "started_at", None)
+                started_at: Any = getattr(history[0], "started_at", None)
                 if hasattr(started_at, "isoformat"):
                     last_sync = started_at.isoformat()
 

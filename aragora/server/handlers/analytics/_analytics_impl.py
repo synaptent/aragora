@@ -37,16 +37,16 @@ from aragora.config import (
 
 logger = logging.getLogger(__name__)
 from aragora.server.validation.query_params import safe_query_int
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     handle_errors,
     json_response,
     ttl_cache,
 )
-from .secure import ForbiddenError, SecureHandler, UnauthorizedError
+from ..secure import ForbiddenError, SecureHandler, UnauthorizedError
 from aragora.server.versioning.compat import strip_version_prefix
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 # Permission required for analytics access
 ANALYTICS_PERMISSION = "analytics:read"

@@ -22,14 +22,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     pass
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
     get_int_param,
     json_response,
 )
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 from aragora.rbac.decorators import require_permission
 from aragora.server.versioning.compat import strip_version_prefix
 

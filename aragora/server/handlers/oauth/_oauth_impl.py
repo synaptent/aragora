@@ -19,16 +19,16 @@ All public names are re-exported here for backward compatibility.
 from __future__ import annotations
 
 # Re-export OAuthHandler from the new package
-from ._oauth.base import OAuthHandler  # noqa: F401
+from .._oauth.base import OAuthHandler  # noqa: F401
 
 # Re-export rate limiter from the new package
-from ._oauth.utils import _oauth_limiter  # noqa: F401
+from .._oauth.utils import _oauth_limiter  # noqa: F401
 
 # Re-export tracing (used by tests that patch at this module path)
 from aragora.observability.tracing import create_span, add_span_attributes  # noqa: F401
 
 # Re-export everything from oauth.config (tests patch these at _oauth_impl level)
-from .oauth.config import (  # noqa: F401
+from .config import (  # noqa: F401
     _get_secret,
     _is_production,
     _get_google_client_id,
@@ -80,10 +80,10 @@ from .oauth.config import (  # noqa: F401
 )
 
 # Re-export models
-from .oauth.models import OAuthUserInfo, _get_param  # noqa: F401
+from .models import OAuthUserInfo, _get_param  # noqa: F401
 
 # Re-export state management
-from .oauth.state import (  # noqa: F401
+from .state import (  # noqa: F401
     _OAuthStatesView,
     _OAUTH_STATES,
     _STATE_TTL_SECONDS,
@@ -174,7 +174,7 @@ if "_validate_redirect_url" not in globals():
     def _validate_redirect_url(redirect_url: str) -> bool:
         """Stable wrapper that preserves function identity across reloads.
 
-        Some long-running test shards reload ``aragora.server.handlers._oauth_impl``
+        Some long-running test shards reload ``aragora.server.handlers.oauth._oauth_impl``
         after importing re-exported symbols from ``oauth.handler``. Keeping this
         wrapper object stable avoids stale identity mismatches while still letting
         reload refresh the underlying implementation logic.

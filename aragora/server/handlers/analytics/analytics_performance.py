@@ -33,8 +33,8 @@ except ImportError:
 from aragora.server.handlers.utils.rbac_guard import rbac_fail_closed
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .analytics.cache import CACHE_CONFIGS, CacheConfig
-from .base import (
+from .cache import CACHE_CONFIGS, CacheConfig
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -42,8 +42,8 @@ from .base import (
     json_response,
     ttl_cache,
 )
-from .openapi_decorator import api_endpoint, query_param, ok_response
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..openapi_decorator import api_endpoint, query_param, ok_response
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -492,7 +492,7 @@ class AnalyticsPerformanceHandler(BaseHandler):
             result = debate_dict.get("result", {})
             if isinstance(result, dict):
                 # Rounds
-                rounds = result.get("rounds_used", result.get("rounds", 0))
+                rounds: Any = result.get("rounds_used", result.get("rounds", 0))
                 total_rounds += rounds
 
                 # Confidence

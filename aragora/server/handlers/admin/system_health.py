@@ -383,6 +383,8 @@ class SystemHealthDashboardHandler(BaseHandler):
                 return fallback
 
             summary = tracker.get_summary() if hasattr(tracker, "get_summary") else {}
+            total: Any
+            spent: Any
             if isinstance(summary, dict):
                 total = summary.get("budget_usd", summary.get("total_budget", 100))
                 spent = summary.get("total_cost_usd", summary.get("spent", 0))
@@ -401,6 +403,7 @@ class SystemHealthDashboardHandler(BaseHandler):
                     eom = forecaster.forecast_eom()
                     if eom is not None:
                         trend = "stable"
+                        eom_val: Any
                         if isinstance(eom, dict):
                             eom_val = eom.get("projected", spent)
                             trend = eom.get("trend", "stable")
