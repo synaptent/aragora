@@ -289,9 +289,11 @@ def test_protected_settlement_retains_authority_and_evidence_gates(failure: str)
     assert gate["authorized_actions"] == []
 
 
-def test_protected_mode_ignores_legacy_grants_instead_of_escalating() -> None:
+def test_protected_mode_accepts_newer_protected_grant_instead_of_escalating() -> None:
     head = "a" * 40
-    view = _pr_view(head, comments=[_authorized_comment(head), _protected_comment(head)])
+    protected = _protected_comment(head)
+    protected["createdAt"] = "2026-05-22T00:06:00Z"
+    view = _pr_view(head, comments=[_authorized_comment(head), protected])
     gate = settler.evaluate_tier4_gate(
         pr=7423,
         expected_head=head,
@@ -313,6 +315,225 @@ def test_protected_mode_ignores_legacy_grants_instead_of_escalating() -> None:
         protected_squash_only=True,
     )
     assert gate["ok"] is False
+
+
+@pytest.mark.parametrize("newest_protected", [False, True])
+@pytest.mark.parametrize("reverse_api_order", [False, True])
+def test_grant_precedence_uses_chronology_not_privilege_or_api_order(
+    newest_protected: bool, reverse_api_order: bool
+) -> None:
+    head = "a" * 40
+    grants = [_authorized_comment(head), _protected_comment(head)]
+    if not newest_protected:
+        grants.reverse()
+    grants[0]["url"] = "https://github.example/older"
+    grants[1].update(createdAt="2026-05-22T00:06:00Z", url="https://github.example/newer")
+    if reverse_api_order:
+        grants.reverse()
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=grants),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == (
+        ["protected_merge"] if newest_protected else ["branch_protection", "merge"]
+    )
+    diagnostics = {item["url"]: item for item in gate["authorization_diagnostics"]}
+    assert diagnostics["https://github.example/newer"]["selection_status"] == "selected"
+    assert diagnostics["https://github.example/older"]["selection_status"] == "superseded"
+    assert diagnostics["https://github.example/older"]["accepted"] is False
+
+
+@pytest.mark.parametrize("protected_mode", [False, True])
+def test_requested_mode_cannot_revive_superseded_grant(protected_mode: bool) -> None:
+    head = "a" * 40
+    grants = [_authorized_comment(head), _protected_comment(head)]
+    if protected_mode:
+        grants.reverse()
+    grants[1]["createdAt"] = "2026-05-22T00:06:00Z"
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=grants),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=protected_mode,
+        require_branch_protection_token=not protected_mode,
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+    assert gate["authorization_diagnostics"][0]["selection_status"] == "superseded"
+    assert gate["authorization_diagnostics"][1]["selection_status"] == "selected"
+    assert not any(item["accepted"] for item in gate["authorization_diagnostics"])
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        None,
+        "",
+        "not-a-date",
+        "2026-99-22T00:06:00Z",
+        "2026-05-22T00:06:00",
+        AUTH_CREATED_AT,
+        "2026-05-21T19:05:00-05:00",
+    ],
+)
+@pytest.mark.parametrize("protected_mode", [False, True])
+def test_grant_precedence_fails_closed_on_unknown_or_tied_order(
+    timestamp: str | None, protected_mode: bool
+) -> None:
+    head = "a" * 40
+    protected = _protected_comment(head)
+    protected["createdAt"] = timestamp
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[_authorized_comment(head), protected]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=protected_mode,
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+    assert gate["authorization_selection"]["status"] == "ambiguous"
+    assert not any(item["accepted"] for item in gate["authorization_diagnostics"])
+
+
+def test_grant_precedence_orders_reviews_and_comments_by_absolute_time() -> None:
+    head = "a" * 40
+    protected = _protected_comment(head)
+    protected["createdAt"] = "2026-05-21T23:00:00Z"  # Draft creation is not publication.
+    protected["submittedAt"] = "2026-05-21T19:06:00-05:00"
+    view = _pr_view(head, comments=[_authorized_comment(head)])
+    view["reviews"] = [protected]
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["protected_merge"]
+    assert gate["authorization_diagnostics"][1]["kind"] == "review"
+
+
+def test_comment_edit_does_not_promote_older_grant() -> None:
+    head = "a" * 40
+    older = _authorized_comment(head)
+    older["updatedAt"] = "2026-05-22T01:00:00Z"
+    newer = _protected_comment(head)
+    newer["createdAt"] = "2026-05-22T00:06:00Z"
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[older, newer]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["protected_merge"]
+
+
+def test_review_missing_submission_time_blocks_ambiguous_order() -> None:
+    head = "a" * 40
+    view = _pr_view(head, comments=[_authorized_comment(head)])
+    view["reviews"] = [_protected_comment(head)]
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is False
+    assert gate["authorization_selection"]["status"] == "ambiguous"
+    assert gate["authorized_actions"] == []
+
+
+@pytest.mark.parametrize("newest_protected", [False, True])
+def test_merge_apply_uses_only_newest_grant(
+    monkeypatch: Any, tmp_path: Path, newest_protected: bool
+) -> None:
+    head = "a" * 40
+    grants = [_authorized_comment(head), _protected_comment(head)]
+    if not newest_protected:
+        grants.reverse()
+    grants[1]["createdAt"] = "2026-05-22T00:06:00Z"
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda *a, **kw: (_pr_view(head, comments=grants), _tier4_packet(), _valid_checks()),
+    )
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(settler, "_apply_merge", lambda **kw: calls.append(kw) or [])
+    assert (
+        settler.main(["--merge-apply", "--pr", "7423", "--head", head, "--cwd", str(tmp_path)]) == 0
+    )
+    assert len(calls) == 1
+    assert calls[0]["protected_squash_only"] is newest_protected
+    assert calls[0]["reconcile_branch_protection"] is not newest_protected
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_merge_apply_does_not_revive_old_protected_grant(
+    monkeypatch: Any, tmp_path: Path, ambiguous: bool
+) -> None:
+    head = "a" * 40
+    legacy = _authorized_comment(head)
+    if not ambiguous:
+        legacy["createdAt"] = "2026-05-22T00:06:00Z"
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda *a, **kw: (
+            _pr_view(head, comments=[_protected_comment(head), legacy]),
+            _tier4_packet(),
+            _valid_checks(),
+        ),
+    )
+    monkeypatch.setattr(settler, "_apply_merge", lambda **kw: pytest.fail("merge forbidden"))
+    assert (
+        settler.main(
+            [
+                "--merge-apply",
+                "--protected-squash-only",
+                "--pr",
+                "7423",
+                "--head",
+                head,
+                "--cwd",
+                str(tmp_path),
+            ]
+        )
+        == 2
+    )
+
+
+@pytest.mark.parametrize("invalid", ["untrusted", "wrong_head", "stale"])
+def test_invalid_grant_does_not_supersede_valid_protected_grant(invalid: str) -> None:
+    head = "a" * 40
+    invalid_grant = _authorized_comment(head)
+    invalid_grant["createdAt"] = "2026-05-22T00:06:00Z"
+    if invalid == "untrusted":
+        invalid_grant["authorAssociation"] = "CONTRIBUTOR"
+    elif invalid == "wrong_head":
+        invalid_grant["body"] = _authorized_comment("b" * 40)["body"]
+    else:
+        invalid_grant["createdAt"] = "2026-05-21T23:59:00Z"
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[invalid_grant, _protected_comment(head)]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["protected_merge"]
 
 
 @pytest.mark.parametrize("explicit_mode", [False, True])

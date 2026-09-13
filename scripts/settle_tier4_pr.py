@@ -6,6 +6,10 @@ a repo-visible operator settlement comment naming the exact head and action.
 Use --protected-squash-only to record/check a grant without administrative
 bypass or branch-protection authority. Legacy grants remain explicit in the
 comment; a protected-only grant never authorizes the legacy admin merge path.
+The newest valid exact-head comment/review supersedes older grants, ordered by
+timezone-aware createdAt/submittedAt. Post a new grant to supersede one; editing
+an old comment does not promote its publication order. Missing timestamps or a
+tie for newest fail closed. Requested-mode constraints never revive an old grant.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -136,17 +141,24 @@ def _text_items(pr_view: dict[str, Any]) -> list[dict[str, Any]]:
                             "authorAssociation": entry.get("authorAssociation"),
                             "author": entry.get("author"),
                             "url": entry.get("url"),
-                            "createdAt": entry.get("createdAt") or entry.get("submittedAt"),
+                            "createdAt": entry.get("submittedAt")
+                            if key == "reviews"
+                            else entry.get("createdAt"),
                         }
                     )
     return items
 
 
-def _parse_timestamp(value: Any) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    return f"{text[:-1]}+00:00" if text.endswith("Z") else text
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            return None
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError):
+        return None
 
 
 def _head_committed_at(pr_view: dict[str, Any]) -> str:
@@ -162,12 +174,9 @@ def _head_committed_at(pr_view: dict[str, Any]) -> str:
 
 
 def _authorization_is_fresh(item: dict[str, Any], *, head_committed_at: str) -> bool:
-    if not head_committed_at:
-        return False
-    created_at = str(item.get("createdAt") or "").strip()
-    if not created_at:
-        return False
-    return _parse_timestamp(created_at) >= _parse_timestamp(head_committed_at)
+    created_at = _parse_timestamp(item.get("createdAt"))
+    committed_at = _parse_timestamp(head_committed_at)
+    return created_at is not None and committed_at is not None and created_at >= committed_at
 
 
 def _trusted_operator_logins(extra_logins: Sequence[str] | None = None) -> frozenset[str]:
@@ -341,7 +350,9 @@ def _authorization_diagnostic(
         rejection_reasons.append(
             "trusted operator admin permission was not evaluated because earlier gate blockers are present"
         )
-    if not fresh_after_head_commit:
+    if _parse_timestamp(item.get("createdAt")) is None:
+        rejection_reasons.append("authorization timestamp is missing or invalid")
+    elif not fresh_after_head_commit:
         rejection_reasons.append("authorization is older than head commit")
     if not exact_head_present:
         rejection_reasons.append("exact head is missing")
@@ -367,6 +378,13 @@ def _authorization_diagnostic(
         "merge_action_present": merge_action_present,
         "branch_protection_action_present": branch_protection_action_present,
         "authorized_actions": sorted(authorized_actions),
+        "ordering_candidate": (
+            marker_present
+            and trusted_author_association
+            and (not admin_permission_required or admin_permission_evaluated)
+            and exact_head_present
+            and merge_action_present
+        ),
         "accepted": not rejection_reasons,
         "rejection_reasons": rejection_reasons,
     }
@@ -388,6 +406,20 @@ def authorization_diagnostics(
     head_committed_at = _head_committed_at(pr_view)
     allowed_logins = _trusted_operator_logins(trusted_operator_logins)
     checker = permission_checker or (lambda login: _login_has_admin_permission(login, repo, cwd))
+    diagnostics = [
+        _authorization_diagnostic(
+            item,
+            head=head,
+            head_committed_at=head_committed_at,
+            require_branch_protection_token=require_branch_protection_token,
+            trusted_operator_logins=allowed_logins,
+            permission_checker=checker,
+            evaluate_member_permissions=evaluate_member_permissions,
+            protected_squash_only=protected_squash_only,
+        )
+        for item in _text_items(pr_view)
+    ]
+    selection = _select_authorization_by_time(diagnostics)
     return {
         "required_author_associations": sorted(TRUSTED_OPERATOR_AUTHOR_ASSOCIATIONS),
         "admin_permission_evaluation": "enabled"
@@ -397,20 +429,54 @@ def authorization_diagnostics(
         "settlement_comment_template": _settlement_comment_template(
             pr=pr, head=head, protected_squash_only=protected_squash_only
         ),
-        "authorization_diagnostics": [
-            _authorization_diagnostic(
-                item,
-                head=head,
-                head_committed_at=head_committed_at,
-                require_branch_protection_token=require_branch_protection_token,
-                trusted_operator_logins=allowed_logins,
-                permission_checker=checker,
-                evaluate_member_permissions=evaluate_member_permissions,
-                protected_squash_only=protected_squash_only,
-            )
-            for item in _text_items(pr_view)
-        ],
+        "authorization_diagnostics": diagnostics,
+        "authorization_selection": selection,
     }
+
+
+def _select_authorization_by_time(diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
+    """Select one publication, independent of API order or requested privilege.
+
+    Mode-incompatible grants still participate: filtering them first would revive
+    a superseded grant. A trusted same-head grant with unknown publication time
+    cannot safely be discarded as stale, so it blocks the whole selection.
+    """
+    candidates: list[tuple[dict[str, Any], datetime | None]] = []
+    for diagnostic in diagnostics:
+        diagnostic["selection_status"] = "ineligible"
+        timestamp = _parse_timestamp(diagnostic.get("createdAt"))
+        if diagnostic["ordering_candidate"] and (
+            timestamp is None or diagnostic["fresh_after_head_commit"]
+        ):
+            candidates.append((diagnostic, timestamp))
+    if not candidates:
+        return {"status": "none", "reason": "no valid current-head authorization"}
+
+    known_times = [timestamp for _, timestamp in candidates if timestamp is not None]
+    reason = ""
+    if len(known_times) != len(candidates):
+        reason = "authorization ordering ambiguous: missing or invalid publication timestamp"
+    elif known_times.count(max(known_times)) != 1:
+        reason = "authorization ordering ambiguous: newest grants share a publication timestamp"
+    if reason:
+        for diagnostic, _ in candidates:
+            diagnostic["selection_status"] = "ambiguous"
+            diagnostic["accepted"] = False
+            diagnostic["rejection_reasons"].append(reason)
+        return {"status": "ambiguous", "reason": reason}
+
+    latest = max(known_times)
+    selected = next(diagnostic for diagnostic, timestamp in candidates if timestamp == latest)
+    for diagnostic, _ in candidates:
+        if diagnostic is selected:
+            diagnostic["selection_status"] = "selected"
+        else:
+            diagnostic["selection_status"] = "superseded"
+            diagnostic["accepted"] = False
+            diagnostic["rejection_reasons"].append(
+                f"superseded by authorization published at {selected['createdAt']}"
+            )
+    return {"status": "selected", "createdAt": selected["createdAt"], "url": selected["url"]}
 
 
 def _state_is_success(value: Any) -> bool:
@@ -542,6 +608,8 @@ def _operator_authorized_actions(
         )
     for diagnostic in report.get("authorization_diagnostics", []):
         if not isinstance(diagnostic, dict) or not diagnostic.get("accepted"):
+            continue
+        if diagnostic.get("selection_status") != "selected":
             continue
         actions = diagnostic.get("authorized_actions")
         if not isinstance(actions, list):
@@ -1065,6 +1133,8 @@ def evaluate_tier4_gate(
         )
         if not authorized_actions:
             blockers.append(OPERATOR_COMMENT_BLOCKER)
+            if diagnostic_report["authorization_selection"]["status"] == "ambiguous":
+                blockers.append(diagnostic_report["authorization_selection"]["reason"])
 
     if "protected_merge" in authorized_actions:
         diagnostic_report["settlement_comment_template"] = _settlement_comment_template(
