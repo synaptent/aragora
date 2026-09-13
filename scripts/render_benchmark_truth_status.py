@@ -355,6 +355,38 @@ def _normalize_proxy_metrics(payload: dict[str, Any]) -> dict[str, Any]:
     return proxy_metrics
 
 
+def _render_snapshot_input_limits(*, generated_at: str, corpus: dict[str, Any]) -> list[str]:
+    lines = [
+        "## Snapshot History And Input Limits",
+        "",
+        "Counts describe the observations available to this snapshot, not a cumulative history. "
+        "Zero current observations do not erase historical rescues and do not establish zero execution time. "
+        "Missing elapsed observations must not be interpreted as measured zero-duration execution.",
+        "",
+    ]
+    # This audit note belongs to a retained publication, not a probe of local log availability.
+    if (
+        generated_at == "2026-09-04T13:28:39Z"
+        and corpus.get("corpus_id") == "tw-01-bounded-execution-v1"
+        and corpus.get("revision") == 7
+    ):
+        lines.extend(
+            [
+                "Snapshot-specific disclosure: this publication omits observations present in prior published snapshots. "
+                "The `2026-09-01T13:38:29Z` rev-7 scorecard retains a `rescue_worker_crash` observation "
+                "that is absent here: total ticks are `11 -> 10`, rescue-crash observations are `1 -> 0`, "
+                "and mean/median elapsed seconds are `227.1/424.3 -> 0.0/0.0`. "
+                "The prior observation remains part of the published historical record; this snapshot does not retract it.",
+                "",
+                "The original raw metrics/rescue inputs are unavailable for this snapshot, so independent raw-input replay "
+                "remains unmeasured. An input reset or replacement has not been independently proven. "
+                "The preserved JSON values are not evidence that the historical rescue did not occur or that execution took zero time.",
+                "",
+            ]
+        )
+    return lines
+
+
 def render_status_markdown(
     *,
     corpus_path: Path,
@@ -424,6 +456,7 @@ def render_status_markdown(
         "",
         "This is the repo-tracked recurring `TW-02` publication surface for the fixed benchmark corpus.",
         "",
+        *_render_snapshot_input_limits(generated_at=generated_at, corpus=corpus),
         "## Corpus",
         "",
         f"- Corpus manifest: `{_repo_stable_path(corpus_path)}`",

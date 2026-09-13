@@ -35,6 +35,61 @@ def _write_json(path: Path, payload: dict[str, object]) -> Path:
     return path
 
 
+@pytest.mark.parametrize(
+    ("generated_at", "corpus_id", "revision", "has_historical_note"),
+    [
+        ("2026-09-04T13:28:39Z", "tw-01-bounded-execution-v1", 7, True),
+        ("2026-09-05T13:28:39Z", "tw-01-bounded-execution-v1", 7, False),
+        ("2026-09-04T13:28:39Z", "other-corpus", 7, False),
+        ("2026-09-04T13:28:39Z", "tw-01-bounded-execution-v1", 8, False),
+    ],
+)
+def test_snapshot_disclosure_is_deterministic_and_publication_scoped(
+    generated_at: str, corpus_id: str, revision: int, has_historical_note: bool
+) -> None:
+    directory = mod.DEFAULT_SCORECARD_ROOT / "tw-01-bounded-execution-v1" / "rev-7"
+    scorecard = mod._load_json(directory / "scorecard-20260904T132839Z.json")
+    previous = mod._load_json(directory / "scorecard-20260901T133829Z.json")
+    assert previous["rescue_counts_by_type"] == {"rescue_worker_crash": 1}
+    assert scorecard["rescue_counts_by_type"] == {}
+    assert previous["proxy_metrics"]["total_ticks"] == 11
+    assert scorecard["proxy_metrics"]["total_ticks"] == 10
+    assert previous["proxy_metrics"]["mean_elapsed_seconds"] == 227.1
+    assert previous["proxy_metrics"]["median_elapsed_seconds"] == 424.3
+    assert scorecard["proxy_metrics"]["mean_elapsed_seconds"] == 0.0
+    assert scorecard["proxy_metrics"]["median_elapsed_seconds"] == 0.0
+    scorecard["generated_at"] = generated_at
+    scorecard["corpus"].update(corpus_id=corpus_id, revision=revision)
+    original = json.dumps(scorecard, sort_keys=True)
+    paths = mod.resolve_latest_paths(
+        corpus_path=mod.DEFAULT_CORPUS_PATH,
+        truth_root=mod.DEFAULT_TRUTH_ROOT,
+        scorecard_root=mod.DEFAULT_SCORECARD_ROOT,
+    )
+    args = dict(
+        corpus_path=mod.DEFAULT_CORPUS_PATH,
+        truth_path=paths["truth_corpus_latest"],
+        scorecard_path=paths["scorecard_corpus_latest"],
+        latest_paths=paths,
+        truth_payload={},
+        scorecard_payload=scorecard,
+    )
+    rendered = mod.render_status_markdown(**args)
+    assert rendered == mod.render_status_markdown(**args)
+    assert json.dumps(scorecard, sort_keys=True) == original
+    assert "Zero current observations do not erase historical rescues" in rendered
+    assert "do not establish zero execution time" in rendered
+    assert ("Snapshot-specific disclosure" in rendered) is has_historical_note
+    assert ("original raw metrics/rescue inputs are unavailable" in rendered) is has_historical_note
+    if has_historical_note:
+        assert "2026-09-01T13:38:29Z" in rendered
+        assert "omits observations present in prior published snapshots" in rendered
+        assert "rescue_worker_crash" in rendered
+        assert "11 -> 10" in rendered
+        assert "227.1/424.3 -> 0.0/0.0" in rendered
+        assert "reset or replacement has not been independently proven" in rendered
+
+
 def _truth_payload(
     *, revision: int, generated_at: str = "2026-04-14T20:00:00Z"
 ) -> dict[str, object]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -21,6 +22,37 @@ from tests.benchmarks.test_rescue_productization import (
     parse_issue_linkage_actions,
     parse_repeated_class_rows,
 )
+
+
+@pytest.mark.parametrize("generated_at", ["2026-09-04T13:28:39Z", "2026-09-05T13:28:39Z"])
+def test_snapshot_disclosure_survives_regeneration_without_changing_inputs(
+    tmp_path: Path, generated_at: str
+) -> None:
+    report = mod._load_json(mod.DEFAULT_REPORT_ROOT / "rescue-productization-20260904T132839Z.json")
+    report["generated_at"] = generated_at
+    source = tmp_path / "source"
+    source.mkdir()
+    latest = source / "latest.json"
+    original = json.dumps(report, sort_keys=True)
+    latest.write_text(original, encoding="utf-8")
+    output = tmp_path / "TW03.md"
+    args = ["--report-root", str(source), "--output", str(output)]
+    assert mod.main(args) == 0
+    rendered = output.read_bytes()
+    assert mod.main(args) == 0
+    assert output.read_bytes() == rendered
+    assert latest.read_text(encoding="utf-8") == original
+    text = rendered.decode()
+    assert "Zero current observations do not erase historical rescues" in text
+    assert "do not establish zero execution time" in text
+    affected = generated_at == "2026-09-04T13:28:39Z"
+    assert ("Snapshot-specific disclosure" in text) is affected
+    assert ("original raw metrics/rescue inputs are unavailable" in text) is affected
+    if affected:
+        assert "omits observations present in prior published snapshots" in text
+        assert "2026-09-01T13:38:29Z" in text
+        assert "rescue_worker_crash" in text
+        assert "reset or replacement has not been independently proven" in text
 
 
 def test_render_status_markdown_includes_repeated_classes_and_actions(tmp_path: Path) -> None:
