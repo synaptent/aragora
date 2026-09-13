@@ -53,8 +53,11 @@ export function connectDebateStream(
   let disposed = false;
   const reportError = (error: unknown) => {
     if (disposed) return;
-    handlers.onError(error instanceof Error ? error.message : 'Failed to connect');
-    handlers.onConnected(false);
+    const message = error && typeof error === 'object' && 'message' in error
+      && typeof error.message === 'string' ? error.message : 'Failed to connect';
+    handlers.onError(message);
+    // Protocol and parse errors do not necessarily close the SDK connection.
+    handlers.onConnected(stream.getState() === 'connected');
   };
   const unsubscribe = [
     stream.on('connected', () => {

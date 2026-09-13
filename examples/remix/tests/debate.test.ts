@@ -42,6 +42,28 @@ test('answer and round fallbacks use only the published SDK fields', () => {
   assert.equal(debateView({ ...debate, rounds: [{ round_number: 1, messages: [] }] }).roundsCompleted, 1);
 });
 
+test('installed SDK numeric running rounds are requested, not completed rounds', async () => {
+  const original = globalThis.fetch;
+  try {
+    // The running-debate handler returns a count, not the completed round array.
+    for (const rounds of [0, 5]) {
+      for (const rounds_used of [undefined, 2]) {
+        globalThis.fetch = async () => new Response(JSON.stringify({
+          ...debate, status: 'running', in_progress: true, rounds, rounds_used,
+        }), { headers: { 'content-type': 'application/json' } });
+        const value = await createClient({ baseUrl: 'https://api.example.test' })
+          .debates.get(debate.debate_id);
+        assert.equal(value.rounds, rounds);
+        const view = debateView(value);
+        assert.equal(view.roundsCompleted, rounds_used ?? 0);
+        assert.deepEqual(view.messages, []);
+      }
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('events use their data envelope and exclude other debates and global messages', () => {
   const event = { type: 'agent_message' as const, timestamp: debate.created_at,
     data: { agent: 'reviewer', content: 'Proposal' }, loop_id: debate.debate_id };
@@ -107,6 +129,78 @@ class BrowserSocket {
   send(data: string) { this.sent.push(data); }
   close() { this.closed = true; }
 }
+
+for (const [name, frame, expectedError] of [
+  ['server error', JSON.stringify({ type: 'error', data: {
+    message: 'Permission denied: debates:read required', code: 403,
+  } }), 'Permission denied: debates:read required'],
+  ['malformed JSON', '{invalid', 'Failed to parse message: {invalid'],
+  ['unknown error shape', JSON.stringify({ type: 'error', data: { code: 500 } }), 'Failed to connect'],
+]) {
+  test(`installed SDK ${name} preserves live connection and subsequent events`, async () => {
+    const original = globalThis.WebSocket;
+    let cleanup: (() => void) | undefined;
+    try {
+      globalThis.WebSocket = BrowserSocket as unknown as typeof WebSocket;
+      const stream = createClient({ baseUrl: 'https://api.example.test' })
+        .createWebSocket({ autoReconnect: false });
+      const states: boolean[] = [];
+      const errors: (string | null)[] = [];
+      const messages: string[] = [];
+      cleanup = connectDebateStream(stream, debate.debate_id, {
+        onConnected: value => states.push(value), onError: value => errors.push(value),
+        onEvent: value => messages.push(value.content ?? ''),
+      });
+      const socket = BrowserSocket.instances.at(-1)!;
+      socket.onopen?.();
+      await Promise.resolve();
+      socket.onmessage?.({ data: frame });
+      assert.equal(stream.getState(), 'connected');
+      assert.equal(states.at(-1), true);
+      assert.equal(errors.at(-1), expectedError);
+      socket.onmessage?.({ data: JSON.stringify({ type: 'agent_message',
+        loop_id: debate.debate_id, data: { content: 'Still live' } }) });
+      assert.deepEqual(messages, ['Still live']);
+      socket.onerror?.();
+      assert.equal(states.at(-1), true);
+      assert.equal(errors.at(-1), 'WebSocket error');
+      socket.onclose?.({ code: 1006, reason: 'Connection lost' });
+      assert.equal(states.at(-1), false);
+      cleanup();
+      const calls = [states.length, errors.length, messages.length];
+      socket.onmessage?.({ data: frame });
+      socket.onerror?.();
+      await Promise.resolve();
+      assert.deepEqual([states.length, errors.length, messages.length], calls);
+    } finally {
+      cleanup?.();
+      globalThis.WebSocket = original;
+    }
+  });
+}
+
+test('initial connection rejection reports a disconnected error state', async () => {
+  const original = globalThis.WebSocket;
+  let cleanup: (() => void) | undefined;
+  try {
+    globalThis.WebSocket = BrowserSocket as unknown as typeof WebSocket;
+    const stream = createClient({ baseUrl: 'https://api.example.test' })
+      .createWebSocket({ autoReconnect: false });
+    const states: boolean[] = [];
+    const errors: (string | null)[] = [];
+    cleanup = connectDebateStream(stream, debate.debate_id, {
+      onConnected: value => states.push(value), onError: value => errors.push(value), onEvent: () => {},
+    });
+    BrowserSocket.instances.at(-1)!.onerror?.();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(states.at(-1), false);
+    assert.ok(!states.includes(true));
+    assert.equal(errors.at(-1), 'WebSocket error');
+  } finally {
+    cleanup?.();
+    globalThis.WebSocket = original;
+  }
+});
 
 test('installed SDK delivers the actual server envelope without losing time or attribution', async () => {
   const original = globalThis.WebSocket;
