@@ -1275,64 +1275,67 @@ export class AragoraClient {
     const maxAttempts = this.config.retryEnabled ? this.config.maxRetries : 1;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      let response: Response;
+      const controller = new AbortController();
+      const timeout = options.timeout ?? this.config.timeout;
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
       try {
-        const controller = new AbortController();
-        const timeout = options.timeout ?? this.config.timeout;
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+        let response: Response | undefined;
+        try {
+          response = await fetch(url.toString(), {
+            method,
+            headers,
+            body: options.body ? JSON.stringify(options.body) : undefined,
+            signal: controller.signal,
+          });
 
-        response = await fetch(url.toString(), {
-          method,
-          headers,
-          body: options.body ? JSON.stringify(options.body) : undefined,
-          signal: controller.signal,
-        });
+          if (!response.ok) {
+            const statusText = response.statusText;
+            const body = await response.json().catch(error => {
+              if (controller.signal.aborted) throw error;
+              return { error: statusText };
+            });
+            throw AragoraError.fromResponse(response.status, body);
+          }
+        } catch (error) {
+          lastError = error as Error;
 
+          // Don't retry on client errors (4xx) or abort.
+          if (error instanceof AragoraError && error.statusCode && error.statusCode < 500) {
+            throw error;
+          }
+          if ((error as Error).name === 'AbortError') {
+            throw new TimeoutError('Request timeout', 'SERVICE_UNAVAILABLE');
+          }
+
+          if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('network'))) {
+            throw new ConnectionError('Connection failed', 'SERVICE_UNAVAILABLE');
+          }
+        }
+
+        if (response?.ok) {
+          // A successful response may represent an operation already performed.
+          // Consumption stays outside retry handling; only our deadline abort
+          // is translated. Unrelated body/decoding errors propagate unchanged.
+          try {
+            const text = await response.text();
+            if (options.responseType === 'text') return text as T;
+            if (!text) return {} as T;
+            return JSON.parse(text) as T;
+          } catch (error) {
+            if (controller.signal.aborted && (error as Error)?.name === 'AbortError') {
+              throw new TimeoutError('Request timeout', 'SERVICE_UNAVAILABLE');
+            }
+            throw error;
+          }
+        }
+      } finally {
         clearTimeout(timeoutId);
-
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({ error: response.statusText }));
-          throw AragoraError.fromResponse(response.status, body);
-        }
-      } catch (error) {
-        lastError = error as Error;
-
-        // Don't retry on client errors (4xx) or abort
-        if (error instanceof AragoraError && error.statusCode && error.statusCode < 500) {
-          throw error;
-        }
-        if ((error as Error).name === 'AbortError') {
-          throw new TimeoutError('Request timeout', 'SERVICE_UNAVAILABLE');
-        }
-
-        // Check for network/connection errors
-        if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('network'))) {
-          throw new ConnectionError('Connection failed', 'SERVICE_UNAVAILABLE');
-        }
-
-        // Retry on server errors and network failures
-        if (attempt < maxAttempts) {
-          await this.sleep(Math.pow(2, attempt - 1) * 1000);
-        }
-        continue;
       }
 
-      // A successful response may represent an operation already performed.
-      // Body/decoding errors must propagate unchanged, outside retry handling.
-      const text = await response.text();
-
-      // Text responses keep their contract even when the body is empty:
-      // '' is a valid string result, never coerced to {}.
-      if (options.responseType === 'text') {
-        return text as T;
+      // Attempt resources are released before retry backoff begins.
+      if (attempt < maxAttempts) {
+        await this.sleep(Math.pow(2, attempt - 1) * 1000);
       }
-
-      // Handle empty JSON responses
-      if (!text) {
-        return {} as T;
-      }
-
-      return JSON.parse(text) as T;
     }
 
     // Check if lastError is a connection-type error
