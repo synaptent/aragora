@@ -154,3 +154,86 @@ def test_optional_content_types_and_unknowns(monkeypatch, version, member):
     assert not verify(doc).ok and not verify_odr_document(doc).ok
     parent[member] = 42
     assert not verify(doc).ok and not verify_odr_document(doc).ok
+
+
+@pytest.mark.parametrize("pr,expected", [(123, 123), ("123", 123), (True, None), ("12a", None)])
+def test_settlement_provenance_normalized_or_omitted(pr, expected, caplog):
+    source = receipt()
+    source.settlement_metadata = {
+        "repo": "synaptent/aragora",
+        "pr": pr,
+        "head_sha": "",
+        "base_sha": 7,
+    }
+    doc = decision_receipt_to_odr(source, odr_version="0.2")
+    assert doc["subject"]["repository"] == "synaptent/aragora"
+    assert "head_sha" not in doc["subject"] and "base_sha" not in doc["subject"]
+    if expected is None:
+        assert "pr_number" not in doc["subject"]
+        assert sum("pr" in r.message for r in caplog.records) == 1
+    else:
+        assert type(doc["subject"]["pr_number"]) is int
+        assert doc["subject"]["pr_number"] == expected
+    for key in ("head_sha", "base_sha"):
+        assert sum(key in r.message for r in caplog.records) == 1
+    assert verify(doc).ok and verify_odr_document(doc).ok
+
+
+@pytest.mark.parametrize("version", ["0.1", "0.2"])
+def test_settlement_content_version_scoped_and_copied(version):
+    source = receipt()
+    content = {
+        "verdicts": [],
+        "rule": {"required_signals": 2, "counted_families": []},
+        "dissent": {"findings": [], "severity_max": "P2", "blocking": False, "present": True},
+        "observations": [{"kind": "failure", "family": "grok", "detail": "boom"}],
+        "adjudication": {"kind": "review_adjudication.v1", "verdict": "settle", "reason": "ok"},
+        "mechanism": {"type": "merge-quorum", "tier": 2},
+    }
+    source.settlement_metadata = {
+        "repo": "o/r",
+        "pr": 1,
+        "head_sha": "a" * 40,
+        "base_sha": "b" * 40,
+        "odr": content,
+    }
+    original = copy.deepcopy(source.settlement_metadata)
+    doc = decision_receipt_to_odr(source, odr_version=version)
+    assert doc["quorum"]["dissent"]["present"] is False
+    if version == "0.1":
+        assert not {"repository", "pr_number", "head_sha", "base_sha"} & doc["subject"].keys()
+        assert not {"verdicts", "rule"} & doc["quorum"].keys()
+        assert not {"findings", "severity_max", "blocking"} & doc["quorum"]["dissent"].keys()
+        assert "observations" not in doc["reasoning"]
+        assert "adjudication" not in doc and "mechanism" not in doc["attestation"]
+    else:
+        assert doc["quorum"]["rule"] == content["rule"]
+        assert doc["reasoning"]["observations"] == content["observations"]
+        assert doc["adjudication"] == content["adjudication"]
+        assert doc["attestation"]["mechanism"] == content["mechanism"]
+        doc["quorum"]["rule"]["counted_families"].append("claude")
+        assert source.settlement_metadata == original
+    assert verify(doc).ok and verify_odr_document(doc).ok
+
+
+def test_settlement_mapping_preserves_absent_markers_and_explicit_attestation():
+    source = DecisionReceipt.from_dict({"receipt_id": "empty"})
+    source.settlement_metadata = {
+        "odr": {
+            "verdicts": [],
+            "rule": {},
+            "dissent": {"blocking": True},
+            "observations": [{"kind": "timeout", "family": "grok", "detail": "deadline"}],
+            "mechanism": {"type": "merge-quorum"},
+        }
+    }
+    doc = decision_receipt_to_odr(
+        source, odr_version="0.2", attestation={"mechanism": {"type": "manual"}}
+    )
+    assert set(doc["quorum"]) == {"status", "reason"}
+    assert set(doc["reasoning"]) == {"status", "reason"}
+    assert doc["attestation"]["mechanism"] == {"type": "manual"}
+    source.settlement_metadata = {"odr": "not-a-dict"}
+    doc = decision_receipt_to_odr(source, odr_version="0.2")
+    assert not {"verdicts", "rule"} & doc["quorum"].keys()
+    assert verify(doc).ok and verify_odr_document(doc).ok

@@ -217,3 +217,85 @@ def test_example_merge_quorum_receipt_matches_emitter():
     expected = decision_receipt_to_odr(collect_outcome_to_decision_receipt(_outcome()))
     actual = json.loads(example.read_text(encoding="utf-8"))
     assert actual == expected, "example merge-quorum receipt is stale; regenerate it"
+
+
+def test_v02_bridge_findings_use_gate_reader():
+    outcome = _outcome()
+    outcome.items[0].body = (
+        "- **[P3]** advisory from PASS\n"
+        "```\n[P0] fenced\n```\n> [P0] quoted\n    [P0] indented\n"
+        "[P2] None\n[P3] N/A\n"
+    )
+    receipt = collect_outcome_to_decision_receipt(outcome)
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    dissent = doc["quorum"]["dissent"]
+    assert [f["severity"] for f in dissent["findings"]] == ["P3", "P1"]
+    assert dissent["findings"][0]["text"] == "advisory from PASS"
+    assert [f["blocking"] for f in dissent["findings"]] == [False, True]
+    assert dissent["severity_max"] == "P1" and dissent["blocking"] is True
+    legacy = decision_receipt_to_odr(receipt)
+    for key in ("present", "dissenting_agents", "views"):
+        assert dissent[key] == legacy["quorum"]["dissent"][key]
+    jsonschema.validate(doc, load_odr_schema())
+
+
+def test_v02_bridge_gate_blocking_is_not_finding_severity():
+    outcome = _outcome(tier=4)
+    for item in outcome.items:
+        item.severity_gated = True
+    outcome.items[-1].body = "[P2] advisory dissent"
+    receipt = collect_outcome_to_decision_receipt(outcome)
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    assert all(v["blocking"] is False for v in doc["quorum"]["verdicts"])
+    assert doc["quorum"]["dissent"]["present"] is False
+    assert doc["quorum"]["dissent"]["dissenting_agents"] == []
+    for verdict in doc["quorum"]["verdicts"]:
+        assert verdict["model_id"] == "undisclosed"
+        assert "role" not in verdict and "posted_at" not in verdict
+        assert verdict["head_sha"] == outcome.head_sha
+    outcome.items[-1].body = "[P1] blocking dissent"
+    doc = decision_receipt_to_odr(collect_outcome_to_decision_receipt(outcome), odr_version="0.2")
+    assert doc["quorum"]["verdicts"][-1]["blocking"] is True
+    assert doc["quorum"]["dissent"]["dissenting_agents"] == ["grok"]
+    assert doc["quorum"]["dissent"]["present"] is True
+    jsonschema.validate(doc, load_odr_schema())
+
+
+def test_v02_bridge_dict_retains_observations_and_provenance():
+    from aragora.swarm.quorum_evidence import ReviewerResult
+
+    outcome = _outcome()
+    outcome.failures = [ReviewerResult(family="grok", ok=False, text="", error="transport boom")]
+    raw = outcome.to_dict()
+    raw["timed_out_families"] = ["openai"]
+    raw["base_sha"] = "b" * 40
+    receipt = collect_outcome_to_decision_receipt(raw)
+    assert type(receipt.settlement_metadata["pr"]) is int
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    assert doc["subject"]["base_sha"] == "b" * 40
+    assert doc["subject"]["pr_number"] == 8667
+    assert doc["quorum"]["rule"]["required_signals"] == 2
+    assert doc["reasoning"]["observations"] == [
+        {"kind": "failure", "family": "grok", "detail": "transport boom"},
+        {"kind": "timeout", "family": "openai", "detail": "reviewer exceeded collection deadline"},
+    ]
+    assert "adjudication" not in doc
+    assert "observations" not in decision_receipt_to_odr(receipt)["reasoning"]
+    jsonschema.validate(doc, load_odr_schema())
+
+
+def test_v02_bridge_adjudication_and_rule_preserve_source():
+    from aragora.swarm.review_adjudicator import AdjudicationResult, AdjudicationVerdict
+
+    raw = _outcome().to_dict()
+    raw["adjudication"] = AdjudicationResult(
+        verdict=AdjudicationVerdict.SETTLE, reason="resolved"
+    ).to_receipt_dict()
+    receipt = collect_outcome_to_decision_receipt(raw)
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    assert doc["adjudication"]["verdict"] == "settle"
+    assert doc["adjudication"]["reason"] == "resolved"
+    assert "adjudication" not in decision_receipt_to_odr(receipt)
+    assert doc["attestation"]["mechanism"]["policy_version"] == raw["policy_version"]
+    assert doc["attestation"]["mechanism"]["action_reason"] == raw["action_reason"]
+    jsonschema.validate(doc, load_odr_schema())

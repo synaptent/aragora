@@ -26,23 +26,112 @@ Design rules (mirroring the emitter's "never fabricate" contract):
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
+from typing import Any
 
+from aragora.cli.commands.review_queue_comment_verdicts import extract_finding_lines
 from aragora.gauntlet.receipt_models import (
     AgentResponseRecord,
     ConsensusProof,
     DecisionReceipt,
 )
-from aragora.swarm.quorum_evidence import FAMILY_PROVIDERS, CollectOutcome, tier_quorum_rule
+from aragora.swarm.quorum_evidence import (
+    FAMILY_PROVIDERS,
+    CollectOutcome,
+    collect_outcome_from_dict,
+    tier_quorum_rule,
+)
 
 __all__ = ["collect_outcome_to_decision_receipt"]
 
 
-def collect_outcome_to_decision_receipt(outcome: CollectOutcome) -> DecisionReceipt:
+def _odr_content(outcome: CollectOutcome, raw: dict[str, Any]) -> dict[str, Any]:
+    rule = tier_quorum_rule(outcome.tier, tiered_gate=outcome.tiered_gate)
+    verdicts, findings = [], []
+    for item in outcome.items:
+        if not item.family.strip():
+            continue
+        rows = [
+            {
+                "issuer": item.family,
+                "severity": line[1:3],
+                "blocking": line[1:3] in ("P0", "P1"),
+                "text": line[4:].strip(),
+            }
+            for line in extract_finding_lines(item.body)
+        ]
+        findings.extend(rows)
+        verdicts.append(
+            {
+                "issuer": item.family,
+                "verdict": item.verdict,
+                "model_family": FAMILY_PROVIDERS.get(item.family, item.family),
+                "model_id": "undisclosed",
+                "head_sha": outcome.head_sha,
+                "counted": item.would_count,
+                "grounded": item.grounded,
+                "blocking": item.dissenting,
+            }
+        )
+    observations = [
+        {"kind": "failure", "family": failure.family, "detail": failure.error or ""}
+        for failure in outcome.failures
+    ]
+    observations.extend(
+        {"kind": "timeout", "family": family, "detail": "reviewer exceeded collection deadline"}
+        for family in raw.get("timed_out_families", outcome.timed_out_families)
+    )
+    dissent: dict[str, Any] = {
+        "findings": findings,
+        "blocking": any(f["blocking"] for f in findings),
+    }
+    if findings:
+        dissent["severity_max"] = min(f["severity"] for f in findings)
+    content: dict[str, Any] = {
+        "verdicts": verdicts,
+        "dissent": dissent,
+        "observations": observations,
+        "rule": {
+            "required_signals": rule.required_signals,
+            "requires_western_frontier": rule.requires_western_frontier,
+            "western_only_counted": rule.western_only_counted,
+            "counted_families": sorted(rule.counted_families(outcome.counting_families)),
+        },
+        "mechanism": {
+            "type": "merge-quorum",
+            "policy_version": raw["policy_version"],
+            "tier": outcome.tier,
+            "tiered_gate": outcome.tiered_gate,
+            "action": outcome.action,
+            "action_reason": outcome.action_reason,
+        },
+    }
+    if outcome.items and len({item.severity_gated for item in outcome.items}) == 1:
+        content["mechanism"]["severity_gated"] = outcome.items[0].severity_gated
+    if outcome.adjudication is not None:
+        adjudication = deepcopy(outcome.adjudication)
+        if "verdict" in adjudication:
+            adjudication["verdict"] = adjudication["verdict"].removeprefix("adjudicated_")
+        policy = dict(adjudication.get("policy", {}))
+        for key in ("groundedness_bar", "advisory_severity_policy"):
+            if key in adjudication:
+                policy[key] = adjudication.pop(key)
+        content["adjudication"] = {"status": "present", **adjudication, "policy": policy}
+    return content
+
+
+def collect_outcome_to_decision_receipt(
+    outcome: CollectOutcome | dict[str, Any],
+) -> DecisionReceipt:
     """Map a merge-quorum :class:`CollectOutcome` onto a :class:`DecisionReceipt`.
 
     The returned receipt is ready for ``decision_receipt_to_odr`` and carries the
     PR's provenance (repo, number, head SHA, tier) under ``settlement_metadata``.
     """
+    raw = outcome if isinstance(outcome, dict) else outcome.to_dict()
+    if isinstance(outcome, dict):
+        outcome = collect_outcome_from_dict(outcome)
+    raw = {**outcome.to_dict(), **raw}
     supportive = list(outcome.supportive_families)
     dissenting = list(outcome.dissenting_families)
     counting = list(outcome.counting_families)
@@ -108,5 +197,7 @@ def collect_outcome_to_decision_receipt(outcome: CollectOutcome) -> DecisionRece
             "tier": outcome.tier,
             "action": outcome.action,
             "tiered_gate": outcome.tiered_gate,
+            **({"base_sha": raw["base_sha"]} if "base_sha" in raw else {}),
+            "odr": _odr_content(outcome, raw),
         },
     )
