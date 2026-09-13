@@ -58,6 +58,23 @@ test('event envelopes retain data and reject other debates and global messages',
   } }, debate.debate_id)?.content, 'Nested');
 });
 
+test('nested loop IDs follow published SDK precedence and reject malformed IDs', () => {
+  const event = { type: 'agent_message' as const, timestamp: debate.created_at,
+    data: { loop_id: debate.debate_id, content: 'Nested loop message' } };
+  assert.equal(displayEvent(event, debate.debate_id)?.content, 'Nested loop message');
+  assert.equal(displayEvent({ ...event, debate_id: 'other' }, debate.debate_id), null);
+  assert.equal(displayEvent({ ...event, loop_id: 'other' }, debate.debate_id), null);
+  assert.equal(displayEvent({ ...event, data: { ...event.data, debate_id: 'other' } }, debate.debate_id), null);
+  assert.equal(displayEvent({ ...event, debate_id: '', data: {
+    ...event.data, debate_id: '',
+  } }, debate.debate_id)?.content, 'Nested loop message');
+  assert.equal(displayEvent({ ...event, data: {
+    ...event.data, debate_id: 123,
+  } }, debate.debate_id)?.content, 'Nested loop message');
+  assert.equal(displayEvent({ ...event, data: { loop_id: 123 } }, debate.debate_id), null);
+  assert.equal(displayEvent({ ...event, data: { loop_id: 'other' } }, debate.debate_id), null);
+});
+
 class BrowserSocket {
   static instances: BrowserSocket[] = [];
   onopen: (() => void) | null = null;
@@ -90,7 +107,9 @@ test('published SDK connection subscribes, projects messages, and cleans up on u
     assert.deepEqual(JSON.parse(socket.sent[0]), { type: 'subscribe', debate_id: debate.debate_id });
     socket.onmessage?.({ data: JSON.stringify({ type: 'agent_message', loop_id: debate.debate_id,
       timestamp: debate.created_at, data: { content: 'Streamed proposal' } }) });
-    assert.deepEqual(messages, ['Streamed proposal']);
+    socket.onmessage?.({ data: JSON.stringify({ type: 'agent_message',
+      timestamp: debate.created_at, data: { loop_id: debate.debate_id, content: 'Nested loop message' } }) });
+    assert.deepEqual(messages, ['Streamed proposal', 'Nested loop message']);
     socket.onerror?.();
     assert.deepEqual(errors, [null, 'WebSocket error']);
     socket.onclose?.({ code: 1006, reason: 'Lost connection' });
@@ -105,7 +124,7 @@ test('published SDK connection subscribes, projects messages, and cleans up on u
     socket.onerror?.();
     await Promise.resolve();
     assert.equal(states.length, stateCount);
-    assert.equal(messages.length, 1);
+    assert.equal(messages.length, 2);
   } finally {
     cleanup();
     globalThis.WebSocket = original;

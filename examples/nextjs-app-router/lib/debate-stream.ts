@@ -15,8 +15,11 @@ interface StreamHandlers {
 
 export function displayEvent(event: WebSocketEvent, debateId: string): StreamEvent | null {
   const data = event.data && typeof event.data === 'object' ? event.data : {};
-  const nestedId = 'debate_id' in data ? data.debate_id : undefined;
-  const id = event.debate_id ?? event.loop_id ?? nestedId;
+  const nestedId = 'debate_id' in data && typeof data.debate_id === 'string'
+    ? data.debate_id : undefined;
+  const nestedLoopId = 'loop_id' in data && typeof data.loop_id === 'string'
+    ? data.loop_id : undefined;
+  const id = event.debate_id || event.loop_id || nestedId || nestedLoopId;
   if (id !== debateId) return null;
   return {
     type: event.type,
