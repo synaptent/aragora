@@ -79,10 +79,10 @@ GH_TIMEOUT = 90
 # --------------------------------------------------------------------------
 
 
-def sh(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
+def sh(cmd: list[str], timeout: int = 30, *, cwd: Path | None = None) -> tuple[int, str]:
     """Run a probe. A failed probe is data (it becomes an UNKNOWN), not a crash."""
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
         return p.returncode, (p.stdout or p.stderr).strip()
     except FileNotFoundError:
         return 127, f"{cmd[0]} not installed"
@@ -156,14 +156,17 @@ class Capsule:
 # --------------------------------------------------------------------------
 
 
-def build_anchor(cap: Capsule) -> bool:
-    code, branch = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+def build_anchor(cap: Capsule, repo_root: Path | None = None) -> bool:
+    code, branch = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
     if code != 0:
         cap.degraded.append("not a git repository; no anchor possible")
         return False
-    _, head = sh(["git", "rev-parse", "--short=12", "HEAD"])
-    main_code, main_sha = sh(["git", "rev-parse", "--short=12", "origin/main"])
-    _, slug = sh(["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"])
+    _, head = sh(["git", "rev-parse", "--short=12", "HEAD"], cwd=repo_root)
+    main_code, main_sha = sh(["git", "rev-parse", "--short=12", "origin/main"], cwd=repo_root)
+    _, slug = sh(
+        ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+        cwd=repo_root,
+    )
 
     cap.anchor = {
         "repo": slug if slug and "/" in slug else "unknown",
@@ -177,8 +180,8 @@ def build_anchor(cap: Capsule) -> bool:
     return True
 
 
-def add_local_beliefs(cap: Capsule) -> None:
-    code, porcelain = sh(["git", "status", "--porcelain"])
+def add_local_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
+    code, porcelain = sh(["git", "status", "--porcelain"], cwd=repo_root)
     if code == 0:
         dirty = [ln for ln in porcelain.splitlines() if ln.strip()]
         cap.beliefs.append(
@@ -190,11 +193,21 @@ def add_local_beliefs(cap: Capsule) -> None:
                 "observed",
             )
         )
+    else:
+        cap.degraded.append(f"git status failed: {porcelain[:120]}")
+        cap.unknowns.append(
+            Unknown(
+                "Is the working tree clean or does it contain uncommitted work?",
+                "A failed index probe cannot establish that edits are safe.",
+                "git status --porcelain",
+                100,
+            )
+        )
 
     if cap.anchor.get("main") != "unresolved":
-        _, behind = sh(["git", "rev-list", "--count", "HEAD..origin/main"])
-        _, ahead = sh(["git", "rev-list", "--count", "origin/main..HEAD"])
-        if behind.isdigit() and ahead.isdigit():
+        behind_code, behind = sh(["git", "rev-list", "--count", "HEAD..origin/main"], cwd=repo_root)
+        ahead_code, ahead = sh(["git", "rev-list", "--count", "origin/main..HEAD"], cwd=repo_root)
+        if behind_code == ahead_code == 0 and behind.isdigit() and ahead.isdigit():
             cap.beliefs.append(
                 Belief(
                     "branch_position",
@@ -203,6 +216,16 @@ def add_local_beliefs(cap: Capsule) -> None:
                     "live",
                     "observed",
                     note="squash merges can make 'ahead' misleading; not merge proof",
+                )
+            )
+        else:
+            cap.degraded.append("git rev-list did not establish branch position")
+            cap.unknowns.append(
+                Unknown(
+                    "How far ahead or behind origin/main is this branch?",
+                    "Unobserved branch position must not be read as synchronized.",
+                    "git rev-list --left-right --count HEAD...origin/main",
+                    30,
                 )
             )
 
@@ -220,7 +243,7 @@ def _probe_rows(cap: Capsule, source: str, output: str) -> list[dict[str, Any]] 
     return rows
 
 
-def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
+def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str, Any]:
     """One `gh pr list` and one `gh run list`. Returns raw PR rows for delta use."""
     raw: dict[str, Any] = {"prs": []}
 
@@ -247,6 +270,7 @@ def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
             "number,title,isDraft,updatedAt,headRefName,author",
         ],
         timeout=GH_TIMEOUT,
+        cwd=repo_root,
     )
     prs = None
     if code == 0:
@@ -304,6 +328,7 @@ def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
             "conclusion,name,createdAt",
         ],
         timeout=GH_TIMEOUT,
+        cwd=repo_root,
     )
     runs = None
     if code == 0:
@@ -360,14 +385,16 @@ def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
     return raw
 
 
-def add_fleet_beliefs(cap: Capsule) -> None:
+def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
     """Summarize scripts/loop_control_status.py without embedding it.
 
     That tool emits ~3,100 tokens of JSON. The agent must read back about 40.
     This is the composition rule in miniature: summarize downward, and never let
     the summary claim more certainty than the thing it summarizes.
     """
-    code, out = sh(["python3", "scripts/loop_control_status.py", "--json"], timeout=120)
+    code, out = sh(
+        ["python3", "scripts/loop_control_status.py", "--json"], timeout=120, cwd=repo_root
+    )
     if code != 0:
         cap.degraded.append(f"loop_control_status unavailable: {out[:100]}")
         cap.unknowns.append(
@@ -450,7 +477,7 @@ def add_fleet_beliefs(cap: Capsule) -> None:
         )
 
 
-def add_pr_beliefs(cap: Capsule, pr: int) -> None:
+def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None:
     """Compose settle_status.py for one PR, inferring --repo from the anchor.
 
     settle_status.py requires --repo and cannot infer it; passing the wrong slug
@@ -465,6 +492,7 @@ def add_pr_beliefs(cap: Capsule, pr: int) -> None:
     code, out = sh(
         ["python3", "scripts/settle_status.py", "--repo", slug, "--pr", str(pr), "--json"],
         timeout=120,
+        cwd=repo_root,
     )
     if code != 0:
         cap.degraded.append(f"settle_status failed for PR {pr}")
@@ -523,9 +551,9 @@ def add_pr_beliefs(cap: Capsule, pr: int) -> None:
         )
 
 
-def add_objective(cap: Capsule) -> None:
+def add_objective(cap: Capsule, repo_root: Path | None = None) -> None:
     branch = cap.anchor.get("branch", "")
-    _, subject = sh(["git", "log", "-1", "--pretty=%s"])
+    _, subject = sh(["git", "log", "-1", "--pretty=%s"], cwd=repo_root)
     cap.objective = {
         "branch": branch,
         "last_commit": subject[:100],
@@ -569,7 +597,18 @@ def add_frontier(cap: Capsule) -> None:
                 "requires --repo and cannot infer it",
             )
         )
-    if dirty:
+    if "working_tree" not in b:
+        cap.frontier.append(
+            Action(
+                "Establish working-tree state before edits",
+                "git status --porcelain",
+                "cheap",
+                "none",
+                True,
+                prerequisite="working-tree probe failed; cleanliness is unknown",
+            )
+        )
+    elif dirty:
         cap.frontier.append(
             Action(
                 "Review uncommitted work before anything else",
@@ -677,16 +716,17 @@ def render(cap: Capsule) -> str:
 
 
 def build(repo_root: Path, pr: int | None = None, fleet: bool = True) -> Capsule:
+    repo_root = repo_root.resolve()
     cap = Capsule()
-    if not build_anchor(cap):
+    if not build_anchor(cap, repo_root):
         return cap
-    add_local_beliefs(cap)
-    add_github_beliefs(cap)
+    add_local_beliefs(cap, repo_root)
+    add_github_beliefs(cap, repo_root)
     if fleet:
-        add_fleet_beliefs(cap)
+        add_fleet_beliefs(cap, repo_root)
     if pr is not None:
-        add_pr_beliefs(cap, pr)
-    add_objective(cap)
+        add_pr_beliefs(cap, pr, repo_root)
+    add_objective(cap, repo_root)
     add_standing_unknowns(cap)
     add_frontier(cap)
     return cap

@@ -130,7 +130,7 @@
       "calls": [
         {
           "label": "settlement status tool",
-          "cmd": "python3 scripts/settle_status.py 9924 2>&1 || echo 'settle_status.py did not resolve'"
+          "cmd": "python3 scripts/settle_status.py --repo synaptent/aragora --pr 9924"
         },
         {
           "label": "merge state + rollup",

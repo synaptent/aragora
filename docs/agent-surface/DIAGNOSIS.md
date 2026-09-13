@@ -4,7 +4,8 @@ Status: **proposed**, with a measured prototype. Nothing in this document has
 been adopted. See the implementation-truth matrix at the end for exactly what
 exists today versus what is proposed.
 
-Measured 2026-08-31 against `synaptent/aragora` @ `2b94459bc0e3`.
+Original measurements: 2026-08-31 against `synaptent/aragora` @ `2b94459bc0e3`.
+The settlement journey correction and separate remeasurement are noted below.
 Reproduce with `python3 scripts/agent_surface/measure.py all --json`.
 
 ## Why this exists
@@ -30,14 +31,40 @@ Token counts use `tiktoken/cl100k_base` as a documented proxy for Claude's
 tokenizer (within roughly 10–15%, far inside the margins here). Every record
 names the tokenizer that produced it.
 
-## Measured baseline — the system as it exists today
+## Historical measured baseline
 
 | journey | calls | tokens | budget | verdict |
 |---|---:|---:|---|---|
 | cold orientation | 7 | 24,272 | 1 / 4,000 | **FAIL — 6.1x** |
 | quiet re-check | 4 | 4,011 | 1 / 200 | **FAIL — 20.1x** |
 | resumption (PR 9924) | 6 | 3,692 | 3 / 12,000 | **FAIL on calls** |
-| high-risk settlement | 5 | 9,856 | 3 / 12,000 | **FAIL on calls** |
+| high-risk settlement (invalid original invocation) | 5 | 9,856 | 3 / 12,000 | **WITHDRAWN as settlement-tool measurement** |
+
+### Settlement journey correction (2026-09-13)
+
+The original first call passed `9924` positionally and omitted required `--repo`
+and `--pr` options. It measured an argparse usage error, then masked exit 2 with
+`|| echo`. It did not measure a successful settlement probe or establish the
+previously claimed wrong-slug traceback. The other historical journeys above
+were not rerun for this correction.
+
+The corrected call is `python3 scripts/settle_status.py --repo synaptent/aragora --pr 9924`.
+It now preserves the tool's exit code. Rerun the affected journey with
+`python3 scripts/agent_surface/measure.py high_risk_settle --json`.
+
+The correction was measured at base commit
+`fccc25a4341f8d6e2df169ea39c0de5d903a7d3b` plus this PR's command and repo-root
+repair, against PR #9924 at `6cfae2030ea2bbb8e2c11c87c7ccc631b06fbf45`.
+All five calls exited 0. The settlement probe returned its exact-head Tier 1
+state, zero counted reviewers, absent human settlement, and failed quorum.
+This is an observation, not permission to review or merge that PR.
+
+The environment lacked `tiktoken`; the harness warned and identified its
+tokenizer as **`chars/4 (crude fallback)`**. It estimated 54 tokens for the
+settlement probe and 8,030 for the five-call journey. These are character-based
+estimates, not comparable tokenizer measurements. The journey still fails the
+unchanged three-call budget (five calls); that result does not depend on the
+token estimate. No current-main or release acceptance is claimed.
 
 Composition of the cold-orientation cost is the important part:
 
@@ -121,11 +148,12 @@ are fossils of a missing composed view. The most severe:
 - **Cap read as total** — `--limit` caps silently understate queue size; a prior
   audit found true open issues at 1,379 behind a 500 cap.
 
-### Two defects found by running the tools rather than reading them
+### Invocation contract and historical cache observations
 
-- `scripts/settle_status.py` **requires `--repo` even when run inside the repo it
-  is asking about**, and cannot infer it. Passing the wrong slug produces a raw
-  200-token Python traceback naming no next action.
+- `scripts/settle_status.py` **requires both `--repo` and `--pr`**. Missing them
+  produces an argparse usage error, not the previously attributed wrong-slug
+  traceback. The capsule supplies both options from the selected checkout and
+  PR argument; the corrected journey exercises this documented invocation.
 - `.aragora/pr-state-cache.json` **does not exist**, and
   `.aragora/backpressure.json` is dated **2026-06-30 — two months stale**. The
   cheap-read caches that would make orientation affordable exist as a design and

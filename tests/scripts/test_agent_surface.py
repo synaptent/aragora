@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -166,6 +168,126 @@ def test_since_unchanged_retains_compact_response(monkeypatch: Any, capsys: Any)
 # --------------------------------------------------------------------------
 # authority rule: a failed probe is never a reassuring default
 # --------------------------------------------------------------------------
+
+
+def test_failed_working_tree_probe_preserves_uncertainty_and_inspection(monkeypatch: Any) -> None:
+    cap = _capsule()
+    monkeypatch.setattr(
+        situation,
+        "sh",
+        lambda cmd, **kw: (1, "unreadable index") if cmd[1] == "status" else (0, "0"),
+    )
+    situation.add_local_beliefs(cap)
+    situation.add_frontier(cap)
+    assert not any(b.key == "working_tree" for b in cap.beliefs)
+    assert any("working tree" in u.question.lower() for u in cap.unknowns)
+    assert any("git status" in d for d in cap.degraded)
+    assert any(a.command == "git status --porcelain" for a in cap.frontier)
+
+
+@pytest.mark.parametrize("which", ["HEAD..origin/main", "origin/main..HEAD"])
+@pytest.mark.parametrize("failure", [(1, "0"), (0, "not a count"), (124, "timeout")])
+def test_failed_branch_position_probe_is_explicit(
+    monkeypatch: Any, which: str, failure: tuple[int, str]
+) -> None:
+    cap = _capsule()
+
+    def probe(cmd: list[str], **kw: Any) -> tuple[int, str]:
+        if cmd[1] == "status":
+            return 0, ""
+        return failure if cmd[-1] == which else (0, "0")
+
+    monkeypatch.setattr(situation, "sh", probe)
+    situation.add_local_beliefs(cap)
+    assert not any(b.key == "branch_position" for b in cap.beliefs)
+    assert any("ahead" in u.question for u in cap.unknowns)
+    assert any("git rev-list" in d for d in cap.degraded)
+
+
+@pytest.mark.parametrize(
+    "status,expected", [("", "clean"), (" M file.py", "1 uncommitted path(s)")]
+)
+def test_successful_local_probes_retain_observed_values(
+    monkeypatch: Any, status: str, expected: str
+) -> None:
+    cap = _capsule()
+    monkeypatch.setattr(
+        situation, "sh", lambda cmd, **kw: (0, status if cmd[1] == "status" else "0")
+    )
+    situation.add_local_beliefs(cap)
+    assert {b.key: b.value for b in cap.beliefs}["working_tree"] == expected
+    assert not cap.degraded and not cap.unknowns
+
+
+def test_shell_probe_uses_explicit_cwd(tmp_path: Path) -> None:
+    code, output = situation.sh(
+        [sys.executable, "-c", "from pathlib import Path; print(Path.cwd())"], cwd=tmp_path
+    )
+    assert code == 0 and Path(output) == tmp_path.resolve()
+
+
+@pytest.mark.parametrize("outside_repo", [False, True])
+def test_cli_repo_root_applies_to_every_probe(
+    monkeypatch: Any, tmp_path: Path, capsys: Any, outside_repo: bool
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    caller = tmp_path / "caller"
+    caller.mkdir()
+    monkeypatch.chdir(caller if outside_repo else target)
+    calls: list[tuple[list[str], Any]] = []
+
+    def subprocess_probe(cmd: list[str], **kw: Any) -> Any:
+        calls.append((cmd, kw.get("cwd")))
+        if cmd[0] == "git":
+            if "--abbrev-ref" in cmd:
+                output = "target-branch"
+            elif "rev-parse" in cmd:
+                output = "abc123def456"
+            elif "status" in cmd:
+                output = " M target-only.py"
+            elif "rev-list" in cmd:
+                output = "0"
+            else:
+                output = "target commit"
+        elif cmd[:3] == ["gh", "repo", "view"]:
+            output = "synaptent/aragora"
+        elif cmd[0] == "gh":
+            output = "[]"
+        elif "scripts/loop_control_status.py" in cmd:
+            output = '{"summary": {"by_state": {"running": 1}}}'
+        else:
+            assert "scripts/settle_status.py" in cmd
+            output = '{"tier": 2, "head_sha": "abc123def456", "signal_count": 0}'
+        return SimpleNamespace(returncode=0, stdout=output, stderr="")
+
+    monkeypatch.setattr(situation.subprocess, "run", subprocess_probe)
+    monkeypatch.setattr(situation.shutil, "which", lambda _: "/fixture/gh")
+    monkeypatch.setattr(
+        sys, "argv", ["situation", "--repo-root", str(target), "--pr", "9924", "--json"]
+    )
+    assert situation.main() == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["anchor"]["branch"] == "target-branch"
+    assert all(cwd == target.resolve() for _, cwd in calls)
+    assert any("scripts/loop_control_status.py" in cmd for cmd, _ in calls)
+    assert any("scripts/settle_status.py" in cmd for cmd, _ in calls)
+    assert any(cmd[:3] == ["gh", "run", "list"] for cmd, _ in calls)
+    assert any(b["value"] == "1 uncommitted path(s)" for b in payload["beliefs"])
+    assert Path.cwd() == (caller if outside_repo else target)
+
+
+def test_settlement_journey_passes_required_options_without_masking_errors() -> None:
+    spec = json.loads((Path(situation.__file__).parent / "journeys.json").read_text())
+    command = spec["journeys"]["high_risk_settle"]["calls"][0]["cmd"]
+    assert shlex.split(command) == [
+        "python3",
+        "scripts/settle_status.py",
+        "--repo",
+        "synaptent/aragora",
+        "--pr",
+        "9924",
+    ]
 
 
 def test_failed_fleet_probe_becomes_an_unknown_not_a_green(monkeypatch: Any) -> None:
