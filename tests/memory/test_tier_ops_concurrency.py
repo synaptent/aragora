@@ -430,7 +430,11 @@ class TestMultiProcessSimulation:
     def test_multiprocess_rejects_false_success(
         self, temp_db_path: str, monkeypatch: pytest.MonkeyPatch, failure: str, message: str
     ) -> None:
-        results = [("success", MemoryTier.FAST), ("success", None), ("success", None)]
+        results: list[tuple[str, MemoryTier | str | None] | Empty] = [
+            ("success", MemoryTier.FAST),
+            ("success", None),
+            ("success", None),
+        ]
         if failure == "missing_result":
             results[-1] = Empty()
         elif failure == "worker_error":
