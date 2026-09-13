@@ -10,7 +10,7 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 #### Breaking Changes
 
-Contract-drift batch 3 removes 26 operations on unserved routes absent from both
+Contract-drift batch 3 removes 25 operations on unserved routes absent from both
 OpenAPI documents. The deprecated debate methods are included.
 `PipelineTransitionsNamespace` and its barrel export are removed, as is the
 orphaned `DebateAgentStatistics` interface. Routes below use normalized parameters.
@@ -18,7 +18,6 @@ orphaned `DebateAgentStatistics` interface. Routes below use normalized paramete
 | Removed Method | Route | Migration |
 |----------------|-------|-----------|
 | `decisions.getOutcome` | `GET /api/v1/decisions/{id}/outcome` | `decisions.getPlanOutcome(planId)` for a completed plan |
-| `decisions.listOutcomes` | `GET /api/v1/decisions/{id}/outcomes` | `decisions.getPlanOutcome(planId)` for a completed plan |
 | `PipelineTransitionsNamespace.transition` | `POST /api/v2/pipelines/{id}/items/{id}/transition` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
 | `PipelineTransitionsNamespace.getHistory` | `GET /api/v2/pipelines/{id}/items/{id}/transitions` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
 | `PipelineTransitionsNamespace.validate` | `POST /api/v2/pipelines/{id}/items/{id}/transition/validate` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |

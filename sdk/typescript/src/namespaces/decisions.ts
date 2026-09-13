@@ -305,6 +305,11 @@ export class DecisionsAPI {
     return this.client.request('GET', `/api/v1/decisions/plans/${planId}/outcome`);
   }
 
+  /** List all outcomes for a decision. */
+  async listOutcomes(decisionId: string): Promise<Record<string, unknown>> {
+    return this.client.get(`/api/v1/decisions/${decisionId}/outcomes`);
+  }
+
   /**
    * Cancel a pending or processing decision.
    *

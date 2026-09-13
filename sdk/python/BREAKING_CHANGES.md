@@ -10,14 +10,13 @@ This document tracks breaking changes specific to the Aragora Python SDK. For co
 
 #### Breaking Changes
 
-Contract-drift batch 3 removes two operations on unserved routes absent from
+Contract-drift batch 3 removes one operation on an unserved route absent from
 both OpenAPI documents, from both synchronous and asynchronous clients.
-TypeScript removes the same two operations; no server routes are removed.
+TypeScript removes the same operation; no server routes are removed.
 
 | Removed Method | Route | Migration |
 |----------------|-------|-----------|
 | `decisions.get_outcome` | `GET /api/v1/decisions/{id}/outcome` | `decisions.get_plan_outcome(plan_id)` for a completed plan |
-| `decisions.list_outcomes` | `GET /api/v1/decisions/{id}/outcomes` | `decisions.get_plan_outcome(plan_id)` for a completed plan |
 
 ### Unreleased (2026-09-03)
 
