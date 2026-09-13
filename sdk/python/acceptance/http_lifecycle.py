@@ -6,8 +6,10 @@ import asyncio
 import hashlib
 import importlib.metadata
 import json
+import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -159,7 +161,31 @@ def test_acceptance_requires_full_execution(mode: str) -> None:
     assert session.exitstatus == (0 if mode == "complete" else 1)
 
 
+@pytest.mark.parametrize(
+    "options",
+    [
+        "-o python_functions=test_loopback_consumers",
+        "-o python_functions=test_acceptance_requires_full_execution",
+        "-k test_loopback_consumers",
+        "--collect-only",
+    ],
+    ids=["collection", "guard-only", "selection", "collect-only"],
+)
+def test_entrypoint_rejects_pytest_options(options: str) -> None:
+    result = subprocess.run(
+        [sys.executable, "-I", str(Path(__file__).resolve())],
+        env={**os.environ, "PYTEST_ADDOPTS": options},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode != 0
+    assert "PYTEST_ADDOPTS must be unset" in result.stderr
+
+
 if __name__ == "__main__":
+    if os.environ.get("PYTEST_ADDOPTS"):
+        raise SystemExit("PYTEST_ADDOPTS must be unset for installed acceptance")
     print(json.dumps({"installed": installed_origin()}, sort_keys=True), flush=True)
     # Copy only tests, never conftest.py (which inserts the source checkout).
     # -I plus an empty pytest configuration prevents PYTHONPATH/repo config leakage.

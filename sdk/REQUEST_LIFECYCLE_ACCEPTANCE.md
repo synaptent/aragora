@@ -53,7 +53,9 @@ Python copies only the two focused lifecycle test modules into a temporary direc
 excludes their source-inserting conftest and repository pytest configuration, and
 checks installed module origins before and after pytest. Deselection, skips/xfails,
 zero collection or collection-only execution fail acceptance; every collected case
-must pass. TypeScript verifies bundle paths beneath the consumer's
+must pass. Non-empty `PYTEST_ADDOPTS` is rejected before pytest starts, so inherited
+collection patterns cannot silently shrink the required matrix. Unset it before running.
+TypeScript verifies bundle paths beneath the consumer's
 node_modules and loads ESM through a generated native package-import probe.
 
 The runners print installed-file hashes. This is provenance, not cryptographic
