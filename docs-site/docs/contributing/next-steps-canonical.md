@@ -274,7 +274,7 @@ This is the executable backlog for the next 30 days. Keep it to one bounded lane
 - Contract-drift paydown batches (exit metric row 10) and the guardrail ceilings, every batch
 - Operator settlement of ready Tier 3-4 mission PRs within one working day of the packet comment, so workers are not parked on rulings
 - Keep at least two countable reviewer families available to workers (Claude profile usage/OAuth plus OpenAI); every mission park between 2026-09-10 and 2026-09-11 was a reviewer-transport park, not a ruling park
-- Restack any Tier 3-4 head that falls behind `main` before asking for settlement ([#10051](https://github.com/synaptent/aragora/pull/10051), readiness M5 [#10049](https://github.com/synaptent/aragora/pull/10049))
+- Restack any Tier 3-4 head that falls behind `main` before asking for settlement (currently readiness M5 [#10049](https://github.com/synaptent/aragora/pull/10049); [#10013](https://github.com/synaptent/aragora/pull/10013) was restacked to `6b905d99` on 2026-09-13 for this reason and awaits a fresh exact-head collection)
 - `CS-01..03` (background)
 - observer truth on current `main` (background)
 - benchmark publication freshness and completeness (background)
