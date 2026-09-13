@@ -180,7 +180,7 @@ What is still missing:
 - ongoing discipline so actual external outreach stays no broader than the recurring proof surfaces and the preserved frontier-review evidence
 - delayed decision-integrity work that turns important claims into executable evidence-linked objects and debates into ranked `CruxSet` outputs, after the proof-first Foreman gate is stable
 
-For this background lane, the work is not “add more speculative autonomy.” It is “make bounded unattended execution boring.” The forward-execution work happens in the ODR tranche above.
+For this background lane, the work is not “add more speculative autonomy.” It is “make bounded unattended execution boring.” The forward-execution work happens in the Receipt-First Mission ([#9966](https://github.com/synaptent/aragora/issues/9966)) declared at the top of this document; the ODR tranche section above is retained as history and is not the live routing target.
 
 Queue rule for this background tranche:
 
@@ -269,7 +269,7 @@ This is the executable backlog for the next 30 days. Keep it to one bounded lane
 - Contract-drift paydown batches (exit metric row 10) and the guardrail ceilings, every batch
 - Operator settlement of ready Tier 3-4 mission PRs within one working day of the packet comment, so workers are not parked on rulings
 - Keep at least two countable reviewer families available to workers (Claude profile usage/OAuth plus OpenAI); every mission park between 2026-09-10 and 2026-09-11 was a reviewer-transport park, not a ruling park
-- Restack any Tier 3-4 head that falls behind `main` before asking for settlement (currently readiness M5 [#10049](https://github.com/synaptent/aragora/pull/10049); [#10013](https://github.com/synaptent/aragora/pull/10013) was restacked to `6b905d99` on 2026-09-13 for this reason and awaits a fresh exact-head collection)
+- Restack any Tier 3-4 head that falls behind `main` before asking for settlement (currently readiness M5 [#10049](https://github.com/synaptent/aragora/pull/10049); [#10013](https://github.com/synaptent/aragora/pull/10013) was restacked on 2026-09-13 for this reason and awaits a fresh exact-head collection)
 - `CS-01..03` (background)
 - observer truth on current `main` (background)
 - benchmark publication freshness and completeness (background)

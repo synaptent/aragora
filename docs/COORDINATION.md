@@ -1,6 +1,6 @@
 # AI Agent Coordination
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-13
 **Maintainer:** Update this file when starting/finishing work
 
 > **Operating Contract.** All coordinated work in this repo follows
@@ -39,7 +39,7 @@
 
 | Lane | Owner / agent | Branches | Open PRs | Touched paths |
 |------|---------------|----------|----------|---------------|
-| Receipt-First mission (M1–M3) | Codex / Factory workers via `scarmani` | `rf/*`, `codex/*` | merged 2026-09-13: [#9979](https://github.com/synaptent/aragora/pull/9979) (`74c22b58`), [#10051](https://github.com/synaptent/aragora/pull/10051) (`8ea6176d`); open Tier 4: [#9988](https://github.com/synaptent/aragora/pull/9988) (awaiting collection + settlement), [#10013](https://github.com/synaptent/aragora/pull/10013) (restacked to `6b905d99` on 2026-09-13, awaiting fresh exact-head collection + settlement) | `aragora/gauntlet/`, `aragora-verify/`, `aragora/swarm/`, `scripts/baselines/`, `.github/workflows/metrics-drift.yml`, `deploy/` |
+| Receipt-First mission (M1–M3) | Codex / Factory workers via `scarmani` | `rf/*`, `codex/*` | merged 2026-09-13: [#9979](https://github.com/synaptent/aragora/pull/9979) (`74c22b58`), [#10051](https://github.com/synaptent/aragora/pull/10051) (`8ea6176d`); open Tier 4: [#9988](https://github.com/synaptent/aragora/pull/9988) (awaiting collection + settlement), [#10013](https://github.com/synaptent/aragora/pull/10013) (restacked on 2026-09-13, awaiting fresh exact-head collection + settlement) | `aragora/gauntlet/`, `aragora-verify/`, `aragora/swarm/`, `scripts/baselines/`, `.github/workflows/metrics-drift.yml`, `deploy/` |
 | Reliable SDK consumption (Tier 3, parked drafts) | Codex via `scarmani` | `codex/*` | [#10014](https://github.com/synaptent/aragora/pull/10014), [#10015](https://github.com/synaptent/aragora/pull/10015), [#10056](https://github.com/synaptent/aragora/pull/10056) | `sdk/python/`, `sdk/typescript/` |
 | P4B handlers decomposition (batch 1 of 4) | Codex / Factory worker via `scarmani` | `structex/*` | [#10000](https://github.com/synaptent/aragora/pull/10000) (head `03ddc3dc`, needs a fresh quorum collection after the 2026-09-07 repair) | `aragora/server/handlers/` (moves behind `MOVED_MODULES` shim) |
 | Readiness mission M1–M7 (stacked drafts, operator review) | `scarmani` | `readiness/*` | [#9982](https://github.com/synaptent/aragora/pull/9982) (M1, grounded P2 on `uv.lock` cooldown), [#9997](https://github.com/synaptent/aragora/pull/9997), [#10005](https://github.com/synaptent/aragora/pull/10005), [#10027](https://github.com/synaptent/aragora/pull/10027), [#10049](https://github.com/synaptent/aragora/pull/10049) (M5, conflicts with `main`), [#10052](https://github.com/synaptent/aragora/pull/10052), [#10060](https://github.com/synaptent/aragora/pull/10060) | `.github/workflows/`, `Makefile`, `scripts/ci/`, `scripts/baselines/`, `aragora/live/`, `docs-site/` |
