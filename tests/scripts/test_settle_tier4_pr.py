@@ -210,6 +210,218 @@ def _valid_checks() -> list[dict[str, str]]:
     ]
 
 
+def _protected_comment(head: str) -> dict[str, Any]:
+    comment = _authorized_comment(head, include_branch_protection=False)
+    comment["body"] = settler._settlement_comment_template(
+        pr=7423, head=head, protected_squash_only=True
+    )
+    return comment
+
+
+def test_protected_settlement_template_grants_only_normal_squash() -> None:
+    body = _protected_comment("a" * 40)["body"]
+    assert "Authorized action: protected_squash_merge\n" in body
+    assert "admin_squash_merge" not in body
+    assert "branch_protection_reconcile" not in body
+    assert settler._comment_authorized_actions(body) == {"protected_merge"}
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "Do not authorize protected_squash_merge",
+        "> Authorized action: protected_squash_merge",
+        "Authorized action: not protected_squash_merge",
+        "Authorized action: protected_squash_merge_extra",
+        "Authorized action: protected_squash_merge and admin_squash_merge",
+        "Authorized action: protected_squash_merge\nAuthorized action: branch_protection_reconcile",
+        "Authorized action: protected_squash_merge\nAuthorized action: unknown_action",
+        "Authorized action: protected_squash_merge\n  Authorized action: unknown_action",
+        "Authorized action: protected_squash_merge\nAuthorized action: protected_squash_merge",
+        "```\nAuthorized action: protected_squash_merge\n```",
+        "~~~\nAuthorized action: protected_squash_merge\n~~~",
+    ],
+)
+def test_protected_settlement_rejects_ambiguous_action_lines(action: str) -> None:
+    body = f"{settler.AUTHORIZED_MARKER}\n{action}"
+    assert settler._comment_authorized_actions(body) == set()
+
+
+def test_protected_settlement_requires_first_heading() -> None:
+    body = _protected_comment("a" * 40)["body"]
+    assert settler._comment_authorized_actions(f"Example only:\n{body}") == set()
+
+
+@pytest.mark.parametrize(
+    "failure", ["head", "stale", "author", "checks", "status", "dissent", "quorum", "draft"]
+)
+def test_protected_settlement_retains_authority_and_evidence_gates(failure: str) -> None:
+    head = "a" * 40
+    comment = _protected_comment(head)
+    view = _pr_view(head, comments=[comment])
+    packet = _tier4_packet()
+    checks = _valid_checks()
+    if failure == "head":
+        view["headRefOid"] = "b" * 40
+    elif failure == "stale":
+        comment["createdAt"] = "2026-05-21T00:00:00Z"
+    elif failure == "author":
+        comment["authorAssociation"] = "CONTRIBUTOR"
+    elif failure == "checks":
+        checks[0]["state"] = "FAILURE"
+    elif failure == "status":
+        view["statusCheckRollup"] = []
+    elif failure == "dissent":
+        packet["entries"][0]["unresolved_dissent"] = True
+    elif failure == "quorum":
+        packet["entries"][0]["counted_reviewer_ids"] = ["openai"]
+    else:
+        view["isDraft"] = True
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=packet,
+        required_checks=checks,
+        protected_squash_only=True,
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+
+
+def test_protected_mode_ignores_legacy_grants_instead_of_escalating() -> None:
+    head = "a" * 40
+    view = _pr_view(head, comments=[_authorized_comment(head), _protected_comment(head)])
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=True,
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["protected_merge"]
+    assert gate["authorization_diagnostics"][0]["accepted"] is False
+    view["comments"].pop()
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=True,
+    )
+    assert gate["ok"] is False
+
+
+@pytest.mark.parametrize("explicit_mode", [False, True])
+def test_protected_settle_check_merge_roundtrip_never_administers_protection(
+    monkeypatch: Any,
+    tmp_path: Path,
+    explicit_mode: bool,
+) -> None:
+    head = "a" * 40
+    view = _pr_view(head, comments=[], human_settlement_state=None)
+    packet = _tier4_repair_packet_missing_settlement()
+    checks = _valid_checks()
+    checks[1]["state"] = "FAILURE"
+    commands: list[list[str]] = []
+    monkeypatch.setattr(settler, "_load_live_inputs", lambda *a, **kw: (view, packet, checks))
+    monkeypatch.setattr(settler, "_current_gh_login", lambda **kw: "scarmani")
+    monkeypatch.setattr(settler, "_login_has_admin_permission", lambda *a, **kw: True)
+    monkeypatch.setattr(
+        settler, "_quorum_failure_log_proves_missing_settlement", lambda *a, **kw: True
+    )
+
+    def post_comment(command: list[str], **kwargs: Any) -> str:
+        commands.append(command)
+        comment = _authorized_comment(head)
+        comment["body"] = command[command.index("--body") + 1]
+        view["comments"].append(comment)
+        return "https://github.example/settlement"
+
+    def run(command: list[str], **kwargs: Any) -> None:
+        commands.append(command)
+        if "state=success" in command:
+            view["statusCheckRollup"] = [
+                {"context": "aragora/human-settlement", "state": "SUCCESS"}
+            ]
+
+    monkeypatch.setattr(settler, "_run_text_command", post_comment)
+    monkeypatch.setattr(settler, "_run_command", run)
+    for name in (
+        "_preflight_branch_protection_reconcile",
+        "_branch_protection_snapshot",
+        "_restore_branch_protection",
+    ):
+        monkeypatch.setattr(settler, name, lambda *a, **kw: pytest.fail("no protection access"))
+    args = [
+        "--pr",
+        "7423",
+        "--head",
+        head,
+        "--cwd",
+        str(tmp_path),
+        "--trusted-operator-login",
+        "scarmani",
+    ]
+    assert settler.main(["--settle-only", "--protected-squash-only", *args]) == 0
+    assert len(commands) == 2
+    assert settler._comment_authorized_actions(view["comments"][0]["body"]) == {"protected_merge"}
+    checks[1]["state"] = "SUCCESS"
+    packet.update(_tier4_packet())
+    mode = ["--protected-squash-only"] if explicit_mode else []
+    assert settler.main(["--check", *mode, *args]) == 0
+    assert len(commands) == 2
+    assert settler.main(["--merge-apply", *mode, *args]) == 0
+    assert commands[-1] == ["gh", "pr", "merge", "7423", "--squash", "--match-head-commit", head]
+
+
+def test_protected_merge_failure_never_attempts_admin_or_protection_rollback(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    commands: list[list[str]] = []
+
+    def fail(command: list[str], **kwargs: Any) -> None:
+        commands.append(command)
+        raise subprocess.CalledProcessError(1, command, stderr="branch protection blocked merge")
+
+    monkeypatch.setattr(settler, "_run_command", fail)
+    monkeypatch.setattr(
+        settler, "_restore_branch_protection", lambda **kw: pytest.fail("no rollback")
+    )
+    with pytest.raises(settler.Tier4ApplyError):
+        settler._apply_merge(
+            pr=7423,
+            head="a" * 40,
+            repo=settler.DEFAULT_REPO,
+            cwd=tmp_path,
+            protected_squash_only=True,
+        )
+    assert len(commands) == 1
+    assert "--admin" not in commands[0]
+
+
+def test_protected_merge_rejects_protection_reconcile_before_any_command(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        settler, "_preflight_branch_protection_reconcile", lambda **kw: pytest.fail("no preflight")
+    )
+    with pytest.raises(RuntimeError, match="protected squash"):
+        settler._apply_merge(
+            pr=7423,
+            head="a" * 40,
+            repo=settler.DEFAULT_REPO,
+            cwd=tmp_path,
+            protected_squash_only=True,
+            reconcile_branch_protection=True,
+        )
+
+
 def test_run_json_timeout_reports_runtime_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout"))

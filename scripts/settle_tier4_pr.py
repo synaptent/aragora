@@ -3,6 +3,9 @@
 
 Tier 4 automation may prepare a packet, but merge/protection mutation requires
 a repo-visible operator settlement comment naming the exact head and action.
+Use --protected-squash-only to record/check a grant without administrative
+bypass or branch-protection authority. Legacy grants remain explicit in the
+comment; a protected-only grant never authorizes the legacy admin merge path.
 """
 
 from __future__ import annotations
@@ -48,6 +51,7 @@ DEFAULT_REPO = "synaptent/aragora"
 AUTHORIZED_MARKER = "Tier-4 Human Settlement Authorization"
 AUTHORIZED_MERGE_TOKENS = ("admin_squash_merge", "admin squash")
 AUTHORIZED_PROTECTION_TOKENS = ("branch_protection_reconcile", "branch protection reconcile")
+PROTECTED_SQUASH_TOKEN = "protected_squash_merge"
 TRUSTED_OPERATOR_AUTHOR_ASSOCIATIONS = {"OWNER"}
 TRUSTED_OPERATOR_MEMBER_ASSOCIATIONS = {"MEMBER"}
 # GitHub reports some repo admins as COLLABORATOR rather than MEMBER. Keep
@@ -274,7 +278,17 @@ def _operator_author_rejection_reason(
     return ""
 
 
-def _settlement_comment_template(*, pr: int, head: str) -> str:
+def _settlement_comment_template(*, pr: int, head: str, protected_squash_only: bool = False) -> str:
+    if protected_squash_only:
+        return (
+            f"{AUTHORIZED_MARKER}\n\n"
+            f"PR: #{pr}\n"
+            f"Exact head: {head}\n"
+            f"Authorized action: {PROTECTED_SQUASH_TOKEN}\n\n"
+            "Normal protected squash only, subject to all live exact-head gates. "
+            "No administrative bypass or branch-protection changes are authorized.\n\n"
+            "Human-risk settlement: I accept the Tier 4 risk for this PR."
+        )
     return (
         "Tier-4 Human Settlement Authorization\n\n"
         f"PR: #{pr}\n"
@@ -295,6 +309,7 @@ def _authorization_diagnostic(
     trusted_operator_logins: frozenset[str],
     permission_checker: PermissionChecker,
     evaluate_member_permissions: bool = True,
+    protected_squash_only: bool = False,
 ) -> dict[str, Any]:
     body = str(item.get("body") or "")
     association = str(item.get("authorAssociation") or "").upper()
@@ -314,7 +329,7 @@ def _authorization_diagnostic(
     fresh_after_head_commit = _authorization_is_fresh(item, head_committed_at=head_committed_at)
     exact_head_present = head in body
     authorized_actions = _comment_authorized_actions(body)
-    merge_action_present = "merge" in authorized_actions
+    merge_action_present = bool({"merge", "protected_merge"} & authorized_actions)
     branch_protection_action_present = "branch_protection" in authorized_actions
 
     rejection_reasons: list[str] = []
@@ -332,6 +347,8 @@ def _authorization_diagnostic(
         rejection_reasons.append("exact head is missing")
     if not merge_action_present:
         rejection_reasons.append("admin_squash_merge action is missing")
+    if protected_squash_only and "protected_merge" not in authorized_actions:
+        rejection_reasons.append("protected_squash_merge action is missing")
     if require_branch_protection_token and not branch_protection_action_present:
         rejection_reasons.append("branch_protection_reconcile action is missing")
 
@@ -366,6 +383,7 @@ def authorization_diagnostics(
     trusted_operator_logins: Sequence[str] | None = None,
     permission_checker: PermissionChecker | None = None,
     evaluate_member_permissions: bool = True,
+    protected_squash_only: bool = False,
 ) -> dict[str, Any]:
     head_committed_at = _head_committed_at(pr_view)
     allowed_logins = _trusted_operator_logins(trusted_operator_logins)
@@ -376,7 +394,9 @@ def authorization_diagnostics(
         if evaluate_member_permissions
         else "skipped_early_gate_blockers",
         "head_committed_at": head_committed_at,
-        "settlement_comment_template": _settlement_comment_template(pr=pr, head=head),
+        "settlement_comment_template": _settlement_comment_template(
+            pr=pr, head=head, protected_squash_only=protected_squash_only
+        ),
         "authorization_diagnostics": [
             _authorization_diagnostic(
                 item,
@@ -386,6 +406,7 @@ def authorization_diagnostics(
                 trusted_operator_logins=allowed_logins,
                 permission_checker=checker,
                 evaluate_member_permissions=evaluate_member_permissions,
+                protected_squash_only=protected_squash_only,
             )
             for item in _text_items(pr_view)
         ],
@@ -452,7 +473,7 @@ def _comment_authorizes_requested_action(
     body: str, *, require_branch_protection_token: bool
 ) -> bool:
     actions = _comment_authorized_actions(body)
-    if "merge" not in actions:
+    if not ({"merge", "protected_merge"} & actions):
         return False
     if require_branch_protection_token and "branch_protection" not in actions:
         return False
@@ -461,6 +482,23 @@ def _comment_authorizes_requested_action(
 
 def _comment_authorized_actions(body: str) -> set[str]:
     lowered = body.lower()
+    if PROTECTED_SQUASH_TOKEN in lowered:
+        # New grants use one exact action line. Mixed/negated/quoted grants must
+        # never fall through to the legacy substring-based privileged parser.
+        lines = lowered.strip("\r\n").splitlines()
+        action_lines = re.findall(r"^[ \t]*authorized action:[ \t]*(.*)$", lowered, re.MULTILINE)
+        if (
+            lines[0] == AUTHORIZED_MARKER.lower()
+            and not any(line.lstrip().startswith(("```", "~~~")) for line in lines)
+            and lowered.count(PROTECTED_SQUASH_TOKEN) == 1
+            and [line.strip() for line in action_lines] == [PROTECTED_SQUASH_TOKEN]
+            and not any(
+                token in lowered
+                for token in (*AUTHORIZED_MERGE_TOKENS, *AUTHORIZED_PROTECTION_TOKENS)
+            )
+        ):
+            return {"protected_merge"}
+        return set()
     actions: set[str] = set()
     if any(token in lowered for token in AUTHORIZED_MERGE_TOKENS):
         actions.add("merge")
@@ -949,6 +987,7 @@ def evaluate_tier4_gate(
     cwd: Path | None = None,
     trusted_operator_logins: Sequence[str] | None = None,
     permission_checker: PermissionChecker | None = None,
+    protected_squash_only: bool = False,
 ) -> dict[str, Any]:
     blockers: list[str] = []
     actual_head = str(pr_view.get("headRefOid") or "")
@@ -1002,6 +1041,7 @@ def evaluate_tier4_gate(
         trusted_operator_logins=trusted_operator_logins,
         permission_checker=permission_checker,
         evaluate_member_permissions=not blockers,
+        protected_squash_only=protected_squash_only,
     )
     authorized_actions: set[str] = set()
     if (
@@ -1025,6 +1065,11 @@ def evaluate_tier4_gate(
         )
         if not authorized_actions:
             blockers.append(OPERATOR_COMMENT_BLOCKER)
+
+    if "protected_merge" in authorized_actions:
+        diagnostic_report["settlement_comment_template"] = _settlement_comment_template(
+            pr=pr, head=expected_head, protected_squash_only=True
+        )
 
     packet_diagnostics = _merge_packet_entry_diagnostics(merge_packet, pr=pr)
     return {
@@ -1957,14 +2002,16 @@ def _restore_branch_protection(*, repo: str, cwd: Path, snapshot: dict[str, Any]
     return errors
 
 
-def _apply_settlement_signal(*, pr: int, head: str, repo: str, cwd: Path) -> list[list[str]]:
+def _apply_settlement_signal(
+    *, pr: int, head: str, repo: str, cwd: Path, protected_squash_only: bool = False
+) -> list[list[str]]:
     comment_command = [
         "gh",
         "pr",
         "comment",
         str(pr),
         "--body",
-        _settlement_comment_template(pr=pr, head=head),
+        _settlement_comment_template(pr=pr, head=head, protected_squash_only=protected_squash_only),
     ]
     status_command = [
         "gh",
@@ -1996,7 +2043,10 @@ def _apply_merge(
     repo: str,
     cwd: Path,
     reconcile_branch_protection: bool = False,
+    protected_squash_only: bool = False,
 ) -> list[list[str]]:
+    if protected_squash_only and reconcile_branch_protection:
+        raise RuntimeError("protected squash cannot reconcile branch protection")
     commands: list[list[str]] = []
     if reconcile_branch_protection:
         _preflight_branch_protection_reconcile(repo=repo, cwd=cwd)
@@ -2024,7 +2074,7 @@ def _apply_merge(
         "merge",
         str(pr),
         "--squash",
-        "--admin",
+        *([] if protected_squash_only else ["--admin"]),
         "--match-head-commit",
         head,
     ]
@@ -2079,7 +2129,11 @@ def _apply_merge(
     except Tier4ApplyError:
         raise
     except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
-        rollback_errors = _restore_branch_protection(repo=repo, cwd=cwd, snapshot=snapshot)
+        rollback_errors = (
+            _restore_branch_protection(repo=repo, cwd=cwd, snapshot=snapshot)
+            if reconcile_branch_protection
+            else []
+        )
         phase = "merge" if not commands else "branch_protection_restore"
         mutation_occurred = bool(commands) or merge_invoked
         recovery_action = (
@@ -2131,6 +2185,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--protected-squash-only",
+        action="store_true",
+        help=(
+            "Record/require only protected_squash_merge authorization. Never use "
+            "--admin or change branch protection. Without this flag, existing "
+            "legacy settlement behavior is unchanged; protected-only comments "
+            "still execute only a normal protected squash."
+        ),
+    )
     parser.add_argument(
         "--skew-auto-resolve",
         action="store_true",
@@ -2226,6 +2290,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 head=args.head,
                 repo=args.repo,
                 cwd=args.cwd,
+                protected_squash_only=args.protected_squash_only,
             )
         else:
             gate = evaluate_tier4_gate(
@@ -2238,6 +2303,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 repo=args.repo,
                 cwd=args.cwd,
                 trusted_operator_logins=args.trusted_operator_login,
+                protected_squash_only=args.protected_squash_only,
             )
             if args.check and gate["ok"]:
                 branch_protection_preflight = _branch_protection_preflight_report(
@@ -2299,6 +2365,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         repo=args.repo,
                         cwd=args.cwd,
                         trusted_operator_logins=args.trusted_operator_login,
+                        protected_squash_only=args.protected_squash_only,
                     )
                     if not gate["ok"]:
                         raise RuntimeError(
@@ -2340,6 +2407,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 repo=args.repo,
                 cwd=args.cwd,
                 reconcile_branch_protection="branch_protection"
+                in set(gate.get("authorized_actions") or []),
+                protected_squash_only="protected_merge"
                 in set(gate.get("authorized_actions") or []),
             )
         out = {"gate": gate, "applied_commands": applied_commands}
