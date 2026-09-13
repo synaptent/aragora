@@ -29,7 +29,7 @@ from aragora.config import (
 from aragora.memory.database import MemoryDatabase
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -39,7 +39,7 @@ from .base import (
     safe_json_parse,
     ttl_cache,
 )
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

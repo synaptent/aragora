@@ -23,15 +23,15 @@ if TYPE_CHECKING:
 
 from aragora.utils.optional_imports import try_import
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     get_int_param,
     json_response,
 )
-from .secure import SecureHandler
-from .utils.auth import ForbiddenError, UnauthorizedError
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..secure import SecureHandler
+from ..utils.auth import ForbiddenError, UnauthorizedError
+from ..utils.rate_limit import RateLimiter, get_client_ip
 from aragora.server.versioning.compat import strip_version_prefix
 
 logger = logging.getLogger(__name__)

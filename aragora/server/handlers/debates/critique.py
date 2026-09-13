@@ -20,7 +20,7 @@ from aragora.server.validation import validate_agent_name_with_version
 from aragora.server.versioning.compat import strip_version_prefix
 from aragora.stores.canonical import get_critique_store, is_critique_store_available
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -29,7 +29,7 @@ from .base import (
     json_response,
 )
 from aragora.rbac.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +107,10 @@ class CritiqueHandler(BaseHandler):
             return self._get_reputation_by_domain(nomic_dir, domain, limit)
 
         if path.startswith("/api/agent/") and path.endswith("/reputation"):
-            agent = self._extract_agent_name(path)
-            if agent is None:
+            agent_name = self._extract_agent_name(path)
+            if agent_name is None:
                 return error_response("Invalid agent name", 400)
-            return self._get_agent_reputation(nomic_dir, agent)
+            return self._get_agent_reputation(nomic_dir, agent_name)
 
         return None
 

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-from .base import (
+from ..base import (
     SAFE_ID_PATTERN,
     BaseHandler,
     HandlerResult,
@@ -35,7 +35,7 @@ from .base import (
     handle_errors,
 )
 from aragora.rbac.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 # Rate limiter: interventions are low-volume but sensitive (30 requests/min)
 _intervention_limiter = RateLimiter(requests_per_minute=30)
@@ -43,7 +43,9 @@ _intervention_limiter = RateLimiter(requests_per_minute=30)
 # Lazy module references
 get_intervention_queue: Any = None
 try:
-    from aragora.debate.intervention import get_intervention_queue
+    from aragora.debate.intervention import get_intervention_queue as _get_intervention_queue
+
+    get_intervention_queue = _get_intervention_queue
 except ImportError:
     pass
 

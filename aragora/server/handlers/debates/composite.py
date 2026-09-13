@@ -36,8 +36,8 @@ from typing import Any
 
 from aragora.rbac.decorators import require_permission
 from aragora.server.validation import SAFE_ID_PATTERN, validate_path_segment
-from .base import BaseHandler, HandlerResult
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..base import BaseHandler, HandlerResult
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

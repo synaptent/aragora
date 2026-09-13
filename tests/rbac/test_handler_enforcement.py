@@ -67,7 +67,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "base",
         "secure",
         "types",
-        "routing",
+        "agents/routing",
         "bindings",
         "exceptions",
         "mixins",
@@ -75,7 +75,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "interface",
         "utilities",
         "openapi_decorator",
-        "explainability_store",
+        "decisions/explainability_store",
         # workflow_builtin_templates removed (module deleted)
         # Utility subdirectories (non-handler helpers)
         "utils/__init__",
@@ -154,8 +154,8 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "metrics/export",
         "metrics/formatters",
         "metrics/tracking",
-        "analytics_metrics",
-        "metrics_endpoint",
+        "analytics/_analytics_metrics_impl",
+        "metrics/metrics_endpoint",
         # Doc endpoints (public API docs)
         "admin/docs",
         # Template discovery (public browsing API, rate-limited, read-only)

@@ -31,7 +31,7 @@ from aragora.swarm.agent_bridge.types import SCHEMA_VERSION
 from aragora.swarm.agent_bridge.types import SessionRegistry
 from aragora.swarm.agent_bridge.types import TurnRecord
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     SAFE_SLUG_PATTERN,

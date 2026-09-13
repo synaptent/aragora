@@ -15,14 +15,14 @@ from typing import Any
 
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
     handle_errors,
     json_response,
 )
-from .utils.decorators import require_permission
+from ..utils.decorators import require_permission
 
 logger = logging.getLogger(__name__)
 

@@ -30,8 +30,11 @@ from aragora.server.handlers.utils.responses import error_dict
 AuthorizationContext: Any
 check_permission: Any
 try:
-    from aragora.rbac import AuthorizationContext, check_permission
+    from aragora.rbac import AuthorizationContext as _AuthorizationContext
+    from aragora.rbac import check_permission as _check_permission
 
+    AuthorizationContext = _AuthorizationContext
+    check_permission = _check_permission
     RBAC_AVAILABLE = True
 except ImportError:
     RBAC_AVAILABLE = False
@@ -43,8 +46,9 @@ from aragora.server.handlers.utils.rbac_guard import rbac_fail_closed
 # JWT auth import for extracting user context
 extract_user_from_request: Any
 try:
-    from aragora.billing.jwt_auth import extract_user_from_request
+    from aragora.billing.jwt_auth import extract_user_from_request as _extract_user_from_request
 
+    extract_user_from_request = _extract_user_from_request
     JWT_AUTH_AVAILABLE = True
 except ImportError:
     JWT_AUTH_AVAILABLE = False

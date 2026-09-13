@@ -8,7 +8,7 @@ Provides REST API endpoints for unified decision-making capabilities:
 
 Usage:
     # In unified_server.py
-    from aragora.server.handlers.decision import DecisionHandler
+    from aragora.server.handlers.decisions.decision import DecisionHandler
 
     handlers.append(DecisionHandler(ctx))
 """
