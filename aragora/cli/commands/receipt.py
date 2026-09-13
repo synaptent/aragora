@@ -983,10 +983,14 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
                 sys.exit(1)
 
     if output_path:
-        if isinstance(content, bytes):
-            Path(output_path).write_bytes(content)
-        else:
-            Path(output_path).write_text(content)
+        try:
+            if isinstance(content, bytes):
+                Path(output_path).write_bytes(content)
+            else:
+                Path(output_path).write_text(content)
+        except (OSError, UnicodeError) as exc:
+            print(f"Error: Cannot write receipt export: {exc}", file=sys.stderr)
+            sys.exit(1)
         print(f"Exported to {output_path}")
     else:
         if isinstance(content, bytes):
