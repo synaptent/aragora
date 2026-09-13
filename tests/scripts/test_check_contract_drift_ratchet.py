@@ -4734,17 +4734,20 @@ def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses(
     assert waves[-1][0] == live_digest
 
 
-def test_latest_typescript_paydown_is_resolved_in_legacy_inventory():
+def test_first_typescript_paydown_is_resolved_in_legacy_inventory():
     root = Path(ratchet.__file__).parents[1]
     authority = _accepted_authority()
-    latest_wave_ids = set(_paydown_waves(authority)[-1][1])
+    # The historical 257-record wave precedes batch 1; later batches must not
+    # redirect coverage away from the 59 legacy rows reconciled by #9979.
+    batch_one_ids = set(_paydown_waves(authority)[1][1])
+    assert len(batch_one_ids) == 59
     cohort_records = {
         record["original_record_id"]: record
         for record in authority["canonical_artifacts"]["original_cohort"]["original_records"]
     }
     retired_literals = {
         cohort_records[record_id]["exact_historical_literal_record"]
-        for record_id in latest_wave_ids
+        for record_id in batch_one_ids
         if cohort_records[record_id]["source_json_key"] == "typescript_sdk_drift"
     }
     inventory = json.loads((root / "scripts/baselines/contract_drift_inventory.json").read_text())
