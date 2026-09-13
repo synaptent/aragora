@@ -221,8 +221,9 @@ class StaleCalibrationDecision:
             ``RENEWAL_REQUIRED``; ``None`` otherwise.  Derived from
             ``claim_id`` and ``evidence_age_days`` so callers can correlate
             audit rows without a round-trip to a database.
-        policy_fingerprint: SHA-256–derived 12-char tag over the inputs, for
-            audit-trail tagging.  Format: ``"cp_" + 12 hex chars``.
+        policy_fingerprint: SHA-256–derived 12-char tag over ``evidence_age_days``
+            and ``half_life_days``, for audit-trail tagging.  Format:
+            ``"cp_" + 12 hex chars``.
     """
 
     policy_decision: PolicyDecision
@@ -234,13 +235,7 @@ class StaleCalibrationDecision:
 
 
 def _calibration_fingerprint(evidence_age_days: float, half_life_days: float) -> str:
-    material = json.dumps(
-        {
-            "evidence_age_days": round(evidence_age_days, 6),
-            "half_life_days": round(half_life_days, 6),
-        },
-        sort_keys=True,
-    )
+    material = f"{evidence_age_days:.6f}:{half_life_days:.6f}"
     return f"cp_{hashlib.sha256(material.encode('utf-8')).hexdigest()[:12]}"
 
 
@@ -277,7 +272,11 @@ def resolve_stale_calibration(
         evidence_age_days: Age of the underlying evidence in days (>= 0).
         half_life_days: Settlement half-life in days (> 0).
         claim_id: Optional stable identifier for the claim; included in the
-            ``claim_renewal_id`` hash so audit rows are correlatable.
+            ``claim_renewal_id`` hash so audit rows are correlatable.  When
+            omitted (default ``""``) all ``RENEWAL_REQUIRED`` decisions for the
+            same ``evidence_age_days`` value share the same renewal token —
+            pass a non-empty, per-claim identifier when token collision across
+            unrelated claims must be prevented.
 
     Returns:
         A :class:`StaleCalibrationDecision` with the advisory action.
@@ -331,12 +330,12 @@ def resolve_stale_calibration(
 
 __all__ = [
     "DEFAULT_FRESH_DAYS",
-    "DEFAULT_STALE_DAYS",
     "DEFAULT_HARD_LIMIT_DAYS",
-    "StalePolicy",
-    "StaleDecision",
-    "is_stale",
+    "DEFAULT_STALE_DAYS",
     "PolicyDecision",
     "StaleCalibrationDecision",
+    "StaleDecision",
+    "StalePolicy",
+    "is_stale",
     "resolve_stale_calibration",
 ]
