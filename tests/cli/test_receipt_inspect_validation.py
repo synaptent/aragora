@@ -88,7 +88,7 @@ def inspect_process(data: dict[str, Any], tmp_path: Path) -> subprocess.Complete
     return subprocess.run(
         [sys.executable, "-m", "aragora.cli.main", "receipt", "inspect", str(source)],
         cwd=tmp_path,
-        env={**os.environ, "PYTHONPATH": str(ROOT)},
+        env={**os.environ, "PYTHONPATH": str(ROOT), "ARAGORA_SSRF_ALLOW_LOCALHOST": "false"},
         capture_output=True,
         text=True,
         timeout=30,
@@ -305,18 +305,67 @@ def test_unknown_boolean_never_defaults(value: Any, tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "value", [0, 2.5, "0", " 2.5 ", "1e2", "NaN", "Infinity", "many", float("nan"), float("inf")]
+    "value,valid",
+    [
+        (0, True),
+        (2.5, True),
+        ("0", True),
+        (" 2.5 ", True),
+        ("1e2", True),
+        pytest.param(10**400, True, id="large-positive-int"),
+        pytest.param(-(10**400), True, id="large-negative-int"),
+        pytest.param(str(10**400), True, id="large-integer-string"),
+        ("1e400", True),
+        ("-1e400", True),
+        ("NaN", False),
+        ("sNaN", False),
+        ("Infinity", False),
+        ("-Infinity", False),
+        ("many", False),
+        ("", False),
+        (True, False),
+        (None, False),
+        ([], False),
+        ({}, False),
+        (float("nan"), False),
+        (float("inf"), False),
+        (-float("inf"), False),
+    ],
 )
-def test_numeric_risk_count_contract(value: Any, tmp_path: Path) -> None:
-    import math
-
-    result = inspect_process({"risk_summary": {"total": value}}, tmp_path)
-    valid = value != "many" and math.isfinite(float(value))
+def test_numeric_risk_count_contract(value: Any, valid: bool, tmp_path: Path) -> None:
+    fields = ("critical", "high", "medium", "low", "total")
+    result = inspect_process({"risk_summary": dict.fromkeys(fields, value)}, tmp_path)
     assert result.returncode == (0 if valid else 1), result.stderr
     if valid:
-        assert f"Total:         {value}" in result.stdout
+        expected = str(value)
+        expected = expected[:117] + "..." if len(expected) > 120 else expected
+        for field in fields:
+            assert f"{field.title() + ':':15}{expected}" in result.stdout
+        assert result.stderr == ""
     else:
-        assert result.stdout == "" and "risk_summary.total" in result.stderr
+        assert result.stdout == "" and "risk_summary.critical" in result.stderr
+        assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "field,label", [("confidence", "Confidence"), ("robustness_score", "Robustness")]
+)
+@pytest.mark.parametrize(
+    "value", [0, 0.75, 1, 1e200, -1e200, pytest.param(10**200, id="large-int")]
+)
+def test_percentage_display_preserves_format_within_cap(
+    field: str, label: str, value: int | float, tmp_path: Path
+) -> None:
+    result = inspect_process({field: value}, tmp_path)
+    assert result.returncode == 0, result.stderr
+    formatted = f"{value:.1%}"
+    expected = formatted[:117] + "..." if len(formatted) > 120 else formatted
+    displayed = next(
+        line[15:] for line in result.stdout.splitlines() if line.startswith(label + ":")
+    )
+    assert displayed == expected
+    assert len(displayed) <= 120
+    assert result.stderr == ""
 
 
 @pytest.mark.parametrize(

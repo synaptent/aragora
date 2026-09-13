@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 import json
 import logging
 import math
@@ -635,9 +636,8 @@ def _validate_inspection_fields(data: dict[str, Any]) -> None:
         if not isinstance(value, kind):
             raise ValueError(f"{field} must be {kind.__name__}")
 
-    def number(value: Any, field: str, *, allow_string: bool = False) -> float:
-        kinds = (int, float, str) if allow_string else (int, float)
-        if isinstance(value, bool) or not isinstance(value, kinds):
+    def number(value: Any, field: str) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(f"{field} must be a finite number")
         try:
             numeric = float(value)
@@ -646,6 +646,21 @@ def _validate_inspection_fields(data: dict[str, Any]) -> None:
         if not math.isfinite(numeric):
             raise ValueError(f"{field} must be a finite number")
         return numeric
+
+    def risk_count(value: Any, field: str) -> None:
+        if isinstance(value, int) and not isinstance(value, bool):
+            return
+        if isinstance(value, float) and math.isfinite(value):
+            return
+        if isinstance(value, str):
+            try:
+                # Preserve numeric-string syntax without imposing float's range.
+                float(value)
+                if Decimal(value).is_finite():
+                    return
+            except (ValueError, InvalidOperation):
+                pass
+        raise ValueError(f"{field} must be a finite number")
 
     require(data.get("verdict", "UNKNOWN"), str, "verdict")
     for field in ("confidence", "robustness_score"):
@@ -656,7 +671,7 @@ def _validate_inspection_fields(data: dict[str, Any]) -> None:
     if risk:
         for field in ("critical", "high", "medium", "low", "total"):
             if field in risk:
-                number(risk[field], f"risk_summary.{field}", allow_string=True)
+                risk_count(risk[field], f"risk_summary.{field}")
 
     consensus = data.get("consensus_proof")
     require(consensus, dict, "consensus_proof", nullable=True)
@@ -732,8 +747,8 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
         verdict.upper(), "?"
     )
     print(f"Verdict:       {verdict_icon} {_inspection_cosmetic(verdict, 'verdict')}")
-    print(f"Confidence:    {confidence:.1%}")
-    print(f"Robustness:    {robustness:.1%}")
+    print(f"Confidence:    {_inspection_cosmetic(f'{confidence:.1%}', 'confidence')}")
+    print(f"Robustness:    {_inspection_cosmetic(f'{robustness:.1%}', 'robustness_score')}")
 
     # Risk summary
     risk_summary = data.get("risk_summary", {})
