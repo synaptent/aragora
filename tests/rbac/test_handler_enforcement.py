@@ -607,7 +607,7 @@ class TestHandlerRBACEnforcement:
         # These have route-level RBAC in DEFAULT_ROUTE_PERMISSIONS but no
         # method-level decorators. Listed here to track defense-in-depth gaps.
         middleware_protected_mutations = {
-            "external_agents",
+            "agents/external_agents",
             "knowledge/checkpoints",
             "knowledge/sharing_notifications",
             "workflows",

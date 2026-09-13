@@ -159,7 +159,7 @@ ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
         signals=("queue_plan_execution",),
     ),
     BackboneEntrypoint(
-        file_path="aragora/server/handlers/plans.py",
+        file_path="aragora/server/handlers/decisions/plans.py",
         qualname="PlansHandler._create_plan",
         lifecycle="create",
         coverage="green",
@@ -167,7 +167,7 @@ ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
         signals=("decision_plan_ctor", "ensure_decision_plan_backbone_run", "plan_store_create"),
     ),
     BackboneEntrypoint(
-        file_path="aragora/server/handlers/plans.py",
+        file_path="aragora/server/handlers/decisions/plans.py",
         qualname="PlansHandler._approve_plan",
         lifecycle="execute",
         coverage="green",
@@ -175,7 +175,7 @@ ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
         signals=("queue_plan_execution",),
     ),
     BackboneEntrypoint(
-        file_path="aragora/server/handlers/plans.py",
+        file_path="aragora/server/handlers/decisions/plans.py",
         qualname="PlansHandler._execute_plan",
         lifecycle="execute",
         coverage="green",
