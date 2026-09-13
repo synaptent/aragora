@@ -51,7 +51,7 @@ def _odr_content(outcome: CollectOutcome, raw: dict[str, Any]) -> dict[str, Any]
     for item in outcome.items:
         if not item.family.strip():
             continue
-        rows = [
+        rows: list[dict[str, Any]] = [
             {
                 "issuer": item.family,
                 "severity": line[1:3],
