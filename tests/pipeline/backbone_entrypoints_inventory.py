@@ -35,7 +35,7 @@ class BackboneEntrypoint:
 
 ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
     BackboneEntrypoint(
-        file_path="aragora/server/decision_integrity_utils.py",
+        file_path="aragora/pipeline/decision_integrity_utils.py",
         qualname="ensure_decision_plan_backbone_run",
         lifecycle="create",
         coverage="green",
@@ -43,7 +43,7 @@ ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
         signals=("run_ledger_create",),
     ),
     BackboneEntrypoint(
-        file_path="aragora/server/decision_integrity_utils.py",
+        file_path="aragora/pipeline/decision_integrity_utils.py",
         qualname="execute_decision_plan_with_backbone",
         lifecycle="execute",
         coverage="green",
@@ -51,7 +51,7 @@ ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
         signals=("bridge_execute_approved_plan", "queue_plan_execution"),
     ),
     BackboneEntrypoint(
-        file_path="aragora/server/decision_integrity_utils.py",
+        file_path="aragora/pipeline/decision_integrity_utils.py",
         qualname="build_decision_integrity_payload",
         lifecycle="mixed",
         coverage="green",
