@@ -27,7 +27,11 @@
       <div class="stream-event">
         <div class="event-header">
           <strong>{event.type}{#if event.agent} ({event.agent}){/if}</strong>
-          <time datetime={event.timestamp}>{new Date(event.timestamp).toLocaleTimeString()}</time>
+          {#if event.timestamp}
+            <time datetime={event.timestamp}>{new Date(event.timestamp).toLocaleTimeString()}</time>
+          {:else}
+            <span class="event-time">Time not reported</span>
+          {/if}
         </div>
         {#if event.content}
           <p>{event.content.slice(0, 200)}{event.content.length > 200 ? '...' : ''}</p>
@@ -42,5 +46,5 @@
   .stream-events { max-height: 24rem; overflow-y: auto; }
   .stream-event { padding: 0.75rem 0; border-top: 1px solid var(--border); }
   .event-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; }
-  time { font-size: 0.75rem; color: var(--text-muted); }
+  time, .event-time { font-size: 0.75rem; color: var(--text-muted); }
 </style>

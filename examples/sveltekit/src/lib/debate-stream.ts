@@ -4,8 +4,13 @@ export interface StreamEvent {
   type: string;
   agent?: string;
   content?: string;
-  timestamp: string;
+  timestamp?: string;
 }
+
+type IncomingEvent = Omit<WebSocketEvent, 'timestamp'> & {
+  timestamp?: unknown;
+  agent?: unknown;
+};
 
 interface StreamHandlers {
   onEvent: (event: StreamEvent) => void;
@@ -13,15 +18,29 @@ interface StreamHandlers {
   onError: (error: string | null) => void;
 }
 
-export function displayEvent(event: WebSocketEvent, debateId: string): StreamEvent | null {
+function eventTimestamp(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // The server's StreamEvent uses epoch seconds; the SDK declares ISO strings.
+    const date = new Date(value * 1000);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+  }
+  if (typeof value === 'string' && Number.isFinite(Date.parse(value))) return value;
+  return undefined;
+}
+
+export function displayEvent(event: IncomingEvent, debateId: string): StreamEvent | null {
   const data = event.data && typeof event.data === 'object' ? event.data : {};
-  const nestedId = 'debate_id' in data ? data.debate_id : undefined;
-  const id = event.debate_id ?? event.loop_id ?? nestedId;
+  const nestedId = 'debate_id' in data && typeof data.debate_id === 'string'
+    ? data.debate_id : undefined;
+  const nestedLoopId = 'loop_id' in data && typeof data.loop_id === 'string'
+    ? data.loop_id : undefined;
+  const id = event.debate_id || event.loop_id || nestedId || nestedLoopId;
   if (id !== debateId) return null;
   return {
     type: event.type,
-    timestamp: event.timestamp,
-    agent: 'agent' in data && typeof data.agent === 'string' ? data.agent : undefined,
+    timestamp: eventTimestamp(event.timestamp),
+    agent: typeof event.agent === 'string' && event.agent ? event.agent
+      : 'agent' in data && typeof data.agent === 'string' ? data.agent : undefined,
     content: 'content' in data && typeof data.content === 'string' ? data.content : undefined,
   };
 }
