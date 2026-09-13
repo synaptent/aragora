@@ -235,38 +235,6 @@ describe('ReplaysAPI Namespace', () => {
         },
       });
     });
-
-    it('should list forks', async () => {
-      const mockForks = {
-        forks: [
-          { id: 'fork_1', parent_replay_id: 'rp_1', fork_round: 2 },
-          { id: 'fork_2', parent_replay_id: 'rp_1', fork_round: 3 },
-        ],
-      };
-      mockClient.request.mockResolvedValue(mockForks);
-
-      const result = await api.listForks('rp_1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/forks');
-      expect(result.forks).toHaveLength(2);
-    });
-  });
-
-  // ===========================================================================
-  // Export and Visualization
-  // ===========================================================================
-
-  describe('Export and Visualization', () => {
-    it('should get HTML visualization', async () => {
-      const mockHtml = '<html><body>Replay visualization</body></html>';
-      mockClient.request.mockResolvedValue(mockHtml);
-
-      const result = await api.getHtml('rp_1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('GET', '/api/replays/rp_1/html');
-      expect(result).toContain('<html>');
-    });
-
   });
 
   // ===========================================================================

@@ -6,6 +6,44 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-09-13)
+
+#### Breaking Changes
+
+Contract-drift batch 3 removes 26 operations on unserved routes absent from both
+OpenAPI documents. The deprecated debate methods are included.
+`PipelineTransitionsNamespace` and its barrel export are removed, as is the
+orphaned `DebateAgentStatistics` interface. Routes below use normalized parameters.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `decisions.getOutcome` | `GET /api/v1/decisions/{id}/outcome` | `decisions.getPlanOutcome(planId)` for a completed plan |
+| `decisions.listOutcomes` | `GET /api/v1/decisions/{id}/outcomes` | `decisions.getPlanOutcome(planId)` for a completed plan |
+| `PipelineTransitionsNamespace.transition` | `POST /api/v2/pipelines/{id}/items/{id}/transition` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.getHistory` | `GET /api/v2/pipelines/{id}/items/{id}/transitions` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.validate` | `POST /api/v2/pipelines/{id}/items/{id}/transition/validate` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.available` | `GET /api/v2/pipelines/{id}/items/{id}/transitions/available` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.rollback` | `POST /api/v2/pipelines/{id}/items/{id}/transition/rollback` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `leaderboard.getDomainRankings` | `GET /api/leaderboard/domain/{domain}` | `leaderboard.getDomains()`, `/api/leaderboard/domains` |
+| `leaderboard.getAgentPerformance` | `GET /api/leaderboard/agent/{agent}` | `leaderboard.getRankings()` for aggregate rankings |
+| `leaderboard.getEloHistory` | `GET /api/leaderboard/agent/{agent}/elo-history` | No replacement |
+| `rbac.getEffectivePermissions` | `GET /api/v1/rbac/users/{id}/permissions` | No replacement |
+| `rbac.removeUser` | `DELETE /api/users/{id}` | Use the `users` or `organizations` namespace for the intended operation |
+| `rbac.changeUserRole` | `PUT /api/users/{id}/role` | Use the `users` or `organizations` namespace for the intended operation |
+| `replays.getHtml` | `GET /api/replays/{id}/html` | No replacement |
+| `replays.listForks` | `GET /api/replays/{id}/forks` | No replacement |
+| `transcription.getJob` | `GET /api/v1/transcription/{id}` | No replacement; only `/status` is served |
+| `transcription.getSegments` | `GET /api/v1/transcription/{id}/segments` | No replacement; only `/status` is served |
+| `transcription.deleteJob` | `DELETE /api/v1/transcription/{id}` | No replacement; only `/status` is served |
+| `batch.getStatus` | `GET /api/v1/batch/{id}` | No replacement |
+| `genesis.getDebateTree` | `GET /api/v1/genesis/debates/{id}/tree` | No replacement |
+| `voice.synthesizeDebate` | `POST /api/v1/voice/debates/{id}/synthesize` | No replacement |
+| `unifiedInbox.reply` | `POST /inbox/messages/{id}/reply` | No replacement |
+| `learning.stopSession` | `POST /api/v1/learning/sessions/{id}/stop` | No replacement |
+| `learning.validatePattern` | `POST /api/v1/learning/patterns/{id}/validate` | No replacement |
+| `debates.getAgentStatistics` | `GET /api/v1/debates/statistics/agents` | `debates.getStatsAgents()` |
+| `debates.deletePermanently` | `DELETE /api/v1/debates/{id}/permanent` | `debates.delete(debateId)` |
+
 ### Unreleased (2026-09-03)
 
 #### Breaking Changes

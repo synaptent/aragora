@@ -185,13 +185,6 @@ export class ReplaysAPI {
   }
 
   /**
-   * Get HTML visualization of the replay.
-   */
-  async getHtml(replayId: string): Promise<string> {
-    return this.client.request('GET', `/api/replays/${replayId}/html`);
-  }
-
-  /**
    * Fork a debate from a specific point to explore alternatives.
    */
   async fork(
@@ -204,13 +197,6 @@ export class ReplaysAPI {
     }
   ): Promise<ReplayFork> {
     return this.client.request('POST', `/api/replays/${replayId}/fork`, { json: options });
-  }
-
-  /**
-   * List forks created from a replay.
-   */
-  async listForks(replayId: string): Promise<{ forks: ReplayFork[] }> {
-    return this.client.request('GET', `/api/replays/${replayId}/forks`);
   }
 
   /**
