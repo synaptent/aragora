@@ -1304,7 +1304,9 @@ export class AragoraClient {
             throw error;
           }
           if ((error as Error).name === 'AbortError') {
-            throw new TimeoutError('Request timeout', 'SERVICE_UNAVAILABLE');
+            throw new TimeoutError(
+              response ? 'Response body timeout' : 'Request timeout', 'SERVICE_UNAVAILABLE'
+            );
           }
 
           if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('network'))) {
@@ -1323,7 +1325,7 @@ export class AragoraClient {
             return JSON.parse(text) as T;
           } catch (error) {
             if (controller.signal.aborted && (error as Error)?.name === 'AbortError') {
-              throw new TimeoutError('Request timeout', 'SERVICE_UNAVAILABLE');
+              throw new TimeoutError('Response body timeout', 'SERVICE_UNAVAILABLE');
             }
             throw error;
           }
