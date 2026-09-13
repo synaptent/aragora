@@ -51,8 +51,9 @@ artifacts are no longer needed. No package/version/release configuration is chan
 
 Python copies only the two focused lifecycle test modules into a temporary directory,
 excludes their source-inserting conftest and repository pytest configuration, and
-checks installed module origins before and after pytest. Skips/xfails or zero
-collection fail acceptance. TypeScript verifies bundle paths beneath the consumer's
+checks installed module origins before and after pytest. Deselection, skips/xfails,
+zero collection or collection-only execution fail acceptance; every collected case
+must pass. TypeScript verifies bundle paths beneath the consumer's
 node_modules and loads ESM through a generated native package-import probe.
 
 The runners print installed-file hashes. This is provenance, not cryptographic

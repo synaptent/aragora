@@ -13,6 +13,8 @@ import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
+from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
 import httpx
@@ -134,10 +136,27 @@ class AcceptanceGuard:
         assert reporter is not None
         if (
             not session.testscollected
-            or reporter.stats.get("skipped")
-            or reporter.stats.get("xfailed")
+            or len(reporter.stats.get("passed", [])) != session.testscollected
+            or any(
+                reporter.stats.get(key) for key in ("deselected", "skipped", "xfailed", "xpassed")
+            )
         ):
             session.exitstatus = 1
+
+
+@pytest.mark.parametrize("mode", ["complete", "deselected", "collect-only", "empty"])
+def test_acceptance_requires_full_execution(mode: str) -> None:
+    stats = {"passed": [object()]} if mode in ("complete", "deselected") else {}
+    if mode == "deselected":
+        stats["deselected"] = [object()]
+    reporter = SimpleNamespace(stats=stats)
+    session = SimpleNamespace(
+        testscollected=0 if mode == "empty" else 1,
+        exitstatus=0,
+        config=SimpleNamespace(pluginmanager=SimpleNamespace(get_plugin=lambda _: reporter)),
+    )
+    AcceptanceGuard().pytest_sessionfinish(cast(pytest.Session, session))
+    assert session.exitstatus == (0 if mode == "complete" else 1)
 
 
 if __name__ == "__main__":
