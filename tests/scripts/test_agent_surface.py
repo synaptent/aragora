@@ -16,6 +16,7 @@ Everything here is offline. No test in this file touches the network or GitHub.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -100,6 +101,66 @@ def test_cursor_changes_when_obligations_change() -> None:
     a = _capsule()
     b = _capsule(obligations=[{"kind": "advisory_next_action", "detail": "x"}])
     assert a.cursor() != b.cursor()
+
+
+@pytest.mark.parametrize("field", ["source", "freshness", "confidence", "note"])
+def test_cursor_changes_when_belief_provenance_changes(field: str) -> None:
+    a = _capsule()
+    b = _capsule()
+    setattr(b.beliefs[0], field, "new uncertainty")
+    assert a.cursor() != b.cursor()
+
+
+@pytest.mark.parametrize("field", ["repo", "branch"])
+def test_cursor_changes_when_checkout_identity_changes(field: str) -> None:
+    a = _capsule()
+    b = _capsule()
+    b.anchor[field] = "different"
+    assert a.cursor() != b.cursor()
+
+
+@pytest.mark.parametrize("field", ["objective", "unknowns", "frontier", "degraded"])
+def test_cursor_tracks_all_meaningful_capsule_sections(field: str) -> None:
+    a = _capsule()
+    b = _capsule()
+    values = {
+        "objective": {"inferred": "different objective"},
+        "unknowns": [situation.Unknown("Ownership?", "Unknown owner", "probe", 1)],
+        "frontier": [situation.Action("Inspect", "git status", "cheap", "none", True)],
+        "degraded": ["probe unavailable"],
+    }
+    setattr(b, field, values[field])
+    assert a.cursor() != b.cursor()
+
+
+def test_since_emits_changed_uncertainty_with_full_provenance(
+    monkeypatch: Any, capsys: Any
+) -> None:
+    previous = _capsule()
+    current = _capsule()
+    current.beliefs[0].freshness = "stale:60"
+    current.unknowns = [situation.Unknown("Ownership?", "Unknown owner", "probe", 1)]
+    current.degraded = ["probe unavailable"]
+    monkeypatch.setattr(situation, "build", lambda *a, **k: current)
+    monkeypatch.setattr(sys, "argv", ["situation", "--since", previous.cursor()])
+    assert situation.main() == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["changed"] is True
+    assert payload["belief_details"][0]["freshness"] == "stale:60"
+    assert payload["unknowns"][0]["question"] == "Ownership?"
+    assert payload["degraded"] == ["probe unavailable"]
+
+
+def test_since_unchanged_retains_compact_response(monkeypatch: Any, capsys: Any) -> None:
+    current = _capsule()
+    monkeypatch.setattr(situation, "build", lambda *a, **k: current)
+    monkeypatch.setattr(sys, "argv", ["situation", "--since", current.cursor()])
+    assert situation.main() == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "changed": False,
+        "cursor": current.cursor(),
+        "anchor": current.anchor["head"],
+    }
 
 
 # --------------------------------------------------------------------------
@@ -199,12 +260,73 @@ def test_missing_repo_slug_withholds_settlement(monkeypatch: Any) -> None:
     cap = _capsule()
     cap.anchor = dict(cap.anchor, repo="unknown")
     called: list[Any] = []
-    monkeypatch.setattr(situation, "sh", lambda *a, **k: called.append(a) or (0, "{}"))
+
+    def record_call(*args: Any, **kwargs: Any) -> tuple[int, str]:
+        called.append(args)
+        return 0, "{}"
+
+    monkeypatch.setattr(situation, "sh", record_call)
 
     situation.add_pr_beliefs(cap, 9924)
 
     assert not called, "must not shell out with an unusable slug"
     assert cap.degraded
+
+
+@pytest.mark.parametrize("probe", ["pr", "run"])
+@pytest.mark.parametrize(
+    "body",
+    ["not json", "null", "{}", "[null]", "[{}]", '[{"isDraft": 1, "conclusion": []}]'],
+)
+def test_invalid_github_probe_cannot_assert_observed_zero(
+    monkeypatch: Any, probe: str, body: str
+) -> None:
+    cap = _capsule(beliefs=[])
+
+    def response(cmd: list[str], **kwargs: Any) -> tuple[int, str]:
+        return 0, body if cmd[1] == probe else "[]"
+
+    monkeypatch.setattr(situation.shutil, "which", lambda _: "/fixture/gh")
+    monkeypatch.setattr(situation, "sh", response)
+    situation.add_github_beliefs(cap)
+    keys = {b.key for b in cap.beliefs}
+    if probe == "pr":
+        assert keys.isdisjoint({"prs_open", "prs_ready", "prs_draft"})
+        assert "main_recent_failures" in keys
+    else:
+        assert "main_recent_failures" not in keys
+        assert "prs_open" in keys
+    assert cap.degraded
+    assert cap.unknowns
+
+
+def test_valid_empty_github_probes_are_observed_zero(monkeypatch: Any) -> None:
+    cap = _capsule(beliefs=[])
+    monkeypatch.setattr(situation.shutil, "which", lambda _: "/fixture/gh")
+    monkeypatch.setattr(situation, "sh", lambda *a, **k: (0, "[]"))
+    situation.add_github_beliefs(cap)
+    assert {b.key: b.value for b in cap.beliefs} == {
+        "prs_open": 0,
+        "prs_ready": 0,
+        "prs_draft": 0,
+        "main_recent_failures": 0,
+    }
+    assert not cap.degraded
+
+
+def test_valid_nonempty_github_probes_keep_counts_and_cap_warning(monkeypatch: Any) -> None:
+    cap = _capsule(beliefs=[])
+    prs = [{"isDraft": i < 40} for i in range(100)]
+    runs = [{"conclusion": value} for value in ["failure", "success", "skipped", None]]
+    monkeypatch.setattr(situation.shutil, "which", lambda _: "/fixture/gh")
+    monkeypatch.setattr(
+        situation, "sh", lambda cmd, **k: (0, json.dumps(prs if cmd[1] == "pr" else runs))
+    )
+    situation.add_github_beliefs(cap)
+    values = {b.key: b.value for b in cap.beliefs}
+    assert values == {"prs_open": 100, "prs_ready": 60, "prs_draft": 40, "main_recent_failures": 1}
+    assert any("capped" in u.question for u in cap.unknowns)
+    assert not cap.degraded
 
 
 # --------------------------------------------------------------------------

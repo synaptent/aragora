@@ -67,7 +67,7 @@ import shutil
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -139,10 +139,13 @@ class Capsule:
         report a change and the delta path would be worthless.
         """
         material = {
-            "head": self.anchor.get("head"),
-            "main": self.anchor.get("main"),
-            "beliefs": {b.key: b.value for b in self.beliefs},
+            "anchor": {k: v for k, v in self.anchor.items() if k != "generated_at"},
+            "objective": self.objective,
+            "beliefs": [asdict(b) for b in self.beliefs],
+            "unknowns": [asdict(u) for u in self.unknowns],
+            "frontier": [asdict(a) for a in self.frontier],
             "obligations": self.obligations,
+            "degraded": self.degraded,
         }
         blob = json.dumps(material, sort_keys=True, default=str)
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
@@ -204,6 +207,19 @@ def add_local_beliefs(cap: Capsule) -> None:
             )
 
 
+def _probe_rows(cap: Capsule, source: str, output: str) -> list[dict[str, Any]] | None:
+    """Keep an invalid probe distinct from a successfully observed empty list."""
+    try:
+        rows = json.loads(output)
+    except json.JSONDecodeError:
+        cap.degraded.append(f"{source} returned unparseable JSON")
+        return None
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        cap.degraded.append(f"{source} returned invalid row data")
+        return None
+    return rows
+
+
 def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
     """One `gh pr list` and one `gh run list`. Returns raw PR rows for delta use."""
     raw: dict[str, Any] = {"prs": []}
@@ -232,12 +248,15 @@ def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
         ],
         timeout=GH_TIMEOUT,
     )
+    prs = None
     if code == 0:
-        try:
-            prs = json.loads(out)
-        except json.JSONDecodeError:
-            prs = []
-            cap.degraded.append("gh pr list returned unparseable JSON")
+        prs = _probe_rows(cap, "gh pr list", out)
+        if prs is not None and any(not isinstance(p.get("isDraft"), bool) for p in prs):
+            cap.degraded.append("gh pr list returned invalid draft states")
+            prs = None
+    else:
+        cap.degraded.append(f"gh pr list failed: {out[:120]}")
+    if prs is not None:
         raw["prs"] = prs
         drafts = sum(1 for p in prs if p.get("isDraft"))
         cap.beliefs.append(
@@ -263,7 +282,6 @@ def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
                 )
             )
     else:
-        cap.degraded.append(f"gh pr list failed: {out[:120]}")
         cap.unknowns.append(
             Unknown(
                 "What is in flight?",
@@ -287,11 +305,19 @@ def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
         ],
         timeout=GH_TIMEOUT,
     )
+    runs = None
     if code == 0:
-        try:
-            runs = json.loads(out)
-        except json.JSONDecodeError:
-            runs = []
+        runs = _probe_rows(cap, "gh run list", out)
+        if runs is not None and any(
+            "conclusion" not in r
+            or (r["conclusion"] is not None and not isinstance(r["conclusion"], str))
+            for r in runs
+        ):
+            cap.degraded.append("gh run list returned invalid conclusions")
+            runs = None
+    else:
+        cap.degraded.append(f"gh run list failed: {out[:120]}")
+    if runs is not None:
         failures = [r for r in runs if r.get("conclusion") == "failure"]
         skipped = sum(1 for r in runs if r.get("conclusion") == "skipped")
         cap.beliefs.append(
@@ -322,7 +348,14 @@ def add_github_beliefs(cap: Capsule) -> dict[str, Any]:
             )
         )
     else:
-        cap.degraded.append(f"gh run list failed: {out[:120]}")
+        cap.unknowns.append(
+            Unknown(
+                "What are the recent main workflow outcomes?",
+                "The workflow probe did not establish a failure count.",
+                "gh run list --branch main --limit 15 --json conclusion,name,createdAt",
+                200,
+            )
+        )
 
     return raw
 
@@ -692,6 +725,11 @@ def main() -> int:
                     "cursor": cursor,
                     "anchor": cap.anchor["head"],
                     "beliefs": changed,
+                    "belief_details": [asdict(b) for b in cap.beliefs],
+                    "unknowns": [asdict(u) for u in cap.unknowns],
+                    "objective": cap.objective,
+                    "frontier": [asdict(a) for a in cap.frontier],
+                    "obligations": cap.obligations,
                     "degraded": cap.degraded,
                 },
                 indent=None,
