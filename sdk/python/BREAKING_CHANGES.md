@@ -10,6 +10,16 @@ This document tracks breaking changes specific to the Aragora Python SDK. For co
 
 #### Breaking Changes
 
+##### Typed HTTP transport failures
+
+Exhausted HTTP timeouts and connection-establishment failures now raise the
+existing `aragora_sdk.TimeoutError` and `aragora_sdk.ConnectionError`, respectively,
+instead of the generic `AragoraError`. Existing `except AragoraError` handlers,
+messages and chained transport causes remain compatible. Code checking exact
+exception types should accept the exported subclasses; Python's built-in
+exceptions with the same names are not these SDK classes. Attempt counts and
+backoff are unchanged. See [Python HTTP request lifecycle](REQUEST_LIFECYCLE.md#transport-failures-and-cancellation).
+
 ##### Python rate-limit automatic waits
 
 `AragoraClient` and `AragoraAsyncClient` now automatically wait only for valid
