@@ -56,6 +56,45 @@ test('events use their data envelope and exclude other debates and global messag
   } }, debate.debate_id)?.content, 'Nested');
 });
 
+test('event routing preserves SDK ID precedence and nested loop IDs', () => {
+  const event = { type: 'agent_message' as const, timestamp: debate.created_at,
+    data: { loop_id: debate.debate_id, content: 'Nested proposal' } };
+  assert.equal(displayEvent(event, debate.debate_id)?.content, 'Nested proposal');
+  assert.equal(displayEvent({ ...event, debate_id: 'other' }, debate.debate_id), null);
+  assert.equal(displayEvent({ ...event, loop_id: 'other' }, debate.debate_id), null);
+  assert.equal(displayEvent({ ...event, data: { ...event.data, debate_id: 'other' } }, debate.debate_id), null);
+  assert.equal(displayEvent({ ...event, debate_id: '', loop_id: '' }, debate.debate_id)?.content, 'Nested proposal');
+  assert.equal(displayEvent({ ...event, data: { loop_id: 42 } }, debate.debate_id), null);
+});
+
+test('server epoch seconds and top-level agent survive display conversion', () => {
+  // StreamEvent.to_dict emits epoch seconds and agent outside the data envelope.
+  const event = { type: 'agent_message' as const, loop_id: debate.debate_id,
+    timestamp: Date.parse(debate.created_at) / 1000 + 0.5, agent: 'wire-reviewer',
+    data: { content: 'Server proposal', agent: 'nested-reviewer' } };
+  assert.deepEqual(displayEvent(event, debate.debate_id), {
+    type: 'agent_message', timestamp: '2026-09-13T00:00:00.500Z',
+    agent: 'wire-reviewer', content: 'Server proposal',
+  });
+  assert.equal(displayEvent({ ...event, timestamp: 0 }, debate.debate_id)?.timestamp, '1970-01-01T00:00:00.000Z');
+  assert.equal(displayEvent({ ...event, timestamp: -1 }, debate.debate_id)?.timestamp, '1969-12-31T23:59:59.000Z');
+  assert.equal(displayEvent({ ...event, timestamp: debate.created_at }, debate.debate_id)?.timestamp, debate.created_at);
+  assert.equal(displayEvent({ ...event, agent: '' }, debate.debate_id)?.agent, 'nested-reviewer');
+  assert.equal(displayEvent({ ...event, agent: { name: 'invalid' } }, debate.debate_id)?.agent, 'nested-reviewer');
+});
+
+test('invalid or missing time remains unknown while retaining the message', () => {
+  const event = { type: 'agent_message' as const, loop_id: debate.debate_id,
+    agent: 'wire-reviewer', data: { content: 'Keep this message' } };
+  for (const timestamp of [undefined, null, Number.NaN, Infinity, Number.MAX_VALUE, '', 'not-a-date']) {
+    const rendered = displayEvent({ ...event, timestamp }, debate.debate_id);
+    assert.ok(rendered);
+    assert.equal(rendered.timestamp, undefined);
+    assert.equal(rendered.agent, 'wire-reviewer');
+    assert.equal(rendered.content, 'Keep this message');
+  }
+});
+
 class BrowserSocket {
   static instances: BrowserSocket[] = [];
   onopen: (() => void) | null = null;
@@ -68,6 +107,34 @@ class BrowserSocket {
   send(data: string) { this.sent.push(data); }
   close() { this.closed = true; }
 }
+
+test('installed SDK delivers the actual server envelope without losing time or attribution', async () => {
+  const original = globalThis.WebSocket;
+  const events: ReturnType<typeof displayEvent>[] = [];
+  let cleanup: (() => void) | undefined;
+  try {
+    globalThis.WebSocket = BrowserSocket as unknown as typeof WebSocket;
+    const stream = createClient({ baseUrl: 'https://api.example.test' })
+      .createWebSocket({ autoReconnect: false });
+    cleanup = connectDebateStream(stream, debate.debate_id, {
+      onEvent: value => events.push(value), onConnected: () => {}, onError: () => {},
+    });
+    const socket = BrowserSocket.instances.at(-1)!;
+    socket.onopen?.();
+    socket.onmessage?.({ data: JSON.stringify({ type: 'agent_message',
+      timestamp: 1789257600.5, agent: 'wire-reviewer', round: 0, seq: 0, agent_seq: 0,
+      data: { loop_id: debate.debate_id, content: 'Actual wire proposal' } }) });
+    assert.deepEqual(events, [{ type: 'agent_message',
+      timestamp: '2026-09-13T00:00:00.500Z', agent: 'wire-reviewer', content: 'Actual wire proposal' }]);
+    socket.onmessage?.({ data: JSON.stringify({ type: 'agent_message',
+      timestamp: 1789257600.5, agent: 'other',
+      data: { loop_id: 'other-debate', content: 'Excluded proposal' } }) });
+    assert.equal(events.length, 1);
+  } finally {
+    cleanup?.();
+    globalThis.WebSocket = original;
+  }
+});
 
 test('installed SDK uses configured backend, subscribes, reconnects and releases listeners', async () => {
   const original = globalThis.WebSocket;

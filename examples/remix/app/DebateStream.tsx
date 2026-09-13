@@ -33,7 +33,9 @@ export function DebateStream({ debateId }: { debateId: string }) {
           <div className="event-heading">
             <strong>{event.type}{event.agent && ` (${event.agent})`}</strong>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              {new Date(event.timestamp).toLocaleTimeString()}
+              {event.timestamp
+                ? <time dateTime={event.timestamp}>{new Date(event.timestamp).toLocaleTimeString()}</time>
+                : 'Time not reported'}
             </span>
           </div>
           {event.content && <p>{event.content.slice(0, 200)}{event.content.length > 200 ? '...' : ''}</p>}
