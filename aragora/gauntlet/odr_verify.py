@@ -43,9 +43,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .odr_export import (
-    ODR_PROFILE_URI,
-    ODR_VERSION,
     jcs_canonicalize,  # noqa: F401 - re-exported for callers/tests
+    load_odr_schema,
     odr_content_digest,
 )
 
@@ -131,7 +130,7 @@ class VerifyResult:
 # review round (head e0e7df74: "weakening signals warn-only").
 # ---------------------------------------------------------------------------
 
-_ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source"}
+_ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source", "adjudication"}
 
 _QUORUM_REQUIRED = (
     "method",
@@ -183,10 +182,11 @@ def _validate_structure(doc: Any) -> list[str]:
     for key in sorted(set(doc) - _ALLOWED_TOP_LEVEL):
         errors.append(f"unknown top-level member: {key} (additionalProperties: false)")
 
-    if doc.get("odr_version") != ODR_VERSION:
-        errors.append(f"odr_version: must be '{ODR_VERSION}'")
-    if doc.get("profile") != ODR_PROFILE_URI:
-        errors.append(f"profile: must be '{ODR_PROFILE_URI}'")
+    version = doc.get("odr_version")
+    if version not in ("0.1", "0.2"):
+        errors.append("odr_version: must be '0.1' or '0.2'")
+    if doc.get("profile") != f"https://aragora.ai/specs/open-decision-receipt/v{version}":
+        errors.append("profile: must match odr_version")
     if not isinstance(doc.get("receipt_id"), str) or not doc.get("receipt_id"):
         errors.append("receipt_id: required non-empty string")
     if "issued_at" in doc:
@@ -214,6 +214,7 @@ def _validate_structure(doc: Any) -> list[str]:
         _validate_signatures(errors, doc["signatures"])
     if "source" in doc:
         _validate_source(errors, doc["source"])
+    _validate_extensions(errors, doc, load_odr_schema())
     return errors
 
 
@@ -221,7 +222,14 @@ def _validate_subject(errors: list[str], value: Any) -> None:
     if not isinstance(value, dict):
         errors.append("subject: must be an object")
         return
-    _unknown_members(errors, "subject", value, frozenset({"identifier", "digest", "summary"}))
+    _unknown_members(
+        errors,
+        "subject",
+        value,
+        frozenset(
+            {"identifier", "digest", "summary", "repository", "pr_number", "head_sha", "base_sha"}
+        ),
+    )
     if not isinstance(value.get("identifier"), str):
         errors.append("subject.identifier: required string")
     if "digest" not in value:
@@ -263,7 +271,7 @@ def _validate_reasoning(errors: list[str], value: Any) -> None:
     if not isinstance(value, dict) or value.get("status") != "present":
         errors.append("reasoning: must be a present block or an absent marker")
         return
-    _unknown_members(errors, "reasoning", value, frozenset({"status", "summary"}))
+    _unknown_members(errors, "reasoning", value, frozenset({"status", "summary", "observations"}))
     if not isinstance(value.get("summary"), str) or not value.get("summary"):
         errors.append("reasoning.summary: required non-empty string when present")
 
@@ -274,7 +282,9 @@ def _validate_quorum(errors: list[str], value: Any) -> None:
     if not isinstance(value, dict) or value.get("status") != "present":
         errors.append("quorum: must be a present block or an absent marker")
         return
-    _unknown_members(errors, "quorum", value, frozenset({"status", *_QUORUM_REQUIRED}))
+    _unknown_members(
+        errors, "quorum", value, frozenset({"status", *_QUORUM_REQUIRED, "verdicts", "rule"})
+    )
     for required in _QUORUM_REQUIRED:
         if required not in value:
             errors.append(f"quorum.{required}: required when present")
@@ -347,7 +357,12 @@ def _validate_dissent(errors: list[str], value: Any) -> None:
         errors.append("quorum.dissent: must be an object")
         return
     _unknown_members(
-        errors, "quorum.dissent", value, frozenset({"present", "dissenting_agents", "views"})
+        errors,
+        "quorum.dissent",
+        value,
+        frozenset(
+            {"present", "dissenting_agents", "views", "findings", "severity_max", "blocking"}
+        ),
     )
     for required in ("present", "dissenting_agents", "views"):
         if required not in value:
@@ -516,6 +531,74 @@ def _validate_signatures(errors: list[str], value: Any) -> None:
         # signed_at is optional but strictly a string when present: a non-string
         # value would silently corrupt the signing-time audit trail.
         _optional_string(errors, f"signatures[{i}]", sig, "signed_at")
+
+
+def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
+    """Validate only optional content extensions using their bundled schema definitions."""
+
+    def member(value: Any, spec: dict[str, Any], path: str) -> None:
+        if "$ref" in spec:
+            spec = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
+        types: dict[str, type | tuple[type, ...]] = {
+            "object": dict,
+            "array": list,
+            "string": str,
+            "boolean": bool,
+            "integer": (int, float),
+            "number": (int, float),
+            "null": type(None),
+        }
+        expected = spec.get("type", [])
+        expected = [expected] if isinstance(expected, str) else expected
+        if expected and not any(
+            isinstance(value, types[t])
+            and not (t in ("integer", "number") and isinstance(value, bool))
+            and not (t == "integer" and isinstance(value, float) and not value.is_integer())
+            for t in expected
+        ):
+            errors.append(f"{path}: must have type {expected}")
+            return
+        if ("enum" in spec and value not in spec["enum"]) or (
+            "const" in spec and value != spec["const"]
+        ):
+            errors.append(f"{path}: invalid value")
+        if isinstance(value, list) and "items" in spec:
+            for index, item in enumerate(value):
+                member(item, spec["items"], f"{path}[{index}]")
+        if isinstance(value, dict) and "properties" in spec:
+            for key, item in value.items():
+                if key in spec["properties"]:
+                    member(item, spec["properties"][key], f"{path}.{key}")
+                elif spec.get("additionalProperties") is False:
+                    errors.append(f"{path}.{key}: unknown member")
+
+    paths = {
+        "": ("adjudication",),
+        "subject": ("repository", "pr_number", "head_sha", "base_sha"),
+        "reasoning": ("observations",),
+        "quorum": ("verdicts", "rule"),
+        "quorum.dissent": ("findings", "severity_max", "blocking"),
+        "attestation.mechanism": (
+            "policy_version",
+            "tier",
+            "tiered_gate",
+            "severity_gated",
+            "action",
+            "action_reason",
+            "record_ref",
+        ),
+    }
+    for path, keys in paths.items():
+        value, spec = doc, schema
+        for part in path.split(".") if path else []:
+            value = value.get(part, {}) if isinstance(value, dict) else {}
+            spec = spec["properties"][part]
+            spec = spec.get("oneOf", [spec])[0]
+        if not isinstance(value, dict) or value.get("status") == "absent":
+            continue
+        for key in keys:
+            if key in value:
+                member(value[key], spec["properties"][key], f"{path}.{key}".lstrip("."))
 
 
 def _validate_source(errors: list[str], value: Any) -> None:

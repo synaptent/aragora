@@ -67,14 +67,15 @@
     ></textarea>
   </div>
 
-  <div class="form-group">
-    <label>Select Agents ({selectedAgents.length} selected)</label>
+  <fieldset class="form-group">
+    <legend>Select Agents ({selectedAgents.length} selected)</legend>
     <div class="agent-list">
       {#each agents as agent}
         <button
           type="button"
           class="agent-button"
           class:selected={selectedAgents.includes(agent.id)}
+          aria-pressed={selectedAgents.includes(agent.id)}
           on:click={() => toggleAgent(agent.id)}
         >
           {agent.name}
@@ -82,7 +83,7 @@
         </button>
       {/each}
     </div>
-  </div>
+  </fieldset>
 
   <div class="form-group">
     <label for="rounds">Number of Rounds: {rounds}</label>
@@ -111,7 +112,13 @@
     margin-bottom: 1.5rem;
   }
 
-  label {
+  fieldset {
+    border: 0;
+    padding: 0;
+    min-width: 0;
+  }
+
+  label, legend {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;

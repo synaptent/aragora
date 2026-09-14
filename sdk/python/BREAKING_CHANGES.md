@@ -10,6 +10,40 @@ This document tracks breaking changes specific to the Aragora Python SDK. For co
 
 #### Breaking Changes
 
+##### Typed HTTP transport failures
+
+Exhausted HTTP timeouts and connection-establishment failures now raise the
+existing `aragora_sdk.TimeoutError` and `aragora_sdk.ConnectionError`, respectively,
+instead of the generic `AragoraError`. Existing `except AragoraError` handlers,
+messages and chained transport causes remain compatible. Code checking exact
+exception types should accept the exported subclasses; Python's built-in
+exceptions with the same names are not these SDK classes. Attempt counts and
+backoff are unchanged. See [Python HTTP request lifecycle](REQUEST_LIFECYCLE.md#transport-failures-and-cancellation).
+
+##### Python rate-limit automatic waits
+
+`AragoraClient` and `AragoraAsyncClient` now automatically wait only for valid
+`Retry-After` hints from **0 through 60 seconds**, inclusive. Previously, integer
+hints such as `Retry-After: 120` could cause a 120-second wait and another attempt.
+Now a larger valid hint immediately raises the original `RateLimitError`, retaining
+its full `retry_after`, status, error code, trace ID and response body. The SDK
+neither clamps the hint nor retries before that hint permits. `max_retries` remains
+an upper bound, not a guarantee that every rate-limited call will exhaust it.
+
+Applications that relied on longer automatic waits must catch `RateLimitError`
+and defer or schedule another attempt under their own retry/deadline policy,
+using the retained hint. Do not retry unconditionally. The fixed safety limit
+has no constructor opt-out; this change adds no configuration option.
+Zero is honored as no delay. Unavailable hints retain the existing exponential
+fallback, including configured fallback delays above 60 seconds. Malformed or
+platform-timer-unrepresentable hints remain unavailable, as documented below.
+See [Python HTTP request lifecycle](REQUEST_LIFECYCLE.md) for complete parsing,
+retry-budget and error-handling details, including an error-handling example.
+
+Batch 06 removes 11 matched phantom operations from both Python index namespace implementations, `ReplaysAPI`, and `DocumentsAPI` (including every async twin).
+For each removed index method, the named route is absent from both OpenAPI documents and is not accepted by the knowledge-base handler: `get_index_stats` (`GET /api/v1/index/{name}/stats`), `add_documents` (`POST /api/v1/index/{name}/documents`), `update_document` (`PUT /api/v1/index/{name}/documents/{document_id}`), `delete_documents` (`DELETE /api/v1/index/{name}/documents`), `rebuild_index` (`POST /api/v1/index/{name}/rebuild`), and `optimize_index` (`POST /api/v1/index/{name}/optimize`).
+For each removed replay method, the named route is absent from both OpenAPI documents and is not accepted by `ReplaysHandler.can_handle`: `get_from_debate` (`GET /api/v1/debates/{debate_id}/replay`), `export` (`GET /api/v1/replays/{replay_id}/export`), and `get_summary` (`GET /api/v1/replays/{replay_id}/summary`). `replays.get_from_debate` was the only method removed in this batch that carried a runtime `DeprecationWarning`.
+For each removed document method, the named route is absent from both OpenAPI documents and is not accepted by `DocumentHandler.can_handle`: `download` (`GET /api/v1/documents/{document_id}/download`) and `reprocess` (`POST /api/v1/documents/{document_id}/reprocess`).
 Removed 12 `debates` methods (sync `DebatesAPI` and async `AsyncDebatesAPI`)
 that targeted routes no server handler dispatches. Every one of them was
 already marked DEPRECATED and emitted a `DeprecationWarning`; each call
@@ -107,6 +141,39 @@ declared by the audio handler even though no POST branch serves it yet.
 |----------------|-------|-----------|
 | `media.get_audio(audio_id)` | `GET /api/v1/media/audio/{id}` | `media.get_audio_url(debate_id)` builds the served `/audio/{debate_id}.mp3` URL; there is no per-file metadata route |
 | `media.delete_audio(audio_id)` | `DELETE /api/v1/media/audio/{id}` | No replacement; audio deletion is not served |
+
+Removed 6 `agents` methods (sync `AgentsAPI` and async `AsyncAgentsAPI`) that
+targeted routes no server handler dispatches: the agents handler rewrites
+`/api/v1/agents/{name}/...` to `/api/agent/{name}/...`, dispatches only
+read-only sub-routes (`profile`, `history`, `calibration`, `consistency`,
+`flips`, `network`, `rivals`, `allies`, `moments`, `positions`, `domains`,
+`performance`, `metadata`, `introspect`, plus the two-segment
+`head-to-head/{opponent}` and `opponent-briefing/{opponent}`) and has no POST
+or PUT branch, and `/api/v1/agents/stats` is rejected as an invalid agent path.
+Every call below failed.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `agents.get_stats()` | `GET /api/v1/agents/stats` | `ranking.get_stats()` (`GET /api/v1/ranking/stats`; `total_agents`, `total_matches`, `avg_elo`, `top_agent`, `elo_range`) for aggregate ranking statistics, or `client.request("GET", "/api/v1/agents", params={"include_stats": "true"})` for per-agent ELO and match counts (`agents.list()` sends no params). Per-agent stats also exist as `GET /api/v2/agents/{agent_id}/stats` on the opt-in FastAPI surface (`ARAGORA_USE_FASTAPI`), served but not in the spec |
+| `agents.calibrate(name, options)` | `POST /api/v1/agents/{name}/calibrate` | No replacement; calibration is recorded by the debate loop, not triggered over HTTP. Read the result with `agents.get_calibration_summary(name)` / `agents.get_calibration_curve(name)` (`GET /api/v1/agent/{name}/calibration-summary` and `.../calibration-curve`) |
+| `agents.enable(name)` | `POST /api/v1/agents/{name}/enable` | No replacement; there is no per-agent enable/disable switch on the HTTP server. Registration is the only served lifecycle mutation besides the per-agent heartbeat (`POST /api/v1/control-plane/agents/{id}/heartbeat`): `agents.register(agent_id, ...)` / `agents.unregister(agent_id)` (`POST` / `DELETE /api/v1/control-plane/agents[/{id}]`, served but not in the spec); the dashboard `pause`/`resume` routes under the same prefix are declared but not dispatched |
+| `agents.disable(name, reason)` | `POST /api/v1/agents/{name}/disable` | See `agents.enable` |
+| `agents.get_quota(name)` | `GET /api/v1/agents/{name}/quota` | `quotas.list()` (`GET /api/v1/quotas`) or `quotas.get(resource)` (`GET /api/v1/quotas/{resource}`); quotas are scoped to the caller's organization, not to an agent |
+| `agents.set_quota(name, limits)` | `PUT /api/v1/agents/{name}/quota` | `quotas.request_increase(resource, requested_limit=..., justification=...)` (`POST /api/v1/quotas/request-increase`) files a request; there is no direct quota write and no per-agent quota |
+
+Removed 4 `backups` methods (sync `BackupsAPI` and async `AsyncBackupsAPI`) that
+targeted routes no server handler dispatches. The backup handler accepts only
+`/api/v2/backups...` paths and below a backup id serves only `verify`,
+`verify-comprehensive` and `restore-test`, so every call below returned 404.
+The retained Python `backups` methods still target `/api/v1/backups...`, which
+the handler also rejects.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `backups.restore(backup_id, target_namespace, data_types, dry_run)` | `POST /api/v1/backups/{id}/restore` | No served Python replacement: `backups.test_restore(backup_id, target_path)` posts to `/api/v1/backups/{backup_id}/restore-test`, which the v2-only backup handler rejects. For a dry-run restore into a server-side scratch path use `client.request("POST", f"/api/v2/backups/{backup_id}/restore-test", json={"target_path": ...})` (`POST /api/v2/backups/{id}/restore-test`, served but not in the spec); the TypeScript `backups.testRestore` targets the same route but currently sends no request body, so its `targetPath` argument is ignored. A real restore is operator-only via `aragora backup restore <backup_id> [--output PATH] [--dry-run]` on the server host |
+| `backups.schedule(schedule, backup_type, retention_days, enabled)` | `POST /api/v1/backups/schedules` | No replacement; the backup schedule is server configuration (`BACKUP_ENABLED`, `BACKUP_DAILY_TIME`, `BACKUP_DR_DRILL_ENABLED`, `BACKUP_DR_DRILL_INTERVAL_DAYS`), not an API resource |
+| `backups.list_schedules()` | `GET /api/v1/backups/schedules` | No replacement; see `backups.schedule` |
+| `backups.delete_schedule(schedule_id)` | `DELETE /api/v1/backups/schedules/{id}` | No replacement; see `backups.schedule` |
 
 ---
 

@@ -26,6 +26,12 @@ Usage:
 from __future__ import annotations
 
 import importlib
+import importlib.abc
+import importlib.util
+import sys
+import warnings
+from importlib.machinery import ModuleSpec
+from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
 # Handler stability classifications (extracted to reduce file complexity)
@@ -36,7 +42,57 @@ from ._stability import (
 )
 
 # Lazy loading infrastructure - load early, contains only string mappings
-from ._lazy_imports import ALL_HANDLER_NAMES, HANDLER_MODULES
+from ._lazy_imports import ALL_HANDLER_NAMES, HANDLER_MODULES, MOVED_MODULES
+
+
+class _MovedModuleLoader(importlib.abc.Loader):
+    """Loader that hands back an already-imported module under its old name."""
+
+    def __init__(self, target: ModuleType) -> None:
+        self._target = target
+        self._spec = target.__spec__
+
+    def create_module(self, spec: ModuleSpec) -> ModuleType:
+        return self._target
+
+    def exec_module(self, module: ModuleType) -> None:
+        # module_from_spec always overwrites __spec__; give the real module its own back.
+        module.__spec__ = self._spec
+
+
+class _MovedModuleFinder(importlib.abc.MetaPathFinder):
+    """Resolve ``aragora.server.handlers.<old>`` to the moved module.
+
+    Appended (not prepended) to ``sys.meta_path`` so it only runs after the
+    path finder fails to find a real file, which means it can never shadow a
+    module that still exists at the flat path.
+    """
+
+    def find_spec(
+        self,
+        fullname: str,
+        path: Any = None,
+        target: ModuleType | None = None,
+    ) -> ModuleSpec | None:
+        prefix = __name__ + "."
+        if not fullname.startswith(prefix):
+            return None
+        basename = fullname[len(prefix) :]
+        new = MOVED_MODULES.get(basename)
+        if new is None:
+            return None
+        warnings.warn(
+            f"{fullname} moved to {new}; import {new} instead (handler basename: {basename})",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return importlib.util.spec_from_loader(
+            fullname, _MovedModuleLoader(importlib.import_module(new))
+        )
+
+
+if not any(isinstance(f, _MovedModuleFinder) for f in sys.meta_path):
+    sys.meta_path.append(_MovedModuleFinder())
 
 # IMPORTANT: Import order matters to avoid circular imports.
 # The admin.cache module must be loaded before base.py because:
@@ -150,16 +206,16 @@ if TYPE_CHECKING:
     )
     from .agents.feedback import FeedbackHandler
     from .agents.recommendations import AgentRecommendationHandler
-    from ._analytics_impl import AnalyticsHandler
+    from .analytics._analytics_impl import AnalyticsHandler
     from .analytics_dashboard import AnalyticsDashboardHandler
-    from ._analytics_metrics_impl import AnalyticsMetricsHandler
-    from .outcome_analytics import OutcomeAnalyticsHandler
+    from .analytics._analytics_metrics_impl import AnalyticsMetricsHandler
+    from .analytics.outcome_analytics import OutcomeAnalyticsHandler
     from .ap_automation import APAutomationHandler
     from .ar_automation import ARAutomationHandler
-    from .audit_trail import AuditTrailHandler
+    from .compliance.audit_trail import AuditTrailHandler
     from .audience_suggestions import AudienceSuggestionsHandler
     from .auditing import AuditingHandler
-    from .security_debate import SecurityDebateHandler
+    from .security.security_debate import SecurityDebateHandler
     from .auth import AuthHandler
     from .autonomous import (
         AlertHandler,
@@ -171,11 +227,11 @@ if TYPE_CHECKING:
         TriggerHandler,
     )
     from .approvals_inbox import UnifiedApprovalsHandler
-    from .backup_handler import BackupHandler
+    from .admin.backup_handler import BackupHandler
     from .belief import BeliefHandler
     from .benchmarking import BenchmarkingHandler
     from .bindings import BindingsHandler
-    from .differentiation import DifferentiationHandler
+    from .analytics_dashboard.differentiation import DifferentiationHandler
     from .bots import (
         DiscordHandler,
         GoogleChatHandler,
@@ -191,7 +247,7 @@ if TYPE_CHECKING:
     from .checkpoints import CheckpointHandler
     from .code_review import CodeReviewHandler
     from .codebase import IntelligenceHandler
-    from .compliance_reports import ComplianceReportHandler
+    from .compliance.compliance_reports import ComplianceReportHandler
     from .composite import CompositeHandler
     from .connectors.management import ConnectorManagementHandler
     from .context_budget import ContextBudgetHandler
@@ -222,13 +278,13 @@ if TYPE_CHECKING:
     from .deliberations import DeliberationsHandler
     from .dependency_analysis import DependencyAnalysisHandler
     from .devices import DeviceHandler
-    from .docs import DocsHandler
-    from .dr_handler import DRHandler
+    from .admin.docs import DocsHandler
+    from .admin.dr_handler import DRHandler
     from .email import EmailHandler
     from .email_debate import EmailDebateHandler
     from .email_services import EmailServicesHandler
     from .email_triage import EmailTriageHandler
-    from .endpoint_analytics import EndpointAnalyticsHandler
+    from .observability.endpoint_analytics import EndpointAnalyticsHandler
     from .erc8004 import ERC8004Handler
     from .evaluation import EvaluationHandler
     from .evolution import EvolutionABTestingHandler, EvolutionHandler
@@ -236,7 +292,7 @@ if TYPE_CHECKING:
     from .explainability import ExplainabilityHandler
     from .external_agents import ExternalAgentsHandler
     from .external_integrations import ExternalIntegrationsHandler
-    from .feature_flags import FeatureFlagsHandler
+    from .admin.feature_flags_read import FeatureFlagsHandler
     from .features import (
         AdvertisingHandler,
         AnalyticsPlatformsHandler,
@@ -279,7 +335,7 @@ if TYPE_CHECKING:
     from .features.gmail_threads import GmailThreadsHandler
     from .features.outlook import OutlookHandler
     from .feedback import FeedbackRoutesHandler
-    from .gallery import GalleryHandler
+    from .public.gallery import GalleryHandler
     from .gastown_dashboard import GasTownDashboardHandler
     from .gateway_agents_handler import GatewayAgentsHandler
     from .gateway_config_handler import GatewayConfigHandler
@@ -287,7 +343,7 @@ if TYPE_CHECKING:
     from .gateway_handler import GatewayHandler
     from .gateway_health_handler import GatewayHealthHandler
     from .gauntlet import GauntletHandler
-    from .gdpr_deletion import GDPRDeletionHandler
+    from .compliance.gdpr_deletion import GDPRDeletionHandler
     from .gauntlet_v1 import (
         GAUNTLET_V1_HANDLERS,
         GauntletAllSchemasHandler,
@@ -330,17 +386,17 @@ if TYPE_CHECKING:
     )
     from .memory.unified_handler import UnifiedMemoryHandler
     from .metrics import MetricsHandler
-    from .metrics_endpoint import UnifiedMetricsHandler
+    from .metrics.metrics_endpoint import UnifiedMetricsHandler
     from .ml import MLHandler
     from .moderation import ModerationHandler
-    from .moderation_analytics import ModerationAnalyticsHandler
+    from .analytics.moderation_analytics import ModerationAnalyticsHandler
     from .moments import MomentsHandler
     from .nomic import NomicHandler
     from .notifications.history import NotificationHistoryHandler
     from .notifications.preferences import NotificationPreferencesHandler
     from .notifications.templates import NotificationTemplatesHandler
     from .oauth import OAuthHandler
-    from .oauth_wizard import OAuthWizardHandler
+    from .oauth.oauth_wizard import OAuthWizardHandler
     from .onboarding import (
         OnboardingHandler,
         get_onboarding_handlers,
@@ -369,7 +425,7 @@ if TYPE_CHECKING:
     from .playbooks import PlaybookHandler
     from .playground import PlaygroundHandler
     from .policy import PolicyHandler
-    from .privacy import PrivacyHandler
+    from .compliance.privacy import PrivacyHandler
     from .public import StatusPageHandler
     from .queue import QueueHandler
     from .receipt_export import ReceiptExportHandler
@@ -381,11 +437,11 @@ if TYPE_CHECKING:
     from .rlm import RLMContextHandler
     from .routing import RoutingHandler
     from .sandbox import SandboxHandler
-    from .scim_handler import SCIMHandler
+    from .auth.scim_handler import SCIMHandler
     from .selection import SelectionHandler
     from .skill_marketplace import SkillMarketplaceHandler
     from .skills import SkillsHandler
-    from .slo import SLOHandler
+    from .observability.slo import SLOHandler
     from .sme.budget_controls import BudgetControlsHandler
     from .sme.receipt_delivery import ReceiptDeliveryHandler
     from .sme.slack_workspace import SlackWorkspaceHandler
@@ -406,13 +462,13 @@ if TYPE_CHECKING:
     from .social.slack_oauth import SlackOAuthHandler
     from .social.teams import TeamsIntegrationHandler
     from .social.teams_oauth import TeamsOAuthHandler
-    from .sso import SSOHandler
+    from .auth.sso import SSOHandler
     from .streaming.handler import StreamingConnectorHandler
     from .tasks.execution import TaskExecutionHandler
     from .tasks.queue import TaskQueueHandler
     from .template_discovery import TemplateDiscoveryHandler
     from .template_marketplace import TemplateMarketplaceHandler
-    from .threat_intel import ThreatIntelHandler
+    from .security.threat_intel import ThreatIntelHandler
     from .tournaments import TournamentHandler
     from .training import TrainingHandler
     from .transcription import TranscriptionHandler
@@ -490,6 +546,11 @@ def __getattr__(name: str) -> Any:
     # Check if this is a lazily-loaded handler
     if name in HANDLER_MODULES:
         return _lazy_import(name)
+
+    # Old flat module name: route through the finder so the warning fires
+    # and the same module object is returned for every import form.
+    if name in MOVED_MODULES:
+        return importlib.import_module(f"{__name__}.{name}")
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

@@ -271,10 +271,10 @@ class TestGitHubAuditClientCreateIssue:
         with patch("aiohttp.ClientSession") as mock_session_class:
             mock_session = MagicMock()
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-            mock_session.__aexit__ = AsyncMock()
+            mock_session.__aexit__ = AsyncMock(return_value=False)
             mock_session.post = MagicMock(return_value=mock_response)
             mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-            mock_response.__aexit__ = AsyncMock()
+            mock_response.__aexit__ = AsyncMock(return_value=False)
             mock_session_class.return_value = mock_session
 
             result = await client.create_issue(

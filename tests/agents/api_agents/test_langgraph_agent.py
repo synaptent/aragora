@@ -453,12 +453,12 @@ class TestLangGraphGenerate:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_langgraph_response)
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
+        mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session = MagicMock()
         mock_session.post = MagicMock(return_value=mock_response)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
             "aragora.agents.api_agents.langgraph_agent.create_client_session",
@@ -480,12 +480,12 @@ class TestLangGraphGenerate:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_langgraph_response)
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
+        mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session = MagicMock()
         mock_session.post = MagicMock(return_value=mock_response)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
             "aragora.agents.api_agents.langgraph_agent.create_client_session",
@@ -537,12 +537,12 @@ class TestLangGraphInvoke:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_langgraph_response)
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
+        mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session = MagicMock()
         mock_session.post = MagicMock(return_value=mock_response)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
             "aragora.agents.api_agents.langgraph_agent.create_client_session",
@@ -601,12 +601,12 @@ class TestLangGraphStream:
         mock_response.status = 200
         mock_response.content = mock_content
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
+        mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session = MagicMock()
         mock_session.post = MagicMock(return_value=mock_response)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
             "aragora.agents.api_agents.langgraph_agent.create_client_session",
@@ -656,12 +656,12 @@ class TestLangGraphStream:
         mock_response.status = 200
         mock_response.content = mock_content
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
+        mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session = MagicMock()
         mock_session.post = MagicMock(return_value=mock_response)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
             "aragora.agents.api_agents.langgraph_agent.create_client_session",
@@ -717,12 +717,12 @@ class TestLangGraphState:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_state)
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
+        mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session = MagicMock()
         mock_session.get = MagicMock(return_value=mock_response)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
             "aragora.agents.api_agents.langgraph_agent.create_client_session",
@@ -758,12 +758,12 @@ class TestLangGraphState:
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=mock_response_data)
         mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_response.__aexit__ = AsyncMock()
+        mock_response.__aexit__ = AsyncMock(return_value=False)
 
         mock_session = MagicMock()
         mock_session.post = MagicMock(return_value=mock_response)
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
             "aragora.agents.api_agents.langgraph_agent.create_client_session",

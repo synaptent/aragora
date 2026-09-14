@@ -23,7 +23,8 @@ attaching one never changes the bytes it covers.
 
 Key management (per the post-incident security architecture):
     The private key is NEVER read from a raw environment variable or committed
-    to the repo. It is resolved from AWS Secrets Manager via
+    to the repo. It is read from the PKCS#8 Ed25519 PEM file named by
+    ``ARAGORA_ODR_SIGNING_KEY_FILE``, or resolved from AWS Secrets Manager via
     :mod:`aragora.config.secrets` (PEM in the secret named by
     ``ARAGORA_ODR_SIGNING_KEY_SECRET``, default ``aragora/odr-signing-key``).
     Only the *public* key is published (repo + a ``.well-known`` endpoint).
@@ -37,8 +38,11 @@ import copy
 import hashlib
 import logging
 import os
+import stat
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from aragora.config.env_helpers import env_bool
 from aragora.gauntlet.odr_jcs import odr_content_digest
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -56,6 +60,8 @@ ODR_SIGNATURE_ALG = "Ed25519"
 #: Name of the AWS Secrets Manager secret holding the PEM private key.
 DEFAULT_SIGNING_KEY_SECRET = "aragora/odr-signing-key"
 SIGNING_KEY_SECRET_ENV = "ARAGORA_ODR_SIGNING_KEY_SECRET"
+SIGNING_KEY_FILE_ENV = "ARAGORA_ODR_SIGNING_KEY_FILE"
+SIGNING_KEY_STRICT_MODE_ENV = "ARAGORA_ODR_SIGNING_KEY_STRICT_MODE"
 
 
 class OdrSigningError(Exception):
@@ -111,10 +117,12 @@ def load_private_key_from_pem(pem: str | bytes) -> Ed25519PrivateKey:
     which never lets the key material transit a raw environment variable.
     """
     Ed25519PrivateKey, _, serialization, _ = _load_ed25519()
+    from cryptography.exceptions import UnsupportedAlgorithm
+
     data = pem.encode("utf-8") if isinstance(pem, str) else pem
     try:
         key = serialization.load_pem_private_key(data, password=None)
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, UnsupportedAlgorithm) as exc:
         raise OdrSigningError("could not parse Ed25519 private key from PEM") from exc
     if not isinstance(key, Ed25519PrivateKey):
         raise OdrSigningError(
@@ -235,15 +243,57 @@ def _load_pem_secret_from_aws(secret_id: str, *, explicitly_named: bool = False)
     )
 
 
+def _key_file_permission_reason(file_mode: int, *, warn: bool = True) -> str | None:
+    mode = stat.S_IMODE(file_mode)
+    if not stat.S_ISREG(file_mode):
+        return "not a regular file"
+    if mode & 0o022:
+        return f"writable by group or other (mode {mode:04o})"
+    if mode & 0o044:
+        if env_bool(SIGNING_KEY_STRICT_MODE_ENV, False):
+            return f"readable by group or other in strict mode (mode {mode:04o})"
+        if warn:
+            # Container secret mounts commonly require these bits for non-root users.
+            logger.warning(
+                "ODR signing key file is readable by group or other (mode %04o); "
+                "set %s=true to reject it",
+                mode,
+                SIGNING_KEY_STRICT_MODE_ENV,
+            )
+    return None
+
+
 def load_signing_key_from_secrets(
     secret_name: str | None = None,
 ) -> Ed25519PrivateKey:
-    """Resolve the ODR signing key from AWS Secrets Manager.
+    """Resolve the signing key from file custody or AWS Secrets Manager.
 
-    The key PEM is fetched via :mod:`aragora.config.secrets` (the same path
-    used for every other Aragora secret), never from a raw env var. The env
-    var only *names* which secret to read.
+    An explicit ``secret_name`` ignores file configuration. Otherwise a non-empty
+    file path takes precedence over the secret environment variable and default.
+    Empty file configuration is equivalent to unset; an unusable file fails closed.
+    Environment variables name custody locations, never raw key material.
     """
+    key_file = os.environ.get(SIGNING_KEY_FILE_ENV) if secret_name is None else None
+    if key_file:
+        try:
+            if os.name != "posix":
+                return load_private_key_from_pem(Path(key_file).read_bytes())
+            reason = _key_file_permission_reason(os.stat(key_file).st_mode, warn=False)
+            if reason is None:
+                # Recheck the opened target; O_NONBLOCK prevents a swapped FIFO from hanging.
+                with os.fdopen(os.open(key_file, os.O_RDONLY | os.O_NONBLOCK), "rb") as stream:
+                    reason = _key_file_permission_reason(os.fstat(stream.fileno()).st_mode)
+                    if reason is None:
+                        return load_private_key_from_pem(stream.read())
+        except (OSError, ValueError, OdrSigningError) as exc:
+            # A path could contain mistakenly pasted key bytes; suppress it and
+            # parser exception chains rather than disclosing them in producer logs.
+            logger.warning("ODR signing key file could not be loaded (%s)", type(exc).__name__)
+            raise OdrSigningError(
+                "ODR signing key file is configured but could not be used; "
+                "expected a readable PKCS#8 Ed25519 private-key PEM"
+            ) from None
+        raise OdrSigningError(f"ODR signing key file is configured but could not be used; {reason}")
     explicit = secret_name or os.environ.get(SIGNING_KEY_SECRET_ENV)
     name = explicit or DEFAULT_SIGNING_KEY_SECRET
     pem = _load_pem_secret_from_aws(name, explicitly_named=bool(explicit))
