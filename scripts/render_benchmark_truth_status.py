@@ -355,7 +355,41 @@ def _normalize_proxy_metrics(payload: dict[str, Any]) -> dict[str, Any]:
     return proxy_metrics
 
 
-def _render_snapshot_input_limits(*, generated_at: str, corpus: dict[str, Any]) -> list[str]:
+def _observation_warnings(payload: dict[str, Any], *, include_elapsed: bool) -> list[str]:
+    if not payload:
+        return []
+    status = dict(payload.get("observation_status") or {})
+    # Legacy producers used 0.0 when no positive elapsed samples existed. An
+    # aggregate alone cannot distinguish missing samples from measured zero.
+    proxy = dict(payload.get("proxy_metrics") or {})
+    if (
+        include_elapsed
+        and "elapsed_time" not in status
+        and any(
+            proxy.get(key) in (None, 0)
+            for key in ("mean_elapsed_seconds", "median_elapsed_seconds")
+        )
+    ):
+        status["elapsed_time"] = "unknown"
+    # Empty counts do not prove that the raw rescue history was available.
+    if "rescue_history" not in status and not payload.get("rescue_counts_by_type"):
+        status["rescue_history"] = "unknown"
+    expected = {
+        "raw_inputs": ("raw inputs", "available"),
+        "elapsed_time": ("elapsed time", "measured"),
+        "rescue_history": ("rescue history", "complete"),
+        "raw_input_replay": ("independent raw-input replay", "measured"),
+    }
+    return [
+        f"{label}: `{status[key]}`"
+        for key, (label, available) in expected.items()
+        if key in status and status[key] != available
+    ]
+
+
+def _render_snapshot_input_limits(
+    *, generated_at: str, corpus: dict[str, Any], warnings: list[str]
+) -> list[str]:
     lines = [
         "## Snapshot History And Input Limits",
         "",
@@ -364,6 +398,18 @@ def _render_snapshot_input_limits(*, generated_at: str, corpus: dict[str, Any]) 
         "Missing elapsed observations must not be interpreted as measured zero-duration execution.",
         "",
     ]
+    if warnings:
+        lines.extend(
+            [
+                "Observation availability warning: " + "; ".join(dict.fromkeys(warnings)) + ".",
+                "",
+                "Unavailable, incomplete, or unknown observations leave dependent values "
+                "non-authoritative. Consult `observation_status` and `observation_limits` in "
+                "the JSON where present; legacy snapshots without these markers do not establish "
+                "input completeness. Empty rescue counts are not a verified absence of rescues.",
+                "",
+            ]
+        )
     # This audit note belongs to a retained publication, not a probe of local log availability.
     if (
         generated_at == "2026-09-04T13:28:39Z"
@@ -456,7 +502,14 @@ def render_status_markdown(
         "",
         "This is the repo-tracked recurring `TW-02` publication surface for the fixed benchmark corpus.",
         "",
-        *_render_snapshot_input_limits(generated_at=generated_at, corpus=corpus),
+        *_render_snapshot_input_limits(
+            generated_at=generated_at,
+            corpus=corpus,
+            warnings=(
+                _observation_warnings(truth_payload, include_elapsed=False)
+                + _observation_warnings(scorecard_payload, include_elapsed=True)
+            ),
+        ),
         "## Corpus",
         "",
         f"- Corpus manifest: `{_repo_stable_path(corpus_path)}`",

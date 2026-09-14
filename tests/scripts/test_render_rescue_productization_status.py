@@ -47,12 +47,63 @@ def test_snapshot_disclosure_survives_regeneration_without_changing_inputs(
     assert "do not establish zero execution time" in text
     affected = generated_at == "2026-09-04T13:28:39Z"
     assert ("Snapshot-specific disclosure" in text) is affected
-    assert ("original raw metrics/rescue inputs are unavailable" in text) is affected
+    assert "Observation availability warning" in text
+    assert "raw inputs: `unavailable`" in text
+    assert "rescue history: `incomplete`" in text
     if affected:
         assert "omits observations present in prior published snapshots" in text
         assert "2026-09-01T13:38:29Z" in text
         assert "rescue_worker_crash" in text
         assert "reset or replacement has not been independently proven" in text
+
+
+@pytest.mark.parametrize("generated_at", ["2026-09-04T13:28:39Z", "2027-01-02T00:00:00Z"])
+@pytest.mark.parametrize(
+    "status,rows,warning",
+    [
+        ({}, [], "rescue history: `unknown`"),
+        (
+            {"raw_inputs": "unavailable", "rescue_history": "incomplete"},
+            [{"class": "crash", "count": 1}],
+            "raw inputs: `unavailable`",
+        ),
+        ({"raw_inputs": "available", "rescue_history": "complete"}, [], None),
+        ({}, [{"class": "crash", "count": 1}], None),
+    ],
+)
+def test_observation_warning_uses_report_data_not_timestamp(
+    tmp_path: Path,
+    generated_at: str,
+    status: dict[str, str],
+    rows: list[dict[str, object]],
+    warning: str | None,
+) -> None:
+    payload = {"generated_at": generated_at, "observation_status": status, "one_off_classes": rows}
+    before = json.dumps(payload, sort_keys=True)
+    rendered = mod.render_status_markdown(report_path=tmp_path / "report.json", payload=payload)
+    if warning:
+        assert "Observation availability warning" in rendered
+        assert warning in rendered
+    else:
+        assert "Observation availability warning" not in rendered
+    assert json.dumps(payload, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("filename", ["latest.json", "rescue-productization-20260904T132839Z.json"])
+def test_published_rescue_json_marks_unavailable_observations(filename: str) -> None:
+    payload = mod._load_json(mod.DEFAULT_REPORT_ROOT / filename)
+    assert payload["observation_status"] == {
+        "raw_inputs": "unavailable",
+        "elapsed_time": "unmeasured",
+        "rescue_history": "incomplete",
+        "raw_input_replay": "unmeasured",
+    }
+    assert {"summary", "repeated_classes", "one_off_classes", "below_threshold_classes"} <= set(
+        payload["observation_limits"]["non_authoritative_fields"]
+    )
+    for reference in payload["observation_limits"]["historical_artifacts"]:
+        assert (mod.REPO_ROOT / reference).is_file()
+    assert payload == mod._load_json(mod.DEFAULT_REPORT_ROOT / "latest.json")
 
 
 def test_render_status_markdown_includes_repeated_classes_and_actions(tmp_path: Path) -> None:

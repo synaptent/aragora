@@ -80,7 +80,10 @@ def test_snapshot_disclosure_is_deterministic_and_publication_scoped(
     assert "Zero current observations do not erase historical rescues" in rendered
     assert "do not establish zero execution time" in rendered
     assert ("Snapshot-specific disclosure" in rendered) is has_historical_note
-    assert ("original raw metrics/rescue inputs are unavailable" in rendered) is has_historical_note
+    assert "Observation availability warning" in rendered
+    assert "raw inputs: `unavailable`" in rendered
+    assert "elapsed time: `unmeasured`" in rendered
+    assert "rescue history: `incomplete`" in rendered
     if has_historical_note:
         assert "2026-09-01T13:38:29Z" in rendered
         assert "omits observations present in prior published snapshots" in rendered
@@ -88,6 +91,137 @@ def test_snapshot_disclosure_is_deterministic_and_publication_scoped(
         assert "11 -> 10" in rendered
         assert "227.1/424.3 -> 0.0/0.0" in rendered
         assert "reset or replacement has not been independently proven" in rendered
+
+
+@pytest.mark.parametrize("generated_at", ["2026-09-04T13:28:39Z", "2027-01-02T00:00:00Z"])
+@pytest.mark.parametrize("corpus_id,revision", [("tw-01-bounded-execution-v1", 7), ("new", 99)])
+@pytest.mark.parametrize("source", ["truth", "scorecard"])
+def test_observation_warning_uses_payload_not_publication_identity(
+    tmp_path: Path, generated_at: str, corpus_id: str, revision: int, source: str
+) -> None:
+    complete = {"raw_inputs": "available", "elapsed_time": "measured", "rescue_history": "complete"}
+    truth = {"observation_status": dict(complete), "rescue_counts_by_type": {}}
+    scorecard = {
+        "generated_at": generated_at,
+        "corpus": {"corpus_id": corpus_id, "revision": revision},
+        "observation_status": dict(complete),
+        "proxy_metrics": {"mean_elapsed_seconds": 0.0, "median_elapsed_seconds": 0.0},
+        "rescue_counts_by_type": {},
+    }
+    payload = truth if source == "truth" else scorecard
+    payload["observation_status"].update(
+        raw_inputs="unavailable", elapsed_time="unmeasured", rescue_history="incomplete"
+    )
+    args = dict(
+        corpus_path=tmp_path / "corpus.json",
+        truth_path=tmp_path / "truth.json",
+        scorecard_path=tmp_path / "scorecard.json",
+        latest_paths={
+            "truth_revision_latest": tmp_path / "truth.json",
+            "scorecard_revision_latest": tmp_path / "scorecard.json",
+        },
+        truth_payload=truth,
+        scorecard_payload=scorecard,
+    )
+    before = json.dumps([truth, scorecard], sort_keys=True)
+    rendered = mod.render_status_markdown(**args)
+    assert "Observation availability warning" in rendered
+    assert "raw inputs: `unavailable`" in rendered
+    assert "elapsed time: `unmeasured`" in rendered
+    assert "rescue history: `incomplete`" in rendered
+    assert json.dumps([truth, scorecard], sort_keys=True) == before
+
+
+@pytest.mark.parametrize("elapsed", [None, 0.0])
+def test_legacy_missing_observations_warn_without_claiming_raw_input_loss(
+    tmp_path: Path, elapsed: float | None
+) -> None:
+    scorecard = {
+        "proxy_metrics": {"mean_elapsed_seconds": elapsed, "median_elapsed_seconds": elapsed},
+        "rescue_counts_by_type": {},
+    }
+    rendered = mod.render_status_markdown(
+        corpus_path=tmp_path / "corpus.json",
+        truth_path=tmp_path / "truth.json",
+        scorecard_path=tmp_path / "scorecard.json",
+        truth_payload={},
+        scorecard_payload=scorecard,
+        latest_paths={
+            "truth_revision_latest": tmp_path / "truth.json",
+            "scorecard_revision_latest": tmp_path / "scorecard.json",
+        },
+    )
+    assert "Observation availability warning" in rendered
+    assert "elapsed time: `unknown`" in rendered
+    assert "rescue history: `unknown`" in rendered
+    assert "raw inputs: `unavailable`" not in rendered
+
+
+@pytest.mark.parametrize(
+    "elapsed,rescues,status",
+    [
+        (12.0, {"rescue_worker_crash": 1}, {}),
+        (
+            0.0,
+            {},
+            {"raw_inputs": "available", "elapsed_time": "measured", "rescue_history": "complete"},
+        ),
+    ],
+)
+def test_observed_values_do_not_trigger_missing_observation_warning(
+    tmp_path: Path, elapsed: float, rescues: dict[str, int], status: dict[str, str]
+) -> None:
+    rendered = mod.render_status_markdown(
+        corpus_path=tmp_path / "corpus.json",
+        truth_path=tmp_path / "truth.json",
+        scorecard_path=tmp_path / "scorecard.json",
+        truth_payload={},
+        scorecard_payload={
+            "proxy_metrics": {"mean_elapsed_seconds": elapsed, "median_elapsed_seconds": elapsed},
+            "rescue_counts_by_type": rescues,
+            "observation_status": status,
+        },
+        latest_paths={
+            "truth_revision_latest": tmp_path / "truth.json",
+            "scorecard_revision_latest": tmp_path / "scorecard.json",
+        },
+    )
+    assert "Observation availability warning" not in rendered
+
+
+@pytest.mark.parametrize(
+    "kind,filename",
+    [
+        ("benchmark_scorecards", "latest.json"),
+        ("benchmark_scorecards", "rev-7/latest.json"),
+        ("benchmark_scorecards", "rev-7/scorecard-20260904T132839Z.json"),
+        ("benchmark_truth_artifacts", "latest.json"),
+        ("benchmark_truth_artifacts", "rev-7/latest.json"),
+        ("benchmark_truth_artifacts", "rev-7/truth-20260904T132828Z.json"),
+    ],
+)
+def test_published_b0_json_marks_unavailable_observations(kind: str, filename: str) -> None:
+    root = _REPO_ROOT / "docs/status/generated" / kind / "tw-01-bounded-execution-v1"
+    payload = mod._load_json(root / filename)
+    assert payload["observation_status"] == {
+        "raw_inputs": "unavailable",
+        "elapsed_time": "unmeasured",
+        "rescue_history": "incomplete",
+        "raw_input_replay": "unmeasured",
+    }
+    limits = payload["observation_limits"]
+    assert "rescue_counts_by_type" in limits["non_authoritative_fields"]
+    if kind == "benchmark_scorecards":
+        assert "proxy_metrics.mean_elapsed_seconds" in limits["non_authoritative_fields"]
+        assert "proxy_metrics.median_elapsed_seconds" in limits["non_authoritative_fields"]
+    else:
+        assert "issues[].had_rescue" in limits["non_authoritative_fields"]
+        previous = mod._load_json(_REPO_ROOT / limits["historical_artifacts"][0])
+        assert (
+            next(row for row in previous["issues"] if row["issue_number"] == 5754)["had_rescue"]
+            is True
+        )
+    assert payload == mod._load_json(root / "latest.json")
 
 
 def _truth_payload(

@@ -135,7 +135,7 @@ def _render_issue_drafts(rows: list[dict[str, Any]]) -> list[str]:
     ]
 
 
-def _render_snapshot_input_limits(generated_at: str) -> list[str]:
+def _render_snapshot_input_limits(generated_at: str, payload: dict[str, Any]) -> list[str]:
     lines = [
         "## Snapshot History And Input Limits",
         "",
@@ -144,6 +144,37 @@ def _render_snapshot_input_limits(generated_at: str) -> list[str]:
         "Missing elapsed observations must not be interpreted as measured zero-duration execution.",
         "",
     ]
+    status = dict(payload.get("observation_status") or {})
+    # Legacy reports did not distinguish an empty ledger from unavailable input.
+    # Inspect the persisted observations, never the renderer host's local files.
+    if "rescue_history" not in status and not any(
+        payload.get(key)
+        for key in ("repeated_classes", "one_off_classes", "below_threshold_classes")
+    ):
+        status["rescue_history"] = "unknown"
+    expected = {
+        "raw_inputs": ("raw inputs", "available"),
+        "elapsed_time": ("elapsed time", "measured"),
+        "rescue_history": ("rescue history", "complete"),
+        "raw_input_replay": ("independent raw-input replay", "measured"),
+    }
+    warnings = [
+        f"{label}: `{status[key]}`"
+        for key, (label, available) in expected.items()
+        if key in status and status[key] != available
+    ]
+    if warnings:
+        lines.extend(
+            [
+                "Observation availability warning: " + "; ".join(warnings) + ".",
+                "",
+                "Unavailable, incomplete, or unknown observations leave dependent values "
+                "non-authoritative. Consult `observation_status` and `observation_limits` in "
+                "the JSON where present; legacy snapshots without these markers do not establish "
+                "input completeness. Empty class lists are not a verified absence of rescues.",
+                "",
+            ]
+        )
     # This audit note belongs to a retained publication, not a probe of local log availability.
     if generated_at == "2026-09-04T13:28:39Z":
         lines.extend(
@@ -178,7 +209,7 @@ def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str
         "",
         "This is the repo-tracked recurring `TW-03` publication surface for repeated rescue-class harvest and conversion.",
         "",
-        *_render_snapshot_input_limits(generated_at),
+        *_render_snapshot_input_limits(generated_at, payload),
         "## Summary",
         "",
         f"- Latest report: `{_repo_stable_path(report_path)}`",

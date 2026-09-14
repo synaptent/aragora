@@ -51,6 +51,27 @@
     "blocked_not_dispatch_bounded": 5
   },
   "generated_at": "2026-09-04T13:28:28Z",
+  "observation_status": {
+    "raw_inputs": "unavailable",
+    "elapsed_time": "unmeasured",
+    "rescue_history": "incomplete",
+    "raw_input_replay": "unmeasured"
+  },
+  "observation_limits": {
+    "reason": "Original raw metrics/rescue inputs are unavailable; independent replay is unmeasured. An input reset or replacement has not been independently proven.",
+    "value_semantics": "Listed fields retain legacy snapshot values, not authoritative measurements of elapsed time or complete rescue history. Empty counts and false rescue flags do not retract prior observations.",
+    "non_authoritative_fields": [
+      "failure_class_distribution",
+      "rescue_counts_by_type",
+      "primary_metrics.no_rescue_truth_success_rate",
+      "issues[].had_rescue",
+      "issues[].no_rescue_truth_success"
+    ],
+    "historical_artifacts": [
+      "docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/truth-20260901T133818Z.json",
+      "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260901T133829Z.json"
+    ]
+  },
   "in_flight_metrics": {
     "in_progress_attempted_count": 5,
     "in_progress_expected_count": 5,

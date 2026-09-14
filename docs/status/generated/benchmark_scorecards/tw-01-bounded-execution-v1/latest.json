@@ -39,6 +39,29 @@
     "blocked_not_dispatch_bounded": 5
   },
   "generated_at": "2026-09-04T13:28:39Z",
+  "observation_status": {
+    "raw_inputs": "unavailable",
+    "elapsed_time": "unmeasured",
+    "rescue_history": "incomplete",
+    "raw_input_replay": "unmeasured"
+  },
+  "observation_limits": {
+    "reason": "Original raw metrics/rescue inputs are unavailable; independent replay is unmeasured. An input reset or replacement has not been independently proven.",
+    "value_semantics": "Listed fields retain legacy snapshot values, not authoritative measurements of elapsed time or complete rescue history. Empty counts and false rescue flags do not retract prior observations.",
+    "non_authoritative_fields": [
+      "proxy_metrics",
+      "proxy_metrics.mean_elapsed_seconds",
+      "proxy_metrics.median_elapsed_seconds",
+      "failure_class_distribution",
+      "rescue_counts_by_type",
+      "truth_metrics.no_rescue_truth_success_rate",
+      "deltas.no_rescue_truth_success_rate",
+      "deltas.proxy_no_rescue_success_rate"
+    ],
+    "historical_artifacts": [
+      "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260901T133829Z.json"
+    ]
+  },
   "metrics_file": ".aragora/overnight/boss_metrics.jsonl",
   "previous_artifact": {
     "generated_at": "2026-09-01T13:38:29Z",

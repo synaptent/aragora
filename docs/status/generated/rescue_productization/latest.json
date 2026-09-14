@@ -1,6 +1,26 @@
 {
   "below_threshold_classes": [],
   "generated_at": "2026-09-04T13:28:39Z",
+  "observation_status": {
+    "raw_inputs": "unavailable",
+    "elapsed_time": "unmeasured",
+    "rescue_history": "incomplete",
+    "raw_input_replay": "unmeasured"
+  },
+  "observation_limits": {
+    "reason": "Original raw metrics/rescue inputs are unavailable; independent replay is unmeasured. An input reset or replacement has not been independently proven.",
+    "value_semantics": "Listed fields retain legacy snapshot values, not authoritative measurements of elapsed time or complete rescue history. Empty counts and false rescue flags do not retract prior observations.",
+    "non_authoritative_fields": [
+      "summary",
+      "repeated_classes",
+      "one_off_classes",
+      "below_threshold_classes"
+    ],
+    "historical_artifacts": [
+      "docs/status/generated/rescue_productization/rescue-productization-20260901T133829Z.json",
+      "docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260901T133829Z.json"
+    ]
+  },
   "initial_issue_drafts": [],
   "issue_drafts": [],
   "issue_linkage_results": [],
