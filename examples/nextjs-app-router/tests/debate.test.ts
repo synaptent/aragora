@@ -75,6 +75,23 @@ test('nested loop IDs follow published SDK precedence and reject malformed IDs',
   assert.equal(displayEvent({ ...event, data: { loop_id: 'other' } }, debate.debate_id), null);
 });
 
+test('server wire timestamps use seconds and top-level agent attribution wins', () => {
+  const event = { type: 'agent_message' as const, timestamp: 1789000000.5,
+    agent: 'wire-reviewer', loop_id: debate.debate_id,
+    data: { agent: 'nested-reviewer', content: 'Wire proposal' } };
+  assert.deepEqual(displayEvent(event, debate.debate_id), {
+    type: 'agent_message', timestamp: '2026-09-10T00:26:40.500Z',
+    agent: 'wire-reviewer', content: 'Wire proposal',
+  });
+  assert.equal(displayEvent({ ...event, timestamp: 0 }, debate.debate_id)?.timestamp,
+    '1970-01-01T00:00:00.000Z');
+  assert.equal(displayEvent({ ...event, timestamp: debate.created_at }, debate.debate_id)?.timestamp,
+    debate.created_at);
+  assert.equal(displayEvent({ ...event, agent: '' }, debate.debate_id)?.agent, 'nested-reviewer');
+  assert.equal(displayEvent({ ...event, timestamp: Number.NaN }, debate.debate_id), null);
+  assert.equal(displayEvent({ ...event, timestamp: Number.MAX_VALUE }, debate.debate_id), null);
+});
+
 class BrowserSocket {
   static instances: BrowserSocket[] = [];
   onopen: (() => void) | null = null;
@@ -87,6 +104,28 @@ class BrowserSocket {
   send(data: string) { this.sent.push(data); }
   close() { this.closed = true; }
 }
+
+test('published SDK preserves server timestamp and agent through message delivery', () => {
+  const original = globalThis.WebSocket;
+  globalThis.WebSocket = BrowserSocket as unknown as typeof WebSocket;
+  const messages: unknown[] = [];
+  const stream = createClient({ baseUrl: 'https://example.test' }).createWebSocket({ autoReconnect: false });
+  const cleanup = connectDebateStream(stream, debate.debate_id, {
+    onConnected: () => {}, onError: () => {}, onEvent: event => messages.push(event),
+  });
+  const socket = BrowserSocket.instances.at(-1)!;
+  try {
+    socket.onopen?.();
+    socket.onmessage?.({ data: JSON.stringify({ type: 'agent_message',
+      timestamp: 1789000000.5, agent: 'wire-reviewer', loop_id: debate.debate_id,
+      data: { content: 'Actual wire shape' } }) });
+    assert.deepEqual(messages, [{ type: 'agent_message',
+      timestamp: '2026-09-10T00:26:40.500Z', agent: 'wire-reviewer', content: 'Actual wire shape' }]);
+  } finally {
+    cleanup();
+    globalThis.WebSocket = original;
+  }
+});
 
 test('published SDK connection subscribes, projects messages, and cleans up on unmount', async () => {
   const original = globalThis.WebSocket;

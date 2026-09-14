@@ -13,7 +13,12 @@ interface StreamHandlers {
   onError: (error: string | null) => void;
 }
 
-export function displayEvent(event: WebSocketEvent, debateId: string): StreamEvent | null {
+type DisplayableEvent = Omit<WebSocketEvent, 'timestamp'> & {
+  timestamp: string | number;
+  agent?: string;
+};
+
+export function displayEvent(event: DisplayableEvent, debateId: string): StreamEvent | null {
   const data = event.data && typeof event.data === 'object' ? event.data : {};
   const nestedId = 'debate_id' in data && typeof data.debate_id === 'string'
     ? data.debate_id : undefined;
@@ -21,10 +26,18 @@ export function displayEvent(event: WebSocketEvent, debateId: string): StreamEve
     ? data.loop_id : undefined;
   const id = event.debate_id || event.loop_id || nestedId || nestedLoopId;
   if (id !== debateId) return null;
+  let timestamp = event.timestamp;
+  if (typeof timestamp === 'number') {
+    // Server StreamEvent envelopes carry Unix seconds, including fractions.
+    const date = new Date(timestamp * 1000);
+    if (!Number.isFinite(date.getTime())) return null;
+    timestamp = date.toISOString();
+  }
   return {
     type: event.type,
-    timestamp: event.timestamp,
-    agent: 'agent' in data && typeof data.agent === 'string' ? data.agent : undefined,
+    timestamp,
+    agent: typeof event.agent === 'string' && event.agent ? event.agent
+      : 'agent' in data && typeof data.agent === 'string' ? data.agent : undefined,
     content: 'content' in data && typeof data.content === 'string' ? data.content : undefined,
   };
 }
