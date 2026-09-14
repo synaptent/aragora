@@ -20,6 +20,7 @@ from aragora.server.validation import (
     sanitize_string,
     sanitize_id,
     SAFE_ID_PATTERN,
+    SAFE_ID_PATTERN_WITH_DOTS,
     SAFE_SLUG_PATTERN,
     SAFE_AGENT_PATTERN,
     MAX_JSON_BODY_SIZE,
@@ -666,11 +667,43 @@ class TestPatterns:
             "gemini-pro",
             "gpt_4",
             "agent123",
+            # dotted frontier model ids (#9994)
+            "gemini-3.1-pro-preview",
+            "claude-fable-5.1",
+            "qwen3.8-2.4t-a95b",
+            "a.b",
+            "_agent",
+            "-agent",
+            "a" * 31 + "b",  # 32 chars, non-dot final char
         ],
     )
     def test_safe_agent_pattern_valid(self, agent: str):
         """Test valid agent names match pattern."""
         assert SAFE_AGENT_PATTERN.match(agent), f"{agent} should match"
+
+    @pytest.mark.parametrize(
+        "agent",
+        [
+            "anthropic/claude-fable-5.1",  # provider-qualified slug: "/" is a path separator
+            "x-ai/grok-4.6",
+            ".hidden",  # leading dot
+            ".",
+            "..",
+            "../etc",
+            "a.",  # trailing dot: Windows drops it, so "a." and "a" would share a folder
+            "claude.",
+            "claude-fable-5.1.",
+            "a" * 31 + ".",  # 32 chars but dot-final
+            "claude fable",  # whitespace
+            "",
+            "claude-fable-5.1\n",  # "$" would match before a trailing newline; "\Z" does not
+            "claude\n",
+            "claude\r\n",
+        ],
+    )
+    def test_safe_agent_pattern_rejects_separators_edge_dots_and_newlines(self, agent: str):
+        """Dots are allowed inside a name, never at either end; slashes and newlines never."""
+        assert not SAFE_AGENT_PATTERN.match(agent), f"{agent!r} should not match"
 
     @pytest.mark.parametrize(
         "agent,expected_match",
@@ -682,3 +715,17 @@ class TestPatterns:
     def test_safe_agent_pattern_max_length(self, agent: str, expected_match: bool):
         """Test agent name max length is 32."""
         assert bool(SAFE_AGENT_PATTERN.match(agent)) is expected_match
+
+    @pytest.mark.parametrize(
+        "pattern",
+        [SAFE_ID_PATTERN, SAFE_ID_PATTERN_WITH_DOTS, SAFE_SLUG_PATTERN, SAFE_AGENT_PATTERN],
+        ids=["id", "id_with_dots", "slug", "agent"],
+    )
+    def test_safe_patterns_reject_trailing_newline(self, pattern: re.Pattern[str]):
+        """A "$" anchor matches before a trailing newline under re.match(); "\\Z" does not.
+
+        The bare name must still match, so the newline is the only thing rejected.
+        """
+        assert pattern.match("valid-name")
+        assert not pattern.match("valid-name\n"), f"{pattern.pattern} accepted a trailing newline"
+        assert not pattern.match("valid-name\r\n"), f"{pattern.pattern} accepted a trailing CRLF"

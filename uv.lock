@@ -280,6 +280,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "click" },
+    { name = "cryptography" },
     { name = "defusedxml" },
     { name = "httpx" },
     { name = "pydantic" },
@@ -357,6 +358,7 @@ requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.9.4,<2.0" },
     { name = "build", marker = "extra == 'test'", specifier = ">=1.5.0,<2.0" },
     { name = "click", specifier = ">=8.4.2,<9.0" },
+    { name = "cryptography", specifier = ">=48.0.1,<51.0" },
     { name = "defusedxml", specifier = ">=0.7,<1.0" },
     { name = "fastapi", marker = "extra == 'all'", specifier = ">=0.139.0,<1.0" },
     { name = "fastapi", marker = "extra == 'gateway'", specifier = ">=0.139.0,<1.0" },

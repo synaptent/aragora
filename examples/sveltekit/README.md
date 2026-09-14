@@ -36,7 +36,13 @@ ARAGORA_API_KEY=your-api-key
 
 # Client-side (public)
 PUBLIC_ARAGORA_API_URL=http://localhost:8080
+PUBLIC_ARAGORA_WS_URL=ws://localhost:8765/ws
 ```
+
+Use the separate WebSocket URL when running `aragora serve --api-port 8080
+--ws-port 8765`. Omit it when your API origin also serves `/ws`. Never put the
+private API key in a `PUBLIC_` variable. Debate views consume the published
+`@aragora/sdk` types; missing confidence and agreement remain "Not reported".
 
 ## Project Structure
 
@@ -62,12 +68,12 @@ Use `+page.server.ts` for data fetching:
 
 ```typescript
 // routes/debates/+page.server.ts
-import { getServerClient } from '$lib/aragora';
+import { getServerClient } from '$lib/aragora.server';
 
 export const load = async () => {
   const client = getServerClient();
-  const debates = await client.debates.list();
-  return { debates };
+  const response = await client.debates.list();
+  return { debates: response.debates };
 };
 ```
 
@@ -84,7 +90,20 @@ export const load = async () => {
 </script>
 ```
 
-## Learn More
+## Validation
+
+```bash
+npm ci
+npm test
+npm run check
+npm run build
+```
+
+Tests exercise the installed SDK's event envelopes, subscription lifecycle and
+debate field mapping without a live provider. `npm run check` checks the Svelte
+components and TypeScript together.
+
+## Resources
 
 - [Aragora Documentation](https://docs.aragora.ai)
 - [SvelteKit Docs](https://kit.svelte.dev/docs)

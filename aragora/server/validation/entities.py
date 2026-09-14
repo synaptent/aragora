@@ -8,25 +8,42 @@ and injection vulnerabilities.
 
 import re
 
-# Safe string patterns for different entity types
-SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
-SAFE_ID_PATTERN_WITH_DOTS = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
-SAFE_SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
-SAFE_AGENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,32}$")
+# Safe string patterns for different entity types.
+# All patterns end in "\Z" rather than "$": "$" also matches just before a
+# trailing newline, so "name\n" would pass a "$"-anchored pattern under
+# re.match(). "\Z" only matches at the true end of the string.
+SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}\Z")
+# Generic dotted identifier (genome IDs, debate slugs, versioned agent names via
+# validate_agent_name_with_version): up to 128 chars, must start alphanumeric.
+# Intentionally distinct from SAFE_AGENT_PATTERN below, which is the 32-char
+# path-segment rule for agent names and also permits a leading "_" / "-".
+# Consumers of this pattern (aragora/server/api.py slugs and debate IDs,
+# critique.py, genome IDs) need the longer limit, so the two are not unified.
+SAFE_ID_PATTERN_WITH_DOTS = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\Z")
+SAFE_SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,128}\Z")
+# Agent names may carry dotted model versions ("gemini-3.1-pro-preview",
+# "claude-fable-5.1", "qwen3.8-2.4t-a95b"), so "." is allowed after the first
+# character. "/" is never allowed: these are single path segments, and the
+# provider prefix of a slug ("anthropic/...") is not part of an agent name.
+# A leading "." is rejected so "." / ".." can never validate (#9994). A
+# trailing "." is rejected too: some consumers build filesystem paths from the
+# name (probes.py), and Windows silently drops a trailing dot, so "a." and "a"
+# would otherwise share a directory. Total length stays 1-32.
+SAFE_AGENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-](?:[a-zA-Z0-9._-]{0,30}[a-zA-Z0-9_-])?\Z")
 
 # Plugin manifest patterns (stricter for submission)
-SAFE_PLUGIN_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,62}[a-z0-9]?$")  # 1-64 chars, lowercase
+SAFE_PLUGIN_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,62}[a-z0-9]?\Z")  # 1-64 chars, lowercase
 SAFE_ENTRY_POINT_PATTERN = re.compile(
-    r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*:[a-zA-Z_][a-zA-Z0-9_]*$"
+    r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*:[a-zA-Z_][a-zA-Z0-9_]*\Z"
 )  # module.path:function
-SAFE_SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$")
+SAFE_SEMVER_PATTERN = re.compile(r"^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?\Z")
 
 # Specific patterns for structured IDs
-SAFE_GAUNTLET_ID_PATTERN = re.compile(r"^gauntlet-\d{14}-[a-f0-9]{6}$")
-SAFE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,64}$")
-SAFE_BATCH_ID_PATTERN = re.compile(r"^batch_[a-zA-Z0-9]{6,32}$")
-SAFE_SHARE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,32}$")
-SAFE_SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{8,64}$")
+SAFE_GAUNTLET_ID_PATTERN = re.compile(r"^gauntlet-\d{14}-[a-f0-9]{6}\Z")
+SAFE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,64}\Z")
+SAFE_BATCH_ID_PATTERN = re.compile(r"^batch_[a-zA-Z0-9]{6,32}\Z")
+SAFE_SHARE_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,32}\Z")
+SAFE_SESSION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{8,64}\Z")
 
 
 def validate_path_segment(
@@ -77,7 +94,12 @@ def validate_id(value: str, name: str = "ID") -> tuple[bool, str | None]:
 
 
 def validate_agent_name(agent: str) -> tuple[bool, str | None]:
-    """Validate an agent name (alphanumeric with hyphens/underscores, 1-32 chars).
+    """Validate an agent name (1-32 chars, see SAFE_AGENT_PATTERN).
+
+    Allowed characters are alphanumerics, hyphens and underscores, plus dots
+    after the first character for versioned model ids ("claude-fable-5.1").
+    A leading or trailing dot is rejected (so "." / ".." never validate), and
+    "/" is never allowed.
 
     Args:
         agent: Agent name to validate
@@ -210,6 +232,9 @@ def validate_genome_id(genome_id: str) -> tuple[bool, str | None]:
 
 def validate_agent_name_with_version(agent: str) -> tuple[bool, str | None]:
     """Validate an agent name that may include version dots (e.g., claude-3.5-sonnet).
+
+    Uses SAFE_ID_PATTERN_WITH_DOTS (128 chars, must start alphanumeric), not the
+    32-char SAFE_AGENT_PATTERN; see the comment on the patterns for why.
 
     Args:
         agent: Agent name to validate
