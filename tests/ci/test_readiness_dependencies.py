@@ -7,11 +7,25 @@ import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYTEST_PLUGINS = [("-n", "pytest-xdist"), ("--timeout", "pytest-timeout")]
+
+
+def test_dependabot_cooldown_respects_ecosystem_support() -> None:
+    config = yaml.safe_load((REPO_ROOT / ".github/dependabot.yml").read_text(encoding="utf-8"))
+    actions = [
+        entry for entry in config["updates"] if entry["package-ecosystem"] == "github-actions"
+    ]
+    assert len(actions) == 1
+    # Actions supports a default cooldown, but not SemVer-specific cooldown keys.
+    assert actions[0]["cooldown"] == {"default-days": 7}
+    for entry in config["updates"]:
+        if entry["package-ecosystem"] != "github-actions":
+            assert entry["cooldown"] == {"default-days": 7, "semver-major-days": 14}
 
 
 @pytest.mark.parametrize(("flag", "package"), PYTEST_PLUGINS)
