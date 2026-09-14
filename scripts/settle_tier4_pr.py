@@ -6,10 +6,11 @@ a repo-visible operator settlement comment naming the exact head and action.
 Use --protected-squash-only to record/check a grant without administrative
 bypass or branch-protection authority. Legacy grants remain explicit in the
 comment; a protected-only grant never authorizes the legacy admin merge path.
-The newest valid exact-head comment/review supersedes older grants, ordered by
+The newest trusted exact-head settlement instruction supersedes older grants, ordered by
 timezone-aware createdAt/submittedAt. Post a new grant to supersede one; editing
 an old comment does not promote its publication order. Missing timestamps or a
 tie for newest fail closed. Requested-mode constraints never revive an old grant.
+An unparsable action blocks authorization instead of reviving a superseded grant.
 """
 
 from __future__ import annotations
@@ -379,11 +380,12 @@ def _authorization_diagnostic(
         "branch_protection_action_present": branch_protection_action_present,
         "authorized_actions": sorted(authorized_actions),
         "ordering_candidate": (
+            # Action parsing controls acceptance, not supersession. An unsupported
+            # newer instruction must never revive an older privileged grant.
             marker_present
             and trusted_author_association
             and (not admin_permission_required or admin_permission_evaluated)
             and exact_head_present
-            and merge_action_present
         ),
         "accepted": not rejection_reasons,
         "rejection_reasons": rejection_reasons,
@@ -437,9 +439,10 @@ def authorization_diagnostics(
 def _select_authorization_by_time(diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
     """Select one publication, independent of API order or requested privilege.
 
-    Mode-incompatible grants still participate: filtering them first would revive
-    a superseded grant. A trusted same-head grant with unknown publication time
-    cannot safely be discarded as stale, so it blocks the whole selection.
+    Mode-incompatible or unparsable instructions still participate: filtering them
+    first would revive a superseded grant. A trusted same-head instruction with
+    unknown publication time cannot safely be discarded as stale, so it blocks
+    the whole selection.
     """
     candidates: list[tuple[dict[str, Any], datetime | None]] = []
     for diagnostic in diagnostics:

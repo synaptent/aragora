@@ -370,6 +370,163 @@ def test_requested_mode_cannot_revive_superseded_grant(protected_mode: bool) -> 
     assert not any(item["accepted"] for item in gate["authorization_diagnostics"])
 
 
+def _unparsable_comment(head: str) -> dict[str, Any]:
+    comment = _protected_comment(head)
+    comment["body"] += "\nNo admin squash or branch protection reconcile is authorized."
+    comment.update(createdAt="2026-05-22T00:06:00Z", url="https://github.example/unparsable")
+    return comment
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "Authorized action: protected_squash_merge\n"
+        "No admin squash or branch protection reconcile is authorized.",
+        "Authorized action: protected_squash_merge and admin_squash_merge",
+        "Authorized action: protected_squash_merge_extra",
+        "Authorized action: not protected_squash_merge",
+        "Authorized action: unknown_action",
+    ],
+)
+@pytest.mark.parametrize("source", ["comment", "review"])
+@pytest.mark.parametrize("reverse_api_order", [False, True])
+@pytest.mark.parametrize("mode", ["default", "protected", "protection"])
+def test_unparsable_newer_instruction_blocks_older_grant(
+    action: str, source: str, reverse_api_order: bool, mode: str
+) -> None:
+    head = "a" * 40
+    older = _protected_comment(head) if mode == "protected" else _authorized_comment(head)
+    newer = _unparsable_comment(head)
+    newer["body"] = f"{settler.AUTHORIZED_MARKER}\nExact head: {head}\n{action}"
+    assert settler._comment_authorized_actions(newer["body"]) == set()
+    if source == "review":
+        newer["submittedAt"] = newer.pop("createdAt")
+    grants = [older, newer]
+    if reverse_api_order:
+        grants.reverse()
+    view = _pr_view(head, comments=grants if source == "comment" else [])
+    if source == "review":
+        older["submittedAt"] = older.pop("createdAt")
+        view["reviews"] = grants
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=mode == "protected",
+        require_branch_protection_token=mode == "protection",
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+    assert settler.OPERATOR_COMMENT_BLOCKER in gate["blockers"]
+    diagnostics = {item["url"]: item for item in gate["authorization_diagnostics"]}
+    assert diagnostics[newer["url"]]["selection_status"] == "selected"
+    assert diagnostics[newer["url"]]["merge_action_present"] is False
+    assert diagnostics[older["url"]]["selection_status"] == "superseded"
+    assert not any(item["accepted"] for item in diagnostics.values())
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [None, "", "not-a-date", "2026-05-22T00:06:00", AUTH_CREATED_AT, "2026-05-21T19:05:00-05:00"],
+)
+@pytest.mark.parametrize("source", ["comment", "review"])
+def test_unparsable_instruction_with_unknown_or_tied_order_blocks_grant(
+    timestamp: str | None, source: str
+) -> None:
+    head = "a" * 40
+    instruction = _unparsable_comment(head)
+    instruction["createdAt"] = timestamp
+    view = _pr_view(head, comments=[_authorized_comment(head)])
+    if source == "review":
+        instruction["submittedAt"] = instruction.pop("createdAt")
+        view["reviews"] = [instruction]
+    else:
+        view["comments"].append(instruction)
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+    assert gate["authorization_selection"]["status"] == "ambiguous"
+    assert not any(item["accepted"] for item in gate["authorization_diagnostics"])
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["newer_legacy", "newer_protected", "untrusted", "wrong_head", "stale", "no_marker", "member"],
+)
+def test_unparsable_instruction_preserves_unrelated_or_newer_grants(case: str) -> None:
+    head = "a" * 40
+    instruction = _unparsable_comment(head)
+    protected_grant = case == "newer_protected"
+    grant = _protected_comment(head) if protected_grant else _authorized_comment(head)
+    if case.startswith("newer_"):
+        instruction["updatedAt"] = "2026-05-22T01:00:00Z"
+        grant["createdAt"] = "2026-05-22T00:07:00Z"
+    elif case == "untrusted":
+        instruction["authorAssociation"] = "CONTRIBUTOR"
+    elif case == "wrong_head":
+        instruction["body"] = instruction["body"].replace(head, "b" * 40)
+    elif case == "stale":
+        instruction["createdAt"] = "2026-05-21T23:59:00Z"
+    elif case == "no_marker":
+        instruction["body"] = instruction["body"].replace(settler.AUTHORIZED_MARKER, "Diagnostic")
+    else:
+        instruction["authorAssociation"] = "MEMBER"
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[instruction, grant]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        trusted_operator_logins=["owner-user"],
+        permission_checker=lambda login: False,
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == (
+        ["protected_merge"] if protected_grant else ["branch_protection", "merge"]
+    )
+    assert gate["authorization_diagnostics"][0]["selection_status"] == (
+        "superseded" if case.startswith("newer_") else "ineligible"
+    )
+    assert gate["authorization_diagnostics"][1]["selection_status"] == "selected"
+
+
+@pytest.mark.parametrize("mode", ["default", "protected", "protection"])
+def test_merge_apply_rejects_unparsable_newer_instruction_without_mutation(
+    monkeypatch: Any, tmp_path: Path, mode: str
+) -> None:
+    head = "a" * 40
+    older = (
+        _protected_comment(head)
+        if mode == "protected"
+        else _authorized_comment(head, include_branch_protection=mode == "protection")
+    )
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda *a, **kw: (
+            _pr_view(head, comments=[older, _unparsable_comment(head)]),
+            _tier4_packet(),
+            _valid_checks(),
+        ),
+    )
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(settler, "_apply_merge", lambda **kw: calls.append(kw) or [])
+    flags = ["--protected-squash-only"] if mode == "protected" else []
+    result = settler.main(
+        ["--merge-apply", "--pr", "7423", "--head", head, "--cwd", str(tmp_path), *flags]
+    )
+    assert result == 2
+    assert calls == []
+
+
 @pytest.mark.parametrize(
     "timestamp",
     [
