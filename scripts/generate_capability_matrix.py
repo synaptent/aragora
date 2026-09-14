@@ -17,11 +17,14 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Sized, cast
 
 try:
     from scripts.capability_gap_report import build_report
 except ImportError:
-    from capability_gap_report import build_report
+    from capability_gap_report import build_report as _fallback_build_report
+
+    build_report = _fallback_build_report
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
 
@@ -64,7 +67,7 @@ def _count_cli_commands(repo_root: Path) -> int:
         parser = build_parser()
         for action in parser._actions:  # noqa: SLF001 - argparse internals
             if getattr(action, "choices", None):
-                return len(action.choices)
+                return len(cast(Sized, action.choices))
     except Exception:
         return _count_cli_commands_static(repo_root)
     return 0
