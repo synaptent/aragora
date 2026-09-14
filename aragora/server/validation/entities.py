@@ -28,8 +28,9 @@ SAFE_SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,128}\Z")
 # A leading "." is rejected so "." / ".." can never validate (#9994). A
 # trailing "." is rejected too: some consumers build filesystem paths from the
 # name (probes.py), and Windows silently drops a trailing dot, so "a." and "a"
-# would otherwise share a directory. Total length stays 1-32.
-SAFE_AGENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-](?:[a-zA-Z0-9._-]{0,30}[a-zA-Z0-9_-])?\Z")
+# would otherwise share a directory. Consecutive dots are rejected; individual
+# interior dots remain valid for model versions. Total length stays 1-32.
+SAFE_AGENT_PATTERN = re.compile(r"^(?!.*\.\.)[a-zA-Z0-9_-](?:[a-zA-Z0-9._-]{0,30}[a-zA-Z0-9_-])?\Z")
 
 # Plugin manifest patterns (stricter for submission)
 SAFE_PLUGIN_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,62}[a-z0-9]?\Z")  # 1-64 chars, lowercase
