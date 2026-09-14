@@ -7,12 +7,13 @@ export function formatPercentage(value: number | undefined): string {
 }
 
 export function debateView(debate: Debate) {
+  const rounds = Array.isArray(debate.rounds) ? debate.rounds : [];
   return {
-    roundsCompleted: debate.rounds_used ?? debate.rounds?.length ?? 0,
+    roundsCompleted: debate.rounds_used ?? rounds.length,
     answer: debate.consensus?.final_answer ?? debate.consensus?.conclusion ?? debate.final_answer,
     confidence: formatPercentage(debate.consensus?.confidence),
     agreement: formatPercentage(debate.consensus?.agreement),
-    messages: (debate.rounds ?? []).flatMap(round =>
+    messages: rounds.flatMap(round =>
       round.messages.map(message => ({
         ...message,
         round: message.round ?? round.round_number,

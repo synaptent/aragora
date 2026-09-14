@@ -44,6 +44,26 @@ test('answer and round fallbacks use only SDK fields', () => {
   assert.equal(debateView({ ...debate, rounds: [{ round_number: 1, messages: [] }] }).roundsCompleted, 1);
 });
 
+test('published SDK numeric requested rounds are not completed history', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const rounds of [0, 3, 5]) {
+      for (const roundsUsed of [undefined, 2]) {
+        globalThis.fetch = async () => new Response(JSON.stringify({
+          ...debate, status: 'running', rounds, rounds_used: roundsUsed, in_progress: true,
+        }), { headers: { 'content-type': 'application/json' } });
+        const response = await createClient({ baseUrl: 'https://example.test' })
+          .debates.get(debate.debate_id);
+        const view = debateView(response);
+        assert.equal(view.roundsCompleted, roundsUsed ?? 0);
+        assert.deepEqual(view.messages, []);
+      }
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('event envelopes retain data and reject other debates and global messages', () => {
   const event = { type: 'agent_message' as const, timestamp: debate.created_at,
     data: { agent: 'reviewer', content: 'Proposal' }, loop_id: debate.debate_id };
