@@ -109,7 +109,11 @@ interface ReplaysClientInterface {
   request<T>(
     method: string,
     path: string,
-    options?: { params?: Record<string, unknown>; json?: Record<string, unknown> }
+    options?: {
+      params?: Record<string, unknown>;
+      json?: Record<string, unknown>;
+      responseType?: 'json' | 'text';
+    }
   ): Promise<T>;
 }
 
@@ -182,6 +186,13 @@ export class ReplaysAPI {
    */
   async getEvolution(replayId: string): Promise<{ evolution: EvolutionEntry[] }> {
     return this.client.request('GET', `/api/replays/${replayId}/evolution`);
+  }
+
+  /**
+   * Get HTML visualization of the replay.
+   */
+  async getHtml(replayId: string): Promise<string> {
+    return this.client.request('GET', `/api/replays/${replayId}/html`, { responseType: 'text' });
   }
 
   /**

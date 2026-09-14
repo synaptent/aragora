@@ -11,6 +11,7 @@
 
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { ReplaysAPI } from '../replays';
+import { AragoraClient } from '../../client';
 
 interface MockClient {
   request: Mock;
@@ -114,6 +115,50 @@ describe('ReplaysAPI Namespace', () => {
       expect(result.events).toHaveLength(2);
     });
 
+    it('should return HTML from the served replay visualization route', async () => {
+      const html = '<!doctype html><html><body>Replay rp_1</body></html>';
+      mockClient.request.mockResolvedValue(html);
+
+      const result = await api.getHtml('rp_1');
+
+      expect(mockClient.request).toHaveBeenCalledExactlyOnceWith(
+        'GET', '/api/replays/rp_1/html', { responseType: 'text' }
+      );
+      expect(result).toBe(html);
+    });
+
+    it('should propagate replay HTML request errors', async () => {
+      const error = new Error('Replay not found');
+      mockClient.request.mockRejectedValue(error);
+
+      await expect(api.getHtml('missing-replay')).rejects.toBe(error);
+      expect(mockClient.request).toHaveBeenCalledExactlyOnceWith(
+        'GET', '/api/replays/missing-replay/html', { responseType: 'text' }
+      );
+    });
+
+    it.each([
+      '<!doctype html><html><body>Replay rp_1</body></html>',
+      '{"not":"HTML"}',
+      '',
+    ])('should preserve the replay response as text through the real client: %s', async (body) => {
+      const fetchMock = vi.fn().mockResolvedValue(new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }));
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        const client = new AragoraClient({ baseUrl: 'https://example.invalid', retryEnabled: false });
+
+        await expect(client.replays.getHtml('rp_1')).resolves.toBe(body);
+        expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+          'https://example.invalid/api/replays/rp_1/html',
+          expect.objectContaining({ method: 'GET' })
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
   });
 
   // ===========================================================================

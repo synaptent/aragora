@@ -10,10 +10,13 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 #### Breaking Changes
 
-Contract-drift batch 3 removes 25 operations on unserved routes absent from both
+Contract-drift batch 3 removes 24 operations on unserved routes absent from both
 OpenAPI documents. The deprecated debate methods are included.
 `PipelineTransitionsNamespace` and its barrel export are removed, as is the
 orphaned `DebateAgentStatistics` interface. Routes below use normalized parameters.
+
+`replays.getHtml(replayId)` is retained: the aiohttp server serves
+`GET /api/replays/{replay_id}/html` and its `/api/v1` alias.
 
 | Removed Method | Route | Migration |
 |----------------|-------|-----------|
@@ -29,7 +32,6 @@ orphaned `DebateAgentStatistics` interface. Routes below use normalized paramete
 | `rbac.getEffectivePermissions` | `GET /api/v1/rbac/users/{id}/permissions` | No replacement |
 | `rbac.removeUser` | `DELETE /api/users/{id}` | Use the `users` or `organizations` namespace for the intended operation |
 | `rbac.changeUserRole` | `PUT /api/users/{id}/role` | Use the `users` or `organizations` namespace for the intended operation |
-| `replays.getHtml` | `GET /api/replays/{id}/html` | No replacement |
 | `replays.listForks` | `GET /api/replays/{id}/forks` | No replacement |
 | `transcription.getJob` | `GET /api/v1/transcription/{id}` | No replacement; only `/status` is served |
 | `transcription.getSegments` | `GET /api/v1/transcription/{id}/segments` | No replacement; only `/status` is served |

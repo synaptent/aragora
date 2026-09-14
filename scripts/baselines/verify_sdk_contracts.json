@@ -93,6 +93,7 @@
     "GET /api/probes/reports/{param}",
     "GET /api/replays/{param}/events",
     "GET /api/replays/{param}/evolution",
+    "GET /api/replays/{param}/html",
     "GET /api/selection/role-assigners",
     "GET /api/selection/scorers",
     "GET /api/selection/team-selectors",
