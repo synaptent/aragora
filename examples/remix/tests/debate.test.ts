@@ -9,6 +9,18 @@ const debate: Debate = {
   created_at: '2026-09-13T00:00:00Z', agents: ['reviewer'],
 };
 
+async function fetchStoredDebate(fields: object) {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ ...debate, ...fields }), {
+      headers: { 'content-type': 'application/json' },
+    });
+    return await createClient({ baseUrl: 'https://api.example.test' }).debates.get(debate.debate_id);
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
 test('missing metrics do not become measured zeros', () => {
   assert.equal(formatPercentage(undefined), 'Not reported');
   assert.equal(formatPercentage(Number.NaN), 'Not reported');
@@ -43,67 +55,54 @@ test('answer and round fallbacks use only the published SDK fields', () => {
 });
 
 test('installed SDK numeric running rounds are requested, not completed rounds', async () => {
-  const original = globalThis.fetch;
-  try {
-    // The running-debate handler returns a count, not the completed round array.
-    for (const rounds of [0, 5]) {
-      for (const rounds_used of [undefined, 2]) {
-        globalThis.fetch = async () => new Response(JSON.stringify({
-          ...debate, status: 'running', in_progress: true, rounds, rounds_used,
-        }), { headers: { 'content-type': 'application/json' } });
-        const value = await createClient({ baseUrl: 'https://api.example.test' })
-          .debates.get(debate.debate_id);
-        assert.equal(value.rounds, rounds);
-        const view = debateView(value);
-        assert.equal(view.roundsCompleted, rounds_used ?? 0);
-        assert.deepEqual(view.messages, []);
-      }
+  for (const rounds of [0, 5]) {
+    for (const rounds_used of [undefined, 2]) {
+      const value = await fetchStoredDebate({ status: 'running', in_progress: true, rounds, rounds_used });
+      assert.equal(value.rounds, rounds);
+      const view = debateView(value);
+      assert.equal(view.roundsCompleted, rounds_used ?? 0);
+      assert.deepEqual(view.messages, []);
     }
-  } finally {
-    globalThis.fetch = original;
   }
 });
 
 test('installed SDK saved records retain top-level messages and their attribution', async () => {
-  const original = globalThis.fetch;
   const messages = [
     { role: 'assistant', agent: 'reviewer', content: 'Saved proposal', round: 0 },
     { role: 'assistant', agent_id: 'peer', content: 'Saved dissent', round: 1 },
   ];
-  try {
-    for (const rounds of [undefined, 2, [], [{ round_number: 1, messages: [] }]]) {
-      globalThis.fetch = async () => new Response(JSON.stringify({
-        ...debate, rounds, rounds_used: 2, messages,
-      }), { headers: { 'content-type': 'application/json' } });
-      const value = await createClient({ baseUrl: 'https://api.example.test' })
-        .debates.get(debate.debate_id);
-      const view = debateView(value);
-      assert.deepEqual(view.messages, messages);
-      assert.equal(view.roundsCompleted, 2);
-      assert.equal(view.messages[0].round, 0);
-    }
-  } finally {
-    globalThis.fetch = original;
+  for (const rounds of [undefined, 2, [], [{ round_number: 1, messages: [] }]]) {
+    const view = debateView(await fetchStoredDebate({ rounds, rounds_used: 2, messages }));
+    assert.deepEqual(view.messages, messages);
+    assert.equal(view.roundsCompleted, 2);
+    assert.equal(view.messages[0].round, 0);
   }
 });
 
 test('round history is not duplicated by a saved-message fallback', async () => {
-  const original = globalThis.fetch;
-  try {
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      ...debate,
-      rounds: [{ round_number: 2, messages: [
-        { role: 'assistant', agent: 'reviewer', content: 'Proposal' },
-      ] }],
-      messages: [{ role: 'assistant', agent: 'reviewer', content: 'Proposal', round: 2 }],
-    }), { headers: { 'content-type': 'application/json' } });
-    const value = await createClient({ baseUrl: 'https://api.example.test' })
-      .debates.get(debate.debate_id);
-    assert.deepEqual(debateView(value).messages, [
-      { role: 'assistant', agent: 'reviewer', content: 'Proposal', round: 2 },
-    ]);
-  } finally {
-    globalThis.fetch = original;
+  const message = { role: 'assistant', agent: 'reviewer', content: 'Proposal', round: 2 };
+  const value = await fetchStoredDebate({
+    rounds: [{ round_number: 2, messages: [{ ...message, round: undefined }] }], messages: [message],
+  });
+  assert.deepEqual(debateView(value).messages, [message]);
+});
+
+test('installed SDK saved metrics preserve actual values and nested precedence', async () => {
+  for (const [fields, expected] of [
+    [{ confidence: 0.8, agreement: 0.6 }, ['80.0%', '60.0%']],
+    [{ confidence: 0, agreement: 0 }, ['0.0%', '0.0%']],
+    [{ confidence: 0.8 }, ['80.0%', 'Not reported']],
+    [{ agreement: 0.6 }, ['Not reported', '60.0%']],
+    [{ confidence: null, agreement: null }, ['Not reported', 'Not reported']],
+    [{ confidence: 0.8, agreement: 0.6, consensus: { reached: false } }, ['80.0%', '60.0%']],
+    [{ confidence: 0.8, agreement: 0.6, consensus: { reached: true, confidence: 0, agreement: 0.2 } }, ['0.0%', '20.0%']],
+  ] as const) {
+    const view = debateView(await fetchStoredDebate(fields));
+    assert.deepEqual([view.confidence, view.agreement], expected);
+  }
+  for (const invalid of [Number.NaN, Infinity, -Infinity]) {
+    const view = debateView({ ...debate, confidence: invalid, agreement: invalid });
+    assert.deepEqual([view.confidence, view.agreement], ['Not reported', 'Not reported']);
   }
 });
 
