@@ -45,6 +45,7 @@ class AddedLine:
     path: str
     line_no: int | None
     line: str
+    hunk: int = 0
 
 
 @dataclass(frozen=True)
@@ -149,8 +150,12 @@ def _is_top_level_symbol(symbol: str) -> bool:
 
 def _parse_imported_names(imports: str) -> list[str]:
     cleaned = imports.split("#", 1)[0].strip()
-    if cleaned.startswith("(") and cleaned.endswith(")"):
-        cleaned = cleaned[1:-1]
+    # The parens are stripped independently so an opener whose closer was not part of
+    # the diff (an unchanged ``)`` under --unified=0) still yields its names.
+    if cleaned.startswith("("):
+        cleaned = cleaned[1:]
+    if cleaned.endswith(")"):
+        cleaned = cleaned[:-1]
     names: list[str] = []
     for part in cleaned.split(","):
         token = part.strip()
@@ -319,6 +324,7 @@ def parse_diff(diff_text: str) -> list[AddedLine]:
     added: list[AddedLine] = []
     current_path: str | None = None
     current_line: int | None = None
+    hunk = 0
     for raw_line in diff_text.splitlines():
         if raw_line.startswith("+++ "):
             current_path = _normalize_diff_path(raw_line[4:].split("\t", 1)[0])
@@ -327,11 +333,12 @@ def parse_diff(diff_text: str) -> list[AddedLine]:
         if raw_line.startswith("@@"):
             match = HUNK_RE.search(raw_line)
             current_line = int(match.group(1)) if match else None
+            hunk += 1
             continue
         if current_path is None:
             continue
         if raw_line.startswith("+") and not raw_line.startswith("+++"):
-            added.append(AddedLine(current_path, current_line, raw_line[1:]))
+            added.append(AddedLine(current_path, current_line, raw_line[1:], hunk))
             if current_line is not None:
                 current_line += 1
         elif raw_line.startswith("-"):
@@ -339,6 +346,60 @@ def parse_diff(diff_text: str) -> list[AddedLine]:
         elif current_line is not None:
             current_line += 1
     return added
+
+
+def _strip_comment(line: str) -> str:
+    return line.split("#", 1)[0].rstrip()
+
+
+def _opens_parenthesized_import(line: str) -> bool:
+    match = FROM_IMPORT_RE.match(_strip_comment(line))
+    if match is None:
+        return False
+    imports = match.group(2)
+    return "(" in imports and ")" not in imports
+
+
+def _is_next_source_line(previous: AddedLine, current: AddedLine) -> bool:
+    return (
+        current.path == previous.path
+        and current.hunk == previous.hunk
+        and previous.line_no is not None
+        and current.line_no == previous.line_no + 1
+    )
+
+
+def reconstruct_multiline_imports(added_lines: list[AddedLine]) -> list[AddedLine]:
+    """Join parenthesized ``from … import (`` statements that span several added lines.
+
+    Only consecutive added source lines of one hunk of one Python file are joined, so
+    neighbouring files, separate hunks or intervening context lines never form one
+    statement. The joined line keeps the opener's path and line number, which is the
+    statement's original source location; comments are dropped per physical line so a
+    trailing ``# noqa`` on the opener cannot hide the names that follow it.
+    """
+    logical: list[AddedLine] = []
+    index = 0
+    while index < len(added_lines):
+        opener = added_lines[index]
+        if not (_is_python_path(opener.path) and _opens_parenthesized_import(opener.line)):
+            logical.append(opener)
+            index += 1
+            continue
+        parts = [_strip_comment(opener.line)]
+        end = index
+        while end + 1 < len(added_lines) and _is_next_source_line(
+            added_lines[end], added_lines[end + 1]
+        ):
+            end += 1
+            piece = _strip_comment(added_lines[end].line).strip()
+            if piece:
+                parts.append(piece)
+            if ")" in piece:
+                break
+        logical.append(AddedLine(opener.path, opener.line_no, " ".join(parts), opener.hunk))
+        index = end + 1
+    return logical
 
 
 def load_charter_entries(
@@ -406,7 +467,7 @@ def _entry_matches_line(
 
 def check_diff(diff_text: str, *, charter_path: Path | str) -> CheckResult:
     entries, authority_by_ref, _status = load_charter_entries(Path(charter_path))
-    added_lines = parse_diff(diff_text)
+    added_lines = reconstruct_multiline_imports(parse_diff(diff_text))
     aliases_by_path: dict[str, dict[str, set[str]]] = {}
     for added_line in added_lines:
         for alias, module in _plain_import_aliases(added_line.line).items():
