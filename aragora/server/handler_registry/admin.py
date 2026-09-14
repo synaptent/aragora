@@ -38,7 +38,7 @@ DeployStatusHandler = _safe_import(
 )
 NomicHandler = _safe_import("aragora.server.handlers", "NomicHandler")
 DocsHandler = _safe_import("aragora.server.handlers", "DocsHandler")
-ApiDocsHandler = _safe_import("aragora.server.handlers.api_docs", "ApiDocsHandler")
+ApiDocsHandler = _safe_import("aragora.server.handlers.admin.api_docs", "ApiDocsHandler")
 MCPToolsHandler = _safe_import("aragora.server.handlers.mcp_tools_handler", "MCPToolsHandler")
 
 # =============================================================================
@@ -64,9 +64,11 @@ CoordinationHandler = _safe_import("aragora.server.handlers.coordination", "Coor
 
 AuthHandler = _safe_import("aragora.server.handlers", "AuthHandler")
 OAuthHandler = _safe_import("aragora.server.handlers", "OAuthHandler")
-OAuthWizardHandler = _safe_import("aragora.server.handlers.oauth_wizard", "OAuthWizardHandler")
-SCIMHandler = _safe_import("aragora.server.handlers.scim_handler", "SCIMHandler")
-SSOHandler = _safe_import("aragora.server.handlers.sso", "SSOHandler")
+OAuthWizardHandler = _safe_import(
+    "aragora.server.handlers.oauth.oauth_wizard", "OAuthWizardHandler"
+)
+SCIMHandler = _safe_import("aragora.server.handlers.auth.scim_handler", "SCIMHandler")
+SSOHandler = _safe_import("aragora.server.handlers.auth.sso", "SSOHandler")
 
 # =============================================================================
 # Billing and Budget Handler Imports
@@ -79,7 +81,7 @@ BudgetControlsHandler = _safe_import(
 )
 CreditsAdminHandler = _safe_import("aragora.server.handlers.admin.credits", "CreditsAdminHandler")
 SpendAnalyticsHandler = _safe_import(
-    "aragora.server.handlers.spend_analytics", "SpendAnalyticsHandler"
+    "aragora.server.handlers.analytics.spend_analytics", "SpendAnalyticsHandler"
 )
 
 # =============================================================================
@@ -93,20 +95,22 @@ WorkspaceHandler = _safe_import("aragora.server.handlers", "WorkspaceHandler")
 # Compliance, Backup, and DR Handler Imports
 # =============================================================================
 
-ComplianceHandler = _safe_import("aragora.server.handlers.compliance_handler", "ComplianceHandler")
-BackupHandler = _safe_import("aragora.server.handlers.backup_handler", "BackupHandler")
-DRHandler = _safe_import("aragora.server.handlers.dr_handler", "DRHandler")
+ComplianceHandler = _safe_import("aragora.server.handlers.compliance.handler", "ComplianceHandler")
+BackupHandler = _safe_import("aragora.server.handlers.admin.backup_handler", "BackupHandler")
+DRHandler = _safe_import("aragora.server.handlers.admin.dr_handler", "DRHandler")
 
 # Privacy and audit handlers
-PrivacyHandler = _safe_import("aragora.server.handlers.privacy", "PrivacyHandler")
-AuditTrailHandler = _safe_import("aragora.server.handlers.audit_trail", "AuditTrailHandler")
+PrivacyHandler = _safe_import("aragora.server.handlers.compliance.privacy", "PrivacyHandler")
+AuditTrailHandler = _safe_import(
+    "aragora.server.handlers.compliance.audit_trail", "AuditTrailHandler"
+)
 AuditSessionsHandler = _safe_import(
     "aragora.server.handlers.features.audit_sessions", "AuditSessionsHandler"
 )
 
 # Data classification handler
 DataClassificationHandler = _safe_import(
-    "aragora.server.handlers.data_classification_handler", "DataClassificationHandler"
+    "aragora.server.handlers.compliance.data_classification_handler", "DataClassificationHandler"
 )
 
 # CSP report handler
@@ -320,7 +324,9 @@ DependencyAnalysisHandler = _safe_import(
 )
 RepositoryHandler = _safe_import("aragora.server.handlers.repository", "RepositoryHandler")
 SchedulerHandler = _safe_import("aragora.server.handlers.features.scheduler", "SchedulerHandler")
-ThreatIntelHandler = _safe_import("aragora.server.handlers.threat_intel", "ThreatIntelHandler")
+ThreatIntelHandler = _safe_import(
+    "aragora.server.handlers.security.threat_intel", "ThreatIntelHandler"
+)
 FeedbackRoutesHandler = _safe_import("aragora.server.handlers.feedback", "FeedbackRoutesHandler")
 PaymentRoutesHandler = _safe_import(
     "aragora.server.handlers.payments.handler", "PaymentRoutesHandler"
@@ -361,7 +367,7 @@ MonitoringHandler = _safe_import(
 UnifiedApprovalsHandler = _safe_import(
     "aragora.server.handlers.approvals_inbox", "UnifiedApprovalsHandler"
 )
-RBACHandler = _safe_import("aragora.server.handlers.rbac", "RBACHandler")
+RBACHandler = _safe_import("aragora.server.handlers.auth.rbac", "RBACHandler")
 
 # Federation status
 FederationStatusHandler = _safe_import(
@@ -379,7 +385,7 @@ AutonomousImproveHandler = _safe_import(
 
 # System intelligence dashboard
 SystemIntelligenceHandler = _safe_import(
-    "aragora.server.handlers.system_intelligence", "SystemIntelligenceHandler"
+    "aragora.server.handlers.admin.system_intelligence", "SystemIntelligenceHandler"
 )
 
 # Observability dashboard
@@ -394,12 +400,12 @@ CrashTelemetryHandler = _safe_import(
 
 # System health dashboard
 SystemHealthDashboardHandler = _safe_import(
-    "aragora.server.handlers.system_health", "SystemHealthDashboardHandler"
+    "aragora.server.handlers.admin.system_health", "SystemHealthDashboardHandler"
 )
 
 # System health dashboard
 SystemHealthDashboardHandler = _safe_import(
-    "aragora.server.handlers.system_health", "SystemHealthDashboardHandler"
+    "aragora.server.handlers.admin.system_health", "SystemHealthDashboardHandler"
 )
 
 # Platform config (runtime config for frontend)
@@ -459,21 +465,25 @@ ReadinessCheckHandler = _safe_import(
 
 # Compliance handlers
 ComplianceReportHandler = _safe_import(
-    "aragora.server.handlers.compliance_reports", "ComplianceReportHandler"
+    "aragora.server.handlers.compliance.compliance_reports", "ComplianceReportHandler"
 )
 EUAIActComplianceHandler = _safe_import(
-    "aragora.server.handlers.compliance_eu_ai_act", "EUAIActComplianceHandler"
+    "aragora.server.handlers.compliance.compliance_eu_ai_act", "EUAIActComplianceHandler"
 )
-GDPRDeletionHandler = _safe_import("aragora.server.handlers.gdpr_deletion", "GDPRDeletionHandler")
+GDPRDeletionHandler = _safe_import(
+    "aragora.server.handlers.compliance.gdpr_deletion", "GDPRDeletionHandler"
+)
 MFAComplianceHandler = _safe_import(
     "aragora.server.handlers.admin.mfa_compliance", "MFAComplianceHandler"
 )
 
 # Backup offsite, feature flags, marketplace pilot
 BackupOffsiteHandler = _safe_import(
-    "aragora.server.handlers.backup_offsite_handler", "BackupOffsiteHandler"
+    "aragora.server.handlers.admin.backup_offsite_handler", "BackupOffsiteHandler"
 )
-FeatureFlagsHandler = _safe_import("aragora.server.handlers.feature_flags", "FeatureFlagsHandler")
+FeatureFlagsHandler = _safe_import(
+    "aragora.server.handlers.admin.feature_flags_read", "FeatureFlagsHandler"
+)
 MarketplacePilotHandler = _safe_import(
     "aragora.server.handlers.marketplace_pilot", "MarketplacePilotHandler"
 )

@@ -1,3 +1,4 @@
+import ast
 import io
 import json
 import os
@@ -12,6 +13,7 @@ from typing import Any
 import pytest
 import yaml
 
+import scripts.verify_contract_drift_workflow_state as workflow_state
 from scripts.verify_contract_drift_workflow_state import (
     CANONICAL_WORKFLOW_ID,
     CANONICAL_WORKFLOW_NAME,
@@ -41,6 +43,22 @@ LIVE_CHECK_NAMES = (
     "contract-drift-pr-delta",
     "contract-drift-main-receipt",
     "contract-drift-program-trajectory",
+)
+LIVE_JOB_IDS = ("pr-delta", "main-receipt", "program-trajectory")
+# The finalizer dispatch is the only step needing `actions: write`; it lives in
+# its own job so the routine receipt path never carries a write scope.
+DISPATCH_JOB_ID = "historical-backfill-dispatch"
+DISPATCH_JOB_NAME = "contract-drift-historical-backfill-dispatch"
+DISPATCH_JOB_IF = (
+    "success() && github.event_name == 'workflow_dispatch' && inputs.historical_backfill"
+)
+# (trigger event, inputs.historical_backfill, jobs whose `if` holds).
+EVENT_JOB_TABLE = (
+    ("pull_request", None, ("pr-delta",)),
+    ("push", None, ("main-receipt", "program-trajectory")),
+    ("schedule", None, ("main-receipt", "program-trajectory")),
+    ("workflow_dispatch", False, ("main-receipt", "program-trajectory")),
+    ("workflow_dispatch", True, ("main-receipt", DISPATCH_JOB_ID)),
 )
 SOURCE_SHA_EXPR = "${{ github.event_name == 'push' && github.event.after || github.sha }}"
 HISTORICAL_SOURCE_SHA_EXPR = "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && github.sha || github.event_name == 'push' && github.event.after || github.sha }}"
@@ -220,9 +238,10 @@ def _run_terminal(
 
 
 def test_workflow_has_exact_live_checks_and_events():
-    assert {job["name"] for job in JOBS.values()} == {f"contract-drift-{name}" for name in ("pr-delta", "main-receipt", "program-trajectory")}  # fmt: skip
+    assert {JOBS[job_id]["name"] for job_id in LIVE_JOB_IDS} == {f"contract-drift-{name}" for name in ("pr-delta", "main-receipt", "program-trajectory")}  # fmt: skip
+    assert set(JOBS) == {*LIVE_JOB_IDS, DISPATCH_JOB_ID}
     assert set(DOC["on"]) == {"pull_request", "push", "schedule", "workflow_dispatch"} and not {"paths", "paths-ignore"} & set(DOC["on"]["pull_request"])  # fmt: skip
-    assert all({"uses": "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065", "with": {"python-version": "3.11"}} in job["steps"] for job in JOBS.values())  # fmt: skip
+    assert all({"uses": "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065", "with": {"python-version": "3.11"}} in JOBS[job_id]["steps"] for job_id in LIVE_JOB_IDS)  # fmt: skip
 
 
 def test_pr_admission_is_event_bound_absolute_and_terminal():
@@ -334,14 +353,27 @@ def _run_record(
     main_sha: str = FIXTURE_MAIN_SHA,
     run_attempt: int = 1,
     started_at: str = "2026-08-12T01:00:00Z",
+    event: str = "push",
+    conclusion: str = "failure",
 ) -> dict[str, Any]:
-    return {"id": run_id, "workflow_id": CANONICAL_WORKFLOW_ID, "path": CANONICAL_WORKFLOW_PATH, "head_branch": "main", "head_sha": main_sha, "event": "push", "run_attempt": run_attempt, "run_started_at": started_at, "status": "completed", "conclusion": "failure"}  # fmt: skip
+    return {"id": run_id, "workflow_id": CANONICAL_WORKFLOW_ID, "path": CANONICAL_WORKFLOW_PATH, "head_branch": "main", "head_sha": main_sha, "event": event, "run_attempt": run_attempt, "run_started_at": started_at, "status": "completed", "conclusion": conclusion}  # fmt: skip
 
 
-def _job_record(name: str, *, run_id: int, main_sha: str, attempt: int, job_id: int) -> tuple[dict[str, Any], str, dict[str, Any]]:  # fmt: skip
+FIXTURE_ATTEMPT_JOB_NAMES = (*LIVE_CHECK_NAMES, DISPATCH_JOB_NAME)
+FIXTURE_JOB_CONCLUSIONS = dict(
+    zip(FIXTURE_ATTEMPT_JOB_NAMES, ("skipped", "success", "failure", "skipped"), strict=True)
+)
+# Job conclusions of a (workflow_dispatch, historical_backfill=true) execution
+# per EVENT_JOB_TABLE: trajectory never runs, the write-scoped dispatch does.
+BACKFILL_DISPATCH_CONCLUSIONS = dict(
+    zip(FIXTURE_ATTEMPT_JOB_NAMES, ("skipped", "success", "skipped", "success"), strict=True)
+)
+
+
+def _job_record(name: str, *, run_id: int, main_sha: str, attempt: int, job_id: int, conclusion: str | None = None) -> tuple[dict[str, Any], str, dict[str, Any]]:  # fmt: skip
     check_id = job_id + 10_000
     check_url = f"https://api.github.com/repos/{FIXTURE_REPO}/check-runs/{check_id}"
-    conclusion = dict(zip(LIVE_CHECK_NAMES, ("skipped", "success", "failure"), strict=True))[name]
+    conclusion = FIXTURE_JOB_CONCLUSIONS[name] if conclusion is None else conclusion
     job = {"id": job_id, "name": name, "run_attempt": attempt, "check_run_url": check_url}
     check = {"id": check_id, "name": name, "head_sha": main_sha, "app": {"id": EXPECTED_PR_DELTA_APP_ID}, "status": "completed", "conclusion": conclusion, "details_url": f"https://github.com/{FIXTURE_REPO}/actions/runs/{run_id}/job/{job_id}"}  # fmt: skip
     return job, check_url, check
@@ -397,7 +429,7 @@ def _live_fixture(
 
     for attempt in range(1, selected_attempt + 1):
         jobs: list[dict[str, Any]] = []
-        for offset, name in enumerate(LIVE_CHECK_NAMES, start=1):
+        for offset, name in enumerate(FIXTURE_ATTEMPT_JOB_NAMES, start=1):
             job, check_url, check = _job_record(
                 name,
                 run_id=selected_id,
@@ -1025,11 +1057,7 @@ def test_historical_backfill_finalizes_only_after_the_receipt_job_completed():
     assert "build_contract_drift_historical_backfill.py" not in str(receipt)
     assert DOC["permissions"] == {"checks": "read", "contents": "read"}
     assert "permissions" not in JOBS["pr-delta"]
-    assert receipt["permissions"] == {
-        "actions": "write",
-        "checks": "read",
-        "contents": "read",
-    }
+    assert receipt["permissions"] == {"checks": "read", "contents": "read"}
 
     upload = _upload_step("main-receipt")
     assert upload["id"] == "receipt-upload"
@@ -1037,13 +1065,19 @@ def test_historical_backfill_finalizes_only_after_the_receipt_job_completed():
         "format('contract-drift-main-receipt-analyzer-{0}', github.sha)" in upload["with"]["name"]
     )
     assert "contract-drift-main-receipt-analyzer.json" in upload["with"]["path"]
-    dispatch = _named_run_step("main-receipt", "Finalize completed historical receipt")
-    assert dispatch["if"] == (
-        "github.event_name == 'workflow_dispatch' && inputs.historical_backfill"
-    )
-    assert dispatch["env"]["ANALYZER_ARTIFACT_ID"] == (
+    # The dispatch job depends on the completed receipt job and consumes the
+    # uploaded analyzer artifact through the job output, so it can only run
+    # after the producer job (and its upload) reached success.
+    assert receipt["outputs"]["analyzer_artifact_id"] == (
         "${{ steps.receipt-upload.outputs.artifact-id }}"
     )
+    dispatch_job = JOBS[DISPATCH_JOB_ID]
+    assert dispatch_job["needs"] == "main-receipt"
+    assert dispatch_job["if"] == DISPATCH_JOB_IF
+    assert dispatch_job["env"]["ANALYZER_ARTIFACT_ID"] == (
+        "${{ needs.main-receipt.outputs.analyzer_artifact_id }}"
+    )
+    dispatch = _named_run_step(DISPATCH_JOB_ID, "Finalize completed historical receipt")
     dispatch_run = dispatch["run"]
     assert "/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=1" in dispatch_run
     assert 'select(.name == "contract-drift-main-receipt") | .id' in dispatch_run
@@ -1145,6 +1179,220 @@ def test_historical_backfill_finalizes_only_after_the_receipt_job_completed():
     analyzer = _analyzer_step_text(receipt)
     assert "tee contract-drift-main-receipt-analyzer.json" in analyzer
     assert "tee contract-drift-main-receipt.json" not in analyzer
+
+
+# --- least-privilege split: finalizer dispatch is its own gated job ----------
+
+
+def _job_permissions(job: dict) -> dict[str, str]:
+    permissions = job.get("permissions")
+    if permissions is None:
+        return dict(DOC["permissions"])
+    assert isinstance(permissions, dict), permissions
+    return dict(permissions)
+
+
+def _job_if_holds(job: dict, *, event: str, historical_backfill: bool | None) -> bool:
+    """Evaluate the job-level `if` for one trigger event with a tiny expression subset."""
+    expression = job.get("if")
+    if expression is None:
+        return True
+    text = str(expression)
+    replacements = {
+        "success()": "True",
+        "github.event_name": repr(event),
+        "!github.event.pull_request.draft": "True",
+        "inputs.historical_backfill": repr(bool(historical_backfill)),
+    }
+    for token, value in replacements.items():
+        text = text.replace(token, value)
+    text = text.replace("&&", " and ").replace("||", " or ")
+    text = re.sub(r"!(?!=)", " not ", text)
+
+    def evaluate(node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return not evaluate(node.operand)
+        if isinstance(node, ast.BoolOp):
+            values = [evaluate(value) for value in node.values]
+            return all(values) if isinstance(node.op, ast.And) else any(values)
+        if isinstance(node, ast.Compare) and len(node.ops) == 1:
+            left, right = evaluate(node.left), evaluate(node.comparators[0])
+            if isinstance(node.ops[0], ast.Eq):
+                return left == right
+            if isinstance(node.ops[0], ast.NotEq):
+                return left != right
+        raise AssertionError((ast.dump(node), expression))
+
+    return bool(evaluate(ast.parse(text, mode="eval")))
+
+
+def test_routine_main_receipt_is_read_only_and_finalizer_dispatch_is_its_own_gated_job():
+    # Job-level permissions cannot be conditioned per step, so the only way the
+    # routine receipt path can run read-only is for the dispatch to be a job.
+    receipt = JOBS["main-receipt"]
+    assert "actions" not in _job_permissions(receipt)
+    assert all(scope == "read" for scope in _job_permissions(receipt).values())
+    assert "actions/workflows/contract-drift-historical-backfill-finalizer.yml" not in str(receipt)
+    assert "gh api --method POST" not in str(receipt)
+    assert receipt["outputs"] == {
+        "analyzer_artifact_id": "${{ steps.receipt-upload.outputs.artifact-id }}"
+    }
+
+    assert set(JOBS) == {*LIVE_JOB_IDS, DISPATCH_JOB_ID}
+    dispatch_job = JOBS[DISPATCH_JOB_ID]
+    assert dispatch_job["name"] == DISPATCH_JOB_NAME
+    assert dispatch_job["name"] not in LIVE_CHECK_NAMES
+    assert dispatch_job["needs"] == "main-receipt"
+    assert dispatch_job["if"] == DISPATCH_JOB_IF
+    assert dispatch_job["permissions"] == {"actions": "write"}
+    assert dispatch_job["env"]["ANALYZER_ARTIFACT_ID"] == (
+        "${{ needs.main-receipt.outputs.analyzer_artifact_id }}"
+    )
+    assert dispatch_job["env"]["SOURCE_SHA"] == HISTORICAL_SOURCE_SHA_EXPR
+    assert "continue-on-error" not in str(dispatch_job)
+    assert all("uses" not in step for step in dispatch_job["steps"])
+    dispatch = _named_run_step(DISPATCH_JOB_ID, "Finalize completed historical receipt")
+    assert "if" not in dispatch
+    assert dispatch["env"] == {"GH_TOKEN": "${{ github.token }}"}
+    dispatch_run = dispatch["run"]
+    assert dispatch_run.startswith("set -euo pipefail\n")
+    assert '[[ "$ANALYZER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]' in dispatch_run
+    assert "/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=1" in dispatch_run
+    assert 'select(.name == "contract-drift-main-receipt") | .id' in dispatch_run
+    assert '--argjson artifact_id "$ANALYZER_ARTIFACT_ID"' in dispatch_run
+    assert '--arg source_sha "$SOURCE_SHA"' in dispatch_run
+    assert (
+        "actions/workflows/contract-drift-historical-backfill-finalizer.yml/dispatches"
+        in dispatch_run
+    )
+
+    # `actions: write` exists in exactly one job, and every other job is read-only.
+    writers = {job_id for job_id, job in JOBS.items() if "write" in _job_permissions(job).values()}
+    assert writers == {DISPATCH_JOB_ID}
+    assert TEXT.count("actions: write") == 1
+
+
+def test_event_permission_table_proves_non_historical_paths_never_reach_actions_write():
+    for event, historical_backfill, expected_jobs in EVENT_JOB_TABLE:
+        running = {
+            job_id
+            for job_id, job in JOBS.items()
+            if _job_if_holds(job, event=event, historical_backfill=historical_backfill)
+        }
+        assert running == set(expected_jobs), (event, historical_backfill)
+        effective = {job_id: _job_permissions(JOBS[job_id]) for job_id in running}
+        if event == "workflow_dispatch" and historical_backfill:
+            assert effective[DISPATCH_JOB_ID] == {"actions": "write"}
+            assert "actions" not in effective["main-receipt"]
+        else:
+            assert "write" not in {
+                scope for permissions in effective.values() for scope in permissions.values()
+            }, (event, historical_backfill)
+    # The gated job never runs on a routine event, so a skipped-job row is the
+    # only trace it leaves on push/schedule/non-backfill dispatch attempts.
+    assert JOBS[DISPATCH_JOB_ID]["needs"] == "main-receipt"
+    assert "program-trajectory" not in str(JOBS[DISPATCH_JOB_ID].get("needs"))
+
+
+def test_live_verifier_requires_the_skipped_dispatch_job_on_routine_main_runs():
+    assert workflow_state.HISTORICAL_DISPATCH_JOB_NAME == DISPATCH_JOB_NAME
+    assert DISPATCH_JOB_NAME not in workflow_state.LIVE_CHECK_NAMES
+    reader, expected = _live_fixture()
+    result = verify_workflow_state(reader)
+    selected = result["selection"]["selected_attempt"]
+    assert set(selected["checks"]) == set(LIVE_CHECK_NAMES)
+    assert selected["auxiliary_jobs"] == {DISPATCH_JOB_NAME: "skipped"}
+    endpoint = f"repos/synaptent/aragora/actions/runs/{expected['run_id']}/attempts/1/jobs?per_page=100&page=1"
+
+    # A missing dispatch job means the workflow source and the attempt disagree.
+    missing, _ = _live_fixture()
+    remaining = [
+        job
+        for job in missing.json_responses[endpoint][0]["jobs"]
+        if job["name"] != DISPATCH_JOB_NAME
+    ]
+    missing.json_responses[endpoint] = [_json_page(remaining, "jobs")]
+    with pytest.raises(VerificationError, match="exact three live checks"):
+        verify_workflow_state(missing)
+
+    # A routine push/schedule run that actually executed the dispatch job is hostile.
+    executed, _ = _live_fixture()
+    dispatch_job = next(
+        job
+        for job in executed.json_responses[endpoint][0]["jobs"]
+        if job["name"] == DISPATCH_JOB_NAME
+    )
+    executed.json_responses[dispatch_job["check_run_url"]][0]["conclusion"] = "success"
+    with pytest.raises(VerificationError, match="historical-backfill dispatch job did not skip"):
+        verify_workflow_state(executed)
+
+    # The dispatch job may never masquerade as a live check.
+    renamed, _ = _live_fixture()
+    dispatch_job = next(
+        job
+        for job in renamed.json_responses[endpoint][0]["jobs"]
+        if job["name"] == DISPATCH_JOB_NAME
+    )
+    dispatch_job["name"] = "contract-drift-main-receipt"
+    with pytest.raises(VerificationError, match="duplicate names"):
+        verify_workflow_state(renamed)
+
+
+def _register_attempt_jobs(reader: FixtureApiReader, *, run: dict[str, Any], conclusions: dict[str, str]) -> None:  # fmt: skip
+    for attempt in range(1, run["run_attempt"] + 1):
+        jobs: list[dict[str, Any]] = []
+        for offset, name in enumerate(FIXTURE_ATTEMPT_JOB_NAMES, start=1):
+            job, check_url, check = _job_record(name, run_id=run["id"], main_sha=run["head_sha"], attempt=attempt, job_id=run["id"] * 1_000 + attempt * 100 + offset, conclusion=conclusions[name])  # fmt: skip
+            jobs.append(job)
+            reader.json_responses[check_url] = [check]
+        endpoint = f"repos/{FIXTURE_REPO}/actions/runs/{run['id']}/attempts/{attempt}/jobs?per_page=100&page=1"
+        reader.json_responses[endpoint] = [_json_page(jobs, "jobs")]
+
+
+def test_live_verifier_selects_the_newest_routine_run_past_historical_backfill_dispatches():
+    runs_endpoint = (
+        f"repos/{FIXTURE_REPO}/actions/workflows/{CANONICAL_WORKFLOW_ID}/runs?per_page=100&page=1"
+    )
+    routine = _run_record(run_id=7001, started_at="2026-08-12T01:00:00Z")
+    backfill = _run_record(run_id=7002, started_at="2026-08-12T02:00:00Z", event="workflow_dispatch", conclusion="success")  # fmt: skip
+    reader, _ = _live_fixture(runs=[routine])
+    reader.json_responses[runs_endpoint] = [_json_page([routine, backfill], "workflow_runs")] * 4
+    _register_attempt_jobs(reader, run=backfill, conclusions=BACKFILL_DISPATCH_CONCLUSIONS)
+    result = verify_workflow_state(reader)
+    assert result["selection"]["identity"] == {"run_started_at": routine["run_started_at"], "run_id": 7001, "run_attempt": 1}  # fmt: skip
+    assert result["selection"]["selected_attempt"]["auxiliary_jobs"] == {
+        DISPATCH_JOB_NAME: "skipped"
+    }
+    assert result["stable_requery"] is True
+
+    # A historical_backfill=false dispatch is a routine receipt and still wins as newest.
+    routine_dispatch = _run_record(run_id=7003, started_at="2026-08-12T03:00:00Z", event="workflow_dispatch")  # fmt: skip
+    reader, _ = _live_fixture(runs=[routine, routine_dispatch])
+    assert verify_workflow_state(reader)["selection"]["identity"]["run_id"] == 7003
+
+    # With only a backfill dispatch at main's tip there is no routine execution to verify.
+    only_backfill, _ = _live_fixture(runs=[backfill])
+    _register_attempt_jobs(only_backfill, run=backfill, conclusions=BACKFILL_DISPATCH_CONCLUSIONS)
+    with pytest.raises(VerificationError, match="matches current main"):
+        verify_workflow_state(only_backfill)
+
+    # A dispatch run whose attempt hides program-trajectory cannot be classified.
+    hidden, _ = _live_fixture(runs=[routine])
+    hidden.json_responses[runs_endpoint] = [_json_page([routine, backfill], "workflow_runs")] * 4
+    _register_attempt_jobs(hidden, run=backfill, conclusions=BACKFILL_DISPATCH_CONCLUSIONS)
+    jobs_endpoint = f"repos/{FIXTURE_REPO}/actions/runs/{backfill['id']}/attempts/1/jobs?per_page=100&page=1"  # fmt: skip
+    remaining = [
+        job
+        for job in hidden.json_responses[jobs_endpoint][0]["jobs"]
+        if job["name"] != "contract-drift-program-trajectory"
+    ]
+    hidden.json_responses[jobs_endpoint] = [_json_page(remaining, "jobs")]
+    with pytest.raises(VerificationError, match="does not expose the program-trajectory job"):
+        verify_workflow_state(hidden)
 
 
 def test_program_trajectory_preserves_real_red_exit(tmp_path):
@@ -1293,18 +1541,26 @@ def test_schedule_and_dispatch_resolve_main_once_for_both_main_jobs():
     assert program["env"]["SOURCE_SHA"] == SOURCE_SHA_EXPR
     assert program["steps"][0]["with"]["ref"] == SOURCE_SHA_EXPR
     assert TEXT.count(SOURCE_SHA_EXPR) == 2
-    assert TEXT.count(HISTORICAL_SOURCE_SHA_EXPR) == 2
+    # Receipt env + receipt checkout ref + the dispatch job's SOURCE_SHA, which
+    # must bind the identical resolved SHA into the finalizer payload.
+    assert TEXT.count(HISTORICAL_SOURCE_SHA_EXPR) == 3
+    assert JOBS[DISPATCH_JOB_ID]["env"]["SOURCE_SHA"] == HISTORICAL_SOURCE_SHA_EXPR
 
 
 def test_exact_three_live_check_names_are_separate():
-    assert len(set(JOBS)) == 3 and len(set(_job_names(DOC))) == 3
-    artifact_names = {job_id: _upload_step(job_id)["with"]["name"] for job_id in JOBS}
+    assert len(set(JOBS)) == 4 and len(set(_job_names(DOC))) == 4
+    assert set(_job_names(DOC)) & set(LIVE_CHECK_NAMES) == set(LIVE_CHECK_NAMES)
+    assert JOBS[DISPATCH_JOB_ID]["name"] not in LIVE_CHECK_NAMES
+    artifact_names = {job_id: _upload_step(job_id)["with"]["name"] for job_id in LIVE_JOB_IDS}
     assert len(set(artifact_names.values())) == 3
-    outputs = {job_id: _upload_step(job_id)["with"]["path"] for job_id in JOBS}
+    outputs = {job_id: _upload_step(job_id)["with"]["path"] for job_id in LIVE_JOB_IDS}
     assert len(set(outputs.values())) == 3
-    for job_id in JOBS:
+    for job_id in LIVE_JOB_IDS:
         assert f"contract-drift-{job_id}-" in artifact_names[job_id]
         assert f"contract-drift-{job_id}.json" in outputs[job_id]
+    # The dispatch job publishes nothing: no upload step, no live check name.
+    with pytest.raises(AssertionError, match="no upload step"):
+        _upload_step(DISPATCH_JOB_ID)
 
 
 def test_terminal_aggregator_fails_when_pr_delta_is_skipped(tmp_path):
@@ -1332,10 +1588,13 @@ def test_main_receipt_job_is_separate_from_intentionally_red_trajectory():
 
 def test_trajectory_failure_does_not_block_main_receipt(tmp_path):
     # No job anywhere in the workflow declares a dependency on the trajectory
-    # job, so its intentionally red exit cannot gate the receipt.
-    for job in JOBS.values():
+    # job, so its intentionally red exit cannot gate the receipt. The only
+    # `needs` edge is the gated dispatch job depending on the receipt itself.
+    for job_id, job in JOBS.items():
         needs = job.get("needs", [])
-        assert "program-trajectory" not in ([needs] if isinstance(needs, str) else needs)
+        needs = [needs] if isinstance(needs, str) else list(needs)
+        assert "program-trajectory" not in needs
+        assert needs == (["main-receipt"] if job_id == DISPATCH_JOB_ID else []), job_id
     env = {
         "EVENT_NAME": "push",
         "HISTORICAL_BACKFILL": "false",

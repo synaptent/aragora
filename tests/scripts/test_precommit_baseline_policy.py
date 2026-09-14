@@ -63,6 +63,18 @@ def test_yaml_hook_excludes_only_helm_template_trees() -> None:
     assert not pattern.search("deploy/kubernetes/ordinary-config.yaml")
 
 
+def test_typecheck_hook_uses_authoritative_merge_base_delta() -> None:
+    hook = _hook("typecheck-changed")
+    entry = str(hook["entry"])
+
+    assert "scripts/run_typecheck_gate.py" in entry
+    assert "--base-ref main --head-ref HEAD" in entry
+    assert "--files" not in entry
+    assert "$@" not in entry
+    assert hook["pass_filenames"] is False
+    assert hook["always_run"] is True
+
+
 def test_documentation_does_not_embed_pem_markers() -> None:
     guide = (REPO_ROOT / "docs/guides/GITHUB_APP_SETUP.md").read_text(encoding="utf-8")
     assert "BEGIN RSA PRIVATE KEY" not in guide

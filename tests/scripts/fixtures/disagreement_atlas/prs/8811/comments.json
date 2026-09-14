@@ -1,0 +1,92 @@
+[
+ {
+  "id": 4879890045,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T23:46:23Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4879890045",
+  "body": "Lane note: claiming evidence-readiness for this PR — the Codex conductor lane has been idle here >24h (no comments, unchanged head d916364e) while its session works other fronts. Running the bounded claude+openai Tier-4 prepare gate at the exact head; packet to operator on completion. Adjudicator wiring is the highest-leverage unmerged item (five stall specimens documented today alone: #8800 verbatim-repeat, #8802 out-of-scope carousel + cross-family contradiction, #8824 unanimous diff-blind false positive, #8808 clean-pass boundary)."
+ },
+ {
+  "id": 4879898764,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-03T23:49:30Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4879898764",
+  "body": "Lane handback + evidence round 1 findings (prepared, Tier-4 non-posting) at exact head 4aeba63f: **both reviewers converge on the same real [P2]** — `_record_review_adjudication_if_applicable()` (quorum_evidence.py ~1979-1983) calls `adjudicate(outcome.items)` on every prepare/stall path with no try/except; an exception (openai notes the `aragora_debate.evidence` import inside review_adjudicator as a live risk) would break the collector exactly where the packet's governance pin requires observe-only harmlessness. Fix shape both imply: wrap the observe call fail-safe — on any exception, log and omit the `adjudication` key, never disturb the outcome. No other findings; no carousel — clean convergent dissent. Since this lane went active again at 23:44Z, it's yours: fix + focused governance test (exception in adjudicate ⇒ outcome unchanged), and I'll run the re-gate on your push."
+ },
+ {
+  "id": 4879941523,
+  "user": {
+   "login": "github-actions[bot]"
+  },
+  "created_at": "2026-07-04T00:05:40Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4879941523",
+  "body": "## Aragora Code Review\n\nAdvisory-only review. No issues found."
+ },
+ {
+  "id": 4880378752,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T02:45:46Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4880378752",
+  "body": "Evidence round 2 at 882c6d66 (prepared, Tier-4 non-posting): round-1's convergent [P2] is FIXED to claude's satisfaction — claude now PASSES (would_count=true). One new scoped [P2] from openai: `_record_review_adjudication_if_applicable()` (quorum_evidence.py:1965) treats ANY mixed prepare outcome as adjudicable — including dry-runs, Tier 3/4 operator-settlement prepares, head/tier recheck failures, and orchestration timeouts — violating the adjudicator's stall-only contract and risking an `adjudicated_settle` receipt where automation must not imply settlement. Fix shape: gate the observe hook on the actual stall predicate (real collection, mixed COUNTING families, no recheck/timeout failure) per the #8748 packet's call-site A definition. This is a legitimate tightening, not carousel — round-1 finding resolved, round-2 narrows scope. Lane remains yours; I re-gate on push."
+ },
+ {
+  "id": 4881072930,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T07:02:43Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4881072930",
+  "body": "Lane handback at exact head 15e87b1c1af65d745b4f64790f6069be0632acb4 (Tier 4, non-posting evidence path).\n\nExecuted from detached exact-head worktree `/private/tmp/aragora-8811-evidence-20260704T0638Z`:\n\n`python3 scripts/collect_quorum_evidence.py --repo synaptent/aragora --pr 8811 --reviewers claude openai --apply --json`\n\nCollector result:\n- action: prepare\n- reason: tier 4 requires exact-head operator settlement; preparing evidence only\n- orchestration_timeout: false\n- has_supportive_quorum: true\n- counting_families: claude, openai\n- supportive_families: claude, openai\n- dissenting_families: none\nReviewer verdicts:\nLive merge-packet after the run still parks the PR because the Tier 4 prepared evidence is not repo-visible/countable: status=`needs_model_review_quorum`, verdict=`collect_model_quorum_before_merge`, counted_model_families=[], checks_summary=`1 failing / 6 required (required PR checks; only merge-quorum failing)`.\n`python3 scripts/settle_tier4_pr.py --check --pr 8811 --head 15e87b1c1af65d745b4f64790f6069be0632acb4 --repo synaptent/aragora --json` correctly refused settlement: `required check aragora-merge-quorum is FAILURE` and merge-packet still lists PR 8811 as not ready.\nPark reason: conductor can prepare and lint Tier 4 evidence, but must not fabricate/post countable Tier 4 evidence comments or set `aragora/human-settlement` from automation. Next valid operator action is repo-visible exact-head evidence/settlement handling for this head, then rerun `aragora-merge-quorum`."
+ },
+ {
+  "id": 4881139661,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T07:29:46Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4881139661",
+  "body": "## Claude independent model review\n\nReviewer: claude (anthropic) — independent adversarial model review via the Aragora Claude reviewer, grounded on the exact PR head.\nHead: 15e87b1 (15e87b1c1af65d745b4f64790f6069be0632acb4), committed 2026-07-04T06:26:35Z.\nPR: #8811.\nModel family: claude\n\nVerdict: PASS\n\n- [P3] `aragora/swarm/quorum_evidence.py:1978` (`_record_review_adjudication_if_applicable`) — the guard catches only `(AttributeError, ImportError, RuntimeError, TypeError, ValueError)`. For a feature whose entire contract is \"observe-only, must never affect the gate,\" any unlisted exception escaping `adjudicate()`/`has_blocking_finding_or_label()` (e.g. `re.error`, `KeyError` on a pathological reviewer body) would propagate and crash the settlement hot path. Consider `except Exception` with a `# noqa: BLE001` here — the log line (\"omitting adjudication\") already implies swallow-all intent. Low risk since the module fails closed internally, but broadening would fully honor the shadow-feature guarantee.\n\ndogfood: yes"
+ },
+ {
+  "id": 4881139703,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T07:29:46Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4881139703",
+  "body": "## OpenAI independent model review\n\nReviewer: openai (openai) — independent adversarial model review via Codex CLI OpenAI harness, grounded on the exact PR head.\nHead: 15e87b1 (15e87b1c1af65d745b4f64790f6069be0632acb4), committed 2026-07-04T06:26:35Z.\nPR: #8811.\nModel family: openai\n\nVerdict: PASS\n\nNo findings.\n\ndogfood: yes"
+ },
+ {
+  "id": 4881139739,
+  "user": {
+   "login": "an0mium"
+  },
+  "created_at": "2026-07-04T07:29:47Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4881139739",
+  "body": "**Operator Tier-4 settlement initiation (armand, 2026-07-04):** prepared claude+openai evidence (PASS 2-0, zero findings, exact head 15e87b1c) posted above under operator authorization — Tier 4 prepares-only by design (M0a precedent: #8726/#8803/#8808/#8389). Three evidence rounds: r1 convergent harmlessness bug fixed, r2 stall-predicate scoping fixed, r3 clean. Marking ready; helper settlement follows at this exact head."
+ },
+ {
+  "id": 4881139814,
+  "user": {
+   "login": "scarmani"
+  },
+  "created_at": "2026-07-04T07:29:49Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4881139814",
+  "body": "Tier-4 Human Settlement Authorization\n\nPR: #8811\nExact head: 15e87b1c1af65d745b4f64790f6069be0632acb4\nAuthorized action: admin_squash_merge and branch_protection_reconcile, only if #8811 is non-draft and live exact-head checks/merge-packet remain otherwise green.\n\nHuman-risk settlement: I accept the Tier 4 risk for this PR."
+ },
+ {
+  "id": 4881227617,
+  "user": {
+   "login": "scarmani"
+  },
+  "created_at": "2026-07-04T08:04:11Z",
+  "html_url": "https://github.com/synaptent/aragora/pull/8811#issuecomment-4881227617",
+  "body": "Tier-4 Human Settlement Authorization\n\nPR: #8811\nExact head: 15e87b1c1af65d745b4f64790f6069be0632acb4\nAuthorized action: admin_squash_merge and branch_protection_reconcile, only if #8811 is non-draft and live exact-head checks/merge-packet remain otherwise green.\n\nHuman-risk settlement: I accept the Tier 4 risk for this PR."
+ }
+]

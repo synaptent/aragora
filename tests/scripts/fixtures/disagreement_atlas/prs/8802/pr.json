@@ -1,0 +1,22 @@
+{
+ "number": 8802,
+ "title": "docs(compliance): executable ODR verification walkthrough with signed sample receipt (EU AI Act)",
+ "state": "closed",
+ "draft": false,
+ "user": {
+  "login": "an0mium"
+ },
+ "labels": [],
+ "created_at": "2026-07-02T21:48:46Z",
+ "updated_at": "2026-07-04T02:58:47Z",
+ "closed_at": "2026-07-04T02:58:44Z",
+ "merged_at": "2026-07-04T02:58:44Z",
+ "merge_commit_sha": "3686472453363b12f9b61d7c5c0c5440019d1428",
+ "head": {
+  "sha": "75e91939d4bd29d633cd76e6f8a557e87b34430c"
+ },
+ "base": {
+  "ref": "main"
+ },
+ "html_url": "https://github.com/synaptent/aragora/pull/8802"
+}

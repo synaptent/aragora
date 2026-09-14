@@ -119,6 +119,272 @@ def _make_pr(
     }
 
 
+@pytest.fixture
+def in_job_advisory_inputs(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], list]:
+    """Mock GitHub inputs, not a live CI execution, for packet-level reachability."""
+    from aragora.cli.commands import review_queue as rq
+
+    head = "a" * 40
+    for flag in (
+        "TIERED_MERGE_GATE",
+        "SEVERITY_GATED_DISSENT",
+        "ADVISORY_DISSENT_SETTLE",
+        "OPERATOR_ADVISORY_SETTLEMENT",
+    ):
+        monkeypatch.setenv(f"ARAGORA_ENABLE_{flag}", "1")
+    monkeypatch.setenv("ARAGORA_SETTLEMENT_CREATOR", "scarmani")
+    monkeypatch.setenv("ARAGORA_TRUSTED_EVIDENCE_POSTERS", "scarmani")
+    monkeypatch.setenv("GITHUB_WORKFLOW", "Aragora Merge Quorum")
+    monkeypatch.setenv("GITHUB_JOB", "merge-quorum")
+    monkeypatch.setenv("GITHUB_RUN_ID", "26288586838")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "synaptent/aragora")
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    quorum_row = {
+        "name": "aragora-merge-quorum",
+        "workflowName": "Aragora Merge Quorum",
+        "status": "IN_PROGRESS",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/synaptent/aragora/actions/runs/26288586838/job/1",
+    }
+    green_rows = [
+        {"name": name, "status": "COMPLETED", "conclusion": "SUCCESS"}
+        for name in (
+            "lint",
+            "typecheck",
+            "sdk-parity",
+            "Generate & Validate",
+            "TypeScript SDK Type Check",
+        )
+    ]
+    pr = _make_pr(
+        number=6283,
+        files=["aragora/server/handlers/x.py"],
+        checks=[
+            quorum_row,
+            *green_rows,
+            {"context": "aragora/human-settlement", "state": "SUCCESS"},
+        ],
+    )
+    pr["headRefOid"] = head
+    pr["commits"] = [{"commit": {"committedDate": "2026-07-10T23:00:00Z"}}]
+    pr["comments"] = [
+        {
+            "author": {"login": "scarmani"},
+            "createdAt": "2026-07-11T00:00:00Z",
+            "body": (
+                f"## {family} independent model review\n**Model family:** {family}\n"
+                f"Current head: {head}\nVerdict: CHANGES-REQUESTED\n"
+                "- [P2] A non-blocking advisory."
+            ),
+        }
+        for family in ("claude", "openai")
+    ] + [
+        {
+            "author": {"login": "scarmani"},
+            "body": f"Tier-4 Human Settlement Authorization\n{head}\n"
+            "admin_squash_merge\nhuman-risk settlement",
+        }
+    ]
+    required = [
+        {**row, "bucket": "pending" if row is quorum_row else "pass"}
+        for row in [quorum_row, *green_rows]
+    ]
+    monkeypatch.setattr(rq, "_gh_json", lambda args: pr)
+    monkeypatch.setattr(
+        rq,
+        "_fetch_required_pr_check_surface",
+        lambda *_args: {"available": True, "checks": required},
+    )
+    monkeypatch.setattr(rq, "_human_settlement_status_creator_verified", lambda **_kw: (True, "ok"))
+    monkeypatch.setattr(rq, "_has_successful_status_context", lambda *_args, **_kw: True)
+    return pr, required
+
+
+def test_build_packet_in_job_all_green_rollup_populates_required_surface_and_fires_valve(
+    in_job_advisory_inputs, tmp_path: Path
+) -> None:
+    packet = _build_packet("6283", repo_override="synaptent/aragora", review_queue_root=tmp_path)
+    assert packet.check_surfaces["required_pr_checks"]["advisory_settle_surface_clear"] is True
+    assert packet.model_review_quorum["status"] == "satisfied"
+    assert packet.model_review_quorum["verdict"] == "operator_advisory_settlement"
+
+
+def test_build_packet_same_pending_quorum_without_job_keeps_valve_blocked(
+    in_job_advisory_inputs, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.delenv("GITHUB_JOB")
+    packet = _build_packet("6283", repo_override="synaptent/aragora", review_queue_root=tmp_path)
+    assert packet.check_surfaces["required_pr_checks"]["advisory_settle_surface_clear"] is False
+    assert packet.model_review_quorum["verdict"] == "not_ready_for_settlement"
+
+
+def test_build_packet_in_job_non_quorum_required_failure_keeps_valve_blocked(
+    in_job_advisory_inputs, tmp_path: Path
+) -> None:
+    pr, required = in_job_advisory_inputs
+    pr["statusCheckRollup"][1]["conclusion"] = "FAILURE"
+    required[1].update(bucket="fail", conclusion="FAILURE")
+    packet = _build_packet("6283", repo_override="synaptent/aragora", review_queue_root=tmp_path)
+    assert packet.check_surfaces["required_pr_checks"]["advisory_settle_surface_clear"] is False
+    assert packet.model_review_quorum["verdict"] == "not_ready_for_settlement"
+
+
+@pytest.fixture(
+    params=[
+        "green",
+        "low_risk",
+        "unavailable",
+        "quorum_fail",
+        "quorum_pending",
+        "required_fail",
+        "required_pending",
+        "optional_fail",
+        "optional_pending",
+    ]
+)
+def reporting_case(request, in_job_advisory_inputs, monkeypatch, tmp_path):
+    """Unit evidence: mocked in-job env/settlement, never live CI or authorization."""
+    from aragora.cli.commands import review_queue as rq
+
+    case = request.param
+    pr, required = in_job_advisory_inputs
+    if case == "low_risk":
+        pr["files"] = [{"path": "docs/example.md"}]
+    if case == "unavailable":
+        monkeypatch.setattr(
+            rq,
+            "_fetch_required_pr_check_surface",
+            lambda *_args: {
+                "available": False,
+                "checks": [],
+                "error": "required surface transport unavailable",
+            },
+        )
+    if case.startswith("quorum_"):
+        # Required quorum rows are all excluded in-job. Exercise the external
+        # quorum-only branch without changing that detector or using the CLI flag.
+        monkeypatch.delenv("GITHUB_JOB")
+        row, required_row = pr["statusCheckRollup"][0], required[0]
+    elif case.startswith("required_"):
+        row, required_row = pr["statusCheckRollup"][1], required[1]
+    elif case.startswith("optional_"):
+        row, required_row = {"name": "optional-audit"}, {}
+        pr["statusCheckRollup"].append(row)
+    if case.endswith(("_fail", "_pending")):
+        pending = case.endswith("_pending")
+        row.update(
+            status="IN_PROGRESS" if pending else "COMPLETED",
+            conclusion="" if pending else "FAILURE",
+        )
+        required_row.update(row, bucket="pending" if pending else "fail")
+    packet = _build_packet("6283", repo_override="synaptent/aragora", review_queue_root=tmp_path)
+    return case, packet, pr, required
+
+
+def test_required_check_reporting_preserves_gate_results(reporting_case) -> None:
+    """Pin pre-cure machine outcomes independently of the reporting assertions."""
+    case, packet, pr, required_rows = reporting_case
+    required = packet.check_surfaces["required_pr_checks"]
+    quorum = packet.model_review_quorum
+    blocked = case in {"required_fail", "required_pending", "quorum_pending"}
+    unavailable = case == "unavailable"
+    expected_verdict = (
+        "not_ready_for_settlement"
+        if blocked
+        else "collect_model_quorum_before_merge"
+        if unavailable
+        else "advisory_settle"
+        if case == "low_risk"
+        else "operator_advisory_settlement"
+    )
+    assert quorum["verdict"] == expected_verdict
+    assert quorum["status"] == (
+        "repair_or_wait" if blocked else "needs_model_review_quorum" if unavailable else "satisfied"
+    )
+    assert quorum["admin_squash_allowed"] is (not blocked and not unavailable)
+    assert quorum["tier"] == (0 if case == "low_risk" else 3)
+    assert required["advisory_settle_surface_clear"] is (not blocked and not unavailable)
+    assert required["gate_selected"] is (not blocked and not unavailable)
+    assert required["quorum_only_failure"] is (case == "quorum_fail")
+    assert required["effective_total"] == (
+        0 if unavailable else 6 if case.startswith("quorum_") else 5
+    )
+    assert required["ignored_current_merge_quorum_self_check_count"] == (
+        0 if unavailable or case.startswith("quorum_") else 1
+    )
+    assert required["ignored_by_ignore_own_quorum_flag_count"] == 0
+    assert packet.machine_recommendation == (
+        "repair_first"
+        if case in {"quorum_fail", "required_fail"}
+        else "needs_human_attention"
+        if blocked
+        else "approve_candidate"
+    )
+    assert packet.check_surfaces.get("effective_gate", {}).get("source") == (
+        "required_pr_checks" if not blocked and not unavailable else None
+    )
+    # The raw rows stay pending even though the existing detector excludes the
+    # current self row from both summaries and non-green diagnostic counts.
+    assert sum(row["bucket"] == "pending" for row in required_rows) == (
+        0 if case == "quorum_fail" else 2 if case == "required_pending" else 1
+    )
+    assert pr["statusCheckRollup"][0]["status"] == (
+        "COMPLETED" if case == "quorum_fail" else "IN_PROGRESS"
+    )
+
+
+def test_required_check_reporting_is_truthful(reporting_case) -> None:
+    case, packet, _pr, _required_rows = reporting_case
+    surfaces = packet.check_surfaces
+    rollup, required = surfaces["pr_rollup"], surfaces["required_pr_checks"]
+    diagnosis = surfaces["diagnosis"]
+    reason = packet.machine_recommendation_reason
+    optional = case.startswith("optional_")
+    assert ("non-required PR checks are non-green" in " ".join(packet.risk_flags)) is optional
+    assert ("non-required non-green checks" in diagnosis) is optional
+    assert ("non-required PR checks are non-green" in reason) is optional
+    assert rollup["pending_count"] == int(
+        case in {"quorum_pending", "required_pending", "optional_pending"}
+    )
+    assert rollup["failing_or_cancelled_count"] == int(case.endswith("_fail"))
+    assert rollup["non_green_count"] == int(case.startswith(("quorum_", "required_", "optional_")))
+    if case == "unavailable":
+        assert required["available"] is False
+        assert required["error"] == "required surface transport unavailable"
+        assert "required PR checks surface is unavailable" in required["gate_blocked_reason"]
+        assert "required PR checks surface is unavailable" in diagnosis
+        assert "unavailable" in reason
+        assert "rollup is non-green" not in diagnosis
+        assert "required checks green" not in reason
+        assert "non_required_non_green_count" not in rollup
+    else:
+        assert required["available"] is True
+        assert rollup["non_required_non_green_count"] == int(optional)
+        assert rollup["non_required_non_green_sample"] == (["optional-audit"] if optional else [])
+    if case in {"green", "low_risk", "optional_fail", "optional_pending"}:
+        assert required["summary"] == "5/5 required green"
+        assert required["gate_blocked_reason"] == ""
+        assert required["failing_or_cancelled"] == required["pending"] == []
+        assert "required check" in diagnosis and "green" in diagnosis
+        assert "branch-protection required checks green" in reason
+    elif case.startswith(("required_", "quorum_")):
+        pending = case.endswith("_pending")
+        name = "lint" if case.startswith("required_") else "aragora-merge-quorum"
+        count = 5 if name == "lint" else 6
+        assert required["summary"] == f"1 {'pending' if pending else 'failing'} / {count} required"
+        assert required["pending"] == ([name] if pending else [])
+        assert required["failing_or_cancelled"] == ([] if pending else [name])
+        assert any(name in sample for sample in rollup["non_green_sample"])
+        if case == "quorum_fail":
+            assert required["gate_blocked_reason"] == ""
+            assert "aragora-merge-quorum" in diagnosis
+        else:
+            assert ("pending" if pending else "failing") in required["gate_blocked_reason"]
+            assert required["gate_blocked_reason"] in diagnosis
+    if case in {"green", "low_risk", "unavailable"}:
+        assert rollup["summary"] == "6/6 green"
+
+
 def _make_reviewer_output(
     *,
     slot_id: str,

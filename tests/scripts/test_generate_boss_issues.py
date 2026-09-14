@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
 from aragora.swarm.issue_scanner import BossIssueCandidate
 from aragora.swarm.roadmap_priority import RoadmapPriorityPolicy
 from scripts import generate_boss_issues as mod
+
+_FETCH_CLOSURE_COUNTS_7D = mod.fetch_closure_counts_7d
 
 
 @pytest.fixture(autouse=True)
@@ -403,28 +407,23 @@ def test_fetch_existing_boss_issues_includes_fingerprinted_open_issues_without_l
     assert seen_cmds == [
         [
             "gh",
-            "issue",
-            "list",
-            "--repo",
-            "org/repo",
-            "--state",
-            "open",
-            "--limit",
-            str(mod._OPEN_ISSUE_LIMIT),
-            "--json",
-            "number,title,body",
+            "api",
+            "--method",
+            "GET",
+            "repos/org/repo/issues?state=open&per_page=100&page=1",
         ]
     ]
 
 
-def test_fetch_existing_boss_issues_returns_empty_on_invalid_payload(monkeypatch) -> None:
+def test_fetch_existing_boss_issues_blocks_on_invalid_payload(monkeypatch) -> None:
     monkeypatch.setattr(
         mod.subprocess,
         "run",
         lambda cmd, **_: SimpleNamespace(returncode=0, stdout=json.dumps({"items": []}), stderr=""),
     )
 
-    assert mod.fetch_existing_boss_issues("org/repo") == []
+    with pytest.raises(mod._AdmissionError, match="open issues page 1"):
+        mod.fetch_existing_boss_issues("org/repo")
 
 
 @pytest.mark.parametrize(
@@ -794,7 +793,7 @@ def test_fetch_open_pr_files_raises_when_open_pr_pagination_cap_exhausted(monkey
 
     monkeypatch.setattr(mod.subprocess, "run", fake_run)
 
-    with pytest.raises(RuntimeError, match="open PR pagination exceeded configured cap"):
+    with pytest.raises(mod._AdmissionError, match="open PRs: pagination exceeded configured cap"):
         mod.fetch_open_pr_files("org/repo")
 
 
@@ -823,7 +822,7 @@ def test_fetch_open_pr_files_raises_when_pr_files_pagination_cap_exhausted(monke
 
     monkeypatch.setattr(mod.subprocess, "run", fake_run)
 
-    with pytest.raises(RuntimeError, match="open PR file pagination exceeded configured cap"):
+    with pytest.raises(mod._AdmissionError, match="open PR #101 files: pagination exceeded"):
         mod.fetch_open_pr_files("org/repo")
 
 
@@ -836,14 +835,14 @@ def test_main_returns_error_when_open_pr_pagination_exhausted(monkeypatch, capsy
     monkeypatch.setattr(mod, "fetch_existing_boss_issues", lambda repo: [])
 
     def raise_pagination_error(repo: str) -> set[str]:
-        raise RuntimeError("open PR pagination exceeded configured cap (10 pages) for org/repo")
+        raise mod._AdmissionError("open PRs", "pagination exceeded configured cap (10 pages)")
 
     monkeypatch.setattr(mod, "fetch_open_pr_files", raise_pagination_error)
     monkeypatch.setattr(sys, "argv", ["generate_boss_issues.py", "--repo", "org/repo"])
 
     assert mod.main() == 1
     out = capsys.readouterr().out
-    assert "Error: open PR pagination exceeded configured cap (10 pages) for org/repo" in out
+    assert "BLOCKED: open PRs: pagination exceeded configured cap (10 pages)" in out
 
 
 def test_create_github_issue_passes_extra_labels_as_repeated_flags(monkeypatch) -> None:
@@ -1216,7 +1215,7 @@ class TestClosureFloorMainWiring:
         assert "would create 3 issues" in out
         assert "created_7d=10" in out and "closed_7d=10" in out
 
-    def test_counts_unavailable_fails_open_with_report(self, monkeypatch, capsys) -> None:
+    def test_counts_unavailable_blocks_with_report(self, monkeypatch, capsys) -> None:
         self._patch_pipeline(monkeypatch, self._eligible(3))
         monkeypatch.setattr(mod, "fetch_closure_counts_7d", lambda repo: None)
         monkeypatch.setattr(
@@ -1235,10 +1234,11 @@ class TestClosureFloorMainWiring:
                 "0.25",
             ],
         )
-        mod.main()
+        assert mod.main() == 1
         out = capsys.readouterr().out
         assert "unavailable" in out.lower()
-        assert "would create 3 issues" in out
+        assert "BLOCKED:" in out
+        assert "would create" not in out
 
     def test_partial_throttle_preserves_substrate_cap_composition(
         self, monkeypatch, capsys
@@ -1285,24 +1285,222 @@ class TestSearchIssueTotalFailureReporting:
     """gh search failures are reported with cause, never swallowed silently
     (grok review task 3 on PR #8148)."""
 
-    def test_nonzero_exit_reports_rc_and_stderr(self, monkeypatch, capsys) -> None:
+    def test_nonzero_exit_reports_rc_and_stderr(self, monkeypatch) -> None:
         monkeypatch.setattr(
             mod.subprocess,
             "run",
             lambda *a, **k: SimpleNamespace(returncode=4, stdout="", stderr="gh: API rate limit"),
         )
-        assert mod._search_issue_total("org/repo", "created:>=2026-06-03") is None
-        out = capsys.readouterr().out
-        assert "gh search failed" in out
-        assert "rc=4" in out
-        assert "rate limit" in out
+        with pytest.raises(mod._AdmissionError) as caught:
+            mod._search_issue_total("org/repo", "created:>=2026-06-03")
+        assert caught.value.stage == "closure counts (created:>=2026-06-03)"
+        assert "rc=4" in caught.value.reason
+        assert "rate limit" in caught.value.reason
 
-    def test_exception_reports_type_and_message(self, monkeypatch, capsys) -> None:
+    def test_exception_reports_type_and_message(self, monkeypatch) -> None:
         def _raise(*a, **k):
             raise OSError("gh not found")
 
         monkeypatch.setattr(mod.subprocess, "run", _raise)
-        assert mod._search_issue_total("org/repo", "closed:>=2026-06-03") is None
-        out = capsys.readouterr().out
-        assert "gh search failed" in out
-        assert "OSError" in out and "gh not found" in out
+        with pytest.raises(mod._AdmissionError, match="OSError: gh not found"):
+            mod._search_issue_total("org/repo", "closed:>=2026-06-03")
+
+
+def _response(payload: object) -> SimpleNamespace:
+    return SimpleNamespace(returncode=0, stdout=json.dumps(payload), stderr="")
+
+
+@pytest.fixture
+def admission_pipeline(monkeypatch):
+    """Exercise real admission lookups with an otherwise eligible candidate."""
+    candidate = _candidate("eligible_module", file_scope=["aragora/eligible_module.py"])
+    monkeypatch.setattr(mod, "scan_all", lambda *a, **kw: [candidate])
+    monkeypatch.setattr(mod, "format_boss_ready_body", lambda c: "valid body")
+    monkeypatch.setattr(mod, "validate_body", lambda body: (True, ""))
+    monkeypatch.setattr(mod, "load_roadmap_priority_policy", lambda root: None)
+    monkeypatch.setattr(mod, "fetch_closure_counts_7d", _FETCH_CLOSURE_COUNTS_7D)
+    monkeypatch.setattr(mod.time, "sleep", lambda seconds: None)
+    create = Mock(return_value=True)
+    monkeypatch.setattr(mod, "create_github_issue", create)
+    return create
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize("stage", ["issues", "prs", "files", "created", "closed"])
+@pytest.mark.parametrize(
+    "failure", ["nonzero", "timeout", "oserror", "invalid_json", "empty", "shape", "record"]
+)
+def test_main_blocks_every_unavailable_input(
+    monkeypatch, capsys, admission_pipeline, stage, failure, dry_run
+) -> None:
+    def fake_run(cmd, **kwargs):
+        assert cmd[:4] == ["gh", "api", "--method", "GET"]
+        assert kwargs["timeout"] == 30
+        endpoint = cmd[4]
+        if "/issues?" in endpoint:
+            current, healthy = "issues", []
+        elif "/pulls?" in endpoint:
+            current, healthy = "prs", [{"number": 1}]
+        elif "/pulls/1/files?" in endpoint:
+            current, healthy = "files", [{"filename": "aragora/unrelated.py"}]
+        else:
+            assert endpoint == "search/issues"
+            current = "created" if "created:" in cmd[6] else "closed"
+            healthy = {"total_count": 1, "incomplete_results": False}
+        if current != stage:
+            return _response(healthy)
+        if failure == "nonzero":
+            return SimpleNamespace(returncode=1, stdout="[]", stderr="rate limit")
+        if failure == "timeout":
+            raise subprocess.TimeoutExpired(cmd, 30)
+        if failure == "oserror":
+            raise OSError("gh unavailable")
+        if failure in {"invalid_json", "empty"}:
+            return SimpleNamespace(
+                returncode=0, stdout="{" if failure == "invalid_json" else "", stderr=""
+            )
+        if failure == "shape":
+            return _response(None)
+        malformed = {
+            "issues": [{"number": 1, "title": "title", "body": []}],
+            "prs": [{"number": True}],
+            "files": [{"filename": None}],
+            "created": {"total_count": True, "incomplete_results": False},
+            "closed": {"total_count": 1, "incomplete_results": True},
+        }
+        return _response(malformed[stage])
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["generate_boss_issues.py", "--label", "lane:test"] + (["--dry-run"] if dry_run else []),
+    )
+    assert mod.main() == 1
+    admission_pipeline.assert_not_called()
+    out = capsys.readouterr().out
+    assert "BLOCKED:" in out and "0 issues created" in out
+    assert "would create" not in out
+
+
+@pytest.mark.parametrize("stage", ["issues", "prs", "files"])
+@pytest.mark.parametrize("failure", ["later_page", "cap", "non_object"])
+def test_partial_inventory_never_admits_work(
+    monkeypatch, capsys, admission_pipeline, stage, failure
+) -> None:
+    monkeypatch.setattr(mod, "_OPEN_ISSUE_PAGE_SIZE", 1)
+    monkeypatch.setattr(mod, "_OPEN_PR_PAGE_SIZE", 1)
+    monkeypatch.setattr(mod, "_OPEN_PR_FILES_PAGE_SIZE", 1)
+    monkeypatch.setattr(mod, "_OPEN_ISSUE_MAX_PAGES", 2)
+    monkeypatch.setattr(mod, "_OPEN_PR_MAX_PAGES", 2)
+    monkeypatch.setattr(mod, "_OPEN_PR_FILES_MAX_PAGES", 2)
+    seen = []
+
+    def fake_run(cmd, **kwargs):
+        endpoint = cmd[-1]
+        seen.append(endpoint)
+        second_page = endpoint.endswith("page=2")
+        if "/issues?" in endpoint:
+            current = "issues"
+            record = {"number": 1, "title": "title", "body": "<!-- fingerprint:other -->"}
+        elif "/pulls?" in endpoint:
+            current, record = "prs", {"number": 2 if second_page else 1}
+        else:
+            current, record = "files", {"filename": "aragora/unrelated.py"}
+        if current == stage:
+            if failure == "later_page" and second_page:
+                raise subprocess.TimeoutExpired(cmd, 30)
+            if failure == "non_object":
+                return _response([None])
+            return _response([record])
+        return _response([] if second_page else [record])
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sys, "argv", ["generate_boss_issues.py", "--label", "lane:test"])
+    assert mod.main() == 1
+    admission_pipeline.assert_not_called()
+    assert "BLOCKED:" in capsys.readouterr().out
+    if failure != "non_object":
+        assert any(endpoint.endswith("page=2") for endpoint in seen)
+
+
+def test_issue_pagination_counts_prs_but_excludes_them_from_duplicates(monkeypatch) -> None:
+    monkeypatch.setattr(mod, "_OPEN_ISSUE_PAGE_SIZE", 2)
+    issue = {"number": 1, "title": "title", "body": "<!-- fingerprint:abc -->"}
+    pages = [
+        [issue, dict(issue, number=2, pull_request={"url": "https://api.github.com/pulls/2"})],
+        [dict(issue, number=3, body=None), dict(issue, number=4)],
+        [],
+    ]
+    run = Mock(side_effect=[_response(page) for page in pages])
+    monkeypatch.setattr(mod.subprocess, "run", run)
+    assert mod.fetch_existing_boss_issues("org/repo") == [issue, dict(issue, number=4)]
+    assert run.call_count == 3
+    assert run.call_args.args[0][-1].endswith("page=3")
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"total_count": -1, "incomplete_results": False},
+        {"total_count": "0", "incomplete_results": False},
+        {"total_count": 1.5, "incomplete_results": False},
+        {"total_count": 0},
+        {"total_count": 0, "incomplete_results": "false"},
+        {"total_count": 0, "incomplete_results": 0},
+    ],
+)
+def test_search_rejects_unverified_counts(monkeypatch, payload) -> None:
+    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **kw: _response(payload))
+    with pytest.raises(mod._AdmissionError, match="closure counts"):
+        mod._search_issue_total("org/repo", "created:>=2026-09-01")
+
+
+@pytest.mark.parametrize("count", [0, 1234])
+def test_search_accepts_complete_counts(monkeypatch, count) -> None:
+    monkeypatch.setattr(
+        mod.subprocess,
+        "run",
+        lambda *a, **kw: _response({"total_count": count, "incomplete_results": False}),
+    )
+    assert mod._search_issue_total("org/repo", "created:>=2026-09-01") == count
+
+
+@pytest.mark.parametrize(
+    "options", [[], ["--closure-floor", "0"], ["--created-7d", "1", "--closed-7d", "1"]]
+)
+def test_verified_empty_inventory_allows_same_candidate(
+    monkeypatch, admission_pipeline, options
+) -> None:
+    def fake_run(cmd, **kwargs):
+        if cmd[4] == "search/issues":
+            assert not options, "disabled floor or explicit overrides must skip search"
+            return _response({"total_count": 1, "incomplete_results": False})
+        return _response([])
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(sys, "argv", ["generate_boss_issues.py", "--label", "lane:test", *options])
+    assert mod.main() == 0
+    admission_pipeline.assert_called_once()
+    assert admission_pipeline.call_args.args[1] == "Add tests for eligible_module"
+
+
+def test_executable_propagates_admission_failure() -> None:
+    # Run the actual __main__ block in a child; all inventory I/O is mocked there.
+    code = """
+import runpy
+import subprocess
+import sys
+from unittest.mock import patch
+
+with patch('aragora.swarm.issue_scanner.scan_all', return_value=[]), \\
+     patch('subprocess.run', side_effect=subprocess.TimeoutExpired('gh', 30)):
+    sys.argv = ['generate_boss_issues.py', '--dry-run']
+    runpy.run_path('scripts/generate_boss_issues.py', run_name='__main__')
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=mod.REPO_ROOT, capture_output=True, text=True, timeout=30
+    )
+    assert result.returncode == 1, result.stderr
+    assert "BLOCKED: open issues page 1: TimeoutExpired" in result.stdout
+    assert "would create" not in result.stdout

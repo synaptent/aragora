@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aragora.config import resolve_db_path
+from aragora.storage.connection_factory import is_postgres_backend
 
 if TYPE_CHECKING:
     from asyncpg import Pool
@@ -563,7 +564,7 @@ def get_password_reset_store() -> PasswordResetStore:
     backend: PasswordResetBackend
     if backend_type == "memory":
         backend = InMemoryPasswordResetStore()
-    elif backend_type == "postgres":
+    elif is_postgres_backend(backend_type):
         # Try to get PostgreSQL pool
         try:
             from aragora.storage.connection_factory import get_postgres_pool

@@ -81,7 +81,7 @@ EmailDebateHandler = _safe_import("aragora.server.handlers.email_debate", "Email
 
 # Security debate handler
 SecurityDebateHandler = _safe_import(
-    "aragora.server.handlers.security_debate", "SecurityDebateHandler"
+    "aragora.server.handlers.security.security_debate", "SecurityDebateHandler"
 )
 
 # Template discovery handler

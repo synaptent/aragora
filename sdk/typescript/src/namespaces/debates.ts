@@ -90,19 +90,6 @@ export interface DebateHealthStatus {
 }
 
 /**
- * Health detail for a specific debate
- */
-export interface DebateHealthDetail {
-  debate_id: string;
-  status: 'healthy' | 'stuck' | 'stalled' | 'completed';
-  stuck_since_round: number | null;
-  current_round: number;
-  last_activity: string;
-  agents_active: string[];
-  recommendations: string[];
-}
-
-/**
  * Debate filter options
  */
 export interface DebateFilters {
@@ -207,22 +194,6 @@ export interface BatchExportResult {
 }
 
 /**
- * Batch operation results
- */
-export interface BatchResults {
-  batch_id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  total_jobs: number;
-  completed_jobs: number;
-  failed_jobs: number;
-  debates: Array<{
-    debate_id: string;
-    status: 'success' | 'failed' | 'pending';
-    error?: string;
-  }>;
-}
-
-/**
  * Debate comparison result
  */
 export interface DebateComparison {
@@ -234,34 +205,6 @@ export interface DebateComparison {
     positions: Record<string, string>;
   }>;
   consensus_alignment: number;
-}
-
-/**
- * Argument quality analysis
- */
-export interface ArgumentQualityAnalysis {
-  debate_id: string;
-  overall_score: number;
-  by_agent: Array<{
-    name: string;
-    quality_score: number;
-    evidence_usage: number;
-    logical_consistency: number;
-    engagement_quality: number;
-  }>;
-  recommendations: string[];
-}
-
-/**
- * Debate note
- */
-export interface DebateNote {
-  note_id: string;
-  debate_id: string;
-  content: string;
-  author: string;
-  created_at: string;
-  updated_at: string;
 }
 
 /**
@@ -1911,20 +1854,6 @@ export class DebatesAPI {
     return this.client.request('GET', '/api/v1/debates/health');
   }
 
-  /**
-   * Get health status for a specific debate.
-   *
-   * @deprecated The server has no per-debate health endpoint: no handler
-   * dispatches GET /api/v1/debates/{id}/health, so the request falls through
-   * to DebatesHandler's slug lookup and returns 404. Use {@link listHealth}
-   * (GET /api/v1/debates/health) for system-wide debate health instead.
-   *
-   * @param debateId - The debate ID
-   */
-  async getHealth(debateId: string): Promise<DebateHealthDetail> {
-    return this.client.request('GET', `/api/v1/debates/${debateId}/health`);
-  }
-
   // ===========================================================================
   // Advanced Query & Filtering
   // ===========================================================================
@@ -2222,60 +2151,6 @@ export class DebatesAPI {
   }
 
   // ===========================================================================
-  // Batch Operations (Extended)
-  // ===========================================================================
-
-  /**
-   * Cancel a batch job.
-   *
-   * @deprecated The server has no batch-cancel endpoint. Worse than a 404:
-   * DebatesHandler.handle_post matches the `/cancel` suffix and treats the
-   * literal path segment "batch" as a debate ID, so this attempts to cancel a
-   * debate named "batch" and fails. Cancel individual debates with
-   * {@link cancel} instead.
-   *
-   * @param batchId - The batch ID to cancel
-   */
-  async cancelBatch(batchId: string): Promise<{ success: boolean; cancelled_jobs: number }> {
-    return this.client.request('POST', `/api/v1/debates/batch/${batchId}/cancel`);
-  }
-
-  /**
-   * Retry failed jobs in a batch.
-   *
-   * @deprecated Not served: no handler dispatches
-   * POST /api/v1/debates/batch/{id}/retry — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Re-submit failed debates
-   * with {@link submitBatch} instead.
-   *
-   * @param batchId - The batch ID
-   * @param options - Retry options
-   */
-  async retryBatch(
-    batchId: string,
-    options?: { onlyFailed?: boolean }
-  ): Promise<{ success: boolean; retried_count: number }> {
-    return this.client.request('POST', `/api/v1/debates/batch/${batchId}/retry`, {
-      body: options,
-    });
-  }
-
-  /**
-   * Get detailed results from a completed batch.
-   *
-   * @deprecated Not served: no handler dispatches
-   * GET /api/v1/debates/batch/{id}/results — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Use {@link getBatchStatus}
-   * (documented GET /api/v1/debates/batch/{id}/status, which includes per-job
-   * state) instead.
-   *
-   * @param batchId - The batch ID
-   */
-  async getBatchResults(batchId: string): Promise<BatchResults> {
-    return this.client.request('GET', `/api/v1/debates/batch/${batchId}/results`);
-  }
-
-  // ===========================================================================
   // Comparison & Analysis
   // ===========================================================================
 
@@ -2296,41 +2171,6 @@ export class DebatesAPI {
     return this.client.request('POST', '/api/v1/debates/compare', {
       body: { debate_ids: debateIds },
     });
-  }
-
-  /**
-   * Get similar debates to a given debate.
-   *
-   * @deprecated Not served: no handler dispatches
-   * GET /api/v1/debates/{id}/similar — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Use cross-debate search
-   * ({@link search}) or {@link compare} instead.
-   *
-   * @param debateId - The debate ID to find similar debates for
-   * @param limit - Maximum number of similar debates to return
-   */
-  async findSimilar(
-    debateId: string,
-    limit: number = 10
-  ): Promise<{ debates: Array<{ debate_id: string; similarity_score: number; task: string }> }> {
-    return this.client.request('GET', `/api/v1/debates/${debateId}/similar`, {
-      params: { limit },
-    });
-  }
-
-  /**
-   * Analyze argument quality in a debate.
-   *
-   * @deprecated Not served: no handler dispatches
-   * GET /api/v1/debates/{id}/quality — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. There is no server
-   * equivalent; the closest documented endpoint is
-   * GET /api/v1/debates/{id}/summary ({@link getSummary}).
-   *
-   * @param debateId - The debate ID
-   */
-  async analyzeArgumentQuality(debateId: string): Promise<ArgumentQualityAnalysis> {
-    return this.client.request('GET', `/api/v1/debates/${debateId}/quality`);
   }
 
   // ===========================================================================
@@ -2371,20 +2211,6 @@ export class DebatesAPI {
     return this.client.request('GET', '/api/v1/debates/archived', {
       params: options as Record<string, unknown>,
     });
-  }
-
-  /**
-   * Restore an archived debate.
-   *
-   * @deprecated Not served: no handler dispatches
-   * POST /api/v1/debates/{id}/restore — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. There is no un-archive
-   * endpoint on the server (archiving via {@link archive} is one-way today).
-   *
-   * @param debateId - The debate ID to restore
-   */
-  async restore(debateId: string): Promise<{ success: boolean }> {
-    return this.client.request('POST', `/api/v1/debates/${debateId}/restore`);
   }
 
   /**
@@ -2482,62 +2308,6 @@ export class DebatesAPI {
     return this.client.request('PATCH', `/api/v1/debates/${debateId}/metadata`, {
       body: { metadata },
     });
-  }
-
-  // ===========================================================================
-  // Notes & Comments
-  // ===========================================================================
-
-  /**
-   * Add a note to a debate.
-   *
-   * @deprecated Not served: the server has no debate-notes feature. No handler
-   * dispatches POST /api/v1/debates/{id}/notes — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Store annotations via
-   * {@link update} (PATCH /api/v1/debates/{id} with a `metadata` field)
-   * instead.
-   *
-   * @param debateId - The debate ID
-   * @param note - The note content
-   */
-  async addNote(
-    debateId: string,
-    note: string
-  ): Promise<{ note_id: string; success: boolean }> {
-    return this.client.request('POST', `/api/v1/debates/${debateId}/notes`, {
-      body: { note },
-    });
-  }
-
-  /**
-   * Get notes for a debate.
-   *
-   * @deprecated Not served: the server has no debate-notes feature. No handler
-   * dispatches GET /api/v1/debates/{id}/notes — the request falls through to
-   * DebatesHandler's slug lookup and returns 404.
-   *
-   * @param debateId - The debate ID
-   */
-  async getNotes(debateId: string): Promise<DebateNote[]> {
-    const response = await this.client.request<{ notes: DebateNote[] }>(
-      'GET',
-      `/api/v1/debates/${debateId}/notes`
-    );
-    return response.notes;
-  }
-
-  /**
-   * Delete a note from a debate.
-   *
-   * @deprecated Not served: the server has no debate-notes feature. No handler
-   * dispatches DELETE /api/v1/debates/{id}/notes/{noteId} — the request falls
-   * through to DebatesHandler's slug lookup and returns 404.
-   *
-   * @param debateId - The debate ID
-   * @param noteId - The note ID to delete
-   */
-  async deleteNote(debateId: string, noteId: string): Promise<{ success: boolean }> {
-    return this.client.request('DELETE', `/api/v1/debates/${debateId}/notes/${noteId}`);
   }
 
   // ===========================================================================
@@ -3282,43 +3052,5 @@ export class DebatesAPI {
     };
   }> {
     return this.client.request('GET', `/api/v1/debates/${encodeURIComponent(debateId)}/reasoning`);
-  }
-  /**
-   * Get per-agent performance statistics for a specific debate.
-   *
-   * @deprecated Not served: no handler dispatches
-   * GET /api/v1/debates/{id}/agent-statistics — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Use {@link getStatsAgents}
-   * (documented GET /api/debates/stats/agents, aggregate across debates)
-   * instead.
-   *
-   * @param debateId - The debate to retrieve agent statistics for
-   * @returns Per-agent statistics keyed by agent name
-   */
-  async getDebateAgentStatistics(debateId: string): Promise<{
-    debate_id: string;
-    agents: Record<string, {
-      contribution_score?: number;
-      argument_count?: number;
-      consensus_alignment?: number;
-      win_rate?: number;
-      avg_confidence?: number;
-    }>;
-  }> {
-    return this.client.request('GET', `/api/v1/debates/${encodeURIComponent(debateId)}/agent-statistics`);
-  }
-
-  /**
-   * Make a debate permanent (prevent automatic cleanup or archiving).
-   *
-   * @deprecated Not served: no handler dispatches
-   * POST /api/v1/debates/{id}/make-permanent — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. There is no server
-   * equivalent for pinning a debate.
-   *
-   * @param debateId - The debate to mark as permanent
-   */
-  async makePermanent(debateId: string): Promise<{ success: boolean; is_permanent: boolean; debate_id: string }> {
-    return this.client.request('POST', `/api/v1/debates/${encodeURIComponent(debateId)}/make-permanent`);
   }
 }
