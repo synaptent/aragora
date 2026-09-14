@@ -92,9 +92,7 @@ def _count_cli_commands_static(repo_root: Path) -> int:
             continue
         if not isinstance(node.func, ast.Name):
             continue
-        if not node.func.id.startswith("_add_"):
-            continue
-        if len(node.args) != 1:
+        if not node.args:
             continue
         if not isinstance(node.args[0], ast.Name) or node.args[0].id != "subparsers":
             continue
@@ -104,9 +102,32 @@ def _count_cli_commands_static(repo_root: Path) -> int:
     for helper_name in helper_names:
         helper = functions.get(helper_name)
         if helper is None:
+            helper = _find_imported_helper(repo_root, parser_path, module, helper_name)
+        if helper is None:
             continue
         count += _count_top_level_commands_in_helper(helper)
     return count
+
+
+def _find_imported_helper(
+    repo_root: Path, source_path: Path, module: ast.Module, name: str
+) -> ast.FunctionDef | None:
+    """Resolve a from-imported registration by reading source, never executing it."""
+    for node in ast.walk(module):
+        if not isinstance(node, ast.ImportFrom) or not node.module:
+            continue
+        for alias in node.names:
+            if (alias.asname or alias.name) != name:
+                continue
+            base = source_path.parents[node.level - 1] if node.level else repo_root
+            path = base.joinpath(*node.module.split(".")).with_suffix(".py")
+            if not path.is_file():
+                continue
+            imported = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for definition in imported.body:
+                if isinstance(definition, ast.FunctionDef) and definition.name == alias.name:
+                    return definition
+    return None
 
 
 def _count_top_level_commands_in_helper(helper: ast.FunctionDef) -> int:

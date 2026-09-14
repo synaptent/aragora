@@ -271,6 +271,8 @@ class TestMainJson:
                 str(ls_remote),
                 "--prs-file",
                 str(prs_file),
+                "--since",
+                "2026-06-03T12:00:00Z",
                 "--json",
             ]
         )
