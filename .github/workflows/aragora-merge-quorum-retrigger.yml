@@ -70,11 +70,35 @@ jobs:
           # reviewer-heading marker AND a 7+ hex head-SHA citation. The enforcing
           # merge-quorum check stays the source of truth for what actually counts,
           # so a rare false-positive only causes a harmless honest re-evaluation.
+          # B1.1 (docs/specs/QUORUM_EVIDENCE_RETRIGGER.md §"Settlement
+          # retrigger"): the Tier-4 human-settlement comment is the second
+          # accepted shape — first non-blank line is the literal marker
+          # posted by settle_tier4_pr.py --settle-only, plus a 40-hex
+          # "Exact head:" citation. The shared helper then requires the
+          # exact-head aragora/human-settlement=success status before any
+          # rerun. (Author gate: the job-level OWNER/MEMBER condition.)
+          settlement_marker='tier-4 human settlement authorization'
+          first_line="$(printf '%s\n' "$COMMENT_BODY" | tr -d '\r' | grep -m1 -E '[^[:space:]]' || true)"
+          first_line_norm="$(printf '%s' "$first_line" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]*#{0,6}[[:space:]]*//; s/[[:space:]]+$//')"
+          if [[ "$first_line_norm" == "$settlement_marker" ]]; then
+            cited="$(printf '%s\n' "$COMMENT_BODY" | tr -d '\r' | grep -m1 -iE '^[[:space:]]*exact head:[[:space:]]*[0-9a-f]{40}[[:space:]]*$' | grep -oiE '[0-9a-f]{40}' | tr '[:upper:]' '[:lower:]' || true)"
+            if [[ -n "$cited" ]]; then
+              echo "match=true" >> "$GITHUB_OUTPUT"
+              echo "mode=settlement" >> "$GITHUB_OUTPUT"
+              echo "settlement_head=${cited}" >> "$GITHUB_OUTPUT"
+              echo "Comment matches settlement shape for head ${cited}; helper verifies the settlement status before re-running merge-quorum."
+            else
+              echo "match=false" >> "$GITHUB_OUTPUT"
+              echo "Settlement-shaped comment cites no 40-hex 'Exact head:' line; skipping retrigger."
+            fi
+            exit 0
+          fi
           heading_re='(focused dogfood|adversarial dogfood|independent model review|model review|verdict:)'
           sha_re='[0-9a-f]{7,40}'
           if grep -qiE "$heading_re" <<<"$COMMENT_BODY" \
             && grep -qiE "$sha_re" <<<"$COMMENT_BODY"; then
             echo "match=true" >> "$GITHUB_OUTPUT"
+            echo "mode=evidence" >> "$GITHUB_OUTPUT"
             echo "Comment matches evidence shape; will re-run merge-quorum."
           else
             echo "match=false" >> "$GITHUB_OUTPUT"
@@ -104,6 +128,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number || github.event.inputs.pr_number }}
+          # B1.1: a manual dispatch has no comment and stays in evidence mode.
+          RETRIGGER_MODE: ${{ steps.shape.outputs.mode || 'evidence' }}
+          SETTLEMENT_HEAD: ${{ steps.shape.outputs.settlement_head }}
         shell: bash
         run: |
           set -euo pipefail

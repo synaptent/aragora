@@ -11,7 +11,15 @@
 # pinned by tests/governance/test_quorum_evidence_retrigger.py.
 #
 # Env contract: GH_TOKEN (read PR/run state + re-run workflow runs),
-# GH_REPO (owner/repo), PR_NUMBER.
+# GH_REPO (owner/repo), PR_NUMBER. Optional (B1.1, spec §"Settlement
+# retrigger"): RETRIGGER_MODE=evidence (default) | settlement, and in
+# settlement mode SETTLEMENT_HEAD = the 40-hex head SHA cited by the
+# Tier-4 human-settlement comment. Settlement mode adds two read-only
+# preconditions before the SAME selection below: the cited head must be
+# the PR's current head, and the exact-head `aragora/human-settlement`
+# commit status must already be `success`. Either precondition failing is
+# a no-op — settlement mode never widens what a rerun can accept, it only
+# replaces the operator's manual post-settlement rerun click.
 #
 # The ONLY mutating action is the single rerun request at the end, on the
 # newest surviving head-bound pull_request evaluation; every other path is
@@ -20,6 +28,15 @@ set -euo pipefail
 
 : "${GH_REPO:?GH_REPO is required}"
 : "${PR_NUMBER:?PR_NUMBER is required}"
+
+mode="${RETRIGGER_MODE:-evidence}"
+case "$mode" in
+  evidence|settlement) ;;
+  *)
+    echo "::warning::unknown RETRIGGER_MODE=${mode}; no-op."
+    exit 0
+    ;;
+esac
 
 # Same gate-deferral rule as the enforcing workflow: drafts and closed
 # PRs have no active gate to refresh.
@@ -36,6 +53,40 @@ if [[ "$pr_state" != "open" || "$pr_draft" != "false" ]]; then
   exit 0
 fi
 echo "PR #${PR_NUMBER} current head: ${head_sha}"
+
+if [[ "$mode" == "settlement" ]]; then
+  # Settlement is exact-head by design (MERGE_GATE_RECONCILIATION.md): a
+  # settlement comment for any other head must not refresh this gate.
+  cited="$(printf '%s' "${SETTLEMENT_HEAD:-}" | tr '[:upper:]' '[:lower:]')"
+  if [[ ! "$cited" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Settlement mode requires a 40-hex SETTLEMENT_HEAD (got '${cited:-<none>}') — no-op."
+    exit 0
+  fi
+  if [[ "$cited" != "$head_sha" ]]; then
+    echo "Settlement comment cites head ${cited} but PR #${PR_NUMBER} is at ${head_sha} — not this head's settlement; no-op."
+    exit 0
+  fi
+  # settle-only posts the comment BEFORE the commit status (seconds apart),
+  # so tolerate that ordering with a short bounded wait. The status can only
+  # be written by a statuses:write principal; the comment alone proves
+  # nothing and never triggers a rerun on its own.
+  settlement_state=""
+  for attempt in 1 2 3; do
+    settlement_state="$(gh api "repos/${GH_REPO}/commits/${head_sha}/status" \
+      --jq '[.statuses[] | select(.context == "aragora/human-settlement")] | first | .state // ""')"
+    if [[ "$settlement_state" == "success" ]]; then
+      break
+    fi
+    if [[ "$attempt" -lt 3 ]]; then
+      sleep "${SETTLEMENT_STATUS_WAIT_SECONDS:-10}"
+    fi
+  done
+  if [[ "$settlement_state" != "success" ]]; then
+    echo "No aragora/human-settlement=success status on ${head_sha} (saw '${settlement_state:-<none>}') — settlement not recorded; no-op."
+    exit 0
+  fi
+  echo "Exact-head aragora/human-settlement=success verified on ${head_sha}; refreshing the post-settlement quorum evaluation."
+fi
 
 # Deterministically select the ONLY legitimate rerun target. A rerun
 # re-executes the run's ORIGINAL frozen event payload, so re-running a

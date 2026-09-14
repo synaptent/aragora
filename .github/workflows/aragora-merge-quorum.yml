@@ -24,6 +24,11 @@ on:
   # stale. When a comment that plausibly carries reviewer evidence is
   # created, the evidence-retrigger job below re-runs the head-bound
   # pull_request evaluation so the gate re-reads the now-complete evidence.
+  # B1.1 (same spec, §"Settlement retrigger"): the Tier-4 human-settlement
+  # comment posted by `settle_tier4_pr.py --settle-only` is the other
+  # comment that changes the gate's answer (Tier 3-4 require the exact-head
+  # `aragora/human-settlement` status), so it is accepted as a second
+  # retrigger shape, gated on the settlement status actually existing.
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -341,19 +346,52 @@ jobs:
       group: quorum-evidence-retrigger-${{ github.event.issue.number }}
       cancel-in-progress: true
     steps:
-      # Guard 1: the comment's FIRST markdown heading must name a known
-      # reviewer family — the same convention the quorum evidence parsers
-      # key on (review_queue.py heading inference + canonical model-family
-      # markers). Anything else no-ops successfully.
-      - name: Evidence-heading guard
+      # Guard 1: the comment must be one of exactly two shapes. (a) Evidence:
+      # its FIRST markdown heading names a known reviewer family — the same
+      # convention the quorum evidence parsers key on (review_queue.py
+      # heading inference + canonical model-family markers). (b) Settlement
+      # (B1.1): its first non-blank line is the literal
+      # "Tier-4 Human Settlement Authorization" marker that
+      # scripts/settle_tier4_pr.py --settle-only posts, the author is an
+      # OWNER/MEMBER of the base repo, and the body cites a 40-hex
+      # "Exact head:". Shape (b) only reaches a rerun after the shared helper
+      # verifies the exact-head aragora/human-settlement=success status.
+      # Anything else no-ops successfully.
+      - name: Evidence-or-settlement shape guard
         id: heading
         env:
           # Attacker-controlled content enters ONLY via env (never inline
           # ${{ }} inside run:), so comment markdown cannot inject shell.
           COMMENT_BODY: ${{ github.event.comment.body }}
+          # Evaluated against the BASE repository by GitHub, not by us.
+          COMMENT_AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         shell: bash
         run: |
           set -euo pipefail
+          settlement_marker='tier-4 human settlement authorization'
+          first_line="$(printf '%s\n' "$COMMENT_BODY" | tr -d '\r' | grep -m1 -E '[^[:space:]]' || true)"
+          first_line_norm="$(printf '%s' "$first_line" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]*#{0,6}[[:space:]]*//; s/[[:space:]]+$//')"
+          if [[ "$first_line_norm" == "$settlement_marker" ]]; then
+            case "$COMMENT_AUTHOR_ASSOCIATION" in
+              OWNER|MEMBER) ;;
+              *)
+                echo "match=false" >> "$GITHUB_OUTPUT"
+                echo "Settlement-shaped comment from author association '${COMMENT_AUTHOR_ASSOCIATION}' (not OWNER/MEMBER) — no-op."
+                exit 0
+                ;;
+            esac
+            cited="$(printf '%s\n' "$COMMENT_BODY" | tr -d '\r' | grep -m1 -iE '^[[:space:]]*exact head:[[:space:]]*[0-9a-f]{40}[[:space:]]*$' | grep -oiE '[0-9a-f]{40}' | tr '[:upper:]' '[:lower:]' || true)"
+            if [[ -z "$cited" ]]; then
+              echo "match=false" >> "$GITHUB_OUTPUT"
+              echo "Settlement-shaped comment cites no 40-hex 'Exact head:' line — no-op."
+              exit 0
+            fi
+            echo "match=true" >> "$GITHUB_OUTPUT"
+            echo "mode=settlement" >> "$GITHUB_OUTPUT"
+            echo "settlement_head=${cited}" >> "$GITHUB_OUTPUT"
+            echo "Settlement-shaped comment for head ${cited}; the shared helper verifies the settlement status before any rerun."
+            exit 0
+          fi
           heading="$(printf '%s\n' "$COMMENT_BODY" | grep -m1 -E '^[[:space:]]{0,3}#{1,6}[[:space:]]' || true)"
           if [[ -z "$heading" ]]; then
             echo "match=false" >> "$GITHUB_OUTPUT"
@@ -368,6 +406,7 @@ jobs:
             exit 0
           fi
           echo "match=true" >> "$GITHUB_OUTPUT"
+          echo "mode=evidence" >> "$GITHUB_OUTPUT"
 
       - name: Check out the shared selection helper (default branch)
         if: steps.heading.outputs.match == 'true'
@@ -392,6 +431,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
+          # B1.1: settlement-shaped comments run the same selection behind
+          # two extra read-only preconditions inside the helper (cited head
+          # == current head; exact-head aragora/human-settlement=success).
+          RETRIGGER_MODE: ${{ steps.heading.outputs.mode }}
+          SETTLEMENT_HEAD: ${{ steps.heading.outputs.settlement_head }}
         shell: bash
         run: |
           set -euo pipefail
