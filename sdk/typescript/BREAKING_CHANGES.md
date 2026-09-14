@@ -10,6 +10,26 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 #### Breaking Changes
 
+`streamDebate`, `streamDebateById`, and client stream wrappers now drain accepted
+events before ending. A socket close without a genuine terminal event throws
+`ConnectionError` after buffered delivery; it no longer manufactures `debate_end`.
+Wrap `for await` in `try/catch` (see the [streaming example](../../docs/guides/SDK_QUICKSTART_TYPESCRIPT.md#real-time-streaming)).
+Close errors expose `WS_CLOSE_<number>` via `error.code`/`error.errorCode` and the
+numeric value via `error.responseBody.code`, without the raw remote reason.
+A native transport error may precede close: the iterator retains close diagnostics
+for up to 1,000 ms after the first error; repeated errors do not restart the window.
+If no close arrives, it throws a sanitized, non-retryable `ConnectionError` without
+a close code. Parsing errors fail immediately and are also non-retryable. Here,
+non-retryable means explicit caller handling is required, not proof of permanence.
+Buffered events still drain; an accepted genuine terminal event before finalization
+takes precedence. Close arriving after finalization cannot revise the outcome.
+`isRetryableError` respects the new optional fifth `ConnectionError` constructor
+argument, `retryable` (default `true` for existing callers). Only close codes
+1001,1006,1011,1012,1013,4029 are retryable; all others, including premature1000,
+require explicit caller handling. This is eligibility, not automatic retry:
+the iterator does not resume, and a new connection guarantees neither replay nor
+gap-free delivery. Bound application retries with backoff; do not restart blindly.
+
 Batch 06 removes 11 matched phantom operations from `IndexAPI`, `ReplaysAPI`, and `DocumentsAPI`.
 For each removed index method, the named route is absent from both OpenAPI documents and is not accepted by the knowledge-base handler: `getIndexStats` (`GET /api/v1/index/{name}/stats`), `addDocuments` (`POST /api/v1/index/{name}/documents`), `updateDocument` (`PUT /api/v1/index/{name}/documents/{documentId}`), `deleteDocuments` (`DELETE /api/v1/index/{name}/documents`), `rebuildIndex` (`POST /api/v1/index/{name}/rebuild`), and `optimizeIndex` (`POST /api/v1/index/{name}/optimize`). The `IndexDocument` and `UpdateDocumentOptions` interfaces are deleted with `addDocuments` and `updateDocument` and are no longer re-exported by the `namespaces` barrel.
 For each removed replay method, the named route is absent from both OpenAPI documents and is not accepted by `ReplaysHandler.can_handle`: `getFromDebate` (`GET /api/v1/debates/{debateId}/replay`), `export` (`GET /api/v1/replays/{replayId}/export`), and `getSummary` (`GET /api/v1/replays/{replayId}/summary`). `replays.getFromDebate` was the only method removed in this batch that carried an `@deprecated` tag.
