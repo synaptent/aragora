@@ -6,9 +6,31 @@ This document tracks breaking changes specific to the Aragora Python SDK. For co
 
 ## Version 2.x
 
+### Unreleased (2026-09-13)
+
+#### Breaking Changes
+
+Contract-drift batch 3 removes one operation on an unserved route absent from
+both OpenAPI documents, from both synchronous and asynchronous clients.
+TypeScript removes the same operation; no server routes are removed.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `decisions.get_outcome` | `GET /api/v1/decisions/{id}/outcome` | `decisions.get_plan_outcome(plan_id)` for a completed plan |
+
 ### Unreleased (2026-09-03)
 
 #### Breaking Changes
+
+##### Typed HTTP transport failures
+
+Exhausted HTTP timeouts and connection-establishment failures now raise the
+existing `aragora_sdk.TimeoutError` and `aragora_sdk.ConnectionError`, respectively,
+instead of the generic `AragoraError`. Existing `except AragoraError` handlers,
+messages and chained transport causes remain compatible. Code checking exact
+exception types should accept the exported subclasses; Python's built-in
+exceptions with the same names are not these SDK classes. Attempt counts and
+backoff are unchanged. See [Python HTTP request lifecycle](REQUEST_LIFECYCLE.md#transport-failures-and-cancellation).
 
 ##### Python rate-limit automatic waits
 

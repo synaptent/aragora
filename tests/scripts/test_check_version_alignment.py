@@ -1,10 +1,15 @@
-"""Tests for scripts/check_version_alignment.py doc-pattern helpers."""
+"""Checker helpers and real CLI behavior in independently seeded repositories.
+
+Hermetic success does not prove checkout alignment. The unchanged public
+``scripts/check_version_alignment.py --check`` and contracts gate check that.
+"""
 
 from __future__ import annotations
 
 import importlib.util
 import json
-import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -527,13 +532,262 @@ def test_readme_and_catalog_patterns_track_the_hand_aligned_spots(cva, tmp_path:
     assert 'display_value = "2.10.0"' in catalog.read_text()
 
 
-# Runs the full checker against the live repo, duplicating the CI gate (sdk-parity.yml, test.yml); opt in so unrelated doc edits cannot fail the unit lane.
-@pytest.mark.skipif(
-    os.environ.get("ARAGORA_RUN_REPO_VERSION_ALIGNMENT_TEST") != "1",
-    reason="set ARAGORA_RUN_REPO_VERSION_ALIGNMENT_TEST=1 to run the checker against the live repo",
-)
-def test_repo_docs_are_aligned(cva, monkeypatch, capsys) -> None:
-    monkeypatch.chdir(REPO_ROOT)
-    monkeypatch.setattr(sys, "argv", ["check_version_alignment.py"])
-    assert cva.main() == 0
-    assert "All versions aligned!" in capsys.readouterr().out
+@pytest.fixture
+def complete_repo(cva, tmp_path):
+    """Literal input forms, independently composed before registry coverage checks."""
+    files = {}
+
+    def add(paths, text):
+        for path in paths.split():
+            assert path not in files
+            files[path] = text
+
+    add(
+        "aragora/__version__.py",
+        "VERSION_MAJOR = 3\nVERSION_MINOR = 7\nVERSION_PATCH = 2\n"
+        "# Release date (ISO 8601 format) — set when the v3.7.2 tag is pushed\n"
+        'RELEASE_DATE = "2030-02-03"\n',
+    )
+    add(
+        "pyproject.toml sdk/python/pyproject.toml",
+        '[project]\nname = "fixture"\nversion = "3.7.2"\ndependencies = ["other==2.9.0"]\n',
+    )
+    add("sdk/python/aragora_sdk/__init__.py", '__version__ = "3.7.2"\n')
+    for directory in (
+        "aragora/live",
+        "sdk/typescript",
+        "ide/vscode-aragora",
+        "ide/vscode-aragora/webview-ui",
+    ):
+        package = {"name": "fixture", "version": "3.7.2"}
+        add(f"{directory}/package.json", json.dumps(package, indent=2) + "\n")
+        packages = {
+            "": package,
+            "../../sdk/typescript": {"name": "@aragora/sdk", "version": "3.7.2"},
+            "node_modules/other": {"version": "2.9.0"},
+        }
+        add(
+            f"{directory}/package-lock.json",
+            json.dumps({**package, "lockfileVersion": 3, "packages": packages}, indent=2) + "\n",
+        )
+    add(
+        "uv.lock",
+        '[[package]]\nname = "aragora"\nversion = "3.7.2"\n'
+        '[[package]]\nname = "other"\nversion = "2.9.0"\n',
+    )
+    add("README.md", "Python + TypeScript SDKs · v3.7.2.**\n")
+    add(
+        "CHANGELOG.md",
+        "_Post-v3.7.2 changes land here until the next stable tag._\n## [2.9.0]\nOld release.\n",
+    )
+    add(
+        "docs/status/metrics/catalog.toml",
+        'claims = [\n  { key = "project_version", display_value = "3.7.2" },\n'
+        '  { key = "other", display_value = "2.9.0" },\n]\n',
+    )
+    add(
+        "docs/STATUS.md docs/status/STATUS.md docs-site/docs/contributing/status.md",
+        "Current released version is **v3.7.2** (released 2030-02-03).\n- **Version**: v3.7.2\n",
+    )
+    add(
+        "docs/deployment/SCALING.md docs-site/docs/deployment/scaling.md",
+        '{\n  "version": "3.7.2",\n  "healthy": true\n}\n',
+    )
+    add(
+        "docs/api/API_REFERENCE.md docs-site/docs/api/reference.md",
+        "| TypeScript (npm) | 3.7.2 | stable |\n| Python (pip) | 3.7.2 | stable |\n"
+        "> **Last Updated:** 2030-02-03 (v3.7.2 alignment with repo versions)\n",
+    )
+    add(
+        "docs/CANONICAL_GOALS.md docs-site/docs/contributing/canonical-goals.md",
+        "| Version | 3.7.2 | stable |\n",
+    )
+    add(
+        "docs/DEPLOYMENT.md docs-site/docs/deployment/overview.md",
+        "`3.7.2` (version from pyproject.toml)\n`v3.7.2` (git tag)\n"
+        "image: ghcr.io/synaptent/aragora/backend:3.7.2\n",
+    )
+    add(
+        "docs/deployment/GO_LIVE_CHECKLIST.md",
+        "image: ghcr.io/synaptent/aragora/backend:3.7.2\n"
+        "image: ghcr.io/synaptent/aragora/frontend:3.7.2\n",
+    )
+    add(
+        "docs/reference/INSTALL_MATRIX.md docs-site/docs/reference/install-matrix.md",
+        "| Root platform | pip | package | **3.7.2** | stable |\n"
+        "| Python SDK | pip | package | **3.7.2** | stable |\n"
+        "| This checkout (`pip install ./sdk/python`) | 3.7.2 | stable |\n"
+        "PyPI serves 2.9.0; the 3.7.2 build ships when the operator tags `v3.7.2`\n"
+        "in-tree version has moved to 3.7.2 but PyPI serves 2.9.0\n"
+        "gives you 2.9.0, not 3.7.2\nin-tree version (3.7.2, not yet released to PyPI)\n",
+    )
+    add(
+        "docs/guides/SELF_HOSTED_QUICKSTART.md",
+        '*Updated: 2030-02-03*\n*Version: 3.7.2*\n{"status": "healthy", "version": "3.7.2"}\n',
+    )
+    add(
+        "docs/guides/SELF_HOSTED_COMPLETE_GUIDE.md",
+        "*Version: 3.7.2 | Updated: 2030-02-03*\n"
+        "**Version:** 3.7.2\n**Last Updated:** 2030-02-03\n"
+        '  "version": "3.7.2",\nimage: ghcr.io/synaptent/aragora/backend:3.7.2\n',
+    )
+    add(
+        "docs/migration/V3_MIGRATION_GUIDE.md",
+        "> **Current version:** v3.7.2\n"
+        "> **Deprecation warnings active since:** v2.0 (still emitted by v3.7)\n",
+    )
+    add(
+        "docs/SDK_GUIDE.md docs-site/docs/guides/sdk.md",
+        "(e.g. the repo can declare 3.7.2 while PyPI serves 2.9.0)\n",
+    )
+    add(
+        "docs/deployment/UPGRADE_ROADMAP.md",
+        "**Aragora v3.7.2** (released 2030-02-03)\n"
+        "| **v3.7.x** | 2030-01-01 | Active | **Current** |\n"
+        "| v3.6.x | 2029-10-01 | Active | Supported |\n"
+        "| v1.0.x | 2026-01-13 | 2026-06-01 | Deprecated |\n"
+        'print(__version__)  # "3.7.2"\n'
+        "**PyPI availability:** the `3.7.2` wheel ships when the operator pushes the "
+        "`v3.7.2` tag; PyPI serves 2.9.0.\n"
+        "### v3.6.x -> v3.7.2 (Minor Upgrade)\npip install --upgrade aragora==3.7.2\n"
+        "### v1.x -> v3.7.2 (Legacy Upgrade)\npip install --upgrade aragora==3.7.2\n"
+        "# Step 1: Historical install\npip install aragora==1.0.0\n"
+        "# Step 3: Upgrade to v3.7.2\npip install aragora==3.7.2\n"
+        'backup --label "pre-upgrade-v3.7.2"\n### v2.9.0 Behavioral Changes\nOld behavior.\n',
+    )
+    for path, text in files.items():
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
+    for name, path, kind in cva.VERSION_SOURCES:
+        text = files[str(path)]
+        actual = json.loads(text)["version"] if kind == "package" else "3.7.2"
+        assert actual == "3.7.2", name
+    for name, path in cva.PYTHON_VERSION_SOURCES:
+        assert '__version__ = "3.7.2"' in files[str(path)], name
+    for name, path, pattern in cva.DOC_SOURCES:
+        matches = list(re.finditer(pattern, files[str(path)], re.MULTILINE))
+        assert matches, name
+        for match in matches:
+            group = (
+                "series"
+                if "series" in match.re.groupindex
+                else ("version" if "version" in match.re.groupindex else 2)
+            )
+            assert match.group(group) == ("3.7" if group == "series" else "3.7.2"), name
+    return tmp_path
+
+
+def _tree(root):
+    return {
+        str(p.relative_to(root)): (p.read_bytes(), p.stat().st_mtime_ns, p.stat().st_mode)
+        for p in root.rglob("*")
+        if p.is_file()
+    }
+
+
+def _checker(root, *args, status=0):
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert result.returncode == status, result.stdout + result.stderr
+    assert ("All versions aligned!" in result.stdout) == (status == 0)
+    return result.stdout + result.stderr
+
+
+STALE_INPUTS = {
+    "manifest": ("pyproject.toml", 'version = "3.7.2"', 'version = "2.9.0"'),
+    "sdk": ("sdk/python/aragora_sdk/__init__.py", "3.7.2", "2.9.0"),
+    "lock": ("aragora/live/package-lock.json", '"version": "3.7.2"', '"version": "2.9.0"'),
+    "doc": ("docs/DEPLOYMENT.md", "backend:3.7.2", "backend:2.9.0"),
+    "date": ("docs/deployment/UPGRADE_ROADMAP.md", "released 2030-02-03", "released 2029-01-01"),
+    "later": (
+        "docs/deployment/UPGRADE_ROADMAP.md",
+        "pip install --upgrade aragora==3.7.2",
+        "pip install --upgrade aragora==2.9.0",
+    ),
+}
+
+
+def _stale(root, scenario):
+    path, before, after = STALE_INPUTS[scenario]
+    target = root / path
+    prefix, found, suffix = target.read_text().rpartition(before)
+    assert found
+    target.write_text(prefix + after + suffix)
+    return path
+
+
+@pytest.mark.parametrize("mode", ["default", "check"])
+def test_checker_cli_aligned(complete_repo, mode):
+    before = _tree(complete_repo)
+    _checker(complete_repo, *(["--check"] if mode == "check" else []))
+    assert _tree(complete_repo) == before
+
+
+@pytest.mark.parametrize("scenario", list(STALE_INPUTS))
+def test_checker_cli_stale(complete_repo, scenario):
+    path = _stale(complete_repo, scenario)
+    before = _tree(complete_repo)
+    for args in ((), ("--check",)):
+        output = _checker(complete_repo, *args, status=1)
+        assert any(path in line and "[MISMATCH]" in line for line in output.splitlines())
+        if scenario == "later":
+            assert "[MISMATCH] (2 occurrences)" in output
+        assert _tree(complete_repo) == before
+
+
+def test_checker_cli_fix(complete_repo):
+    aligned = {p: data[0] for p, data in _tree(complete_repo).items()}
+    for scenario in STALE_INPUTS:
+        _stale(complete_repo, scenario)
+    assert "Fixed " in _checker(complete_repo, "--fix")
+    assert {p: data[0] for p, data in _tree(complete_repo).items()} == aligned
+    before = _tree(complete_repo)
+    _checker(complete_repo, "--check")
+    _checker(complete_repo, "--fix")
+    assert _tree(complete_repo) == before
+
+
+def test_checker_cli_minor(complete_repo):
+    canonical = complete_repo / "aragora/__version__.py"
+    canonical.write_text(
+        canonical.read_text()
+        .replace("VERSION_MINOR = 7", "VERSION_MINOR = 8")
+        .replace("VERSION_PATCH = 2", "VERSION_PATCH = 0")
+        .replace("2030-02-03", "2030-06-01")
+    )
+    before = {p: data[0].decode() for p, data in _tree(complete_repo).items()}
+    _checker(complete_repo, "--fix")
+    _checker(complete_repo, "--check")
+    for path, text in before.items():
+        preserved = [line for line in text.splitlines() if "2.9.0" in line or "1.0." in line]
+        for line in preserved:
+            assert line.replace("3.7.2", "3.8.0") in (complete_repo / path).read_text()
+    roadmap = (complete_repo / "docs/deployment/UPGRADE_ROADMAP.md").read_text()
+    assert "| **v3.8.x** | 2030-06-01 | Active | **Current** |" in roadmap
+    assert "| v3.7.x | 2030-01-01 | Active | Supported |" in roadmap
+    assert "| v3.6.x | 2029-10-01 | Active | Supported |" in roadmap
+    snapshot = _tree(complete_repo)
+    _checker(complete_repo, "--fix")
+    assert _tree(complete_repo) == snapshot
+
+
+@pytest.mark.parametrize("scenario", ["manifest", "pattern", "canonical", "malformed"])
+def test_checker_cli_unusable(complete_repo, scenario):
+    path = "pyproject.toml" if scenario == "manifest" else "aragora/__version__.py"
+    if scenario in ("manifest", "canonical"):
+        (complete_repo / path).unlink()
+    elif scenario == "malformed":
+        (complete_repo / path).write_text('VERSION_MAJOR = "invalid"\n')
+    else:
+        path = "README.md"
+        (complete_repo / path).write_text("No current-version declaration.\n")
+    before = _tree(complete_repo)
+    for mode in ("--check", "--fix", "--check"):
+        assert path in _checker(complete_repo, mode, status=1)
+        assert _tree(complete_repo) == before

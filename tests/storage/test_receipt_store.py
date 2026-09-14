@@ -122,6 +122,190 @@ def signed_receipt_dict():
     }
 
 
+class _SchemaBackend:
+    """Stateful DDL double: ALTER needs a table, indexes need their columns."""
+
+    def __init__(self, columns=None, failure=None):
+        self.columns = None if columns is None else set(columns)
+        self.indexes = set()
+        self.statements = []
+        self.failure = failure
+
+    def execute_write(self, statement):
+        words = statement.split()
+        stage = "alter" if words[0] == "ALTER" else words[1].lower()
+        self.statements.append(stage)
+        if self.failure and stage == self.failure[0]:
+            raise self.failure[1]
+        if stage == "table":
+            if self.columns is None:
+                self.columns = {
+                    line.strip().split()[0] for line in statement.split("(")[1].split(",")
+                }
+        elif stage == "alter":
+            if self.columns is None:
+                raise RuntimeError('relation "receipts" does not exist')
+            column = words[8] if "IF NOT EXISTS" in statement else words[5]
+            if column in self.columns and "IF NOT EXISTS" not in statement:
+                raise sqlite3.OperationalError(f"duplicate column name: {column}")
+            self.columns.add(column)
+        else:
+            column = statement.split("(")[1].split(")")[0].split()[0]
+            if self.columns is None or column not in self.columns:
+                raise RuntimeError(f"missing indexed column: {column}")
+            self.indexes.add(words[5])
+
+    def close(self):
+        pass
+
+
+def _schema_constructor(monkeypatch, backend, engine):
+    module = importlib.import_module("aragora.storage.receipt_store")
+    name = "PostgreSQLBackend" if engine == "postgresql" else "SQLiteBackend"
+    monkeypatch.setattr(module, name, lambda *args: backend)
+    monkeypatch.setattr(module, "POSTGRESQL_AVAILABLE", True)
+    return ReceiptStore(backend=engine, database_url="postgresql://unused", file_receipt_dirs=[])
+
+
+@pytest.mark.parametrize("engine", ["sqlite", "postgresql"])
+@pytest.mark.parametrize("existing", [None, (), ("timestamp_token",), ("legal_hold",)])
+def test_schema_initialization_order_and_repeated_construction(monkeypatch, engine, existing):
+    definitions = ReceiptStore.SCHEMA_STATEMENTS_SQLITE[0].split("(")[1].split(",")
+    optional = {sql.split()[5] for sql in ReceiptStore.MIGRATION_STATEMENTS_SQLITE}
+    required = {line.strip().split()[0] for line in definitions}
+    columns = None if existing is None else (required - optional) | set(existing)
+    backend = _SchemaBackend(columns)
+    for _ in range(3):
+        backend.statements.clear()
+        store = _schema_constructor(monkeypatch, backend, engine)
+        assert backend.columns == required
+        assert "idx_receipts_legal_hold" in backend.indexes
+        expected = ["table"] + ["alter"] * 8 + ["index"] * (9 if engine == "postgresql" else 8)
+        assert backend.statements == expected
+        assert store.SCHEMA_STATEMENTS is ReceiptStore.SCHEMA_STATEMENTS_SQLITE
+        store.close()
+
+
+@pytest.mark.parametrize("engine", ["sqlite", "postgresql"])
+@pytest.mark.parametrize("stage", ["table", "alter", "index"])
+@pytest.mark.parametrize(
+    "error",
+    [
+        sqlite3.OperationalError("unexpected DDL failure"),
+        sqlite3.DatabaseError("unexpected database failure"),
+        OSError("unexpected IO failure"),
+        RuntimeError("unexpected runtime failure"),
+        ValueError("unexpected value failure"),
+    ],
+)
+def test_schema_initialization_exposes_unexpected_errors(monkeypatch, engine, stage, error):
+    backend = _SchemaBackend(failure=(stage, error))
+    with pytest.raises(type(error)) as raised:
+        _schema_constructor(monkeypatch, backend, engine)
+    assert raised.value is error
+    assert backend.statements[-1] == stage
+    assert backend.statements[0] == "table"
+
+
+@pytest.mark.parametrize("stage", ["table", "index"])
+def test_schema_duplicate_column_outside_upgrade_is_not_suppressed(monkeypatch, stage):
+    error = sqlite3.OperationalError("duplicate column name: timestamp_token")
+    with pytest.raises(sqlite3.OperationalError) as raised:
+        _schema_constructor(monkeypatch, _SchemaBackend(failure=(stage, error)), "sqlite")
+    assert raised.value is error
+
+
+@pytest.mark.parametrize("existing", [None, (), ("timestamp_token",), ("legal_hold",)])
+def test_sqlite_schema_lifecycle_preserves_rows(tmp_path, sample_receipt_dict, existing):
+    path = tmp_path / "lifecycle.db"
+    optional = {sql.split()[5] for sql in ReceiptStore.MIGRATION_STATEMENTS_SQLITE}
+    expected = {}
+    with sqlite3.connect(path) as conn:
+        assert (
+            conn.execute("SELECT name FROM sqlite_master WHERE name='receipts'").fetchone() is None
+        )
+        if existing is not None:
+            schema = "\n".join(
+                line
+                for line in ReceiptStore.SCHEMA_STATEMENTS_SQLITE[0].splitlines()
+                if not line.strip() or line.split()[0] not in optional - set(existing)
+            )
+            conn.execute(schema)
+            for i in range(2):
+                payload = dict(sample_receipt_dict, receipt_id=f"old-{i}", gauntlet_id=f"g-{i}")
+                values = {
+                    "receipt_id": payload["receipt_id"],
+                    "gauntlet_id": payload["gauntlet_id"],
+                    "created_at": 100.0,
+                    "verdict": "APPROVED",
+                    "confidence": 0.85,
+                    "risk_level": "MEDIUM",
+                    "checksum": f"checksum-{i}",
+                    "data_json": json.dumps(payload),
+                }
+                if "timestamp_token" in existing:
+                    values["timestamp_token"] = "old-token" if i == 0 else None
+                if "legal_hold" in existing:
+                    values["legal_hold"] = i
+                names = ", ".join(values)
+                conn.execute(
+                    f"INSERT INTO receipts ({names}) VALUES ({','.join('?' for _ in values)})",
+                    tuple(values.values()),
+                )
+            conn.row_factory = sqlite3.Row
+            expected = {
+                row["receipt_id"]: dict(row) for row in conn.execute("SELECT * FROM receipts")
+            }
+    for iteration in range(3):
+        store = ReceiptStore(db_path=path, backend="sqlite", file_receipt_dirs=[])
+        try:
+            with sqlite3.connect(path) as conn:
+                conn.row_factory = sqlite3.Row
+                columns = {row[1] for row in conn.execute("PRAGMA table_info(receipts)")}
+                assert optional <= columns
+                for statement in ReceiptStore.SCHEMA_STATEMENTS_SQLITE[1:]:
+                    name = statement.split()[5]
+                    column = statement.split("(")[1].split(")")[0].split()[0]
+                    assert [row[2] for row in conn.execute(f"PRAGMA index_info({name})")] == [
+                        column
+                    ]
+                actual = {
+                    row["receipt_id"]: dict(row) for row in conn.execute("SELECT * FROM receipts")
+                }
+                assert len(actual) == len(expected)
+                for rid, before in expected.items():
+                    assert {key: actual[rid][key] for key in before} == before
+                    assert store.get(rid).data == json.loads(before["data_json"])
+                    if iteration == 0:
+                        for column in optional - set(existing or ()):
+                            assert actual[rid][column] == (0 if column == "legal_hold" else None)
+                expected = actual
+            if iteration == 2:
+                if expected:
+                    rid = sorted(expected)[0]
+                    payload = dict(store.get(rid).data, statement="updated")
+                    store.save(payload)
+                    assert store.get(rid).data["statement"] == "updated"
+                    # INSERT OR REPLACE resets optional columns, the unchanged SQLite save semantics.
+                    with sqlite3.connect(path) as conn:
+                        assert conn.execute(
+                            "SELECT timestamp_token, legal_hold FROM receipts WHERE receipt_id=?",
+                            (rid,),
+                        ).fetchone() == (None, 0)
+                    assert store.count() == len(expected)
+                store.save(dict(sample_receipt_dict, receipt_id="new", gauntlet_id="new-gauntlet"))
+                assert store.count() == len(expected) + 1
+        finally:
+            store.close()
+    reopened = ReceiptStore(db_path=path, backend="sqlite", file_receipt_dirs=[])
+    try:
+        assert reopened.get("new") is not None
+        if expected:
+            assert reopened.get(sorted(expected)[0]).data["statement"] == "updated"
+    finally:
+        reopened.close()
+
+
 # ===========================================================================
 # StoredReceipt Dataclass Tests
 # ===========================================================================
@@ -891,70 +1075,6 @@ class TestReceiptStoreSingleton:
 
 class TestReceiptStoreBackends:
     """Tests for backend configuration."""
-
-    @pytest.mark.parametrize("backend_type", ["sqlite", "postgresql"])
-    def test_schema_creates_table_then_migrates_then_indexes(self, backend_type):
-        store = ReceiptStore.__new__(ReceiptStore)
-        store.backend_type = backend_type
-        store._backend = MagicMock()
-        schema = getattr(store, f"SCHEMA_STATEMENTS_{backend_type.upper()}")
-        migrations = getattr(store, f"MIGRATION_STATEMENTS_{backend_type.upper()}")
-
-        store._init_schema()
-
-        statements = [call.args[0] for call in store._backend.execute_write.call_args_list]
-        assert statements == [schema[0], *migrations, *schema[1:]]
-
-    @pytest.mark.parametrize("backend_type", ["sqlite", "postgresql"])
-    def test_table_creation_failure_is_not_reported_as_initialized(self, backend_type):
-        store = ReceiptStore.__new__(ReceiptStore)
-        store.backend_type = backend_type
-        store._backend = MagicMock()
-        store._backend.execute_write.side_effect = RuntimeError("database unavailable")
-
-        with pytest.raises(RuntimeError, match="database unavailable"):
-            store._init_schema()
-        assert store._backend.execute_write.call_count == 1
-
-    @pytest.mark.parametrize("legacy", [False, True])
-    def test_sqlite_bootstrap_and_reopen_preserve_receipt(
-        self, temp_db_path, sample_receipt_dict, legacy
-    ):
-        if legacy:
-            # The old schema predates timestamp and legal-hold columns/indexes.
-            old_schema = "\n".join(
-                line
-                for line in ReceiptStore.SCHEMA_STATEMENTS_SQLITE[0].splitlines()
-                if not line.strip().startswith(("timestamp_", "legal_hold"))
-            )
-            with sqlite3.connect(temp_db_path) as connection:
-                connection.execute(old_schema)
-                connection.execute(
-                    "INSERT INTO receipts (receipt_id, gauntlet_id, created_at, verdict, "
-                    "confidence, risk_level, checksum, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    ("old", "old-gauntlet", 1.0, "APPROVED", 0.8, "LOW", "old", "{}"),
-                )
-
-        store = ReceiptStore(db_path=temp_db_path, backend="sqlite", file_receipt_dirs=[])
-        try:
-            if legacy:
-                assert store.get("old") is not None
-            store.save(sample_receipt_dict)
-        finally:
-            store.close()
-
-        reopened = ReceiptStore(db_path=temp_db_path, backend="sqlite", file_receipt_dirs=[])
-        try:
-            receipt = reopened.get(sample_receipt_dict["receipt_id"])
-            assert receipt is not None
-            assert receipt.data["statement"] == sample_receipt_dict["statement"]
-            if legacy:
-                assert reopened.get("old") is not None
-            with sqlite3.connect(temp_db_path) as connection:
-                indexes = {row[1] for row in connection.execute("PRAGMA index_list(receipts)")}
-            assert "idx_receipts_legal_hold" in indexes
-        finally:
-            reopened.close()
 
     def test_sqlite_backend(self, temp_db_path):
         """Test SQLite backend initialization."""

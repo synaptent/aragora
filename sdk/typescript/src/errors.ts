@@ -398,7 +398,9 @@ export class ConnectionError extends AragoraError {
     message: string = 'Connection failed',
     errorCode?: ErrorCode | string,
     traceId?: string,
-    responseBody?: Record<string, unknown>
+    responseBody?: Record<string, unknown>,
+    /** Retry eligibility, not automatic retry or guaranteed stream replay. */
+    readonly retryable: boolean = true
   ) {
     super(message, undefined, errorCode, traceId, responseBody);
     this.name = 'ConnectionError';
@@ -433,7 +435,7 @@ export function isValidationError(error: unknown): error is ValidationError {
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof ServerError) return true;
   if (error instanceof TimeoutError) return true;
-  if (error instanceof ConnectionError) return true;
+  if (error instanceof ConnectionError) return error.retryable;
   if (error instanceof RateLimitError) return true;
   return false;
 }
