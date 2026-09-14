@@ -64,6 +64,48 @@ test('published SDK numeric requested rounds are not completed history', async (
   }
 });
 
+test('installed SDK retains saved flat messages when nested history is empty', async () => {
+  const original = globalThis.fetch;
+  const messages = [
+    { role: 'assistant', agent: 'reviewer', content: 'Saved proposal', round: 0 },
+    { role: 'assistant', agent_id: 'peer', content: 'Saved dissent', round: 1 },
+  ];
+  try {
+    // DebateStorage.save_dict/get_debate preserves flat messages; normalization
+    // adds response aliases without turning the numeric rounds into history.
+    for (const rounds of [undefined, 3, [], [{ round_number: 1, messages: [] }]]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({
+        ...debate, id: debate.debate_id, rounds, rounds_used: 2, messages,
+      }), { headers: { 'content-type': 'application/json' } });
+      const value = await createClient({ baseUrl: 'https://example.test' })
+        .debates.get(debate.debate_id);
+      const view = debateView(value);
+      assert.deepEqual(view.messages, messages);
+      assert.equal(view.roundsCompleted, 2);
+      assert.equal(view.messages[0].round, 0);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('saved fallback neither duplicates nor replaces populated round history', async () => {
+  const original = globalThis.fetch;
+  try {
+    const message = { role: 'assistant', agent: 'reviewer', content: 'Proposal', round: 2 };
+    for (const messages of [[message], [{ ...message, content: 'Flat alternative' }], null]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({
+        ...debate, rounds: [{ round_number: 2, messages: [message] }], messages,
+      }), { headers: { 'content-type': 'application/json' } });
+      const value = await createClient({ baseUrl: 'https://example.test' })
+        .debates.get(debate.debate_id);
+      assert.deepEqual(debateView(value).messages, [message]);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('event envelopes retain data and reject other debates and global messages', () => {
   const event = { type: 'agent_message' as const, timestamp: debate.created_at,
     data: { agent: 'reviewer', content: 'Proposal' }, loop_id: debate.debate_id };
