@@ -64,6 +64,49 @@ test('installed SDK numeric running rounds are requested, not completed rounds',
   }
 });
 
+test('installed SDK saved records retain top-level messages and their attribution', async () => {
+  const original = globalThis.fetch;
+  const messages = [
+    { role: 'assistant', agent: 'reviewer', content: 'Saved proposal', round: 0 },
+    { role: 'assistant', agent_id: 'peer', content: 'Saved dissent', round: 1 },
+  ];
+  try {
+    for (const rounds of [undefined, 2, [], [{ round_number: 1, messages: [] }]]) {
+      globalThis.fetch = async () => new Response(JSON.stringify({
+        ...debate, rounds, rounds_used: 2, messages,
+      }), { headers: { 'content-type': 'application/json' } });
+      const value = await createClient({ baseUrl: 'https://api.example.test' })
+        .debates.get(debate.debate_id);
+      const view = debateView(value);
+      assert.deepEqual(view.messages, messages);
+      assert.equal(view.roundsCompleted, 2);
+      assert.equal(view.messages[0].round, 0);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('round history is not duplicated by a saved-message fallback', async () => {
+  const original = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      ...debate,
+      rounds: [{ round_number: 2, messages: [
+        { role: 'assistant', agent: 'reviewer', content: 'Proposal' },
+      ] }],
+      messages: [{ role: 'assistant', agent: 'reviewer', content: 'Proposal', round: 2 }],
+    }), { headers: { 'content-type': 'application/json' } });
+    const value = await createClient({ baseUrl: 'https://api.example.test' })
+      .debates.get(debate.debate_id);
+    assert.deepEqual(debateView(value).messages, [
+      { role: 'assistant', agent: 'reviewer', content: 'Proposal', round: 2 },
+    ]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 test('events use their data envelope and exclude other debates and global messages', () => {
   const event = { type: 'agent_message' as const, timestamp: debate.created_at,
     data: { agent: 'reviewer', content: 'Proposal' }, loop_id: debate.debate_id };
