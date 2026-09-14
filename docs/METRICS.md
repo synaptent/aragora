@@ -16,8 +16,8 @@
 | Python lines of code under aragora/ | `2002179` | `aragora/` | `python3 -c "from pathlib import Path; import subprocess; files = subprocess.check_output(['git', 'ls-files', 'aragora'], text=True).splitlines(); print(sum(sum(1 for _ in Path(p).open(encoding='utf-8', errors='replace')) for p in files if p.endswith('.py')))"` |
 | Top-level modules under aragora/ | `145` | `aragora/` | `git ls-files aragora \| awk -F/ 'NF>2 {print $2}' \| sort -u \| wc -l` |
 | Test files (test_*.py under tests/) | `5607` | `tests/` | `git ls-files tests \| grep -E '(^\|/)test_[^/]*\.py$' \| wc -l` |
-| Test functions (class + module level) | `226785` | `tests/` | `git grep -E '^[[:space:]]*(async )?def test_' -- tests \| wc -l` |
-| @pytest.mark.parametrize decorators | `1205` | `tests/` | `git grep -E '@pytest\.mark\.parametrize' -- tests \| wc -l` |
+| Test functions (class + module level) | `226793` | `tests/` | `git grep -E '^[[:space:]]*(async )?def test_' -- tests \| wc -l` |
+| @pytest.mark.parametrize decorators | `1216` | `tests/` | `git grep -E '@pytest\.mark\.parametrize' -- tests \| wc -l` |
 | CLI top-level command modules | `86` | `aragora/cli/commands/` | `git ls-files aragora/cli/commands \| grep -E '/[^/]*\.py$' \| grep -v '/__' \| wc -l` |
 | OpenAPI paths | `2912` | `docs/api/openapi.json` | `python -c "import json; print(len(json.load(open('docs/api/openapi.json'))['paths']))"` |
 | OpenAPI operations (HTTP verbs) | `3205` | `docs/api/openapi.json` | `python -c "import json; spec=json.load(open('docs/api/openapi.json')); print(sum(1 for p in spec['paths'].values() for m in p if m.lower() in {'get','post','put','delete','patch','head','options'}))"` |
