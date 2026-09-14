@@ -2003,6 +2003,166 @@ def test_cli_trusted_operator_login_authorizes_member_comment(
     assert rc == 0
 
 
+@pytest.mark.parametrize("lookup", ["failed", "denied"])
+@pytest.mark.parametrize("parseable", [False, True])
+@pytest.mark.parametrize("timestamp", ["2026-05-22T00:06:00Z", None, AUTH_CREATED_AT])
+@pytest.mark.parametrize("older_author", ["owner", "same_member", "other_member"])
+@pytest.mark.parametrize("association", ["MEMBER", "COLLABORATOR"])
+@pytest.mark.parametrize("source", ["comment", "review"])
+@pytest.mark.parametrize("mode", ["default", "protected", "protection"])
+def test_permission_lookup_uncertainty_does_not_revive_grant(
+    monkeypatch: Any,
+    lookup: str,
+    parseable: bool,
+    timestamp: str | None,
+    older_author: str,
+    association: str,
+    source: str,
+    mode: str,
+) -> None:
+    head = "a" * 40
+    older = _protected_comment(head) if mode == "protected" else _authorized_comment(head)
+    newer = _unparsable_comment(head)
+    if parseable:
+        newer["body"] = _protected_comment(head)["body"]
+    newer.update(authorAssociation=association, author={"login": "new-admin"}, createdAt=timestamp)
+    if older_author != "owner":
+        older.update(
+            authorAssociation="MEMBER",
+            author={"login": ("new-admin" if older_author == "same_member" else "old-admin")},
+        )
+    calls: list[str] = []
+
+    def permission_response(command: list[str], **kwargs: Any) -> dict[str, Any]:
+        calls.append(command[-1])
+        if older_author != "owner" and len(calls) == 1:
+            return {"permission": "admin"}
+        if lookup == "failed":
+            raise RuntimeError("permission lookup transport unavailable")
+        return {"permission": "write"}
+
+    monkeypatch.setattr(settler, "_run_json", permission_response)
+    view = _pr_view(head, comments=[older])
+    if source == "review":
+        newer["submittedAt"] = newer.pop("createdAt")
+        view["reviews"] = [newer]
+    else:
+        view["comments"].append(newer)
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        trusted_operator_logins=["new-admin", "old-admin"],
+        protected_squash_only=mode == "protected",
+        require_branch_protection_token=mode == "protection",
+    )
+    assert len(calls) == (1 if older_author == "owner" else 2)
+    assert gate["ok"] is (lookup == "denied")
+    diagnostic = gate["authorization_diagnostics"][-1]
+    if lookup == "failed":
+        assert gate["authorized_actions"] == []
+        assert diagnostic["admin_permission_lookup_failed"] is True
+        assert diagnostic["accepted"] is False
+        assert diagnostic["selection_status"] == (
+            "selected" if timestamp not in (None, AUTH_CREATED_AT) else "ambiguous"
+        )
+        assert any("lookup failed" in reason for reason in diagnostic["rejection_reasons"])
+    else:
+        assert gate["authorized_actions"] == (
+            ["protected_merge"] if mode == "protected" else ["branch_protection", "merge"]
+        )
+        assert diagnostic["selection_status"] == "ineligible"
+        assert any("lacks admin permission" in reason for reason in diagnostic["rejection_reasons"])
+
+
+@pytest.mark.parametrize(
+    "case", ["newer_grant", "wrong_head", "no_marker", "stale", "not_allowlisted"]
+)
+def test_permission_lookup_uncertainty_preserves_irrelevant_or_superseded_inputs(
+    monkeypatch: Any,
+    case: str,
+) -> None:
+    head = "a" * 40
+    grant, instruction = _authorized_comment(head), _unparsable_comment(head)
+    instruction.update(authorAssociation="MEMBER", author={"login": "new-admin"})
+    if case == "newer_grant":
+        grant["createdAt"] = "2026-05-22T00:07:00Z"
+    elif case == "wrong_head":
+        instruction["body"] = instruction["body"].replace(head, "b" * 40)
+    elif case == "no_marker":
+        instruction["body"] = "Not a settlement instruction"
+    elif case == "stale":
+        instruction["createdAt"] = "2026-05-21T23:59:00Z"
+    calls: list[str] = []
+
+    def unavailable(command: list[str], **kwargs: Any) -> dict[str, Any]:
+        calls.append(command[-1])
+        raise RuntimeError("permission lookup unavailable")
+
+    monkeypatch.setattr(settler, "_run_json", unavailable)
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[instruction, grant]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        trusted_operator_logins=["other" if case == "not_allowlisted" else "new-admin"],
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["branch_protection", "merge"]
+    assert gate["authorization_diagnostics"][1]["selection_status"] == "selected"
+    if case == "not_allowlisted":
+        assert calls == []
+
+
+@pytest.mark.parametrize("protected", [False, True])
+def test_permission_lookup_uncertainty_prevents_merge_apply(
+    monkeypatch: Any, protected: bool
+) -> None:
+    head = "a" * 40
+    older = _protected_comment(head) if protected else _authorized_comment(head)
+    newer = _unparsable_comment(head)
+    newer.update(authorAssociation="MEMBER", author={"login": "new-admin"})
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda *a, **kw: (
+            _pr_view(head, comments=[older, newer]),
+            _tier4_packet(),
+            _valid_checks(),
+        ),
+    )
+
+    def unavailable(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("permission lookup unavailable")
+
+    monkeypatch.setattr(settler, "_run_json", unavailable)
+    mutations: list[str] = []
+    monkeypatch.setattr(
+        settler,
+        "_preflight_branch_protection_reconcile",
+        lambda **kw: mutations.append("preflight"),
+    )
+    monkeypatch.setattr(settler, "_apply_merge", lambda **kw: mutations.append("merge") or [])
+    flags = ["--protected-squash-only"] if protected else []
+    rc = settler.main(
+        [
+            "--merge-apply",
+            "--pr",
+            "7423",
+            "--head",
+            head,
+            "--trusted-operator-login",
+            "new-admin",
+            *flags,
+        ]
+    )
+    assert rc == 2
+    assert mutations == []
+
+
 def test_collaborator_permission_payload_only_treats_admin_as_admin() -> None:
     assert settler._collaborator_permission_is_admin({"permission": "admin"}) is True
     assert settler._collaborator_permission_is_admin({"role_name": "admin"}) is True

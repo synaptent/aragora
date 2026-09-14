@@ -11,6 +11,8 @@ timezone-aware createdAt/submittedAt. Post a new grant to supersede one; editing
 an old comment does not promote its publication order. Missing timestamps or a
 tie for newest fail closed. Requested-mode constraints never revive an old grant.
 An unparsable action blocks authorization instead of reviving a superseded grant.
+A failed permission lookup likewise blocks an instruction from granting authority,
+without discarding it as confirmed non-admin before chronological selection.
 """
 
 from __future__ import annotations
@@ -66,6 +68,7 @@ TRUSTED_OPERATOR_MEMBER_ASSOCIATIONS = {"MEMBER"}
 TRUSTED_OPERATOR_ALLOWLIST_ADMIN_ASSOCIATIONS = {"COLLABORATOR"}
 TRUSTED_OPERATOR_LOGINS_ENV = "ARAGORA_TIER4_TRUSTED_OPERATORS"
 PermissionChecker = Callable[[str], bool]
+ADMIN_PERMISSION_LOOKUP_FAILED = "admin permission lookup failed; operator trust is unknown"
 HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"
 HUMAN_SETTLEMENT_STATUS_BLOCKER = f"missing or unsuccessful {HUMAN_SETTLEMENT_CONTEXT} status"
 MERGE_QUORUM_CONTEXT = "aragora-merge-quorum"
@@ -220,10 +223,7 @@ def _login_has_admin_permission(login: str, repo: str, cwd: Path | None) -> bool
     if not login:
         return False
     endpoint = f"repos/{repo}/collaborators/{quote(login, safe='')}/permission"
-    try:
-        payload = _run_json(["gh", "api", endpoint], cwd=cwd)
-    except RuntimeError:
-        return False
+    payload = _run_json(["gh", "api", endpoint], cwd=cwd)
     return _collaborator_permission_is_admin(payload)
 
 
@@ -283,7 +283,11 @@ def _operator_author_rejection_reason(
         return f"{association} login {login} is not in trusted operator allowlist"
     if not evaluate_member_permissions:
         return ""
-    if not permission_checker(login):
+    try:
+        has_admin_permission = permission_checker(login)
+    except RuntimeError:
+        return ADMIN_PERMISSION_LOOKUP_FAILED
+    if not has_admin_permission:
         return f"trusted {association.lower()} {login or '<missing>'} lacks admin permission"
     return ""
 
@@ -335,6 +339,7 @@ def _authorization_diagnostic(
         trusted_operator_logins=trusted_operator_logins,
     )
     admin_permission_evaluated = admin_permission_required and evaluate_member_permissions
+    admin_permission_lookup_failed = author_rejection == ADMIN_PERMISSION_LOOKUP_FAILED
     trusted_author_association = not author_rejection
     fresh_after_head_commit = _authorization_is_fresh(item, head_committed_at=head_committed_at)
     exact_head_present = head in body
@@ -374,6 +379,7 @@ def _authorization_diagnostic(
         "trusted_author_association": trusted_author_association,
         "admin_permission_required": admin_permission_required,
         "admin_permission_evaluated": admin_permission_evaluated,
+        "admin_permission_lookup_failed": admin_permission_lookup_failed,
         "fresh_after_head_commit": fresh_after_head_commit,
         "exact_head_present": exact_head_present,
         "merge_action_present": merge_action_present,
@@ -383,7 +389,8 @@ def _authorization_diagnostic(
             # Action parsing controls acceptance, not supersession. An unsupported
             # newer instruction must never revive an older privileged grant.
             marker_present
-            and trusted_author_association
+            # Unknown trust cannot authorize, but must not revive an older grant.
+            and (trusted_author_association or admin_permission_lookup_failed)
             and (not admin_permission_required or admin_permission_evaluated)
             and exact_head_present
         ),
