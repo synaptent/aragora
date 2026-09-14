@@ -207,7 +207,7 @@ The current dated frame is the Receipt-First mission's exit-metric table on [#99
 - **100%** of failures land in truthful canonical buckets
 - repeated rescue classes become explicit product work
 
-Current status: `docs/status/B0_BENCHMARK_TRUTH_STATUS.md` and `docs/status/TW03_RESCUE_PRODUCTIZATION_STATUS.md` are the live recurring proof surfaces. As of 2026-09-12 the `B0` surface on `main` is dated 2026-09-01; the automated refresh [#9980](https://github.com/synaptent/aragora/pull/9980) is parked at one countable review family because the worker Claude profiles are out of usage or revoked, so restoring reviewer capacity is the gate on freshness, not the publication job. When benchmark publication drifts, lags, or lands incomplete corpus coverage, restoring that publication becomes the immediate gate again before any scope widening.
+Current status: `docs/status/B0_BENCHMARK_TRUTH_STATUS.md` and `docs/status/TW03_RESCUE_PRODUCTIZATION_STATUS.md` are the live recurring proof surfaces. As of 2026-09-14 the `B0` surface on `main` is dated 2026-09-04T13:28:39Z: the automated refresh [#9980](https://github.com/synaptent/aragora/pull/9980) merged 2026-09-14 as `cedf5230` after a two-family review of its repaired renderer (machine-readable missing-observation disclosure plus a general data-driven guard) and a METRICS refresh, so no publication PR is parked. Reviewer capacity remains the general throughput limit for the queue, but it is no longer the gate on this surface. When benchmark publication drifts, lags, or lands incomplete corpus coverage, restoring that publication becomes the immediate gate again before any scope widening.
 
 Primary truth metric:
 
