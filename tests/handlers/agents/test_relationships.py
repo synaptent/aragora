@@ -521,7 +521,7 @@ class TestInputValidation:
         result = handler.handle("/api/v1/agents/.bad/relationships", {}, mock_http_handler)
         assert _status(result) == 400
         result = handler.handle("/api/v1/agents/../relationships", {}, mock_http_handler)
-        assert _status(result) != 200
+        assert _status(result) == 400
 
     def test_agent_name_with_special_chars(self, handler, mock_http_handler):
         result = handler.handle("/api/v1/agents/bad%3Cscript/relationships", {}, mock_http_handler)
