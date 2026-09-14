@@ -19,13 +19,13 @@ They pin the structural contract of ``aragora-merge-quorum.yml``:
   default branch: the newest completed non-draft head-bound evaluation,
   ordered by ``((run_started_at // created_at), run_id, run_attempt)``,
   with comment bursts collapsing into a single rerun;
-* B1.1 (spec §"Settlement retrigger"): the Tier-4 human-settlement
-  comment posted by ``settle_tier4_pr.py --settle-only`` is the second
-  accepted comment shape, and it reaches the SAME selection only after
-  the helper verifies that the cited head is the PR's current head and
-  that the exact-head ``aragora/human-settlement`` status is already
-  ``success`` — replacing the manual post-settlement ``gh run rerun``
-  without widening what a rerun can accept.
+* B1.1 (spec §"Settlement retrigger"): the ``status`` event for the
+  exact-head ``aragora/human-settlement`` commit status — posted by every
+  settlement route — drives a separate ``settlement-retrigger`` job that
+  resolves the open PR(s) at that commit and runs the SAME shared helper
+  in settlement mode, which re-verifies the head and the status before
+  the unchanged selection — replacing the manual post-settlement
+  ``gh run rerun`` without widening what a rerun can accept.
 
 The suite must FAIL against the pre-B1 workflow and PASS with the
 change (RED/GREEN proof captured in the implementing PR).
@@ -591,99 +591,128 @@ _STALE_FAILED_RUN = [_run(300, "completed", "failure", "2026-08-16T10:05Z", "202
 
 
 class TestSettlementRetriggerContract:
-    """B1.1 structural pins: the settlement comment is a second accepted
-    shape on BOTH surfaces, the author gate is enforced, and the helper —
-    not the workflow files — verifies the settlement status."""
+    """B1.1 structural pins: the settlement signal is the commit status
+    event, handled by its own least-privileged job that delegates to the
+    shared helper; the comment surfaces are untouched by it."""
 
-    SETTLEMENT_MARKER = "tier-4 human settlement authorization"
+    @pytest.fixture(scope="class")
+    def settlement_job(self, workflow: dict[str, Any]) -> dict[str, Any]:
+        jobs = workflow["jobs"]
+        assert "settlement-retrigger" in jobs, (
+            "workflow must define the B1.1 settlement-retrigger job "
+            "(docs/specs/QUORUM_EVIDENCE_RETRIGGER.md §Settlement retrigger)"
+        )
+        return jobs["settlement-retrigger"]
 
-    def test_both_surfaces_recognize_the_settlement_marker(
-        self, retrigger_scripts: dict[str, str]
+    def test_status_event_is_a_trigger(self, triggers: dict[str, Any]) -> None:
+        """The settlement status must be able to re-trigger the workflow."""
+        assert "status" in triggers
+
+    def test_settlement_job_is_gated_to_the_settlement_success_status(
+        self, settlement_job: dict[str, Any]
     ) -> None:
-        for surface, script in retrigger_scripts.items():
-            assert self.SETTLEMENT_MARKER in script, (
-                f"{surface}: must recognize the settle_tier4_pr.py settlement comment marker"
-            )
-            assert "exact head:" in script, (
-                f"{surface}: settlement shape requires the head citation"
-            )
-            assert "mode=settlement" in script and "mode=evidence" in script, (
-                f"{surface}: the guard must classify the comment shape for the helper"
-            )
+        """Declarative guard: only aragora/human-settlement, only success —
+        every other commit status skips without scheduling a runner."""
+        condition = str(settlement_job.get("if", ""))
+        assert "github.event_name == 'status'" in condition
+        assert "github.event.context == 'aragora/human-settlement'" in condition
+        assert "github.event.state == 'success'" in condition
 
-    def test_settlement_marker_matches_the_settle_script_template(self) -> None:
-        """The marker the guards look for is the one settle_tier4_pr.py posts."""
-        settle_script = (REPO_ROOT / "scripts" / "settle_tier4_pr.py").read_text(encoding="utf-8")
-        assert 'AUTHORIZED_MARKER = "Tier-4 Human Settlement Authorization"' in settle_script
-        assert 'HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"' in settle_script
+    def test_settlement_context_matches_the_settle_tooling(self) -> None:
+        """The context the job listens for is the one both settlement routes post."""
+        settle = (REPO_ROOT / "scripts" / "settle_tier4_pr.py").read_text(encoding="utf-8")
+        assert 'HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"' in settle
+        review_queue = (REPO_ROOT / "aragora" / "cli" / "commands" / "review_queue.py").read_text(
+            encoding="utf-8"
+        )
+        assert 'HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"' in review_queue
 
-    def test_evidence_retrigger_gates_settlement_shape_on_author_association(
-        self, retrigger_job: dict[str, Any]
+    def test_enforcing_job_excluded_from_status_events(self, enforcing_job: dict[str, Any]) -> None:
+        """A status event must never produce a default-branch-bound evaluation."""
+        assert "github.event_name != 'status'" in str(enforcing_job.get("if", ""))
+
+    def test_workflow_concurrency_group_keys_status_events_by_sha(
+        self, workflow: dict[str, Any]
     ) -> None:
-        """The enforcing workflow's job has no author gate of its own, so the
-        settlement branch must read author_association (via env) and
-        accept only OWNER/MEMBER."""
-        steps_env: dict[str, Any] = {}
-        for step in retrigger_job.get("steps", []):
-            steps_env.update(step.get("env", {}) or {})
-        assert any(
-            "github.event.comment.author_association" in str(value) for value in steps_env.values()
-        ), "author association must reach the guard through env:"
-        script = _run_blocks(retrigger_job)
-        assert "github.event.comment.author_association" not in script
-        assert "OWNER|MEMBER" in script
+        """Status events carry no PR number; without the sha fallback every
+        settlement would collide in one empty-suffixed group."""
+        assert "github.event.sha" in workflow["concurrency"]["group"]
 
-    def test_standalone_surface_keeps_its_declarative_author_gate(
-        self, standalone_workflow: dict[str, Any]
+    def test_settlement_job_write_surface_is_exactly_actions(
+        self, settlement_job: dict[str, Any]
     ) -> None:
-        condition = str(standalone_workflow["jobs"]["retrigger"].get("if", ""))
-        assert '"OWNER","MEMBER"' in condition
-        assert "github.event.comment.author_association" in condition
+        permissions = settlement_job.get("permissions") or {}
+        writes = sorted(scope for scope, level in permissions.items() if level == "write")
+        assert writes == ["actions"]
+        assert permissions.get("contents") == "read"
+        assert permissions.get("statuses") is None, "the job must not be able to post statuses"
 
-    def test_both_surfaces_pass_mode_and_settlement_head_to_the_helper(
-        self, retrigger_job: dict[str, Any], standalone_workflow: dict[str, Any]
+    def test_settlement_job_concurrency_is_per_sha_and_cancels_in_progress(
+        self, settlement_job: dict[str, Any]
     ) -> None:
-        surfaces = {
-            "evidence-retrigger": retrigger_job,
-            "standalone": standalone_workflow["jobs"]["retrigger"],
-        }
-        for surface, job in surfaces.items():
-            helper_steps = [
-                step
-                for step in job.get("steps", [])
-                if SELECT_SCRIPT_INVOCATION in str(step.get("run", ""))
-            ]
-            assert len(helper_steps) == 1, surface
-            env = helper_steps[0].get("env") or {}
-            assert "RETRIGGER_MODE" in env, f"{surface}: helper must receive the comment shape"
-            assert "SETTLEMENT_HEAD" in env, f"{surface}: helper must receive the cited head"
-            assert "outputs.mode" in str(env["RETRIGGER_MODE"]), surface
-            assert "outputs.settlement_head" in str(env["SETTLEMENT_HEAD"]), surface
+        concurrency = settlement_job.get("concurrency") or {}
+        assert "github.event.sha" in str(concurrency.get("group", ""))
+        assert concurrency.get("cancel-in-progress") is True
 
-    def test_manual_dispatch_stays_in_evidence_mode(
-        self, standalone_workflow: dict[str, Any]
+    def test_settlement_job_checks_out_only_the_shared_helper(
+        self, settlement_job: dict[str, Any]
     ) -> None:
-        """A workflow_dispatch has no comment; it must not default into the
-        settlement branch."""
+        checkouts = [
+            step
+            for step in settlement_job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        assert len(checkouts) == 1
+        with_block = checkouts[0].get("with") or {}
+        assert with_block.get("ref") == "${{ github.event.repository.default_branch }}"
+        assert str(with_block.get("sparse-checkout", "")).split() == [
+            "scripts/quorum_evidence_retrigger_select.sh"
+        ]
+        assert with_block.get("sparse-checkout-cone-mode") is False
+
+    def test_settlement_job_resolves_open_prs_at_the_settled_head_and_delegates(
+        self, settlement_job: dict[str, Any]
+    ) -> None:
+        """A status event names a commit; the job maps it to the open PR(s)
+        whose CURRENT head is that commit (read-only) and runs the shared
+        helper once per PR in settlement mode. No inline selection."""
+        script = _run_blocks(settlement_job)
+        assert "/pulls" in script and 'select(.state == "open"' in script
+        assert ".head.sha ==" in script, "only PRs whose current head is the settled sha"
+        assert script.count(SELECT_SCRIPT_INVOCATION) == 1
+        for token in ("sort_by(", "--paginate", "total_count", "gh run rerun", "run_started_at"):
+            assert token not in script, f"selection logic must stay in the helper ({token!r})"
         helper_steps = [
             step
-            for step in standalone_workflow["jobs"]["retrigger"].get("steps", [])
+            for step in settlement_job.get("steps", [])
             if SELECT_SCRIPT_INVOCATION in str(step.get("run", ""))
         ]
-        assert "|| 'evidence'" in str(helper_steps[0]["env"]["RETRIGGER_MODE"])
+        env = helper_steps[0].get("env") or {}
+        assert env.get("RETRIGGER_MODE") == "settlement"
+        assert "github.event.sha" in str(env.get("SETTLED_SHA", ""))
+        assert "github.event.sha" not in script, "the event sha reaches the shell via env only"
+        assert 'SETTLEMENT_HEAD="$SETTLED_SHA"' in script
+
+    def test_comment_surfaces_carry_no_settlement_logic(
+        self, retrigger_scripts: dict[str, str]
+    ) -> None:
+        """The settlement signal is the status, never a comment shape: the
+        two comment-driven surfaces stay byte-for-byte evidence-only."""
+        for surface, script in retrigger_scripts.items():
+            assert "settlement" not in script.lower(), surface
+            assert "RETRIGGER_MODE" not in script, surface
 
     def test_settlement_verification_lives_only_in_the_shared_helper(
-        self, select_script: str, retrigger_scripts: dict[str, str]
+        self, select_script: str, workflow: dict[str, Any]
     ) -> None:
         """The status read is merge-authority logic: one copy, in the helper."""
         assert 'select(.context == "aragora/human-settlement")' in select_script
         assert "commits/${head_sha}/status" in select_script
         assert '"$cited" != "$head_sha"' in select_script, "settlement must be exact-head"
-        for surface, script in retrigger_scripts.items():
-            assert "select(.context" not in script, (
-                f"{surface}: settlement status verification must not be duplicated inline"
-            )
-            assert "commits/" not in script, f"{surface}: no inline commit-status read"
+        for job_id in ("evidence-retrigger", "settlement-retrigger"):
+            script = _run_blocks(workflow["jobs"][job_id])
+            assert "select(.context" not in script, job_id
+            assert "/status" not in script.replace("/statuses", ""), job_id
 
     def test_helper_rejects_unknown_modes(self, select_script: str) -> None:
         assert "evidence|settlement) ;;" in select_script

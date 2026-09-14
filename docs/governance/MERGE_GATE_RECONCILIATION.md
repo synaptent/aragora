@@ -117,11 +117,10 @@ gh api --method POST "repos/synaptent/aragora/statuses/$HEAD_SHA" \
 
 # 3. Re-run the merge-quorum check so it observes the signal.
 #    (Or: PR page -> Checks -> aragora-merge-quorum -> Re-run.)
-#    When settlement is recorded with `scripts/settle_tier4_pr.py --settle-only`,
-#    its "Tier-4 Human Settlement Authorization" comment triggers this rerun
-#    automatically once the status above exists (B1.1,
+#    Posting the status in step 2 (by any route) emits a `status` event that
+#    triggers this rerun automatically (B1.1,
 #    docs/specs/QUORUM_EVIDENCE_RETRIGGER.md); the manual rerun below remains
-#    the fallback for hand-posted settlements.
+#    the fallback.
 BRANCH=$(gh pr view "$PR" --repo synaptent/aragora --json headRefName --jq .headRefName)
 RUN_ID=$(gh run list --repo synaptent/aragora \
   --workflow=aragora-merge-quorum.yml --branch "$BRANCH" \

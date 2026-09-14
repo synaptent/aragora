@@ -24,13 +24,17 @@ on:
   # stale. When a comment that plausibly carries reviewer evidence is
   # created, the evidence-retrigger job below re-runs the head-bound
   # pull_request evaluation so the gate re-reads the now-complete evidence.
-  # B1.1 (same spec, §"Settlement retrigger"): the Tier-4 human-settlement
-  # comment posted by `settle_tier4_pr.py --settle-only` is the other
-  # comment that changes the gate's answer (Tier 3-4 require the exact-head
-  # `aragora/human-settlement` status), so it is accepted as a second
-  # retrigger shape, gated on the settlement status actually existing.
   issue_comment:
     types: [created]
+  # B1.1 (same spec, §"Settlement retrigger"): Tier 3-4 need the exact-head
+  # `aragora/human-settlement` commit status, and that status is the other
+  # thing that changes this gate's answer after the head-bound evaluation
+  # already ran. GitHub emits a `status` event when it is posted, whichever
+  # route posts it (settle_tier4_pr.py --settle-only, review-queue
+  # record-settlement --post-github-status, or a manual `gh api` status), so
+  # the settlement-retrigger job below re-runs the head-bound evaluation for
+  # the open PR(s) at that commit instead of waiting for a manual rerun.
+  status:
   workflow_dispatch:
     inputs:
       pr_number:
@@ -44,7 +48,7 @@ concurrency:
   # Including the issue number keeps comment-triggered runs serialized
   # per-PR (and behind any in-flight evaluation for the same PR) instead
   # of colliding in a single repo-wide group.
-  group: aragora-merge-quorum-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number }}
+  group: aragora-merge-quorum-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number || github.event.sha }}
   # cancel-in-progress is intentionally false. With true, two triggers for the
   # same PR (e.g. synchronize + reopened, or rapid pushes) cancel each other;
   # a cancelled run reports a "cancelled" conclusion, which turns this REQUIRED
@@ -64,10 +68,11 @@ permissions:
 jobs:
   merge-quorum:
     name: aragora-merge-quorum
-    # issue_comment events are handled by the evidence-retrigger job below.
-    # The enforcing evaluation only runs in pull_request / workflow_dispatch
-    # context, where its check run binds to the PR head SHA.
-    if: github.event_name != 'issue_comment'
+    # issue_comment events are handled by the evidence-retrigger job and
+    # status events by the settlement-retrigger job below. The enforcing
+    # evaluation only runs in pull_request / workflow_dispatch context, where
+    # its check run binds to the PR head SHA.
+    if: github.event_name != 'issue_comment' && github.event_name != 'status'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -346,52 +351,19 @@ jobs:
       group: quorum-evidence-retrigger-${{ github.event.issue.number }}
       cancel-in-progress: true
     steps:
-      # Guard 1: the comment must be one of exactly two shapes. (a) Evidence:
-      # its FIRST markdown heading names a known reviewer family — the same
-      # convention the quorum evidence parsers key on (review_queue.py
-      # heading inference + canonical model-family markers). (b) Settlement
-      # (B1.1): its first non-blank line is the literal
-      # "Tier-4 Human Settlement Authorization" marker that
-      # scripts/settle_tier4_pr.py --settle-only posts, the author is an
-      # OWNER/MEMBER of the base repo, and the body cites a 40-hex
-      # "Exact head:". Shape (b) only reaches a rerun after the shared helper
-      # verifies the exact-head aragora/human-settlement=success status.
-      # Anything else no-ops successfully.
-      - name: Evidence-or-settlement shape guard
+      # Guard 1: the comment's FIRST markdown heading must name a known
+      # reviewer family — the same convention the quorum evidence parsers
+      # key on (review_queue.py heading inference + canonical model-family
+      # markers). Anything else no-ops successfully.
+      - name: Evidence-heading guard
         id: heading
         env:
           # Attacker-controlled content enters ONLY via env (never inline
           # ${{ }} inside run:), so comment markdown cannot inject shell.
           COMMENT_BODY: ${{ github.event.comment.body }}
-          # Evaluated against the BASE repository by GitHub, not by us.
-          COMMENT_AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         shell: bash
         run: |
           set -euo pipefail
-          settlement_marker='tier-4 human settlement authorization'
-          first_line="$(printf '%s\n' "$COMMENT_BODY" | tr -d '\r' | grep -m1 -E '[^[:space:]]' || true)"
-          first_line_norm="$(printf '%s' "$first_line" | tr '[:upper:]' '[:lower:]' | sed -E 's/^[[:space:]]*#{0,6}[[:space:]]*//; s/[[:space:]]+$//')"
-          if [[ "$first_line_norm" == "$settlement_marker" ]]; then
-            case "$COMMENT_AUTHOR_ASSOCIATION" in
-              OWNER|MEMBER) ;;
-              *)
-                echo "match=false" >> "$GITHUB_OUTPUT"
-                echo "Settlement-shaped comment from author association '${COMMENT_AUTHOR_ASSOCIATION}' (not OWNER/MEMBER) — no-op."
-                exit 0
-                ;;
-            esac
-            cited="$(printf '%s\n' "$COMMENT_BODY" | tr -d '\r' | grep -m1 -iE '^[[:space:]]*exact head:[[:space:]]*[0-9a-f]{40}[[:space:]]*$' | grep -oiE '[0-9a-f]{40}' | tr '[:upper:]' '[:lower:]' || true)"
-            if [[ -z "$cited" ]]; then
-              echo "match=false" >> "$GITHUB_OUTPUT"
-              echo "Settlement-shaped comment cites no 40-hex 'Exact head:' line — no-op."
-              exit 0
-            fi
-            echo "match=true" >> "$GITHUB_OUTPUT"
-            echo "mode=settlement" >> "$GITHUB_OUTPUT"
-            echo "settlement_head=${cited}" >> "$GITHUB_OUTPUT"
-            echo "Settlement-shaped comment for head ${cited}; the shared helper verifies the settlement status before any rerun."
-            exit 0
-          fi
           heading="$(printf '%s\n' "$COMMENT_BODY" | grep -m1 -E '^[[:space:]]{0,3}#{1,6}[[:space:]]' || true)"
           if [[ -z "$heading" ]]; then
             echo "match=false" >> "$GITHUB_OUTPUT"
@@ -406,7 +378,6 @@ jobs:
             exit 0
           fi
           echo "match=true" >> "$GITHUB_OUTPUT"
-          echo "mode=evidence" >> "$GITHUB_OUTPUT"
 
       - name: Check out the shared selection helper (default branch)
         if: steps.heading.outputs.match == 'true'
@@ -431,12 +402,79 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
-          # B1.1: settlement-shaped comments run the same selection behind
-          # two extra read-only preconditions inside the helper (cited head
-          # == current head; exact-head aragora/human-settlement=success).
-          RETRIGGER_MODE: ${{ steps.heading.outputs.mode }}
-          SETTLEMENT_HEAD: ${{ steps.heading.outputs.settlement_head }}
         shell: bash
         run: |
           set -euo pipefail
           bash scripts/quorum_evidence_retrigger_select.sh
+
+  # B1.1 (docs/specs/QUORUM_EVIDENCE_RETRIGGER.md §"Settlement retrigger"):
+  # the exact-head `aragora/human-settlement` commit status is the unforgeable
+  # settlement signal the enforcing evaluation already requires for Tier 3-4,
+  # and only a statuses:write principal can post it. Every settlement route
+  # posts it, so its `status` event is the one signal that covers all of
+  # them. Like evidence-retrigger, this job never evaluates anything inline:
+  # it re-runs the newest head-bound pull_request evaluation through the same
+  # shared helper, which re-verifies the status before requesting the rerun.
+  settlement-retrigger:
+    name: quorum-settlement-retrigger
+    # Declarative guards: only the settlement context, only success. Every
+    # other commit status (CI contexts, pending/failure states) skips without
+    # scheduling a runner.
+    if: >-
+      github.event_name == 'status' &&
+      github.event.context == 'aragora/human-settlement' &&
+      github.event.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Same least-privilege shape as evidence-retrigger: actions:write only to
+    # re-run this workflow's own prior evaluation; everything else read-only.
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+      issues: read
+    # One retrigger per settled commit; a repeated status post for the same
+    # sha cancels the older still-pending retrigger.
+    concurrency:
+      group: quorum-settlement-retrigger-${{ github.event.sha }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out the shared selection helper (default branch)
+        uses: actions/checkout@v4
+        with:
+          # Always run the BASE repo's default-branch copy of the helper —
+          # never PR code (the enforcing evaluation job's same ref pin).
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: scripts/quorum_evidence_retrigger_select.sh
+          sparse-checkout-cone-mode: false
+
+      # A status event names a commit, not a PR. Resolve the open PR(s) whose
+      # head is that commit (read-only) and run the shared helper for each in
+      # settlement mode: the helper re-checks that the sha is the PR's current
+      # head and that aragora/human-settlement=success is really on it, then
+      # applies the unchanged newest-survivor selection and burst dedup.
+      - name: Re-trigger the head-bound quorum evaluation for the settled PR(s)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          # The event sha is GitHub-supplied, never comment/author-controlled;
+          # it still reaches the shell only through env.
+          SETTLED_SHA: ${{ github.event.sha }}
+          RETRIGGER_MODE: settlement
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$SETTLED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::warning::status event carried no 40-hex sha; no-op."
+            exit 0
+          fi
+          prs="$(gh api "repos/${GH_REPO}/commits/${SETTLED_SHA}/pulls" \
+            --jq '[.[] | select(.state == "open" and .head.sha == "'"${SETTLED_SHA}"'") | .number] | unique | .[]')"
+          if [[ -z "$prs" ]]; then
+            echo "No open PR has ${SETTLED_SHA} as its current head — settlement is exact-head; no-op."
+            exit 0
+          fi
+          for pr in $prs; do
+            echo "Settled head ${SETTLED_SHA} is the current head of PR #${pr}."
+            PR_NUMBER="$pr" SETTLEMENT_HEAD="$SETTLED_SHA" bash scripts/quorum_evidence_retrigger_select.sh
+          done

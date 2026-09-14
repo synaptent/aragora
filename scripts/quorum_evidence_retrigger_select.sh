@@ -13,13 +13,14 @@
 # Env contract: GH_TOKEN (read PR/run state + re-run workflow runs),
 # GH_REPO (owner/repo), PR_NUMBER. Optional (B1.1, spec §"Settlement
 # retrigger"): RETRIGGER_MODE=evidence (default) | settlement, and in
-# settlement mode SETTLEMENT_HEAD = the 40-hex head SHA cited by the
-# Tier-4 human-settlement comment. Settlement mode adds two read-only
-# preconditions before the SAME selection below: the cited head must be
+# settlement mode SETTLEMENT_HEAD = the 40-hex sha of the commit whose
+# `aragora/human-settlement` status event fired. Settlement mode adds two
+# read-only preconditions before the SAME selection below: that sha must be
 # the PR's current head, and the exact-head `aragora/human-settlement`
-# commit status must already be `success`. Either precondition failing is
-# a no-op — settlement mode never widens what a rerun can accept, it only
-# replaces the operator's manual post-settlement rerun click.
+# commit status must really be `success` (re-read from the API, never
+# trusted from the caller). Either precondition failing is a no-op —
+# settlement mode never widens what a rerun can accept, it only replaces
+# the operator's manual post-settlement rerun click.
 #
 # The ONLY mutating action is the single rerun request at the end, on the
 # newest surviving head-bound pull_request evaluation; every other path is
@@ -66,10 +67,11 @@ if [[ "$mode" == "settlement" ]]; then
     echo "Settlement comment cites head ${cited} but PR #${PR_NUMBER} is at ${head_sha} — not this head's settlement; no-op."
     exit 0
   fi
-  # settle-only posts the comment BEFORE the commit status (seconds apart),
-  # so tolerate that ordering with a short bounded wait. The status can only
-  # be written by a statuses:write principal; the comment alone proves
-  # nothing and never triggers a rerun on its own.
+  # Re-read the status from the API rather than trusting the caller: the
+  # status can only be written by a statuses:write principal, and a status
+  # superseded by a later non-success post for the same context must not
+  # unlock a rerun. The short bounded wait tolerates eventual consistency
+  # between the status write and the combined-status read.
   settlement_state=""
   for attempt in 1 2 3; do
     settlement_state="$(gh api "repos/${GH_REPO}/commits/${head_sha}/status" \
