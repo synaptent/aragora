@@ -2,6 +2,7 @@ import type { Debate } from '@aragora/sdk';
 
 type StoredDebate = Debate & {
   messages?: NonNullable<Debate['rounds']>[number]['messages'];
+  agreement?: number;
 };
 
 export function formatPercentage(value: number | undefined): string {
@@ -19,8 +20,8 @@ export function debateView(debate: StoredDebate) {
   return {
     roundsCompleted: debate.rounds_used ?? rounds.length,
     answer: debate.consensus?.final_answer ?? debate.consensus?.conclusion ?? debate.final_answer,
-    confidence: formatPercentage(debate.consensus?.confidence),
-    agreement: formatPercentage(debate.consensus?.agreement),
+    confidence: formatPercentage(debate.consensus?.confidence ?? debate.confidence),
+    agreement: formatPercentage(debate.consensus?.agreement ?? debate.agreement),
     messages: roundMessages.length > 0 ? roundMessages : savedMessages,
   };
 }

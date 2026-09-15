@@ -44,6 +44,54 @@ test('answer and round fallbacks use only SDK fields', () => {
   assert.equal(debateView({ ...debate, rounds: [{ round_number: 1, messages: [] }] }).roundsCompleted, 1);
 });
 
+test('installed SDK preserves saved top-level confidence and agreement', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const consensus of [undefined, null, { reached: false }]) {
+      for (const metrics of [
+        { confidence: 0.8, agreement: 0.6 },
+        { confidence: 0, agreement: 0 },
+        { confidence: null, agreement: null },
+      ]) {
+        globalThis.fetch = async () => new Response(JSON.stringify({
+          ...debate, ...metrics, consensus,
+        }), { headers: { 'content-type': 'application/json' } });
+        const value = await createClient({ baseUrl: 'https://example.test' })
+          .debates.get(debate.debate_id);
+        const view = debateView(value);
+        assert.equal(view.confidence, formatPercentage(metrics.confidence ?? undefined));
+        assert.equal(view.agreement, formatPercentage(metrics.agreement ?? undefined));
+      }
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test('nested metrics take precedence per field, including explicit zero', () => {
+  const saved = { ...debate, confidence: 0.8, agreement: 0.6 };
+  const both = debateView({ ...saved, consensus: {
+    reached: false, confidence: 0, agreement: 0,
+  } });
+  assert.equal(both.confidence, '0.0%');
+  assert.equal(both.agreement, '0.0%');
+  const confidenceOnly = debateView({ ...saved, consensus: { reached: false, confidence: 0 } });
+  assert.equal(confidenceOnly.confidence, '0.0%');
+  assert.equal(confidenceOnly.agreement, '60.0%');
+  const agreementOnly = debateView({ ...saved, consensus: { reached: false, agreement: 0 } });
+  assert.equal(agreementOnly.confidence, '80.0%');
+  assert.equal(agreementOnly.agreement, '0.0%');
+});
+
+test('unreported or non-finite saved metrics are not measured zeroes', () => {
+  const saved = { ...debate, confidence: Number.NaN, agreement: Number.POSITIVE_INFINITY };
+  assert.equal(debateView(saved).confidence, 'Not reported');
+  assert.equal(debateView(saved).agreement, 'Not reported');
+  assert.equal(debateView({ ...debate, confidence: 0.8 }).agreement, 'Not reported');
+  const agreementOnly = { ...debate, agreement: 0.6 };
+  assert.equal(debateView(agreementOnly).confidence, 'Not reported');
+});
+
 test('published SDK numeric requested rounds are not completed history', async () => {
   const original = globalThis.fetch;
   try {
