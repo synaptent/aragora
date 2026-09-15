@@ -223,6 +223,9 @@ transport timeout and may finish later: this is not a hard end-to-end deadline.
 Transport errors propagate rather than being classified as pending. The adapter
 does not submit a second run. Inspect the existing run before submitting again.
 Completed legacy receipts without a status field remain supported.
+New API and queued runs retain their submitted ID through execution, storage,
+and receipt creation. Standalone runs still generate an ID. Historical results
+stored under a different ID are not migrated or silently accepted by the client.
 
 ## Decision Receipts
 

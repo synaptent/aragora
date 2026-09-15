@@ -6,7 +6,7 @@ import inspect
 import json
 from threading import Thread
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -265,3 +265,96 @@ def test_inflight_receipt_retains_transport_timeout_and_can_finish_after_budget(
     client._get.side_effect = respond
     assert api.run_and_wait("content", timeout=10).verdict == "APPROVED"
     assert clock.sleeps == []
+
+
+@pytest.mark.parametrize("producer", ["handler", "worker"])
+def test_producer_identity_survives_execution_storage_and_receipts(monkeypatch, tmp_path, producer):
+    from aragora.agents import base
+    import aragora.gauntlet as package
+    from aragora.gauntlet import storage
+    from aragora.ranking import elo
+    from aragora.server.handlers.gauntlet import receipts, results, runner
+    from aragora.server.workers.gauntlet_worker import GauntletWorker
+    from aragora.storage.job_queue_store import QueuedJob
+
+    config_type = package.OrchestratorConfig
+
+    def offline_config(**kwargs):
+        return config_type(
+            **kwargs,
+            **{
+                f"enable_{phase}": False
+                for phase in ("redteam", "probing", "deep_audit", "verification", "risk_assessment")
+            },
+        )
+
+    # Real result construction and SQLite; no inference, ELO, or receipt publication.
+    monkeypatch.setattr(package, "OrchestratorConfig", offline_config)
+    monkeypatch.setattr(base, "create_agent", lambda **_: SimpleNamespace(name="offline"))
+    monkeypatch.setattr(elo, "EloSystem", MagicMock())
+    store_type = storage.GauntletStorage
+    db = str(tmp_path / "results.db")
+    store = store_type(db, backend="sqlite")
+    store.save_inflight(RUN_ID, "pending", "spec", "fixture", "hash", None, "default", ["demo"])
+    monkeypatch.setattr(storage, "GauntletStorage", lambda: store)
+    runs = {RUN_ID: {**state("pending"), "input_summary": "fixture"}}
+    for module in (runner, receipts, results):
+        monkeypatch.setattr(module, "get_gauntlet_runs", lambda: runs)
+        monkeypatch.setattr(module, "_get_storage_proxy", lambda: store)
+    monkeypatch.setattr(runner, "get_gauntlet_broadcast_fn", lambda: None)
+    if producer == "handler":
+        owner = SimpleNamespace(_auto_persist_receipt=AsyncMock())
+        asyncio.run(
+            runner.GauntletRunnerMixin._run_gauntlet_async(
+                owner, RUN_ID, "fixture", "spec", None, ["demo"], "default"
+            )
+        )
+        assert runs[RUN_ID]["result_obj"].gauntlet_id == RUN_ID
+        assert owner._auto_persist_receipt.call_args.args[0].gauntlet_id == RUN_ID
+    else:
+        worker = object.__new__(GauntletWorker)
+        worker.broadcast_fn = None
+        job = QueuedJob(
+            id="queue-job",
+            job_type="gauntlet",
+            payload={"gauntlet_id": RUN_ID, "input_content": "fixture", "agents": ["demo"]},
+        )
+        assert asyncio.run(worker._execute_gauntlet(job))["gauntlet_id"] == RUN_ID
+        runs.clear()
+    assert store.get(RUN_ID)["gauntlet_id"] == RUN_ID
+    assert store.get_inflight(RUN_ID) is None
+    client = MagicMock()
+    client._post.return_value = state("pending")
+
+    def read(path):
+        response = asyncio.run(
+            inspect.unwrap(receipts.GauntletReceiptsMixin._get_receipt)(
+                None, RUN_ID, {"signed": "false"}
+            )
+            if path == RECEIPT_PATH
+            else inspect.unwrap(results.GauntletResultsMixin._get_status)(None, RUN_ID)
+        )
+        assert response.status_code == 200
+        return json.loads(response.body)
+
+    client._get.side_effect = read
+    for _ in range(2):
+        receipt = gauntlet.GauntletAPI(client).run_and_wait("fixture", timeout=10)
+        assert receipt.gauntlet_id == RUN_ID
+        assert receipt.verdict == "NEEDS_REVIEW"  # No fabricated successful evidence.
+        runs.clear()
+        store.close()
+        store = store_type(db, backend="sqlite")  # Restart-style durable lookup.
+    store.close()
+    assert client._post.call_count == 2  # One per explicit client invocation.
+
+
+def test_standalone_execution_still_generates_distinct_ids():
+    from aragora.gauntlet import GauntletOrchestrator, OrchestratorConfig
+
+    config = OrchestratorConfig(enable_risk_assessment=False, enable_verification=False)
+    first = asyncio.run(GauntletOrchestrator([]).run(config))
+    second = asyncio.run(GauntletOrchestrator([]).run(config))
+    assert first.gauntlet_id.startswith("gauntlet-")
+    assert second.gauntlet_id.startswith("gauntlet-")
+    assert first.gauntlet_id != second.gauntlet_id
