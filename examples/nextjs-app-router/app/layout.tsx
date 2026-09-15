@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,10 +16,10 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <nav className="navbar">
-          <a href="/" className="logo">Aragora</a>
+          <Link href="/" className="logo">Aragora</Link>
           <div className="nav-links">
-            <a href="/debates">Debates</a>
-            <a href="/debates/new">New Debate</a>
+            <Link href="/debates">Debates</Link>
+            <Link href="/debates/new">New Debate</Link>
           </div>
         </nav>
         <main className="container">
