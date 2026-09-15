@@ -7,10 +7,10 @@ new maintainer who is inspecting Aragora without prior context.
 
 ## One-Sentence Thesis
 
-Aragora is an auditable execution control plane for consequential AI-assisted
-work: it coordinates heterogeneous agents, requires evidence-backed review,
-preserves receipts and provenance, and stops truthfully when a task lacks enough
-support to proceed.
+Aragora is an auditable execution control plane for AI-assisted decisions:
+multi-model review in, a verifiable Decision Receipt out. It coordinates
+heterogeneous agents, requires evidence-backed review, preserves receipts and
+provenance, and stops truthfully when a task lacks enough support to proceed.
 
 ## What Aragora Is Good For Today
 
