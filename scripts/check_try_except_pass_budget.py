@@ -15,6 +15,7 @@ budget has a ceiling of 0, so new files cannot introduce the pattern and
 existing files cannot grow.  Ceilings only ever move down (``--tighten``
 refuses to raise one).  A ``# noqa`` for S110/S112 inside ``tests/`` is a hard
 failure regardless of budget, so the budget cannot be bypassed by suppression.
+Measurement ignores all noqa directives, including blanket and file-level ones.
 
 Usage:
     python scripts/check_try_except_pass_budget.py            # enforce; exit 1 on any exceed
@@ -152,6 +153,7 @@ def measure(tests_root: Path = DEFAULT_TESTS_ROOT, repo_root: Path = REPO_ROOT) 
         "json",
         "--exit-zero",
         "--no-cache",
+        "--ignore-noqa",
     ]
     proc = subprocess.run(cmd, cwd=str(repo_root), capture_output=True, text=True, check=False)
     if proc.returncode != 0:
@@ -303,6 +305,7 @@ def format_text(ev: Evaluation, budget_path: Path) -> str:
 
 def _atomic_write(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_name: str | None
     fd, tmp_name = tempfile.mkstemp(prefix=".try_except_pass_budget.", dir=str(path.parent))
     try:
         with os.fdopen(fd, "wb") as handle:

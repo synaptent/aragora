@@ -198,6 +198,24 @@ class TestTighten:
         assert p.stat().st_mtime_ns == stamp
 
 
+class TestAtomicWrite:
+    def test_replacement_failure_preserves_budget_and_removes_temporary_file(
+        self, tmp_path, monkeypatch
+    ):
+        path = tmp_path / "budget.json"
+        path.write_bytes(b"original")
+
+        def fail_replace(source, destination):
+            raise OSError("replacement failed")
+
+        monkeypatch.setattr(budget_mod.os, "replace", fail_replace)
+        with pytest.raises(OSError, match="replacement failed"):
+            budget_mod._atomic_write(path, b"replacement")
+
+        assert path.read_bytes() == b"original"
+        assert list(tmp_path.iterdir()) == [path]
+
+
 class TestScanNoqa:
     def test_detects_suppression_and_ignores_plain_comments(self, tmp_path):
         root = tmp_path / "tests"
@@ -221,6 +239,55 @@ class TestMeasure:
             ("tests/test_x.py", "S112"),
         ]
         assert all(f.row > 0 for f in found)
+
+    @pytest.mark.parametrize("source,rule", [(_BLANKET, "S110"), (_CONTINUE, "S112")])
+    @pytest.mark.parametrize("suppression", ["inline", "ruff-file", "flake8-file"])
+    def test_blanket_suppression_cannot_hide_debt(
+        self, tmp_path, capsys, source, rule, suppression
+    ):
+        root = tmp_path / "tests"
+        root.mkdir()
+        directive = "no" + "qa"
+        if suppression == "inline":
+            source = source.replace("except Exception:", "except Exception:  # " + directive)
+        else:
+            prefix = suppression.removesuffix("-file")
+            source = f"# {prefix}: {directive}\n" + source
+        (root / "test_x.py").write_text(source)
+
+        found = budget_mod.measure(root, repo_root=tmp_path)
+        assert [(f.path, f.code) for f in found] == [("tests/test_x.py", rule)]
+        budget = tmp_path / "budget.json"
+        before = budget_mod.canonical_budget_bytes(0, {})
+        budget.write_bytes(before)
+        args = ["--tests-root", str(root), "--budget", str(budget)]
+        assert budget_mod.main([*args, "--json"]) == 1
+        result = json.loads(capsys.readouterr().out)
+        assert result["total_measured"] == 1
+        assert not result["ok"]
+        assert budget_mod.main([*args, "--tighten"]) == 1
+        assert budget.read_bytes() == before
+
+    def test_suppression_cannot_tighten_away_existing_debt(self, tmp_path):
+        root = tmp_path / "tests"
+        root.mkdir()
+        (root / "test_x.py").write_text("# ruff: no" + "qa\n" + _BLANKET)
+        budget = tmp_path / "budget.json"
+        before = budget_mod.canonical_budget_bytes(1, {"tests/test_x.py": 1})
+        budget.write_bytes(before)
+        code, message = budget_mod.tighten(
+            budget_mod.measure(root, repo_root=tmp_path),
+            budget_mod.scan_noqa(root, repo_root=tmp_path),
+            budget,
+        )
+        assert code == 0 and "already tight" in message
+        assert budget.read_bytes() == before
+
+    def test_suppression_does_not_turn_narrow_handler_into_debt(self, tmp_path):
+        root = tmp_path / "tests"
+        root.mkdir()
+        (root / "test_x.py").write_text("# ruff: no" + "qa\n" + _TYPED)
+        assert budget_mod.measure(root, repo_root=tmp_path) == []
 
     def test_cli_end_to_end(self, tmp_path):
         root = tmp_path / "tests"
