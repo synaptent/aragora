@@ -201,6 +201,27 @@ max_high_findings: 2        # >2 high = CONDITIONAL
 min_robustness_score: 0.7   # <0.7 = CONDITIONAL
 ```
 
+### Waiting for API runs
+
+The Python client's `client.gauntlet.run_and_wait(...)` polls the existing run
+status endpoint and fetches a receipt only after `completed`. The receipt endpoint's
+HTTP `400` / `GAUNTLET_406` means "not completed," which can also describe a failed
+run; it is not sufficient evidence that the run is still progressing. Explicit
+`pending` and `running` statuses are polled. Failed, cancelled, missing, malformed,
+or mismatched run responses stop waiting instead of being treated as pending.
+Failed/cancelled diagnostics identify the run without echoing backend error details.
+
+`timeout` is a monotonic polling budget starting after submission. Sleeps are at
+most five seconds and never exceed the remaining budget; no new status or receipt
+request starts after expiry. An already-started request retains the client's
+transport timeout and may finish later: this is not a hard end-to-end deadline.
+Transport errors propagate rather than being classified as pending. The adapter
+does not submit a second run. Inspect the existing run before submitting again.
+Completed legacy receipts without a status field remain supported.
+New API and queued runs retain their submitted ID through execution, storage,
+and receipt creation. Standalone runs still generate an ID. Historical results
+stored under a different ID are not migrated or silently accepted by the client.
+
 ## Decision Receipts
 
 Decision Receipts are audit-ready artifacts documenting the validation:
