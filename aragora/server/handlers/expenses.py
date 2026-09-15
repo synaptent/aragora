@@ -34,7 +34,7 @@ import binascii
 import logging
 import threading
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeAlias
 from collections.abc import Awaitable
 
 from aragora.resilience import CircuitBreaker
@@ -82,7 +82,7 @@ def reset_expense_circuit_breaker() -> None:
 
 
 # Type alias for handler methods that can return async or sync results
-MaybeAsyncHandlerResult = HandlerResult | None | Awaitable[HandlerResult | None]
+MaybeAsyncHandlerResult: TypeAlias = HandlerResult | None | Awaitable[HandlerResult | None]
 
 # Thread-safe service instance
 _expense_tracker: Any | None = None
@@ -1103,6 +1103,10 @@ class ExpenseHandler(BaseHandler):
         "/api/v1/accounting/expenses/pending": ["GET"],
         "/api/v1/accounting/expenses/export": ["GET"],
     }
+
+    # Contract discovery reads list-shaped metadata; the dynamic-ID canary
+    # cannot distinguish this collection from a broad prefix match.
+    GET_ROUTES = ["/api/v1/accounting/expenses"]
 
     # Dynamic routes with path params
     DYNAMIC_ROUTES = {

@@ -4,26 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main]
-    paths:
-      - 'aragora/**'
-      - 'aragora-debate/**'
-      - 'tests/**'
-      - 'pyproject.toml'
-      - 'requirements.txt'
-      - 'scripts/capability_gap_report.py'
-      - 'scripts/generate_capability_matrix.py'
-      - 'scripts/check_capability_matrix_sync.py'
-      - 'scripts/check_legacy_entrypoints.py'
-      - 'scripts/check_legacy_collab_flags.py'
-      - 'scripts/capability_matrix_delta.py'
-      - 'scripts/generate_cli_reference.py'
-      - 'aragora/capabilities.yaml'
-      - 'aragora/capability_surfaces.yaml'
-      - 'docs/CAPABILITY_MATRIX.md'
-      - 'docs/reference/CLI_REFERENCE.md'
-      - 'docs-site/docs/contributing/capability-matrix.md'
-      - 'docs-site/docs/api/cli.md'
-      - '.github/workflows/test.yml'
   workflow_dispatch:
   schedule:
     - cron: '0 4 * * *'
@@ -36,7 +16,8 @@ jobs:
   # ============================================================
   # Test Tier Architecture (#180)
   # ============================================================
-  # PR tier (test-fast):       <5 min target, parallel by category
+  # Future required PR gate:   test-fast-gate, 10-min worker cap
+  # PR tier (test-fast):       parallel by category, longer diagnostic cap
   #   Markers excluded: slow, load, e2e, integration, benchmark, performance
   # Compat matrix (test):      Full OS/Python matrix, coverage gates
   # Nightly tier (nightly-slow): slow + load + e2e tests, 600s timeout
@@ -46,7 +27,8 @@ jobs:
 
   # Version alignment check (fast, runs first)
   version-check:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: [test-shard-scope]
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.test-shard-scope.outputs.in_scope == 'true'
     name: Version Alignment
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -190,6 +172,8 @@ jobs:
           retention-days: 14
 
   scope:
+    needs: [test-shard-scope]
+    if: needs.test-shard-scope.outputs.in_scope == 'true'
     name: PR Scope
     runs-on: ubuntu-latest
     outputs:
@@ -331,7 +315,8 @@ jobs:
 
   # Skip marker audit (warns if skip count increases)
   skip-audit:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: [test-shard-scope]
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.test-shard-scope.outputs.in_scope == 'true'
     name: Skip Marker Audit
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -402,7 +387,8 @@ jobs:
 
   # Status document reconciliation (detect drift across capability/GA/roadmap docs)
   status-reconciliation:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: [test-shard-scope]
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.test-shard-scope.outputs.in_scope == 'true'
     name: Status Doc Reconciliation
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -569,21 +555,21 @@ jobs:
 
   # ==========================================================================
   # test-shard-scope (NEW): classify which test-fast shards must run for this
-  # change. Heavy shards (debate, server-handlers, handlers) skip when no
+  # change. Heavy shards (server-handlers, handlers) skip when no
   # relevant code/test paths changed; their job still reports success so the
   # `needs: test-fast` downstream gates remain satisfied.
   #
-  # Triggered always on push/schedule; scope-filtered only on pull_request.
+  # Scope-filtered only on pull_request; all shards run on schedule/dispatch.
   # The `core` filter, when matched, forces ALL shards to run (covers
   # workflow/script/dependency/version edits that touch the whole repo).
   # ==========================================================================
   test-shard-scope:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     name: Classify test-fast Shard Scope
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
       scopes_changed: ${{ steps.filter.outputs.changes }}
+      in_scope: ${{ steps.scope.outputs.in_scope }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -593,6 +579,28 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
+            # Former pull_request.paths trigger allowlist, pinned by
+            # tests/ci/test_fast_gate_workflows.py::test_single_workflow_scope_gate.
+            in_scope:
+              - 'aragora/**'
+              - 'aragora-debate/**'
+              - 'tests/**'
+              - 'pyproject.toml'
+              - 'requirements.txt'
+              - 'scripts/capability_gap_report.py'
+              - 'scripts/generate_capability_matrix.py'
+              - 'scripts/check_capability_matrix_sync.py'
+              - 'scripts/check_legacy_entrypoints.py'
+              - 'scripts/check_legacy_collab_flags.py'
+              - 'scripts/capability_matrix_delta.py'
+              - 'scripts/generate_cli_reference.py'
+              - 'aragora/capabilities.yaml'
+              - 'aragora/capability_surfaces.yaml'
+              - 'docs/CAPABILITY_MATRIX.md'
+              - 'docs/reference/CLI_REFERENCE.md'
+              - 'docs-site/docs/contributing/capability-matrix.md'
+              - 'docs-site/docs/api/cli.md'
+              - '.github/workflows/test.yml'
             core:
               - 'pyproject.toml'
               - 'requirements*.txt'
@@ -610,12 +618,6 @@ jobs:
             agents:
               - 'aragora/agents/**'
               - 'tests/agents/**'
-            debate:
-              - 'aragora/debate/**'
-              - 'tests/debate/**'
-              - 'aragora/agents/**'
-              - 'aragora/memory/**'
-              - 'aragora/reasoning/**'
             reasoning:
               - 'aragora/rlm/**'
               - 'aragora/reasoning/**'
@@ -672,6 +674,21 @@ jobs:
               - 'tests/compliance/**'
               - 'tests/gauntlet/**'
               - 'tests/cli/**'
+      # Run on drafts too: the umbrella must trust a completed classifier.
+      # PRs are in scope iff a changed file matches the former trigger allowlist;
+      # every non-pull_request event is in scope.
+      - name: Set workflow scope
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FILTER_IN_SCOPE: ${{ steps.filter.outputs.in_scope }}
+        run: |
+          if [[ "$EVENT_NAME" != "pull_request" || "$FILTER_IN_SCOPE" == "true" ]]; then
+            echo "in_scope=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "in_scope=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Report scopes
         run: |
@@ -681,25 +698,21 @@ jobs:
   # Fast parallel tests by category (Ubuntu only, primary Python)
   #
   # Sub-sharding history:
-  #   2026-04-25: Heavy shards split to fit within 30-min runner cap.
-  #     - debate (1 shard, 30+ min) -> debate-am, debate-nz, debate-phases
-  #   2026-07-15: debate-am re-saturated (28-30+ min, cancelled on main sched
-  #     run 29390230325 and PR #9245 run 29293412959 despite the #9280
-  #     rebalance). Re-split into 4 balanced shards: debate-phases + debate-1/2/3
-  #     (~11.5 min pytest each). Boundaries in scripts/ci_resolve_test_shard.py.
+  #   Heavy shards split to fit within 30-min runner cap.
+  #     Debate shards now live in test-debate-shards.yml (main/nightly/manual).
   #     - server (1 shard, 23 min)  -> server-handlers-am, server-handlers-nz, server-rest
   #     - handlers (1 shard, 26 min) -> handlers-features, handlers-amk-no-features, handlers-lz
   #   Path-filter (test-shard-scope) added: PRs touching only docs/CI/integration
   #     tests skip irrelevant heavy shards entirely.
   # ==========================================================================
   test-fast:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.test-shard-scope.outputs.in_scope == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.category.timeout }}
-    needs: [baseline-determinism, test-shard-scope]
+    needs: [test-shard-scope]
     strategy:
       fail-fast: false
-      matrix:
+      matrix: &fast-shards
         category:
           # Light shards (unchanged from prior 9-shard layout)
           - name: agents
@@ -725,31 +738,6 @@ jobs:
           - name: infra
             pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli
             scope: infra
-            timeout: 30
-
-          # debate: 4 balanced sub-shards (~11.5 min pytest each, measured
-          # 2026-07-15). debate-phases = tests/debate/ subdirs + first range
-          # of top-level files; debate-1/2/3 = remaining contiguous ranges.
-          # Boundaries live in scripts/ci_resolve_test_shard.py.
-          - name: debate-phases
-            pytest_args: ""
-            resolver: debate-phases
-            scope: debate
-            timeout: 30
-          - name: debate-1
-            pytest_args: ""
-            resolver: debate-1
-            scope: debate
-            timeout: 30
-          - name: debate-2
-            pytest_args: ""
-            resolver: debate-2
-            scope: debate
-            timeout: 30
-          - name: debate-3
-            pytest_args: ""
-            resolver: debate-3
-            scope: debate
             timeout: 30
 
           # server (was 1 shard at 23 min, now 3 sub-shards)
@@ -794,7 +782,7 @@ jobs:
             scope: handlers
             timeout: 30
 
-    steps:
+    steps: &fast-shard-steps
       - name: Resolve shard relevance
         id: relevance
         shell: bash
@@ -826,7 +814,9 @@ jobs:
 
       - name: Checkout
         if: steps.relevance.outputs.should_run == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify checkout integrity
         if: steps.relevance.outputs.should_run == 'true'
@@ -893,7 +883,7 @@ jobs:
           pytest ${{ steps.shard_paths.outputs.args }} \
             -m "not slow and not load and not e2e and not integration and not integration_minimal and not benchmark and not performance" \
             --timeout=120 \
-            -n auto \
+            -n 4 \
             --dist loadscope \
             -v \
             --tb=short \
@@ -906,6 +896,53 @@ jobs:
         if: steps.relevance.outputs.should_run != 'true'
         run: |
           echo "::notice::Shard ${{ matrix.category.name }} skipped: scope '${{ matrix.category.scope }}' not in changed scopes"
+
+  # Share the shard census and execution with test-fast, without waiting for
+  # baseline-determinism. The longer diagnostic lane retains its existing cap.
+  test-fast-gate-run:
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.test-shard-scope.outputs.in_scope == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test-shard-scope]
+    strategy:
+      fail-fast: false
+      matrix: *fast-shards
+    steps: *fast-shard-steps
+
+  test-fast-gate:
+    needs: [test-shard-scope, test-fast-gate-run]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Evaluate fast gate result
+        shell: bash
+        env:
+          CLASSIFIER_RESULT: ${{ needs.test-shard-scope.result }}
+          IN_SCOPE: ${{ needs.test-shard-scope.outputs.in_scope }}
+          WORKER_RESULT: ${{ needs.test-fast-gate-run.result }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+        run: |
+          set -euo pipefail
+          if [[ "$CLASSIFIER_RESULT" != "success" ]]; then
+            echo "::error::Change classification concluded '$CLASSIFIER_RESULT'; its scope verdict cannot be trusted. Failing closed."
+            exit 1
+          fi
+          case "$IN_SCOPE:$WORKER_RESULT:$IS_DRAFT" in
+            true:success:false|true:success:)
+              echo "In-scope fast gate workers succeeded."
+              ;;
+            false:skipped:false|false:skipped:true)
+              echo "Out-of-scope PR: fast gate workers skipped."
+              ;;
+            true:skipped:true)
+              echo "Draft PR: in-scope fast gate workers skipped."
+              ;;
+            *)
+              echo "::error::Unexpected fast gate state: in_scope='$IN_SCOPE', worker='$WORKER_RESULT', draft='$IS_DRAFT'. Failing closed."
+              exit 1
+              ;;
+          esac
 
   epistemic-settlement-gate:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
@@ -1617,8 +1654,8 @@ jobs:
     name: Test Summary
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [test]
-    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always())
+    needs: [test, test-shard-scope]
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always()) && needs.test-shard-scope.outputs.in_scope == 'true'
 
     steps:
       - name: Checkout
@@ -2206,7 +2243,8 @@ jobs:
         run: echo "No frontend file changes detected, skipping TypeScript type check."
 
   security:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: [test-shard-scope]
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.test-shard-scope.outputs.in_scope == 'true'
     name: Security Scan
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -2265,7 +2303,8 @@ jobs:
           retention-days: 30
 
   typecheck:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: [test-shard-scope]
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.test-shard-scope.outputs.in_scope == 'true'
     name: Type Check
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -2319,7 +2358,8 @@ jobs:
 
   # Database migration testing
   migration-test:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: [test-shard-scope]
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.test-shard-scope.outputs.in_scope == 'true'
     name: Database Migrations
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -2523,11 +2563,11 @@ jobs:
 
   # Test Analytics - Generate flakiness report
   quality-gates:
-    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always())
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always()) && needs.test-shard-scope.outputs.in_scope == 'true'
     name: Quality Gates
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [test-fast, test-summary, epistemic-settlement-gate, v1-scope-lock-gate]
+    needs: [test-fast, test-summary, epistemic-settlement-gate, v1-scope-lock-gate, test-shard-scope]
 
     steps:
       - name: Check prerequisite results
@@ -2601,8 +2641,8 @@ jobs:
     name: Test Analytics
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [test-fast]
-    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always() && github.event_name == 'pull_request')
+    needs: [test-fast, test-shard-scope]
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (always() && github.event_name == 'pull_request') && needs.test-shard-scope.outputs.in_scope == 'true'
 
     steps:
       - name: Checkout

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from importlib import resources
-from typing import Any
+from typing import Any, cast
 
 __all__ = ["load_bundled_schema", "validate_structure", "ODR_PROFILE_URI", "ODR_VERSION"]
 
@@ -43,7 +43,7 @@ _ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source", "adjudication"}
 def load_bundled_schema() -> dict[str, Any]:
     """Return the bundled ODR v0.1 JSON Schema (draft 2020-12)."""
     text = resources.files("aragora_verify").joinpath("odr_schema.json").read_text("utf-8")
-    return json.loads(text)
+    return cast(dict[str, Any], json.loads(text))
 
 
 def _is_absent_marker(value: Any) -> bool:
@@ -107,7 +107,7 @@ def _check_confidence(errors: list[str], value: Any) -> None:
         errors.append("confidence.scale: must be 'unit_interval' when present")
 
 
-def _check_attestation(errors: list[str], value: Any) -> None:
+def _check_attestation(errors: list[str], value: Any) -> None:  # noqa: C901 - Mirror the ODR profile's attestation checks.
     if not isinstance(value, dict):
         errors.append("attestation: must be an object")
         return
@@ -181,7 +181,7 @@ def _check_signatures(errors: list[str], value: Any) -> None:
             errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined in v0.1")
 
 
-def validate_structure(doc: Any) -> list[str]:
+def validate_structure(doc: Any) -> list[str]:  # noqa: C901 - Preserve conformance check and diagnostic ordering.
     """Return a list of conformance errors; empty means the receipt is well-formed."""
     errors: list[str] = []
     if not isinstance(doc, dict):
@@ -318,11 +318,11 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
 def _jsonschema_errors(doc: Any) -> list[str]:
     """Optional full draft-2020-12 validation when ``jsonschema`` is installed."""
     try:
-        import jsonschema  # type: ignore
+        import jsonschema
     except ImportError:
         return []
     try:
-        validator_cls = jsonschema.Draft202012Validator  # type: ignore[attr-defined]
+        validator_cls = jsonschema.Draft202012Validator
     except AttributeError:  # pragma: no cover - very old jsonschema
         return []
     validator = validator_cls(load_bundled_schema())

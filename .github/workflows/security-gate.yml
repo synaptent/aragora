@@ -10,6 +10,9 @@ on:
     paths:
       - 'aragora/**'
       - 'pyproject.toml'
+      - 'aragora-debate/pyproject.toml'
+      - 'aragora-verify/pyproject.toml'
+      - 'sdk/python/pyproject.toml'
       - 'uv.lock'
       - 'requirements*.txt'
       - 'scripts/pre_release_check.py'

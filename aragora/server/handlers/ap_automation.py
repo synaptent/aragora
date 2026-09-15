@@ -30,6 +30,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from datetime import datetime
 from decimal import Decimal
@@ -99,6 +100,7 @@ def get_ap_automation():
 async def handle_add_invoice(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Add a payable invoice.
@@ -199,14 +201,28 @@ async def handle_add_invoice(
         return error_response("Invoice creation failed", status=500)
 
 
+def _filter_payment_status(invoices: list[Any], status: str | None) -> list[Any]:
+    """Filter outstanding invoices, which have no stored status field."""
+    if status == "paid":
+        return []
+    if status == "partial":
+        return [inv for inv in invoices if inv.amount_paid > 0]
+    if status == "unpaid":
+        return [inv for inv in invoices if inv.amount_paid == 0]
+    return invoices
+
+
 @rate_limit(requests_per_minute=120)
 @require_permission("ap:read")
 async def handle_list_invoices(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     List payable invoices with filters.
+
+    Date filters must be scalar ISO strings; repeated/list values return 400.
 
     GET /api/v1/accounting/ap/invoices
     Query params: {
@@ -220,9 +236,16 @@ async def handle_list_invoices(
     }
     """
     # Parse and validate filters
+    from aragora.services.ap_automation import PaymentPriority
+
     vendor_id = data.get("vendor_id")
     status = data.get("status")
-    priority = data.get("priority")
+    if status and status not in ("unpaid", "partial", "paid"):
+        return error_response("Invalid invoice status", status=400)
+    try:
+        priority = PaymentPriority(data["priority"]) if data.get("priority") else None
+    except ValueError:
+        return error_response("Invalid payment priority", status=400)
     start_date = None
     end_date = None
 
@@ -231,7 +254,7 @@ async def handle_list_invoices(
             start_date = datetime.fromisoformat(data["start_date"])
         if data.get("end_date"):
             end_date = datetime.fromisoformat(data["end_date"])
-    except ValueError:
+    except (TypeError, ValueError):
         return error_response("Dates must be in ISO format", status=400)
 
     try:
@@ -258,11 +281,20 @@ async def handle_list_invoices(
         async with _ap_circuit_breaker.protected_call():
             invoices = await ap.list_invoices(
                 vendor_id=vendor_id,
-                status=status,
                 priority=priority,
-                start_date=start_date,
-                end_date=end_date,
             )
+
+        # The service lists outstanding invoices only; payment status and dates
+        # are HTTP filters and must be applied before pagination.
+        invoices = _filter_payment_status(invoices, status)
+        if start_date:
+            invoices = [
+                inv for inv in invoices if inv.invoice_date.timestamp() >= start_date.timestamp()
+            ]
+        if end_date:
+            invoices = [
+                inv for inv in invoices if inv.invoice_date.timestamp() <= end_date.timestamp()
+            ]
 
         # Apply pagination
         paginated = invoices[offset : offset + limit]
@@ -290,6 +322,7 @@ async def handle_get_invoice(
     data: dict[str, Any],
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get a payable invoice by ID.
@@ -333,6 +366,7 @@ async def handle_record_payment(
     data: dict[str, Any],
     invoice_id: str,
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Record a payment for a payable invoice.
@@ -418,6 +452,7 @@ async def handle_record_payment(
 async def handle_optimize_payments(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Optimize payment timing for outstanding invoices.
@@ -501,6 +536,7 @@ async def handle_optimize_payments(
 async def handle_batch_payments(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Create a batch payment for multiple invoices.
@@ -579,6 +615,7 @@ async def handle_batch_payments(
 async def handle_get_forecast(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get cash flow forecast.
@@ -632,6 +669,7 @@ async def handle_get_forecast(
 async def handle_get_discounts(
     data: dict[str, Any],
     user_id: str = "default",
+    handler: Any = None,
 ) -> HandlerResult:
     """
     Get early payment discount opportunities.
@@ -694,43 +732,47 @@ class APAutomationHandler(BaseHandler):
         "/api/v1/accounting/ap/batch",
         "/api/v1/accounting/ap/forecast",
         "/api/v1/accounting/ap/discounts",
-        "/api/v1/accounting/connect",
-        "/api/v1/accounting/customers",
-        "/api/v1/accounting/disconnect",
-        "/api/v1/accounting/expenses",
-        "/api/v1/accounting/expenses/categorize",
-        "/api/v1/accounting/expenses/export",
-        "/api/v1/accounting/expenses/pending",
-        "/api/v1/accounting/expenses/stats",
-        "/api/v1/accounting/expenses/sync",
-        "/api/v1/accounting/expenses/upload",
-        "/api/v1/accounting/invoices",
-        "/api/v1/accounting/invoices/overdue",
-        "/api/v1/accounting/invoices/pending",
-        "/api/v1/accounting/invoices/stats",
-        "/api/v1/accounting/invoices/status",
-        "/api/v1/accounting/invoices/upload",
-        "/api/v1/accounting/payments/scheduled",
-        "/api/v1/accounting/purchase-orders",
-        "/api/v1/accounting/reports",
-        "/api/v1/accounting/status",
-        "/api/v1/accounting/transactions",
-        "/api/v1/accounting/gusto/employees",
-        "/api/v1/accounting/gusto/payrolls",
-        "/api/v1/accounting/gusto/status",
-        "/api/v1/gusto/connect",
-        "/api/v1/gusto/disconnect",
-        "/api/v1/gusto/employees",
-        "/api/v1/gusto/payrolls",
-        "/api/v1/gusto/status",
-        "/api/v1/ap/batch-payments",
-        "/api/v1/ap/cash-flow",
-        "/api/v1/ap/discount-opportunities",
-        "/api/v1/ap/invoices",
-        "/api/v1/ap/optimize",
     ]
 
     DYNAMIC_ROUTES: dict[str, Any] = {
         "GET /api/v1/accounting/ap/invoices/{invoice_id}": handle_get_invoice,
         "POST /api/v1/accounting/ap/invoices/{invoice_id}/payment": handle_record_payment,
     }
+
+    def can_handle(self, path: str) -> bool:
+        """Claim only AP routes, including single-segment dynamic IDs."""
+        return path in self.ROUTES or any(
+            re.fullmatch(re.sub(r"\{[^}]+\}", "[^/]+", route.split(" ", 1)[1]), path)
+            for route in self.DYNAMIC_ROUTES
+        )
+
+    async def handle(self, path: str, query_params: dict[str, Any], handler: Any) -> HandlerResult:
+        """Dispatch modular GET requests through the permission-checked functions."""
+        if path == "/api/v1/accounting/ap/invoices":
+            return await handle_list_invoices(query_params, handler=handler)
+        if path == "/api/v1/accounting/ap/forecast":
+            return await handle_get_forecast(query_params, handler=handler)
+        if path == "/api/v1/accounting/ap/discounts":
+            return await handle_get_discounts(query_params, handler=handler)
+        match = re.fullmatch(r"/api/v1/accounting/ap/invoices/([^/]+)", path)
+        if match:
+            return await handle_get_invoice(query_params, invoice_id=match[1], handler=handler)
+        return error_response("Route not found", status=404)
+
+    async def handle_post(
+        self, path: str, query_params: dict[str, Any], handler: Any
+    ) -> HandlerResult:
+        """Read the HTTP body and dispatch AP mutations."""
+        data = self.read_json_body(handler)
+        if data is None:
+            return error_response("Invalid JSON body", status=400)
+        if path == "/api/v1/accounting/ap/invoices":
+            return await handle_add_invoice(data, handler=handler)
+        if path == "/api/v1/accounting/ap/optimize":
+            return await handle_optimize_payments(data, handler=handler)
+        if path == "/api/v1/accounting/ap/batch":
+            return await handle_batch_payments(data, handler=handler)
+        match = re.fullmatch(r"/api/v1/accounting/ap/invoices/([^/]+)/payment", path)
+        if match:
+            return await handle_record_payment(data, invoice_id=match[1], handler=handler)
+        return error_response("Route not found", status=404)
