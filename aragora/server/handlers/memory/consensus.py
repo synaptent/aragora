@@ -31,7 +31,7 @@ from aragora.config import (
 from aragora.server.validation.entities import SAFE_SLUG_PATTERN
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -48,7 +48,7 @@ from .base import (
 from aragora.billing.auth import extract_user_from_request
 from aragora.rbac.checker import get_permission_checker
 from aragora.rbac.models import AuthorizationContext
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 # Rate limiter for consensus endpoints (30 requests per minute)
 _consensus_limiter = RateLimiter(requests_per_minute=30)

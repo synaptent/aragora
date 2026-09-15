@@ -26,7 +26,7 @@ from aragora.persistence.db_config import DatabaseType, get_db_path
 from aragora.server.versioning.compat import strip_version_prefix
 from aragora.utils.optional_imports import try_import_class
 
-from .base import (
+from ..base import (
     SAFE_AGENT_PATTERN,
     BaseHandler,
     HandlerResult,
@@ -36,7 +36,7 @@ from .base import (
     ttl_cache,
 )
 from aragora.rbac.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

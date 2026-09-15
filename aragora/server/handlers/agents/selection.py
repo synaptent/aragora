@@ -42,7 +42,7 @@ from aragora.routing.selection import (
 )
 from aragora.routing.team_builder import TeamBuilder
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -50,7 +50,7 @@ from .base import (
     json_response,
 )
 from aragora.rbac.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-from .base import (
+from ..base import (
     SAFE_ID_PATTERN,
     BaseHandler,
     HandlerResult,
@@ -33,7 +33,7 @@ from .base import (
     handle_errors,
 )
 from aragora.rbac.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 # Rate limiter for breakpoints endpoints (60 requests per minute - debug feature)
 _breakpoints_limiter = RateLimiter(requests_per_minute=60)

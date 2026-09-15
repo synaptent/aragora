@@ -19,14 +19,14 @@ from typing import Any
 from aragora.rbac.decorators import require_permission
 from aragora.server.validation import validate_path_segment, SAFE_ID_PATTERN
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
     json_response,
     handle_errors,
 )
-from .utils.rate_limit import rate_limit
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 

@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 from aragora.rbac.decorators import require_permission
-from .base import BaseHandler, HandlerResult, error_response, json_response
-from .utils.rate_limit import RateLimiter
+from ..base import BaseHandler, HandlerResult, error_response, json_response
+from ..utils.rate_limit import RateLimiter
 
 # Rate limiter for cross-pollination endpoints
 _cross_pollination_limiter = RateLimiter(requests_per_minute=60)

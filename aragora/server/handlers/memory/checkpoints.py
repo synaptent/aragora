@@ -26,7 +26,7 @@ from aragora.debate.checkpoint import (
 )
 
 from aragora.rbac.decorators import require_permission
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     ServerContext,
@@ -36,7 +36,7 @@ from .base import (
     json_response,
     safe_json_parse,
 )
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 
