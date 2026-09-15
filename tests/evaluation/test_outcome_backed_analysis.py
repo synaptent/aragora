@@ -60,6 +60,12 @@ def _rows(count: int, *, team_brier: float, baseline_brier: float):
     return team, baseline
 
 
+def _holdout_rows(count: int, *, team_brier: float, baseline_brier: float):
+    team = [_score(f"holdout-{index:02d}", brier=team_brier) for index in range(count)]
+    baseline = [_score(f"holdout-{index:02d}", brier=baseline_brier) for index in range(count)]
+    return team, baseline
+
+
 def test_report_is_byte_identical_across_repeated_calls() -> None:
     team, baseline = _rows(16, team_brier=0.2, baseline_brier=0.3)
 
@@ -69,6 +75,7 @@ def test_report_is_byte_identical_across_repeated_calls() -> None:
     assert json.dumps(first, sort_keys=True, separators=(",", ":")) == json.dumps(
         second, sort_keys=True, separators=(",", ":")
     )
+    assert first["phase"] == "development"
 
 
 def test_hand_computed_three_case_summary_and_exact_p_value() -> None:
@@ -159,6 +166,49 @@ def test_fewer_than_sixteen_pairs_is_insufficient_data() -> None:
     team, baseline = _rows(15, team_brier=0.2, baseline_brier=0.3)
 
     assert _analyze(team, baseline).verdict == "insufficient_data"
+
+
+def test_complete_holdout_phase_can_outperform() -> None:
+    team, baseline = _holdout_rows(8, team_brier=0.2, baseline_brier=0.3)
+    holdout_case_ids = {str(row["case_id"]) for row in team}
+
+    report = _analyze(
+        team,
+        baseline,
+        phase="holdout",
+        holdout_case_ids=holdout_case_ids,
+    )
+
+    assert report.phase == "holdout"
+    assert report.n == 8
+    assert report.verdict == "team_outperforms"
+    assert report.to_dict()["thresholds"]["expected_case_count"] == 8
+
+
+def test_partial_holdout_phase_is_insufficient_data() -> None:
+    team, baseline = _holdout_rows(7, team_brier=0.2, baseline_brier=0.3)
+    holdout_case_ids = {f"holdout-{index:02d}" for index in range(8)}
+
+    report = _analyze(
+        team,
+        baseline,
+        phase="holdout",
+        holdout_case_ids=holdout_case_ids,
+    )
+
+    assert report.verdict == "insufficient_data"
+
+
+def test_holdout_phase_rejects_unregistered_case_id() -> None:
+    team, baseline = _holdout_rows(2, team_brier=0.2, baseline_brier=0.3)
+
+    with pytest.raises(ValueError, match="non-holdout case IDs"):
+        _analyze(
+            team,
+            baseline,
+            phase="holdout",
+            holdout_case_ids={"holdout-00"},
+        )
 
 
 def test_exact_sign_flip_matches_independent_brute_force_for_eight_pairs() -> None:
