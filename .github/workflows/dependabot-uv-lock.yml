@@ -11,6 +11,11 @@ on:
     paths:
       - "pyproject.toml"
       - "uv.lock"
+      # uv workspace member manifests feed root uv.lock validity, so a
+      # member-only Dependabot bump must refresh the shared lock too.
+      - "aragora-debate/pyproject.toml"
+      - "aragora-verify/pyproject.toml"
+      - "sdk/python/pyproject.toml"
       - ".github/workflows/dependabot-uv-lock.yml"
   workflow_dispatch:
     inputs:
