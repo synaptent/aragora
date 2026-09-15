@@ -4822,6 +4822,78 @@ class TestBuildQueueAndPacket:
         assert entry["verdict"] == "admin_squash_blocked_by_live_gate"
         assert 8958 in packet["not_ready"]
 
+    def test_merge_packet_current_head_park_blocks_admin_squash_order(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def fake_build_packet(ref: str, **_kwargs: Any) -> ReviewPacket:
+            return ReviewPacket(
+                pr_number=int(ref),
+                title=f"PR {ref}",
+                url=f"https://github.com/synaptent/aragora/pull/{ref}",
+                head_sha="abc123",
+                base_sha="def456",
+                author="codex",
+                is_draft=False,
+                additions=1,
+                deletions=1,
+                changed_files=1,
+                queue_bucket="ready_now",
+                touched_subsystems=["docs"],
+                high_risk_paths_touched=[],
+                validation=[],
+                checks_summary="4/4 green",
+                risk_flags=[],
+                machine_recommendation="approve_candidate",
+                machine_recommendation_reason="bounded test packet",
+                packet_sha="sha256:test",
+                generated_at="2026-05-30T00:00:00+00:00",
+                labels=[],
+                merge_state_status="CLEAN",
+                park_record={
+                    "blocked": True,
+                    "head_sha": "abc123",
+                    "park_marker": "Current-head repeat-blocker park",
+                    "created_at": "2026-07-08T05:20:08Z",
+                    "comment_url": "https://github.example/comment/park",
+                    "reason": "Do not merge this PR on this head.",
+                },
+                model_review_quorum={
+                    "tier": 0,
+                    "tier_name": "Tier 0",
+                    "status": "satisfied",
+                    "verdict": "admin_squash_allowed",
+                    "admin_squash_allowed": True,
+                    "requires_human_risk_settlement": False,
+                    "unresolved_dissent": False,
+                    "reviewer_signals": [],
+                    "dogfood_evidence": [],
+                    "counted_reviewer_ids": ["openai"],
+                    "reasons": ["docs-only change"],
+                },
+            )
+
+        monkeypatch.setattr("aragora.cli.commands.review_queue._build_packet", fake_build_packet)
+        monkeypatch.setattr(
+            "aragora.cli.commands.review_queue._explicit_merged_pr_merge_packet_entry",
+            lambda ref, repo_override: None,
+        )
+
+        packet = _build_merge_authorization_packet(
+            pr_refs=["9005"],
+            limit=30,
+            repo_override=None,
+        )
+
+        entry = packet["entries"][0]
+        assert entry["model_quorum_admin_squash_allowed"] is True
+        assert entry["admin_squash_allowed"] is False
+        assert entry["park_record"]["blocked"] is True
+        assert "current-head park record present" in entry["admin_squash_gate_blockers"][0]
+        assert packet["admin_squash_order"] == []
+        assert entry["status"] == "blocked_by_live_gate"
+        assert entry["verdict"] == "admin_squash_blocked_by_live_gate"
+        assert packet["not_ready"] == [9005]
+
     def test_merge_packet_allows_verified_allowlisted_unstable_cancellations(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -5633,6 +5705,43 @@ class TestBuildQueueAndPacket:
         assert "repos/synaptent/aragora/pulls/7466/files?per_page=100&page=2" in calls
         assert "repos/synaptent/aragora/issues/7466/comments?per_page=100&page=2" in calls
         assert f"repos/synaptent/aragora/commits/{head}/check-runs?per_page=100&page=2" in calls
+
+    def test_rest_fallback_fails_closed_when_issue_comments_unavailable(self) -> None:
+        head = "b" * 40
+
+        def fake_gh_json(args: list[str]) -> Any:
+            endpoint = args[1]
+            if endpoint.endswith("/pulls/7466"):
+                return {
+                    "number": 7466,
+                    "title": "fallback PR",
+                    "html_url": "https://github.com/synaptent/aragora/pull/7466",
+                    "head": {"sha": head, "ref": "topic"},
+                    "base": {"sha": "c" * 40, "ref": "main"},
+                    "user": {"login": "codex"},
+                    "state": "open",
+                    "draft": False,
+                    "mergeable": True,
+                    "mergeable_state": "clean",
+                    "labels": [],
+                    "additions": 1,
+                    "deletions": 0,
+                    "changed_files": 1,
+                    "body": "",
+                }
+            if endpoint.endswith("/files?per_page=100"):
+                return [{"filename": "docs/example.md"}]
+            if endpoint.endswith("/comments?per_page=100"):
+                raise _GhError("issue comments unavailable")
+            raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+        with pytest.raises(_GhError, match="issue comments unavailable"):
+            rest_fallback._hydrate_pr_with_rest_fallback(
+                number=7466,
+                repo_slug="synaptent/aragora",
+                source_error="GraphQL rate limit",
+                gh_json=fake_gh_json,
+            )
 
     def test_non_required_rollup_failures_use_required_pr_checks_gate(
         self, monkeypatch: pytest.MonkeyPatch
