@@ -2,7 +2,8 @@
 Spectate Namespace API
 
 Provides methods for real-time debate observation:
-- Connect to Server-Sent Events (SSE) stream for a debate
+- Read recent, status, and stream snapshots
+- Inject events into the spectate bridge
 """
 
 from __future__ import annotations
@@ -19,20 +20,11 @@ class SpectateAPI:
 
     Example:
         >>> client = AragoraClient(base_url="https://api.aragora.ai")
-        >>> stream = client.spectate.connect_sse("debate-123")
+        >>> stream = client.spectate.get_stream(debate_id="debate-123")
     """
 
     def __init__(self, client: AragoraClient):
         self._client = client
-
-    def connect_sse(self, debate_id: str) -> dict[str, Any]:
-        """
-        Connect to SSE stream for a debate.
-
-        Returns connection details including the stream URL.
-        Use the stream URL with an SSE client for real-time events.
-        """
-        return self._client.request("GET", f"/api/v1/spectate/{debate_id}/stream")
 
     def get_recent(self, *, count: int = 50, debate_id: str | None = None) -> dict[str, Any]:
         """Get recent buffered spectate events."""
@@ -63,19 +55,11 @@ class AsyncSpectateAPI:
 
     Example:
         >>> async with AragoraAsyncClient(base_url="https://api.aragora.ai") as client:
-        ...     stream = await client.spectate.connect_sse("debate-123")
+        ...     stream = await client.spectate.get_stream(debate_id="debate-123")
     """
 
     def __init__(self, client: AragoraAsyncClient):
         self._client = client
-
-    async def connect_sse(self, debate_id: str) -> dict[str, Any]:
-        """
-        Connect to SSE stream for a debate.
-
-        Returns connection details including the stream URL.
-        """
-        return await self._client.request("GET", f"/api/v1/spectate/{debate_id}/stream")
 
     async def get_recent(self, *, count: int = 50, debate_id: str | None = None) -> dict[str, Any]:
         """Get recent buffered spectate events."""

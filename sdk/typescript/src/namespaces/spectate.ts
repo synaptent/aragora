@@ -15,16 +15,6 @@ interface SpectateClientInterface {
 export class SpectateAPI {
   constructor(private client: SpectateClientInterface) {}
 
-  /**
-   * Connect to SSE stream for a debate.
-   *
-   * Returns connection details including the stream URL.
-   * Use the stream URL with an EventSource client for real-time events.
-   */
-  async connectSSE(debateId: string): Promise<Record<string, unknown>> {
-    return this.client.request('GET', `/api/v1/spectate/${encodeURIComponent(debateId)}/stream`);
-  }
-
   async getRecent(options?: { count?: number; debateId?: string }): Promise<Record<string, unknown>> {
     return this.client.request('GET', '/api/v1/spectate/recent', {
       params: { count: options?.count ?? 50, ...(options?.debateId ? { debate_id: options.debateId } : {}) },
