@@ -64,6 +64,7 @@ def maybe_emit_cruxset(
     provenance: dict[str, Any] | None = None,
     top_k: int = 5,
     min_score: float = 0.1,
+    counterfactuals_by_claim_id: dict[str, str] | None = None,
 ) -> CruxSet | None:
     """Build a CruxSet for the given debate context if emission is enabled.
 
@@ -82,6 +83,11 @@ def maybe_emit_cruxset(
     detector invocation are logged at warning level and swallowed
     rather than re-raised — the function is a soft enrichment layer
     and must not cause debate failures.
+
+    ``counterfactuals_by_claim_id`` is the DIC-15 hook: a mapping from
+    ``claim_id`` to the richer counterfactual string produced by the
+    crux-finder validation pass. When supplied, each matching
+    ``Crux.counterfactual`` field is overridden with this richer text.
     """
     if not cruxset_emission_enabled():
         return None
@@ -117,6 +123,7 @@ def maybe_emit_cruxset(
             receipt_id=receipt_id,
             provenance=provenance,
             max_cruxes=top_k,
+            counterfactuals_by_claim_id=counterfactuals_by_claim_id,
         )
     except (ValueError, KeyError) as exc:
         logger.warning(
@@ -191,6 +198,26 @@ def maybe_emit_cruxset_from_finder_result(
         # extra_provenance intentionally overwrites base keys — caller's responsibility
         provenance.update(extra_provenance)
 
+    # DIC-15 counterfactual hook: build a claim_id → rich-text map so
+    # build_cruxset_from_analysis can populate Crux.counterfactual with the
+    # condition/outcome_change text instead of the bare resolution_impact score.
+    cf_by_claim: dict[str, str] | None = None
+    if counterfactuals:
+        cf_by_claim = {}
+        for cf in counterfactuals:
+            if not isinstance(cf, dict):
+                continue
+            cid = str(cf.get("claim_id") or "")
+            if not cid:
+                continue
+            parts: list[str] = []
+            if cf.get("condition"):
+                parts.append(str(cf["condition"]))
+            if cf.get("outcome_change"):
+                parts.append(str(cf["outcome_change"]))
+            if parts:
+                cf_by_claim[cid] = "; ".join(parts)
+
     return maybe_emit_cruxset(
         question=result.question,
         analysis_payload=analysis_payload,
@@ -198,6 +225,7 @@ def maybe_emit_cruxset_from_finder_result(
         receipt_id=receipt_id,
         provenance=provenance,
         top_k=max(len(cruxes), 1),
+        counterfactuals_by_claim_id=cf_by_claim,
     )
 
 
