@@ -14,10 +14,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sqlite3
 import threading
 import time
 from collections import OrderedDict
 from datetime import datetime
+from importlib import import_module
 from typing import TYPE_CHECKING, Any
 from collections.abc import Callable
 
@@ -25,6 +27,54 @@ if TYPE_CHECKING:
     from aragora.gauntlet.storage import GauntletStorage
 
 logger = logging.getLogger(__name__)
+
+# Keep driver errors explicit without coupling the HTTP reader to the queue worker.
+_STORAGE_ERRORS: tuple[type[Exception], ...] = (OSError, RuntimeError, ValueError, sqlite3.Error)
+for _driver, _error in (
+    ("psycopg2", "Error"),
+    ("asyncpg", "PostgresError"),
+    ("asyncpg", "InterfaceError"),
+):
+    try:
+        _STORAGE_ERRORS += (getattr(import_module(_driver), _error),)
+    except ImportError:
+        pass
+
+
+async def resolve_gauntlet_run(
+    gauntlet_id: str, cached: dict[str, Any] | None, get_storage: Callable[..., Any]
+) -> dict[str, Any] | None:
+    """Prefer durable completion, then queue state, over stale HTTP/inflight caches."""
+    if cached and cached.get("status") == "completed":
+        return cached  # Preserve the in-process result_obj receipt conversion.
+    from .receipts import _call_nonblocking
+    from aragora.storage.job_queue_store import get_job_store, JobStatus
+
+    storage = get_storage()
+    stored = await _call_nonblocking(storage, "get", gauntlet_id)
+    inflight = await _call_nonblocking(storage, "get_inflight", gauntlet_id)
+    if not stored and inflight and inflight.status in ("failed", "cancelled"):
+        return inflight.to_dict()  # Survives a failed queue terminal-state write.
+    job = await get_job_store().get(gauntlet_id) if is_durable_queue_enabled() else None
+    if stored:
+        if not isinstance(stored, dict) or stored.get("gauntlet_id", gauntlet_id) != gauntlet_id:
+            raise ValueError("Stored gauntlet identity mismatch")
+        run = {"gauntlet_id": gauntlet_id, "status": "completed", "result": stored}
+        if (job and job.status == JobStatus.FAILED) or (inflight and inflight.status == "failed"):
+            run["error"] = "Gauntlet result persisted; delivery bookkeeping failed"
+        return run
+    if job:
+        status = job.status
+        if status == JobStatus.COMPLETED:
+            raise RuntimeError("Completed gauntlet result unavailable")
+        run = {"gauntlet_id": gauntlet_id, "status": status.value}
+        if status in (JobStatus.FAILED, JobStatus.CANCELLED):
+            run["error"] = "Gauntlet execution or result delivery failed"
+        else:
+            run["status"] = "running" if status == JobStatus.PROCESSING else "pending"
+        return run
+    return inflight.to_dict() if inflight else cached
+
 
 # In-memory storage for in-flight gauntlet runs (pending/running)
 # Completed runs are persisted to GauntletStorage

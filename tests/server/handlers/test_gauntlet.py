@@ -468,6 +468,7 @@ class TestGauntletGetReceipt:
         with patch.object(gauntlet_module, "_get_storage") as mock_storage:
             mock_storage_instance = MagicMock()
             mock_storage_instance.get.return_value = None
+            mock_storage_instance.get_inflight.return_value = None
             mock_storage.return_value = mock_storage_instance
 
             handler = make_mock_handler(path="/api/v1/gauntlet/gauntlet-missing123/receipt")

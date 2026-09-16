@@ -267,7 +267,9 @@ def test_inflight_receipt_retains_transport_timeout_and_can_finish_after_budget(
     assert clock.sleeps == []
 
 
-@pytest.mark.parametrize("producer", ["handler", "worker"])
+@pytest.mark.parametrize(
+    "producer", ["handler", "worker", "worker-cleanup", "worker-save", "worker-complete"]
+)
 def test_producer_identity_survives_execution_storage_and_receipts(monkeypatch, tmp_path, producer):
     from aragora.agents import base
     import aragora.gauntlet as package
@@ -275,7 +277,8 @@ def test_producer_identity_survives_execution_storage_and_receipts(monkeypatch, 
     from aragora.ranking import elo
     from aragora.server.handlers.gauntlet import receipts, results, runner
     from aragora.server.workers.gauntlet_worker import GauntletWorker
-    from aragora.storage.job_queue_store import QueuedJob
+    from aragora.storage import job_queue_store
+    import sqlite3
 
     config_type = package.OrchestratorConfig
 
@@ -295,14 +298,22 @@ def test_producer_identity_survives_execution_storage_and_receipts(monkeypatch, 
     store_type = storage.GauntletStorage
     db = str(tmp_path / "results.db")
     store = store_type(db, backend="sqlite")
-    store.save_inflight(RUN_ID, "pending", "spec", "fixture", "hash", None, "default", ["demo"])
     monkeypatch.setattr(storage, "GauntletStorage", lambda: store)
     runs = {RUN_ID: {**state("pending"), "input_summary": "fixture"}}
+    run_id = RUN_ID
+    queue = job_queue_store.SQLiteJobStore(tmp_path / "jobs.db")
+    monkeypatch.setattr(job_queue_store, "get_job_store", lambda: queue)
+    monkeypatch.setattr("aragora.server.workers.gauntlet_worker.get_job_store", lambda: queue)
+    if producer == "worker-complete":
+        monkeypatch.setattr(
+            queue, "complete", AsyncMock(side_effect=sqlite3.OperationalError("private queue"))
+        )
     for module in (runner, receipts, results):
         monkeypatch.setattr(module, "get_gauntlet_runs", lambda: runs)
         monkeypatch.setattr(module, "_get_storage_proxy", lambda: store)
     monkeypatch.setattr(runner, "get_gauntlet_broadcast_fn", lambda: None)
     if producer == "handler":
+        store.save_inflight(RUN_ID, "pending", "spec", "fixture", "hash", None, "default", ["demo"])
         owner = SimpleNamespace(_auto_persist_receipt=AsyncMock())
         asyncio.run(
             runner.GauntletRunnerMixin._run_gauntlet_async(
@@ -312,35 +323,79 @@ def test_producer_identity_survives_execution_storage_and_receipts(monkeypatch, 
         assert runs[RUN_ID]["result_obj"].gauntlet_id == RUN_ID
         assert owner._auto_persist_receipt.call_args.args[0].gauntlet_id == RUN_ID
     else:
-        worker = object.__new__(GauntletWorker)
-        worker.broadcast_fn = None
-        job = QueuedJob(
-            id="queue-job",
-            job_type="gauntlet",
-            payload={"gauntlet_id": RUN_ID, "input_content": "fixture", "agents": ["demo"]},
+        tasks = []
+        monkeypatch.setattr(runner, "is_durable_queue_enabled", lambda: True)
+        monkeypatch.setattr(
+            runner, "create_tracked_task", lambda coro, **_: tasks.append(asyncio.create_task(coro))
         )
-        assert asyncio.run(worker._execute_gauntlet(job))["gauntlet_id"] == RUN_ID
-        runs.clear()
-    assert store.get(RUN_ID)["gauntlet_id"] == RUN_ID
-    assert store.get_inflight(RUN_ID) is None
+        if producer in ("worker-cleanup", "worker-save"):
+            monkeypatch.setattr(
+                store,
+                "delete_inflight" if producer == "worker-cleanup" else "save",
+                MagicMock(side_effect=sqlite3.OperationalError("private database path")),
+            )
+
+        async def submitted_job():
+            owner = SimpleNamespace(
+                read_json_body=lambda _: {"input_content": "fixture", "agents": ["demo"]}
+            )
+            response = await inspect.unwrap(runner.GauntletRunnerMixin._start_gauntlet)(
+                owner, SimpleNamespace()
+            )
+            assert response.status_code == 202
+            await asyncio.gather(*tasks)
+            worker = GauntletWorker()
+            job = await queue.dequeue(worker_id=worker.worker_id)
+            await worker._process_job(job)
+            return json.loads(response.body)["gauntlet_id"]
+
+        run_id = asyncio.run(submitted_job())
+        assert runs[run_id]["status"] == "pending"  # Preserve the submitting process's cache.
+        job = asyncio.run(queue.get(run_id))
+        assert job.status.value == ("completed" if producer == "worker" else "failed")
+    if producer != "worker-save":
+        assert store.get(run_id)["gauntlet_id"] == run_id
+        assert (store.get_inflight(run_id) is None) == (producer in ("handler", "worker"))
     client = MagicMock()
-    client._post.return_value = state("pending")
+    client._post.return_value = {"gauntlet_id": run_id, "status": "pending"}
 
     def read(path):
         response = asyncio.run(
             inspect.unwrap(receipts.GauntletReceiptsMixin._get_receipt)(
-                None, RUN_ID, {"signed": "false"}
+                None, run_id, {"signed": "false"}
             )
-            if path == RECEIPT_PATH
-            else inspect.unwrap(results.GauntletResultsMixin._get_status)(None, RUN_ID)
+            if path.endswith("/receipt")
+            else inspect.unwrap(results.GauntletResultsMixin._get_status)(None, run_id)
         )
         assert response.status_code == 200
         return json.loads(response.body)
 
     client._get.side_effect = read
+    if producer == "worker-save":
+        assert read(f"/api/v1/gauntlet/{run_id}")["status"] == "failed"
+        response = asyncio.run(
+            inspect.unwrap(receipts.GauntletReceiptsMixin._get_receipt)(None, run_id, {})
+        )
+        assert response.status_code == 400
+        with pytest.raises(AragoraAPIError, match="failed"):
+            gauntlet.GauntletAPI(client).run_and_wait("fixture", timeout=10)
+        assert "private database path" not in str(read(f"/api/v1/gauntlet/{run_id}"))
+        assert asyncio.run(queue.dequeue(worker_id="again")) is None
+        store.close()
+        return
+    assert read(f"/api/v1/gauntlet/{run_id}")["status"] == "completed"
+    if producer in ("worker-cleanup", "worker-complete"):
+        assert "delivery bookkeeping failed" in read(f"/api/v1/gauntlet/{run_id}")["error"]
+        with monkeypatch.context() as replay:
+            replay.setattr(
+                package.GauntletOrchestrator, "run", AsyncMock(side_effect=AssertionError("rerun"))
+            )
+            assert asyncio.run(GauntletWorker()._execute_gauntlet(job))["gauntlet_id"] == run_id
+    runs[run_id]["status"] = "failed" if producer != "handler" else "completed"
+    assert read(f"/api/gauntlet/{run_id}/receipt")["gauntlet_id"] == run_id
     for _ in range(2):
         receipt = gauntlet.GauntletAPI(client).run_and_wait("fixture", timeout=10)
-        assert receipt.gauntlet_id == RUN_ID
+        assert receipt.gauntlet_id == run_id
         assert receipt.verdict == "NEEDS_REVIEW"  # No fabricated successful evidence.
         runs.clear()
         store.close()
@@ -358,3 +413,60 @@ def test_standalone_execution_still_generates_distinct_ids():
     assert first.gauntlet_id.startswith("gauntlet-")
     assert second.gauntlet_id.startswith("gauntlet-")
     assert first.gauntlet_id != second.gauntlet_id
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "gauntlet_results",
+        "gauntlet_inflight",
+        "queue",
+        "identity",
+        "shape",
+        AssertionError,
+        TypeError,
+        AttributeError,
+        asyncio.CancelledError,
+    ],
+)
+async def test_lookup_faults_never_look_missing_or_pending(monkeypatch, tmp_path, cached, fault):
+    from aragora.gauntlet.storage import GauntletStorage
+    from aragora.server.handlers.gauntlet import receipts, results, storage
+    from aragora.storage import job_queue_store
+
+    store = GauntletStorage(str(tmp_path / "lookup.db"), backend="sqlite")
+    queue = SimpleNamespace(get=AsyncMock(return_value=None))
+    monkeypatch.setattr(job_queue_store, "get_job_store", lambda: queue)
+    monkeypatch.setattr(storage, "is_durable_queue_enabled", lambda: True)
+    if not isinstance(fault, str):
+        queue.get.side_effect = fault
+    elif fault.startswith("gauntlet_"):
+        store._backend.execute_write(f"DROP TABLE {fault}")  # Real SQLite lookup error.
+    elif fault == "queue":
+        queue.get.side_effect = OSError("private queue details")
+    else:
+        monkeypatch.setattr(
+            store, "get", lambda _: {"gauntlet_id": "wrong"} if fault == "identity" else ["invalid"]
+        )
+    for module in (results, receipts):
+        monkeypatch.setattr(module, "_get_storage_proxy", lambda: store)
+        monkeypatch.setattr(
+            module, "get_gauntlet_runs", lambda: {RUN_ID: state("pending")} if cached else {}
+        )
+    try:
+        for method, args in (
+            (results.GauntletResultsMixin._get_status, (None, RUN_ID)),
+            (receipts.GauntletReceiptsMixin._get_receipt, (None, RUN_ID, {})),
+        ):
+            if not isinstance(fault, str):
+                with pytest.raises(fault):
+                    await inspect.unwrap(method)(*args)
+                continue
+            response = await inspect.unwrap(method)(*args)
+            assert response.status_code == 500
+            assert json.loads(response.body)["code"] == "GAUNTLET_501"
+            assert b"private" not in response.body and b"no such table" not in response.body
+    finally:
+        store.close()
