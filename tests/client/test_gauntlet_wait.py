@@ -474,7 +474,11 @@ async def test_lookup_faults_never_look_missing_or_pending(monkeypatch, tmp_path
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reader", ["status", "receipt"])
-async def test_completion_between_result_and_queue_reads(monkeypatch, tmp_path, reader):
+@pytest.mark.parametrize("delivery_fault", [None, "cleanup", "queue_complete"])
+async def test_completion_between_result_and_queue_reads(
+    monkeypatch, tmp_path, reader, delivery_fault
+):
+    import sqlite3
     from threading import Event
 
     from aragora.agents import base
@@ -520,6 +524,19 @@ async def test_completion_between_result_and_queue_reads(monkeypatch, tmp_path, 
     worker = gauntlet_worker.GauntletWorker()
     job = await queue.dequeue(worker_id=worker.worker_id)
 
+    if delivery_fault == "cleanup":
+        result_store._backend.execute_write(
+            "CREATE TRIGGER reject_cleanup BEFORE DELETE ON gauntlet_inflight "
+            "BEGIN SELECT RAISE(ABORT, 'cleanup failure'); END"
+        )
+    elif delivery_fault == "queue_complete":
+        with sqlite3.connect(queue.db_path) as conn:
+            conn.execute(
+                "CREATE TRIGGER reject_completion BEFORE UPDATE ON job_queue "
+                "WHEN NEW.status = 'completed' "
+                "BEGIN SELECT RAISE(ABORT, 'queue completion failure'); END"
+            )
+
     loop = asyncio.get_running_loop()
     read_absent = asyncio.Event()
     release_reader = Event()
@@ -550,8 +567,13 @@ async def test_completion_between_result_and_queue_reads(monkeypatch, tmp_path, 
         await asyncio.wait_for(read_absent.wait(), timeout=5)
         await worker._process_job(job)
         assert real_get(run_id)["gauntlet_id"] == run_id
-        assert result_store.get_inflight(run_id) is None
-        assert (await queue.get(run_id)).status == job_queue_store.JobStatus.COMPLETED
+        if delivery_fault:
+            assert result_store.get_inflight(run_id).status == "failed"
+            assert (await queue.get(run_id)).status == job_queue_store.JobStatus.FAILED
+        else:
+            assert result_store.get_inflight(run_id) is None
+            assert (await queue.get(run_id)).status == job_queue_store.JobStatus.COMPLETED
+        assert await queue.dequeue(worker_id="no-replay") is None
     finally:
         release_reader.set()
     response = await first
@@ -559,6 +581,13 @@ async def test_completion_between_result_and_queue_reads(monkeypatch, tmp_path, 
     result_store.close()
     assert response.status_code == 200, "Successful durable completion must not manufacture a 500"
     assert second.status_code == 200
+    if reader == "status":
+        assert json.loads(response.body)["status"] == "completed"
+        if delivery_fault:
+            assert "delivery bookkeeping failed" in json.loads(response.body)["error"]
+    else:
+        assert json.loads(response.body)["gauntlet_id"] == run_id
+        assert json.loads(response.body)["verdict"] == "NEEDS_REVIEW"
 
 
 @pytest.mark.asyncio
@@ -566,7 +595,10 @@ async def test_completion_between_result_and_queue_reads(monkeypatch, tmp_path, 
     "fault",
     [None, "identity", "shape", "database", AssertionError, TypeError, asyncio.CancelledError],
 )
-async def test_completion_reread_preserves_failures(monkeypatch, fault):
+@pytest.mark.parametrize(
+    "terminal", ["completed", "failed", "cancelled", "inflight-failed", "inflight-cancelled"]
+)
+async def test_completion_reread_preserves_failures(monkeypatch, fault, terminal):
     import sqlite3
 
     from aragora.server.handlers.gauntlet import receipts, results, storage
@@ -577,9 +609,16 @@ async def test_completion_reread_preserves_failures(monkeypatch, fault):
         "shape": ["invalid"],
         "database": sqlite3.OperationalError("private database details"),
     }.get(fault, fault)
-    store = SimpleNamespace(get=MagicMock(), get_inflight=MagicMock(return_value=None))
+    inflight = None
+    if terminal.startswith("inflight-"):
+        inflight = SimpleNamespace(status=terminal[9:], to_dict=lambda: state(terminal[9:]))
+    store = SimpleNamespace(get=MagicMock(), get_inflight=MagicMock(return_value=inflight))
     queue = SimpleNamespace(
-        get=AsyncMock(return_value=SimpleNamespace(status=job_queue_store.JobStatus.COMPLETED))
+        get=AsyncMock(
+            return_value=SimpleNamespace(
+                status=job_queue_store.JobStatus("processing" if inflight else terminal)
+            )
+        )
     )
     monkeypatch.setattr(job_queue_store, "get_job_store", lambda: queue)
     monkeypatch.setattr(storage, "is_durable_queue_enabled", lambda: True)
@@ -597,7 +636,15 @@ async def test_completion_reread_preserves_failures(monkeypatch, fault):
                 await inspect.unwrap(method)(*args)
         else:
             response = await inspect.unwrap(method)(*args)
-            assert response.status_code == 500
-            assert json.loads(response.body)["code"] == "GAUNTLET_501"
+            if fault is None and terminal != "completed":
+                if method is results.GauntletResultsMixin._get_status:
+                    assert response.status_code == 200
+                    assert json.loads(response.body)["status"] == terminal.removeprefix("inflight-")
+                else:
+                    assert response.status_code == 400
+                    assert json.loads(response.body)["code"] == "GAUNTLET_406"
+            else:
+                assert response.status_code == 500
+                assert json.loads(response.body)["code"] == "GAUNTLET_501"
             assert b"private" not in response.body
         assert store.get.call_args_list == [call(RUN_ID), call(RUN_ID)]

@@ -54,10 +54,21 @@ async def resolve_gauntlet_run(
     stored = await _call_nonblocking(storage, "get", gauntlet_id)
     inflight = await _call_nonblocking(storage, "get_inflight", gauntlet_id)
     if not stored and inflight and inflight.status in ("failed", "cancelled"):
-        return inflight.to_dict()  # Survives a failed queue terminal-state write.
+        stored = await _call_nonblocking(storage, "get", gauntlet_id)
+        if not stored:
+            return inflight.to_dict()  # Survives a failed queue terminal-state write.
     job = await get_job_store().get(gauntlet_id) if is_durable_queue_enabled() else None
-    # Completion can commit between the first result lookup and the queue read.
-    if not stored and job and job.status == JobStatus.COMPLETED:
+    # Reconcile absence after any later terminal observation, including delivery failure.
+    if (
+        not stored
+        and job
+        and job.status
+        in (
+            JobStatus.COMPLETED,
+            JobStatus.FAILED,
+            JobStatus.CANCELLED,
+        )
+    ):
         stored = await _call_nonblocking(storage, "get", gauntlet_id)
     if stored:
         if not isinstance(stored, dict) or stored.get("gauntlet_id", gauntlet_id) != gauntlet_id:
