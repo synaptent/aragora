@@ -214,6 +214,7 @@ anchoring are in-flight. See the [proof ladder](#proof-ladder).
 - [Quickstart](docs/quickstart.md) · [Cold Reviewer Guide](docs/COLD_REVIEWER_GUIDE.md) · [CLI Reference](docs/CLI_REFERENCE.md)
 - [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) · [SDK Guide](docs/SDK_GUIDE.md) · [API Reference](docs/api/API_REFERENCE.md)
 - [Feature status](docs/STATUS.md) · [Enterprise features](docs/enterprise/ENTERPRISE_FEATURES.md) · [Architecture deep-dive](docs/EXTENDED_README.md)
+- [Handler testing guidance](aragora/server/handlers/README.md#typed-handler-characterization-suites) — source and integration validation for typed handlers
 - [Inspiration and credits](docs/reference/CREDITS.md)
 
 ## Security
