@@ -43,13 +43,17 @@ from aragora.server.validation.query_params import safe_query_int
 SCIMConfig: Any
 SCIMServer: Any
 try:
-    from aragora.auth.scim.server import SCIMConfig, SCIMServer
+    from aragora.auth.scim.server import SCIMConfig as _SCIMConfig
+    from aragora.auth.scim.server import SCIMServer as _SCIMServer
 
     SCIM_AVAILABLE = True
 except ImportError:
     SCIM_AVAILABLE = False
     SCIMConfig = None
     SCIMServer = None
+else:
+    SCIMConfig = _SCIMConfig
+    SCIMServer = _SCIMServer
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +76,7 @@ class SCIMHandler(BaseHandler):
         "/scim/v2/Groups/*",
     ]
 
-    def __init__(self, server_context):
+    def __init__(self, server_context: dict[str, Any]) -> None:
         super().__init__(server_context)
         self._scim_server: SCIMServer | None = None
 
