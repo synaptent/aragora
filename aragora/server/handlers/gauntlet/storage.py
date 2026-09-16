@@ -56,6 +56,9 @@ async def resolve_gauntlet_run(
     if not stored and inflight and inflight.status in ("failed", "cancelled"):
         return inflight.to_dict()  # Survives a failed queue terminal-state write.
     job = await get_job_store().get(gauntlet_id) if is_durable_queue_enabled() else None
+    # Completion can commit between the first result lookup and the queue read.
+    if not stored and job and job.status == JobStatus.COMPLETED:
+        stored = await _call_nonblocking(storage, "get", gauntlet_id)
     if stored:
         if not isinstance(stored, dict) or stored.get("gauntlet_id", gauntlet_id) != gauntlet_id:
             raise ValueError("Stored gauntlet identity mismatch")

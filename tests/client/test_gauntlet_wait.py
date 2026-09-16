@@ -6,7 +6,7 @@ import inspect
 import json
 from threading import Thread
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
@@ -470,3 +470,134 @@ async def test_lookup_faults_never_look_missing_or_pending(monkeypatch, tmp_path
             assert b"private" not in response.body and b"no such table" not in response.body
     finally:
         store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reader", ["status", "receipt"])
+async def test_completion_between_result_and_queue_reads(monkeypatch, tmp_path, reader):
+    from threading import Event
+
+    from aragora.agents import base
+    import aragora.gauntlet as package
+    from aragora.gauntlet import storage
+    from aragora.integrations import receipt_webhooks
+    from aragora.ranking import elo
+    from aragora.server.handlers.gauntlet import receipts, results, storage as http_storage
+    from aragora.server.workers import gauntlet_worker
+    from aragora.storage import job_queue_store
+
+    run_id = "gauntlet-independent-completion-race"
+    result_store = storage.GauntletStorage(str(tmp_path / "results.db"), backend="sqlite")
+    queue = job_queue_store.SQLiteJobStore(tmp_path / "jobs.db")
+    result_store.save_inflight(
+        run_id, "pending", "spec", "fixture", "hash", None, "default", ["demo"]
+    )
+    monkeypatch.setattr(storage, "GauntletStorage", lambda: result_store)
+    monkeypatch.setattr(job_queue_store, "get_job_store", lambda: queue)
+    monkeypatch.setattr(gauntlet_worker, "get_job_store", lambda: queue)
+    monkeypatch.setattr(http_storage, "is_durable_queue_enabled", lambda: True)
+    runs = {run_id: {"gauntlet_id": run_id, "status": "pending"}}
+    for module in (results, receipts):
+        monkeypatch.setattr(module, "_get_storage_proxy", lambda: result_store)
+        monkeypatch.setattr(module, "get_gauntlet_runs", lambda: runs)
+
+    config_type = package.OrchestratorConfig
+
+    def offline_config(**kwargs):
+        return config_type(
+            **kwargs,
+            **{
+                f"enable_{phase}": False
+                for phase in ("redteam", "probing", "deep_audit", "verification", "risk_assessment")
+            },
+        )
+
+    monkeypatch.setattr(package, "OrchestratorConfig", offline_config)
+    monkeypatch.setattr(base, "create_agent", lambda **_: SimpleNamespace(name="offline"))
+    monkeypatch.setattr(elo, "EloSystem", MagicMock())
+    monkeypatch.setattr(receipt_webhooks, "get_receipt_notifier", MagicMock())
+    await gauntlet_worker.enqueue_gauntlet_job(run_id, "fixture", "spec", None, ["demo"], "default")
+    worker = gauntlet_worker.GauntletWorker()
+    job = await queue.dequeue(worker_id=worker.worker_id)
+
+    loop = asyncio.get_running_loop()
+    read_absent = asyncio.Event()
+    release_reader = Event()
+    real_get = result_store.get
+    calls = 0
+
+    def get_with_completion_barrier(key):
+        nonlocal calls
+        calls += 1
+        value = real_get(key)
+        if calls == 1:
+            assert value is None
+            loop.call_soon_threadsafe(read_absent.set)
+            assert release_reader.wait(5), "test barrier timed out"
+        return value
+
+    monkeypatch.setattr(result_store, "get", get_with_completion_barrier)
+
+    async def read():
+        if reader == "status":
+            return await inspect.unwrap(results.GauntletResultsMixin._get_status)(None, run_id)
+        return await inspect.unwrap(receipts.GauntletReceiptsMixin._get_receipt)(
+            None, run_id, {"signed": "false"}
+        )
+
+    first = asyncio.create_task(read())
+    try:
+        await asyncio.wait_for(read_absent.wait(), timeout=5)
+        await worker._process_job(job)
+        assert real_get(run_id)["gauntlet_id"] == run_id
+        assert result_store.get_inflight(run_id) is None
+        assert (await queue.get(run_id)).status == job_queue_store.JobStatus.COMPLETED
+    finally:
+        release_reader.set()
+    response = await first
+    second = await read()
+    result_store.close()
+    assert response.status_code == 200, "Successful durable completion must not manufacture a 500"
+    assert second.status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fault",
+    [None, "identity", "shape", "database", AssertionError, TypeError, asyncio.CancelledError],
+)
+async def test_completion_reread_preserves_failures(monkeypatch, fault):
+    import sqlite3
+
+    from aragora.server.handlers.gauntlet import receipts, results, storage
+    from aragora.storage import job_queue_store
+
+    stored = {
+        "identity": {"gauntlet_id": "wrong"},
+        "shape": ["invalid"],
+        "database": sqlite3.OperationalError("private database details"),
+    }.get(fault, fault)
+    store = SimpleNamespace(get=MagicMock(), get_inflight=MagicMock(return_value=None))
+    queue = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(status=job_queue_store.JobStatus.COMPLETED))
+    )
+    monkeypatch.setattr(job_queue_store, "get_job_store", lambda: queue)
+    monkeypatch.setattr(storage, "is_durable_queue_enabled", lambda: True)
+    for module in (results, receipts):
+        monkeypatch.setattr(module, "_get_storage_proxy", lambda: store)
+        monkeypatch.setattr(module, "get_gauntlet_runs", lambda: {RUN_ID: state("pending")})
+    for method, args in (
+        (results.GauntletResultsMixin._get_status, (None, RUN_ID)),
+        (receipts.GauntletReceiptsMixin._get_receipt, (None, RUN_ID, {})),
+    ):
+        store.get.reset_mock(side_effect=True)
+        store.get.side_effect = [None, stored]
+        if isinstance(fault, type):
+            with pytest.raises(fault):
+                await inspect.unwrap(method)(*args)
+        else:
+            response = await inspect.unwrap(method)(*args)
+            assert response.status_code == 500
+            assert json.loads(response.body)["code"] == "GAUNTLET_501"
+            assert b"private" not in response.body
+        assert store.get.call_args_list == [call(RUN_ID), call(RUN_ID)]
