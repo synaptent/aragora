@@ -365,3 +365,321 @@ def test_cli_json_exits_nonzero_with_citable_ids(tmp_path: Path, capsys: Any) ->
     assert payload["ok"] is False
     assert payload["binding_violations"][0]["entry_id"] == "CHR-P4A-004"
     assert payload["binding_violations"][0]["authority_ids"] == ["ARCH-015"]
+
+
+def _charters_payload_with_legacy_entries() -> dict[str, Any]:
+    payload = _charters_payload()
+    payload["authorities"].append(
+        {
+            "id": "ARCH-016",
+            "concern": "legacy-executor",
+            "authority": "aragora/queue/legacy",
+            "registry_refs": ["CHR-P4A-009", "CHR-X-051"],
+        }
+    )
+    payload["registry"].extend(
+        [
+            {
+                "id": "CHR-P4A-009",
+                "state": "REMOVED",
+                "binding_in_draft": True,
+                "paths": ["aragora/queue/legacy.py"],
+                "symbols": ["aragora.queue.legacy:legacy_executor"],
+                "kept_symbols": ["aragora.queue.legacy:LegacyStatus"],
+                "evidence": "legacy executor removed; status enum kept.",
+            },
+            {
+                "id": "CHR-X-051",
+                "state": "REMOVED",
+                "paths": ["aragora/legacy_mod.py"],
+                "symbols": ["aragora.legacy_mod:old_thing"],
+                "evidence": "proposed removal, not yet binding in draft.",
+            },
+        ]
+    )
+    return payload
+
+
+def test_multiline_removed_symbol_readd_reports_original_source_location(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/pkg/worker.py b/pkg/worker.py
+--- a/pkg/worker.py
++++ b/pkg/worker.py
+@@ -9,0 +10,4 @@
++from aragora.queue import (
++    create_default_executor,
++)
++executor = create_default_executor()
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.binding_violations] == ["CHR-P4A-004"]
+    violation = result.binding_violations[0]
+    assert violation.binding == "BINDING"
+    assert violation.authority_ids == ["ARCH-015"]
+    assert violation.path == "pkg/worker.py"
+    assert violation.line_no == 10
+    assert "create_default_executor" in violation.line
+    assert result.proposed_violations == []
+
+
+def test_multiline_removed_symbol_alias_and_comments_are_binding(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/some.py b/some.py
+--- a/some.py
++++ b/some.py
+@@ -0,0 +1,5 @@
++from aragora.queue import (  # noqa: F401
++    QueueConfig,  # unrelated, kept on purpose
++    create_default_executor as build_executor,
++)  # end of import
++executor = build_executor()
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.binding_violations] == ["CHR-P4A-004"]
+    assert result.binding_violations[0].line_no == 1
+    assert "create_default_executor" in result.binding_violations[0].line
+
+
+def test_multiline_import_without_added_closer_still_detects_symbol(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/some.py b/some.py
+--- a/some.py
++++ b/some.py
+@@ -1,1 +1,2 @@
+-from aragora.queue import (QueueConfig,
++from aragora.queue import (
++    create_default_executor,
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.binding_violations] == ["CHR-P4A-004"]
+    assert result.binding_violations[0].line_no == 1
+
+
+def test_multiline_kept_only_import_is_not_a_violation(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/debate/team_selector.py b/aragora/debate/team_selector.py
+--- a/aragora/debate/team_selector.py
++++ b/aragora/debate/team_selector.py
+@@ -1,0 +2,5 @@
++from aragora.control_plane.registry import (
++    AgentRegistry,
++    AgentStatus,
++)
++registry = AgentRegistry()
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is True
+    assert result.violations == []
+
+
+def test_multiline_mixed_kept_and_parked_import_is_proposed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/aragora/debate/team_selector.py b/aragora/debate/team_selector.py
+--- a/aragora/debate/team_selector.py
++++ b/aragora/debate/team_selector.py
+@@ -1,0 +2,4 @@
++from aragora.control_plane.registry import (
++    AgentRegistry,
++    RegionalLoadBalancer,
++)
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert result.binding_violations == []
+    assert [violation.entry_id for violation in result.proposed_violations] == ["CHR-X-040"]
+    assert result.proposed_violations[0].line_no == 2
+    assert result.proposed_violations[0].authority_ids == ["ARCH-014"]
+
+
+def test_multiline_mixed_kept_and_removed_symbol_flags_only_removed(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload_with_legacy_entries())
+    diff_text = """diff --git a/some.py b/some.py
+--- a/some.py
++++ b/some.py
+@@ -0,0 +1,4 @@
++from aragora.queue.legacy import (
++    LegacyStatus,
++    legacy_executor,
++)
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert [violation.entry_id for violation in result.binding_violations] == ["CHR-P4A-009"]
+    assert result.binding_violations[0].authority_ids == ["ARCH-016"]
+    assert "legacy_executor" in result.binding_violations[0].line
+    assert result.proposed_violations == []
+
+    kept_only = """diff --git a/some.py b/some.py
+--- a/some.py
++++ b/some.py
+@@ -0,0 +1,3 @@
++from aragora.queue.legacy import (
++    LegacyStatus,
++)
+"""
+
+    assert checker.check_diff(kept_only, charter_path=charter_path).violations == []
+
+
+def test_multiline_proposed_symbol_readd_is_not_binding(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload_with_legacy_entries())
+    diff_text = """diff --git a/some.py b/some.py
+--- a/some.py
++++ b/some.py
+@@ -0,0 +1,3 @@
++from aragora.legacy_mod import (
++    old_thing,
++)
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is False
+    assert result.binding_violations == []
+    assert [violation.entry_id for violation in result.proposed_violations] == ["CHR-X-051"]
+    assert result.proposed_violations[0].binding == "PROPOSED"
+    assert "old_thing" in result.proposed_violations[0].line
+
+
+def test_multiline_import_is_not_joined_across_files(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/first.py b/first.py
+--- a/first.py
++++ b/first.py
+@@ -4,0 +5,1 @@
++from aragora.queue import (
+diff --git a/second.py b/second.py
+--- a/second.py
++++ b/second.py
+@@ -0,0 +1,2 @@
++    create_default_executor,
++)
+"""
+
+    assert checker.check_diff(diff_text, charter_path=charter_path).violations == []
+
+    single_line_in_second = """diff --git a/first.py b/first.py
+--- a/first.py
++++ b/first.py
+@@ -4,0 +5,1 @@
++from aragora.queue import (
+diff --git a/second.py b/second.py
+--- a/second.py
++++ b/second.py
+@@ -0,0 +1,1 @@
++from aragora.queue import create_default_executor
+"""
+
+    result = checker.check_diff(single_line_in_second, charter_path=charter_path)
+
+    assert [violation.entry_id for violation in result.binding_violations] == ["CHR-P4A-004"]
+    assert result.binding_violations[0].path == "second.py"
+    assert result.binding_violations[0].line_no == 1
+
+
+def test_multiline_import_is_not_joined_across_hunks(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/some.py b/some.py
+--- a/some.py
++++ b/some.py
+@@ -0,0 +1,1 @@
++from aragora.queue import (
+@@ -1,0 +2,2 @@
++    create_default_executor,
++)
+"""
+
+    assert checker.check_diff(diff_text, charter_path=charter_path).violations == []
+
+
+def test_multiline_benign_import_passes(tmp_path: Path) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_text = """diff --git a/some.py b/some.py
+--- a/some.py
++++ b/some.py
+@@ -0,0 +1,5 @@
++from os.path import (
++    join,
++    split as split_path,
++)
++target = join("a", "b")
+"""
+
+    result = checker.check_diff(diff_text, charter_path=charter_path)
+
+    assert result.ok is True
+    assert result.violations == []
+
+
+def test_cli_text_multiline_reports_source_location_and_authority(
+    tmp_path: Path, capsys: Any
+) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_path = tmp_path / "diff.patch"
+    diff_path.write_text(
+        """diff --git a/pkg/worker.py b/pkg/worker.py
+--- a/pkg/worker.py
++++ b/pkg/worker.py
+@@ -9,0 +10,3 @@
++from aragora.queue import (
++    create_default_executor,
++)
+""",
+        encoding="utf-8",
+    )
+
+    rc = checker.main(
+        ["--charters", str(charter_path), "--diff-file", str(diff_path), "--format", "text"]
+    )
+    out = capsys.readouterr().out
+
+    assert rc == 1
+    assert "Charter compliance: FAIL" in out
+    assert "BINDING CHR-P4A-004 [REMOVED] authorities=ARCH-015 pkg/worker.py:10:" in out
+    assert "create_default_executor" in out
+
+
+def test_cli_json_multiline_reports_source_location(tmp_path: Path, capsys: Any) -> None:
+    charter_path = _write_charters(tmp_path, _charters_payload())
+    diff_path = tmp_path / "diff.patch"
+    diff_path.write_text(
+        """diff --git a/pkg/worker.py b/pkg/worker.py
+--- a/pkg/worker.py
++++ b/pkg/worker.py
+@@ -9,0 +10,3 @@
++from aragora.queue import (
++    create_default_executor,
++)
+""",
+        encoding="utf-8",
+    )
+
+    rc = checker.main(
+        ["--charters", str(charter_path), "--diff-file", str(diff_path), "--format", "json"]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert rc == 1
+    assert payload["ok"] is False
+    violation = payload["binding_violations"][0]
+    assert violation["entry_id"] == "CHR-P4A-004"
+    assert violation["authority_ids"] == ["ARCH-015"]
+    assert violation["path"] == "pkg/worker.py"
+    assert violation["line_no"] == 10
+    assert "create_default_executor" in violation["line"]
+    assert payload["proposed_violations"] == []

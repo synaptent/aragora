@@ -26,24 +26,14 @@ from aragora.privacy.deletion import get_legal_hold_manager as _base_get_legal_h
 logger = logging.getLogger(__name__)
 
 
-def get_legal_hold_manager():  # type: ignore[override]
-    """Indirection for tests that patch compliance_handler.get_legal_hold_manager."""
-    try:
-        from aragora.server.handlers.compliance import handler as compat
-
-        return compat.get_legal_hold_manager()
-    except (ImportError, AttributeError):
-        return _base_get_legal_hold_manager()
+def get_legal_hold_manager() -> Any:
+    """Default provider for standalone legal-hold mixins."""
+    return _base_get_legal_hold_manager()
 
 
-def get_audit_store():  # type: ignore[override]
-    """Indirection for tests that patch compliance_handler.get_audit_store."""
-    try:
-        from aragora.server.handlers.compliance import handler as compat
-
-        return compat.get_audit_store()
-    except (ImportError, AttributeError):
-        return _base_get_audit_store()
+def get_audit_store() -> Any:
+    """Default audit provider without depending on the concrete handler."""
+    return _base_get_audit_store()
 
 
 def _extract_user_id_from_headers(headers: dict[str, str] | None) -> str:
@@ -83,6 +73,12 @@ def _extract_user_id_from_headers(headers: dict[str, str] | None) -> str:
 class LegalHoldMixin:
     """Mixin providing legal hold management methods."""
 
+    def _get_legal_hold_manager(self) -> Any:
+        return get_legal_hold_manager()
+
+    def _get_legal_hold_audit_store(self) -> Any:
+        return get_audit_store()
+
     @require_permission("compliance:legal")
     async def _list_legal_holds(self, query_params: dict[str, str]) -> HandlerResult:
         """
@@ -94,7 +90,7 @@ class LegalHoldMixin:
         active_only = query_params.get("active_only", "true").lower() == "true"
 
         try:
-            hold_manager = get_legal_hold_manager()
+            hold_manager = self._get_legal_hold_manager()
 
             if active_only:
                 holds = hold_manager.get_active_holds()
@@ -151,7 +147,7 @@ class LegalHoldMixin:
         created_by = _extract_user_id_from_headers(headers)
 
         try:
-            hold_manager = get_legal_hold_manager()
+            hold_manager = self._get_legal_hold_manager()
             hold = hold_manager.create_hold(
                 user_ids=user_ids,
                 reason=reason,
@@ -162,7 +158,7 @@ class LegalHoldMixin:
 
             # Log the hold creation
             try:
-                store = get_audit_store()
+                store = self._get_legal_hold_audit_store()
                 store.log_event(
                     action="legal_hold_created",
                     resource_type="legal_hold",
@@ -206,7 +202,7 @@ class LegalHoldMixin:
         released_by = body.get("released_by", "compliance_api")
 
         try:
-            hold_manager = get_legal_hold_manager()
+            hold_manager = self._get_legal_hold_manager()
             released = hold_manager.release_hold(hold_id, released_by)
 
             if not released:
@@ -214,7 +210,7 @@ class LegalHoldMixin:
 
             # Log the release
             try:
-                store = get_audit_store()
+                store = self._get_legal_hold_audit_store()
                 store.log_event(
                     action="legal_hold_released",
                     resource_type="legal_hold",
