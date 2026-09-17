@@ -14,6 +14,7 @@ rather than raising, so the CLI can print all problems at once.
 from __future__ import annotations
 
 import json
+import re
 from importlib import resources
 from typing import Any
 
@@ -240,7 +241,7 @@ def validate_structure(doc: Any) -> list[str]:
     _check_signatures(errors, doc.get("signatures"))
 
     _validate_extensions(errors, doc, load_bundled_schema())
-    errors.extend(_jsonschema_errors(doc))
+    errors.extend(_without_restated(_jsonschema_errors(doc), errors))
     return errors
 
 
@@ -276,6 +277,10 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
         if isinstance(value, list) and "items" in spec:
             for index, item in enumerate(value):
                 member(item, spec["items"], f"{path}[{index}]")
+        if isinstance(value, dict):
+            for name in spec.get("required", ()):
+                if name not in value:
+                    errors.append(f"{path}: missing required member: {name}")
         if isinstance(value, dict) and "properties" in spec:
             for key, item in value.items():
                 if key in spec["properties"]:
@@ -283,12 +288,18 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
                 elif spec.get("additionalProperties") is False:
                     errors.append(f"{path}.{key}: unknown member")
 
-    paths = {
+    # Members the v0.1 profile does not define: rejected outright on a "0.1" document.
+    version_scoped = {
         "": ("adjudication",),
         "subject": ("repository", "pr_number", "head_sha", "base_sha"),
         "reasoning": ("observations",),
         "quorum": ("verdicts", "rule"),
         "quorum.dissent": ("findings", "severity_max", "blocking"),
+    }
+    # attestation.mechanism is additionalProperties: true, so its typed extras stay legal
+    # on every version and are only shape-checked.
+    paths = {
+        **version_scoped,
         "attestation.mechanism": (
             "policy_version",
             "tier",
@@ -299,20 +310,59 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
             "record_ref",
         ),
     }
+    v01 = doc.get("odr_version") == "0.1"
     for path, keys in paths.items():
         value, spec = doc, schema
         for part in path.split(".") if path else []:
             value = value.get(part, {}) if isinstance(value, dict) else {}
             spec = spec["properties"][part]
+            # oneOf[0] is the present-block branch; the absent-marker $ref is oneOf[1].
             spec = spec.get("oneOf", [spec])[0]
         if not isinstance(value, dict) or value.get("status") == "absent":
             continue
         if path and spec.get("additionalProperties") is False:
-            for key in value.keys() - spec["properties"].keys():
-                errors.append(f"{path or 'receipt'}.{key}: unknown member")
+            for key in sorted(value.keys() - spec["properties"].keys()):
+                errors.append(f"{path}.{key}: unknown member")
         for key in keys:
-            if key in value:
-                member(value[key], spec["properties"][key], f"{path}.{key}".lstrip("."))
+            if key not in value:
+                continue
+            member_path = f"{path}.{key}".lstrip(".")
+            if v01 and path in version_scoped:
+                errors.append(f"{member_path}: not in profile 0.1")
+            else:
+                member(value[key], spec["properties"][key], member_path)
+
+
+# jsonschema reports an unexpected or version-scoped member at its parent object (or, in
+# older releases, at the member itself); the hand-written checks name the member.
+_RESTATED_BY_JSONSCHEMA = {
+    "Additional properties are not allowed": ": unknown member",
+    "False schema does not allow": ": not in profile 0.1",
+}
+
+
+def _without_restated(schema_errors: list[str], errors: list[str]) -> list[str]:
+    """Keep the jsonschema lines that add a finding the hand-written checks did not name."""
+    covered: dict[str, set[str]] = {suffix: set() for suffix in _RESTATED_BY_JSONSCHEMA.values()}
+    for line in errors:
+        if line.startswith("unknown top-level member: "):
+            covered[": unknown member"].add("<root>")
+        for suffix, locations in covered.items():
+            if line.endswith(suffix):
+                member = line[: -len(suffix)]
+                for dotted in (member, member.rpartition(".")[0]):
+                    slashed = re.sub(r"\[(\d+)\]", r"/\1", dotted).replace(".", "/")
+                    locations.add(slashed or "<root>")
+    kept: list[str] = []
+    for line in schema_errors:
+        location, _, message = line.removeprefix("schema[").partition("]: ")
+        suffix = next(
+            (s for prefix, s in _RESTATED_BY_JSONSCHEMA.items() if message.startswith(prefix)),
+            None,
+        )
+        if suffix is None or location not in covered[suffix]:
+            kept.append(line)
+    return kept
 
 
 def _jsonschema_errors(doc: Any) -> list[str]:
