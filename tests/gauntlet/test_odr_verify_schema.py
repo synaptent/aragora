@@ -736,6 +736,23 @@ _INCOMPLETE_SHAPES: list[tuple[Mutation, str]] = [
     ),
 ]
 _INCOMPLETE_IDS = [expected for _, expected in _INCOMPLETE_SHAPES]
+_ABSENT = {"status": "absent", "reason": "not supplied"}
+# An absent marker that also carries members is neither branch of its oneOf, so those
+# members are checked like a present block's: (version, mutation, one expected line).
+_MARKERS_WITH_MEMBERS: list[tuple[str, Mutation, str]] = [
+    (
+        "0.1",
+        lambda d: d["subject"].update(_ABSENT, pr_number=1),
+        "subject.pr_number: not in profile 0.1",
+    ),
+    ("0.1", lambda d: d.update(quorum={**_ABSENT, "rule": {}}), "quorum.rule: not in profile 0.1"),
+    (
+        "0.2",
+        lambda d: d["quorum"]["dissent"].update(_ABSENT, findings=[{}]),
+        "quorum.dissent.findings[0]: missing required member: issuer",
+    ),
+]
+_MARKER_IDS = [f"{v}-{expected.split(':')[0]}" for v, _, expected in _MARKERS_WITH_MEMBERS]
 
 
 def _v02(doc: dict[str, Any]) -> dict[str, Any]:
@@ -782,7 +799,16 @@ def test_mechanism_extras_stay_legal_on_v01_documents() -> None:
     assert result.ok is True
 
 
-def test_adjudication_minimal_and_verbatim_to_receipt_dict_verify() -> None:
+@pytest.mark.parametrize(("version", "mutate", "expected"), _MARKERS_WITH_MEMBERS, ids=_MARKER_IDS)
+def test_absent_marker_with_members_is_checked_like_a_present_block(
+    version: str, mutate: Mutation, expected: str
+) -> None:
+    doc = _valid_odr() if version == "0.1" else _v02(_valid_odr())
+    mutate(doc)
+    assert expected in _failing_detail(doc)
+
+
+def test_adjudication_minimal_and_not_applicable_to_receipt_dict_verify() -> None:
     from aragora.swarm.review_adjudicator import AdjudicationResult, AdjudicationVerdict
 
     verbatim = AdjudicationResult(
@@ -795,6 +821,18 @@ def test_adjudication_minimal_and_verbatim_to_receipt_dict_verify() -> None:
         doc["adjudication"] = copy.deepcopy(value)
         result = verify_odr_document(doc)
         assert result.ok is True, _check(result, "schema_conformance").detail
+
+
+@pytest.mark.parametrize("verdict", ["SETTLE", "BLOCK", "ESCALATE"])
+def test_adjudicated_verdicts_verify_in_the_bridge_normalised_form_only(verdict: str) -> None:
+    from aragora.swarm.review_adjudicator import AdjudicationResult, AdjudicationVerdict
+
+    doc = _v02(_valid_odr())
+    doc["adjudication"] = AdjudicationResult(AdjudicationVerdict[verdict], "x").to_receipt_dict()
+    assert "adjudication.verdict: invalid value" in _failing_detail(doc)
+    # The merge-quorum bridge strips the ``adjudicated_`` prefix before writing the member.
+    doc["adjudication"]["verdict"] = doc["adjudication"]["verdict"].removeprefix("adjudicated_")
+    assert verify_odr_document(doc).ok is True
 
 
 @pytest.mark.parametrize(("mutate", "expected"), _INCOMPLETE_SHAPES, ids=_INCOMPLETE_IDS)
@@ -848,3 +886,11 @@ def test_mechanism_extras_agree_with_jsonschema(jsonschema_validator: Any) -> No
     doc = _valid_odr()
     doc["attestation"]["mechanism"] = {"type": "merge-quorum", "tier": 2}
     assert jsonschema_validator.is_valid(doc)
+
+
+@pytest.mark.parametrize(("version", "mutate", "expected"), _MARKERS_WITH_MEMBERS, ids=_MARKER_IDS)
+def test_markers_with_members_agree_with_jsonschema(
+    jsonschema_validator: Any, version: str, mutate: Mutation, expected: str
+) -> None:
+    mutate(doc := _valid_odr() if version == "0.1" else _v02(_valid_odr()))
+    assert not jsonschema_validator.is_valid(doc)

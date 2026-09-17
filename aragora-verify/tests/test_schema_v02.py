@@ -163,6 +163,27 @@ INCOMPLETE_SHAPES = [
         "adjudication.status: unknown member",
     ),
 ]
+ABSENT = {"status": "absent", "reason": "not supplied"}
+# An absent marker that also carries members is neither branch of its oneOf, so those
+# members are checked like a present block's: (version, mutation, one expected line).
+MARKERS_WITH_MEMBERS = [
+    (
+        "0.1",
+        lambda d: d["subject"].update(ABSENT, pr_number=1),
+        "subject.pr_number: not in profile 0.1",
+    ),
+    ("0.1", lambda d: d.update(quorum={**ABSENT, "rule": {}}), "quorum.rule: not in profile 0.1"),
+    (
+        "0.2",
+        lambda d: d["quorum"]["dissent"].update(ABSENT, findings=[{}]),
+        "quorum.dissent.findings[0]: missing required member: issuer",
+    ),
+]
+MARKER_IDS = [f"{v}-{expected.split(':')[0]}" for v, _, expected in MARKERS_WITH_MEMBERS]
+
+
+def v01_or_v02(version):
+    return valid_odr() if version == "0.1" else v02(valid_odr())
 
 
 def v02(doc):
@@ -202,6 +223,16 @@ def test_mechanism_extras_stay_legal_on_v01_documents(walker_only):
     doc["attestation"]["mechanism"] = {"type": "merge-quorum", "tier": 2, "policy_version": 3}
     assert schema.validate_structure(doc) == []
     assert verify(doc).ok
+
+
+@pytest.mark.parametrize("version,mutate,expected", MARKERS_WITH_MEMBERS, ids=MARKER_IDS)
+def test_absent_marker_with_members_is_checked_like_a_present_block(
+    walker_only, version, mutate, expected
+):
+    mutate(doc := v01_or_v02(version))
+    assert expected in schema.validate_structure(doc)
+    result = verify(doc)
+    assert not result.ok and expected in result.checks[0].detail
 
 
 @pytest.mark.parametrize("value", [MINIMAL_ADJUDICATION, VERBATIM_ADJUDICATION])
@@ -327,5 +358,13 @@ def test_incomplete_shapes_agree_with_jsonschema(mutate, expected):
     jsonschema = pytest.importorskip("jsonschema")
     doc = v02(valid_odr())
     mutate(doc)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(doc, schema.load_bundled_schema())
+
+
+@pytest.mark.parametrize("version,mutate,expected", MARKERS_WITH_MEMBERS, ids=MARKER_IDS)
+def test_markers_with_members_agree_with_jsonschema(version, mutate, expected):
+    jsonschema = pytest.importorskip("jsonschema")
+    mutate(doc := v01_or_v02(version))
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(doc, schema.load_bundled_schema())

@@ -606,7 +606,11 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
             spec = spec["properties"][part]
             # oneOf[0] is the present-block branch; the absent-marker $ref is oneOf[1].
             spec = spec.get("oneOf", [spec])[0]
-        if not isinstance(value, dict) or value.get("status") == "absent":
+        if not isinstance(value, dict):
+            continue
+        # A strict absent marker carries nothing to check; a marker that also carries
+        # members is neither branch of its oneOf, so those members are checked as present.
+        if value.get("status") == "absent" and value.keys() <= {"status", "reason"}:
             continue
         for key in keys:
             if key not in value:

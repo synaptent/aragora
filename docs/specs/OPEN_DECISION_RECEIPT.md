@@ -189,7 +189,7 @@ every stored receipt and is out of scope for v0.1.
 
 ### 4.10 v0.2 optional members
 
-These additions preserve the meaning and required-ness of every v0.1 member; every row below is optional in a v0.2 document. Inside the five `object` rows (`quorum.verdicts[]`, `quorum.rule`, `quorum.dissent.findings[]`, `adjudication`, `reasoning.observations[]`) a `?` suffix (or the word optional) marks a sub-member an emitter may omit, and a conforming emitter writes every other listed sub-member whenever it writes that object (§8, rule 5). Both verifiers reject an object lacking a non-`?` sub-member and an `adjudication` carrying `status` (failing check `schema_conformance`, detail `<path>: missing required member: <name>`).
+These additions preserve the meaning and required-ness of every v0.1 member; every row below is optional in a v0.2 document. Inside the five `object` rows (`quorum.verdicts[]`, `quorum.rule`, `quorum.dissent.findings[]`, `adjudication`, `reasoning.observations[]`) a `?` suffix (or the word optional) marks a sub-member an emitter may omit, and a conforming emitter writes every other listed sub-member whenever it writes that object (§8, rule 5). Both verifiers reject an object lacking a non-`?` sub-member (failing check `schema_conformance`, detail `<path>: missing required member: <name>`) and an `adjudication` carrying `status` (same check, detail `adjudication.status: unknown member`).
 
 | Member | Parent | Type | Meaning |
 |---|---|---|---|
@@ -198,7 +198,7 @@ These additions preserve the meaning and required-ness of every v0.1 member; eve
 | `quorum.dissent.findings[]` | `quorum.dissent` | object | Findings from all reviewers: `issuer`, `severity` (P0..P3), `blocking` (P0/P1 true), `location?`, `text`. |
 | `quorum.dissent.severity_max` | `quorum.dissent` | string | Most severe finding, ordered P0 > P1 > P2 > P3. |
 | `quorum.dissent.blocking` | `quorum.dissent` | boolean | True iff any finding is P0/P1. |
-| `adjudication` | top-level | object | Omitted when absent; `kind: "review_adjudication.v1"`, `verdict` (settle/block/escalate/not_applicable), `reason`; optional policy and assessment/finding arrays record the adjudicator's decision. |
+| `adjudication` | top-level | object | Omitted when absent; `kind: "review_adjudication.v1"`, `verdict` (settle/block/escalate/not_applicable), `reason`, `groundedness_bar?` (number), `advisory_severity_policy?` (cap_at_advisory/promote_grounded_to_block); optional `policy` and assessment/finding arrays record the adjudicator's decision. |
 | `attestation.mechanism.{policy_version,tier,tiered_gate,severity_gated,action,action_reason,record_ref}` | `attestation.mechanism` | integer, integer, boolean, boolean, string, string, string | Policy version, risk tier, gate modes, action and reason, optional settlement-record reference. |
 | `subject.repository` | `subject` | string | Repository owning the reviewed PR. |
 | `subject.pr_number` | `subject` | integer | Reviewed pull-request number. |
