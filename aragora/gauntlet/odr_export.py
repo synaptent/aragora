@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from copy import deepcopy
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -46,6 +48,19 @@ ODR_VERSION = ODR_DEFAULT_VERSION
 ODR_PROFILE_URI = ODR_PROFILE_URIS[ODR_DEFAULT_VERSION]
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_odr_version(explicit: str | None) -> str:
+    """Resolve an explicit profile, then the environment, then the library default."""
+    if explicit is not None:
+        if explicit not in ODR_VERSIONS:
+            raise ValueError(f"odr_version must be one of {ODR_VERSIONS}")
+        return explicit
+    configured = os.environ.get("ARAGORA_ODR_PROFILE_VERSION")
+    if configured and configured not in ODR_VERSIONS:
+        raise ValueError(f"ARAGORA_ODR_PROFILE_VERSION must be one of {ODR_VERSIONS}")
+    return configured or ODR_DEFAULT_VERSION
+
 
 __all__ = [
     "ODR_DEFAULT_VERSION",
@@ -326,6 +341,43 @@ def decision_receipt_to_odr(
             "artifact_hash": receipt.artifact_hash,
         },
     }
+    if odr_version == "0.2":
+        metadata = receipt.settlement_metadata or {}
+        for source, target in (
+            ("repo", "repository"),
+            ("pr", "pr_number"),
+            ("head_sha", "head_sha"),
+            ("base_sha", "base_sha"),
+        ):
+            if source not in metadata:
+                continue
+            value = metadata[source]
+            if source == "pr":
+                if isinstance(value, str) and value.isascii() and value.isdigit():
+                    value = int(value)
+                valid = isinstance(value, int) and not isinstance(value, bool)
+            else:
+                valid = isinstance(value, str) and bool(value)
+            if valid:
+                doc["subject"][target] = value
+            else:
+                logger.warning("Omitting invalid settlement_metadata key %s", source)
+        content = metadata.get("odr")
+        content = deepcopy(content) if isinstance(content, dict) else {}
+        if doc["quorum"].get("status") == "present":
+            for key in ("verdicts", "rule"):
+                if key in content:
+                    doc["quorum"][key] = content[key]
+            dissent = content.get("dissent", {})
+            for key in ("findings", "severity_max", "blocking"):
+                if key in dissent:
+                    doc["quorum"]["dissent"][key] = dissent[key]
+        if content.get("observations") and doc["reasoning"]["status"] == "present":
+            doc["reasoning"]["observations"] = content["observations"]
+        if "adjudication" in content:
+            doc["adjudication"] = content["adjudication"]
+        if "mechanism" in content and "mechanism" not in doc["attestation"]:
+            doc["attestation"]["mechanism"] = content["mechanism"]
     return doc
 
 

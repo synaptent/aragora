@@ -180,6 +180,12 @@ Examples:
     export_parser.add_argument(
         "--output", "-o", help="Output file path (default: prints to stdout for text formats)"
     )
+    export_parser.add_argument(
+        "--odr-version",
+        choices=("0.1", "0.2"),
+        help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > default (0.1). "
+        "Applies only to --format odr; ignored for other formats.",
+    )
     export_parser.set_defaults(func=cmd_receipt_export)
 
     # Default when just 'aragora receipt' is called
@@ -884,9 +890,10 @@ def _resolve_receipt_data(receipt_ref: str) -> dict[str, Any] | None:
     return data
 
 
-def _export_odr(data: dict[str, Any]) -> str:
+def _export_odr(data: dict[str, Any], *, odr_version: str | None = None) -> str:
     """Render a receipt dict as a JCS-canonical Open Decision Receipt document."""
     from aragora.gauntlet.odr_export import (
+        ODR_DEFAULT_VERSION,
         calibration_provenance_for_receipt,
         decision_receipt_to_odr,
         jcs_canonicalize,
@@ -900,6 +907,7 @@ def _export_odr(data: dict[str, Any]) -> str:
     # (issue #8229); otherwise the existing settlement/absent logic applies.
     odr = decision_receipt_to_odr(
         receipt,
+        odr_version=odr_version if odr_version is not None else ODR_DEFAULT_VERSION,
         calibration_provenance=calibration_provenance_for_receipt(receipt),
     )
     odr = sign_odr_if_configured(odr)
@@ -913,6 +921,15 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
     receipt_path = getattr(args, "receipt", None)
     output_format = getattr(args, "format", "html")
     output_path = getattr(args, "output", None)
+    odr_version = None
+    if output_format == "odr":
+        from aragora.gauntlet.odr_export import resolve_odr_version
+
+        try:
+            odr_version = resolve_odr_version(getattr(args, "odr_version", None))
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(2)
 
     if not receipt_path:
         print("Error: Receipt file path or ID required", file=sys.stderr)
@@ -930,7 +947,7 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
         from aragora.gauntlet.odr_signing import OdrSigningError
 
         try:
-            content = _export_odr(data)
+            content = _export_odr(data, odr_version=odr_version)
         except OdrSigningError as e:
             # A configured-but-unusable signing key fails closed upstream;
             # present it as a clean CLI error, not a traceback.
