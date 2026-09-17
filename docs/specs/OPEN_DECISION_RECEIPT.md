@@ -273,9 +273,12 @@ construction:
   messages. The verifier rebuilds `protected` from the entry under check, so
   any changed or stripped member (`key_id` included) fails `signature` while
   `canonical_digest` still passes. Signers write `issuer` (required), `role`
-  (`emitter` for the reference producer), `signed_at` (RFC 3339 UTC with
-  timezone) and `expires_at` only when supplied (later than `signed_at`);
-  there is no opt-out of the metadata on a 0.2 document.
+  (`emitter` for the reference producer), `signed_at` (RFC 3339, UTC offset
+  only) and `expires_at` only when supplied (later than `signed_at`); the
+  reference signer refuses to sign a 0.2 document without them. Verifiers
+  check the members' types and their commitment only: whether an entry must
+  carry `issuer`, and whether `expires_at` has passed, are verifier policy
+  that this revision does not evaluate.
 - In both, `signature` is base64 (or hex) of the 64 raw Ed25519 bytes,
   `key_id` is `ed25519-` + the first 16 hex digits of SHA-256 over the raw
   public key, and only entries whose `key_id` matches the supplied key count.

@@ -47,7 +47,7 @@ import hashlib
 import logging
 import os
 import stat
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -345,13 +345,13 @@ def public_key_pem(private_key: Ed25519PrivateKey) -> str:
 
 
 def _parse_rfc3339(value: Any, member: str) -> datetime:
-    """Parse a ``signatures[]`` timestamp; it must carry an explicit timezone."""
+    """Parse a ``signatures[]`` timestamp; it must carry a UTC (zero) offset."""
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (AttributeError, ValueError) as exc:
         raise OdrSigningError(f"{member} is not an RFC 3339 timestamp: {value!r}") from exc
-    if parsed.tzinfo is None:
-        raise OdrSigningError(f"{member} must carry a timezone offset: {value!r}")
+    if parsed.utcoffset() != timedelta(0):
+        raise OdrSigningError(f"{member} must carry a UTC timezone offset: {value!r}")
     return parsed
 
 
@@ -408,9 +408,10 @@ def sign_odr_receipt(
         replace: When True, drop any existing signatures before appending
             (re-sign). When False (default), append alongside existing ones —
             the digest excludes ``signatures``, so this never invalidates a
-            prior signature.
+            prior signature; an existing entry outside the schema shape
+            (unknown member, bad type, unknown role) raises instead.
         issuer, role, signed_at, expires_at: The v0.2 entry metadata (``role``
-            from :data:`ODR_SIGNATURE_ROLES`, timestamps RFC 3339 with timezone).
+            from :data:`ODR_SIGNATURE_ROLES`, timestamps RFC 3339 with a UTC offset).
 
     Returns:
         A copy of ``odr`` with the new entry appended to its ``signatures``

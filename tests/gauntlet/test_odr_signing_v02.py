@@ -171,6 +171,7 @@ def test_v02_entry_over_v01_message_fails_in_both_verifiers() -> None:
         ({"expires_at": "not-a-timestamp"}, "expires_at"),
         ({"expires_at": "2027-09-05T00:00:00"}, "timezone"),
         ({"signed_at": "2026-09-05T00:00:00", "expires_at": _T1}, "timezone"),
+        ({"signed_at": "2026-09-05T02:00:00+02:00"}, "UTC"),
     ],
 )
 def test_v02_signer_rejects_invalid_metadata(override: dict[str, Any], match: str) -> None:
