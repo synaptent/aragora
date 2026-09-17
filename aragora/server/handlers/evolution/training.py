@@ -34,7 +34,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -45,7 +45,7 @@ from .base import (
 
 if TYPE_CHECKING:
     pass
-from .utils.rate_limit import rate_limit
+from ..utils.rate_limit import rate_limit
 from aragora.rbac.decorators import require_permission
 from aragora.server.validation.query_params import safe_query_float, safe_query_int
 from aragora.utils.async_utils import run_async

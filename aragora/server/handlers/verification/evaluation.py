@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 from aragora.utils.optional_imports import try_import
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -30,7 +30,7 @@ from .base import (
     json_response,
 )
 from aragora.rbac.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

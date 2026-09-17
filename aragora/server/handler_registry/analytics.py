@@ -114,7 +114,9 @@ DAGOperationsHandler = _safe_import(
 OutcomeHandler = _safe_import("aragora.server.handlers.governance.outcomes", "OutcomeHandler")
 
 # Decision Benchmarking
-BenchmarkingHandler = _safe_import("aragora.server.handlers.benchmarking", "BenchmarkingHandler")
+BenchmarkingHandler = _safe_import(
+    "aragora.server.handlers.verification.benchmarking", "BenchmarkingHandler"
+)
 
 # Decision Playbooks
 PlaybookHandler = _safe_import("aragora.server.handlers.playbooks", "PlaybookHandler")

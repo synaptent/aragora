@@ -599,7 +599,7 @@ def _to_receipt_summary(r: Any) -> ReceiptSummary:
 def _extract_receipt_payload(receipt: Any) -> dict[str, Any]:
     """Normalize receipt payloads from dict, StoredReceipt, or legacy objects."""
     if isinstance(receipt, dict):
-        payload = dict(receipt)
+        payload: dict[str, Any] = dict(receipt)
         nested = receipt.get("data")
         if isinstance(nested, dict):
             payload.update(nested)
@@ -610,7 +610,7 @@ def _extract_receipt_payload(receipt: Any) -> dict[str, Any]:
         if isinstance(full_payload, dict):
             return full_payload
 
-    payload: dict[str, Any] = {}
+    payload = {}
     nested = getattr(receipt, "data", None)
     if isinstance(nested, dict):
         payload.update(nested)
@@ -933,6 +933,8 @@ async def get_shared_receipt(
             raise HTTPException(status_code=410, detail="Share link has expired")
         if share_status == "limit_reached":
             raise HTTPException(status_code=410, detail="Share link access limit reached")
+        if share_info is None:
+            raise HTTPException(status_code=404, detail="Share link not found")
 
         receipt_id = share_info.get("receipt_id", "")
         receipt_data = None
@@ -1320,7 +1322,7 @@ async def send_receipt_to_channel(
             raise NotFoundError(f"Receipt {receipt_id} not found")
 
         from aragora.channels.formatter import format_receipt_for_channel
-        from aragora.server.handlers.receipts import ReceiptsHandler
+        from aragora.server.handlers.decisions.receipts import ReceiptsHandler
 
         supported_channels = {"slack", "teams", "email", "discord"}
         if body.channel_type not in supported_channels:

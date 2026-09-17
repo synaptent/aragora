@@ -34,16 +34,16 @@ from aragora.server.validation import validate_path_segment, SAFE_ID_PATTERN
 from aragora.server.versioning.compat import strip_version_prefix
 
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     get_string_param,
     json_response,
     safe_error_message,
 )
-from .secure import SecureHandler
-from .utils.auth import ForbiddenError, UnauthorizedError
-from .utils.rate_limit import rate_limit
+from ..secure import SecureHandler
+from ..utils.auth import ForbiddenError, UnauthorizedError
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 

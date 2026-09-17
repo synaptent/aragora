@@ -22,7 +22,7 @@ import logging
 import time
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     pass
@@ -32,7 +32,7 @@ from aragora.server.middleware.rate_limit import rate_limit
 from aragora.server.validation import validate_agent_name, validate_id
 from aragora.utils.optional_imports import try_import_class
 
-from .base import (
+from ..base import (
     SAFE_SLUG_PATTERN,
     HandlerResult,
     error_response,
@@ -41,7 +41,7 @@ from .base import (
     require_permission,
     safe_error_message,
 )
-from .secure import SecureHandler
+from ..secure import SecureHandler
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +103,7 @@ class AuditRequestParser:
         data, err = AuditRequestParser._read_json(handler, read_json_fn)
         if err:
             return None, err
+        data = cast(dict[str, Any], data)
 
         agent_name, err = AuditRequestParser._require_field(data, "agent_name", validate_agent_name)
         if err:
@@ -129,6 +130,7 @@ class AuditRequestParser:
         data, err = AuditRequestParser._read_json(handler, read_json_fn)
         if err:
             return None, err
+        data = cast(dict[str, Any], data)
 
         task, err = AuditRequestParser._require_field(data, "task")
         if err:
@@ -475,6 +477,7 @@ class AuditingHandler(SecureHandler):
             if err:
                 logger.info("Capability probe request validation failed")
                 return err
+            parsed = cast(dict[str, Any], parsed)
 
             agent_name = parsed["agent_name"]
             model_type = parsed["model_type"]
@@ -654,6 +657,7 @@ class AuditingHandler(SecureHandler):
             if err:
                 logger.info("Deep audit request validation failed")
                 return err
+            parsed = cast(dict[str, Any], parsed)
 
             task = parsed["task"]
             context = parsed["context"]

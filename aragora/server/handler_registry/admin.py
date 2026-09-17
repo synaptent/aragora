@@ -54,7 +54,7 @@ RotationStatusHandler = _safe_import(
 )
 ModerationHandler = _safe_import("aragora.server.handlers.moderation", "ModerationHandler")
 AudienceSuggestionsHandler = _safe_import(
-    "aragora.server.handlers.audience_suggestions", "AudienceSuggestionsHandler"
+    "aragora.server.handlers.debates.audience_suggestions", "AudienceSuggestionsHandler"
 )
 CoordinationHandler = _safe_import("aragora.server.handlers.coordination", "CoordinationHandler")
 
@@ -221,7 +221,7 @@ IntrospectionHandler = _safe_import("aragora.server.handlers", "IntrospectionHan
 # Harnesses Handler Imports
 # =============================================================================
 
-HarnessesHandler = _safe_import("aragora.server.handlers.harnesses", "HarnessesHandler")
+HarnessesHandler = _safe_import("aragora.server.handlers.agents.harnesses", "HarnessesHandler")
 
 # =============================================================================
 # Sandbox and Visualization Handler Imports
@@ -445,7 +445,7 @@ TaskExecutionHandler = _safe_import(
 TaskQueueHandler = _safe_import("aragora.server.handlers.tasks.queue", "TaskQueueHandler")
 
 # Decision plans
-PlansHandler = _safe_import("aragora.server.handlers.plans", "PlansHandler")
+PlansHandler = _safe_import("aragora.server.handlers.decisions.plans", "PlansHandler")
 
 # Base handler result (for backward compatibility)
 HandlerResult = _safe_import("aragora.server.handlers", "HandlerResult")

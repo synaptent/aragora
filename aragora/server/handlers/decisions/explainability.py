@@ -40,7 +40,7 @@ from aragora.server.handlers.base import (
 )
 from aragora.server.handlers.utils.rate_limit import rate_limit
 from aragora.rbac.decorators import require_permission
-from aragora.server.handlers.explainability_store import (
+from aragora.server.handlers.decisions.explainability_store import (
     BatchJob as StoreBatchJob,
     get_batch_job_store,
 )
