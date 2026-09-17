@@ -246,6 +246,28 @@ def test_unknown_members_reported_once_with_jsonschema():
     assert text.count("not_in_profile") == 1
 
 
+def test_missing_required_members_reported_once_with_jsonschema():
+    pytest.importorskip("jsonschema")
+    doc = v02(valid_odr())
+    doc["adjudication"] = {"status": "absent"}
+    doc["quorum"]["verdicts"] = [{}]
+    errors = schema.validate_structure(doc)
+    assert [e for e in errors if "required" in e] == [
+        "adjudication: missing required member: kind",
+        "adjudication: missing required member: verdict",
+        "adjudication: missing required member: reason",
+        "quorum.verdicts[0]: missing required member: issuer",
+        "quorum.verdicts[0]: missing required member: verdict",
+        "quorum.verdicts[0]: missing required member: model_family",
+        "quorum.verdicts[0]: missing required member: model_id",
+    ]
+    assert "adjudication.status: unknown member" in errors
+    assert not [e for e in errors if e.startswith("schema[adjudication]")]
+    del doc["subject"]
+    assert "missing required member: subject" in schema.validate_structure(doc)
+    assert not [e for e in schema.validate_structure(doc) if "'subject' is a required" in e]
+
+
 def test_jsonschema_still_reports_paths_the_walker_does_not_reach():
     pytest.importorskip("jsonschema")
     doc = valid_odr()

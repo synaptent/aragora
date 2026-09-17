@@ -333,35 +333,54 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
                 member(value[key], spec["properties"][key], member_path)
 
 
-# jsonschema reports an unexpected or version-scoped member at its parent object (or, in
-# older releases, at the member itself); the hand-written checks name the member.
-_RESTATED_BY_JSONSCHEMA = {
-    "Additional properties are not allowed": ": unknown member",
-    "False schema does not allow": ": not in profile 0.1",
-}
+_UNEXPECTED_MEMBERS = re.compile(
+    r"^Additional properties are not allowed \((.*) (?:was|were) unexpected\)$"
+)
+_VERSION_SCOPED_MEMBER = re.compile(r"^False schema does not allow ")
+_REQUIRED_MEMBER = re.compile(r"^'(.*)' is a required property$")
+
+
+def _slashed(dotted: str) -> str:
+    """``quorum.verdicts[0]`` in the jsonschema location form ``quorum/verdicts/0``."""
+    return re.sub(r"\[(\d+)\]", r"/\1", dotted).replace(".", "/") or "<root>"
 
 
 def _without_restated(schema_errors: list[str], errors: list[str]) -> list[str]:
-    """Keep the jsonschema lines that add a finding the hand-written checks did not name."""
-    covered: dict[str, set[str]] = {suffix: set() for suffix in _RESTATED_BY_JSONSCHEMA.values()}
+    """Drop the jsonschema lines that restate a finding the hand-written checks already name.
+
+    jsonschema reports an unexpected or missing required member at the object holding it and
+    a version-scoped member at its parent object (or, in older releases, at the member
+    itself); the checks above name the member, so one line per finding is kept.
+    """
+    named: set[tuple[str, str, str]] = set()
     for line in errors:
-        if line.startswith("unknown top-level member: "):
-            covered[": unknown member"].add("<root>")
-        for suffix, locations in covered.items():
-            if line.endswith(suffix):
-                member = line[: -len(suffix)]
-                for dotted in (member, member.rpartition(".")[0]):
-                    slashed = re.sub(r"\[(\d+)\]", r"/\1", dotted).replace(".", "/")
-                    locations.add(slashed or "<root>")
+        path, _, message = line.partition(": ")
+        if path == "unknown top-level member":
+            path, message = message, "unknown member"
+        elif path == "missing required member":
+            path, message = "", line
+        kind, _, name = message.partition(": ")
+        if kind == "missing required member":
+            named.add((kind, _slashed(path), name))
+        elif kind in ("unknown member", "not in profile 0.1"):
+            parent, _, name = path.rpartition(".")
+            named.add((kind, _slashed(parent), name))
+            named.add((kind, _slashed(path), ""))
     kept: list[str] = []
     for line in schema_errors:
         location, _, message = line.removeprefix("schema[").partition("]: ")
-        suffix = next(
-            (s for prefix, s in _RESTATED_BY_JSONSCHEMA.items() if message.startswith(prefix)),
-            None,
-        )
-        if suffix is None or location not in covered[suffix]:
-            kept.append(line)
+        unexpected = _UNEXPECTED_MEMBERS.match(message)
+        required = _REQUIRED_MEMBER.match(message)
+        names = re.findall(r"'([^']*)'", unexpected.group(1)) if unexpected else []
+        if names and all(("unknown member", location, name) in named for name in names):
+            continue
+        if _VERSION_SCOPED_MEMBER.match(message) and any(
+            kind == "not in profile 0.1" and where == location for kind, where, _ in named
+        ):
+            continue
+        if required and ("missing required member", location, required.group(1)) in named:
+            continue
+        kept.append(line)
     return kept
 
 
