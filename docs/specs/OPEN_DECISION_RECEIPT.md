@@ -189,7 +189,7 @@ every stored receipt and is out of scope for v0.1.
 
 ### 4.10 v0.2 optional members
 
-These additions preserve the meaning and required-ness of every v0.1 member; every row below is optional in a v0.2 document. Inside the five `object` rows (`quorum.verdicts[]`, `quorum.rule`, `quorum.dissent.findings[]`, `adjudication`, `reasoning.observations[]`) a `?` suffix (or the word optional) marks a sub-member an emitter may omit, and a conforming emitter writes every other listed sub-member whenever it writes that object (§8, rule 5). This revision's schema and verifiers do not yet enforce that completeness: an object lacking such a sub-member, or an `adjudication` carrying a `status` member, is schema-valid here and neither verifier rejects it; `required` arrays for those five shapes (`adjudication`: `kind`, `verdict`, `reason`, no `status`) and the matching verifier checks follow in the next revision of this staged rollout (§9.5).
+These additions preserve the meaning and required-ness of every v0.1 member; every row below is optional in a v0.2 document. Inside the five `object` rows (`quorum.verdicts[]`, `quorum.rule`, `quorum.dissent.findings[]`, `adjudication`, `reasoning.observations[]`) a `?` suffix (or the word optional) marks a sub-member an emitter may omit, and a conforming emitter writes every other listed sub-member whenever it writes that object (§8, rule 5). Both verifiers reject an object lacking a non-`?` sub-member and an `adjudication` carrying `status` (failing check `schema_conformance`, detail `<path>: missing required member: <name>`).
 
 | Member | Parent | Type | Meaning |
 |---|---|---|---|
@@ -208,7 +208,7 @@ These additions preserve the meaning and required-ness of every v0.1 member; eve
 
 Gate-level dissent (`present`/`dissenting_agents`/`verdicts[].blocking`) and severity-level findings (`findings`/`severity_max`/`dissent.blocking`) are independent notions, never derived from each other.
 An emitter MUST NOT write any of these members into a v0.1 document (§8, rule 5).
-The schema and the verifiers of this revision do not yet reject them on a v0.1 document; version-scoped rejection (failing check `schema_conformance`, detail `<path>: not in profile 0.1`) follows in the next revision of this staged rollout (§9.5).
+Both verifiers reject any of these members on a v0.1 document (failing check `schema_conformance`, detail `<path>: not in profile 0.1`).
 
 ## 5. Canonicalization and hashing — RFC 8785 (JCS)
 
@@ -305,7 +305,7 @@ An emitter conforms to ODR v0.1 or v0.2 iff:
    be absent is non-conformant even if schema-valid;
 3. hashing and signing use the JCS basis of §5;
 4. `signatures` is `[]` and `routing.status` is `"reserved"`.
-5. it writes no §4.10 member into a v0.1 document, no member outside §2 and §4.10 into a v0.2 document, and every non-`?` sub-member of each §4.10 `object` row it writes — non-conformant even if schema-valid in this revision (verifier-side rejection follows, §4.10).
+5. it writes no §4.10 member into a v0.1 document, no member outside §2 and §4.10 into a v0.2 document, and every non-`?` sub-member of each §4.10 `object` row it writes.
 
 A verifier conforms iff it validates the schema, recomputes `odr_digest` from
 JCS bytes, and treats `"undisclosed"`/absent markers as *weakening* rather
