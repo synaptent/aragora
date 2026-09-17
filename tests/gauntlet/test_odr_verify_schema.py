@@ -659,3 +659,192 @@ def test_quorum_consistency_tamper_on_blocked_fixture_fails() -> None:
     check = _check(result, "quorum_consistency")
     assert check.status == FAIL
     assert "ghost-agent" in check.detail
+
+
+# ---------------------------------------------------------------------------
+# Version-scoped membership, adjudication shape, required sub-members of the
+# v0.2 object shapes, one diagnostic per unknown member and the cached loader
+# (spec §4.10 and §8 rule 5).
+# ---------------------------------------------------------------------------
+
+_V02_PROFILE = "https://aragora.ai/specs/open-decision-receipt/v0.2"
+_COMPLETE_VERDICT = {
+    "issuer": "claude",
+    "verdict": "pass",
+    "model_family": "claude",
+    "model_id": "undisclosed",
+}
+_COMPLETE_RULE = {
+    "required_signals": 1,
+    "requires_western_frontier": False,
+    "western_only_counted": False,
+    "counted_families": ["openai"],
+}
+_COMPLETE_FINDING = {"issuer": "claude", "severity": "P3", "blocking": False, "text": "x"}
+_COMPLETE_OBSERVATION = {"kind": "failure", "family": "grok", "detail": "x"}
+_MINIMAL_ADJUDICATION = {"kind": "review_adjudication.v1", "verdict": "settle", "reason": "x"}
+
+# Every version-scoped v0.2 member: (path, mutation adding a complete value).
+_V02_MEMBERS: list[tuple[str, Mutation]] = [
+    ("adjudication", lambda d: d.__setitem__("adjudication", dict(_MINIMAL_ADJUDICATION))),
+    ("subject.repository", lambda d: d["subject"].__setitem__("repository", "o/r")),
+    ("subject.pr_number", lambda d: d["subject"].__setitem__("pr_number", 1)),
+    ("subject.head_sha", lambda d: d["subject"].__setitem__("head_sha", "a" * 40)),
+    ("subject.base_sha", lambda d: d["subject"].__setitem__("base_sha", "b" * 40)),
+    ("quorum.verdicts", lambda d: d["quorum"].__setitem__("verdicts", [dict(_COMPLETE_VERDICT)])),
+    ("quorum.rule", lambda d: d["quorum"].__setitem__("rule", dict(_COMPLETE_RULE))),
+    (
+        "quorum.dissent.findings",
+        lambda d: d["quorum"]["dissent"].__setitem__("findings", [dict(_COMPLETE_FINDING)]),
+    ),
+    (
+        "quorum.dissent.severity_max",
+        lambda d: d["quorum"]["dissent"].__setitem__("severity_max", "P2"),
+    ),
+    ("quorum.dissent.blocking", lambda d: d["quorum"]["dissent"].__setitem__("blocking", False)),
+    (
+        "reasoning.observations",
+        lambda d: d["reasoning"].__setitem__("observations", [dict(_COMPLETE_OBSERVATION)]),
+    ),
+]
+_V02_IDS = [path for path, _ in _V02_MEMBERS]
+_INCOMPLETE_SHAPES: list[tuple[Mutation, str]] = [
+    (
+        lambda d: d["quorum"].__setitem__("verdicts", [{}]),
+        "quorum.verdicts[0]: missing required member: issuer",
+    ),
+    (
+        lambda d: d["quorum"].__setitem__("rule", {}),
+        "quorum.rule: missing required member: required_signals",
+    ),
+    (
+        lambda d: d["quorum"]["dissent"].__setitem__("findings", [{"blocking": False}]),
+        "quorum.dissent.findings[0]: missing required member: issuer",
+    ),
+    (
+        lambda d: d["reasoning"].__setitem__("observations", [{}]),
+        "reasoning.observations[0]: missing required member: kind",
+    ),
+    (
+        lambda d: d.__setitem__("adjudication", {"status": "absent"}),
+        "adjudication: missing required member: kind",
+    ),
+    (lambda d: d.__setitem__("adjudication", {}), "adjudication: missing required member: kind"),
+    (
+        lambda d: d.__setitem__("adjudication", {"status": "absent", "reason": "none"}),
+        "adjudication.status: unknown member",
+    ),
+]
+_INCOMPLETE_IDS = [expected for _, expected in _INCOMPLETE_SHAPES]
+
+
+def _v02(doc: dict[str, Any]) -> dict[str, Any]:
+    doc.update(odr_version="0.2", profile=_V02_PROFILE)
+    return doc
+
+
+def _failing_detail(doc: dict[str, Any]) -> str:
+    result = verify_odr_document(doc)
+    assert result.ok is False
+    check = _check(result, "schema_conformance")
+    assert check.status == FAIL
+    return check.detail
+
+
+@pytest.mark.parametrize(("path", "mutate"), _V02_MEMBERS, ids=_V02_IDS)
+def test_v02_member_alone_on_v01_document_is_not_in_profile(path: str, mutate: Mutation) -> None:
+    doc = _valid_odr()
+    mutate(doc)
+    detail = _failing_detail(doc)
+    assert f"{path}: not in profile 0.1" in detail
+    assert detail.count(path) == 1
+    doc = _v02(_valid_odr())
+    mutate(doc)
+    assert verify_odr_document(doc).ok is True
+
+
+def test_all_v02_members_on_v01_document_name_each_path_once() -> None:
+    doc = _valid_odr()
+    for _path, mutate in _V02_MEMBERS:
+        mutate(doc)
+    detail = _failing_detail(doc)
+    for path in _V02_IDS:
+        assert detail.count(f"{path}: not in profile 0.1") == 1
+    assert "attestation.mechanism" not in detail
+    assert verify_odr_document(_v02(doc)).ok is True
+
+
+def test_mechanism_extras_stay_legal_on_v01_documents() -> None:
+    doc = _valid_odr()
+    doc["attestation"]["mechanism"] = {"type": "merge-quorum", "tier": 2, "policy_version": 3}
+    result = verify_odr_document(doc)
+    assert _check(result, "schema_conformance").status == PASS
+    assert result.ok is True
+
+
+def test_adjudication_minimal_and_verbatim_to_receipt_dict_verify() -> None:
+    from aragora.swarm.review_adjudicator import AdjudicationResult, AdjudicationVerdict
+
+    verbatim = AdjudicationResult(
+        verdict=AdjudicationVerdict.NOT_APPLICABLE, reason="no findings"
+    ).to_receipt_dict()
+    assert {"groundedness_bar", "advisory_severity_policy"} <= verbatim.keys()
+    assert "status" not in verbatim
+    for value in (_MINIMAL_ADJUDICATION, verbatim):
+        doc = _v02(_valid_odr())
+        doc["adjudication"] = copy.deepcopy(value)
+        result = verify_odr_document(doc)
+        assert result.ok is True, _check(result, "schema_conformance").detail
+
+
+@pytest.mark.parametrize(("mutate", "expected"), _INCOMPLETE_SHAPES, ids=_INCOMPLETE_IDS)
+def test_incomplete_v02_object_shapes_fail(mutate: Mutation, expected: str) -> None:
+    doc = _v02(_valid_odr())
+    mutate(doc)
+    assert expected in _failing_detail(doc)
+
+
+def test_unknown_members_reported_once() -> None:
+    doc = _v02(_valid_odr())
+    doc["not_in_profile"] = 1
+    doc["subject"]["bogus"] = 1
+    detail = _failing_detail(doc)
+    assert detail.count("subject.bogus") == 1
+    assert detail.count("not_in_profile") == 1
+
+
+def test_load_odr_schema_is_cached_and_returns_a_deep_copy() -> None:
+    from aragora.gauntlet import odr_export
+
+    first = load_odr_schema()
+    first["x"] = 1
+    first["properties"]["subject"]["x"] = 1
+    second = load_odr_schema()
+    assert first is not second
+    assert "x" not in second and "x" not in second["properties"]["subject"]
+    assert odr_export._load_odr_schema_cached.cache_info().hits >= 1
+
+
+@pytest.mark.parametrize(("path", "mutate"), _V02_MEMBERS, ids=_V02_IDS)
+def test_version_scoping_agrees_with_jsonschema(
+    jsonschema_validator: Any, path: str, mutate: Mutation
+) -> None:
+    doc = _valid_odr()
+    mutate(doc)
+    assert not jsonschema_validator.is_valid(copy.deepcopy(doc))
+    assert jsonschema_validator.is_valid(_v02(doc))
+
+
+@pytest.mark.parametrize(("mutate", "expected"), _INCOMPLETE_SHAPES, ids=_INCOMPLETE_IDS)
+def test_incomplete_shapes_agree_with_jsonschema(
+    jsonschema_validator: Any, mutate: Mutation, expected: str
+) -> None:
+    doc = _v02(_valid_odr())
+    mutate(doc)
+    assert not jsonschema_validator.is_valid(doc)
+
+
+def test_mechanism_extras_agree_with_jsonschema(jsonschema_validator: Any) -> None:
+    doc = _valid_odr()
+    doc["attestation"]["mechanism"] = {"type": "merge-quorum", "tier": 2}
+    assert jsonschema_validator.is_valid(doc)
