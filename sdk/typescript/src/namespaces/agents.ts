@@ -555,28 +555,6 @@ export class AgentsAPI {
     return this.client.getAgentCalibration(name);
   }
 
-  /**
-   * Trigger agent calibration.
-   *
-   * @param name - Agent name
-   * @param options - Calibration options
-   */
-  async calibrate(name: string, options?: {
-    domains?: string[];
-    sampleSize?: number;
-  }): Promise<Record<string, unknown>> {
-    return this.client.request(
-      'POST',
-      `/api/v1/agents/${encodeURIComponent(name)}/calibrate`,
-      {
-        body: {
-          domains: options?.domains,
-          sample_size: options?.sampleSize,
-        },
-      }
-    );
-  }
-
   // ===========================================================================
   // ELO and Rankings (extended)
   // ===========================================================================
@@ -719,27 +697,6 @@ export class AgentsAPI {
   }
 
   /**
-   * Enable an agent.
-   */
-  async enable(name: string): Promise<Record<string, unknown>> {
-    return this.client.request(
-      'POST',
-      `/api/v1/agents/${encodeURIComponent(name)}/enable`
-    );
-  }
-
-  /**
-   * Disable an agent with optional reason.
-   */
-  async disable(name: string, reason?: string): Promise<Record<string, unknown>> {
-    return this.client.request(
-      'POST',
-      `/api/v1/agents/${encodeURIComponent(name)}/disable`,
-      reason ? { body: { reason } } : undefined
-    );
-  }
-
-  /**
    * Send a heartbeat for an agent.
    */
   async heartbeat(agentId: string, status: string): Promise<Record<string, unknown>> {
@@ -747,53 +704,6 @@ export class AgentsAPI {
       'POST',
       `/api/v1/control-plane/agents/${encodeURIComponent(agentId)}/heartbeat`,
       { body: { status } }
-    );
-  }
-
-  // ===========================================================================
-  // Quota Management
-  // ===========================================================================
-
-  /**
-   * Get an agent's quota information.
-   */
-  async getQuota(name: string): Promise<Record<string, unknown>> {
-    return this.client.request(
-      'GET',
-      `/api/v1/agents/${encodeURIComponent(name)}/quota`
-    );
-  }
-
-  /**
-   * Set an agent's quota.
-   */
-  async setQuota(name: string, options: {
-    debatesLimit?: number;
-    tokensLimit?: number;
-  }): Promise<Record<string, unknown>> {
-    return this.client.request(
-      'PUT',
-      `/api/v1/agents/${encodeURIComponent(name)}/quota`,
-      {
-        body: {
-          debates_limit: options.debatesLimit,
-          tokens_limit: options.tokensLimit,
-        },
-      }
-    );
-  }
-
-  // ===========================================================================
-  // Statistics
-  // ===========================================================================
-
-  /**
-   * Get aggregate agent statistics.
-   */
-  async getStats(): Promise<Record<string, unknown>> {
-    return this.client.request(
-      'GET',
-      '/api/v1/agents/stats'
     );
   }
 

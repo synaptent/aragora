@@ -396,29 +396,6 @@ export class UnifiedInboxAPI {
   }
 
   /**
-   * Reply to a message.
-   *
-   * NOTE: kept at its legacy non-versioned path. The versioned reply
-   * endpoint (POST /api/v1/inbox/messages/{id}/reply) is defined in
-   * aragora/server/handlers/inbox/email_actions.py but is not mounted
-   * into the live route registry yet, so this path is tracked in the
-   * SDK drift baselines pending server-side wiring.
-   */
-  async reply(
-    messageId: string,
-    request: { content: string }
-  ): Promise<{
-    message_id: string;
-    in_reply_to: string;
-    channel: string;
-    status: string;
-  }> {
-    return this.client.request('POST', `/inbox/messages/${messageId}/reply`, {
-      json: request,
-    });
-  }
-
-  /**
    * Start a debate on a message — trigger multi-agent analysis.
    */
   async debateMessage(

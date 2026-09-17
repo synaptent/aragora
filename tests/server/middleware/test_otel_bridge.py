@@ -417,7 +417,7 @@ class TestInjectTraceContext:
         original_import = builtins.__import__
 
         def custom_import(name, *args, **kwargs):
-            if name == "aragora.observability.middleware.tracing":
+            if name == "aragora.observability.middleware.trace_state":
                 return mock_tracing
             return original_import(name, *args, **kwargs)
 
@@ -439,7 +439,7 @@ class TestInjectTraceContext:
         original_import = builtins.__import__
 
         def custom_import(name, *args, **kwargs):
-            if name == "aragora.observability.middleware.tracing":
+            if name == "aragora.observability.middleware.trace_state":
                 return mock_tracing
             return original_import(name, *args, **kwargs)
 
@@ -531,7 +531,7 @@ class TestGetCurrentIds:
         original_import = builtins.__import__
 
         def custom_import(name, *args, **kwargs):
-            if name == "aragora.observability.middleware.tracing":
+            if name == "aragora.observability.middleware.trace_state":
                 return mock_tracing
             return original_import(name, *args, **kwargs)
 
@@ -551,7 +551,7 @@ class TestGetCurrentIds:
         original_import = builtins.__import__
 
         def custom_import(name, *args, **kwargs):
-            if name == "aragora.observability.middleware.tracing":
+            if name == "aragora.observability.middleware.trace_state":
                 return mock_tracing
             return original_import(name, *args, **kwargs)
 
@@ -569,7 +569,7 @@ class TestGetCurrentIds:
         original_import = builtins.__import__
 
         def fail_import(name, *args, **kwargs):
-            if name == "aragora.observability.middleware.tracing":
+            if name == "aragora.observability.middleware.trace_state":
                 raise ImportError("not available")
             return original_import(name, *args, **kwargs)
 
@@ -586,7 +586,7 @@ class TestGetCurrentIds:
         original_import = builtins.__import__
 
         def fail_import(name, *args, **kwargs):
-            if name == "aragora.observability.middleware.tracing":
+            if name == "aragora.observability.middleware.trace_state":
                 raise ImportError("not available")
             return original_import(name, *args, **kwargs)
 
@@ -614,7 +614,7 @@ class TestCreateSpanContext:
         original_import = builtins.__import__
 
         def custom_import(name, *args, **kwargs):
-            if name == "aragora.observability.middleware.tracing":
+            if name == "aragora.observability.middleware.trace_state":
                 return mock_tracing
             return original_import(name, *args, **kwargs)
 
@@ -631,7 +631,7 @@ class TestCreateSpanContext:
         original_import = builtins.__import__
 
         def fail_import(name, *args, **kwargs):
-            if name == "aragora.observability.middleware.tracing":
+            if name == "aragora.observability.middleware.trace_state":
                 raise ImportError("nope")
             return original_import(name, *args, **kwargs)
 

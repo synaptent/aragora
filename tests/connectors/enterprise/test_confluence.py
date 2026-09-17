@@ -17,6 +17,7 @@ import asyncio
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from aragora.connectors.enterprise.base import SyncState, SyncStatus
@@ -442,20 +443,22 @@ class TestConfluenceErrorHandling:
 
     @pytest.mark.asyncio
     async def test_handles_api_error(self, mock_credentials):
-        """Should handle API errors gracefully."""
+        """API errors from _api_request propagate out of _get_spaces."""
         from aragora.connectors.enterprise.collaboration.confluence import ConfluenceConnector
 
         connector = ConfluenceConnector(base_url="https://test.atlassian.net/wiki")
         connector.credentials = mock_credentials
 
         with patch.object(connector, "_api_request", new_callable=AsyncMock) as mock_api:
-            mock_api.side_effect = Exception("API Error")
+            # _api_request surfaces HTTP failures via response.raise_for_status()
+            mock_api.side_effect = httpx.HTTPStatusError(
+                "API Error", request=MagicMock(), response=MagicMock(status_code=500)
+            )
 
-            try:
-                spaces = await connector._get_spaces()
-                assert spaces == [] or spaces is None
-            except Exception:
-                pass  # Expected - API error propagates
+            with pytest.raises(httpx.HTTPStatusError, match="API Error"):
+                await connector._get_spaces()
+
+            mock_api.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_handles_space_not_found(self, mock_credentials):
@@ -480,20 +483,21 @@ class TestConfluenceErrorHandling:
 
     @pytest.mark.asyncio
     async def test_handles_permission_denied(self, mock_credentials):
-        """Should handle permission denied errors."""
+        """A 403 from _api_request propagates out of _get_spaces."""
         from aragora.connectors.enterprise.collaboration.confluence import ConfluenceConnector
 
         connector = ConfluenceConnector(base_url="https://test.atlassian.net/wiki")
         connector.credentials = mock_credentials
 
         with patch.object(connector, "_api_request", new_callable=AsyncMock) as mock_api:
-            mock_api.side_effect = Exception("403 Forbidden")
+            mock_api.side_effect = httpx.HTTPStatusError(
+                "403 Forbidden", request=MagicMock(), response=MagicMock(status_code=403)
+            )
 
-            try:
-                spaces = await connector._get_spaces()
-                assert spaces == [] or spaces is None
-            except Exception:
-                pass  # Expected - permission error propagates
+            with pytest.raises(httpx.HTTPStatusError, match="403 Forbidden"):
+                await connector._get_spaces()
+
+            mock_api.assert_awaited_once()
 
 
 class TestConfluenceWebhooks:

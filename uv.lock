@@ -303,11 +303,12 @@ wheels = [
 
 [[package]]
 name = "aragora"
-version = "2.9.0"
+version = "2.10.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "click" },
+    { name = "cryptography" },
     { name = "defusedxml" },
     { name = "httpx" },
     { name = "pydantic" },
@@ -398,6 +399,7 @@ requires-dist = [
     { name = "boto3", marker = "extra == 'test'", specifier = ">=1.34,<2.0" },
     { name = "build", marker = "extra == 'test'", specifier = ">=1.5.0,<2.0" },
     { name = "click", specifier = ">=8.4.2,<9.0" },
+    { name = "cryptography", specifier = ">=48.0.1,<51.0" },
     { name = "defusedxml", specifier = ">=0.7,<1.0" },
     { name = "deptry", marker = "extra == 'all'", specifier = ">=0.25.1,<1.0" },
     { name = "deptry", marker = "extra == 'readiness'", specifier = ">=0.25.1,<1.0" },
@@ -429,7 +431,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.14.14" },
     { name = "supabase", marker = "extra == 'all'", specifier = ">=2.31.0,<3.0" },
     { name = "supabase", marker = "extra == 'enterprise'", specifier = ">=2.31.0,<3.0" },
-    { name = "twine", marker = "extra == 'test'", specifier = ">=6.2.0,<7.0" },
+    { name = "twine", marker = "extra == 'test'", specifier = ">=6.2.0,<8.0" },
     { name = "typer", specifier = ">=0.26.8,<1.0" },
     { name = "types-croniter", marker = "extra == 'dev'", specifier = ">=6.2.2.20260518,<7.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12.20260518,<7.0" },
@@ -489,7 +491,7 @@ provides-extras = ["anthropic", "openai", "mistral", "gemini", "all", "dev"]
 
 [[package]]
 name = "aragora-sdk"
-version = "2.9.0"
+version = "2.10.0"
 source = { editable = "sdk/python" }
 dependencies = [
     { name = "httpx" },

@@ -257,7 +257,7 @@ class TestAuthentication:
                     return_value=mock_httpx_response(200, token_response)
                 )
                 mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-                mock_instance.__aexit__ = AsyncMock()
+                mock_instance.__aexit__ = AsyncMock(return_value=False)
                 mock_client.return_value = mock_instance
 
                 result = await outlook_connector.authenticate(
@@ -291,7 +291,7 @@ class TestAuthentication:
                     return_value=mock_httpx_response(200, token_response)
                 )
                 mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-                mock_instance.__aexit__ = AsyncMock()
+                mock_instance.__aexit__ = AsyncMock(return_value=False)
                 mock_client.return_value = mock_instance
 
                 result = await outlook_connector.authenticate(
@@ -340,7 +340,7 @@ class TestAuthentication:
                 mock_instance = AsyncMock()
                 mock_instance.post = AsyncMock(side_effect=ConnectionError("invalid_grant"))
                 mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-                mock_instance.__aexit__ = AsyncMock()
+                mock_instance.__aexit__ = AsyncMock(return_value=False)
                 mock_client.return_value = mock_instance
 
                 result = await outlook_connector.authenticate(
@@ -397,7 +397,7 @@ class TestTokenManagement:
                     return_value=mock_httpx_response(200, token_response)
                 )
                 mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-                mock_instance.__aexit__ = AsyncMock()
+                mock_instance.__aexit__ = AsyncMock(return_value=False)
                 mock_client.return_value = mock_instance
 
                 token = await authenticated_connector._get_access_token()
@@ -431,7 +431,7 @@ class TestApiRequests:
             mock_instance = AsyncMock()
             mock_instance.request = AsyncMock(return_value=mock_httpx_response(200, response_data))
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock()
+            mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_client.return_value = mock_instance
 
             result = await authenticated_connector._api_request("/messages")
@@ -450,7 +450,7 @@ class TestApiRequests:
             mock_instance = AsyncMock()
             mock_instance.request = AsyncMock(return_value=mock_httpx_response(200, response_data))
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-            mock_instance.__aexit__ = AsyncMock()
+            mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_client.return_value = mock_instance
 
             result = await authenticated_connector._api_request(delta_url)

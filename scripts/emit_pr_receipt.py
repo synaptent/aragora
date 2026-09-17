@@ -4,9 +4,8 @@ This is the offline glue the M2 GitHub Action calls. It reads a CollectOutcome
 dict (as produced by ``collect_quorum_evidence.py --json``), bridges it to a
 ``DecisionReceipt`` (``aragora/swarm/quorum_receipt.py``), exports the portable
 Open Decision Receipt (``aragora/gauntlet/odr_export.py``), optionally validates
-it, and writes the receipt JSON. No model calls, no network — a pure
-transformation of an already-collected review outcome into a portable, verifiable
-artifact.
+it, and writes the receipt JSON. No model calls. Signing uses a configured local
+file or AWS Secrets Manager; unconfigured deployments emit an unsigned receipt.
 
 Examples
 --------
@@ -31,7 +30,9 @@ from aragora.gauntlet.odr_export import (  # noqa: E402
     decision_receipt_to_odr,
     load_odr_schema,
     odr_content_digest,
+    sign_odr_if_configured,
 )
+from aragora.gauntlet.odr_signing import OdrSigningError  # noqa: E402
 from aragora.swarm.quorum_evidence import collect_outcome_from_dict  # noqa: E402
 from aragora.swarm.quorum_receipt import collect_outcome_to_decision_receipt  # noqa: E402
 
@@ -40,7 +41,7 @@ def build_receipt(outcome_dict: dict[str, Any]) -> dict[str, Any]:
     """CollectOutcome dict -> portable ODR receipt dict (never fabricates)."""
     outcome = collect_outcome_from_dict(outcome_dict)
     receipt = collect_outcome_to_decision_receipt(outcome)
-    return decision_receipt_to_odr(receipt)
+    return sign_odr_if_configured(decision_receipt_to_odr(receipt))
 
 
 def verify_receipt(odr: dict[str, Any]) -> tuple[str, bool]:
@@ -95,7 +96,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     outcome_dict = json.loads(args.outcome.read_text(encoding="utf-8"))
-    odr = build_receipt(outcome_dict)
+    try:
+        odr = build_receipt(outcome_dict)
+    except OdrSigningError:
+        print(
+            "Error: ODR signing key is configured but could not be used; "
+            "refusing to export an unsigned receipt",
+            file=sys.stderr,
+        )
+        return 1
 
     # Write the receipt FIRST so a verification hiccup never loses the artifact.
     args.out.parent.mkdir(parents=True, exist_ok=True)

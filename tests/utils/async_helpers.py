@@ -5,8 +5,9 @@ timeout handling and clear error messages.
 """
 
 import asyncio
+import inspect
 from typing import Any, Optional, TypeVar
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 
 T = TypeVar("T")
 
@@ -152,10 +153,46 @@ class AsyncTestContext:
                 pass  # Cleanup errors are not fatal
 
 
+def close_coroutine_then(
+    result: Any = None,
+    *,
+    raise_: BaseException | None = None,
+) -> Callable[..., Any]:
+    """Build a ``side_effect`` for mocks that stand in for a coroutine *runner*.
+
+    ``asyncio.run``, ``asyncio.create_task`` and
+    ``aragora.utils.async_utils.run_async`` all receive an already-created
+    coroutine object.  Patching them with a plain ``return_value`` (or a bare
+    ``side_effect`` exception) leaves that coroutine unconsumed, and Python then
+    emits ``RuntimeWarning: coroutine '...' was never awaited`` at garbage
+    collection, attributed to whichever test happens to be running.  This side
+    effect closes the coroutine first, then returns ``result`` or raises
+    ``raise_``.
+
+    Usage::
+
+        with patch("asyncio.run", side_effect=close_coroutine_then(raise_=RuntimeError("x"))):
+            main()
+
+        with patch("asyncio.create_task", side_effect=close_coroutine_then(MagicMock())):
+            handler.enqueue(...)
+    """
+
+    def _side_effect(coro: Any, *args: Any, **kwargs: Any) -> Any:
+        if inspect.iscoroutine(coro):
+            coro.close()
+        if raise_ is not None:
+            raise raise_
+        return result
+
+    return _side_effect
+
+
 __all__ = [
     "DEFAULT_TIMEOUT",
     "run_with_timeout",
     "run_with_cancellation",
     "gather_with_timeout",
     "AsyncTestContext",
+    "close_coroutine_then",
 ]
