@@ -295,6 +295,10 @@ def test_v02_bridge_adjudication_and_rule_preserve_source():
     doc = decision_receipt_to_odr(receipt, odr_version="0.2")
     assert doc["adjudication"]["verdict"] == "settle"
     assert doc["adjudication"]["reason"] == "resolved"
+    # The member is the verbatim AdjudicationResult shape: omitted when absent,
+    # never a presence marker, so no "status" key may be injected.
+    assert "status" not in doc["adjudication"]
+    assert {"kind", "verdict", "reason"} <= set(doc["adjudication"])
     assert "adjudication" not in decision_receipt_to_odr(receipt)
     assert doc["attestation"]["mechanism"]["policy_version"] == raw["policy_version"]
     assert doc["attestation"]["mechanism"]["action_reason"] == raw["action_reason"]

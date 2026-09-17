@@ -131,7 +131,7 @@ def _odr_content(outcome: CollectOutcome, raw: dict[str, Any]) -> dict[str, Any]
         for key in ("groundedness_bar", "advisory_severity_policy"):
             if key in adjudication:
                 policy[key] = adjudication.pop(key)
-        content["adjudication"] = {"status": "present", **adjudication, "policy": policy}
+        content["adjudication"] = {**adjudication, "policy": policy}
     return content
 
 
