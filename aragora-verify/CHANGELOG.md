@@ -4,6 +4,15 @@ All notable changes to `aragora-verify` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses semantic
 versioning.
 
+## [Unreleased] — 0.2.0 pending
+
+### Added
+- ODR v0.2 signature metadata: optional `signatures[].{issuer, role, signed_at,
+  expires_at}` in the bundled schema and the version-dispatched signed message of
+  spec §6 (a `0.2` signature covers `JCS({odr_digest, odr_signature_input, protected})`,
+  so any changed or stripped entry member FAILs `signature`; `0.1` documents verify
+  unchanged and their metadata warns `unauthenticated signature metadata`).
+
 ## [0.1.2] — Unreleased
 
 ### Changed

@@ -297,3 +297,114 @@ def test_load_public_key_rejects_garbage() -> None:
 
     with pytest.raises(VerificationError):
         load_public_key(b"not a key")
+
+
+# --- v0.2 signature entries: signer-committed metadata (spec §6) ------------
+
+_T0, _T1 = "2026-09-05T00:00:00+00:00", "2027-09-05T00:00:00+00:00"
+_DELETE = object()
+
+
+def _valid_odr_v02():
+    doc = valid_odr()
+    doc.update(odr_version="0.2", profile="https://aragora.ai/specs/open-decision-receipt/v0.2")
+    return doc
+
+
+def _sign_v02(doc, private_key, *, over_v01_message=False, **metadata):
+    """Sign per the v0.2 construction: JCS({odr_digest, odr_signature_input, protected})."""
+    import base64
+
+    from aragora_verify.jcs import jcs_canonicalize, odr_content_digest
+
+    protected = {"alg": "Ed25519", "key_id": compute_key_id(private_key.public_key())}
+    protected.update({"issuer": "aragora", "role": "emitter", "signed_at": _T0, **metadata})
+    digest_hex = odr_content_digest(doc)
+    payload = {"odr_digest": digest_hex, "odr_signature_input": "0.2", "protected": protected}
+    message = bytes.fromhex(digest_hex) if over_v01_message else jcs_canonicalize(payload)
+    signature = base64.b64encode(private_key.sign(message)).decode("ascii")
+    return dict(doc, signatures=[dict(protected, signature=signature)])
+
+
+def _verify_with(signed, public_key):
+    return verify(signed, public_key=load_public_key(_pubkey_bytes(public_key)))
+
+
+def _unauthenticated(result):
+    return [w for w in result.warnings if "unauthenticated signature metadata" in w]
+
+
+@pytest.mark.parametrize(
+    "metadata", [{}, {"role": "reviewer", "expires_at": _T1}], ids=["default", "with_expiry"]
+)
+def test_v02_signed_receipt_with_metadata_verifies(metadata) -> None:
+    private_key, public_key = make_keypair()
+    result = _verify_with(_sign_v02(_valid_odr_v02(), private_key, **metadata), public_key)
+    assert result.ok is True, result.checks
+    assert _check(result, "signature").status == PASS
+    assert _unauthenticated(result) == []
+
+
+@pytest.mark.parametrize(
+    "member,value",
+    [
+        pytest.param("issuer", "mallory", id="issuer_changed"),
+        pytest.param("expires_at", "2099-01-01T00:00:00Z", id="expires_at_added"),
+        pytest.param("signed_at", _DELETE, id="signed_at_stripped"),
+        pytest.param("role", "notary", id="role_changed"),
+        pytest.param("issuer", _DELETE, id="issuer_stripped"),
+        pytest.param("key_id", "ed25519-deadbeefdeadbeef", id="key_id_relabeled"),
+    ],
+)
+def test_v02_metadata_tamper_fails_signature_but_not_digest(member, value) -> None:
+    private_key, public_key = make_keypair()
+    signed = _sign_v02(_valid_odr_v02(), private_key)
+    if value is _DELETE:
+        del signed["signatures"][0][member]
+    else:
+        signed["signatures"][0][member] = value
+    result = _verify_with(signed, public_key)
+    assert result.ok is False
+    assert _check(result, "canonical_digest").status == PASS
+    assert _check(result, "signature").status == FAIL
+
+
+def test_v02_entry_over_v01_message_fails() -> None:
+    # No fallback between constructions: a 0.2 document is only ever checked
+    # under the 0.2 message, so an entry made over the raw digest bytes fails.
+    private_key, public_key = make_keypair()
+    signed = _sign_v02(_valid_odr_v02(), private_key, over_v01_message=True)
+    result = _verify_with(signed, public_key)
+    assert result.ok is False
+    assert _check(result, "canonical_digest").status == PASS
+    assert _check(result, "signature").status == FAIL
+
+
+def test_v01_signature_construction_unchanged_and_metadata_only_warns() -> None:
+    # The shared fixture signs a 0.1 document over the raw digest bytes with a
+    # signed_at member (no new warning); other metadata warns, with or without a key.
+    private_key, public_key = make_keypair()
+    signed = sign_odr(valid_odr(), private_key)
+    assert set(signed["signatures"][0]) == {"alg", "key_id", "signature", "signed_at"}
+    result = _verify_with(signed, public_key)
+    assert result.ok is True and _check(result, "signature").status == PASS
+    assert _unauthenticated(result) == []
+    signed["signatures"][0]["issuer"] = "aragora"
+    result = _verify_with(signed, public_key)
+    assert result.ok is True and _check(result, "signature").status == PASS
+    assert len(_unauthenticated(result)) == 1 and "issuer" in _unauthenticated(result)[0]
+    assert len(_unauthenticated(verify(signed))) == 1
+
+
+@pytest.mark.parametrize(
+    "member,value", [("issuer", ""), ("role", "auditor"), ("expires_at", 5), ("note", "x")]
+)
+def test_hand_written_signature_checks_without_jsonschema(monkeypatch, member, value) -> None:
+    from aragora_verify import schema
+
+    monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
+    signed = _sign_v02(_valid_odr_v02(), make_keypair()[0])
+    signed["signatures"][0][member] = value
+    errors = schema.validate_structure(signed)
+    assert any(e.startswith(f"signatures[0].{member}: ") for e in errors), errors
+    assert _check(verify(signed), "schema_conformance").status == FAIL

@@ -47,6 +47,7 @@ from .odr_export import (
     load_odr_schema,
     odr_content_digest,
 )
+from .odr_jcs import odr_signature_message
 
 __all__ = [
     "Check",
@@ -131,6 +132,14 @@ class VerifyResult:
 # ---------------------------------------------------------------------------
 
 _ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source", "adjudication"}
+
+_SIGNATURE_ROLES = ("emitter", "reviewer", "attestor", "notary")
+_SIGNATURE_MEMBERS = frozenset(
+    {"alg", "key_id", "signature", "issuer", "role", "signed_at", "expires_at"}
+)
+#: Members a v0.1 signature cannot commit; their presence on a v0.1 document
+#: is reported as unauthenticated (``signed_at`` was always a legal v0.1 member).
+_UNAUTHENTICATED_V01_MEMBERS = ("issuer", "role", "expires_at")
 
 _QUORUM_REQUIRED = (
     "method",
@@ -517,20 +526,20 @@ def _validate_signatures(errors: list[str], value: Any) -> None:
         if not isinstance(sig, dict):
             errors.append(f"signatures[{i}]: must be an object")
             continue
-        _unknown_members(
-            errors,
-            f"signatures[{i}]",
-            sig,
-            frozenset({"alg", "key_id", "signature", "signed_at"}),
-        )
+        _unknown_members(errors, f"signatures[{i}]", sig, _SIGNATURE_MEMBERS)
         for field_name in ("alg", "key_id", "signature"):
             if not isinstance(sig.get(field_name), str) or not sig.get(field_name):
                 errors.append(f"signatures[{i}].{field_name}: required non-empty string")
         if isinstance(sig.get("alg"), str) and sig.get("alg") != "Ed25519":
             errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined in v0.1")
-        # signed_at is optional but strictly a string when present: a non-string
-        # value would silently corrupt the signing-time audit trail.
+        # Metadata is optional on both versions (one schema for both) but strictly
+        # typed when present; only a v0.2 signature commits it (spec §6).
+        if "issuer" in sig and (not isinstance(sig["issuer"], str) or not sig["issuer"]):
+            errors.append(f"signatures[{i}].issuer: must be a non-empty string")
+        if "role" in sig and sig["role"] not in _SIGNATURE_ROLES:
+            errors.append(f"signatures[{i}].role: must be one of {', '.join(_SIGNATURE_ROLES)}")
         _optional_string(errors, f"signatures[{i}]", sig, "signed_at")
+        _optional_string(errors, f"signatures[{i}]", sig, "expires_at")
 
 
 def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
@@ -747,7 +756,7 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> 
             "signatures present but 'cryptography' is not installed; not verified",
         )
     _, _, invalid_signature = loaded
-    message = bytes.fromhex(digest_hex)
+    odr_version = doc.get("odr_version")
     provided_key_id = compute_key_id(public_key)
     verified_any = False
     failed_matching = False
@@ -763,6 +772,10 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> 
             if key_id == provided_key_id:
                 failed_matching = True
             continue
+        # Spec §6: the DOCUMENT's version picks the construction; a 0.2 entry's
+        # protected members are rebuilt from the entry, so tampering fails here.
+        protected = {k: v for k, v in sig.items() if k != "signature"}
+        message = odr_signature_message(digest_hex, odr_version, protected)
         try:
             public_key.verify(raw_sig, message)
         except invalid_signature:
@@ -919,6 +932,17 @@ def _weakening_warnings(doc: dict[str, Any]) -> list[str]:
     reasoning = doc.get("reasoning")
     if isinstance(reasoning, dict) and reasoning.get("status") == "absent":
         warnings.append("reasoning: absent — no recorded justification")
+
+    # A v0.1 signature covers only the digest, so entry metadata on a v0.1
+    # document is a claim nobody signed (spec §6); v0.2 entries commit it.
+    if doc.get("odr_version") != "0.2":
+        for i, sig in enumerate(doc.get("signatures") or ()):
+            loose = [m for m in _UNAUTHENTICATED_V01_MEMBERS if isinstance(sig, dict) and m in sig]
+            if loose:
+                warnings.append(
+                    f"signatures[{i}]: unauthenticated signature metadata ({', '.join(loose)}) "
+                    "— a v0.1 signature does not cover these members"
+                )
     return warnings
 
 

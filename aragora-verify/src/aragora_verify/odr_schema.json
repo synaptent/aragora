@@ -439,7 +439,7 @@
     },
     "signatures": {
       "type": "array",
-      "description": "Reserved for detached signatures (Ed25519, issue #8225). Empty in v0.1; signatures cover the SHA-256 of the JCS bytes of the payload with this array removed.",
+      "description": "Detached Ed25519 signatures (spec §6). Every entry covers odr_digest, the SHA-256 of the JCS bytes of the payload with this array removed. On a v0.1 document the signed message is the 32 raw digest bytes and the entry is {alg, key_id, signature} (signed_at tolerated, unauthenticated). On a v0.2 document the signed message is JCS({odr_digest, odr_signature_input: \"0.2\", protected}) where protected is the entry without signature, so issuer, role, signed_at and expires_at are signer-committed.",
       "items": {
         "type": "object",
         "required": ["alg", "key_id", "signature"],
@@ -447,7 +447,10 @@
           "alg": { "type": "string", "enum": ["Ed25519"] },
           "key_id": { "type": "string", "minLength": 1 },
           "signature": { "type": "string", "minLength": 1 },
-          "signed_at": { "type": "string" }
+          "issuer": { "type": "string", "minLength": 1 },
+          "role": { "type": "string", "enum": ["emitter", "reviewer", "attestor", "notary"] },
+          "signed_at": { "type": "string" },
+          "expires_at": { "type": "string" }
         },
         "additionalProperties": false
       }

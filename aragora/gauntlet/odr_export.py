@@ -396,6 +396,10 @@ def sign_odr_if_configured(
     instead — silently publishing an unsigned receipt from a deployment that
     was expected to sign would fail open. Once a key is loaded, signing errors
     always propagate.
+
+    A v0.2 document gets the signer-committed entry (spec §6) with ``issuer``
+    from ``ARAGORA_ODR_SIGNING_ISSUER`` (default ``aragora``) and role
+    ``emitter``; a v0.1 document keeps the three-member entry.
     """
     from aragora.gauntlet import odr_signing
 
@@ -405,6 +409,11 @@ def sign_odr_if_configured(
     except odr_signing.OdrSigningUnconfiguredError as exc:
         logger.warning("ODR signing key not configured; exporting unsigned ODR receipt: %s", exc)
         return odr
+    if odr.get("odr_version") == "0.2":
+        issuer = (
+            os.environ.get(odr_signing.SIGNING_ISSUER_ENV) or odr_signing.DEFAULT_SIGNING_ISSUER
+        )
+        return odr_signing.sign_odr_receipt(odr, private_key, issuer=issuer, role="emitter")
     return odr_signing.sign_odr_receipt(odr, private_key)
 
 

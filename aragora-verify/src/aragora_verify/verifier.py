@@ -20,7 +20,10 @@ key and a hash chain):
    deterministically (``jcs``), the value any detached signature covers.
 3. **Ed25519 signatures** — verifies each ``signatures[]`` entry against a
    supplied public key, per the construction in ``OPEN_DECISION_RECEIPT.md``
-   §6 / issue #8225: the signed message is the SHA-256 digest above.
+   §6 / issue #8225, chosen by the document's ``odr_version`` with no fallback:
+   ``0.1`` signs the 32 raw bytes of the digest above; ``0.2`` signs
+   ``JCS({"odr_digest", "odr_signature_input": "0.2", "protected"})`` with
+   ``protected`` = the entry minus ``signature`` (metadata signer-committed).
 4. **Quorum consistency** — every supporting/dissenting agent appears among
    ``quorum.participants`` (spec §8: a mismatch is a malformed/tamper signal).
 5. **Hash-chain linkage** — when a chain is supplied, the receipt is anchored
@@ -40,7 +43,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from .jcs import odr_content_digest
+from .jcs import odr_content_digest, odr_signature_message
 from .schema import validate_structure
 
 __all__ = [
@@ -56,6 +59,10 @@ PASS = "pass"
 FAIL = "fail"
 WARN = "warn"
 SKIP = "skip"
+
+#: Members a v0.1 signature cannot commit; their presence on a v0.1 document
+#: is reported as unauthenticated (``signed_at`` was always a legal v0.1 member).
+_UNAUTHENTICATED_V01_MEMBERS = ("issuer", "role", "expires_at")
 
 
 class VerificationError(Exception):
@@ -215,7 +222,7 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key) -> Check
         )
 
     _, _, InvalidSignature = _load_ed25519()
-    message = bytes.fromhex(digest_hex)
+    odr_version = doc.get("odr_version")
     provided_key_id = compute_key_id(public_key)
     verified_any = False
     failed_matching = False
@@ -231,6 +238,10 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key) -> Check
             if key_id == provided_key_id:
                 failed_matching = True
             continue
+        # Spec §6: the DOCUMENT's version picks the construction; a 0.2 entry's
+        # protected members are rebuilt from the entry, so tampering fails here.
+        protected = {k: v for k, v in sig.items() if k != "signature"}
+        message = odr_signature_message(digest_hex, odr_version, protected)
         try:
             public_key.verify(raw_sig, message)
             if key_id == provided_key_id:
@@ -382,6 +393,17 @@ def _weakening_warnings(doc: dict[str, Any]) -> list[str]:
     reasoning = doc.get("reasoning")
     if isinstance(reasoning, dict) and reasoning.get("status") == "absent":
         warnings.append("reasoning: absent — no recorded justification")
+
+    # A v0.1 signature covers only the digest, so entry metadata on a v0.1
+    # document is a claim nobody signed (spec §6); v0.2 entries commit it.
+    if doc.get("odr_version") != "0.2":
+        for i, sig in enumerate(doc.get("signatures") or ()):
+            loose = [m for m in _UNAUTHENTICATED_V01_MEMBERS if isinstance(sig, dict) and m in sig]
+            if loose:
+                warnings.append(
+                    f"signatures[{i}]: unauthenticated signature metadata ({', '.join(loose)}) "
+                    "— a v0.1 signature does not cover these members"
+                )
     return warnings
 
 
