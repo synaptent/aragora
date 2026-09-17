@@ -167,6 +167,12 @@ def _check_attestation(errors: list[str], value: Any) -> None:
                 errors.append(f"attestation.mechanism.{key}: must be a string")
 
 
+_SIGNATURE_ROLES = ("emitter", "reviewer", "attestor", "notary")
+_SIGNATURE_MEMBERS = frozenset(
+    {"alg", "key_id", "signature", "issuer", "role", "signed_at", "expires_at"}
+)
+
+
 def _check_signatures(errors: list[str], value: Any) -> None:
     if not isinstance(value, list):
         errors.append("signatures: must be an array")
@@ -175,11 +181,22 @@ def _check_signatures(errors: list[str], value: Any) -> None:
         if not isinstance(sig, dict):
             errors.append(f"signatures[{i}]: must be an object")
             continue
+        for key in sorted(sig.keys() - _SIGNATURE_MEMBERS):
+            errors.append(f"signatures[{i}].{key}: unknown member")
         for field in ("alg", "key_id", "signature"):
             if not isinstance(sig.get(field), str) or not sig.get(field):
                 errors.append(f"signatures[{i}].{field}: required non-empty string")
         if sig.get("alg") not in (None, "Ed25519") and isinstance(sig.get("alg"), str):
             errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined in v0.1")
+        # Metadata is optional on both versions (one schema for both) but strictly
+        # typed when present; only a v0.2 signature commits it (spec §6).
+        if "issuer" in sig and (not isinstance(sig["issuer"], str) or not sig["issuer"]):
+            errors.append(f"signatures[{i}].issuer: must be a non-empty string")
+        if "role" in sig and sig["role"] not in _SIGNATURE_ROLES:
+            errors.append(f"signatures[{i}].role: must be one of {', '.join(_SIGNATURE_ROLES)}")
+        for key in ("signed_at", "expires_at"):
+            if key in sig and not isinstance(sig[key], str):
+                errors.append(f"signatures[{i}].{key}: must be a string")
 
 
 def validate_structure(doc: Any) -> list[str]:

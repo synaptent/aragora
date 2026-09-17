@@ -210,10 +210,11 @@ These additions preserve the meaning and required-ness of every v0.1 member; eve
 | `subject.head_sha` | `subject` | string | Exact reviewed head. |
 | `subject.base_sha` | `subject` | string | Recorded base, when available. |
 | `reasoning.observations[]` | `reasoning` | object | `kind` (timeout/failure/rerun), `family`, `detail`; only alongside a real source reasoning summary, never an absent marker. |
+| `signatures[].{issuer,role,signed_at,expires_at}` | signature items | string | Signature metadata on 0.2 documents, signer-committed by the §6 construction: issuer, role (emitter/reviewer/attestor/notary), signing time and optional expiry (RFC 3339 UTC). |
 
 Gate-level dissent (`present`/`dissenting_agents`/`verdicts[].blocking`) and severity-level findings (`findings`/`severity_max`/`dissent.blocking`) are independent notions, never derived from each other.
 An emitter MUST NOT write any of these members into a v0.1 document (§8, rule 5).
-Both verifiers reject any of these members on a v0.1 document (failing check `schema_conformance`, detail `<path>: not in profile 0.1`).
+Both verifiers reject any of these members on a v0.1 document (failing check `schema_conformance`, detail `<path>: not in profile 0.1`), with one exception: the `signatures[]` metadata members are syntactically legal on every version (the schema is one file for both), so on a v0.1 document both verifiers verify the entry under the 0.1 construction and report those members in `warnings[]` as `unauthenticated signature metadata` (§6) instead of rejecting them; the reference signer refuses to write them into a v0.1 document.
 
 ## 5. Canonicalization and hashing — RFC 8785 (JCS)
 
@@ -253,12 +254,36 @@ ODR intentionally defines **no envelope**. Deployment guidance:
   repository's own loop. TET answers *"was the record rewritten?"*; ODR
   answers *"what did the decision actually consist of?"*. They compose.
 - **COSE / detached signature:** sign `odr_digest` (§5) as a COSE_Sign1
-  detached payload, or place Ed25519 signatures in the reserved
-  `signatures[]` array (schema shape: `alg`, `key_id`, `signature`,
-  `signed_at`). Implementation is issue **#8225** and is out of scope for
-  v0.1 — emitters MUST emit `signatures: []`.
+  detached payload, or place Ed25519 detached signatures in the
+  `signatures[]` array (issue **#8225**; shape: `alg`, `key_id`, `signature`,
+  plus the signer-committed `issuer`, `role`, `signed_at`, `expires_at` of
+  §4.10 on v0.2 documents). An emitter without a key emits `signatures: []`.
 - **in-toto:** the ODR document can serve as the predicate of an attestation
   whose subject duplicates `subject.digest`.
+
+**Signed-message construction (binding on signers and both verifiers).** The
+document's `odr_version` selects the message an Ed25519 signature covers —
+never the entry shape — and a verifier never falls back to the other
+construction:
+
+- `"0.1"`: `message = bytes.fromhex(odr_digest)`, the 32 raw bytes of the
+  digest, with the three-member entry `{alg, key_id, signature}`. Metadata on
+  a 0.1 document is unauthenticated: for any `issuer`, `role` or `expires_at`
+  both verifiers still verify under this construction and add a `warnings[]`
+  entry containing `unauthenticated signature metadata` (`signed_at` alone
+  produces no warning).
+- `"0.2"`: `protected` = the entry minus `signature`, and
+  `message = JCS({"odr_digest": <hex>, "odr_signature_input": "0.2", "protected": protected})`
+  under the §5 canonicalizer; `odr_signature_input` domain-separates the two
+  messages. The verifier rebuilds `protected` from the entry under check, so
+  any changed or stripped member (`key_id` included) fails `signature` while
+  `canonical_digest` still passes. Signers write `issuer` (required), `role`
+  (`emitter` for the reference producer), `signed_at` (RFC 3339 UTC with
+  timezone) and `expires_at` only when supplied (later than `signed_at`);
+  there is no opt-out of the metadata on a 0.2 document.
+- In both, `signature` is base64 (or hex) of the 64 raw Ed25519 bytes,
+  `key_id` is `ed25519-` + the first 16 hex digits of SHA-256 over the raw
+  public key, and only entries whose `key_id` matches the supplied key count.
 
 **Published custody record:** Receipt-First mission key `ed25519-44c316618e9a0f58`,
 generated 2026-09-03 for validation (not a production trust anchor), is published as

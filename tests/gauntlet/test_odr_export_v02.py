@@ -108,12 +108,15 @@ def test_extension_walkers_accept_integral_numbers_but_not_booleans():
 
 
 @pytest.mark.parametrize("version", ["0.1", "0.2"])
-def test_three_member_signatures_verify_for_both_versions(version):
+def test_emitted_documents_sign_and_verify_for_both_versions(version):
     doc = decision_receipt_to_odr(receipt(), odr_version=version)
     assert verify(doc).ok and verify_odr_document(doc).ok
     key = odr_test_key()
-    signed = sign_odr_receipt(doc, key)
-    assert set(signed["signatures"][0]) == {"alg", "key_id", "signature"}
+    # A 0.2 document commits the signer metadata into the signed message (spec §6).
+    v02 = version == "0.2"
+    signed = sign_odr_receipt(doc, key, **({"issuer": "aragora"} if v02 else {}))
+    members = {"alg", "key_id", "signature"} | ({"issuer", "role", "signed_at"} if v02 else set())
+    assert set(signed["signatures"][0]) == members
     assert verify(signed, public_key=key.public_key()).ok
     assert verify_odr_document(signed, public_key=key.public_key()).ok
 
