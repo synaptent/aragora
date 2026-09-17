@@ -30,6 +30,7 @@ import json
 import logging
 import os
 from copy import deepcopy
+from functools import lru_cache
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -407,8 +408,13 @@ def sign_odr_if_configured(
     return odr_signing.sign_odr_receipt(odr, private_key)
 
 
-def load_odr_schema() -> dict[str, Any]:
-    """Load the bundled ODR JSON Schema (draft 2020-12)."""
+@lru_cache(maxsize=1)
+def _load_odr_schema_cached() -> dict[str, Any]:
     text = resources.files("aragora.gauntlet").joinpath("odr_schema.json").read_text("utf-8")
     schema: dict[str, Any] = json.loads(text)
     return schema
+
+
+def load_odr_schema() -> dict[str, Any]:
+    """Load the bundled ODR JSON Schema (draft 2020-12) as a fresh deep copy."""
+    return deepcopy(_load_odr_schema_cached())
