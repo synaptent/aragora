@@ -26,6 +26,7 @@ Design rules (mirroring the emitter's "never fabricate" contract):
 from __future__ import annotations
 
 import hashlib
+import logging
 from copy import deepcopy
 from typing import Any
 
@@ -44,6 +45,11 @@ from aragora.swarm.quorum_evidence import (
 
 __all__ = ["collect_outcome_to_decision_receipt"]
 
+logger = logging.getLogger(__name__)
+
+# The gate reader accepts any "[Pn]" digit; the ODR severity enum is closed at P3.
+_ODR_SEVERITIES = frozenset({"P0", "P1", "P2", "P3"})
+
 
 def _odr_content(outcome: CollectOutcome, raw: dict[str, Any]) -> dict[str, Any]:
     rule = tier_quorum_rule(outcome.tier, tiered_gate=outcome.tiered_gate)
@@ -51,15 +57,24 @@ def _odr_content(outcome: CollectOutcome, raw: dict[str, Any]) -> dict[str, Any]
     for item in outcome.items:
         if not item.family.strip():
             continue
-        rows: list[dict[str, Any]] = [
-            {
-                "issuer": item.family,
-                "severity": line[1:3],
-                "blocking": line[1:3] in ("P0", "P1"),
-                "text": line[4:].strip(),
-            }
-            for line in extract_finding_lines(item.body)
-        ]
+        rows: list[dict[str, Any]] = []
+        for line in extract_finding_lines(item.body):
+            severity = line[1:3]
+            if severity not in _ODR_SEVERITIES:
+                logger.warning(
+                    "omitting %s finding with severity %s outside the ODR profile (P0-P3)",
+                    item.family,
+                    severity,
+                )
+                continue
+            rows.append(
+                {
+                    "issuer": item.family,
+                    "severity": severity,
+                    "blocking": severity in ("P0", "P1"),
+                    "text": line[4:].strip(),
+                }
+            )
         findings.extend(rows)
         verdicts.append(
             {

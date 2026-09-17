@@ -299,3 +299,23 @@ def test_v02_bridge_adjudication_and_rule_preserve_source():
     assert doc["attestation"]["mechanism"]["policy_version"] == raw["policy_version"]
     assert doc["attestation"]["mechanism"]["action_reason"] == raw["action_reason"]
     jsonschema.validate(doc, load_odr_schema())
+
+
+def test_v02_bridge_omits_out_of_profile_severities(caplog):
+    # The gate reader accepts any single digit after "P"; the ODR severity enum
+    # stops at P3, so a "[P4]" reviewer line must be dropped, never emitted.
+    import logging
+
+    outcome = _outcome()
+    outcome.items[0].body = "[P4] out of enum advisory\n[P9] also out of enum\n[P3] kept advisory"
+    with caplog.at_level(logging.WARNING, logger="aragora.swarm.quorum_receipt"):
+        receipt = collect_outcome_to_decision_receipt(outcome)
+    doc = decision_receipt_to_odr(receipt, odr_version="0.2")
+    dissent = doc["quorum"]["dissent"]
+    assert [f["severity"] for f in dissent["findings"]] == ["P3", "P1"]
+    assert dissent["findings"][0]["text"] == "kept advisory"
+    assert dissent["severity_max"] == "P1"
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 2
+    assert "P4" in warnings[0] and "P9" in warnings[1]
+    jsonschema.validate(doc, load_odr_schema())
