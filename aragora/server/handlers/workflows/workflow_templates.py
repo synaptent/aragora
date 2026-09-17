@@ -26,7 +26,7 @@ from aragora.workflow.types import WorkflowDefinition
 from aragora.config import DEFAULT_ROUNDS
 from aragora.rbac.decorators import require_permission
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -36,7 +36,7 @@ from .base import (
     handle_errors,
     json_response,
 )
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

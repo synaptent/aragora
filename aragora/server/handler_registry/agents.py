@@ -37,7 +37,7 @@ ExternalAgentsHandler = _safe_import(
 
 # Gateway agent handlers
 GatewayAgentsHandler = _safe_import(
-    "aragora.server.handlers.gateway_agents_handler", "GatewayAgentsHandler"
+    "aragora.server.handlers.gateway.gateway_agents_handler", "GatewayAgentsHandler"
 )
 
 # Selection handler (agent selection)

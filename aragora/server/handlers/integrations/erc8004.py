@@ -38,7 +38,7 @@ from aragora.blockchain.config import get_chain_config as get_chain_config  # no
 
 # Optional heavy connectors / adapters -- imported lazily at call-time but
 # made available as module-level attributes so ``unittest.mock.patch`` can
-# target ``aragora.server.handlers.erc8004.ERC8004Connector`` etc.
+# target ``aragora.server.handlers.integrations.erc8004.ERC8004Connector`` etc.
 try:
     from aragora.connectors.blockchain import ERC8004Connector as ERC8004Connector  # noqa: E402
 except ImportError:  # pragma: no cover – web3 optional

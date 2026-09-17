@@ -73,21 +73,23 @@ UsageMeteringHandler = _safe_import(
 # =============================================================================
 
 CanvasPipelineHandler = _safe_import(
-    "aragora.server.handlers.canvas_pipeline", "CanvasPipelineHandler"
+    "aragora.server.handlers.canvas.canvas_pipeline", "CanvasPipelineHandler"
 )
 
 # Idea Canvas
-IdeaCanvasHandler = _safe_import("aragora.server.handlers.idea_canvas", "IdeaCanvasHandler")
+IdeaCanvasHandler = _safe_import("aragora.server.handlers.canvas.idea_canvas", "IdeaCanvasHandler")
 
 # Goal Canvas
-GoalCanvasHandler = _safe_import("aragora.server.handlers.goal_canvas", "GoalCanvasHandler")
+GoalCanvasHandler = _safe_import("aragora.server.handlers.canvas.goal_canvas", "GoalCanvasHandler")
 
 # Action Canvas
-ActionCanvasHandler = _safe_import("aragora.server.handlers.action_canvas", "ActionCanvasHandler")
+ActionCanvasHandler = _safe_import(
+    "aragora.server.handlers.canvas.action_canvas", "ActionCanvasHandler"
+)
 
 # Orchestration Canvas
 OrchestrationCanvasHandler = _safe_import(
-    "aragora.server.handlers.orchestration_canvas", "OrchestrationCanvasHandler"
+    "aragora.server.handlers.canvas.orchestration_canvas", "OrchestrationCanvasHandler"
 )
 
 # Universal Graph Pipeline
@@ -107,7 +109,7 @@ ProvenanceExplorerHandler = _safe_import(
 
 # DAG Operations
 DAGOperationsHandler = _safe_import(
-    "aragora.server.handlers.dag_operations", "DAGOperationsHandler"
+    "aragora.server.handlers.pipeline.dag_operations", "DAGOperationsHandler"
 )
 
 # Outcome Tracking
@@ -119,7 +121,7 @@ BenchmarkingHandler = _safe_import(
 )
 
 # Decision Playbooks
-PlaybookHandler = _safe_import("aragora.server.handlers.playbooks", "PlaybookHandler")
+PlaybookHandler = _safe_import("aragora.server.handlers.workflows.playbooks", "PlaybookHandler")
 
 # Knowledge Flow (flywheel visualization)
 KnowledgeFlowHandler = _safe_import(
@@ -153,7 +155,7 @@ PipelineExecuteHandler = _safe_import(
     "aragora.server.handlers.pipeline.execute", "PipelineExecuteHandler"
 )
 PipelineGraphHandler = _safe_import(
-    "aragora.server.handlers.pipeline_graph", "PipelineGraphHandler"
+    "aragora.server.handlers.pipeline.pipeline_graph", "PipelineGraphHandler"
 )
 PlanManagementHandler = _safe_import(
     "aragora.server.handlers.pipeline.plans", "PlanManagementHandler"

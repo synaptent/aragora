@@ -39,7 +39,9 @@ DeployStatusHandler = _safe_import(
 NomicHandler = _safe_import("aragora.server.handlers", "NomicHandler")
 DocsHandler = _safe_import("aragora.server.handlers", "DocsHandler")
 ApiDocsHandler = _safe_import("aragora.server.handlers.admin.api_docs", "ApiDocsHandler")
-MCPToolsHandler = _safe_import("aragora.server.handlers.mcp_tools_handler", "MCPToolsHandler")
+MCPToolsHandler = _safe_import(
+    "aragora.server.handlers.integrations.mcp_tools_handler", "MCPToolsHandler"
+)
 
 # =============================================================================
 # Admin Handler Imports
@@ -120,33 +122,33 @@ CSPReportHandler = _safe_import("aragora.server.handlers.security", "CSPReportHa
 # Gateway Handler Imports
 # =============================================================================
 
-GatewayHandler = _safe_import("aragora.server.handlers.gateway_handler", "GatewayHandler")
+GatewayHandler = _safe_import("aragora.server.handlers.gateway.gateway_handler", "GatewayHandler")
 OpenClawGatewayHandler = _safe_import(
-    "aragora.server.handlers.openclaw_gateway", "OpenClawGatewayHandler"
+    "aragora.server.handlers.openclaw.openclaw_gateway", "OpenClawGatewayHandler"
 )
 GatewayCredentialsHandler = _safe_import(
-    "aragora.server.handlers.gateway_credentials_handler", "GatewayCredentialsHandler"
+    "aragora.server.handlers.gateway.gateway_credentials_handler", "GatewayCredentialsHandler"
 )
 GatewayHealthHandler = _safe_import(
-    "aragora.server.handlers.gateway_health_handler", "GatewayHealthHandler"
+    "aragora.server.handlers.gateway.gateway_health_handler", "GatewayHealthHandler"
 )
 GatewayConfigHandler = _safe_import(
-    "aragora.server.handlers.gateway_config_handler", "GatewayConfigHandler"
+    "aragora.server.handlers.gateway.gateway_config_handler", "GatewayConfigHandler"
 )
-ERC8004Handler = _safe_import("aragora.server.handlers.erc8004", "ERC8004Handler")
+ERC8004Handler = _safe_import("aragora.server.handlers.integrations.erc8004", "ERC8004Handler")
 
 # =============================================================================
 # Integration Handler Imports
 # =============================================================================
 
 ExternalIntegrationsHandler = _safe_import(
-    "aragora.server.handlers.external_integrations", "ExternalIntegrationsHandler"
+    "aragora.server.handlers.integrations.external_integrations", "ExternalIntegrationsHandler"
 )
 IntegrationHealthHandler = _safe_import(
     "aragora.server.handlers.integrations.health", "IntegrationHealthHandler"
 )
 IntegrationManagementHandler = _safe_import(
-    "aragora.server.handlers.integration_management", "IntegrationsHandler"
+    "aragora.server.handlers.integrations.integration_management", "IntegrationsHandler"
 )
 FeatureIntegrationsHandler = _safe_import(
     "aragora.server.handlers.features.integrations", "IntegrationsHandler"
@@ -157,7 +159,7 @@ StreamingConnectorHandler = _safe_import(
 )
 MarketplaceHandler = _safe_import("aragora.server.handlers", "MarketplaceHandler")
 MarketplaceBrowseHandler = _safe_import(
-    "aragora.server.handlers.marketplace_browse", "MarketplaceBrowseHandler"
+    "aragora.server.handlers.catalog.marketplace_browse", "MarketplaceBrowseHandler"
 )
 AutomationHandler = _safe_import(
     "aragora.server.handlers.integrations.automation", "AutomationHandler"
@@ -173,19 +175,19 @@ QueueHandler = _safe_import("aragora.server.handlers", "QueueHandler")
 
 # Workflow templates and patterns
 WorkflowTemplatesHandler = _safe_import(
-    "aragora.server.handlers.workflow_templates", "WorkflowTemplatesHandler"
+    "aragora.server.handlers.workflows.workflow_templates", "WorkflowTemplatesHandler"
 )
 WorkflowPatternsHandler = _safe_import(
-    "aragora.server.handlers.workflow_templates", "WorkflowPatternsHandler"
+    "aragora.server.handlers.workflows.workflow_templates", "WorkflowPatternsHandler"
 )
 WorkflowCategoriesHandler = _safe_import(
-    "aragora.server.handlers.workflow_templates", "WorkflowCategoriesHandler"
+    "aragora.server.handlers.workflows.workflow_templates", "WorkflowCategoriesHandler"
 )
 WorkflowPatternTemplatesHandler = _safe_import(
-    "aragora.server.handlers.workflow_templates", "WorkflowPatternTemplatesHandler"
+    "aragora.server.handlers.workflows.workflow_templates", "WorkflowPatternTemplatesHandler"
 )
 SMEWorkflowsHandler = _safe_import(
-    "aragora.server.handlers.workflow_templates", "SMEWorkflowsHandler"
+    "aragora.server.handlers.workflows.workflow_templates", "SMEWorkflowsHandler"
 )
 
 # =============================================================================
@@ -261,7 +263,7 @@ RoutingRulesHandler = _safe_import(
 
 CodeIntelligenceHandler = _safe_import("aragora.server.handlers.codebase", "IntelligenceHandler")
 ComputerUseHandler = _safe_import(
-    "aragora.server.handlers.computer_use_handler", "ComputerUseHandler"
+    "aragora.server.handlers.integrations.computer_use_handler", "ComputerUseHandler"
 )
 RLMContextHandler = _safe_import("aragora.server.handlers", "RLMContextHandler")
 RLMHandler = _safe_import("aragora.server.handlers.features.rlm", "RLMHandler")
@@ -285,24 +287,28 @@ DevOpsHandler = _safe_import("aragora.server.handlers.features", "DevOpsHandler"
 # Accounting Handler Imports
 # =============================================================================
 
-APAutomationHandler = _safe_import("aragora.server.handlers.ap_automation", "APAutomationHandler")
-ARAutomationHandler = _safe_import("aragora.server.handlers.ar_automation", "ARAutomationHandler")
-InvoiceHandler = _safe_import("aragora.server.handlers.invoices", "InvoiceHandler")
-ExpenseHandler = _safe_import("aragora.server.handlers.expenses", "ExpenseHandler")
+APAutomationHandler = _safe_import(
+    "aragora.server.handlers.finance.ap_automation", "APAutomationHandler"
+)
+ARAutomationHandler = _safe_import(
+    "aragora.server.handlers.finance.ar_automation", "ARAutomationHandler"
+)
+InvoiceHandler = _safe_import("aragora.server.handlers.finance.invoices", "InvoiceHandler")
+ExpenseHandler = _safe_import("aragora.server.handlers.finance.expenses", "ExpenseHandler")
 
 # =============================================================================
 # Skills and Marketplace Handler Imports
 # =============================================================================
 
-SkillsHandler = _safe_import("aragora.server.handlers.skills", "SkillsHandler")
+SkillsHandler = _safe_import("aragora.server.handlers.catalog.skills", "SkillsHandler")
 SkillMarketplaceHandler = _safe_import(
-    "aragora.server.handlers.skill_marketplace", "SkillMarketplaceHandler"
+    "aragora.server.handlers.catalog.skill_marketplace", "SkillMarketplaceHandler"
 )
 TemplateMarketplaceHandler = _safe_import(
-    "aragora.server.handlers.template_marketplace", "TemplateMarketplaceHandler"
+    "aragora.server.handlers.catalog.template_marketplace", "TemplateMarketplaceHandler"
 )
 TemplateRecommendationsHandler = _safe_import(
-    "aragora.server.handlers.template_marketplace", "TemplateRecommendationsHandler"
+    "aragora.server.handlers.catalog.template_marketplace", "TemplateRecommendationsHandler"
 )
 
 # =============================================================================
@@ -318,7 +324,7 @@ AuditGitHubBridgeHandler = _safe_import(
 # Miscellaneous Handler Imports
 # =============================================================================
 
-BindingsHandler = _safe_import("aragora.server.handlers.bindings", "BindingsHandler")
+BindingsHandler = _safe_import("aragora.server.handlers.integrations.bindings", "BindingsHandler")
 DependencyAnalysisHandler = _safe_import(
     "aragora.server.handlers.dependency_analysis", "DependencyAnalysisHandler"
 )
@@ -345,7 +351,7 @@ CloudStorageHandler = _safe_import(
 SmartUploadHandler = _safe_import(
     "aragora.server.handlers.features.smart_upload", "SmartUploadHandler"
 )
-PartnerHandler = _safe_import("aragora.server.handlers.partner", "PartnerHandler")
+PartnerHandler = _safe_import("aragora.server.handlers.integrations.partner", "PartnerHandler")
 
 # Playground (public demo)
 PlaygroundHandler = _safe_import("aragora.server.handlers.playground", "PlaygroundHandler")
@@ -485,7 +491,7 @@ FeatureFlagsHandler = _safe_import(
     "aragora.server.handlers.admin.feature_flags_read", "FeatureFlagsHandler"
 )
 MarketplacePilotHandler = _safe_import(
-    "aragora.server.handlers.marketplace_pilot", "MarketplacePilotHandler"
+    "aragora.server.handlers.catalog.marketplace_pilot", "MarketplacePilotHandler"
 )
 
 # Workflow builder and template registry

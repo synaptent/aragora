@@ -24,17 +24,17 @@ from aiohttp import web
 
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
     handle_errors,
     json_response,
 )
-from .openapi_decorator import api_endpoint, path_param, query_param
+from ..openapi_decorator import api_endpoint, path_param, query_param
 from aragora.rbac.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
-from .utils import parse_json_body
+from ..utils.rate_limit import RateLimiter, get_client_ip
+from ..utils import parse_json_body
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ BindingType: Any
 MessageBinding: Any
 
 try:
-    from aragora.server.bindings import (
+    from aragora.server.bindings import (  # type: ignore[no-redef]
         BindingRouter,
         BindingType,
         MessageBinding,

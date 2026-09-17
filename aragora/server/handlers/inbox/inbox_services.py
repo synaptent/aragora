@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 if TYPE_CHECKING:
     from aragora.connectors.gmail import GmailConnector
-    from aragora.server.handlers.inbox_command import EmailPrioritizer
+    from aragora.server.handlers.inbox.inbox_command import EmailPrioritizer
     from aragora.services.sender_history import SenderHistoryService
 
 logger = logging.getLogger(__name__)
