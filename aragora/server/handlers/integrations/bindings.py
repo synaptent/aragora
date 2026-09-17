@@ -49,13 +49,17 @@ BindingType: Any
 MessageBinding: Any
 
 try:
-    from aragora.server.bindings import (  # type: ignore[no-redef]
-        BindingRouter,
-        BindingType,
-        MessageBinding,
-        get_binding_router,
+    from aragora.server.bindings import (
+        BindingRouter as _BindingRouter,
+        BindingType as _BindingType,
+        MessageBinding as _MessageBinding,
+        get_binding_router as _get_binding_router,
     )
 
+    BindingRouter = _BindingRouter
+    BindingType = _BindingType
+    MessageBinding = _MessageBinding
+    get_binding_router = _get_binding_router
     BINDINGS_AVAILABLE = True
 except ImportError:
     BINDINGS_AVAILABLE = False
