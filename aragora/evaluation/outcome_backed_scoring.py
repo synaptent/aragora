@@ -57,27 +57,27 @@ def _string_ids(value: Any, field: str, *, allow_empty: bool) -> tuple[str, ...]
     return tuple(items)
 
 
-def _predicted_cruxes(value: Any) -> tuple[str, ...]:
+def validate_predicted_cruxes(value: Any, *, field: str = "output.cruxes") -> tuple[str, ...]:
+    """Validate and normalize the shared predicted-crux output contract."""
+
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
-        raise ValueError("output.cruxes must be an array of strings")
+        raise ValueError(f"{field} must be an array of strings")
     if not MIN_PREDICTED_CRUXES <= len(value) <= MAX_PREDICTED_CRUXES:
         raise ValueError(
-            f"output.cruxes must contain {MIN_PREDICTED_CRUXES} to {MAX_PREDICTED_CRUXES} items"
+            f"{field} must contain {MIN_PREDICTED_CRUXES} to {MAX_PREDICTED_CRUXES} items"
         )
     items: list[str] = []
     for index, item in enumerate(value):
         if not isinstance(item, str) or not item.strip():
-            raise ValueError(f"output.cruxes[{index}] must be a non-empty string")
+            raise ValueError(f"{field}[{index}] must be a non-empty string")
         normalized = item.strip()
         if len(normalized) > MAX_PREDICTED_CRUX_CHARS:
-            raise ValueError(
-                f"output.cruxes[{index}] exceeds {MAX_PREDICTED_CRUX_CHARS} characters"
-            )
+            raise ValueError(f"{field}[{index}] exceeds {MAX_PREDICTED_CRUX_CHARS} characters")
         if not _TOKEN_PATTERN.search(normalized.lower()):
-            raise ValueError(f"output.cruxes[{index}] must contain a word or number")
+            raise ValueError(f"{field}[{index}] must contain a word or number")
         items.append(normalized)
     if len({item.casefold() for item in items}) != len(items):
-        raise ValueError("output.cruxes must not contain duplicates")
+        raise ValueError(f"{field} must not contain duplicates")
     return tuple(items)
 
 
@@ -140,7 +140,7 @@ def crux_recall(predicted: Sequence[str], expected: Sequence[Mapping[str, Any]])
     One predicted item can satisfy at most one expected crux.
     """
 
-    predicted_items = _predicted_cruxes(predicted)
+    predicted_items = validate_predicted_cruxes(predicted)
     expected_candidates = _expected_crux_candidates(expected)
     predicted_tokens = tuple(_normalize_tokens(item) for item in predicted_items)
     edges: list[list[int]] = []
@@ -224,7 +224,7 @@ def score_case_result(
         "output.forecast_probability",
         maximum=1.0,
     )
-    predicted_cruxes = _predicted_cruxes(output.get("cruxes"))
+    predicted_cruxes = validate_predicted_cruxes(output.get("cruxes"))
     expected_cruxes = outcome.get("cruxes")
     if not isinstance(expected_cruxes, list):
         raise ValueError("outcome.cruxes must be an array")
@@ -267,4 +267,5 @@ __all__ = [
     "SCORER_CONTRACT_VERSION",
     "crux_recall",
     "score_case_result",
+    "validate_predicted_cruxes",
 ]
