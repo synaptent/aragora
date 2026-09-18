@@ -35,6 +35,11 @@ exec {sys.executable} "$@"
 
 FAKE_PIP = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$FAKE_LOG/pip.log"
+printf 'INDEX=%s EXTRA_INDEX=%s FIND_LINKS=%s CONSTRAINT=%s\\n' \\
+  "${PIP_INDEX_URL-<unset>}" \\
+  "${PIP_EXTRA_INDEX_URL-<unset>}" \\
+  "${PIP_FIND_LINKS-<unset>}" \\
+  "${PIP_CONSTRAINT-<unset>}" >> "$FAKE_LOG/pip-env.log"
 for arg in "$@"; do
   case "$arg" in
     *==99.9.9)
@@ -269,14 +274,19 @@ def test_missing_wheel_is_reported_before_the_venv_is_built(
     assert "step: install" not in proc.stdout
 
 
-def test_signing_key_env_is_unset_for_the_demo_and_export_steps(
+def test_caller_env_is_scrubbed_for_the_install_demo_and_export_steps(
     fake_toolchain: dict[str, Path], tmp_path: Path
 ) -> None:
-    """No signing input reaches the CLI that writes the receipt.
+    """No signing input reaches the CLI that writes the receipt, and no caller
+    index reaches pip.
 
     The key variables are the obvious channel; the secrets-manager switches are
     the second one, since the exporter falls back to a remote key when they say
     it may (``aragora/gauntlet/odr_export.py`` → ``aragora/config/secrets.py``).
+    Absence is not enough there: an AWS-hosted runner opts in through
+    ``AWS_EXECUTION_ENV`` unless the flag says false outright. pip's index
+    variables are scrubbed for a related reason: the transcript is evidence
+    about the published packages only if the caller cannot substitute them.
     """
     key = tmp_path / "key.pem"
     key.write_text("not-a-key\n", encoding="utf-8")
@@ -289,6 +299,11 @@ def test_signing_key_env_is_unset_for_the_demo_and_export_steps(
             "PYTHONPATH": str(REPO_ROOT),
             "ARAGORA_USE_SECRETS_MANAGER": "true",
             "ARAGORA_ENV": "production",
+            "AWS_EXECUTION_ENV": "AWS_ECS_FARGATE",
+            "PIP_INDEX_URL": "https://mirror.invalid/simple",
+            "PIP_EXTRA_INDEX_URL": "https://extra.invalid/simple",
+            "PIP_FIND_LINKS": str(tmp_path),
+            "PIP_CONSTRAINT": str(tmp_path / "constraints.txt"),
         },
     )
 
@@ -297,8 +312,12 @@ def test_signing_key_env_is_unset_for_the_demo_and_export_steps(
     assert len(env_log) == 2, env_log
     for line in env_log:
         assert line == (
-            "KEY_FILE=<unset> SECRET=<unset> PYTHONPATH=<unset> SECRETS_MANAGER=<unset> ENV=<unset>"
+            "KEY_FILE=<unset> SECRET=<unset> PYTHONPATH=<unset> SECRETS_MANAGER=false ENV=<unset>"
         )
+
+    assert _log(fake_toolchain, "pip-env.log").splitlines() == [
+        "INDEX=<unset> EXTRA_INDEX=<unset> FIND_LINKS=<unset> CONSTRAINT=<unset>"
+    ]
 
 
 def test_published_receipt_requires_a_pubkey_url(fake_toolchain: dict[str, Path]) -> None:

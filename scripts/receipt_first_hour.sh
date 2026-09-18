@@ -128,13 +128,18 @@ cd "$WORK" || exit 1
 printf 'step: install\n'
 python3 -m venv "$VENV" || fail install $?
 printf 'venv: %s\n' "$VENV"
-"$VENV/bin/pip" install --quiet "$ARAGORA_SPEC" "$VERIFY_SPEC" \
+# The run is only evidence about the PUBLISHED packages, so a caller's index,
+# find-links or constraint file must not decide what gets installed.
+INSTALL_ENV=(env -u PIP_INDEX_URL -u PIP_EXTRA_INDEX_URL -u PIP_FIND_LINKS -u PIP_CONSTRAINT)
+"${INSTALL_ENV[@]}" "$VENV/bin/pip" install --quiet "$ARAGORA_SPEC" "$VERIFY_SPEC" \
   ${EXTRA_SPECS[@]+"${EXTRA_SPECS[@]}"} || fail install $?
 
 # The key variables are one way in; the secrets-manager switches are the other,
-# because the exporter asks AWS for a key when the environment says it may.
+# because the exporter asks AWS for a key when the environment says it may. An
+# explicit false is required: with the flag merely absent, an AWS-hosted runner
+# still opts in through AWS_EXECUTION_ENV (aragora/config/secrets.py:330-338).
 UNSIGNED_ENV=(env -u ARAGORA_ODR_SIGNING_KEY_FILE -u ARAGORA_ODR_SIGNING_KEY_SECRET
-  -u ARAGORA_USE_SECRETS_MANAGER -u ARAGORA_ENV -u ARAGORA_ENVIRONMENT)
+  -u ARAGORA_ENV -u ARAGORA_ENVIRONMENT ARAGORA_USE_SECRETS_MANAGER=false)
 
 printf 'step: demo\n'
 "${UNSIGNED_ENV[@]}" \
