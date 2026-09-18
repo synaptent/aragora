@@ -363,7 +363,14 @@ def _protected_members(
     signed_at: str | None,
     expires_at: str | None,
 ) -> dict[str, Any]:
-    """Validate and assemble the signer-committed members of a v0.2 entry."""
+    """Validate and assemble the signer-committed members of a v0.2 entry.
+
+    Timestamps are re-emitted at whatever precision the caller supplied: a
+    ``signed_at``/``expires_at`` carrying a fractional second keeps it, and ``Z``
+    becomes the equivalent ``+00:00`` offset. Only the generated default
+    ``signed_at`` is truncated to whole seconds. Both forms are valid RFC 3339 and
+    both verifiers compare parsed instants, not the strings.
+    """
     if not isinstance(issuer, str) or not issuer:
         raise OdrSigningError("issuer is required (non-empty string) to sign a v0.2 document")
     if role not in ODR_SIGNATURE_ROLES:

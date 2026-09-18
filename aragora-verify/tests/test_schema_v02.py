@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+import aragora_verify
 from aragora_verify import schema
 from aragora_verify.verifier import verify
 from _fixtures import valid_odr
@@ -31,6 +32,27 @@ def test_schema_pairs_version_and_profile(monkeypatch, version, profile_version)
     assert "profile: must match odr_version" in schema.validate_structure(doc)
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(doc, bundled)
+
+
+def test_version_constants_name_v02_while_both_versions_keep_verifying():
+    # The constants are informational: validate_structure accepts 0.1 and 0.2 by
+    # literal, so re-pointing them never narrows what the verifier reads.
+    assert schema.ODR_VERSION == "0.2"
+    assert schema.ODR_PROFILE_URI == "https://aragora.ai/specs/open-decision-receipt/v0.2"
+    assert aragora_verify.ODR_VERSION == schema.ODR_VERSION
+    assert aragora_verify.ODR_PROFILE_URI == schema.ODR_PROFILE_URI
+    assert schema.validate_structure(valid_odr()) == []
+    assert schema.validate_structure(v02(valid_odr())) == []
+
+
+def test_bundled_schema_is_cached_and_returned_as_a_fresh_deep_copy():
+    first = schema.load_bundled_schema()
+    first["x"] = 1
+    first["properties"]["subject"]["x"] = 1
+    second = schema.load_bundled_schema()
+    assert first is not second
+    assert "x" not in second and "x" not in second["properties"]["subject"]
+    assert schema._load_bundled_schema_cached.cache_info().hits >= 1
 
 
 def test_v02_schema_members_are_optional():
@@ -77,6 +99,7 @@ def test_versions_and_unknown_members_without_jsonschema(monkeypatch, version):
         ("method", 5, "a string"),
         ("reached", "yes", "a boolean"),
         ("independence", 5, "an object"),
+        ("supporting_agents", ["claude", 5], "an array of strings"),
     ):
         mutant = copy.deepcopy(doc)
         mutant["quorum"][member] = bad

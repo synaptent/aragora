@@ -46,10 +46,10 @@ def test_metadata_guard_is_python_310_compatible() -> None:
     assert "tomllib" not in imported_names
 
 
-def test_package_version_tracks_unreleased_security_floor_bump() -> None:
+def test_package_version_is_the_v02_release_line() -> None:
     project = _project_metadata()
 
-    assert project["version"] == "0.1.2"
+    assert project["version"] == "0.2.0"
 
 
 def test_standalone_dependency_floor_blocks_known_cryptography_advisory() -> None:
@@ -58,13 +58,20 @@ def test_standalone_dependency_floor_blocks_known_cryptography_advisory() -> Non
     assert "cryptography>=48.0.1" in project["dependencies"]
 
 
-def test_changelog_records_unreleased_floor_bump() -> None:
+def test_changelog_records_the_v02_release_and_folds_in_the_floor_bump() -> None:
     text = CHANGELOG.read_text(encoding="utf-8")
+    headings = re.findall(r"^## \[([^\]]+)\]", text, flags=re.MULTILINE)
+    section = text.split("## [0.2.0]")[1].split("## [0.1.1]")[0]
 
-    assert "## [0.1.2] — Unreleased" in text
-    assert "cryptography" in text
-    assert ">=48.0.1" in text
-    assert "GHSA-537c-gmf6-5ccf" in text
+    # The security-floor bullets shipped in an unreleased 0.1.x section; that line
+    # was never published, so 0.2.0 is the top heading and carries them instead.
+    assert headings[0] == "0.2.0"
+    assert "0.1.1" in headings
+    assert "cryptography" in section
+    assert ">=48.0.1" in section
+    assert "GHSA-537c-gmf6-5ccf" in section
+    for marker in ("ACTA", "expir", "Dissent trail", "0.2"):
+        assert marker in section
 
 
 def test_crypto_floor_docs_call_out_wheel_openssl_and_publish_boundary() -> None:
@@ -72,5 +79,5 @@ def test_crypto_floor_docs_call_out_wheel_openssl_and_publish_boundary() -> None
 
     assert "wheel" in text
     assert "OpenSSL" in text
-    assert "0.1.2" in text
+    assert "0.2.0" in text
     assert "publish" in text

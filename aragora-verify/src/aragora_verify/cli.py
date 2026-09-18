@@ -102,7 +102,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict-expiry", action="store_true", help="fail instead of warning on expired signatures"
     )
     parser.add_argument(
-        "--require-issuer", metavar="NAME", help="require a verifying v0.2 signature from NAME"
+        "--require-issuer",
+        metavar="NAME",
+        help="require a verifying v0.2 signature from NAME; a verified but expired "
+        "signature satisfies it unless --strict-expiry is also given",
     )
     parser.add_argument("--version", action="version", version=f"aragora-verify {__version__}")
     return parser
