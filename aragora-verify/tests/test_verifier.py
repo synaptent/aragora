@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -559,3 +560,50 @@ def test_hand_written_signature_checks_without_jsonschema(monkeypatch, member, v
     errors = schema.validate_structure(signed)
     assert any(e.startswith(f"signatures[0].{member}: ") for e in errors), errors
     assert _check(verify(signed), "schema_conformance").status == FAIL
+
+
+@pytest.mark.parametrize("version", ["0.1", "0.2"])
+@pytest.mark.parametrize("foreign", [False, True])
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_v02_signature_precedence_and_v01(version, foreign, corrupt):
+    doc, key = _v02_signed()
+    if version == "0.1":
+        doc = sign_odr(valid_odr(), key)
+    extra = dict(doc["signatures"][0])
+    if foreign:
+        extra["key_id"] = "ed25519-feedfacefeedface"
+        if version == "0.2":
+            extra["expires_at"] = "1999-01-01T00:00:00Z"
+    if corrupt:
+        extra["signature"] = base64.b64encode(bytes(64)).decode()
+    doc["signatures"].insert(0, extra)
+    result = verify(
+        doc,
+        public_key=key.public_key(),
+        strict_expiry=True,
+        now=datetime(2000, 1, 1, tzinfo=timezone.utc),
+    )
+    assert result.ok is (foreign or not corrupt)
+    assert not any("expire" in w for w in result.warnings)
+    mismatch = [w for w in result.warnings if "key_id_mismatch" in w]
+    assert len(mismatch) == int(foreign)
+    if foreign:
+        assert extra["key_id"] in mismatch[0]
+        doc["signatures"].pop()
+        assert not verify(doc, public_key=key.public_key()).ok
+
+
+def test_v02_expiry_clock_and_v01_compatibility():
+    doc, key = _v02_signed()
+    result = verify(doc, public_key=key.public_key())
+    assert result.ok and "expire" in " ".join(result.warnings)
+    assert not verify(doc, public_key=key.public_key(), strict_expiry=True).ok
+    for year, expected in [(2000, True), (2001, False), (2002, False)]:
+        result = verify(
+            doc,
+            public_key=key.public_key(),
+            strict_expiry=True,
+            now=datetime(year, 1, 1, tzinfo=timezone.utc),
+        )
+        assert result.ok is expected
+    assert verify(sign_odr(valid_odr(), key), public_key=key.public_key(), strict_expiry=True).ok

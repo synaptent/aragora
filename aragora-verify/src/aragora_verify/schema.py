@@ -13,6 +13,8 @@ rather than raising, so the CLI can print all problems at once.
 
 from __future__ import annotations
 
+import copy
+import functools
 import json
 import re
 from importlib import resources
@@ -20,8 +22,11 @@ from typing import Any
 
 __all__ = ["load_bundled_schema", "validate_structure", "ODR_PROFILE_URI", "ODR_VERSION"]
 
-ODR_VERSION = "0.1"
-ODR_PROFILE_URI = "https://aragora.ai/specs/open-decision-receipt/v0.1"
+#: Informational: the newest profile this verifier speaks. Version acceptance is
+#: keyed off the document's own ``odr_version`` literal, so both 0.1 and 0.2
+#: documents verify regardless of what these name.
+ODR_VERSION = "0.2"
+ODR_PROFILE_URI = "https://aragora.ai/specs/open-decision-receipt/v0.2"
 
 _REQUIRED_MEMBERS = (
     "odr_version",
@@ -41,10 +46,16 @@ _REQUIRED_MEMBERS = (
 _ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source", "adjudication"}
 
 
-def load_bundled_schema() -> dict[str, Any]:
-    """Return the bundled ODR v0.1 JSON Schema (draft 2020-12)."""
+@functools.lru_cache(maxsize=1)
+def _load_bundled_schema_cached() -> dict[str, Any]:
     text = resources.files("aragora_verify").joinpath("odr_schema.json").read_text("utf-8")
-    return json.loads(text)
+    schema: dict[str, Any] = json.loads(text)
+    return schema
+
+
+def load_bundled_schema() -> dict[str, Any]:
+    """Return the bundled ODR JSON Schema (draft 2020-12) as a fresh deep copy."""
+    return copy.deepcopy(_load_bundled_schema_cached())
 
 
 def _is_absent_marker(value: Any) -> bool:
@@ -97,6 +108,10 @@ def _check_quorum(errors: list[str], value: Any) -> None:
         errors.append("quorum.reached: must be a boolean")
     if "independence" in value and not isinstance(value["independence"], dict):
         errors.append("quorum.independence: must be an object")
+    if "supporting_agents" in value:
+        agents = value["supporting_agents"]
+        if not isinstance(agents, list) or not all(isinstance(agent, str) for agent in agents):
+            errors.append("quorum.supporting_agents: must be an array of strings")
     participants = value.get("participants")
     if isinstance(participants, list):
         for i, p in enumerate(participants):
