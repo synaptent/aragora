@@ -21,7 +21,10 @@ import sys
 import tempfile
 import webbrowser
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +188,13 @@ Examples:
         choices=("0.1", "0.2"),
         help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > default (0.1). "
         "Applies only to --format odr; ignored for other formats.",
+    )
+    export_parser.add_argument(
+        "--acta",
+        metavar="FILE",
+        help="Also write a signed ACTA-02 projection envelope of the exported document to "
+        "FILE. Requires --format odr at an effective version of 0.2, --output, and a "
+        "usable ODR signing key; both files are written, or neither is.",
     )
     export_parser.set_defaults(func=cmd_receipt_export)
 
@@ -890,13 +900,12 @@ def _resolve_receipt_data(receipt_ref: str) -> dict[str, Any] | None:
     return data
 
 
-def _export_odr(data: dict[str, Any], *, odr_version: str | None = None) -> str:
-    """Render a receipt dict as a JCS-canonical Open Decision Receipt document."""
+def _odr_document(data: dict[str, Any], *, odr_version: str | None = None) -> dict[str, Any]:
+    """Build the Open Decision Receipt document for a receipt dict, signed if configured."""
     from aragora.gauntlet.odr_export import (
         ODR_DEFAULT_VERSION,
         calibration_provenance_for_receipt,
         decision_receipt_to_odr,
-        jcs_canonicalize,
         sign_odr_if_configured,
     )
     from aragora.gauntlet.receipt_models import DecisionReceipt
@@ -910,8 +919,50 @@ def _export_odr(data: dict[str, Any], *, odr_version: str | None = None) -> str:
         odr_version=odr_version if odr_version is not None else ODR_DEFAULT_VERSION,
         calibration_provenance=calibration_provenance_for_receipt(receipt),
     )
-    odr = sign_odr_if_configured(odr)
-    return jcs_canonicalize(odr).decode("utf-8")
+    return sign_odr_if_configured(odr)
+
+
+def _export_odr(data: dict[str, Any], *, odr_version: str | None = None) -> str:
+    """Render a receipt dict as a JCS-canonical Open Decision Receipt document."""
+    from aragora.gauntlet.odr_export import jcs_canonicalize
+
+    return jcs_canonicalize(_odr_document(data, odr_version=odr_version)).decode("utf-8")
+
+
+def _acta_signing_key(
+    output_format: str, output_path: str | None, odr_version: str | None
+) -> Ed25519PrivateKey:
+    """Check the ``--acta`` preconditions and resolve the signing key, or exit.
+
+    Everything that can refuse the export runs before the first byte is written:
+    a lone receipt or a lone projection is harder to notice than a clean failure.
+    """
+    from aragora.gauntlet.odr_signing import OdrSigningError, load_signing_key_from_secrets
+
+    if output_format != "odr":
+        print(
+            f"Error: --acta requires --format odr (got --format {output_format})",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if not output_path:
+        print(
+            "Error: --acta requires --output for the ODR document it projects",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if odr_version != "0.2":
+        print(
+            "Error: --acta projects signed v0.2 documents; pass --odr-version 0.2 "
+            f"(effective ODR version: {odr_version})",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    try:
+        return load_signing_key_from_secrets()
+    except OdrSigningError as exc:
+        print(f"Error: --acta requires a usable ODR signing key: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_receipt_export(args: argparse.Namespace) -> None:
@@ -921,6 +972,7 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
     receipt_path = getattr(args, "receipt", None)
     output_format = getattr(args, "format", "html")
     output_path = getattr(args, "output", None)
+    acta_path: str | None = getattr(args, "acta", None)
     odr_version = None
     if output_format == "odr":
         from aragora.gauntlet.odr_export import resolve_odr_version
@@ -930,6 +982,7 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
         except ValueError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(2)
+    signing_key = _acta_signing_key(output_format, output_path, odr_version) if acta_path else None
 
     if not receipt_path:
         print("Error: Receipt file path or ID required", file=sys.stderr)
@@ -940,14 +993,27 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     content: str | bytes
+    acta_content: str | None = None
 
     if output_format in ("json",):
         content = json.dumps(data, indent=2, default=str)
     elif output_format == "odr":
+        from aragora.gauntlet.odr_export import jcs_canonicalize
         from aragora.gauntlet.odr_signing import OdrSigningError
 
         try:
-            content = _export_odr(data, odr_version=odr_version)
+            odr = _odr_document(data, odr_version=odr_version)
+            content = jcs_canonicalize(odr).decode("utf-8")
+            if signing_key is not None:
+                from aragora.gauntlet.odr_acta_projection import project_to_acta
+                from aragora.gauntlet.odr_signing import compute_key_id
+
+                envelope = project_to_acta(
+                    odr,
+                    private_key=signing_key,
+                    kid=compute_key_id(signing_key.public_key()),
+                )
+                acta_content = jcs_canonicalize(envelope).decode("utf-8")
         except OdrSigningError as e:
             # A configured-but-unusable signing key fails closed upstream;
             # present it as a clean CLI error, not a traceback.
@@ -1008,7 +1074,18 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
         except (OSError, UnicodeError) as exc:
             print(f"Error: Cannot write receipt export: {exc}", file=sys.stderr)
             sys.exit(1)
-        print(f"Exported to {output_path}")
+        if acta_content is None or not acta_path:
+            print(f"Exported to {output_path}")
+        else:
+            try:
+                Path(acta_path).write_text(acta_content)
+            except (OSError, UnicodeError) as exc:
+                # The pair is the deliverable: a receipt left behind without its
+                # projection is indistinguishable from a plain --format odr export.
+                Path(output_path).unlink(missing_ok=True)
+                print(f"Error: Cannot write ACTA projection: {exc}", file=sys.stderr)
+                sys.exit(1)
+            print(f"Exported to {output_path} and {acta_path}")
     else:
         if isinstance(content, bytes):
             sys.stdout.buffer.write(content)

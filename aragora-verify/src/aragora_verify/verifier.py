@@ -44,6 +44,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from .acta import verify_acta_projection
 from .jcs import odr_content_digest, odr_signature_message
 from .schema import validate_structure
 
@@ -535,6 +536,39 @@ def _looks_like_native_receipt(doc: Any) -> bool:
     return any(marker in doc for marker in native_markers)
 
 
+def looks_like_acta_envelope(doc: Any) -> bool:
+    """Heuristic: is ``doc`` an ACTA-02 projection rather than an ODR document?
+
+    A projection carries the receipt inside ``payload.odr``, so the CLI can
+    accept a ``.acta.json`` directly instead of the ``.odr.json`` beside it.
+    """
+    if not isinstance(doc, dict) or "signature" not in doc:
+        return False
+    payload = doc.get("payload")
+    return isinstance(payload, dict) and "odr" in payload
+
+
+def _check_projection(envelope: Any, doc: dict[str, Any], public_key: Any | None) -> list[Check]:
+    """Projection checks plus the binding of the envelope to THIS receipt."""
+    result = verify_acta_projection(envelope, public_key)
+    checks = [Check(c.name, c.status, c.detail) for c in result.checks]
+    payload = envelope.get("payload") if isinstance(envelope, dict) else None
+    projected = payload.get("odr") if isinstance(payload, dict) else None
+    matches = projected == doc
+    checks.append(
+        Check(
+            "acta_receipt_match",
+            PASS if matches else FAIL,
+            (
+                "projection carries this receipt"
+                if matches
+                else "payload.odr is not the receipt being verified"
+            ),
+        )
+    )
+    return checks
+
+
 _NATIVE_RECEIPT_HINT = (
     "input looks like a native Aragora receipt, not an ODR document -- convert "
     "it first: aragora receipt export <file> --format odr -o receipt.odr.json, "
@@ -555,11 +589,14 @@ def verify(
     now: datetime | None = None,
     strict_expiry: bool = False,
     require_issuer: str | None = None,
+    acta: dict[str, Any] | None = None,
 ) -> VerifyResult:
     """Verify an ODR document. ``public_key`` is a loaded Ed25519 key (see
     :func:`load_public_key`); ``chain`` is a list of parsed JSONL chain entries.
     ``now`` overrides the timezone-aware expiry clock; ``strict_expiry`` fails
     on expiry. ``require_issuer`` requires a verifying signer-committed v0.2 issuer.
+    ``acta`` is an ACTA-02 projection envelope that must carry exactly this
+    document (``aragora_verify.acta``).
     """
     receipt_id = str(doc.get("receipt_id") or "") if isinstance(doc, dict) else ""
     checks: list[Check] = []
@@ -614,6 +651,8 @@ def verify(
             )
         )
     checks.append(_check_chain(doc, digest_hex, chain))
+    if acta is not None:
+        checks.extend(_check_projection(acta, doc, public_key))
 
     warnings.extend(
         c.detail
@@ -641,10 +680,21 @@ def verify_path(
     now: datetime | None = None,
     strict_expiry: bool = False,
     require_issuer: str | None = None,
+    acta_path: str | None = None,
 ) -> VerifyResult:
-    """Convenience wrapper that reads files from disk and calls :func:`verify`."""
+    """Convenience wrapper that reads files from disk and calls :func:`verify`.
+
+    With no ``acta_path``, a receipt file that is itself an ACTA-02 projection
+    is detected and verified as one, against the ODR document it carries.
+    """
     with open(receipt_path, "rb") as fh:
         doc = json.loads(fh.read())
+    acta: dict[str, Any] | None = None
+    if acta_path:
+        with open(acta_path, "rb") as fh:
+            acta = json.loads(fh.read())
+    elif looks_like_acta_envelope(doc):
+        acta, doc = doc, doc["payload"]["odr"]
     public_key = None
     if pubkey_path:
         with open(pubkey_path, "rb") as fh:
@@ -664,4 +714,5 @@ def verify_path(
         now=now,
         strict_expiry=strict_expiry,
         require_issuer=require_issuer,
+        acta=acta,
     )

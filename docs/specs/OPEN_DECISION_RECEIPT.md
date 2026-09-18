@@ -255,6 +255,13 @@ ODR intentionally defines **no envelope**. Deployment guidance:
   §4.10 on v0.2 documents). An emitter without a key emits `signatures: []`.
 - **in-toto:** the ODR document can serve as the predicate of an attestation
   whose subject duplicates `subject.digest`.
+- **ACTA signed receipts (`draft-farley-acta-signed-receipts-02`):** a
+  projection carries the whole document as `payload.odr` inside a signed
+  `{payload, signature}` envelope (`aragora.gauntlet.odr_acta_projection`,
+  mirrored verbatim in `aragora_verify.acta`; `receipt export --acta` emits one
+  beside a v0.2 document and `aragora-verify --acta` checks it).
+  `payload_digest` includes `signatures`; `odr_digest` (§5) excludes them, so
+  the two agree only for a document carrying no `signatures` member at all.
 
 **Signed-message construction (binding on signers and both verifiers).** The
 document's `odr_version` selects the message an Ed25519 signature covers —

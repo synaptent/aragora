@@ -1,6 +1,7 @@
 """``aragora-verify`` command-line interface.
 
-    aragora-verify receipt.json [--pubkey key.pem] [--chain chain.jsonl] [--json]
+    aragora-verify receipt.json [--pubkey key.pem] [--acta receipt.acta.json]
+                               [--chain chain.jsonl] [--json]
 
 Exit status: ``0`` when the receipt verifies (no failed checks and any present
 signatures were checked), ``1`` when any check fails, ``2`` for usage/input
@@ -83,6 +84,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ed25519 public key (PEM/DER/raw/base64/hex) to verify signatures with",
     )
     parser.add_argument(
+        "--acta",
+        metavar="FILE",
+        help="ACTA-02 projection envelope (.acta.json) that must carry this receipt; "
+        "a projection passed as the receipt argument is detected on its own",
+    )
+    parser.add_argument(
         "--chain",
         metavar="JSONL",
         help="hash-chain file (JSONL); checks the receipt is anchored and the chain links",
@@ -107,6 +114,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = verify_path(
             args.receipt,
             pubkey_path=args.pubkey,
+            acta_path=args.acta,
             chain_path=args.chain,
             now=args.now,
             strict_expiry=args.strict_expiry,
