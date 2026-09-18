@@ -121,7 +121,7 @@ BenchmarkingHandler = _safe_import(
 )
 
 # Decision Playbooks
-PlaybookHandler = _safe_import("aragora.server.handlers.workflows.playbooks", "PlaybookHandler")
+PlaybookHandler = _safe_import("aragora.server.handlers.catalog.playbooks", "PlaybookHandler")
 
 # Knowledge Flow (flywheel visualization)
 KnowledgeFlowHandler = _safe_import(

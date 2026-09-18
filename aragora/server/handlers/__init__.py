@@ -422,7 +422,7 @@ if TYPE_CHECKING:
     from .pipeline.transitions import PipelineTransitionsHandler
     from .pipeline.universal_graph import UniversalGraphHandler
     from .decisions.plans import PlansHandler
-    from .workflows.playbooks import PlaybookHandler
+    from .catalog.playbooks import PlaybookHandler
     from .playground import PlaygroundHandler
     from .policy import PolicyHandler
     from .compliance.privacy import PrivacyHandler
@@ -478,7 +478,7 @@ if TYPE_CHECKING:
     from .agents.verticals import VerticalsHandler
     from .debates.visualization import VisualizationHandler
     from .webhook_management import WebhookHandler
-    from .workflows.workflow_templates import (
+    from .catalog.workflow_templates import (
         SMEWorkflowsHandler,
         TemplateRecommendationsHandler,
         WorkflowCategoriesHandler,

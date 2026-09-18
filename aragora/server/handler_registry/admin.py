@@ -175,19 +175,19 @@ QueueHandler = _safe_import("aragora.server.handlers", "QueueHandler")
 
 # Workflow templates and patterns
 WorkflowTemplatesHandler = _safe_import(
-    "aragora.server.handlers.workflows.workflow_templates", "WorkflowTemplatesHandler"
+    "aragora.server.handlers.catalog.workflow_templates", "WorkflowTemplatesHandler"
 )
 WorkflowPatternsHandler = _safe_import(
-    "aragora.server.handlers.workflows.workflow_templates", "WorkflowPatternsHandler"
+    "aragora.server.handlers.catalog.workflow_templates", "WorkflowPatternsHandler"
 )
 WorkflowCategoriesHandler = _safe_import(
-    "aragora.server.handlers.workflows.workflow_templates", "WorkflowCategoriesHandler"
+    "aragora.server.handlers.catalog.workflow_templates", "WorkflowCategoriesHandler"
 )
 WorkflowPatternTemplatesHandler = _safe_import(
-    "aragora.server.handlers.workflows.workflow_templates", "WorkflowPatternTemplatesHandler"
+    "aragora.server.handlers.catalog.workflow_templates", "WorkflowPatternTemplatesHandler"
 )
 SMEWorkflowsHandler = _safe_import(
-    "aragora.server.handlers.workflows.workflow_templates", "SMEWorkflowsHandler"
+    "aragora.server.handlers.catalog.workflow_templates", "SMEWorkflowsHandler"
 )
 
 # =============================================================================

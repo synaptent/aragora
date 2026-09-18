@@ -581,8 +581,8 @@ flat path (import or `patch` string). Targets are relative to
 | `pipeline_graph.py` | 589 | HM 1 + reg 1 | 1 | 1 | `pipeline/pipeline_graph.py` |
 | `pipeline_telemetry.py` | 134 | none | 0 | 1 | `pipeline/pipeline_telemetry.py` |
 | `_shared_inbox_handler.py` | 173 | none | 3 | 3 | `shared_inbox/_shared_inbox_handler.py` |
-| `playbooks.py` | 217 | HM 1 + reg 1 | 1 | 1 | `workflows/playbooks.py` |
-| `workflow_templates.py` | 1270 | HM 6 + reg 5 | 1 | 3 | `workflows/workflow_templates.py` |
+| `playbooks.py` | 217 | HM 1 + reg 1 | 1 | 1 | `catalog/playbooks.py` |
+| `workflow_templates.py` | 1270 | HM 6 + reg 5 | 1 | 3 | `catalog/workflow_templates.py` |
 
 ### Batch 4 (42 files, 33760 LOC)
 
