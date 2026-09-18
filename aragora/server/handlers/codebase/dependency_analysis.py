@@ -111,7 +111,7 @@ _analysis_cache: dict[str, dict[str, Any]] = {}
 _analysis_cache_lock = threading.Lock()
 
 
-def _validate_repo_path(raw_path: str) -> tuple[Path | None, HandlerResult | None]:
+def _validate_repo_path(raw_path: str | None) -> tuple[Path | None, HandlerResult | None]:
     """Validate repo path and block traversal attempts.
 
     Resolves the path (including symlinks and '..'). If ARAGORA_SCAN_ROOT is

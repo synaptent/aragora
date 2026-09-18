@@ -333,7 +333,7 @@ class NomicHandler(SecureEndpointMixin, SecureHandler):  # type: ignore[misc]  #
             # Collect warnings
             warnings = state.get("warnings", [])
             if stalled:
-                warnings.append(f"No activity for {stall_duration // 60} minutes")
+                warnings.append(f"No activity for {(stall_duration or 0) // 60} minutes")
 
             return json_response(
                 {

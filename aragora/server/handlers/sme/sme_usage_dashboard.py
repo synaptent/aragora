@@ -160,7 +160,7 @@ class SMEUsageDashboardHandler(SecureHandler):
 
         return db_user, org, None
 
-    def _get_cost_tracker(self) -> Any | None:
+    def _get_cost_tracker(self) -> Any:
         """Get cost tracker instance."""
         from aragora.billing.cost_tracker import get_cost_tracker
 

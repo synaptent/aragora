@@ -45,7 +45,11 @@ _operator_limiter = RateLimiter(requests_per_minute=30)
 # Lazy reference to avoid import errors if debate module not available
 _get_operator_manager: Any = None
 try:
-    from aragora.debate.operator_intervention import get_operator_manager as _get_operator_manager
+    from aragora.debate.operator_intervention import (
+        get_operator_manager as _get_operator_manager_impl,
+    )
+
+    _get_operator_manager = _get_operator_manager_impl
 except ImportError:
     pass
 

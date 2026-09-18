@@ -36,8 +36,11 @@ from aragora.audit.unified import audit_admin, audit_data
 AuthorizationContext: Any
 check_permission: Any
 try:
-    from aragora.rbac import AuthorizationContext, check_permission
+    from aragora.rbac import AuthorizationContext as _AuthorizationContext
+    from aragora.rbac import check_permission as _check_permission
 
+    AuthorizationContext = _AuthorizationContext
+    check_permission = _check_permission
     RBAC_AVAILABLE = True
 except ImportError:
     RBAC_AVAILABLE = False

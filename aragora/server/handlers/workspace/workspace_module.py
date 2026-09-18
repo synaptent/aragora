@@ -65,8 +65,11 @@ from aragora.protocols import HTTPRequestHandler
 AuthorizationContext: Any = None
 check_permission: Any = None
 try:
-    from aragora.rbac import AuthorizationContext, check_permission
+    from aragora.rbac import AuthorizationContext as _AuthorizationContext
+    from aragora.rbac import check_permission as _check_permission
 
+    AuthorizationContext = _AuthorizationContext
+    check_permission = _check_permission
     RBAC_AVAILABLE = True
 except ImportError:
     RBAC_AVAILABLE = False
@@ -92,13 +95,16 @@ from aragora.server.validation.query_params import safe_query_int  # noqa: F401 
 RBACProfile: Any = None
 try:
     from aragora.rbac.profiles import (
-        RBACProfile,  # noqa: F401
+        RBACProfile as _RBACProfile,
+    )
+    from aragora.rbac.profiles import (
+        get_available_roles_for_assignment,  # noqa: F401
+        get_lite_role_summary,  # noqa: F401
         get_profile_config,  # noqa: F401
         get_profile_roles,  # noqa: F401
-        get_lite_role_summary,  # noqa: F401
-        get_available_roles_for_assignment,  # noqa: F401
     )
 
+    RBACProfile = _RBACProfile
     PROFILES_AVAILABLE = True
 except ImportError:
     PROFILES_AVAILABLE = False
