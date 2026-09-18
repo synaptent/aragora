@@ -9,8 +9,6 @@ from typing import Any
 
 import pytest
 
-pytest.importorskip("cryptography")
-
 _ROOT = Path(__file__).resolve().parents[2]
 _GENERATOR = _ROOT / "scripts" / "gen_odr_vectors.py"
 _COMMITTED = _ROOT / "tests" / "verify" / "vectors"
@@ -25,7 +23,9 @@ def _load_generator() -> Any:
     return module
 
 
-def test_committed_vectors_match_a_fresh_generator_run(tmp_path: Path, monkeypatch) -> None:
+def test_committed_vectors_match_a_fresh_generator_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     module = _load_generator()
     # ROOT only backs the closing "wrote N vectors to <relative path>" line.
     monkeypatch.setattr(module, "ROOT", tmp_path)
