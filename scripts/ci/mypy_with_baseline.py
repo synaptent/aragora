@@ -30,6 +30,16 @@ Sync mode
 ``python scripts/ci/mypy_with_baseline.py --sync`` regenerates
 ``.mypy-baseline`` from a fresh mypy run. Use after landing a PR that
 intentionally clears a batch of existing errors.
+
+Relocation tolerance
+--------------------
+``mypy-baseline filter`` matches each error's clean line (its own identity:
+``path:0: severity: message  [code]``) against the baseline, so moving a file
+would report every baselined error in it as new. Before filtering, errors of a
+moved file are pointed back at their baselined path when the new path exists,
+exactly one baselined path with the same basename is absent from the tree and
+no other new error claims it. Ambiguity, copies and changed messages stay new;
+relocated errors never change the exit code. Resync with ``--sync`` to rekey.
 """
 
 from __future__ import annotations
@@ -59,6 +69,9 @@ def _run_mypy(mypy_args: tuple[str, ...]) -> subprocess.Popen[bytes]:
     )
 
 
+FILTER_IGNORED_CATEGORIES: tuple[str, ...] = ("note",)
+
+
 def _filter(mypy_proc: subprocess.Popen[bytes]) -> int:
     cmd = [
         sys.executable,
@@ -74,14 +87,124 @@ def _filter(mypy_proc: subprocess.Popen[bytes]) -> int:
         # overloads). We baseline them out here too so they do not register
         # as new violations.
         "--ignore-categories",
-        "note",
+        *FILTER_IGNORED_CATEGORIES,
     ]
     assert mypy_proc.stdout is not None
-    filter_proc = subprocess.Popen(cmd, stdin=mypy_proc.stdout, cwd=str(REPO_ROOT))
+    # surrogateescape keeps untouched lines byte-identical through the rewrite.
+    raw_lines = mypy_proc.stdout.read().decode("utf-8", "surrogateescape")
     mypy_proc.stdout.close()
-    filter_rc = filter_proc.wait()
     mypy_proc.wait()
-    return filter_rc
+    try:
+        baseline_lines = BASELINE_PATH.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        baseline_lines = []
+    lines, relocations = _relocate_moved_files(
+        raw_lines.splitlines(keepends=True), baseline_lines, REPO_ROOT
+    )
+    _print_relocations(relocations)
+    filter_proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, cwd=str(REPO_ROOT))
+    filter_proc.communicate("".join(lines).encode("utf-8", "surrogateescape"))
+    return filter_proc.returncode
+
+
+def _relocate_moved_files(
+    mypy_lines: list[str], baseline_lines: list[str], tree_root: Path
+) -> tuple[list[str], list[tuple[str, str, int]]]:
+    """Point relocated files' errors back at their baselined path for the filter.
+
+    Identity is mypy-baseline's own clean line (``Error.get_clean_line`` of the
+    installed package, under the same options ``_filter`` passes) split into
+    path and rest, so this is exactly the filter's matching with the path
+    swapped. A new ``P + rest`` is relocated iff ``P`` exists under
+    ``tree_root``, exactly one baselined ``Q + rest`` has ``Q != P``, the same
+    basename and ``Q`` absent from the tree, and no other new line claims that
+    ``Q + rest``. Up to the baselined count of such lines is replaced by the
+    baseline line itself (which the filter then matches); everything else is
+    passed through untouched. Returns the rewritten stream and
+    ``(from_clean_line, to_clean_line, occurrences)`` per relocated identity.
+    """
+    # The package's own identity, not a re-implementation; these modules are
+    # stable across the mypy-baseline>=0.7.4,<0.8 pin in pyproject.toml.
+    from mypy_baseline._config import Config
+    from mypy_baseline._error import Error
+
+    config = Config().read_file(tree_root / "pyproject.toml")
+    config.ignore_categories = list(FILTER_IGNORED_CATEGORIES)
+
+    def split(error: Error) -> tuple[str, str] | None:
+        if config.is_ignored(error.message) or config.is_ignored_category(error.category):
+            return None
+        path = str(Path(*error.path.parts[: config.depth])).replace("\\", "/")
+        return path, error.get_clean_line(config)[len(path) :]
+
+    # Baseline lines are already clean; one that does not round-trip through the
+    # identity could never be matched by the filter either, so it is left alone.
+    baselined: dict[str, int] = {}
+    absent_by_rest: dict[str, list[str]] = {}
+    for line in baseline_lines:
+        error = Error.new(line)
+        parts = split(error) if error is not None else None
+        if parts is None or "".join(parts) != line:
+            continue
+        baselined[line] = baselined.get(line, 0) + 1
+        if not (tree_root / parts[0]).exists():
+            absent_by_rest.setdefault(parts[1], []).append(parts[0])
+
+    parsed: list[tuple[str, str] | None] = []
+    current: dict[tuple[str, str], int] = {}
+    for line in mypy_lines:
+        error = Error.new(line)
+        parts = split(error) if error is not None else None
+        parsed.append(parts)
+        if parts is not None:
+            current[parts] = current.get(parts, 0) + 1
+
+    claims: dict[str, list[tuple[str, str]]] = {}
+    for (path, rest), count in current.items():
+        if count <= baselined.get(path + rest, 0) or not (tree_root / path).exists():
+            continue
+        candidates = {
+            old
+            for old in absent_by_rest.get(rest, ())
+            if old != path and Path(old).name == Path(path).name
+        }
+        if len(candidates) == 1:
+            claims.setdefault(candidates.pop() + rest, []).append((path, rest))
+
+    target: dict[tuple[str, str], str] = {}
+    budget: dict[tuple[str, str], int] = {}
+    relocations: list[tuple[str, str, int]] = []
+    for old, claimants in claims.items():
+        if len(claimants) != 1:
+            continue
+        new = claimants[0]
+        moved = min(current[new] - baselined.get("".join(new), 0), baselined[old])
+        target[new] = old
+        budget[new] = moved
+        relocations.append((old, "".join(new), moved))
+
+    rewritten: list[str] = []
+    for line, parts in zip(mypy_lines, parsed):
+        if parts is not None and budget.get(parts, 0) > 0:
+            budget[parts] -= 1
+            rewritten.append(target[parts] + "\n")
+        else:
+            rewritten.append(line)
+    return rewritten, sorted(relocations)
+
+
+def _print_relocations(relocations: list[tuple[str, str, int]]) -> None:
+    if not relocations:
+        return
+    for old, new, _count in relocations:
+        print(f"  RELOCATED {old} -> {new}")
+    occurrences = sum(count for _old, _new, count in relocations)
+    print(
+        f"mypy-baseline: {len(relocations)} relocated error(s) ({occurrences} occurrence(s)) "
+        "matched by basename after a file move; counted as baselined, not new "
+        "(resync with --sync to rekey)",
+        flush=True,
+    )
 
 
 def _sync(mypy_proc: subprocess.Popen[bytes]) -> int:

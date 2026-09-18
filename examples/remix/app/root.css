@@ -19,6 +19,7 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .container {
@@ -96,10 +97,22 @@ body {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr));
   gap: 1rem;
 }
 
 .status-pending { background: #fef3c7; color: #92400e; }
 .status-running { background: #dbeafe; color: #1e40af; }
 .status-completed { background: #d1fae5; color: #065f46; }
+
+.status-badge { padding: 0.25rem 0.75rem; border-radius: 8px; }
+.agent-tag { padding: 0.25rem 0.75rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+.detail-section { padding: 1.5rem 0; border-top: 1px solid var(--border); }
+.detail-section h2 { margin-bottom: 1rem; }
+h2 { font-size: 1.25rem; }
+.event-heading { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: space-between; }
+@media (max-width: 480px) {
+  .navbar { padding: 1rem; gap: 1rem; flex-wrap: wrap; }
+  .nav-links { gap: 1rem; }
+  .container { padding: 1.5rem 1rem; }
+}
