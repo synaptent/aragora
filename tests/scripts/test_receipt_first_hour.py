@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,15 +20,17 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "receipt_first_hour.sh"
 
-FAKE_PYTHON = """#!/usr/bin/env bash
-if [ "${1:-}" = "-m" ] && [ "${2:-}" = "venv" ]; then
-  mkdir -p "$3/bin"
+# The fake shadows python3 on PATH, so the fallthrough must name the real
+# interpreter by absolute path or it would re-exec itself.
+FAKE_PYTHON = f"""#!/usr/bin/env bash
+if [ "${{1:-}}" = "-m" ] && [ "${{2:-}}" = "venv" ]; then
+  mkdir -p "${{@: -1}}/bin"
   for tool in pip aragora aragora-verify; do
-    cp "$FAKE_BIN/$tool" "$3/bin/$tool"
+    cp "$FAKE_BIN/$tool" "${{@: -1}}/bin/$tool"
   done
   exit 0
 fi
-exec /usr/bin/env python3 "$@"
+exec {sys.executable} "$@"
 """
 
 FAKE_PIP = """#!/usr/bin/env bash
@@ -45,10 +48,12 @@ exit 0
 
 FAKE_ARAGORA = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$FAKE_LOG/aragora.log"
-printf 'KEY_FILE=%s SECRET=%s PYTHONPATH=%s\\n' \\
+printf 'KEY_FILE=%s SECRET=%s PYTHONPATH=%s SECRETS_MANAGER=%s ENV=%s\\n' \\
   "${ARAGORA_ODR_SIGNING_KEY_FILE-<unset>}" \\
   "${ARAGORA_ODR_SIGNING_KEY_SECRET-<unset>}" \\
-  "${PYTHONPATH-<unset>}" >> "$FAKE_LOG/env.log"
+  "${PYTHONPATH-<unset>}" \\
+  "${ARAGORA_USE_SECRETS_MANAGER-<unset>}" \\
+  "${ARAGORA_ENV-<unset>}" >> "$FAKE_LOG/env.log"
 out=""
 prev=""
 for arg in "$@"; do
@@ -76,7 +81,8 @@ def fake_toolchain(tmp_path: Path) -> dict[str, Path]:
     bindir = tmp_path / "fakebin"
     pathdir = tmp_path / "pathbin"
     logdir = tmp_path / "logs"
-    for d in (bindir, pathdir, logdir):
+    tmpdir = tmp_path / "scratch"
+    for d in (bindir, pathdir, logdir, tmpdir):
         d.mkdir()
     for name, body in (
         ("pip", FAKE_PIP),
@@ -89,13 +95,14 @@ def fake_toolchain(tmp_path: Path) -> dict[str, Path]:
     python = pathdir / "python3"
     python.write_text(FAKE_PYTHON, encoding="utf-8")
     python.chmod(0o755)
-    return {"bin": bindir, "path": pathdir, "log": logdir}
+    return {"bin": bindir, "path": pathdir, "log": logdir, "tmp": tmpdir}
 
 
 def _run(
     toolchain: dict[str, Path],
     args: list[str] | None = None,
     env_extra: dict[str, str] | None = None,
+    cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     env = dict(os.environ)
     env.pop("PYTHONPATH", None)
@@ -104,6 +111,8 @@ def _run(
     env["PATH"] = f"{toolchain['path']}{os.pathsep}{env['PATH']}"
     env["FAKE_BIN"] = str(toolchain["bin"])
     env["FAKE_LOG"] = str(toolchain["log"])
+    # the script leaves its scratch root behind on purpose, so keep it under tmp_path
+    env["TMPDIR"] = str(toolchain["tmp"])
     env.update(env_extra or {})
     return subprocess.run(
         ["bash", str(SCRIPT), *(args or [])],
@@ -111,6 +120,7 @@ def _run(
         capture_output=True,
         check=False,
         env=env,
+        cwd=str(cwd) if cwd is not None else None,
     )
 
 
@@ -221,10 +231,53 @@ def test_local_wheels_replace_the_pypi_specs(
     assert last == ["install", "--quiet", str(wheel_a), str(wheel_v)]
 
 
+def test_relative_wheel_paths_survive_the_scratch_directory(
+    fake_toolchain: dict[str, Path], tmp_path: Path
+) -> None:
+    """Wheels given as ``dist/<name>.whl`` still resolve once the script cd's away."""
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    wheel_a = dist / "aragora-2.11.0-py3-none-any.whl"
+    wheel_v = dist / "aragora_verify-0.2.0-py3-none-any.whl"
+    wheel_a.write_text("", encoding="utf-8")
+    wheel_v.write_text("", encoding="utf-8")
+
+    proc = _run(
+        fake_toolchain,
+        [
+            "--aragora-wheel",
+            "dist/aragora-2.11.0-py3-none-any.whl",
+            "--verify-wheel",
+            "dist/aragora_verify-0.2.0-py3-none-any.whl",
+        ],
+        cwd=tmp_path,
+    )
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    last = _log(fake_toolchain, "pip.log").splitlines()[-1].split()
+    assert last == ["install", "--quiet", str(wheel_a), str(wheel_v)]
+
+
+def test_missing_wheel_is_reported_before_the_venv_is_built(
+    fake_toolchain: dict[str, Path], tmp_path: Path
+) -> None:
+    """A wheel path that does not exist is a usage error, not a pip surprise."""
+    proc = _run(fake_toolchain, ["--aragora-wheel", str(tmp_path / "nope.whl")])
+
+    assert proc.returncode == 2, (proc.stdout, proc.stderr)
+    assert "nope.whl" in proc.stdout + proc.stderr
+    assert "step: install" not in proc.stdout
+
+
 def test_signing_key_env_is_unset_for_the_demo_and_export_steps(
     fake_toolchain: dict[str, Path], tmp_path: Path
 ) -> None:
-    """An exported signing key never reaches the CLI that writes the receipt."""
+    """No signing input reaches the CLI that writes the receipt.
+
+    The key variables are the obvious channel; the secrets-manager switches are
+    the second one, since the exporter falls back to a remote key when they say
+    it may (``aragora/gauntlet/odr_export.py`` → ``aragora/config/secrets.py``).
+    """
     key = tmp_path / "key.pem"
     key.write_text("not-a-key\n", encoding="utf-8")
 
@@ -234,6 +287,8 @@ def test_signing_key_env_is_unset_for_the_demo_and_export_steps(
             "ARAGORA_ODR_SIGNING_KEY_FILE": str(key),
             "ARAGORA_ODR_SIGNING_KEY_SECRET": "mission-secret",
             "PYTHONPATH": str(REPO_ROOT),
+            "ARAGORA_USE_SECRETS_MANAGER": "true",
+            "ARAGORA_ENV": "production",
         },
     )
 
@@ -241,7 +296,9 @@ def test_signing_key_env_is_unset_for_the_demo_and_export_steps(
     env_log = _log(fake_toolchain, "env.log").splitlines()
     assert len(env_log) == 2, env_log
     for line in env_log:
-        assert line == "KEY_FILE=<unset> SECRET=<unset> PYTHONPATH=<unset>"
+        assert line == (
+            "KEY_FILE=<unset> SECRET=<unset> PYTHONPATH=<unset> SECRETS_MANAGER=<unset> ENV=<unset>"
+        )
 
 
 def test_published_receipt_requires_a_pubkey_url(fake_toolchain: dict[str, Path]) -> None:

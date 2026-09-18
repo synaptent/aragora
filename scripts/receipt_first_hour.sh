@@ -33,7 +33,20 @@ PUBLISHED_RECEIPT=""
 PUBKEY_URL=""
 
 usage() {
-  sed -n '2,23p' "$0" | sed -e 's/^#$//' -e 's/^# //'
+  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+}
+
+# pip runs from the scratch directory, so a wheel given as dist/x.whl must be
+# resolved against the caller's cwd before that move.
+wheel_path() {
+  local dir base
+  dir=$(dirname -- "$1")
+  base=$(basename -- "$1")
+  if [ ! -f "$1" ]; then
+    printf 'receipt-first-hour: no such wheel: %s\n' "$1" >&2
+    exit 2
+  fi
+  printf '%s/%s\n' "$(cd -- "$dir" && pwd)" "$base"
 }
 
 finish() {
@@ -58,11 +71,11 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     --aragora-wheel)
-      ARAGORA_SPEC=${2:?--aragora-wheel needs a path}
+      ARAGORA_SPEC=$(wheel_path "${2:?--aragora-wheel needs a path}") || exit 2
       shift 2
       ;;
     --verify-wheel)
-      VERIFY_SPEC=${2:?--verify-wheel needs a path}
+      VERIFY_SPEC=$(wheel_path "${2:?--verify-wheel needs a path}") || exit 2
       shift 2
       ;;
     --published-receipt)
@@ -118,12 +131,17 @@ printf 'venv: %s\n' "$VENV"
 "$VENV/bin/pip" install --quiet "$ARAGORA_SPEC" "$VERIFY_SPEC" \
   ${EXTRA_SPECS[@]+"${EXTRA_SPECS[@]}"} || fail install $?
 
+# The key variables are one way in; the secrets-manager switches are the other,
+# because the exporter asks AWS for a key when the environment says it may.
+UNSIGNED_ENV=(env -u ARAGORA_ODR_SIGNING_KEY_FILE -u ARAGORA_ODR_SIGNING_KEY_SECRET
+  -u ARAGORA_USE_SECRETS_MANAGER -u ARAGORA_ENV -u ARAGORA_ENVIRONMENT)
+
 printf 'step: demo\n'
-env -u ARAGORA_ODR_SIGNING_KEY_FILE -u ARAGORA_ODR_SIGNING_KEY_SECRET \
+"${UNSIGNED_ENV[@]}" \
   "$VENV/bin/aragora" demo rate-limiter --offline --receipt r.json || fail demo $?
 
 printf 'step: export\n'
-env -u ARAGORA_ODR_SIGNING_KEY_FILE -u ARAGORA_ODR_SIGNING_KEY_SECRET \
+"${UNSIGNED_ENV[@]}" \
   "$VENV/bin/aragora" receipt export r.json --format odr --output r.odr.json || fail export $?
 printf 'odr: %s\n' "$WORK/r.odr.json"
 
