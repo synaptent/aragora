@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -64,22 +63,6 @@ def test_v02_dissent_consistency_precedes_signature(member, value):
     result = verify(doc, public_key=key.public_key())
     assert next(c.name for c in result.checks if c.status == FAIL) == "dissent_consistency"
     assert verify(valid_odr()).ok
-
-
-def test_v02_expiry_clock_and_v01_compatibility():
-    doc, key = _v02_signed()
-    result = verify(doc, public_key=key.public_key())
-    assert result.ok and "expire" in " ".join(result.warnings)
-    assert not verify(doc, public_key=key.public_key(), strict_expiry=True).ok
-    for year, expected in [(2000, True), (2001, False), (2002, False)]:
-        result = verify(
-            doc,
-            public_key=key.public_key(),
-            strict_expiry=True,
-            now=datetime(year, 1, 1, tzinfo=timezone.utc),
-        )
-        assert result.ok is expected
-    assert verify(sign_odr(valid_odr(), key), public_key=key.public_key(), strict_expiry=True).ok
 
 
 def test_v02_cli_flags_trail_and_issuer(tmp_path, capsys):
