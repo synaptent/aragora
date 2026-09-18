@@ -46,16 +46,16 @@ except ImportError:
 
 from aragora.server.handlers.utils.rbac_guard import rbac_fail_closed
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     handle_errors,
     json_response,
     log_request,
 )
-from .utils.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
-from .secure import SecureHandler
+from ..utils.decorators import require_permission
+from ..utils.rate_limit import RateLimiter, get_client_ip
+from ..secure import SecureHandler
 
 logger = logging.getLogger(__name__)
 

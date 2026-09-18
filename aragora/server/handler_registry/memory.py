@@ -62,7 +62,7 @@ LearningHandler = _safe_import("aragora.server.handlers", "LearningHandler")
 
 # Autonomous learning handler
 AutonomousLearningHandler = _safe_import(
-    "aragora.server.handlers.autonomous_learning", "AutonomousLearningHandler"
+    "aragora.server.handlers.autonomous.autonomous_learning", "AutonomousLearningHandler"
 )
 
 # Evidence enrichment

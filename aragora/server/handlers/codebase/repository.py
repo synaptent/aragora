@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from aragora.server.validation import validate_path_segment, SAFE_ID_PATTERN
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     PaginatedHandlerMixin,
@@ -33,7 +33,7 @@ from .base import (
     safe_error_message,
     handle_errors,
 )
-from .utils.rate_limit import rate_limit
+from ..utils.rate_limit import rate_limit
 from aragora.rbac.decorators import require_permission
 
 if TYPE_CHECKING:

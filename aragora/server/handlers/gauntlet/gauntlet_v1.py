@@ -20,13 +20,13 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
-from .base import (
+from ..base import (
     HandlerResult,
     get_string_param,
     json_response,
 )
-from .secure import SecureHandler
-from .utils.auth import ForbiddenError, UnauthorizedError, get_auth_context
+from ..secure import SecureHandler
+from ..utils.auth import ForbiddenError, UnauthorizedError, get_auth_context
 
 logger = logging.getLogger(__name__)
 

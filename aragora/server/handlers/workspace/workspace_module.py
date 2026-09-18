@@ -134,7 +134,7 @@ PERM_AUDIT_READ = "audit:read"
 PERM_AUDIT_REPORT = "audit:report"
 PERM_AUDIT_VERIFY = "audit:verify"
 
-from .base import (
+from ..base import (
     HandlerResult,
     ServerContext,
     error_response,
@@ -144,11 +144,11 @@ from .base import (
 )
 from aragora.server.handlers.openapi_decorator import api_endpoint  # noqa: F401 - used by mixin modules via _mod()
 from aragora.server.versioning.compat import strip_version_prefix
-from .secure import SecureHandler
-from .utils.rate_limit import rate_limit  # noqa: F401 - used by mixin modules via _mod()
+from ..secure import SecureHandler
+from ..utils.rate_limit import rate_limit  # noqa: F401 - used by mixin modules via _mod()
 
 # Import utilities from the workspace package
-from .workspace.workspace_utils import (
+from .workspace_utils import (
     WorkspaceCircuitBreaker,
     get_workspace_circuit_breaker_status,
     _validate_workspace_id,
@@ -157,11 +157,11 @@ from .workspace.workspace_utils import (
 )
 
 # Import mixin classes providing handler method implementations
-from .workspace.crud import WorkspaceCrudMixin
-from .workspace.policies import WorkspacePoliciesMixin
-from .workspace.members import WorkspaceMembersMixin
-from .workspace.invites import WorkspaceInvitesMixin
-from .workspace.settings import WorkspaceSettingsMixin
+from .crud import WorkspaceCrudMixin
+from .policies import WorkspacePoliciesMixin
+from .members import WorkspaceMembersMixin
+from .invites import WorkspaceInvitesMixin
+from .settings import WorkspaceSettingsMixin
 
 if TYPE_CHECKING:
     pass

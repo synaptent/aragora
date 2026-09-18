@@ -48,13 +48,13 @@ from typing import Any
 
 from aragora.pdb import storage as brief_storage
 from aragora.pdb import worker as brief_worker
-from aragora.server.handlers import review_queue_brief
+from aragora.server.handlers.governance import review_queue_brief
 from aragora.server.versioning.compat import strip_version_prefix
 from aragora.triage import compute_window, detect_drift
 from aragora.triage.event_source import iter_events_from_store
 
-from .base import BaseHandler, HandlerResult, error_response, json_response
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..base import BaseHandler, HandlerResult, error_response, json_response
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

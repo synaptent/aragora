@@ -30,7 +30,7 @@ from aragora.server.validation.query_params import safe_query_int
 from aragora.server.versioning.compat import strip_version_prefix
 from aragora.audit.unified import audit_admin, audit_data
 
-from .base import (
+from ..base import (
     HandlerResult,
     PaginatedHandlerMixin,
     error_response,
@@ -39,10 +39,10 @@ from .base import (
     safe_error_message,
     handle_errors,
 )
-from .secure import SecureHandler
-from .utils.auth import ForbiddenError, UnauthorizedError
-from .utils.auth_mixins import SecureEndpointMixin
-from .utils.rate_limit import rate_limit
+from ..secure import SecureHandler
+from ..utils.auth import ForbiddenError, UnauthorizedError
+from ..utils.auth_mixins import SecureEndpointMixin
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 

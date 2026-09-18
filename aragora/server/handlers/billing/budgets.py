@@ -38,13 +38,13 @@ from typing import Any
 
 from aragora.rbac.decorators import require_permission
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
     json_response,
 )
-from .utils.rate_limit import rate_limit
+from ..utils.rate_limit import rate_limit
 from aragora.observability.metrics import track_handler
 from aragora.server.validation.query_params import safe_query_int, safe_query_float
 
