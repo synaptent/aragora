@@ -254,6 +254,19 @@ def test_verify_skips_the_signature_without_a_key(odr, private_key, kid):
     assert [c.status for c in result.checks if c.name == "acta_signature"] == ["skip"]
 
 
+def test_an_unkeyed_verdict_reports_that_authenticity_was_never_checked(odr, private_key, kid):
+    """`ok` alone must not read as "authentic" to a direct caller."""
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+
+    unkeyed = verify_acta_projection(envelope, None)
+    keyed = verify_acta_projection(envelope, private_key.public_key())
+
+    assert unkeyed.authenticity_unverified is True
+    assert unkeyed.to_dict()["authenticity_unverified"] is True
+    assert keyed.authenticity_unverified is False
+    assert keyed.to_dict()["authenticity_unverified"] is False
+
+
 @pytest.mark.parametrize(
     "mutate",
     [

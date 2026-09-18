@@ -357,3 +357,13 @@ def test_bundled_copy_rejects_an_impossible_issued_at(odr, private_key) -> None:
 
     assert result.ok is False
     assert any("issued_at" in reason for reason in result.reasons)
+
+
+def test_bundled_result_flags_an_unauthenticated_verdict(odr, private_key) -> None:
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+
+    result = verify_acta_projection(envelope, None)
+
+    assert result.ok is True
+    assert result.authenticity_unverified is True

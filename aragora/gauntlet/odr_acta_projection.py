@@ -105,7 +105,15 @@ class ActaCheck:
 
 @dataclass
 class ActaVerifyResult:
-    """Structured projection verdict; ``ok`` is the single PASS/FAIL."""
+    """Structured projection verdict.
+
+    ``ok`` is the single PASS/FAIL: nothing checked contradicts the envelope.
+    It is NOT a statement about authenticity — without a public key the
+    signature is skipped rather than failed, exactly as an unkeyed ODR
+    verification behaves. Callers that need "this envelope is authentic" must
+    read ``authenticity_unverified`` too, which is what the bundled CLI does
+    before it prints UNVERIFIED.
+    """
 
     ok: bool
     checks: list[ActaCheck] = field(default_factory=list)
@@ -115,9 +123,15 @@ class ActaVerifyResult:
         """``"<check>: <detail>"`` for every failing check, in check order."""
         return [f"{check.name}: {check.detail}" for check in self.checks if check.status == FAIL]
 
+    @property
+    def authenticity_unverified(self) -> bool:
+        """True when nothing authenticated the envelope, e.g. no public key."""
+        return any(c.name == "acta_signature" and c.status == SKIP for c in self.checks)
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "ok": self.ok,
+            "authenticity_unverified": self.authenticity_unverified,
             "checks": [
                 {"name": c.name, "status": c.status, "detail": c.detail} for c in self.checks
             ],
