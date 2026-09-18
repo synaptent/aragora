@@ -702,8 +702,11 @@ def verify_path(
     if acta_path:
         with open(acta_path, "rb") as fh:
             acta = json.loads(fh.read())
-    elif looks_like_acta_envelope(doc):
-        acta, doc = doc, doc["payload"]["odr"]
+    if looks_like_acta_envelope(doc):
+        # The receipt argument is itself a projection: verify the document it
+        # carries, against the explicit --acta envelope when one was supplied.
+        detected, doc = doc, doc["payload"]["odr"]
+        acta = acta if acta is not None else detected
     public_key = None
     if pubkey_path:
         with open(pubkey_path, "rb") as fh:

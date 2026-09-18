@@ -51,6 +51,7 @@ __all__ = [
     "PREVIEW_MAX_CHARS",
     "acta_envelope_hash",
     "acta_payload_digest",
+    "ed25519_key_id",
     "project_to_acta",
     "verify_acta_projection",
 ]
@@ -73,6 +74,7 @@ SKIP = "skip"
 _HASH_PREFIX = "sha256:"
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 _ED25519_SIG_HEX = re.compile(r"[0-9a-f]{128}")
+_RFC3339 = re.compile(r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})")
 _PAYLOAD_MEMBERS = frozenset(
     {
         "type",
@@ -128,6 +130,25 @@ def acta_payload_digest(odr_doc: Mapping[str, Any]) -> dict[str, Any]:
         "size": len(canonical),
         "preview": canonical.decode("utf-8")[:PREVIEW_MAX_CHARS],
     }
+
+
+def ed25519_key_id(public_key: Any) -> str | None:
+    """``ed25519-`` + first 16 hex of SHA-256(raw public key), or ``None``.
+
+    The same key id both packages' ``compute_key_id`` produce (asserted by
+    tests on both sides). It is recomputed here rather than imported so this
+    module keeps working as a verbatim copy in either package. ``None`` means
+    the object is not an Ed25519 public key, so no label can be bound to it.
+    """
+    try:
+        from cryptography.hazmat.primitives import serialization
+    except ImportError:  # pragma: no cover - declared dependency of both packages
+        return None
+    try:
+        raw = public_key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return "ed25519-" + hashlib.sha256(raw).hexdigest()[:16]
 
 
 def acta_envelope_hash(envelope: Mapping[str, Any]) -> str:
@@ -197,10 +218,13 @@ def verify_acta_projection(
 ) -> ActaVerifyResult:
     """Verify envelope shape, the ODR binding, the signature and the chain link.
 
-    ``previousReceiptHash`` is always checked for being 64 lowercase hex; it is
-    compared against a recomputed digest ONLY when ``previous_envelope`` is
-    supplied, so a single non-genesis link verifies on its own. Without
-    ``public_key`` the signature check is SKIP, not FAIL.
+    ``signature.kid`` (and therefore ``payload.issuer_id``) must name the
+    verifying key, so a valid signer cannot relabel an envelope as another
+    issuer. ``previousReceiptHash`` is always checked for being 64 lowercase
+    hex; it is compared against a recomputed digest ONLY when
+    ``previous_envelope`` is supplied, and stays SKIP otherwise, so a single
+    non-genesis link verifies on its own. Without ``public_key`` the signature
+    check is SKIP, not FAIL.
     """
     shape = _check_shape(envelope)
     checks = [shape]
@@ -268,8 +292,8 @@ def _shape_errors(envelope: Any) -> list[str]:
     if payload.get("chain_scope") != ACTA_CHAIN_SCOPE:
         errors.append(f"payload.chain_scope must be {ACTA_CHAIN_SCOPE!r}")
     issued_at = payload.get("issued_at")
-    if not isinstance(issued_at, str) or not issued_at:
-        errors.append("payload.issued_at must be a non-empty RFC 3339 timestamp")
+    if not isinstance(issued_at, str) or not _RFC3339.fullmatch(issued_at):
+        errors.append("payload.issued_at must be an RFC 3339 timestamp with a UTC offset")
     if kid is not None and payload.get("issuer_id") != kid:
         errors.append("payload.issuer_id must equal signature.kid")
     link = payload.get("previousReceiptHash")
@@ -351,6 +375,15 @@ def _check_signature(
         from cryptography.exceptions import InvalidSignature
     except ImportError as exc:  # pragma: no cover - declared dependency of both packages
         return ActaCheck("acta_signature", FAIL, f"cryptography is required to verify: {exc}")
+    verifying_kid = ed25519_key_id(public_key)
+    if verifying_kid is not None and kid != verifying_kid:
+        # kid is also payload.issuer_id, the identity a chain consumer reads.
+        return ActaCheck(
+            "acta_signature",
+            FAIL,
+            f"signature.kid is {kid}, the verifying key is {verifying_kid} "
+            "(possible signer-label tampering)",
+        )
     try:
         public_key.verify(bytes.fromhex(signature["sig"]), jcs_canonicalize(payload))
     except InvalidSignature:
@@ -370,7 +403,7 @@ def _check_chain(
         if link == GENESIS_PREVIOUS_RECEIPT_HASH:
             return ActaCheck("acta_chain", PASS, "genesis link (no predecessor)")
         return ActaCheck(
-            "acta_chain", PASS, f"links to {link} (predecessor not supplied, link not recomputed)"
+            "acta_chain", SKIP, f"links to {link} (predecessor not supplied, link not recomputed)"
         )
     try:
         expected = acta_envelope_hash(previous_envelope)

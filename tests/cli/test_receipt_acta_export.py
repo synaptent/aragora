@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
 import sys
 from pathlib import Path
 
@@ -263,3 +265,52 @@ def test_acta_and_output_may_not_be_the_same_file(tmp_path, receipt, key_file, c
     assert exc.value.code == 2
     assert "--acta" in err and "--output" in err
     assert not both.exists()
+
+
+def test_exported_pair_respects_the_umask_rather_than_landing_private(
+    tmp_path, receipt, key_file, monkeypatch
+):
+    """Staging through a temp file must not silently make exports 0600."""
+    monkeypatch.setenv(FILE_ENV, str(key_file))
+    acta_path = tmp_path / "x.acta.json"
+    umask = os.umask(0o022)
+    os.umask(umask)
+
+    _run(_export_argv(receipt, tmp_path, "--odr-version", "0.2", "--acta", str(acta_path)))
+
+    expected = 0o666 & ~umask
+    assert stat.S_IMODE((tmp_path / "x.odr.json").stat().st_mode) == expected
+    assert stat.S_IMODE(acta_path.stat().st_mode) == expected
+
+
+def test_a_move_that_fails_after_the_receipt_landed_rolls_it_back(
+    tmp_path, receipt, key_file, capsys, monkeypatch
+):
+    """Staging both files is not enough: the second move can still fail."""
+    monkeypatch.setenv(FILE_ENV, str(key_file))
+    odr_path = tmp_path / "x.odr.json"
+    odr_path.write_text("PREVIOUS EXPORT")
+    blocked = tmp_path / "blocked.acta.json"
+    blocked.mkdir()
+
+    with pytest.raises(SystemExit) as exc:
+        _run(_export_argv(receipt, tmp_path, "--odr-version", "0.2", "--acta", str(blocked)))
+
+    assert exc.value.code == 1
+    assert "Cannot write" in capsys.readouterr().err
+    assert odr_path.read_text() == "PREVIOUS EXPORT"
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_a_move_that_fails_after_a_new_receipt_landed_removes_it(
+    tmp_path, receipt, key_file, monkeypatch
+):
+    monkeypatch.setenv(FILE_ENV, str(key_file))
+    blocked = tmp_path / "blocked.acta.json"
+    blocked.mkdir()
+
+    with pytest.raises(SystemExit):
+        _run(_export_argv(receipt, tmp_path, "--odr-version", "0.2", "--acta", str(blocked)))
+
+    assert not (tmp_path / "x.odr.json").exists()
+    assert not list(tmp_path.glob("*.part"))

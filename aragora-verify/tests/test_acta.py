@@ -25,6 +25,7 @@ from aragora_verify.acta import (
     ACTA_SIGNATURE_ALG,
     GENESIS_PREVIOUS_RECEIPT_HASH,
     acta_envelope_hash,
+    ed25519_key_id,
     project_to_acta,
     verify_acta_projection,
 )
@@ -306,3 +307,40 @@ def test_cli_help_lists_the_flag(capsys):
 
     assert exc.value.code == 0
     assert "--acta" in capsys.readouterr().out
+
+
+def test_bundled_key_id_matches_the_packages_compute_key_id(private_key) -> None:
+    public_key = private_key.public_key()
+
+    assert ed25519_key_id(public_key) == compute_key_id(public_key)
+
+
+def test_cli_fails_an_envelope_relabelled_with_another_kid(
+    projection, pubkey_file, tmp_path, capsys
+) -> None:
+    odr_path, acta_path = projection
+    private_key = _key()
+    envelope = json.loads(acta_path.read_text())
+    other_kid = compute_key_id(Ed25519PrivateKey.generate().public_key())
+    envelope["payload"]["issuer_id"] = other_kid
+    envelope["signature"]["kid"] = other_kid
+    envelope["signature"]["sig"] = private_key.sign(jcs_canonicalize(envelope["payload"])).hex()
+    relabelled = tmp_path / "relabelled.acta.json"
+    relabelled.write_bytes(jcs_canonicalize(envelope))
+
+    code = main([str(odr_path), "--acta", str(relabelled), "--pubkey", str(pubkey_file)])
+
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "signer-label tampering" in out
+
+
+def test_cli_accepts_an_envelope_given_as_both_receipt_and_acta(
+    projection, pubkey_file, capsys
+) -> None:
+    _, acta_path = projection
+
+    code = main([str(acta_path), "--acta", str(acta_path), "--pubkey", str(pubkey_file)])
+
+    assert code == 0
+    assert "VERIFIED" in capsys.readouterr().out

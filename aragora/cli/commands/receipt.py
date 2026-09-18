@@ -990,21 +990,35 @@ def _write_export_pair(
     """Write the ODR document and its projection, or leave both paths untouched.
 
     Each artifact is staged beside its target and moved into place only once
-    both have been written, so a failure never clobbers an existing file.
+    both have been written, so a failure never clobbers an existing file. If
+    the second move still fails, the first is rolled back to what was there.
     """
+    umask = os.umask(0o022)
+    os.umask(umask)
     staged: list[tuple[Path, Path]] = []
+    replaced: list[tuple[Path, bytes | None]] = []
     try:
         for target, payload in ((Path(output_path), content), (Path(acta_path), acta_content)):
             with tempfile.NamedTemporaryFile(
                 dir=target.parent, prefix=f".{target.name}.", suffix=".part", delete=False
             ) as handle:
                 handle.write(payload.encode("utf-8") if isinstance(payload, str) else payload)
-                staged.append((Path(handle.name), target))
+                source = Path(handle.name)
+            # Exports are shared artifacts; NamedTemporaryFile would pin them 0600.
+            source.chmod(0o666 & ~umask)
+            staged.append((source, target))
         for source, target in staged:
+            previous = target.read_bytes() if target.is_file() else None
             os.replace(source, target)
+            replaced.append((target, previous))
     except (OSError, UnicodeError):
         for source, _ in staged:
             source.unlink(missing_ok=True)
+        for target, previous in reversed(replaced):
+            if previous is None:
+                target.unlink(missing_ok=True)
+            else:
+                target.write_bytes(previous)
         raise
 
 

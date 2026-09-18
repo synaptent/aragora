@@ -21,6 +21,7 @@ from aragora.gauntlet.odr_acta_projection import (
     ACTA_SIGNATURE_ALG,
     GENESIS_PREVIOUS_RECEIPT_HASH,
     acta_envelope_hash,
+    ed25519_key_id,
     project_to_acta,
     verify_acta_projection,
 )
@@ -289,3 +290,50 @@ def test_verify_fails_when_the_declared_size_disagrees(odr, private_key, kid):
 
     assert result.ok is False
     assert any("acta_binding" in reason for reason in result.reasons)
+
+
+def test_verify_fails_an_envelope_relabelled_with_another_kid(odr, private_key, kid):
+    """A valid signer must not be able to claim another issuer's identity."""
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    other_kid = compute_key_id(Ed25519PrivateKey.generate().public_key())
+    envelope["payload"]["issuer_id"] = other_kid
+    envelope["signature"]["kid"] = other_kid
+    envelope["signature"]["sig"] = private_key.sign(jcs_canonicalize(envelope["payload"])).hex()
+
+    result = verify_acta_projection(envelope, private_key.public_key())
+
+    assert result.ok is False
+    assert any("signer-label tampering" in reason for reason in result.reasons)
+
+
+def test_ed25519_key_id_matches_compute_key_id(private_key):
+    public_key = private_key.public_key()
+
+    assert ed25519_key_id(public_key) == compute_key_id(public_key)
+
+
+def test_ed25519_key_id_is_none_for_a_non_key_object():
+    assert ed25519_key_id(object()) is None
+
+
+def test_verify_rejects_an_issued_at_that_is_not_rfc3339(odr, private_key, kid):
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    envelope["payload"]["issued_at"] = "soon"
+
+    result = verify_acta_projection(envelope, private_key.public_key())
+
+    assert result.ok is False
+    assert any("issued_at" in reason for reason in result.reasons)
+
+
+def test_a_lone_non_genesis_link_is_reported_as_skipped_not_passed(odr, private_key, kid):
+    first = project_to_acta(odr, private_key=private_key, kid=kid)
+    second = project_to_acta(
+        odr, private_key=private_key, kid=kid, previous_receipt_hash=acta_envelope_hash(first)
+    )
+
+    result = verify_acta_projection(second, private_key.public_key())
+
+    assert result.ok is True
+    assert [c.status for c in result.checks if c.name == "acta_chain"] == ["skip"]
+    assert [c.status for c in result.checks if c.name == "acta_chain"] != ["pass"]
