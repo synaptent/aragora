@@ -738,6 +738,7 @@ def _check_signatures(
     digest_hex: str,
     public_key: Any,
     warnings: list[str],
+    verified: list[dict[str, Any]],
 ) -> Check:
     signatures = doc.get("signatures")
     signatures = signatures if isinstance(signatures, list) else []
@@ -800,6 +801,7 @@ def _check_signatures(
         # mismatched key_id would let a tampered key_id claim a false signer.
         if key_id == provided_key_id:
             verified_any = True
+            verified.append(sig)
             notes.append(f"sig[{i}] (key_id={key_id or '?'}): verified")
         else:
             key_id_mismatch = True
@@ -895,12 +897,16 @@ def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
                 )
     rule = quorum.get("rule")
     if rule:
-        # counted_families is the producer's already-filtered signal set.
+        # The recorded rule is a necessary bar; merge-quorum also requires posting.
         families = set(rule["counted_families"])
         reached = len(families) >= rule["required_signals"]
         if rule["requires_western_frontier"]:
             reached = reached and bool(families & {"claude", "openai"})
-        if reached != quorum["reached"]:
+        if dissent.get("present") or dissent.get("dissenting_agents"):
+            reached = False
+        if reached != quorum["reached"] and (
+            quorum["reached"] or quorum["method"] != "merge-quorum"
+        ):
             checks.append(
                 Check(
                     "quorum_rule",
@@ -911,13 +917,15 @@ def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
     return checks
 
 
-def _check_expiry(doc: dict[str, Any], now: datetime | None, strict: bool) -> list[Check]:
+def _check_expiry(
+    doc: dict[str, Any], now: datetime | None, strict: bool, verified: list[dict[str, Any]]
+) -> list[Check]:
     if doc["odr_version"] != "0.2":
         return []
     clock = now if now is not None else datetime.now(timezone.utc)
     checks = []
     for i, sig in enumerate(doc["signatures"]):
-        if "expires_at" not in sig:
+        if sig not in verified or "expires_at" not in sig:
             continue
         detail = ""
         try:
@@ -1084,10 +1092,13 @@ def verify_odr_document(
         return VerifyResult(ok=False, receipt_id=receipt_id, odr_digest="", checks=checks)
     checks.append(Check("canonical_digest", PASS, f"sha-256:{digest_hex}"))
     warnings: list[str] = []
+    verified: list[dict[str, Any]] = []
     checks.append(
-        _safe_check("signature", lambda: _check_signatures(doc, digest_hex, public_key, warnings))
+        _safe_check(
+            "signature", lambda: _check_signatures(doc, digest_hex, public_key, warnings, verified)
+        )
     )
-    checks.extend(_check_expiry(doc, now, strict_expiry))
+    checks.extend(_check_expiry(doc, now, strict_expiry, verified))
     checks.append(_safe_check("chain_link", lambda: _check_chain(doc, digest_hex, chain)))
 
     warnings.extend(

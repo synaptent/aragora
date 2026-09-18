@@ -88,10 +88,17 @@ def _check_quorum(errors: list[str], value: Any) -> None:
     ):
         if field not in value:
             errors.append(f"quorum.{field}: required when present")
+    for field, expected in (("participants", list), ("dissent", dict)):
+        if field in value and not isinstance(value[field], expected):
+            errors.append(f"quorum.{field}: must be a {expected.__name__}")
     participants = value.get("participants")
     if isinstance(participants, list):
         for i, p in enumerate(participants):
-            if not isinstance(p, dict) or "agent" not in p or "model_family" not in p:
+            if (
+                not isinstance(p, dict)
+                or not isinstance(p.get("agent"), str)
+                or "model_family" not in p
+            ):
                 errors.append(f"quorum.participants[{i}]: requires agent and model_family")
 
 

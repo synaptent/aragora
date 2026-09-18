@@ -79,11 +79,19 @@ def test_v02_signature_precedence_and_v01(version, foreign, corrupt):
     extra = dict(doc["signatures"][0])
     if foreign:
         extra["key_id"] = "ed25519-feedfacefeedface"
+        if version == "0.2":
+            extra["expires_at"] = "1999-01-01T00:00:00Z"
     if corrupt:
         extra["signature"] = base64.b64encode(bytes(64)).decode()
     doc["signatures"].insert(0, extra)
-    result = verify(doc, public_key=key.public_key())
+    result = verify(
+        doc,
+        public_key=key.public_key(),
+        strict_expiry=True,
+        now=datetime(2000, 1, 1, tzinfo=timezone.utc),
+    )
     assert result.ok is (foreign or not corrupt)
+    assert not any("expire" in w for w in result.warnings)
     mismatch = [w for w in result.warnings if "key_id_mismatch" in w]
     assert len(mismatch) == int(foreign)
     if foreign:

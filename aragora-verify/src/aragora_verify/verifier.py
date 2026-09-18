@@ -352,12 +352,16 @@ def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
                 )
     rule = quorum.get("rule")
     if rule:
-        # counted_families is the producer's already-filtered signal set.
+        # The recorded rule is a necessary bar; merge-quorum also requires posting.
         families = set(rule["counted_families"])
         reached = len(families) >= rule["required_signals"]
         if rule["requires_western_frontier"]:
             reached = reached and bool(families & {"claude", "openai"})
-        if reached != quorum["reached"]:
+        if dissent.get("present") or dissent.get("dissenting_agents"):
+            reached = False
+        if reached != quorum["reached"] and (
+            quorum["reached"] or quorum["method"] != "merge-quorum"
+        ):
             checks.append(
                 Check(
                     "quorum_rule",
@@ -368,13 +372,15 @@ def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
     return checks
 
 
-def _check_expiry(doc: dict[str, Any], now: datetime | None, strict: bool) -> list[Check]:
+def _check_expiry(
+    doc: dict[str, Any], now: datetime | None, strict: bool, verified: list[dict[str, Any]]
+) -> list[Check]:
     if doc["odr_version"] != "0.2":
         return []
     clock = now if now is not None else datetime.now(timezone.utc)
     checks = []
     for i, sig in enumerate(doc["signatures"]):
-        if "expires_at" not in sig:
+        if sig not in verified or "expires_at" not in sig:
             continue
         detail = ""
         try:
@@ -589,7 +595,7 @@ def verify(
     warnings: list[str] = []
     verified: list[dict[str, Any]] = []
     checks.append(_check_signatures(doc, digest_hex, public_key, warnings, verified))
-    checks.extend(_check_expiry(doc, now, strict_expiry))
+    checks.extend(_check_expiry(doc, now, strict_expiry, verified))
     if require_issuer is not None:
         found = doc["odr_version"] == "0.2" and any(
             sig.get("issuer") == require_issuer for sig in verified

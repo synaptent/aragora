@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "aragora-verify/src"))
 
 from aragora_verify import verify  # noqa: E402
+from aragora_verify import schema  # noqa: E402
 from aragora_verify.jcs import jcs_canonicalize as standalone_jcs  # noqa: E402
 from aragora.gauntlet.odr_export import (
     decision_receipt_to_odr,
@@ -72,10 +73,16 @@ def engine(request):
         ("quorum.dissent.dissenting_agents", ["mallory"], "quorum_consistency"),
         ("quorum.dissent.severity_max", "P0", "dissent_consistency"),
         ("quorum.dissent.blocking", True, "dissent_consistency"),
+        ("quorum.dissent", 5, "schema_conformance"),
+        ("quorum.dissent", "abc", "schema_conformance"),
+        ("quorum.participants", "abc", "schema_conformance"),
+        ("quorum.participants", {}, "schema_conformance"),
+        ("quorum.participants.0.agent", [], "schema_conformance"),
         ("not_in_profile", 1, "schema_conformance"),
     ],
 )
-def test_v02_consistency_first_and_v01_unchanged(engine, path, value, name):
+def test_v02_consistency_first_and_v01_unchanged(engine, path, value, name, monkeypatch):
+    monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
     legacy = json.loads((ROOT / "docs/specs/examples/example-approved-clean.odr.json").read_text())
     assert engine(legacy).ok
     key = odr_test_key()
@@ -110,6 +117,12 @@ def test_v02_optional_summaries_rule_warning_and_digest(engine):
     content = {k: v for k, v in doc.items() if k != "signatures"}
     assert jcs_canonicalize(content) == standalone_jcs(content)
     assert result.odr_digest == odr_content_digest(doc) == verify(doc).odr_digest
+    doc["quorum"]["method"] = "merge-quorum"
+    doc["quorum"]["dissent"].update(present=True, dissenting_agents=["claude"])
+    assert not any("reached" in w for w in engine(doc).warnings)
+    doc["quorum"]["dissent"].update(present=False, dissenting_agents=[])
+    doc["quorum"]["supporting_agents"] = []
+    assert not any("reached" in w for w in engine(doc).warnings)
     legacy = json.loads((ROOT / "docs/specs/examples/example-approved-clean.odr.json").read_text())
     assert "ODR v0.1" in engine(legacy).checks[0].detail
 
@@ -136,7 +149,7 @@ def test_v02_signer_normalizes_utc_output(timestamp, engine):
     assert entry["signed_at"] == "2000-01-01T00:00:00+00:00"
     assert entry["expires_at"] == "2001-01-01T00:00:00+00:00"
     assert engine(doc, public_key=key.public_key()).ok
-    assert any("expire" in w for w in engine(doc).warnings)
+    assert not any("expire" in w for w in engine(doc).warnings)
     assert not engine(doc, public_key=key.public_key(), strict_expiry=True).ok
     legacy = decision_receipt_to_odr(DecisionReceipt.from_dict({"receipt_id": "legacy"}))
     assert engine(sign_odr_receipt(legacy, key), public_key=key.public_key()).ok
@@ -156,11 +169,14 @@ def test_v02_multi_signature_warnings_and_legacy(version, foreign, signature, en
     extra = dict(doc["signatures"][0])
     if foreign:
         extra["key_id"] = "ed25519-feedfacefeedface"
+        if version == "0.2":
+            extra["expires_at"] = "1999-01-01T00:00:00Z"
     if signature != "copy":
         extra["signature"] = base64.b64encode(bytes(64)).decode() if signature == "zero" else "bad"
     doc["signatures"].insert(0, extra)
-    result = engine(doc, public_key=key.public_key())
+    result = engine(doc, public_key=key.public_key(), strict_expiry=True)
     assert result.ok is (foreign or signature == "copy")
+    assert not any("expire" in w for w in result.warnings)
     mismatch = [w for w in result.warnings if "key_id_mismatch" in w]
     assert len(mismatch) == int(foreign)
     if foreign:
