@@ -336,6 +336,11 @@ def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
         )
     dissent = quorum["dissent"]
     if "findings" in dissent:
+        for i, finding in enumerate(dissent["findings"]):
+            want = finding["severity"] in ("P0", "P1")
+            if finding["blocking"] != want:
+                detail = f"findings[{i}].blocking: expected {want!r} for {finding['severity']}"
+                checks.append(Check("dissent_consistency", FAIL, f"quorum.dissent.{detail}"))
         severities = [f["severity"] for f in dissent["findings"]]
         expected = {
             "severity_max": min(severities, default=None),

@@ -60,6 +60,10 @@ def document():
     return doc
 
 
+def legacy():
+    return json.loads((ROOT / "docs/specs/examples/example-approved-clean.odr.json").read_text())
+
+
 @pytest.fixture(params=[verify_odr_document, verify])
 def engine(request):
     return request.param
@@ -73,6 +77,7 @@ def engine(request):
         ("quorum.dissent.dissenting_agents", ["mallory"], "quorum_consistency"),
         ("quorum.dissent.severity_max", "P0", "dissent_consistency"),
         ("quorum.dissent.blocking", True, "dissent_consistency"),
+        ("quorum.dissent.findings.0.blocking", True, "dissent_consistency"),
         ("quorum.dissent", 5, "schema_conformance"),
         ("quorum.dissent", "abc", "schema_conformance"),
         ("quorum.participants", "abc", "schema_conformance"),
@@ -83,8 +88,7 @@ def engine(request):
 )
 def test_v02_consistency_first_and_v01_unchanged(engine, path, value, name, monkeypatch):
     monkeypatch.setattr(schema, "_jsonschema_errors", lambda doc: [])
-    legacy = json.loads((ROOT / "docs/specs/examples/example-approved-clean.odr.json").read_text())
-    assert engine(legacy).ok
+    assert engine(legacy()).ok
     key = odr_test_key()
     doc = sign_odr_receipt(document(), key, issuer="aragora")
     target = doc
@@ -123,8 +127,20 @@ def test_v02_optional_summaries_rule_warning_and_digest(engine):
     doc["quorum"]["dissent"].update(present=False, dissenting_agents=[])
     doc["quorum"]["supporting_agents"] = []
     assert not any("reached" in w for w in engine(doc).warnings)
-    legacy = json.loads((ROOT / "docs/specs/examples/example-approved-clean.odr.json").read_text())
-    assert "ODR v0.1" in engine(legacy).checks[0].detail
+    assert "ODR v0.1" in engine(legacy()).checks[0].detail
+
+
+def test_v02_per_finding_blocking_and_v01(engine):
+    key = odr_test_key()
+    doc = document()
+    dissent = doc["quorum"]["dissent"]
+    dissent["findings"][0]["severity"] = "P1"
+    dissent.update(severity_max="P1", blocking=True)
+    result = engine(sign_odr_receipt(doc, key, issuer="aragora"), public_key=key.public_key())
+    fails = [c for c in result.checks if c.status == "fail"]
+    assert [c.name for c in fails] == ["dissent_consistency"]
+    assert fails[0].detail == "quorum.dissent.findings[0].blocking: expected True for P1"
+    assert engine(legacy()).ok
 
 
 @pytest.mark.parametrize(
@@ -160,11 +176,7 @@ def test_v02_signer_normalizes_utc_output(timestamp, engine):
 @pytest.mark.parametrize("signature", ["copy", "zero", "undecodable"])
 def test_v02_multi_signature_warnings_and_legacy(version, foreign, signature, engine):
     key = odr_test_key()
-    doc = (
-        document()
-        if version == "0.2"
-        else json.loads((ROOT / "docs/specs/examples/example-approved-clean.odr.json").read_text())
-    )
+    doc = document() if version == "0.2" else legacy()
     doc = sign_odr_receipt(doc, key, **({"issuer": "aragora"} if version == "0.2" else {}))
     extra = dict(doc["signatures"][0])
     if foreign:
@@ -201,5 +213,5 @@ def test_v02_expiry_clock_parity_and_legacy(engine):
         assert (
             engine(doc, public_key=key.public_key(), now=now, strict_expiry=True).ok is not expired
         )
-    legacy = json.loads((ROOT / "docs/specs/examples/example-approved-clean.odr.json").read_text())
-    assert engine(sign_odr_receipt(legacy, key), public_key=key.public_key(), strict_expiry=True).ok
+    signed = sign_odr_receipt(legacy(), key)
+    assert engine(signed, public_key=key.public_key(), strict_expiry=True).ok

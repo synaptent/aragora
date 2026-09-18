@@ -43,6 +43,20 @@ def _v02_signed(doc=None):
     return doc, key
 
 
+def test_v02_per_finding_blocking_consistency():
+    doc = valid_odr(odr_version="0.2")
+    doc["quorum"]["dissent"].update(
+        findings=[{"issuer": "claude", "severity": "P1", "blocking": False, "text": "Review"}],
+        severity_max="P1",
+        blocking=True,
+    )
+    doc, key = _v02_signed(doc)
+    fails = [c for c in verify(doc, public_key=key.public_key()).checks if c.status == FAIL]
+    assert [c.name for c in fails] == ["dissent_consistency"]
+    assert fails[0].detail == "quorum.dissent.findings[0].blocking: expected True for P1"
+    assert verify(valid_odr()).ok
+
+
 @pytest.mark.parametrize("member,value", [("severity_max", "P0"), ("blocking", True)])
 def test_v02_dissent_consistency_precedes_signature(member, value):
     doc, key = _v02_signed()
@@ -52,12 +66,11 @@ def test_v02_dissent_consistency_precedes_signature(member, value):
     assert verify(valid_odr()).ok
 
 
-@pytest.mark.parametrize("strict", [False, True])
-def test_v02_expiry_clock_and_v01_compatibility(strict):
+def test_v02_expiry_clock_and_v01_compatibility():
     doc, key = _v02_signed()
-    result = verify(doc, public_key=key.public_key(), strict_expiry=strict)
-    assert result.ok is (not strict)
-    assert "expire" in " ".join(result.warnings) if not strict else not result.ok
+    result = verify(doc, public_key=key.public_key())
+    assert result.ok and "expire" in " ".join(result.warnings)
+    assert not verify(doc, public_key=key.public_key(), strict_expiry=True).ok
     for year, expected in [(2000, True), (2001, False), (2002, False)]:
         result = verify(
             doc,
@@ -67,37 +80,6 @@ def test_v02_expiry_clock_and_v01_compatibility(strict):
         )
         assert result.ok is expected
     assert verify(sign_odr(valid_odr(), key), public_key=key.public_key(), strict_expiry=True).ok
-
-
-@pytest.mark.parametrize("version", ["0.1", "0.2"])
-@pytest.mark.parametrize("foreign", [False, True])
-@pytest.mark.parametrize("corrupt", [False, True])
-def test_v02_signature_precedence_and_v01(version, foreign, corrupt):
-    doc, key = _v02_signed()
-    if version == "0.1":
-        doc = sign_odr(valid_odr(), key)
-    extra = dict(doc["signatures"][0])
-    if foreign:
-        extra["key_id"] = "ed25519-feedfacefeedface"
-        if version == "0.2":
-            extra["expires_at"] = "1999-01-01T00:00:00Z"
-    if corrupt:
-        extra["signature"] = base64.b64encode(bytes(64)).decode()
-    doc["signatures"].insert(0, extra)
-    result = verify(
-        doc,
-        public_key=key.public_key(),
-        strict_expiry=True,
-        now=datetime(2000, 1, 1, tzinfo=timezone.utc),
-    )
-    assert result.ok is (foreign or not corrupt)
-    assert not any("expire" in w for w in result.warnings)
-    mismatch = [w for w in result.warnings if "key_id_mismatch" in w]
-    assert len(mismatch) == int(foreign)
-    if foreign:
-        assert extra["key_id"] in mismatch[0]
-        doc["signatures"].pop()
-        assert not verify(doc, public_key=key.public_key()).ok
 
 
 def test_v02_cli_flags_trail_and_issuer(tmp_path, capsys):
@@ -168,15 +150,9 @@ def test_v02_schema_labels_and_help(capsys):
 @pytest.mark.parametrize("severity", ["P0", "P1", "P2", "P3", None])
 def test_v02_adjudication_trail(severity, tmp_path, capsys):
     doc = valid_odr(odr_version="0.2")
+    blocking = severity in ("P0", "P1")
     doc["quorum"]["dissent"]["findings"] = (
-        [
-            {
-                "issuer": "claude",
-                "severity": severity,
-                "blocking": severity in ("P0", "P1"),
-                "text": "Finding",
-            }
-        ]
+        [{"issuer": "claude", "severity": severity, "blocking": blocking, "text": "Finding"}]
         if severity
         else []
     )
@@ -192,7 +168,7 @@ def test_v02_adjudication_trail(severity, tmp_path, capsys):
     pub.write_bytes(_pubkey_bytes(key.public_key()))
     assert main([str(path), "--pubkey", str(pub)]) == 0
     lines = capsys.readouterr().out.splitlines()
-    label = "blocking" if severity in ("P0", "P1") else "advisory"
+    label = "blocking" if blocking else "advisory"
     finding = f"[{severity}] claude ({label}): Finding" if severity else "(no dissent recorded)"
     assert lines[-4:] == [
         "Dissent trail",
