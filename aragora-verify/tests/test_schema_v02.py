@@ -128,7 +128,7 @@ V02_MEMBERS = [
     ),
     (
         "quorum.dissent.severity_max",
-        lambda d: d["quorum"]["dissent"].__setitem__("severity_max", "P2"),
+        lambda d: d["quorum"]["dissent"].__setitem__("severity_max", COMPLETE_FINDING["severity"]),
     ),
     ("quorum.dissent.blocking", lambda d: d["quorum"]["dissent"].__setitem__("blocking", False)),
     (

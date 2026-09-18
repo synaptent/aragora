@@ -187,7 +187,7 @@ def _check_signatures(errors: list[str], value: Any) -> None:
             if not isinstance(sig.get(field), str) or not sig.get(field):
                 errors.append(f"signatures[{i}].{field}: required non-empty string")
         if sig.get("alg") not in (None, "Ed25519") and isinstance(sig.get("alg"), str):
-            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined in v0.1")
+            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined")
         # Metadata is optional on both versions (one schema for both) but strictly
         # typed when present; only a v0.2 signature commits it (spec §6).
         if "issuer" in sig and (not isinstance(sig["issuer"], str) or not sig["issuer"]):
@@ -254,7 +254,7 @@ def validate_structure(doc: Any) -> list[str]:
     _check_attestation(errors, doc.get("attestation"))
     routing = doc.get("routing")
     if not isinstance(routing, dict) or routing.get("status") != "reserved":
-        errors.append("routing.status: must be 'reserved' in v0.1")
+        errors.append("routing.status: must be 'reserved'")
     _check_signatures(errors, doc.get("signatures"))
 
     _validate_extensions(errors, doc, load_bundled_schema())

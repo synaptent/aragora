@@ -318,7 +318,7 @@ _SCHEMA_VIOLATIONS: list[Any] = [
         lambda d: d.__setitem__(
             "signatures", [{"alg": "RSA", "key_id": "k1", "signature": "c2ln"}]
         ),
-        "signatures[0].alg: only 'Ed25519' is defined in v0.1",
+        "signatures[0].alg: only 'Ed25519' is defined",
         id="signature_alg_not_ed25519",
     ),
     # Remaining schema surface: quorum block
@@ -699,7 +699,7 @@ _V02_MEMBERS: list[tuple[str, Mutation]] = [
     ),
     (
         "quorum.dissent.severity_max",
-        lambda d: d["quorum"]["dissent"].__setitem__("severity_max", "P2"),
+        lambda d: d["quorum"]["dissent"].__setitem__("severity_max", _COMPLETE_FINDING["severity"]),
     ),
     ("quorum.dissent.blocking", lambda d: d["quorum"]["dissent"].__setitem__("blocking", False)),
     (

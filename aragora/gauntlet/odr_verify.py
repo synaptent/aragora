@@ -40,6 +40,7 @@ import binascii
 import hashlib
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from .odr_export import (
@@ -515,7 +516,7 @@ def _validate_routing(errors: list[str], value: Any) -> None:
         return
     _unknown_members(errors, "routing", value, frozenset({"status"}))
     if value.get("status") != "reserved":
-        errors.append("routing.status: must be 'reserved' in v0.1")
+        errors.append("routing.status: must be 'reserved'")
 
 
 def _validate_signatures(errors: list[str], value: Any) -> None:
@@ -531,7 +532,7 @@ def _validate_signatures(errors: list[str], value: Any) -> None:
             if not isinstance(sig.get(field_name), str) or not sig.get(field_name):
                 errors.append(f"signatures[{i}].{field_name}: required non-empty string")
         if isinstance(sig.get("alg"), str) and sig.get("alg") != "Ed25519":
-            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined in v0.1")
+            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined")
         # Metadata is optional on both versions (one schema for both) but strictly
         # typed when present; only a v0.2 signature commits it (spec §6).
         if "issuer" in sig and (not isinstance(sig["issuer"], str) or not sig["issuer"]):
@@ -732,11 +733,20 @@ def _decode_signature(value: str) -> bytes | None:
 # ---------------------------------------------------------------------------
 
 
-def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> Check:
+def _check_signatures(
+    doc: dict[str, Any],
+    digest_hex: str,
+    public_key: Any,
+    warnings: list[str],
+) -> Check:
     signatures = doc.get("signatures")
     signatures = signatures if isinstance(signatures, list) else []
     if not signatures and public_key is None:
-        return Check("signature", WARN, "receipt is unsigned (v0.1); authenticity not established")
+        return Check(
+            "signature",
+            WARN,
+            f"receipt is unsigned (v{doc['odr_version']}); authenticity not established",
+        )
     if not signatures and public_key is not None:
         return Check(
             "signature", WARN, "receipt carries no signatures; nothing to verify with the key"
@@ -766,6 +776,8 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> 
         if not isinstance(sig, dict):
             continue
         key_id = str(sig.get("key_id") or "")
+        if key_id != provided_key_id:
+            warnings.append(f"signatures[{i}]: key_id_mismatch: {key_id} != {provided_key_id}")
         raw_sig = _decode_signature(str(sig.get("signature") or ""))
         if raw_sig is None:
             notes.append(f"sig[{i}]: undecodable signature")
@@ -849,6 +861,78 @@ def _check_quorum_consistency(doc: dict[str, Any]) -> Check:
     return Check(
         "quorum_consistency", PASS, "supporting/dissenting agents all appear in participants"
     )
+
+
+def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
+    """Cross-check recorded content, never infer gate dissent from findings."""
+    quorum = doc["quorum"]
+    if doc["odr_version"] != "0.2" or quorum.get("status") != "present":
+        return []
+    checks = []
+    participants = {p["agent"] for p in quorum["participants"]}
+    missing = sorted({v["issuer"] for v in quorum.get("verdicts", [])} - participants)
+    if missing:
+        checks.append(
+            Check(
+                "verdicts_consistency", FAIL, "issuers not in participants: " + ", ".join(missing)
+            )
+        )
+    dissent = quorum["dissent"]
+    if "findings" in dissent:
+        severities = [f["severity"] for f in dissent["findings"]]
+        expected = {
+            "severity_max": min(severities, default=None),
+            "blocking": any(s in ("P0", "P1") for s in severities),
+        }
+        for member, value in expected.items():
+            if member in dissent and dissent[member] != value:
+                checks.append(
+                    Check(
+                        "dissent_consistency",
+                        FAIL,
+                        f"quorum.dissent.{member}: expected {value!r} from findings",
+                    )
+                )
+    rule = quorum.get("rule")
+    if rule:
+        # counted_families is the producer's already-filtered signal set.
+        families = set(rule["counted_families"])
+        reached = len(families) >= rule["required_signals"]
+        if rule["requires_western_frontier"]:
+            reached = reached and bool(families & {"claude", "openai"})
+        if reached != quorum["reached"]:
+            checks.append(
+                Check(
+                    "quorum_rule",
+                    WARN,
+                    f"quorum.reached: recorded {quorum['reached']}, rule implies {reached}",
+                )
+            )
+    return checks
+
+
+def _check_expiry(doc: dict[str, Any], now: datetime | None, strict: bool) -> list[Check]:
+    if doc["odr_version"] != "0.2":
+        return []
+    clock = now if now is not None else datetime.now(timezone.utc)
+    checks = []
+    for i, sig in enumerate(doc["signatures"]):
+        if "expires_at" not in sig:
+            continue
+        detail = ""
+        try:
+            expires = datetime.fromisoformat(sig["expires_at"].replace("Z", "+00:00"))
+            if expires.utcoffset() is None or clock.utcoffset() is None:
+                raise ValueError("a timezone is required")
+            if clock >= expires:
+                detail = f"signatures[{i}]: expired at {sig['expires_at']}"
+        except ValueError:
+            detail = (
+                f"signatures[{i}]: cannot evaluate expires_at (timezone-aware timestamps required)"
+            )
+        if detail:
+            checks.append(Check("signature_expiry", FAIL if strict else WARN, detail))
+    return checks
 
 
 def _check_chain(doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any]] | None) -> Check:
@@ -956,9 +1040,13 @@ def verify_odr_document(
     *,
     public_key: Any | None = None,
     chain: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
+    strict_expiry: bool = False,
 ) -> VerifyResult:
     """Verify an ODR document. ``public_key`` is a loaded Ed25519 key
     (see :func:`load_public_key`); ``chain`` is a list of parsed chain entries.
+    ``now`` overrides the timezone-aware expiry clock; ``strict_expiry`` turns
+    expiry warnings into failures. Neither changes v0.1 verification.
     """
     receipt_id = str(doc.get("receipt_id") or "") if isinstance(doc, dict) else ""
     checks: list[Check] = []
@@ -967,12 +1055,14 @@ def verify_odr_document(
     if structure_errors:
         checks.append(Check("schema_conformance", FAIL, "; ".join(structure_errors[:12])))
         return VerifyResult(ok=False, receipt_id=receipt_id, odr_digest="", checks=checks)
-    checks.append(Check("schema_conformance", PASS, "conforms to ODR v0.1 profile"))
+    checks.append(
+        Check("schema_conformance", PASS, f"conforms to ODR v{doc['odr_version']} profile")
+    )
 
     # Boundary contract: this engine verifies untrusted/possibly-tampered receipts,
     # so any exception raised while checking structurally-valid-but-malformed input
-    # must become a FAIL verdict — never propagate as a crash. Each check below is
-    # run through this guard so one malformed subfield cannot abort verification.
+    # must become a FAIL verdict — never propagate as a crash. Legacy checks use
+    # this guard; v0.2 consistency checks read only schema-validated members.
     def _safe_check(name: str, fn: Callable[[], Check]) -> Check:
         try:
             return fn()
@@ -981,6 +1071,8 @@ def verify_odr_document(
                 name, FAIL, f"verification raised on malformed input: {type(exc).__name__}: {exc}"
             )
 
+    checks.append(_safe_check("quorum_consistency", lambda: _check_quorum_consistency(doc)))
+    checks.extend(_check_v02_consistency(doc))
     try:
         digest_hex = odr_content_digest(doc)
     except Exception as exc:  # noqa: BLE001 - boundary: malformed input -> FAIL, not crash
@@ -991,13 +1083,20 @@ def verify_odr_document(
         )
         return VerifyResult(ok=False, receipt_id=receipt_id, odr_digest="", checks=checks)
     checks.append(Check("canonical_digest", PASS, f"sha-256:{digest_hex}"))
-    checks.append(_safe_check("signature", lambda: _check_signatures(doc, digest_hex, public_key)))
-    checks.append(_safe_check("quorum_consistency", lambda: _check_quorum_consistency(doc)))
+    warnings: list[str] = []
+    checks.append(
+        _safe_check("signature", lambda: _check_signatures(doc, digest_hex, public_key, warnings))
+    )
+    checks.extend(_check_expiry(doc, now, strict_expiry))
     checks.append(_safe_check("chain_link", lambda: _check_chain(doc, digest_hex, chain)))
 
-    warnings: list[str] = []
+    warnings.extend(
+        c.detail
+        for c in checks
+        if c.status == WARN and c.name in ("quorum_rule", "signature_expiry")
+    )
     try:
-        warnings = _weakening_warnings(doc)
+        warnings.extend(_weakening_warnings(doc))
     except Exception as exc:  # noqa: BLE001 - boundary: malformed input -> WARN, not crash
         # Weakening signals warn, never fail (spec §8): an unscannable receipt
         # loses its advisory signals but that alone cannot flip the verdict.
