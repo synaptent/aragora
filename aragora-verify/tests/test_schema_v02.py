@@ -73,7 +73,11 @@ def test_versions_and_unknown_members_without_jsonschema(monkeypatch, version):
     wrong = copy.deepcopy(doc)
     wrong["profile"] = "https://aragora.ai/specs/open-decision-receipt/v9"
     assert not verify(wrong).ok
-    for member, bad, msg in (("reached", "yes", "a boolean"), ("independence", 5, "an object")):
+    for member, bad, msg in (
+        ("method", 5, "a string"),
+        ("reached", "yes", "a boolean"),
+        ("independence", 5, "an object"),
+    ):
         mutant = copy.deepcopy(doc)
         mutant["quorum"][member] = bad
         assert schema.validate_structure(mutant) == [f"quorum.{member}: must be {msg}"]

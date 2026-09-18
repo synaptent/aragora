@@ -91,6 +91,8 @@ def _check_quorum(errors: list[str], value: Any) -> None:
     for field, expected in (("participants", list), ("dissent", dict)):
         if field in value and not isinstance(value[field], expected):
             errors.append(f"quorum.{field}: must be a {expected.__name__}")
+    if "method" in value and not isinstance(value["method"], str):
+        errors.append("quorum.method: must be a string")
     if "reached" in value and not isinstance(value["reached"], bool):
         errors.append("quorum.reached: must be a boolean")
     if "independence" in value and not isinstance(value["independence"], dict):
