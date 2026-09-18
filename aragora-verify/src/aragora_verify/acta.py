@@ -74,7 +74,10 @@ SKIP = "skip"
 _HASH_PREFIX = "sha256:"
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
 _ED25519_SIG_HEX = re.compile(r"[0-9a-f]{128}")
-_RFC3339 = re.compile(r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})")
+_RFC3339 = re.compile(
+    r"(?P<date>\d{4}-\d{2}-\d{2})[Tt](?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2})"
+    r"(\.\d+)?([Zz]|[+-](?P<offset_hour>\d{2}):(?P<offset_minute>\d{2}))"
+)
 _PAYLOAD_MEMBERS = frozenset(
     {
         "type",
@@ -253,6 +256,23 @@ def _rfc3339(value: datetime | str | None) -> str:
     return value
 
 
+def _is_rfc3339(value: str) -> bool:
+    """RFC 3339 shape AND a real instant: the shape alone admits 9999-99-99T99:99:99Z."""
+    match = _RFC3339.fullmatch(value)
+    if match is None:
+        return False
+    try:
+        datetime.strptime(match["date"], "%Y-%m-%d")
+    except ValueError:
+        return False
+    # second 60 is the RFC 3339 leap second.
+    if int(match["hour"]) > 23 or int(match["minute"]) > 59 or int(match["second"]) > 60:
+        return False
+    if match["offset_hour"] is None:
+        return True
+    return int(match["offset_hour"]) <= 23 and int(match["offset_minute"]) <= 59
+
+
 def _shape_errors(envelope: Any) -> list[str]:
     if not isinstance(envelope, Mapping):
         return [f"envelope must be an object, got {type(envelope).__name__}"]
@@ -292,7 +312,7 @@ def _shape_errors(envelope: Any) -> list[str]:
     if payload.get("chain_scope") != ACTA_CHAIN_SCOPE:
         errors.append(f"payload.chain_scope must be {ACTA_CHAIN_SCOPE!r}")
     issued_at = payload.get("issued_at")
-    if not isinstance(issued_at, str) or not _RFC3339.fullmatch(issued_at):
+    if not isinstance(issued_at, str) or not _is_rfc3339(issued_at):
         errors.append("payload.issued_at must be an RFC 3339 timestamp with a UTC offset")
     if kid is not None and payload.get("issuer_id") != kid:
         errors.append("payload.issuer_id must equal signature.kid")

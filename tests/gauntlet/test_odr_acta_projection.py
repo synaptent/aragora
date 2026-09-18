@@ -316,14 +316,41 @@ def test_ed25519_key_id_is_none_for_a_non_key_object():
     assert ed25519_key_id(object()) is None
 
 
-def test_verify_rejects_an_issued_at_that_is_not_rfc3339(odr, private_key, kid):
+@pytest.mark.parametrize(
+    "issued_at",
+    [
+        pytest.param("soon", id="not_a_timestamp"),
+        pytest.param("2026-99-99T99:99:99Z", id="impossible_calendar_values"),
+        pytest.param("2026-02-30T00:00:00Z", id="day_that_does_not_exist"),
+        pytest.param("2026-06-14T24:00:00Z", id="hour_out_of_range"),
+        pytest.param("2026-06-14T00:00:00+99:00", id="offset_out_of_range"),
+        pytest.param("2026-06-14 00:00:00Z", id="space_instead_of_t"),
+        pytest.param("2026-06-14T00:00:00", id="no_offset"),
+    ],
+)
+def test_verify_rejects_an_issued_at_that_is_not_a_real_rfc3339_instant(
+    odr, private_key, kid, issued_at
+):
     envelope = project_to_acta(odr, private_key=private_key, kid=kid)
-    envelope["payload"]["issued_at"] = "soon"
+    envelope["payload"]["issued_at"] = issued_at
+    envelope["signature"]["sig"] = private_key.sign(jcs_canonicalize(envelope["payload"])).hex()
 
     result = verify_acta_projection(envelope, private_key.public_key())
 
     assert result.ok is False
     assert any("issued_at" in reason for reason in result.reasons)
+
+
+@pytest.mark.parametrize(
+    "issued_at",
+    ["2026-06-14T00:00:00Z", "2026-06-14T00:00:00.123456Z", "2024-02-29T23:59:60+02:00"],
+)
+def test_verify_accepts_real_rfc3339_instants(odr, private_key, kid, issued_at):
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    envelope["payload"]["issued_at"] = issued_at
+    envelope["signature"]["sig"] = private_key.sign(jcs_canonicalize(envelope["payload"])).hex()
+
+    assert verify_acta_projection(envelope, private_key.public_key()).ok is True
 
 
 def test_a_lone_non_genesis_link_is_reported_as_skipped_not_passed(odr, private_key, kid):

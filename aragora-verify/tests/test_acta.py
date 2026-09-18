@@ -344,3 +344,16 @@ def test_cli_accepts_an_envelope_given_as_both_receipt_and_acta(
 
     assert code == 0
     assert "VERIFIED" in capsys.readouterr().out
+
+
+def test_bundled_copy_rejects_an_impossible_issued_at(odr, private_key) -> None:
+    """The reviewer's repro: an RFC 3339-shaped but non-existent instant."""
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    envelope["payload"]["issued_at"] = "2026-99-99T99:99:99Z"
+    envelope["signature"]["sig"] = private_key.sign(jcs_canonicalize(envelope["payload"])).hex()
+
+    result = verify_acta_projection(envelope, private_key.public_key())
+
+    assert result.ok is False
+    assert any("issued_at" in reason for reason in result.reasons)
