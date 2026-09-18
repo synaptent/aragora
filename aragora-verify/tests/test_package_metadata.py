@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from typing import Any
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parent
@@ -13,7 +14,7 @@ CHANGELOG = PACKAGE_ROOT / "CHANGELOG.md"
 INDEPENDENT_VERIFIER_GUIDE = REPO_ROOT / "docs/specs/INDEPENDENT_VERIFIER_GUIDE.md"
 
 
-def _project_metadata() -> dict[str, object]:
+def _project_metadata() -> dict[str, Any]:
     text = PYPROJECT.read_text(encoding="utf-8")
     version_match = re.search(r'^version = "([^"]+)"$', text, flags=re.MULTILINE)
     dependencies_match = re.search(

@@ -11,6 +11,7 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
+from types import ModuleType
 
 _ROOT = Path(__file__).resolve().parents[2]
 _ARAGORA_VERIFY_SRC = _ROOT / "aragora-verify" / "src"
@@ -23,21 +24,28 @@ from aragora.gauntlet import odr_verify as in_repo_verifier  # noqa: E402
 from aragora.swarm.quorum_evidence import WESTERN_FRONTIER_FAMILIES  # noqa: E402
 
 
-def _inlined_family_sets(module: object) -> list[frozenset[str]]:
-    """Every ``<expr> & {"a", "b"}`` string-set literal in the module's source."""
-    tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
-    return [
-        frozenset(element.value for element in node.right.elts)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.BinOp)
-        and isinstance(node.op, ast.BitAnd)
-        and isinstance(node.right, ast.Set)
-        and node.right.elts
-        and all(
-            isinstance(element, ast.Constant) and isinstance(element.value, str)
-            for element in node.right.elts
-        )
+def _string_set_literal(node: ast.expr) -> frozenset[str] | None:
+    if not isinstance(node, ast.Set) or not node.elts:
+        return None
+    strings = [
+        element.value
+        for element in node.elts
+        if isinstance(element, ast.Constant) and isinstance(element.value, str)
     ]
+    return frozenset(strings) if len(strings) == len(node.elts) else None
+
+
+def _inlined_family_sets(module: ModuleType) -> list[frozenset[str]]:
+    """Every ``<expr> & {"a", "b"}`` string-set literal in the module's source."""
+    assert module.__file__ is not None
+    tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitAnd):
+            literal = _string_set_literal(node.right)
+            if literal is not None:
+                found.append(literal)
+    return found
 
 
 def test_both_verifier_family_literals_equal_the_canonical_set() -> None:
