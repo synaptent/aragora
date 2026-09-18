@@ -9,5 +9,5 @@
     "exit_code": 0,
     "reasons": []
   },
-  "description": "Head of a three-link ACTA-02 chain; chain_three.chain.json carries all three envelopes, genesis first."
+  "description": "Head of a three-link ACTA-02 chain, verified with --acta chain_three.acta.json; chain_three.chain.json carries all three envelopes, genesis first, for link-by-link hash recomputation. It is not an input to --chain, which reads the legacy JSONL hash ledger."
 }

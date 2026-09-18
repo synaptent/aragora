@@ -4,11 +4,11 @@
     "issued_at": "2026-01-15T12:10:00+00:00",
     "issuer_id": "ed25519-56475aa75463474c",
     "chain_scope": "acta-02",
-    "previousReceiptHash": "af8d4e761ab318833fa0763be652cd7f3d433fe2d2292fd00ff7af0e5357a188",
+    "previousReceiptHash": "cc7f63457e4388d8aa507a65445d3fd1c050b230cd3769fd4cf23681d4e7cdeb",
     "payload_digest": {
-      "hash": "sha256:7d393f88e9a6a969ac03c44730b8be9ddee5091ecf06586976215c5768539ce1",
+      "hash": "sha256:dd543b1a6a4353d70c357b302a3b45aaaae3c4a0e3366b9749ced29df5120f60",
       "size": 2919,
-      "preview": "{\"attestation\":{\"disposition\":\"autonomous\"},\"claim\":{\"statement\":\"Merge synaptent/aragora PR 10113: ingest hardening step 3\",\"verdict\":\"PASS\"},\"confidence\":{\"calibration\":{\"provenance_ref\":{\"receipt_id\":\"odr-vector-chain-3\",\"type\":\"aragora.settlement_metad"
+      "preview": "{\"attestation\":{\"disposition\":\"autonomous\"},\"claim\":{\"statement\":\"Merge synaptent/aragora PR 10110: ingest hardening step 3\",\"verdict\":\"PASS\"},\"confidence\":{\"calibration\":{\"provenance_ref\":{\"receipt_id\":\"odr-vector-chain-3\",\"type\":\"aragora.settlement_metad"
     },
     "odr": {
       "odr_version": "0.2",
@@ -20,9 +20,9 @@
         "digest": {
           "status": "present",
           "alg": "sha-256",
-          "value": "9e0e33a7a186da3984138f5754d0ad13aad1eb10d79d93a5ce232e6b95b9f617"
+          "value": "d5e08c2e52ae59e85364dd9f4fc23269b1d6a635f64e7113c73de3b6d9cb0102"
         },
-        "summary": "Merge synaptent/aragora PR 10113: ingest hardening step 3",
+        "summary": "Merge synaptent/aragora PR 10110: ingest hardening step 3",
         "repository": "synaptent/aragora",
         "pr_number": 10110,
         "head_sha": "7f9c2ba4e88f827d616045507605853ed73b8093",
@@ -30,7 +30,7 @@
       },
       "claim": {
         "verdict": "PASS",
-        "statement": "Merge synaptent/aragora PR 10113: ingest hardening step 3"
+        "statement": "Merge synaptent/aragora PR 10110: ingest hardening step 3"
       },
       "reasoning": {
         "status": "present",
@@ -150,7 +150,7 @@
           "issuer": "aragora",
           "role": "emitter",
           "signed_at": "2026-01-15T12:05:00+00:00",
-          "signature": "DQ0OzpRoB2HiYtviQOfuzYKKHXVjbSxDcjv5OgbR6Vp1n8uyq5C1mXsSIys4G7Idj1T8+WnOFXYxkHiTA57bCQ=="
+          "signature": "lDjC5y35i/F/KTgld9m9DHoeMJ3sA9F2oJWlRLCysxjbMc0FivKRHpsR1emj19sdwf3iEhnNzQrDTcZnpw7CAQ=="
         }
       ],
       "source": {
@@ -158,13 +158,13 @@
         "schema": "aragora.gauntlet.DecisionReceipt",
         "schema_version": "1.0",
         "receipt_id": "odr-vector-chain-3",
-        "artifact_hash": "9479a1e7f9c692501dc59b8cb5bb4f5ca6910f510e1a20b27c05033887399e7d"
+        "artifact_hash": "466651655132f4f8a1190c2626d15985d2c8db8c28ab567bd19fd545cdccc683"
       }
     }
   },
   "signature": {
     "alg": "EdDSA",
     "kid": "ed25519-56475aa75463474c",
-    "sig": "540d61d8c3084212ce32e92d8eeba10cf0c262607cea48f4138ac118dbc1fbaae5143ab3dc64e4ca4e21cc6ef53108ab747a218eb0ab5b8501d346ce12841605"
+    "sig": "995fbd3f8d67b751e60697becddfe700fe30455eefe3375af4a84ba2756b732f408be992d2e278d0fd9081fc6dff7c2ddaad3be0af1c26a65f0639e3c724f208"
   }
 }

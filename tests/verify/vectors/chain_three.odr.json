@@ -8,9 +8,9 @@
     "digest": {
       "status": "present",
       "alg": "sha-256",
-      "value": "9e0e33a7a186da3984138f5754d0ad13aad1eb10d79d93a5ce232e6b95b9f617"
+      "value": "d5e08c2e52ae59e85364dd9f4fc23269b1d6a635f64e7113c73de3b6d9cb0102"
     },
-    "summary": "Merge synaptent/aragora PR 10113: ingest hardening step 3",
+    "summary": "Merge synaptent/aragora PR 10110: ingest hardening step 3",
     "repository": "synaptent/aragora",
     "pr_number": 10110,
     "head_sha": "7f9c2ba4e88f827d616045507605853ed73b8093",
@@ -18,7 +18,7 @@
   },
   "claim": {
     "verdict": "PASS",
-    "statement": "Merge synaptent/aragora PR 10113: ingest hardening step 3"
+    "statement": "Merge synaptent/aragora PR 10110: ingest hardening step 3"
   },
   "reasoning": {
     "status": "present",
@@ -138,7 +138,7 @@
       "issuer": "aragora",
       "role": "emitter",
       "signed_at": "2026-01-15T12:05:00+00:00",
-      "signature": "DQ0OzpRoB2HiYtviQOfuzYKKHXVjbSxDcjv5OgbR6Vp1n8uyq5C1mXsSIys4G7Idj1T8+WnOFXYxkHiTA57bCQ=="
+      "signature": "lDjC5y35i/F/KTgld9m9DHoeMJ3sA9F2oJWlRLCysxjbMc0FivKRHpsR1emj19sdwf3iEhnNzQrDTcZnpw7CAQ=="
     }
   ],
   "source": {
@@ -146,6 +146,6 @@
     "schema": "aragora.gauntlet.DecisionReceipt",
     "schema_version": "1.0",
     "receipt_id": "odr-vector-chain-3",
-    "artifact_hash": "9479a1e7f9c692501dc59b8cb5bb4f5ca6910f510e1a20b27c05033887399e7d"
+    "artifact_hash": "466651655132f4f8a1190c2626d15985d2c8db8c28ab567bd19fd545cdccc683"
   }
 }

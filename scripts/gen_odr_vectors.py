@@ -83,6 +83,11 @@ RULE = {
     "counted_families": ["claude", "openai"],
 }
 
+#: Ordering for ``severity_max``. Ranking by label rather than by string order
+#: keeps an unexpected label loud instead of silently sorting into the wrong
+#: place.
+SEVERITY_RANK = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+
 
 def verdicts(decisions: dict[str, str], blocking: tuple[str, ...] = ()) -> list[dict[str, Any]]:
     return [
@@ -114,7 +119,7 @@ def dissent_block(findings: list[dict[str, Any]]) -> dict[str, Any]:
     severities = [item["severity"] for item in findings]
     return {
         "findings": findings,
-        "severity_max": min(severities),
+        "severity_max": min(severities, key=SEVERITY_RANK.__getitem__),
         "blocking": any(item["blocking"] for item in findings),
     }
 
@@ -341,7 +346,7 @@ def build_vectors(key: Any, foreign_key: Any) -> dict[str, dict[str, Any]]:
             document(
                 f"odr-vector-chain-{link}",
                 odr_version="0.2",
-                summary=f"Merge {REPOSITORY} PR {PR_NUMBER + link}: ingest hardening step {link}",
+                summary=f"Merge {REPOSITORY} PR {PR_NUMBER}: ingest hardening step {link}",
                 reasoning="Chain link recorded by the same emitter under the same key.",
                 verdict="PASS",
                 reached=True,
@@ -446,8 +451,10 @@ def build_vectors(key: Any, foreign_key: Any) -> dict[str, dict[str, Any]]:
             chain_docs[-1],
             chain[-1],
             0,
-            "Head of a three-link ACTA-02 chain; chain_three.chain.json carries all three "
-            "envelopes, genesis first.",
+            "Head of a three-link ACTA-02 chain, verified with --acta chain_three.acta.json; "
+            "chain_three.chain.json carries all three envelopes, genesis first, for link-by-link "
+            "hash recomputation. It is not an input to --chain, which reads the legacy JSONL "
+            "hash ledger.",
         ),
         "projection_pass": (
             base,
