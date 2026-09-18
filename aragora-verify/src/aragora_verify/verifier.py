@@ -41,6 +41,7 @@ import binascii
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from .jcs import odr_content_digest, odr_signature_message
@@ -87,6 +88,8 @@ class VerifyResult:
     odr_digest: str
     checks: list[Check] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    dissent_trail: list[str] = field(default_factory=list)
+    key_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -96,6 +99,8 @@ class VerifyResult:
             "odr_digest": self.odr_digest,
             "checks": [asdict(c) for c in self.checks],
             "warnings": list(self.warnings),
+            "dissent_trail": list(self.dissent_trail),
+            "key_id": self.key_id,
         }
 
     @property
@@ -202,11 +207,21 @@ def _decode_signature(value: str) -> bytes | None:
 # ---------------------------------------------------------------------------
 
 
-def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key) -> Check:  # noqa: ANN001
+def _check_signatures(
+    doc: dict[str, Any],
+    digest_hex: str,
+    public_key: Any,
+    warnings: list[str],
+    verified: list[dict[str, Any]],
+) -> Check:
     signatures = doc.get("signatures")
     signatures = signatures if isinstance(signatures, list) else []
     if not signatures and public_key is None:
-        return Check("signature", WARN, "receipt is unsigned (v0.1); authenticity not established")
+        return Check(
+            "signature",
+            WARN,
+            f"receipt is unsigned (v{doc['odr_version']}); authenticity not established",
+        )
     if not signatures and public_key is not None:
         return Check(
             "signature",
@@ -232,6 +247,8 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key) -> Check
         if not isinstance(sig, dict):
             continue
         key_id = str(sig.get("key_id") or "")
+        if key_id != provided_key_id:
+            warnings.append(f"signatures[{i}]: key_id_mismatch: {key_id} != {provided_key_id}")
         raw_sig = _decode_signature(str(sig.get("signature") or ""))
         if raw_sig is None:
             notes.append(f"sig[{i}]: undecodable signature")
@@ -246,6 +263,7 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key) -> Check
             public_key.verify(raw_sig, message)
             if key_id == provided_key_id:
                 verified_any = True
+                verified.append(sig)
                 notes.append(f"sig[{i}] (key_id={key_id}): verified")
             else:
                 key_id_mismatch = True
@@ -300,6 +318,102 @@ def _check_quorum_consistency(doc: dict[str, Any]) -> Check:
     return Check(
         "quorum_consistency", PASS, "supporting/dissenting agents all appear in participants"
     )
+
+
+def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
+    """Cross-check recorded content, never infer gate dissent from findings."""
+    quorum = doc["quorum"]
+    if doc["odr_version"] != "0.2" or quorum.get("status") != "present":
+        return []
+    checks = []
+    participants = {p["agent"] for p in quorum["participants"]}
+    missing = sorted({v["issuer"] for v in quorum.get("verdicts", [])} - participants)
+    if missing:
+        checks.append(
+            Check(
+                "verdicts_consistency", FAIL, "issuers not in participants: " + ", ".join(missing)
+            )
+        )
+    dissent = quorum["dissent"]
+    if "findings" in dissent:
+        for i, finding in enumerate(dissent["findings"]):
+            want = finding["severity"] in ("P0", "P1")
+            if finding["blocking"] != want:
+                detail = f"findings[{i}].blocking: expected {want!r} for {finding['severity']}"
+                checks.append(Check("dissent_consistency", FAIL, f"quorum.dissent.{detail}"))
+        severities = [f["severity"] for f in dissent["findings"]]
+        expected = {
+            "severity_max": min(severities, default=None),
+            "blocking": any(s in ("P0", "P1") for s in severities),
+        }
+        for member, value in expected.items():
+            if member in dissent and dissent[member] != value:
+                checks.append(
+                    Check(
+                        "dissent_consistency",
+                        FAIL,
+                        f"quorum.dissent.{member}: expected {value!r} from findings",
+                    )
+                )
+    rule = quorum.get("rule")
+    if rule:
+        # The recorded rule is a necessary bar; merge-quorum also requires posting.
+        families = set(rule["counted_families"])
+        reached = len(families) >= rule["required_signals"]
+        if rule["requires_western_frontier"]:
+            reached = reached and bool(families & {"claude", "openai"})
+        if dissent.get("present") or dissent.get("dissenting_agents"):
+            reached = False
+        if reached != quorum["reached"] and (
+            quorum["reached"] or quorum["method"] != "merge-quorum"
+        ):
+            checks.append(
+                Check(
+                    "quorum_rule",
+                    WARN,
+                    f"quorum.reached: recorded {quorum['reached']}, rule implies {reached}",
+                )
+            )
+    return checks
+
+
+def _check_expiry(
+    doc: dict[str, Any], now: datetime | None, strict: bool, verified: list[dict[str, Any]]
+) -> list[Check]:
+    if doc["odr_version"] != "0.2":
+        return []
+    clock = now if now is not None else datetime.now(timezone.utc)
+    checks = []
+    for i, sig in enumerate(doc["signatures"]):
+        if sig not in verified or "expires_at" not in sig:
+            continue
+        detail = ""
+        try:
+            expires = datetime.fromisoformat(sig["expires_at"].replace("Z", "+00:00"))
+            if expires.utcoffset() is None or clock.utcoffset() is None:
+                raise ValueError("a timezone is required")
+            if clock >= expires:
+                detail = f"signatures[{i}]: expired at {sig['expires_at']}"
+        except ValueError:
+            detail = (
+                f"signatures[{i}]: cannot evaluate expires_at (timezone-aware timestamps required)"
+            )
+        if detail:
+            checks.append(Check("signature_expiry", FAIL if strict else WARN, detail))
+    return checks
+
+
+def _dissent_trail(doc: dict[str, Any]) -> list[str]:
+    trail = []
+    for finding in doc["quorum"].get("dissent", {}).get("findings", []):
+        label = "blocking" if finding["severity"] in ("P0", "P1") else "advisory"
+        trail.append(f"[{finding['severity']}] {finding['issuer']} ({label}): {finding['text']}")
+    if "adjudication" in doc:
+        if not trail:
+            trail.append("(no dissent recorded)")
+        adj = doc["adjudication"]
+        trail.append(f"Adjudication: {adj['verdict']} — {adj['reason']}")
+    return trail
 
 
 def _check_chain(doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any]] | None) -> Check:
@@ -438,9 +552,14 @@ def verify(
     *,
     public_key: Any | None = None,
     chain: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
+    strict_expiry: bool = False,
+    require_issuer: str | None = None,
 ) -> VerifyResult:
     """Verify an ODR document. ``public_key`` is a loaded Ed25519 key (see
     :func:`load_public_key`); ``chain`` is a list of parsed JSONL chain entries.
+    ``now`` overrides the timezone-aware expiry clock; ``strict_expiry`` fails
+    on expiry. ``require_issuer`` requires a verifying signer-committed v0.2 issuer.
     """
     receipt_id = str(doc.get("receipt_id") or "") if isinstance(doc, dict) else ""
     checks: list[Check] = []
@@ -457,7 +576,11 @@ def verify(
         return VerifyResult(
             ok=False, receipt_id=receipt_id, odr_digest="", checks=checks, warnings=[]
         )
-    checks.append(Check("schema_conformance", PASS, "conforms to ODR v0.1 profile"))
+    checks.append(
+        Check("schema_conformance", PASS, f"conforms to ODR v{doc['odr_version']} profile")
+    )
+    checks.append(_check_quorum_consistency(doc))
+    checks.extend(_check_v02_consistency(doc))
 
     try:
         digest_hex = odr_content_digest(doc)
@@ -474,14 +597,39 @@ def verify(
         )
     checks.append(Check("canonical_digest", PASS, f"sha-256:{digest_hex}"))
 
-    checks.append(_check_signatures(doc, digest_hex, public_key))
-    checks.append(_check_quorum_consistency(doc))
+    warnings: list[str] = []
+    verified: list[dict[str, Any]] = []
+    checks.append(_check_signatures(doc, digest_hex, public_key, warnings, verified))
+    checks.extend(_check_expiry(doc, now, strict_expiry, verified))
+    if require_issuer is not None:
+        found = doc["odr_version"] == "0.2" and any(
+            sig.get("issuer") == require_issuer for sig in verified
+        )
+        checks.append(
+            Check(
+                "require_issuer",
+                PASS if found else FAIL,
+                f"issuer {require_issuer!r}: "
+                + ("verified" if found else "no verifying v0.2 signature"),
+            )
+        )
     checks.append(_check_chain(doc, digest_hex, chain))
 
-    warnings = _weakening_warnings(doc)
+    warnings.extend(
+        c.detail
+        for c in checks
+        if c.status == WARN and c.name in ("quorum_rule", "signature_expiry")
+    )
+    warnings.extend(_weakening_warnings(doc))
     ok = not any(c.status == FAIL for c in checks)
     return VerifyResult(
-        ok=ok, receipt_id=receipt_id, odr_digest=digest_hex, checks=checks, warnings=warnings
+        ok=ok,
+        receipt_id=receipt_id,
+        odr_digest=digest_hex,
+        checks=checks,
+        warnings=warnings,
+        dissent_trail=_dissent_trail(doc),
+        key_id=verified[0]["key_id"] if verified else None,
     )
 
 
@@ -490,6 +638,9 @@ def verify_path(
     *,
     pubkey_path: str | None = None,
     chain_path: str | None = None,
+    now: datetime | None = None,
+    strict_expiry: bool = False,
+    require_issuer: str | None = None,
 ) -> VerifyResult:
     """Convenience wrapper that reads files from disk and calls :func:`verify`."""
     with open(receipt_path, "rb") as fh:
@@ -506,4 +657,11 @@ def verify_path(
                 line = line.strip()
                 if line:
                     chain.append(json.loads(line))
-    return verify(doc, public_key=public_key, chain=chain)
+    return verify(
+        doc,
+        public_key=public_key,
+        chain=chain,
+        now=now,
+        strict_expiry=strict_expiry,
+        require_issuer=require_issuer,
+    )

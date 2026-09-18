@@ -280,10 +280,11 @@ construction:
   `canonical_digest` still passes. Signers write `issuer` (required), `role`
   (`emitter` for the reference producer), `signed_at` (RFC 3339, UTC offset
   only) and `expires_at` only when supplied (later than `signed_at`); the
-  reference signer refuses to sign a 0.2 document without them. Verifiers
-  check the members' types and their commitment only: whether an entry must
-  carry `issuer`, and whether `expires_at` has passed, are verifier policy
-  that this revision does not evaluate.
+  reference signer refuses to sign a 0.2 document without them. Both verifiers
+  warn when `expires_at` has passed, or fail with `strict_expiry=True`.
+  The package CLI exposes `--strict-expiry` and `--now <iso>` for that policy.
+  Its `--require-issuer <name>` requires a verifying v0.2 signature with that
+  signer-committed issuer; a v0.1 issuer claim never satisfies the requirement.
 - In both, `signature` is base64 (or hex) of the 64 raw Ed25519 bytes,
   `key_id` is `ed25519-` + the first 16 hex digits of SHA-256 over the raw
   public key, and only entries whose `key_id` matches the supplied key count.

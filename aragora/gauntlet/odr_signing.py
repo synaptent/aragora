@@ -372,11 +372,12 @@ def _protected_members(
         signed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     signed_at_dt = _parse_rfc3339(signed_at, "signed_at")
     protected: dict[str, Any] = {"alg": ODR_SIGNATURE_ALG, "key_id": key_id, "issuer": issuer}
-    protected.update(role=role, signed_at=signed_at)
+    protected.update(role=role, signed_at=signed_at_dt.isoformat())
     if expires_at is not None:
-        if _parse_rfc3339(expires_at, "expires_at") <= signed_at_dt:
+        expires_at_dt = _parse_rfc3339(expires_at, "expires_at")
+        if expires_at_dt <= signed_at_dt:
             raise OdrSigningError("expires_at must be later than signed_at")
-        protected["expires_at"] = expires_at
+        protected["expires_at"] = expires_at_dt.isoformat()
     return protected
 
 

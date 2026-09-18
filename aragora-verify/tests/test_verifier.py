@@ -2,13 +2,164 @@
 
 from __future__ import annotations
 
+import base64
+import json
+from pathlib import Path
 
 import pytest
 
 from aragora_verify import compute_key_id, load_public_key, verify
+from aragora_verify.cli import main
+from aragora_verify.jcs import odr_content_digest, odr_signature_message
 from aragora_verify.verifier import FAIL, PASS, SKIP, WARN
 
 from _fixtures import make_keypair, sign_odr, valid_odr
+
+
+def _v02_signed(doc=None):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    # Public test material, identical to tests/gauntlet/odr_test_keys.py.
+    key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    if doc is None:
+        doc = valid_odr(odr_version="0.2")
+        doc["quorum"]["dissent"].update(
+            findings=[{"issuer": "claude", "severity": "P2", "blocking": False, "text": "Review"}],
+            severity_max="P2",
+            blocking=False,
+        )
+    entry = {
+        "alg": "Ed25519",
+        "key_id": compute_key_id(key.public_key()),
+        "issuer": "aragora",
+        "signed_at": "2000-01-01T00:00:00Z",
+        "expires_at": "2001-01-01T00:00:00Z",
+    }
+    entry["signature"] = base64.b64encode(
+        key.sign(odr_signature_message(odr_content_digest(doc), "0.2", entry))
+    ).decode()
+    doc["signatures"] = [entry]
+    return doc, key
+
+
+def test_v02_per_finding_blocking_consistency():
+    doc = valid_odr(odr_version="0.2")
+    doc["quorum"]["dissent"].update(
+        findings=[{"issuer": "claude", "severity": "P1", "blocking": False, "text": "Review"}],
+        severity_max="P1",
+        blocking=True,
+    )
+    doc, key = _v02_signed(doc)
+    fails = [c for c in verify(doc, public_key=key.public_key()).checks if c.status == FAIL]
+    assert [c.name for c in fails] == ["dissent_consistency"]
+    assert fails[0].detail == "quorum.dissent.findings[0].blocking: expected True for P1"
+    assert verify(valid_odr()).ok
+
+
+@pytest.mark.parametrize("member,value", [("severity_max", "P0"), ("blocking", True)])
+def test_v02_dissent_consistency_precedes_signature(member, value):
+    doc, key = _v02_signed()
+    doc["quorum"]["dissent"][member] = value
+    result = verify(doc, public_key=key.public_key())
+    assert next(c.name for c in result.checks if c.status == FAIL) == "dissent_consistency"
+    assert verify(valid_odr()).ok
+
+
+def test_v02_cli_flags_trail_and_issuer(tmp_path, capsys):
+    doc, key = _v02_signed()
+    receipt, pub = tmp_path / "r.json", tmp_path / "pub.pem"
+    receipt.write_text(json.dumps(doc))
+    pub.write_bytes(_pubkey_bytes(key.public_key()))
+    base = [str(receipt), "--pubkey", str(pub)]
+    assert main(base + ["--require-issuer", "aragora"]) == 0
+    output = capsys.readouterr().out
+    assert output.splitlines().count("Dissent trail") == 1
+    assert "[P2] claude (advisory): Review" in output
+    assert output.rstrip().endswith(f"=> VERIFIED (key_id={doc['signatures'][0]['key_id']})")
+    assert main(base + ["--strict-expiry"]) == 1
+    assert main(base + ["--strict-expiry", "--now", "2000-06-01T00:00:00Z"]) == 0
+    capsys.readouterr()
+    assert main(base + ["--now", "2000-06-01T00:00:00Z", "--json"]) == 0
+    assert not any("expire" in w for w in json.loads(capsys.readouterr().out)["warnings"])
+    for timestamp in ("bad", "2000-01-01T00:00:00"):
+        with pytest.raises(SystemExit) as exc:
+            main(base + ["--now", timestamp])
+        assert exc.value.code == 2
+    assert main(base + ["--require-issuer", "missing"]) == 1
+    assert main([str(receipt), "--require-issuer", "aragora"]) == 1
+    assert main([str(receipt)]) == 3
+    capsys.readouterr()
+    assert main(base + ["--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["key_id"] == compute_key_id(key.public_key())
+    assert result["dissent_trail"] == ["[P2] claude (advisory): Review"]
+    doc = sign_odr(valid_odr(), key)
+    doc["signatures"][0]["issuer"] = "aragora"
+    receipt.write_text(json.dumps(doc))
+    assert main(base + ["--require-issuer", "aragora"]) == 1
+    receipt.write_text(json.dumps(valid_odr()))
+    assert main([str(receipt)]) == 0
+    assert "(no dissent recorded)" in capsys.readouterr().out
+    assert main([str(receipt), "--json"]) == 0
+    result = json.loads(capsys.readouterr().out)
+    assert result["dissent_trail"] == [] and result["key_id"] is None
+
+
+def test_v02_issuer_requires_verifying_entry():
+    doc, key = _v02_signed()
+    doc["signatures"].insert(
+        0, dict(doc["signatures"][0], issuer="forged", key_id="ed25519-feedfacefeedface")
+    )
+    assert verify(doc, public_key=key.public_key(), require_issuer="aragora").ok
+    assert not verify(doc, public_key=key.public_key(), require_issuer="forged").ok
+    assert not verify(doc, public_key=make_keypair()[1], require_issuer="aragora").ok
+    assert not verify(valid_odr(), require_issuer="aragora").ok
+
+
+def test_v02_schema_labels_and_help(capsys):
+    doc, key = _v02_signed()
+    assert "ODR v0.2" in _check(verify(doc), "schema_conformance").detail
+    example = (
+        Path(__file__).resolve().parents[2] / "docs/specs/examples/example-approved-clean.odr.json"
+    )
+    legacy = json.loads(example.read_text()) if example.exists() else valid_odr()
+    assert "ODR v0.1" in _check(verify(legacy), "schema_conformance").detail
+    with pytest.raises(SystemExit) as exit_info:
+        main(["--help"])
+    assert exit_info.value.code == 0
+    assert "v0.2" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("severity", ["P0", "P1", "P2", "P3", None])
+def test_v02_adjudication_trail(severity, tmp_path, capsys):
+    doc = valid_odr(odr_version="0.2")
+    blocking = severity in ("P0", "P1")
+    doc["quorum"]["dissent"]["findings"] = (
+        [{"issuer": "claude", "severity": severity, "blocking": blocking, "text": "Finding"}]
+        if severity
+        else []
+    )
+    doc["adjudication"] = {
+        "kind": "review_adjudication.v1",
+        "verdict": "settle",
+        "reason": "Reviewed",
+    }
+    doc, key = _v02_signed(doc)
+    path = tmp_path / "adjudicated.json"
+    pub = tmp_path / "pub.pem"
+    path.write_text(json.dumps(doc))
+    pub.write_bytes(_pubkey_bytes(key.public_key()))
+    assert main([str(path), "--pubkey", str(pub)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    label = "blocking" if blocking else "advisory"
+    finding = f"[{severity}] claude ({label}): Finding" if severity else "(no dissent recorded)"
+    assert lines[-4:] == [
+        "Dissent trail",
+        finding,
+        "Adjudication: settle — Reviewed",
+        f"  => VERIFIED (key_id={compute_key_id(key.public_key())})",
+    ]
+    assert verify(valid_odr()).ok
 
 
 def _check(result, name):

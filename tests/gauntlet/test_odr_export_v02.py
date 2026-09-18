@@ -177,6 +177,10 @@ def test_optional_content_types_and_unknowns(monkeypatch, version, member):
             check = next(c for c in result.checks if c.name == "schema_conformance")
             assert "not in profile 0.1" in check.detail
         return
+    if member == "verdicts":
+        doc["quorum"]["participants"].append(
+            {"agent": "reviewer", "model_family": "openai", "model_id": "undisclosed"}
+        )
     assert verify(doc).ok and verify_odr_document(doc).ok
     target = parent[member][0] if isinstance(value, list) else parent[member]
     target["unexpected"] = True
@@ -219,7 +223,12 @@ def test_settlement_content_version_scoped_and_copied(version):
             "western_only_counted": False,
             "counted_families": [],
         },
-        "dissent": {"findings": [], "severity_max": "P2", "blocking": False, "present": True},
+        "dissent": {
+            "findings": [{"issuer": "reviewer", "severity": "P2", "blocking": False, "text": "x"}],
+            "severity_max": "P2",
+            "blocking": False,
+            "present": True,
+        },
         "observations": [{"kind": "failure", "family": "grok", "detail": "boom"}],
         "adjudication": {"kind": "review_adjudication.v1", "verdict": "settle", "reason": "ok"},
         "mechanism": {"type": "merge-quorum", "tier": 2},

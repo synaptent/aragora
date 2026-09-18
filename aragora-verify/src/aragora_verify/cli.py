@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from typing import Sequence
 
 from . import __version__
@@ -49,15 +50,28 @@ def _render(result: VerifyResult) -> str:
         for warning in result.warnings:
             lines.append(f"    ! {warning}")
     lines.append("")
-    lines.append(f"  => {verdict}")
+    lines.append("Dissent trail")
+    lines.extend(result.dissent_trail or ["(no dissent recorded)"])
+    key = f" (key_id={result.key_id})" if result.key_id else ""
+    lines.append(f"  => {verdict}{key}")
     return "\n".join(lines)
+
+
+def _now(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.utcoffset() is None:
+            raise ValueError("timezone required")
+        return parsed
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("--now requires an ISO timestamp with timezone") from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aragora-verify",
         description=(
-            "Offline verifier for Open Decision Receipts (ODR v0.1): schema "
+            "Offline verifier for Open Decision Receipts (ODR v0.1 and v0.2): schema "
             "conformance, JCS canonical digest, Ed25519 signature, hash-chain "
             "link, and quorum consistency. No Aragora install or account required."
         ),
@@ -74,6 +88,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="hash-chain file (JSONL); checks the receipt is anchored and the chain links",
     )
     parser.add_argument("--json", action="store_true", help="emit the structured result as JSON")
+    parser.add_argument(
+        "--now", type=_now, metavar="ISO", help="clock for signature expiry (default: now UTC)"
+    )
+    parser.add_argument(
+        "--strict-expiry", action="store_true", help="fail instead of warning on expired signatures"
+    )
+    parser.add_argument(
+        "--require-issuer", metavar="NAME", help="require a verifying v0.2 signature from NAME"
+    )
     parser.add_argument("--version", action="version", version=f"aragora-verify {__version__}")
     return parser
 
@@ -81,7 +104,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        result = verify_path(args.receipt, pubkey_path=args.pubkey, chain_path=args.chain)
+        result = verify_path(
+            args.receipt,
+            pubkey_path=args.pubkey,
+            chain_path=args.chain,
+            now=args.now,
+            strict_expiry=args.strict_expiry,
+            require_issuer=args.require_issuer,
+        )
     except FileNotFoundError as exc:
         print(f"error: file not found: {exc.filename}", file=sys.stderr)
         return 2

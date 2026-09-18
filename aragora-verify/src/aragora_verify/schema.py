@@ -88,10 +88,23 @@ def _check_quorum(errors: list[str], value: Any) -> None:
     ):
         if field not in value:
             errors.append(f"quorum.{field}: required when present")
+    for field, expected in (("participants", list), ("dissent", dict)):
+        if field in value and not isinstance(value[field], expected):
+            errors.append(f"quorum.{field}: must be a {expected.__name__}")
+    if "method" in value and not isinstance(value["method"], str):
+        errors.append("quorum.method: must be a string")
+    if "reached" in value and not isinstance(value["reached"], bool):
+        errors.append("quorum.reached: must be a boolean")
+    if "independence" in value and not isinstance(value["independence"], dict):
+        errors.append("quorum.independence: must be an object")
     participants = value.get("participants")
     if isinstance(participants, list):
         for i, p in enumerate(participants):
-            if not isinstance(p, dict) or "agent" not in p or "model_family" not in p:
+            if (
+                not isinstance(p, dict)
+                or not isinstance(p.get("agent"), str)
+                or "model_family" not in p
+            ):
                 errors.append(f"quorum.participants[{i}]: requires agent and model_family")
 
 
@@ -187,7 +200,7 @@ def _check_signatures(errors: list[str], value: Any) -> None:
             if not isinstance(sig.get(field), str) or not sig.get(field):
                 errors.append(f"signatures[{i}].{field}: required non-empty string")
         if sig.get("alg") not in (None, "Ed25519") and isinstance(sig.get("alg"), str):
-            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined in v0.1")
+            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined")
         # Metadata is optional on both versions (one schema for both) but strictly
         # typed when present; only a v0.2 signature commits it (spec §6).
         if "issuer" in sig and (not isinstance(sig["issuer"], str) or not sig["issuer"]):
@@ -254,7 +267,7 @@ def validate_structure(doc: Any) -> list[str]:
     _check_attestation(errors, doc.get("attestation"))
     routing = doc.get("routing")
     if not isinstance(routing, dict) or routing.get("status") != "reserved":
-        errors.append("routing.status: must be 'reserved' in v0.1")
+        errors.append("routing.status: must be 'reserved'")
     _check_signatures(errors, doc.get("signatures"))
 
     _validate_extensions(errors, doc, load_bundled_schema())
