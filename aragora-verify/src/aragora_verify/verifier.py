@@ -703,10 +703,14 @@ def verify_path(
         with open(acta_path, "rb") as fh:
             acta = json.loads(fh.read())
     if looks_like_acta_envelope(doc):
-        # The receipt argument is itself a projection: verify the document it
-        # carries, against the explicit --acta envelope when one was supplied.
-        detected, doc = doc, doc["payload"]["odr"]
-        acta = acta if acta is not None else detected
+        if acta is not None:
+            # Verifying the --acta file while printing a verdict for the file
+            # the caller named would leave that file unchecked.
+            raise VerificationError(
+                f"{receipt_path} is itself an ACTA-02 projection: pass it alone, "
+                "or pass the ODR document it carries with --acta"
+            )
+        acta, doc = doc, doc["payload"]["odr"]
     public_key = None
     if pubkey_path:
         with open(pubkey_path, "rb") as fh:

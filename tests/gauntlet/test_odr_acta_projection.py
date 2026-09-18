@@ -377,3 +377,18 @@ def test_a_lone_non_genesis_link_is_reported_as_skipped_not_passed(odr, private_
     assert result.ok is True
     assert [c.status for c in result.checks if c.name == "acta_chain"] == ["skip"]
     assert [c.status for c in result.checks if c.name == "acta_chain"] != ["pass"]
+
+
+def test_project_rejects_an_issued_at_the_verifier_would_reject(odr, private_key, kid):
+    """Producer and consumer share one definition of a usable timestamp."""
+    with pytest.raises(ValueError, match="issued_at"):
+        project_to_acta(odr, private_key=private_key, kid=kid, issued_at="not-a-timestamp")
+
+
+def test_project_rejects_a_naive_datetime_rather_than_calling_it_utc(odr, private_key, kid):
+    from datetime import datetime
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        project_to_acta(
+            odr, private_key=private_key, kid=kid, issued_at=datetime(2026, 6, 14, 12, 0, 0)
+        )

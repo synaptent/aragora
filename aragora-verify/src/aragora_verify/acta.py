@@ -263,10 +263,13 @@ def _rfc3339(value: datetime | str | None) -> str:
     if value is None:
         value = datetime.now(timezone.utc)
     if isinstance(value, datetime):
-        moment = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-        return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    if not isinstance(value, str) or not value:
-        raise ValueError("issued_at must be a datetime or a non-empty RFC 3339 string")
+        if value.tzinfo is None:
+            # A naive datetime is usually local wall clock; relabelling it UTC
+            # would sign the wrong instant into an audit artifact.
+            raise ValueError("issued_at datetime must be timezone-aware")
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not isinstance(value, str) or not _is_rfc3339(value):
+        raise ValueError("issued_at must be an aware datetime or an RFC 3339 timestamp string")
     return value
 
 
@@ -327,7 +330,7 @@ def _shape_errors(envelope: Any) -> list[str]:
         errors.append(f"payload.chain_scope must be {ACTA_CHAIN_SCOPE!r}")
     issued_at = payload.get("issued_at")
     if not isinstance(issued_at, str) or not _is_rfc3339(issued_at):
-        errors.append("payload.issued_at must be an RFC 3339 timestamp with a UTC offset")
+        errors.append("payload.issued_at must be an RFC 3339 timestamp with a time offset")
     if kid is not None and payload.get("issuer_id") != kid:
         errors.append("payload.issuer_id must equal signature.kid")
     link = payload.get("previousReceiptHash")

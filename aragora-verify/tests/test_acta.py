@@ -335,15 +335,22 @@ def test_cli_fails_an_envelope_relabelled_with_another_kid(
     assert "signer-label tampering" in out
 
 
-def test_cli_accepts_an_envelope_given_as_both_receipt_and_acta(
-    projection, pubkey_file, capsys
+def test_cli_rejects_an_envelope_given_as_both_receipt_and_acta(
+    projection, pubkey_file, tmp_path, capsys
 ) -> None:
+    """Never print a verdict for the named file without checking it."""
     _, acta_path = projection
+    forged = json.loads(acta_path.read_text())
+    forged["signature"]["sig"] = "0" * 128
+    forged_path = tmp_path / "forged.acta.json"
+    forged_path.write_bytes(jcs_canonicalize(forged))
 
-    code = main([str(acta_path), "--acta", str(acta_path), "--pubkey", str(pubkey_file)])
+    code = main([str(forged_path), "--acta", str(acta_path), "--pubkey", str(pubkey_file)])
 
-    assert code == 0
-    assert "VERIFIED" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "VERIFIED" not in captured.out
+    assert "itself an ACTA-02 projection" in captured.err
 
 
 def test_bundled_copy_rejects_an_impossible_issued_at(odr, private_key) -> None:
