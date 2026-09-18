@@ -51,25 +51,54 @@ class LaunchError(Exception):
         super().__init__(category)
 
 
-def _directory(path: Path) -> None:
-    info = path.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+def _open_directory(path: Path) -> int:
+    parts = list(path.absolute().parts[1:])
+    if ".." in parts:
         raise LaunchError("unsafe_directory")
-    # Root-owned sticky temp ancestors cannot rename another owner's entry.
-    for ancestor in path.absolute().parents:
-        info = ancestor.stat()
-        sticky_root = info.st_uid == 0 and info.st_mode & stat.S_ISVTX
-        if info.st_uid not in {0, os.getuid()} or (info.st_mode & 0o022 and not sticky_root):
-            raise LaunchError("unsafe_directory")
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    fd = os.open("/", flags)
+    at_root = True
+    try:
+        while True:
+            info = os.fstat(fd)
+            sticky_root = info.st_uid == 0 and info.st_mode & stat.S_ISVTX
+            if info.st_uid not in {0, os.getuid()} or (
+                info.st_mode & 0o022 and not (parts and sticky_root)
+            ):
+                raise LaunchError("unsafe_directory")
+            if not parts:
+                if info.st_uid != os.getuid():
+                    raise LaunchError("unsafe_directory")
+                return fd
+            part = parts.pop(0)
+            # Only macOS's protected root aliases are expanded; the physical
+            # target is still opened and checked one descriptor at a time.
+            if at_root and sys.platform == "darwin" and part in {"var", "tmp", "etc"}:
+                alias = os.stat(part, dir_fd=fd, follow_symlinks=False)
+                if stat.S_ISLNK(alias.st_mode):
+                    if alias.st_uid != 0 or os.readlink(part, dir_fd=fd) not in {
+                        "private/" + part,
+                        "/private/" + part,
+                    }:
+                        raise LaunchError("unsafe_directory")
+                    parts = ["private", part] + parts
+                    continue
+            child = os.open(part, flags, dir_fd=fd)
+            os.close(fd)
+            fd = child
+            at_root = False
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _directory(path: Path) -> None:
+    os.close(_open_directory(path))
 
 
 def _json(path: Path, private: bool = True) -> dict:
-    _directory(path.parent)
-    parent = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    parent = _open_directory(path.parent)
     try:
-        info = os.fstat(parent)
-        if info.st_uid != os.getuid() or info.st_mode & 0o022:
-            raise LaunchError("unsafe_directory")
         fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         with os.fdopen(fd, "rb") as stream:
             info = os.fstat(stream.fileno())
@@ -459,6 +488,40 @@ def _read_prompt(deadline: float) -> bytes:
     raise LaunchError("input_limit")
 
 
+def _deliver(payload: bytes, deadline: float) -> None:
+    fd = sys.stdout.fileno()
+    blocking = os.get_blocking(fd)
+    try:
+        os.set_blocking(fd, False)
+        pending = memoryview(payload)
+        while pending:
+            if not select.select([], [fd], [], _remaining(deadline))[1]:
+                raise LaunchError("timeout")
+            _remaining(deadline)
+            try:
+                count = os.write(fd, pending[:65536])
+            except BlockingIOError:
+                continue
+            pending = pending[count:]
+        _remaining(deadline)
+    finally:
+        os.set_blocking(fd, blocking)
+
+
+def _diagnostic(category: str) -> None:
+    # A blocked diagnostic sink must not defeat timeout/error termination.
+    fd = sys.stderr.fileno()
+    try:
+        blocking = os.get_blocking(fd)
+        try:
+            os.set_blocking(fd, False)
+            os.write(fd, ("native_claude_launch: " + category + "\n").encode())
+        finally:
+            os.set_blocking(fd, blocking)
+    except OSError:
+        pass
+
+
 def main(argv=None) -> int:
     try:
         args = list(sys.argv[1:] if argv is None else argv)
@@ -541,17 +604,17 @@ def main(argv=None) -> int:
         category = _failure(code, out, err, options.model)
         if category:
             raise LaunchError(category)
-        _remaining(deadline)
-        sys.stdout.buffer.write(
-            (json.loads(out)["result"] + "\n").encode() if output_format == "text" else out
+        _deliver(
+            (json.loads(out)["result"] + "\n").encode() if output_format == "text" else out,
+            deadline,
         )
         # Never forward untrusted CLI diagnostics, which may echo prompt/config.
         return 0
     except LaunchError as exc:
-        print("native_claude_launch: " + exc.category, file=sys.stderr)
+        _diagnostic(exc.category)
         return 124 if exc.category == "timeout" else 1
     except (OSError, ValueError, KeyError, TypeError, RecursionError):
-        print("native_claude_launch: input_or_runtime_unavailable", file=sys.stderr)
+        _diagnostic("input_or_runtime_unavailable")
         return 1
 
 

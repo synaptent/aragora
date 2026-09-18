@@ -33,6 +33,10 @@ identities, malformed inputs and insufficient lifetime fail closed. Filename
 changes do not select a different account. Remaining lifetime must strictly
 exceed the requested deadline plus 300 seconds.
 
+Private reads validate each physical ancestor through pinned directory descriptors.
+Intermediate symlinks are rejected except protected macOS `/var`, `/tmp`, and
+`/etc` root aliases, whose physical targets receive the same validation.
+
 ```bash
 printf 'Reply exactly OK' | scripts/claude_profile.sh exec-claude example-profile \
   --model APPROVED_MODEL --timeout-seconds 90 -- --output-format json
@@ -51,6 +55,10 @@ policy is held for explicit qualification, never disabled to make a probe pass.
 Claude Code 2.x is eligible only when the required runtime flags are available.
 Absent local policy files do not prove absence of uncached server-managed policy;
 that admission question must be resolved before activating a real account.
+
+The deadline includes result delivery. A blocked output pipe terminates with
+timeout, possibly after partial output; only exit zero indicates complete delivery.
+Diagnostics are best-effort and cannot extend termination by blocking on stderr.
 
 The launcher does not persist tokens or forward unrelated credential variables.
 An environment secret remains visible to sufficiently privileged local software.

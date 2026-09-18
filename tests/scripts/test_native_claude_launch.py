@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import signal
@@ -87,7 +88,7 @@ def launch(tmp_path):
             print(prompt[5:], file=sys.stderr); sys.exit(1)
         if token not in ('unit-only-access-token', 'rotated-access-token'):
             print('401 OAuth access token has been revoked', file=sys.stderr); sys.exit(1)
-        print(json.dumps({'type': 'result', 'result': 'OK', 'argv': sys.argv[1:],
+        print(json.dumps({'type': 'result', 'result': ('x' * 1048576 if prompt == 'large' else 'OK'), 'argv': sys.argv[1:],
                           'fresh_auth': True, 'env_keys': sorted(os.environ),
                           'modelUsage': {(prompt if prompt == 'wrong-model' else 'fixture-model'): {'inputTokens': 1}}}))
     """)
@@ -417,3 +418,95 @@ def test_preflight_cannot_extend_overall_deadline(launch):
 def test_two_x_runtime_with_required_capabilities_is_eligible(launch, version):
     launch[5].write_text(launch[5].read_text().replace("2.1.268", version))
     assert launch[0](extra=("--output-format", "text")).stdout == "OK\n"
+
+
+@pytest.mark.parametrize("output_format", ["json", "text"])
+@pytest.mark.parametrize("sink", ["blocked", "closed", "draining"])
+def test_result_delivery_owns_remaining_deadline(launch, output_format, sink):
+    _, _, _, _, env, fake = launch
+    args = ["/bin/bash", str(WRAPPER), "exec-claude", "max-test"]
+    args += ["--model", "fixture-model", "--timeout-seconds", "1"]
+    args += ["--", "--output-format", output_format]
+    with subprocess.Popen(
+        args,
+        env=env,
+        cwd=fake.parent.parent,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ) as proc:
+        try:
+            proc.stdin.write(b"large")
+            proc.stdin.close()
+            proc.stdin = None
+            if sink == "closed":
+                proc.stdout.close()
+            if sink != "draining":
+                assert proc.wait(timeout=3) == (124 if sink == "blocked" else 1)
+                assert b"native_claude_launch:" in proc.stderr.read()
+            else:
+                out, err = proc.communicate(timeout=3)
+                assert proc.returncode == 0 and not err
+                value = (
+                    json.loads(out)["result"] if output_format == "json" else out.decode().strip()
+                )
+                assert value == "x" * 1048576
+            assert Path(str(fake) + ".calls").read_text().splitlines() == ["generation"]
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+
+
+@pytest.fixture
+def native():
+    spec = importlib.util.spec_from_file_location(
+        "native_launch", WRAPPER.with_name("native_claude_launch.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("mode", [0o700, 0o777])
+def test_private_read_rejects_intermediate_symlink(native, tmp_path, mode):
+    root = tmp_path.resolve()
+    target = root / "physical" / "owned" / "auth"
+    put(target / "credential.json", {"synthetic": True})
+    (root / "physical").chmod(mode)
+    alias = root / "alias"
+    alias.symlink_to(target.parent, target_is_directory=True)
+    with pytest.raises((native.LaunchError, OSError)):
+        native.read_private_json(alias / "auth" / "credential.json")
+    if mode == 0o700:
+        assert native.read_private_json(target / "credential.json") == {"synthetic": True}
+    else:
+        with pytest.raises(native.LaunchError):
+            native.read_private_json(target / "credential.json")
+
+
+def test_private_read_remains_bound_when_ancestor_is_replaced(native, tmp_path, monkeypatch):
+    root = tmp_path.resolve() / "trusted"
+    put(root / "auth" / "credential.json", {"original": True})
+    replacement = tmp_path.resolve() / "replacement"
+    put(replacement / "auth" / "credential.json", {"substituted": True})
+    original_open = os.open
+    replaced = []
+
+    def swap_after_open(path, *args, **kwargs):
+        fd = original_open(path, *args, **kwargs)
+        if path == "trusted" and not replaced:
+            root.rename(root.with_name("preserved"))
+            root.symlink_to(replacement, target_is_directory=True)
+            replaced.append(True)
+        return fd
+
+    monkeypatch.setattr(native.os, "open", swap_after_open)
+    assert native.read_private_json(root / "auth" / "credential.json") == {"original": True}
+    assert replaced, "must open and validate each directory component"
+
+
+def test_system_temporary_alias_is_safe(native, tmp_path):
+    physical = tmp_path.resolve() / "safe.json"
+    put(physical, {"synthetic": True})
+    alias = Path(str(physical).replace("/private/var/", "/var/", 1))
+    assert native.read_private_json(alias) == {"synthetic": True}
