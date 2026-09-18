@@ -30,6 +30,7 @@ from aragora_verify.acta import (
 )
 from aragora_verify.cli import main
 from aragora_verify.jcs import jcs_canonicalize, odr_signature_message
+from aragora_verify.verifier import verify
 
 _COPY = Path(__file__).resolve().parents[1] / "src" / "aragora_verify" / "acta.py"
 _IN_TREE = Path(__file__).resolve().parents[2] / "aragora" / "gauntlet" / "odr_acta_projection.py"
@@ -168,6 +169,33 @@ def test_verify_rejects_a_broken_binding(odr, private_key):
     assert result.to_dict()["ok"] is False
 
 
+def test_verify_rejects_an_empty_preview(odr, private_key):
+    kid = compute_key_id(private_key.public_key())
+    envelope = project_to_acta(odr, private_key=private_key, kid=kid)
+    envelope["payload"]["payload_digest"]["preview"] = ""
+
+    result = verify_acta_projection(envelope, private_key.public_key())
+
+    assert result.ok is False
+    assert any("preview" in reason for reason in result.reasons)
+
+
+def test_receipt_match_compares_canonical_bytes_not_python_equality(private_key):
+    kid = compute_key_id(private_key.public_key())
+    as_bool = _signed_v02_odr(private_key)
+    as_bool["quorum"]["independence"]["distinct_model_families"] = True
+    as_int = copy.deepcopy(as_bool)
+    as_int["quorum"]["independence"]["distinct_model_families"] = 1
+    envelope = project_to_acta(as_bool, private_key=private_key, kid=kid)
+
+    result = verify(as_int, public_key=private_key.public_key(), acta=envelope)
+
+    assert as_bool == as_int, "Python equality cannot tell JSON true from 1"
+    assert jcs_canonicalize(as_bool) != jcs_canonicalize(as_int)
+    match = next(check for check in result.checks if check.name == "acta_receipt_match")
+    assert match.status == "fail"
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -247,6 +275,29 @@ def test_cli_reports_a_missing_projection_file_as_usage(projection, pubkey_file,
 
     assert exit_code == 2
     assert "not found" in capsys.readouterr().err
+
+
+def test_cli_without_a_public_key_reports_unverified(tmp_path, private_key, capsys):
+    """An envelope always carries a signature, so leaving it unchecked is not VERIFIED."""
+    unsigned = valid_odr("0.2")
+    unsigned["profile"] = "https://aragora.ai/specs/open-decision-receipt/v0.2"
+    envelope = project_to_acta(
+        unsigned, private_key=private_key, kid=compute_key_id(private_key.public_key())
+    )
+    odr_path = tmp_path / "unsigned.odr.json"
+    odr_path.write_bytes(jcs_canonicalize(unsigned))
+    acta_path = tmp_path / "unsigned.acta.json"
+    acta_path.write_bytes(jcs_canonicalize(envelope))
+
+    assert main([str(odr_path)]) == 0, "an unsigned receipt on its own stays a warning"
+    capsys.readouterr()
+
+    exit_code = main([str(odr_path), "--acta", str(acta_path)])
+
+    out = capsys.readouterr().out
+    assert exit_code == 3
+    assert "UNVERIFIED" in out
+    assert "acta_signature" in out
 
 
 def test_cli_help_lists_the_flag(capsys):

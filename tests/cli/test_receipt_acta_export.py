@@ -234,3 +234,32 @@ def test_unwritable_projection_path_leaves_no_receipt_behind(
     assert exc.value.code == 1
     assert "Cannot write" in capsys.readouterr().err
     assert not (tmp_path / "x.odr.json").exists()
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_a_failed_pair_write_keeps_an_existing_output_file(
+    tmp_path, receipt, key_file, capsys, monkeypatch
+):
+    monkeypatch.setenv(FILE_ENV, str(key_file))
+    existing = tmp_path / "x.odr.json"
+    existing.write_text("PREVIOUS EXPORT")
+    unwritable = tmp_path / "missing-dir" / "x.acta.json"
+
+    with pytest.raises(SystemExit) as exc:
+        _run(_export_argv(receipt, tmp_path, "--odr-version", "0.2", "--acta", str(unwritable)))
+
+    assert exc.value.code == 1
+    assert existing.read_text() == "PREVIOUS EXPORT"
+
+
+def test_acta_and_output_may_not_be_the_same_file(tmp_path, receipt, key_file, capsys, monkeypatch):
+    monkeypatch.setenv(FILE_ENV, str(key_file))
+    both = tmp_path / "x.odr.json"
+
+    with pytest.raises(SystemExit) as exc:
+        _run(_export_argv(receipt, tmp_path, "--odr-version", "0.2", "--acta", str(both)))
+
+    err = capsys.readouterr().err
+    assert exc.value.code == 2
+    assert "--acta" in err and "--output" in err
+    assert not both.exists()

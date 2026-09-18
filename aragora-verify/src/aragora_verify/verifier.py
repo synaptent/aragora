@@ -45,7 +45,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .acta import verify_acta_projection
-from .jcs import odr_content_digest, odr_signature_message
+from .jcs import jcs_canonicalize, odr_content_digest, odr_signature_message
 from .schema import validate_structure
 
 __all__ = [
@@ -112,8 +112,12 @@ class VerifyResult:
         supplied but the receipt carries no signatures to check (PR #8802 round-5
         review [P2]). Such a receipt is structurally OK but NOT authenticated, so
         callers must not treat it as "verified" even though no check hard-failed.
-        An unsigned receipt verified WITHOUT a key stays WARN (the v0.1 norm)."""
-        return any(c.name == "signature" and c.status == SKIP for c in self.checks)
+        An unsigned receipt verified WITHOUT a key stays WARN (the v0.1 norm).
+        An ACTA projection always carries a signature (it is REQUIRED by the
+        envelope shape), so a skipped `acta_signature` is unverified too."""
+        return any(
+            c.name in ("signature", "acta_signature") and c.status == SKIP for c in self.checks
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -554,7 +558,12 @@ def _check_projection(envelope: Any, doc: dict[str, Any], public_key: Any | None
     checks = [Check(c.name, c.status, c.detail) for c in result.checks]
     payload = envelope.get("payload") if isinstance(envelope, dict) else None
     projected = payload.get("odr") if isinstance(payload, dict) else None
-    matches = projected == doc
+    # Canonical bytes, not dict equality: JSON `true` and `1` compare equal in
+    # Python but hash differently, and this check backs a digest claim.
+    try:
+        matches = jcs_canonicalize(projected) == jcs_canonicalize(doc)
+    except (TypeError, ValueError):
+        matches = False
     checks.append(
         Check(
             "acta_receipt_match",

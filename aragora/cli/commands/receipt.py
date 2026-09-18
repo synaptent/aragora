@@ -900,8 +900,18 @@ def _resolve_receipt_data(receipt_ref: str) -> dict[str, Any] | None:
     return data
 
 
-def _odr_document(data: dict[str, Any], *, odr_version: str | None = None) -> dict[str, Any]:
-    """Build the Open Decision Receipt document for a receipt dict, signed if configured."""
+def _odr_document(
+    data: dict[str, Any],
+    *,
+    odr_version: str | None = None,
+    signer: Ed25519PrivateKey | None = None,
+) -> dict[str, Any]:
+    """Build the Open Decision Receipt document for a receipt dict, signed if configured.
+
+    An already-loaded ``signer`` key is reused rather than re-read, so a
+    rotation between two loads cannot sign the document and its ACTA projection
+    with different keys.
+    """
     from aragora.gauntlet.odr_export import (
         ODR_DEFAULT_VERSION,
         calibration_provenance_for_receipt,
@@ -919,7 +929,9 @@ def _odr_document(data: dict[str, Any], *, odr_version: str | None = None) -> di
         odr_version=odr_version if odr_version is not None else ODR_DEFAULT_VERSION,
         calibration_provenance=calibration_provenance_for_receipt(receipt),
     )
-    return sign_odr_if_configured(odr)
+    if signer is None:
+        return sign_odr_if_configured(odr)
+    return sign_odr_if_configured(odr, key_loader=lambda: signer)
 
 
 def _export_odr(data: dict[str, Any], *, odr_version: str | None = None) -> str:
@@ -930,7 +942,7 @@ def _export_odr(data: dict[str, Any], *, odr_version: str | None = None) -> str:
 
 
 def _acta_signing_key(
-    output_format: str, output_path: str | None, odr_version: str | None
+    output_format: str, output_path: str | None, acta_path: str, odr_version: str | None
 ) -> Ed25519PrivateKey:
     """Check the ``--acta`` preconditions and resolve the signing key, or exit.
 
@@ -951,6 +963,13 @@ def _acta_signing_key(
             file=sys.stderr,
         )
         sys.exit(2)
+    if Path(acta_path).resolve() == Path(output_path).resolve():
+        print(
+            "Error: --acta and --output must name different files; "
+            "the projection does not replace the ODR document",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     if odr_version != "0.2":
         print(
             "Error: --acta projects signed v0.2 documents; pass --odr-version 0.2 "
@@ -963,6 +982,30 @@ def _acta_signing_key(
     except OdrSigningError as exc:
         print(f"Error: --acta requires a usable ODR signing key: {exc}", file=sys.stderr)
         sys.exit(1)
+
+
+def _write_export_pair(
+    output_path: str, content: str | bytes, acta_path: str, acta_content: str
+) -> None:
+    """Write the ODR document and its projection, or leave both paths untouched.
+
+    Each artifact is staged beside its target and moved into place only once
+    both have been written, so a failure never clobbers an existing file.
+    """
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for target, payload in ((Path(output_path), content), (Path(acta_path), acta_content)):
+            with tempfile.NamedTemporaryFile(
+                dir=target.parent, prefix=f".{target.name}.", suffix=".part", delete=False
+            ) as handle:
+                handle.write(payload.encode("utf-8") if isinstance(payload, str) else payload)
+                staged.append((Path(handle.name), target))
+        for source, target in staged:
+            os.replace(source, target)
+    except (OSError, UnicodeError):
+        for source, _ in staged:
+            source.unlink(missing_ok=True)
+        raise
 
 
 def cmd_receipt_export(args: argparse.Namespace) -> None:
@@ -982,7 +1025,9 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
         except ValueError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(2)
-    signing_key = _acta_signing_key(output_format, output_path, odr_version) if acta_path else None
+    signing_key = (
+        _acta_signing_key(output_format, output_path, acta_path, odr_version) if acta_path else None
+    )
 
     if not receipt_path:
         print("Error: Receipt file path or ID required", file=sys.stderr)
@@ -1002,7 +1047,7 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
         from aragora.gauntlet.odr_signing import OdrSigningError
 
         try:
-            odr = _odr_document(data, odr_version=odr_version)
+            odr = _odr_document(data, odr_version=odr_version, signer=signing_key)
             content = jcs_canonicalize(odr).decode("utf-8")
             if signing_key is not None:
                 from aragora.gauntlet.odr_acta_projection import project_to_acta
@@ -1066,24 +1111,24 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
                 sys.exit(1)
 
     if output_path:
-        try:
-            if isinstance(content, bytes):
-                Path(output_path).write_bytes(content)
-            else:
-                Path(output_path).write_text(content)
-        except (OSError, UnicodeError) as exc:
-            print(f"Error: Cannot write receipt export: {exc}", file=sys.stderr)
-            sys.exit(1)
         if acta_content is None or not acta_path:
+            try:
+                if isinstance(content, bytes):
+                    Path(output_path).write_bytes(content)
+                else:
+                    Path(output_path).write_text(content)
+            except (OSError, UnicodeError) as exc:
+                print(f"Error: Cannot write receipt export: {exc}", file=sys.stderr)
+                sys.exit(1)
             print(f"Exported to {output_path}")
         else:
             try:
-                Path(acta_path).write_text(acta_content)
+                _write_export_pair(output_path, content, acta_path, acta_content)
             except (OSError, UnicodeError) as exc:
-                # The pair is the deliverable: a receipt left behind without its
-                # projection is indistinguishable from a plain --format odr export.
-                Path(output_path).unlink(missing_ok=True)
-                print(f"Error: Cannot write ACTA projection: {exc}", file=sys.stderr)
+                print(
+                    f"Error: Cannot write the receipt and its ACTA projection: {exc}",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             print(f"Exported to {output_path} and {acta_path}")
     else:

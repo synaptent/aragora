@@ -299,8 +299,14 @@ def _digest_errors(digest: Any) -> list[str]:
     size = digest.get("size")
     if not isinstance(size, int) or isinstance(size, bool) or size < 0:
         errors.append("payload.payload_digest.size must be a non-negative integer")
-    if "preview" in members and not isinstance(digest["preview"], str):
-        errors.append("payload.payload_digest.preview must be a string")
+    if "preview" in members and not (
+        isinstance(digest["preview"], str) and 0 < len(digest["preview"]) <= PREVIEW_MAX_CHARS
+    ):
+        # An empty preview would satisfy the prefix binding check while claiming
+        # nothing; a producer with nothing to show omits the member instead.
+        errors.append(
+            f"payload.payload_digest.preview must be 1-{PREVIEW_MAX_CHARS} characters when present"
+        )
     return errors
 
 
