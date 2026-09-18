@@ -1,0 +1,13 @@
+{
+  "verifier": {
+    "verified": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "aragora_verify": {
+    "ok": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "description": "Head of a three-link ACTA-02 chain; chain_three.chain.json carries all three envelopes, genesis first."
+}
