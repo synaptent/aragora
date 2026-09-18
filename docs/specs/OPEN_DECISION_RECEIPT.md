@@ -339,10 +339,10 @@ This table maps *evidence availability*, not legal conformity: ODR makes the
 facts inspectable; conformity assessment remains the deployer's process (see
 `docs/compliance/EU_AI_ACT_GUIDE.md`).
 
-**Instrument and dates.** Article 14 is read here as amended by
-Regulation (EU) 2026/1744 (the "Digital Omnibus on AI", OJ L 2026/1744,
+**Instrument and dates.** Article 14 is read here under the application dates
+set by Regulation (EU) 2026/1744 (the "Digital Omnibus on AI", OJ L 2026/1744,
 published 2026-07-24, in force 2026-07-27), which restates Article 113 of
-Regulation (EU) 2024/1689:
+Regulation (EU) 2024/1689 without changing Article 14 itself:
 
 - Article 6(2) / `Annex III` high-risk systems: Chapter III applies from 2027-12-02.
 - Article 6(1) / `Annex I` product-embedded high-risk systems: from 2028-08-02.
@@ -371,11 +371,15 @@ in `quorum.supporting_agents` and `quorum.dissent.dissenting_agents` should
 appear among `quorum.participants[].agent`. A mismatch is a malformed-receipt
 signal (emitter bug or tampering), not a mere weakening.
 
-Both bundled verifiers report one consistency set under the single check name
-`dissent_consistency`: those participant and verdict cross-checks, the two
-aggregate dissent members `quorum.dissent.severity_max` and
-`quorum.dissent.blocking`, and each `quorum.dissent.findings[].blocking`
-against its own severity.
+Both bundled verifiers report that cross-check as `quorum_consistency`, and on
+a v0.2 document they add two more: `verdicts_consistency`, that every
+`quorum.verdicts[].issuer` is a participant, and `dissent_consistency`, that
+`quorum.dissent.severity_max` and `quorum.dissent.blocking` follow from
+`quorum.dissent.findings[]` and that each `findings[].blocking` matches its own
+severity, with the offending index named in the failure detail. A fourth check,
+`quorum_rule`, compares `quorum.reached` against the recorded `quorum.rule` and
+warns rather than fails, because the gate it re-derives also requires the
+evidence to have been posted.
 
 ## 9. Versioning and Stability
 
@@ -561,6 +565,7 @@ are unmet and the table says so member by member.
 | `hook_latency_ms` | ACTA-02 | divergent | Not emitted: no policy-evaluation hook runs on the projection path. | ACTA §2.2 |
 | `tool_duration_ms` | ACTA-02 | divergent | Not emitted: there is no post-execution tool invocation to time. | ACTA §2.2 |
 | `previousReceiptHash` | ACTA-02 | conformant | SHA-256 over the JCS bytes of the whole signed predecessor envelope, with 64 zeros at the head of a chain. | ACTA §5.7 |
+| `chain_scope` | ACTA-02 | extension | Not a draft member: the projection states the digest scope of `previousReceiptHash` in the payload, because ASQAV reuses that name with a narrower scope. | ACTA §5.7 |
 | `committed_fields_root` | ACTA-02 | divergent | Commitment Mode is not projected: ODR discloses the whole document, so there is nothing to withhold behind a Merkle root. | ACTA §5.1 |
 | `signature.alg` | ACTA-02 | conformant | The JOSE name `EdDSA`, the draft's mandatory-to-implement algorithm. | ACTA §2.1.1 |
 | `signature.kid` | ACTA-02 | divergent | The key id is `ed25519-` plus 16 hex digits of SHA-256 over the raw public key, not the recommended `sb:issuer:<base58>` form. | ACTA §2.1.1 |
