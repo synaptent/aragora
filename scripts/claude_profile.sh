@@ -15,6 +15,7 @@ Usage:
   claude_profile.sh login <profile-name-or-home>
   claude_profile.sh logout <profile-name-or-home>
   claude_profile.sh exec <profile-name-or-home> -- <command...>
+  claude_profile.sh exec-claude <profile-name> --model MODEL --timeout-seconds N -- [--output-format json|text]
 
 Examples:
   scripts/claude_profile.sh status max-01
@@ -46,6 +47,13 @@ fi
 MODE="$1"
 PROFILE_HOME="$2"
 shift 2
+
+# Deliberately bypass generic exec: only the native child may receive its token.
+# Do this before profile-directory creation or the unrelated GitHub-token lookup.
+if [[ "$MODE" == "exec-claude" ]]; then
+  exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/native_claude_launch.py" \
+    "$PROFILE_HOME" "$@"
+fi
 
 require_command claude
 
