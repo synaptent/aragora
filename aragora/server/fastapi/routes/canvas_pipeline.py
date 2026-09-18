@@ -67,7 +67,7 @@ from aragora.pipeline.backbone_errors import (
 )
 from aragora.pipeline.execution_mode import ExecutionMode as SafetyMode
 from aragora.rbac.models import AuthorizationContext
-from aragora.server.handlers.canvas_pipeline import attach_unified_live_state
+from aragora.server.handlers.canvas.canvas_pipeline import attach_unified_live_state
 
 from ..dependencies.auth import require_permission
 from ..middleware.error_handling import NotFoundError
@@ -553,7 +553,7 @@ async def create_from_braindump(
         orchestrator_summary: dict[str, Any] | None = None
 
         if body.use_unified_orchestrator:
-            from aragora.server.handlers.canvas_pipeline import CanvasPipelineHandler
+            from aragora.server.handlers.canvas.canvas_pipeline import CanvasPipelineHandler
 
             try:
                 (

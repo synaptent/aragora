@@ -15,7 +15,7 @@ from aragora.rbac.decorators import require_permission
 
 if TYPE_CHECKING:
     from aragora.connectors.gmail import GmailConnector
-    from aragora.server.handlers.inbox_command import EmailPrioritizer
+    from aragora.server.handlers.inbox.inbox_command import EmailPrioritizer
 
 logger = logging.getLogger(__name__)
 

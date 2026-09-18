@@ -77,7 +77,9 @@ HybridDebateHandler = _safe_import(
 )
 
 # Email debate handler
-EmailDebateHandler = _safe_import("aragora.server.handlers.email_debate", "EmailDebateHandler")
+EmailDebateHandler = _safe_import(
+    "aragora.server.handlers.email.email_debate", "EmailDebateHandler"
+)
 
 # Security debate handler
 SecurityDebateHandler = _safe_import(
@@ -86,7 +88,7 @@ SecurityDebateHandler = _safe_import(
 
 # Template discovery handler
 TemplateDiscoveryHandler = _safe_import(
-    "aragora.server.handlers.template_discovery", "TemplateDiscoveryHandler"
+    "aragora.server.handlers.catalog.template_discovery", "TemplateDiscoveryHandler"
 )
 
 # Prompt engine handler

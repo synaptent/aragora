@@ -68,7 +68,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "secure",
         "types",
         "agents/routing",
-        "bindings",
+        "integrations/bindings",
         "exceptions",
         "mixins",
         "register",
@@ -159,13 +159,13 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         # Doc endpoints (public API docs)
         "admin/docs",
         # Template discovery (public browsing API, rate-limited, read-only)
-        "template_discovery",
+        "catalog/template_discovery",
         # Debate sharing (public spectate endpoint; POST/DELETE use inline require_auth_or_error)
         "debates/share",
         # Spectate WebSocket/SSE (public read-only stream for live debate visualization)
         "spectate_ws",
         # Marketplace browse (public catalog browsing, read-only)
-        "marketplace_browse",
+        "catalog/marketplace_browse",
         # Platform config now uses SecureHandler (RBAC-protected)
         # Health probes and dashboard monitoring (public liveness/readiness endpoints)
         "admin/dashboard_health",
@@ -236,6 +236,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "agents/__init__",
         "auth/__init__",
         "canvas/__init__",
+        "catalog/__init__",
         "codebase/__init__",
         "codebase/security/__init__",
         "codebase/security/events",
@@ -285,6 +286,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "features/unified_inbox/stats",
         "features/unified_inbox/sync",
         "features/unified_inbox/triage",
+        "finance/__init__",
         "gateway/__init__",
         "github/__init__",
         "inbox/__init__",
@@ -388,8 +390,8 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         # Feature modules (middleware-protected)
         "features/features",
         # Inbox modules (middleware-protected)
-        "inbox_actions",
-        "inbox_services",
+        "inbox/inbox_actions",
+        "inbox/inbox_services",
         # Inbox auto-debate helpers (service modules invoked by protected handlers)
         "inbox/auto_debate",
         "features/unified_inbox/auto_debate",
@@ -410,9 +412,9 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         # Public demo endpoint (no auth by design)
         "playground",
         "debates/public_viewer",
-        "mcp_tools_handler",
+        "integrations/mcp_tools_handler",
         "openclaw/runtime",
-        "pipeline_telemetry",
+        "pipeline/pipeline_telemetry",
         # Read-only analytics/informational endpoints (no mutations)
         "agents/matches_stats",
         "agents/recommendations",

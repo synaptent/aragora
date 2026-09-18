@@ -103,7 +103,9 @@ ChannelHealthHandler = _safe_import(
 # =============================================================================
 
 UnifiedInboxHandler = _safe_import("aragora.server.handlers.features", "UnifiedInboxHandler")
-InboxCommandHandler = _safe_import("aragora.server.handlers.inbox_command", "InboxCommandHandler")
+InboxCommandHandler = _safe_import(
+    "aragora.server.handlers.inbox.inbox_command", "InboxCommandHandler"
+)
 SharedInboxHandler = _safe_import(
     "aragora.server.handlers.shared_inbox.handler", "SharedInboxHandler"
 )
@@ -115,7 +117,9 @@ TeamInboxMentionsHandler = _safe_import(
 )
 
 # Email triage, feedback hub, notification history/preferences
-EmailTriageHandler = _safe_import("aragora.server.handlers.email_triage", "EmailTriageHandler")
+EmailTriageHandler = _safe_import(
+    "aragora.server.handlers.email.email_triage", "EmailTriageHandler"
+)
 FeedbackHubHandler = _safe_import(
     "aragora.server.handlers.agents.feedback_hub", "FeedbackHubHandler"
 )

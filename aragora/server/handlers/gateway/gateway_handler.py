@@ -49,7 +49,10 @@ from aragora.server.handlers.utils.rbac_guard import rbac_fail_closed
 
 AuthorizationContext: Any = None
 try:
-    from aragora.rbac import AuthorizationContext, check_permission
+    from aragora.rbac import AuthorizationContext as _AuthorizationContext
+    from aragora.rbac import check_permission
+
+    AuthorizationContext = _AuthorizationContext
     from aragora.billing.jwt_auth import extract_user_from_request
 
     RBAC_AVAILABLE = True
@@ -60,14 +63,17 @@ except ImportError:
 DeviceRegistry: Any = None
 get_canonical_gateway_stores: Any = None
 try:
+    from aragora.gateway import DeviceRegistry as _DeviceRegistry
     from aragora.gateway import (
-        DeviceRegistry,
         DeviceNode,
         DeviceStatus,
         AgentRouter,
     )
-    from aragora.stores import get_canonical_gateway_stores
 
+    DeviceRegistry = _DeviceRegistry
+    from aragora.stores import get_canonical_gateway_stores as _get_canonical_gateway_stores
+
+    get_canonical_gateway_stores = _get_canonical_gateway_stores
     GATEWAY_AVAILABLE = True
 except ImportError:
     GATEWAY_AVAILABLE = False

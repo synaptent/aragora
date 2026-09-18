@@ -25,7 +25,7 @@
     "aragora/pipeline/idea_to_execution.py": 4034,
     "aragora/pipeline/stage_transitions.py": 2138,
     "aragora/server/debate_controller.py": 2008,
-    "aragora/server/handlers/canvas_pipeline.py": 2600,
+    "aragora/server/handlers/canvas/canvas_pipeline.py": 2600,
     "aragora/server/handlers/costs/handler.py": 2486,
     "aragora/server/handlers/playground.py": 4253,
     "aragora/server/handlers/social/slack_oauth.py": 2075,

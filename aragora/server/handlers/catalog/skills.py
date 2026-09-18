@@ -20,7 +20,7 @@ from typing import Any
 
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -28,8 +28,8 @@ from .base import (
     json_response,
 )
 from aragora.rbac.decorators import require_permission
-from .utils import parse_json_body
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils import parse_json_body
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

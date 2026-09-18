@@ -55,7 +55,7 @@ from aragora.control_plane.leader import (
 )
 from aragora.rbac.decorators import require_permission
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -65,7 +65,7 @@ from .base import (
     handle_errors,
     json_response,
 )
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -967,7 +967,7 @@ class TemplateMarketplaceHandler(BaseHandler):
         except (json.JSONDecodeError, ValueError):
             return error_response("Invalid JSON in request body", 400)
 
-        rating = data.get("rating")
+        rating: Any = data.get("rating")
         is_valid, err = validate_rating(rating)
         if not is_valid:
             return error_response(err, 400)

@@ -135,7 +135,7 @@ ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
         signals=("queue_plan_execution",),
     ),
     BackboneEntrypoint(
-        file_path="aragora/server/handlers/canvas_pipeline.py",
+        file_path="aragora/server/handlers/canvas/canvas_pipeline.py",
         qualname="CanvasPipelineHandler.handle_execute",
         lifecycle="execute",
         coverage="green",
@@ -143,7 +143,7 @@ ENTRYPOINT_INVENTORY: Final[tuple[BackboneEntrypoint, ...]] = (
         signals=("queue_plan_execution",),
     ),
     BackboneEntrypoint(
-        file_path="aragora/server/handlers/orchestration_canvas.py",
+        file_path="aragora/server/handlers/canvas/orchestration_canvas.py",
         qualname="OrchestrationCanvasHandler._execute_pipeline",
         lifecycle="execute",
         coverage="green",
