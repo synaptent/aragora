@@ -12,6 +12,19 @@ baseline may only shrink: ``--update`` rewrites it to the current (smaller)
 set and refuses growth unless ``--allow-grow --reason "<why>"`` is given, in
 which case the reason is recorded in the file.
 
+Relocation tolerance
+--------------------
+Moving a file would otherwise turn every baselined finding in it into a new
+one. A new key ``P::X`` is instead *relocated* when ``P`` exists under
+``--cwd``, exactly one baselined ``Q::X`` (``Q != P``, same basename) names a
+path that no longer exists, and no other new key claims that ``Q::X``.
+Relocated keys are neither new nor resolved: they never change the exit code
+and are reported separately (``RELOCATED`` lines, ``relocated_count`` and
+``relocated_findings`` in the report). Anything ambiguous (two absent
+candidates, the old path still present, a changed identity) stays new.
+``--update`` rekeys relocated findings count-neutrally and appends a
+``relocation_log`` entry; it is still refused when genuine new keys exist.
+
 Modelled on ``scripts/ci/check_file_sizes.py``; stdlib only so it runs in CI
 before project dependencies are installed. See ``docs/RATCHETS.md``.
 
@@ -28,7 +41,8 @@ Baseline file
 -------------
     {"tool": "ruff", "version": 1, "generated_at": "<UTC ISO>",
      "findings": {"<path>::<symbol>::<rule>": <count>, ...},
-     "growth_log": [{"at": ..., "reason": ..., "added": n}]}   (optional)
+     "growth_log": [{"at": ..., "reason": ..., "added": n}],      (optional)
+     "relocation_log": [{"at": ..., "relocated": n}]}             (optional)
 
 Keys are sorted and paths are relative to ``--cwd`` so the file is stable
 across machines and diffs.
@@ -55,8 +69,9 @@ import re
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path, PurePosixPath
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -97,6 +112,7 @@ class Baseline:
     findings: dict[str, int]
     generated_at: str = ""
     growth_log: list[dict[str, object]] = field(default_factory=list)
+    relocation_log: list[dict[str, object]] = field(default_factory=list)
     exists: bool = True
 
     def to_json(self) -> str:
@@ -108,6 +124,8 @@ class Baseline:
         }
         if self.growth_log:
             payload["growth_log"] = self.growth_log
+        if self.relocation_log:
+            payload["relocation_log"] = self.relocation_log
         return json.dumps(payload, indent=2, sort_keys=False) + "\n"
 
 
@@ -147,11 +165,15 @@ def load_baseline(path: Path, tool: str) -> Baseline:
     growth_log = data.get("growth_log", [])
     if not isinstance(growth_log, list):
         raise BaselineError(f"malformed baseline ('growth_log' is not a list): {path}")
+    relocation_log = data.get("relocation_log", [])
+    if not isinstance(relocation_log, list):
+        raise BaselineError(f"malformed baseline ('relocation_log' is not a list): {path}")
     return Baseline(
         tool=baseline_tool,
         findings=dict(findings),
         generated_at=str(data.get("generated_at", "")),
         growth_log=growth_log,
+        relocation_log=relocation_log,
     )
 
 
@@ -263,22 +285,94 @@ def collect_findings(
 # --- Comparison -------------------------------------------------------------
 
 
+def _split_key(key: str) -> tuple[str, str]:
+    """``path::symbol::rule`` -> (path, ``symbol::rule``); the second part is the identity X."""
+    path, _sep, identity = key.partition("::")
+    return path, identity
+
+
+def classify_relocations(
+    current: Mapping[str, int], baseline: Mapping[str, int], tree_root: Path
+) -> dict[str, str]:
+    """Map each relocated new key ``P::X`` to the baselined ``Q::X`` it moved from.
+
+    ``P::X`` (current count above its baselined count) is relocated iff ``P``
+    exists under ``tree_root``, exactly one baselined ``Q::X`` has ``Q != P``,
+    ``basename(Q) == basename(P)`` and ``Q`` absent from the tree, and no other
+    new key claims that same ``Q::X``. Everything else stays new.
+    """
+    new_keys = [k for k, n in current.items() if n > baseline.get(k, 0)]
+    if not new_keys:
+        return {}
+    absent_by_identity: dict[str, list[str]] = {}
+    for key in baseline:
+        path, identity = _split_key(key)
+        if not (tree_root / path).exists():
+            absent_by_identity.setdefault(identity, []).append(path)
+    claims: dict[str, list[str]] = {}
+    for key in new_keys:
+        path, identity = _split_key(key)
+        if not (tree_root / path).exists():
+            continue
+        name = PurePosixPath(path).name
+        candidates = {
+            old
+            for old in absent_by_identity.get(identity, ())
+            if old != path and PurePosixPath(old).name == name
+        }
+        if len(candidates) == 1:
+            claims.setdefault(f"{candidates.pop()}::{identity}", []).append(key)
+    return {claimants[0]: old for old, claimants in claims.items() if len(claimants) == 1}
+
+
 @dataclass
 class Comparison:
     current: dict[str, int]
     baseline: dict[str, int]
+    # new key -> the baselined key it was relocated from (see classify_relocations).
+    relocations: dict[str, str] = field(default_factory=dict)
+
+    @cached_property
+    def effective(self) -> dict[str, int]:
+        """The baseline with every relocated key's count carried to its new path."""
+        if not self.relocations:
+            return self.baseline
+        effective = dict(self.baseline)
+        for new, old in self.relocations.items():
+            effective[new] = effective.get(new, 0) + effective.pop(old, 0)
+        return effective
 
     @property
     def new_keys(self) -> list[str]:
-        return sorted(k for k, n in self.current.items() if n > self.baseline.get(k, 0))
+        effective = self.effective
+        return sorted(k for k, n in self.current.items() if n > effective.get(k, 0))
 
     @property
     def resolved_keys(self) -> list[str]:
-        return sorted(k for k, n in self.baseline.items() if n > self.current.get(k, 0))
+        return sorted(k for k, n in self.effective.items() if n > self.current.get(k, 0))
+
+    @property
+    def relocated(self) -> list[tuple[str, str, int]]:
+        """``(from_key, to_key, occurrences_moved)`` per relocated key, sorted by old key."""
+        return sorted(
+            (
+                old,
+                new,
+                min(self.current[new] - self.baseline.get(new, 0), self.baseline.get(old, 0)),
+            )
+            for new, old in self.relocations.items()
+        )
 
     @property
     def unchanged(self) -> bool:
         return self.current == self.baseline
+
+
+def compare(
+    current: dict[str, int], baseline: dict[str, int], tree_root: Path | None
+) -> Comparison:
+    relocations = classify_relocations(current, baseline, tree_root or Path.cwd())
+    return Comparison(current=current, baseline=baseline, relocations=relocations)
 
 
 def count_findings(findings: Sequence[Finding]) -> dict[str, int]:
@@ -400,6 +494,7 @@ def _write_report(
     resolved: int = 0,
     current_keys: int = 0,
     current_occurrences: int = 0,
+    relocated: Sequence[tuple[str, str, int]] = (),
     error: str | None = None,
 ) -> None:
     if path is None:
@@ -414,6 +509,10 @@ def _write_report(
         "resolved_count": resolved,
         "current_keys": current_keys,
         "current_occurrences": current_occurrences,
+        "relocated_count": len(relocated),
+        "relocated_findings": [
+            {"from": old, "to": new, "count": count} for old, new, count in relocated
+        ],
     }
     if error:
         report["error"] = error
@@ -435,8 +534,8 @@ def _print_new_findings(
             location = f"{hint.path}:{hint.line}" if hint.line else hint.path
             where = f"  ({location}: {hint.message})" if hint.message else f"  ({location})"
         delta = ""
-        if cmp.baseline.get(key, 0):
-            delta = f"  [count {cmp.current[key]} > baselined {cmp.baseline[key]}]"
+        if cmp.effective.get(key, 0):
+            delta = f"  [count {cmp.current[key]} > baselined {cmp.effective[key]}]"
         print(f"  NEW {key}{where}{delta}")
     print(
         "Fix the finding(s), or refresh the baseline with the same command plus:\n"
@@ -444,6 +543,17 @@ def _print_new_findings(
         "(shrink-only: refuses to add findings)\n"
         '  --update --allow-grow --reason "<why>"     '
         "(records the growth in the baseline)"
+    )
+
+
+def _print_relocations(tool: str, cmp: Comparison) -> None:
+    if not cmp.relocations:
+        return
+    for old, new, _count in cmp.relocated:
+        print(f"  RELOCATED {old} -> {new}")
+    print(
+        f"{tool}: {len(cmp.relocations)} relocated key(s) matched by basename after a file "
+        "move; counted as baselined, not new (rekey with --update)"
     )
 
 
@@ -510,6 +620,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         allow_grow=args.allow_grow,
         reason=args.reason,
         report_json=args.report_json,
+        cwd=cwd,
     )
 
 
@@ -522,16 +633,22 @@ def check_findings(
     allow_grow: bool = False,
     reason: str | None = None,
     report_json: Path | None = None,
+    cwd: Path | None = None,
 ) -> int:
-    """Apply the shared ratchet to keyed findings, including config-only checks."""
+    """Apply the shared ratchet to keyed findings, including config-only checks.
+
+    ``cwd`` is the tree the finding paths are relative to (relocation checks
+    look files up there); it defaults to the process working directory.
+    """
     if (allow_grow and (not update or not reason or not reason.strip())) or (
         reason is not None and not allow_grow
     ):
         raise BaselineError("growth requires --update --allow-grow --reason TEXT")
     tool = baseline.tool
     current = count_findings(findings)
-    cmp = Comparison(current=current, baseline=baseline.findings)
+    cmp = compare(current, baseline.findings, cwd)
     exit_code = EXIT_OK
+    _print_relocations(tool, cmp)
 
     if update:
         # Initial creation (no file yet) is not growth: there is nothing to shrink from.
@@ -554,6 +671,7 @@ def check_findings(
                 findings=current,
                 generated_at=_utc_now(),
                 growth_log=list(baseline.growth_log),
+                relocation_log=list(baseline.relocation_log),
             )
             if grew:
                 new_baseline.growth_log.append(
@@ -563,13 +681,25 @@ def check_findings(
                         "added": len(cmp.new_keys),
                     }
                 )
+            if cmp.relocations:
+                new_baseline.relocation_log.append(
+                    {"at": new_baseline.generated_at, "relocated": len(cmp.relocations)}
+                )
             write_baseline(baseline_path, new_baseline)
-            verb = "created" if not baseline.exists else ("grew" if grew else "shrank")
+            if not baseline.exists:
+                verb = "created"
+            elif grew:
+                verb = "grew"
+            elif cmp.relocations and not cmp.resolved_keys:
+                verb = "rekeyed"
+            else:
+                verb = "shrank"
+            rekeyed = f", {len(cmp.relocations)} rekeyed" if cmp.relocations else ""
             print(
                 f"{tool}: baseline {baseline_path} {verb}: "
                 f"{len(current)} key(s) / {sum(current.values())} occurrence(s) "
                 f"(was {len(baseline.findings)} key(s); "
-                f"{len(cmp.new_keys)} added, {len(cmp.resolved_keys)} resolved)"
+                f"{len(cmp.new_keys)} added, {len(cmp.resolved_keys)} resolved{rekeyed})"
             )
     elif cmp.new_keys:
         _print_new_findings(tool, baseline_path, cmp, findings)
@@ -587,6 +717,7 @@ def check_findings(
         resolved=len(cmp.resolved_keys),
         current_keys=len(current),
         current_occurrences=sum(current.values()),
+        relocated=cmp.relocated,
     )
     return exit_code
 

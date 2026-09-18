@@ -66,9 +66,10 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      actions: write
       checks: read
       contents: read
+    outputs:
+      analyzer_artifact_id: ${{ steps.receipt-upload.outputs.artifact-id }}
     env:
       EVENT_NAME: "${{ github.event_name }}"
       HISTORICAL_BACKFILL: "${{ inputs.historical_backfill || false }}"
@@ -119,13 +120,25 @@ jobs:
         with:
           name: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && format('contract-drift-main-receipt-analyzer-{0}', github.sha) || format('contract-drift-main-receipt-{0}', github.sha) }}"
           path: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && 'contract-drift-main-receipt-analyzer.json' || 'contract-drift-main-receipt.json' }}"
+
+  historical-backfill-dispatch:
+    name: contract-drift-historical-backfill-dispatch
+    needs: main-receipt
+    if: success() && github.event_name == 'workflow_dispatch' && inputs.historical_backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    env:
+      ANALYZER_ARTIFACT_ID: "${{ needs.main-receipt.outputs.analyzer_artifact_id }}"
+      SOURCE_SHA: "${{ github.event_name == 'workflow_dispatch' && inputs.historical_backfill && github.sha || github.event_name == 'push' && github.event.after || github.sha }}"
+    steps:
       - name: Finalize completed historical receipt
-        if: github.event_name == 'workflow_dispatch' && inputs.historical_backfill
         env:
-          ANALYZER_ARTIFACT_ID: ${{ steps.receipt-upload.outputs.artifact-id }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          [[ "$ANALYZER_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
           SOURCE_REF="${GITHUB_REF#refs/heads/}"
           if [[ "$SOURCE_REF" == "$GITHUB_REF" ]]; then
             SOURCE_REF="${GITHUB_REF#refs/tags/}"
@@ -165,6 +178,20 @@ jobs:
     name: contract-drift-program-trajectory
     if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || !inputs.historical_backfill)
     runs-on: ubuntu-latest
+    # INFORMATIONAL while the Receipt-First paydown (#9966 row 10) catches up
+    # to the date-driven target: the strict --mode program check fails on
+    # every push to main (398 active units on 2026-09-06, 288 on 2026-09-14,
+    # vs a target of 75 and shrinking), so the red workflow run carried no
+    # information. JOB-level continue-on-error only decouples the WORKFLOW
+    # RUN conclusion: this job's own check still concludes failure when the
+    # analyzer exits non-zero (the live-state verifier requires that
+    # truthful red), the analyzer step stays unconditioned and strict, and
+    # the trajectory artifact still uploads. Never move this key to the
+    # analyzer step: a step-level continue-on-error would turn the job green
+    # and mask the analyzer. Re-tighten (remove this key) in the same PR that
+    # brings total_items at or below max_open_items on main.
+    # Operator decision 2026-09-07; policy tests pin this exact shape.
+    continue-on-error: true
     env: {SOURCE_SHA: "${{ github.event_name == 'push' && github.event.after || github.sha }}"}
     steps:
       - uses: actions/checkout@v4

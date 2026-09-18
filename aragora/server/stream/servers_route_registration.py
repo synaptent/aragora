@@ -79,7 +79,7 @@ except ImportError:
     EMAIL_WEBHOOK_HANDLER_AVAILABLE = False
 
 try:
-    from aragora.server.handlers.threat_intel import register_threat_intel_routes
+    from aragora.server.handlers.security.threat_intel import register_threat_intel_routes
 
     THREAT_INTEL_HANDLER_AVAILABLE = True
 except ImportError:

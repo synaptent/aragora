@@ -98,7 +98,7 @@ def test_existing_frontend_hook_is_unchanged() -> None:
     assert _hooks()["tsc-check"] == {
         "id": "tsc-check",
         "name": "TypeScript type check (frontend)",
-        "entry": "bash -c 'cd aragora/live && npx tsc --noEmit'",
+        "entry": "bash scripts/tsc_check_hook.sh",
         "language": "system",
         "pass_filenames": False,
         "files": r"^aragora/live/src/.*\.(ts|tsx)$",

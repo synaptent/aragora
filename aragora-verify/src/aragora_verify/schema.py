@@ -37,6 +37,7 @@ _REQUIRED_MEMBERS = (
     "routing",
     "signatures",
 )
+_ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source", "adjudication"}
 
 
 def load_bundled_schema() -> dict[str, Any]:
@@ -189,11 +190,14 @@ def validate_structure(doc: Any) -> list[str]:  # noqa: C901 - Preserve conforma
     for member in _REQUIRED_MEMBERS:
         if member not in doc:
             errors.append(f"missing required member: {member}")
+    for member in sorted(doc.keys() - _ALLOWED_TOP_LEVEL):
+        errors.append(f"unknown top-level member: {member}")
 
-    if doc.get("odr_version") != ODR_VERSION:
-        errors.append(f"odr_version: must be '{ODR_VERSION}'")
-    if doc.get("profile") != ODR_PROFILE_URI:
-        errors.append(f"profile: must be '{ODR_PROFILE_URI}'")
+    version = doc.get("odr_version")
+    if version not in ("0.1", "0.2"):
+        errors.append("odr_version: must be '0.1' or '0.2'")
+    if doc.get("profile") != f"https://aragora.ai/specs/open-decision-receipt/v{version}":
+        errors.append("profile: must match odr_version")
     if not isinstance(doc.get("receipt_id"), str) or not doc.get("receipt_id"):
         errors.append("receipt_id: required non-empty string")
     issued_at = doc.get("issued_at", "__missing__")
@@ -235,8 +239,92 @@ def validate_structure(doc: Any) -> list[str]:  # noqa: C901 - Preserve conforma
         errors.append("routing.status: must be 'reserved' in v0.1")
     _check_signatures(errors, doc.get("signatures"))
 
+    _validate_extensions(errors, doc, load_bundled_schema())
     errors.extend(_jsonschema_errors(doc))
     return errors
+
+
+_EXTENSION_TYPES: dict[str, type | tuple[type, ...]] = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "boolean": bool,
+    "integer": (int, float),
+    "number": (int, float),
+    "null": type(None),
+}
+
+_EXTENSION_PATHS: dict[str, tuple[str, ...]] = {
+    "": ("adjudication",),
+    "subject": ("repository", "pr_number", "head_sha", "base_sha"),
+    "reasoning": ("observations",),
+    "quorum": ("verdicts", "rule"),
+    "quorum.dissent": ("findings", "severity_max", "blocking"),
+    "attestation.mechanism": (
+        "policy_version",
+        "tier",
+        "tiered_gate",
+        "severity_gated",
+        "action",
+        "action_reason",
+        "record_ref",
+    ),
+}
+
+
+def _extension_type_matches(value: Any, type_name: str) -> bool:
+    if not isinstance(value, _EXTENSION_TYPES[type_name]):
+        return False
+    if type_name in ("integer", "number") and isinstance(value, bool):
+        return False
+    return not (type_name == "integer" and isinstance(value, float) and not value.is_integer())
+
+
+def _validate_extension_member(
+    errors: list[str], value: Any, spec: dict[str, Any], path: str, schema: dict[str, Any]
+) -> None:
+    if "$ref" in spec:
+        spec = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
+    expected = spec.get("type", [])
+    expected = [expected] if isinstance(expected, str) else expected
+    if expected and not any(_extension_type_matches(value, t) for t in expected):
+        errors.append(f"{path}: must have type {expected}")
+        return
+    if ("enum" in spec and value not in spec["enum"]) or (
+        "const" in spec and value != spec["const"]
+    ):
+        errors.append(f"{path}: invalid value")
+    if isinstance(value, list) and "items" in spec:
+        for index, item in enumerate(value):
+            _validate_extension_member(errors, item, spec["items"], f"{path}[{index}]", schema)
+    if isinstance(value, dict) and "properties" in spec:
+        for key, item in value.items():
+            if key in spec["properties"]:
+                _validate_extension_member(
+                    errors, item, spec["properties"][key], f"{path}.{key}", schema
+                )
+            elif spec.get("additionalProperties") is False:
+                errors.append(f"{path}.{key}: unknown member")
+
+
+def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
+    """Validate only optional content extensions using their bundled schema definitions."""
+    for path, keys in _EXTENSION_PATHS.items():
+        value, spec = doc, schema
+        for part in path.split(".") if path else []:
+            value = value.get(part, {}) if isinstance(value, dict) else {}
+            spec = spec["properties"][part]
+            spec = spec.get("oneOf", [spec])[0]
+        if not isinstance(value, dict) or value.get("status") == "absent":
+            continue
+        if path and spec.get("additionalProperties") is False:
+            for key in value.keys() - spec["properties"].keys():
+                errors.append(f"{path or 'receipt'}.{key}: unknown member")
+        for key in keys:
+            if key in value:
+                _validate_extension_member(
+                    errors, value[key], spec["properties"][key], f"{path}.{key}".lstrip("."), schema
+                )
 
 
 def _jsonschema_errors(doc: Any) -> list[str]:
