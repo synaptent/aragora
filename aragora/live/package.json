@@ -75,7 +75,7 @@
     "recharts": "^3.10.1",
     "swr": "^2.4.2",
     "tailwind-merge": "^3.6.0",
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",
@@ -88,7 +88,7 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
-    "@testing-library/user-event": "^14.6.6",
+    "@testing-library/user-event": "^14.6.7",
     "@types/dompurify": "^3.2.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^25",
@@ -101,8 +101,8 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.8.0",
-    "jest": "^30.4.2",
-    "jest-environment-jsdom": "^30.4.1",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
     "jest-junit": "17.0.0",
     "jscpd": "5.1.1",
     "knip": "6.34.0",
