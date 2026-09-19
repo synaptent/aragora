@@ -129,8 +129,12 @@ printf 'step: install\n'
 python3 -m venv "$VENV" || fail install $?
 printf 'venv: %s\n' "$VENV"
 # The run is only evidence about the PUBLISHED packages, so a caller's index,
-# find-links or constraint file must not decide what gets installed.
-INSTALL_ENV=(env -u PIP_INDEX_URL -u PIP_EXTRA_INDEX_URL -u PIP_FIND_LINKS -u PIP_CONSTRAINT)
+# find-links or constraint file must not decide what gets installed. pip reads
+# those from pip.conf as well as the environment, and PIP_CONFIG_FILE outranks
+# even --isolated, so pointing it at /dev/null is what disables every config
+# file (user, site and environment-level) for the install step.
+INSTALL_ENV=(env -u PIP_INDEX_URL -u PIP_EXTRA_INDEX_URL -u PIP_FIND_LINKS -u PIP_CONSTRAINT
+  PIP_CONFIG_FILE=/dev/null)
 "${INSTALL_ENV[@]}" "$VENV/bin/pip" install --quiet "$ARAGORA_SPEC" "$VERIFY_SPEC" \
   ${EXTRA_SPECS[@]+"${EXTRA_SPECS[@]}"} || fail install $?
 

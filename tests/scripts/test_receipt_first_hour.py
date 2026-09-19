@@ -35,11 +35,12 @@ exec {sys.executable} "$@"
 
 FAKE_PIP = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$FAKE_LOG/pip.log"
-printf 'INDEX=%s EXTRA_INDEX=%s FIND_LINKS=%s CONSTRAINT=%s\\n' \\
+printf 'INDEX=%s EXTRA_INDEX=%s FIND_LINKS=%s CONSTRAINT=%s CONFIG_FILE=%s\\n' \\
   "${PIP_INDEX_URL-<unset>}" \\
   "${PIP_EXTRA_INDEX_URL-<unset>}" \\
   "${PIP_FIND_LINKS-<unset>}" \\
-  "${PIP_CONSTRAINT-<unset>}" >> "$FAKE_LOG/pip-env.log"
+  "${PIP_CONSTRAINT-<unset>}" \\
+  "${PIP_CONFIG_FILE-<unset>}" >> "$FAKE_LOG/pip-env.log"
 for arg in "$@"; do
   case "$arg" in
     *==99.9.9)
@@ -287,6 +288,8 @@ def test_caller_env_is_scrubbed_for_the_install_demo_and_export_steps(
     ``AWS_EXECUTION_ENV`` unless the flag says false outright. pip's index
     variables are scrubbed for a related reason: the transcript is evidence
     about the published packages only if the caller cannot substitute them.
+    The variables are only half of that channel, since pip.conf carries the
+    same settings, so the install also pins ``PIP_CONFIG_FILE`` at /dev/null.
     """
     key = tmp_path / "key.pem"
     key.write_text("not-a-key\n", encoding="utf-8")
@@ -304,6 +307,7 @@ def test_caller_env_is_scrubbed_for_the_install_demo_and_export_steps(
             "PIP_EXTRA_INDEX_URL": "https://extra.invalid/simple",
             "PIP_FIND_LINKS": str(tmp_path),
             "PIP_CONSTRAINT": str(tmp_path / "constraints.txt"),
+            "PIP_CONFIG_FILE": str(tmp_path / "pip.conf"),
         },
     )
 
@@ -316,7 +320,8 @@ def test_caller_env_is_scrubbed_for_the_install_demo_and_export_steps(
         )
 
     assert _log(fake_toolchain, "pip-env.log").splitlines() == [
-        "INDEX=<unset> EXTRA_INDEX=<unset> FIND_LINKS=<unset> CONSTRAINT=<unset>"
+        "INDEX=<unset> EXTRA_INDEX=<unset> FIND_LINKS=<unset> "
+        "CONSTRAINT=<unset> CONFIG_FILE=/dev/null"
     ]
 
 
