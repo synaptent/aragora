@@ -300,17 +300,24 @@ def _check_quorum_consistency(doc: dict[str, Any]) -> Check:
     quorum = doc.get("quorum")
     if not isinstance(quorum, dict) or quorum.get("status") != "present":
         return Check("quorum_consistency", SKIP, "no present quorum block to cross-check")
+
+    def _as_list(container: dict[str, Any], key: str) -> list[Any]:
+        # A member present but null is not an absent member, so dict.get's
+        # default never fires; schema_conformance is what reports the defect.
+        value = container.get(key)
+        return value if isinstance(value, list) else []
+
     participants = {
         str(p.get("agent"))
-        for p in quorum.get("participants", [])
+        for p in _as_list(quorum, "participants")
         if isinstance(p, dict) and p.get("agent")
     }
     referenced: set[str] = set()
-    referenced.update(str(a) for a in quorum.get("supporting_agents", []) if isinstance(a, str))
+    referenced.update(str(a) for a in _as_list(quorum, "supporting_agents") if isinstance(a, str))
     dissent = quorum.get("dissent")
     if isinstance(dissent, dict):
         referenced.update(
-            str(a) for a in dissent.get("dissenting_agents", []) if isinstance(a, str)
+            str(a) for a in _as_list(dissent, "dissenting_agents") if isinstance(a, str)
         )
     missing = sorted(referenced - participants)
     if missing:
