@@ -29,9 +29,8 @@ modules just to construct a proposal shape).
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -83,6 +82,11 @@ def _fenced_block(text: str, *, info: str = "") -> str:
         longest_run = max(longest_run, run)
     fence = "`" * max(3, longest_run + 1)
     return f"{fence}{info}\n{text}\n{fence}"
+
+
+def _single_line(text: object) -> str:
+    """Collapse *text* to one line so it cannot open a Markdown block of its own."""
+    return " ".join(str(text).split())
 
 
 @dataclass(frozen=True)
@@ -487,7 +491,12 @@ def propose_followup_for_repair_spec(
     if spec.repair_kind == "report_only":
         return None
 
-    title = f"[DIC-22] Review repair candidate: {spec.code_unit_id} ({spec.repair_kind})"
+    code_unit_id = _single_line(spec.code_unit_id)
+    repair_kind = _single_line(spec.repair_kind)
+    linked_claims = [_single_line(c) for c in spec.linked_claims]
+    linked_crux_ids = [_single_line(c) for c in spec.linked_crux_ids]
+
+    title = f"[DIC-22] Review repair candidate: {code_unit_id} ({repair_kind})"
     if len(title) > 140:
         title = title[:139] + "…"
 
@@ -497,21 +506,24 @@ def propose_followup_for_repair_spec(
         "verified-replacement pipeline for a decayed proof-carrying code unit.",
         "",
         "## Repair spec",
-        f"- spec_id: {spec.spec_id}",
-        f"- code_unit_id: {spec.code_unit_id}",
-        f"- repair_kind: {spec.repair_kind}",
+        f"- spec_id: {_single_line(spec.spec_id)}",
+        f"- code_unit_id: {code_unit_id}",
+        f"- repair_kind: {repair_kind}",
         f"- integrity_score: {spec.decay_signal.integrity_score:.3f}",
-        f"- created_at: {spec.created_at}",
+        f"- created_at: {_single_line(spec.created_at)}",
     ]
-    if spec.linked_claims:
-        body_lines.extend(["", "## Linked claims"])
-        body_lines.extend(f"- {c}" for c in spec.linked_claims)
-    if spec.linked_crux_ids:
-        body_lines.extend(["", "## Linked cruxes"])
-        body_lines.extend(f"- {c}" for c in spec.linked_crux_ids)
+    if linked_claims:
+        body_lines.extend(["", "## Linked claims", _fenced_block("\n".join(linked_claims))])
+    if linked_crux_ids:
+        body_lines.extend(["", "## Linked cruxes", _fenced_block("\n".join(linked_crux_ids))])
     if spec.validation_commands:
-        body_lines.extend(["", "## Validation commands"])
-        body_lines.extend(f"- `{cmd}`" for cmd in spec.validation_commands)
+        body_lines.extend(
+            [
+                "",
+                "## Validation commands",
+                _fenced_block("\n".join(str(cmd) for cmd in spec.validation_commands)),
+            ]
+        )
     if spec.proposed_patch:
         body_lines.extend(
             [
@@ -527,8 +539,8 @@ def propose_followup_for_repair_spec(
             "",
             "## Provenance",
             "- source: DIC-22 repair pipeline → DIC-17 follow-up bridge",
-            f"- spec_id: {spec.spec_id}",
-            f"- provenance_hash: {spec.provenance_hash or '(report_only — no hash)'}",
+            f"- spec_id: {_single_line(spec.spec_id)}",
+            f"- provenance_hash: {_single_line(spec.provenance_hash)}",
             "",
             "## Queue policy",
             "This issue is a DIC-17 proposal. It MUST NOT carry `boss-ready` unless the "
@@ -539,7 +551,17 @@ def propose_followup_for_repair_spec(
     )
 
     labels = _without_boss_ready({"epistemic", "repair-required", spec.repair_kind, *extra_labels})
-    source_key = _source_key("repair_spec", spec.spec_id)
+    # spec_id embeds propose_repair()'s per-call timestamp, so keying on it would
+    # emit a fresh proposal for every rescan of the same decayed unit.
+    dedup_material = "|".join(
+        [
+            code_unit_id,
+            repair_kind,
+            ",".join(sorted(linked_claims)),
+            ",".join(sorted(linked_crux_ids)),
+        ]
+    )
+    source_key = _source_key("repair_spec", dedup_material)
 
     return FollowupProposal(
         source_kind="repair_spec",
