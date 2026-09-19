@@ -144,20 +144,6 @@ export interface DebateStatistics {
 }
 
 /**
- * Agent performance statistics
- */
-export interface DebateAgentStatistics {
-  agents: Array<{
-    name: string;
-    debates_participated: number;
-    win_rate: number;
-    avg_quality_score: number;
-    consensus_contribution: number;
-  }>;
-  period: string;
-}
-
-/**
  * Consensus analytics
  */
 export interface ConsensusAnalytics {
@@ -2044,25 +2030,6 @@ export class DebatesAPI {
   }
 
   /**
-   * Get agent performance statistics across debates.
-   *
-   * @param options - Filter options
-   *
-   * @deprecated Not served: no handler dispatches
-   * GET /api/v1/debates/statistics/agents — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Use {@link getStatsAgents}
-   * (documented GET /api/v1/debates/stats/agents) instead.
-   */
-  async getAgentStatistics(options?: {
-    period?: string;
-    agents?: string[];
-  }): Promise<DebateAgentStatistics> {
-    return this.client.request('GET', '/api/v1/debates/statistics/agents', {
-      params: options as Record<string, unknown>,
-    });
-  }
-
-  /**
    * Get consensus analytics for debates.
    *
    * @deprecated Not served: /api/v1/debates/analytics/consensus is declared in
@@ -2211,21 +2178,6 @@ export class DebatesAPI {
     return this.client.request('GET', '/api/v1/debates/archived', {
       params: options as Record<string, unknown>,
     });
-  }
-
-  /**
-   * Permanently delete a debate (requires archive first).
-   *
-   * @deprecated Not served: no handler dispatches
-   * DELETE /api/v1/debates/{id}/permanent — the request falls through to
-   * DebatesHandler's slug lookup and returns 404. Use {@link delete}
-   * (documented DELETE /api/v1/debates/{id}, which permanently deletes the
-   * debate and cascades to critiques) instead.
-   *
-   * @param debateId - The debate ID to delete permanently
-   */
-  async deletePermanently(debateId: string): Promise<{ success: boolean }> {
-    return this.client.request('DELETE', `/api/v1/debates/${debateId}/permanent`);
   }
 
   // ===========================================================================

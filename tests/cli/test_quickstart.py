@@ -574,10 +574,24 @@ def test_offline_cli_ignores_unsearched_ancestor_env(tmp_path, monkeypatch):
     assert ancestor_env.read_text() == contents
 
 
+def test_offline_cli_portable_environment(monkeypatch):
+    """Inspect child startup configuration without launching a process."""
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+    with patch.object(subprocess, "run", side_effect=RuntimeError("environment captured")) as run:
+        with pytest.raises(RuntimeError, match="environment captured"):
+            test_offline_cli()
+    env = run.call_args.kwargs["env"]
+    assert env["SystemRoot"] == os.environ["SystemRoot"]
+    assert env["PATH"] == os.defpath
+    assert env["USERPROFILE"] == env["HOME"]
+
+
 def test_offline_cli():
     """Synthetic offline artifact proof, not hosted database durability."""
     root = Path(__file__).resolve().parents[2]
-    with tempfile.TemporaryDirectory(prefix="quickstart-cli-", dir="/tmp") as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="quickstart-cli-", dir=tempfile.gettempdir()
+    ) as directory:
         scratch = Path(directory)
         cwd = scratch / "cwd"
         cwd.mkdir()
@@ -586,7 +600,7 @@ def test_offline_cli():
         env = {
             "HOME": str(scratch / "home"),
             "TMPDIR": str(scratch),
-            "PATH": "/usr/bin:/bin",
+            "PATH": os.defpath,
             "PYTHONPATH": str(root),
             "PYTHONNOUSERSITE": "1",
             "PYTHONDONTWRITEBYTECODE": "1",
@@ -600,6 +614,10 @@ def test_offline_cli():
             "ARAGORA_USE_DISTRIBUTED_RATE_LIMIT": "false",
             "ARAGORA_ENV": "development",
         }
+        for key in ("SYSTEMROOT", "SystemRoot", "TEMP", "TMP", "COMSPEC", "PATHEXT"):
+            if key in os.environ:
+                env[key] = os.environ[key]
+        env["USERPROFILE"] = env["HOME"]
         Path(env["HOME"]).mkdir()
         artifact = scratch / "receipt.json"
         question = "Should we validate the offline runtime?"

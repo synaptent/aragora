@@ -156,13 +156,6 @@ export class LearningAPI {
     });
   }
 
-  /**
-   * Stop a running training session.
-   */
-  async stopSession(sessionId: string): Promise<{ session: Record<string, unknown>; message: string }> {
-    return this.client.request('POST', `/api/v1/learning/sessions/${sessionId}/stop`);
-  }
-
   // ===========================================================================
   // Metrics
   // ===========================================================================
@@ -222,13 +215,6 @@ export class LearningAPI {
    */
   async getPattern(patternId: string): Promise<Record<string, unknown>> {
     return this.client.request('GET', `/api/v1/learning/patterns/${patternId}`);
-  }
-
-  /**
-   * Validate a detected pattern.
-   */
-  async validatePattern(patternId: string): Promise<{ pattern: Record<string, unknown>; message: string }> {
-    return this.client.request('POST', `/api/v1/learning/patterns/${patternId}/validate`);
   }
 
   // ===========================================================================

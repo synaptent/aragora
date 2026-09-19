@@ -53,6 +53,9 @@ describe('HTTP attempt deadline ownership', () => {
     await vi.advanceTimersByTimeAsync(50);
     finish(); // Prevent a broken implementation leaving the assertion pending.
     expect((await result).error).toBeInstanceOf(TimeoutError);
+    expect((await result).error).toMatchObject({
+      message: 'Response body timeout', code: 'SERVICE_UNAVAILABLE',
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -64,6 +67,9 @@ describe('HTTP attempt deadline ownership', () => {
     const result = observe(client.get('/api/debate'));
     await vi.advanceTimersByTimeAsync(50);
     expect((await result).error).toBeInstanceOf(TimeoutError);
+    expect((await result).error).toMatchObject({
+      message: 'Request timeout', code: 'SERVICE_UNAVAILABLE',
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -180,6 +186,22 @@ describe('HTTP attempt deadline ownership', () => {
     await vi.advanceTimersByTimeAsync(1050);
     finish();
     expect((await result).error).toBeInstanceOf(TimeoutError);
+    expect((await result).error).toMatchObject({ message: 'Response body timeout' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not carry a response-body phase into a later pre-response timeout', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 503 }))
+      .mockImplementation((_url, init) => new Promise((_resolve, reject) => {
+        init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), { once: true });
+      }));
+    const result = observe(client.post('/api/debate', {}));
+    await vi.advanceTimersByTimeAsync(1050);
+    expect((await result).error).toBeInstanceOf(TimeoutError);
+    expect((await result).error).toMatchObject({
+      message: 'Request timeout', code: 'SERVICE_UNAVAILABLE',
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(vi.getTimerCount()).toBe(0);
   });

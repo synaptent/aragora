@@ -44,3 +44,35 @@ The deadline relies on Fetch's abort-aware body consumption. It does not preempt
 synchronous JavaScript such as JSON decoding, create an overall retry deadline,
 or change WebSocket/reconnect behavior. A timeout after successful headers still
 does not prove the server operation failed: inspect its state before retrying.
+
+## Timeout phase diagnostics
+
+The HTTP client keeps the existing SDK `TimeoutError` type and
+`SERVICE_UNAVAILABLE` code. Its message distinguishes where the interruption
+was observed:
+
+- `Response body timeout`: a response arrived, but consuming its successful or
+  error body timed out.
+- `Request timeout`: the attempt timed out before `fetch` returned a response.
+  This includes connecting or waiting for headers; it does not identify the
+  network's precise failure point.
+
+The phase is specific to the current attempt, even after an earlier HTTP failure.
+It does not change retry rules, attempt budgets, or the no-replay guarantee for
+successful responses. Neither message proves that the server did not perform
+an operation, and a body timeout alone does not disclose the HTTP status.
+
+```typescript
+import { TimeoutError } from '@aragora/sdk';
+
+try {
+  await client.post('/api/v1/debates', { task: 'Compare approaches' });
+} catch (error) {
+  if (error instanceof TimeoutError && error.message === 'Response body timeout') {
+    console.error('Response interrupted; inspect operation state before retrying.');
+  } else {
+    console.error('Request failed; server-side outcome may still be unknown.', error);
+  }
+  // No automatic retry is sent from either branch.
+}
+```
