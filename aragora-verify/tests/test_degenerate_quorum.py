@@ -105,8 +105,12 @@ def _nonpass(result: Any) -> list[str]:
 def test_non_integer_family_count_warns_like_the_in_repo_engine(value, walker_only) -> None:
     """A non-integer weakening signal degrades to a warning, never a crash or a FAIL.
 
-    Both engines deliberately leave ``distinct_model_families`` untyped in the
-    walker (spec §8 weakening signals warn), so the verdicts must match exactly.
+    Both dependency-free walkers leave ``distinct_model_families`` untyped (spec §8:
+    weakening signals warn rather than fail), so with the optional ``schema`` extra
+    absent the two engines must agree exactly. The bundled JSON schema does type the
+    member as ``integer``, so an install that also carries ``jsonschema`` reports
+    ``schema_conformance`` for these values instead; that is pre-existing behaviour of
+    the extra, which is why ``walker_only`` pins the dependency-free path here.
     """
     odr_verify = pytest.importorskip("aragora.gauntlet.odr_verify")
     doc = valid_odr()
