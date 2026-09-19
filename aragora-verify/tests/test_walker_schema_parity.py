@@ -77,13 +77,19 @@ def assign(doc: dict[str, Any], path: str, value: Any) -> None:
     cursor[leaf] = value
 
 
+def _oneofs(node: Any) -> list[list[Any]]:
+    kids = node.values() if isinstance(node, dict) else node if isinstance(node, list) else ()
+    here = [node["oneOf"]] if isinstance(node, dict) and "oneOf" in node else []
+    return here + [branch for kid in kids for branch in _oneofs(kid)]
+
+
 def test_document_using_every_typed_block_still_verifies(walker_only) -> None:
     result = verify(conformant_doc())
     assert result.ok is True, [(c.name, c.detail) for c in result.checks if c.status == FAIL]
 
 
 @pytest.mark.parametrize(
-    ("path", "value"), SCHEMA_TYPED_MEMBERS, ids=[p for p, _ in SCHEMA_TYPED_MEMBERS]
+    ("path", "value"), SCHEMA_TYPED_MEMBERS, ids=[f"{p}-{v!r}" for p, v in SCHEMA_TYPED_MEMBERS]
 )
 def test_schema_typed_member_fails_without_the_extra(path: str, value: Any, walker_only) -> None:
     doc = conformant_doc()
@@ -111,6 +117,8 @@ def test_malformed_absent_marker_is_rejected(marker: dict[str, Any], walker_only
 def test_absent_marker_is_not_typed_as_the_present_branch(walker_only) -> None:
     # Each of these members is a oneOf whose second branch is the absent marker;
     # routing a strict marker to the present branch would reject valid receipts.
+    found = _oneofs(schema.load_bundled_schema())
+    assert [b[1] for b in found if len(b) == 2] == [{"$ref": "#/$defs/absent"}] * 7
     doc = conformant_doc()
     doc["claim"]["statement"] = {"status": "absent", "reason": "no statement recorded"}
     doc["subject"]["digest"] = {"status": "absent", "reason": "no artifact digest recorded"}

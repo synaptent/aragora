@@ -10,6 +10,7 @@ tests measure; the parity test additionally runs the in-repo twin as installed.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -60,6 +61,12 @@ def test_degenerate_quorum_member_fails_schema_conformance(kind, walker_only) ->
     result = verify(_mutant(kind))
     assert result.ok is False
     assert _failing(result) == ["schema_conformance"]
+
+
+def test_the_twin_under_comparison_is_the_in_repo_engine() -> None:
+    # A stale ``aragora`` in site-packages would measure a different engine and still pass.
+    module = pytest.importorskip("aragora.gauntlet.odr_verify")
+    assert Path(module.__file__).resolve().parents[2] == Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize("kind", MUTANTS)
