@@ -44,8 +44,9 @@ OBSERVATION_DEPENDENT_FIELDS = (
     "issue_drafts",
     "issue_linkage_results",
 )
-# RescueEventLedger.repeated_classes and class_counts read a fixed 500-event
-# tail, so a --recent-limit above this cannot widen what the harvest observed.
+# RescueEventLedger.repeated_classes is pinned to a 500-event tail, so a larger
+# --recent-limit widens the one-off and below-threshold counts but not repeated-
+# class detection. Record the narrowest window any published class list saw.
 RESCUE_CLASS_HARVEST_EVENT_LIMIT = 500
 
 
@@ -669,7 +670,7 @@ def build_unavailable_source_report(
         "status": "unavailable",
         "event_count": None,
         "sha256": None,
-        "summary_event_limit": recent_limit,
+        "summary_event_limit": min(recent_limit, RESCUE_CLASS_HARVEST_EVENT_LIMIT),
         "summary_truncated": None,
         "error": error.to_dict(),
     }
