@@ -30,17 +30,14 @@ SCHEMA_TYPED_MEMBERS = [
     ("subject.digest.alg", 5),
     ("subject.summary", 5),
     ("quorum.independence.distinct_model_families", -1),  # schema minimum: 0
+    ("cruxes", {"status": "present", "items": []}),  # schema minItems: 1
 ] + [
     (f"source.{m}", 5)
     for m in ("artifact_hash", "receipt_id", "schema", "schema_version", "system")
 ]
 
-# A marker is only the absent branch of its oneOf when it matches $defs/absent.
-MALFORMED_MARKERS = [
-    {"status": "absent"},
-    {"status": "absent", "reason": 5},
-    {"status": "absent", "reason": ""},
-]
+MARKER = {"status": "absent"}
+MALFORMED_MARKERS = [MARKER, MARKER | {"reason": 5}, MARKER | {"reason": ""}]
 
 
 def conformant_doc() -> dict[str, Any]:

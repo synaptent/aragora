@@ -349,8 +349,9 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
             "const" in spec and value != spec["const"]
         ):
             out.append(f"{path}: invalid value")
-        if isinstance(value, str) and len(value) < spec.get("minLength", 0):
-            out.append(f"{path}: shorter than the schema's minLength {spec['minLength']}")
+        floor = spec.get("minLength", spec.get("minItems", 0))
+        if isinstance(value, (str, list)) and len(value) < floor:
+            out.append(f"{path}: shorter than the schema's minimum of {floor}")
         elif isinstance(value, (int, float)) and not isinstance(value, bool):
             if value < spec.get("minimum", value) or value > spec.get("maximum", value):
                 out.append(f"{path}: outside the schema's permitted range")
@@ -420,7 +421,7 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
     # members such as ``source.system`` and ``quorum.independence.distinct_model_families``
     # untyped, which made the verdict depend on whether the optional ``jsonschema`` extra
     # was installed. A finding is kept only when nothing above already named that member
-    # or the block holding it, so a malformed member yields exactly one diagnostic.
+    # or the block holding it, so a malformed member yields exactly one walker diagnostic.
     found: list[str] = []
     for key, value in doc.items():
         if key in schema["properties"]:
