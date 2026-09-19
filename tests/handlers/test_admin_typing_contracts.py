@@ -1400,7 +1400,7 @@ def _fallback_module(name: str, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    module.__package__ = HANDLERS_PKG
+    module.__package__ = original.__package__
     with pytest.MonkeyPatch.context() as local:
         local.setitem(sys.modules, "aragora.rbac.decorators", None)
         spec.loader.exec_module(module)
