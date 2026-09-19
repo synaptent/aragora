@@ -34,6 +34,21 @@ logger = logging.getLogger(__name__)
 
 CRUXSET_EMISSION_ENV_VAR = "ARAGORA_CRUXSET_EMISSION_ENABLED"
 
+# ``Crux.counterfactual`` is contracted as a short note, but the crux-finder's
+# condition text embeds the whole agent-authored claim statement, which has no
+# upper bound. Clip here so consumers that render the field verbatim — such as
+# the DIC-17 follow-up bridge, which truncates every other free-text field —
+# cannot be handed an unbounded note.
+MAX_CRUX_COUNTERFACTUAL_CHARS = 800
+
+
+def _clip_counterfactual(text: str, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -> str:
+    """Return ``text`` trimmed to ``limit`` characters, ellipsised when clipped."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "\u2026"
+
 
 def cruxset_emission_enabled() -> bool:
     """Return True when the AGT-01 CruxSet emission surface is enabled.
@@ -216,7 +231,7 @@ def maybe_emit_cruxset_from_finder_result(
             if cf.get("outcome_change"):
                 parts.append(str(cf["outcome_change"]))
             if parts:
-                cf_by_claim[cid] = "; ".join(parts)
+                cf_by_claim[cid] = _clip_counterfactual("; ".join(parts))
 
     return maybe_emit_cruxset(
         question=result.question,
@@ -231,6 +246,7 @@ def maybe_emit_cruxset_from_finder_result(
 
 __all__ = [
     "CRUXSET_EMISSION_ENV_VAR",
+    "MAX_CRUX_COUNTERFACTUAL_CHARS",
     "cruxset_emission_enabled",
     "enable_cruxset_emission",
     "maybe_emit_cruxset",

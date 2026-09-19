@@ -370,7 +370,7 @@ def build_cruxset_from_analysis(
         claim_id = str(entry.get("claim_id") or "")
         # DIC-15 hook: prefer the validation-pass counterfactual when available.
         if claim_id in cf_map:
-            counterfactual_text = cf_map[claim_id]
+            counterfactual_text = str(cf_map[claim_id])
         elif entry.get("resolution_impact") is not None:
             counterfactual_text = (
                 f"Resolution impact {round(float(entry.get('resolution_impact') or 0.0), 4)}"

@@ -16,12 +16,14 @@ All tests are deterministic; no Arena, no network, no live agents.
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from types import ModuleType
 from typing import Any
 
 import pytest
 
+from aragora.epistemic.followup import MAX_BODY_STATEMENT_CHARS, propose_followup_for_crux
 from aragora.reasoning import cruxset_emission as mod
 from aragora.reasoning.crux_detector import CruxAnalysisResult, CruxClaim
 from aragora.reasoning.cruxset import CruxSet, build_cruxset_from_analysis
@@ -62,7 +64,7 @@ def _inject_stub(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _reset_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+def _reset_flag(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.delenv(mod.CRUXSET_EMISSION_ENV_VAR, raising=False)
     yield
     monkeypatch.delenv(mod.CRUXSET_EMISSION_ENV_VAR, raising=False)
@@ -279,3 +281,125 @@ def test_cruxset_checksum_valid_after_wiring(monkeypatch: pytest.MonkeyPatch) ->
     cs = mod.maybe_emit_cruxset_from_finder_result(result)
     assert cs is not None
     assert cs.verify_checksum()
+
+
+# ---------------------------------------------------------------------------
+# 3. Bounded note contract — Crux.counterfactual stays a short note
+# ---------------------------------------------------------------------------
+
+
+def _finder_counterfactuals(*claims: CruxClaim) -> list[dict[str, Any]]:
+    """Mirror the entries ``build_crux_finder_result`` produces for each crux."""
+    return [
+        {
+            "claim_id": c.claim_id,
+            "condition": f"Resolve '{c.statement}' to high confidence",
+            "outcome_change": f"Reduces total network uncertainty by {c.resolution_impact:.3f}",
+            "likelihood": round(min(1.0, c.uncertainty_score + 0.2), 3),
+            "affected_claims": list(c.affected_claims),
+        }
+        for c in claims
+    ]
+
+
+def test_normal_length_counterfactual_is_not_clipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An ordinary statement produces the full condition and outcome text, unclipped."""
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+    claim = _claim("c1", "Adoption of X reduces p99 latency", 0.85)
+    result = _result(_analysis(claim), counterfactuals=_finder_counterfactuals(claim))
+    cs = mod.maybe_emit_cruxset_from_finder_result(result)
+    assert cs is not None
+    text = cs.cruxes[0].counterfactual
+    assert text.startswith("Resolve 'Adoption of X reduces p99 latency' to high confidence")
+    assert "Reduces total network uncertainty by" in text
+    assert "…" not in text
+    assert len(text) <= mod.MAX_CRUX_COUNTERFACTUAL_CHARS
+
+
+def test_long_statement_counterfactual_is_clipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The finder embeds the unbounded claim statement, so the wired note must be bounded."""
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+    claim = _claim("c1", "A" * 5000, 0.85)
+    result = _result(_analysis(claim), counterfactuals=_finder_counterfactuals(claim))
+    cs = mod.maybe_emit_cruxset_from_finder_result(result)
+    assert cs is not None
+    text = cs.cruxes[0].counterfactual
+    assert len(text) == mod.MAX_CRUX_COUNTERFACTUAL_CHARS
+    assert text.startswith("Resolve 'AAA")
+    assert text.endswith("…")
+
+
+def test_clipped_counterfactual_keeps_cruxset_verifiable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clipping happens before the checksum is computed, so the bundle still verifies."""
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+    claim = _claim("c1", "B" * 4000, 0.9)
+    result = _result(_analysis(claim), counterfactuals=_finder_counterfactuals(claim))
+    cs = mod.maybe_emit_cruxset_from_finder_result(result)
+    assert cs is not None
+    assert cs.verify_checksum()
+    assert CruxSet.from_json(cs.to_json()).verify_checksum()
+
+
+def test_explicit_cf_map_value_is_coerced_to_text() -> None:
+    """A non-string override still yields a string field, like every other payload value."""
+    payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
+    cs = build_cruxset_from_analysis(
+        question="Q?",
+        analysis_payload=payload,
+        counterfactuals_by_claim_id={"c1": 42},  # type: ignore[dict-item]
+    )
+    assert cs.cruxes[0].counterfactual == "42"
+
+
+# ---------------------------------------------------------------------------
+# 4. DIC-17 consumer contract — the follow-up bridge reads Crux.counterfactual
+# ---------------------------------------------------------------------------
+
+
+def _proposal_for(monkeypatch: pytest.MonkeyPatch, claim: CruxClaim, *, wired: bool) -> Any:
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+    result = _result(
+        _analysis(claim),
+        counterfactuals=_finder_counterfactuals(claim) if wired else [],
+    )
+    cs = mod.maybe_emit_cruxset_from_finder_result(result)
+    assert cs is not None
+    proposal = propose_followup_for_crux(
+        cs.cruxes[0], cruxset_id=cs.cruxset_id, question=cs.question
+    )
+    assert proposal is not None
+    return proposal
+
+
+def test_followup_body_carries_the_rich_counterfactual(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The consumer renders the condition/outcome text instead of the bare score."""
+    claim = _claim("c1", "Adoption of X reduces p99 latency", 0.85)
+    proposal = _proposal_for(monkeypatch, claim, wired=True)
+    assert "## Counterfactual" in proposal.body
+    assert "Resolve 'Adoption of X reduces p99 latency' to high confidence" in proposal.body
+    assert "Resolution impact" not in proposal.body
+
+
+def test_followup_counterfactual_section_respects_body_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pathological statement must not smuggle unbounded text past the body budget.
+
+    ``propose_followup_for_crux`` truncates ``statement`` at
+    ``MAX_BODY_STATEMENT_CHARS`` but renders ``counterfactual`` verbatim, so the
+    producer has to keep the note bounded.
+    """
+    claim = _claim("c1", "A" * 5000, 0.85)
+    proposal = _proposal_for(monkeypatch, claim, wired=True)
+    section = proposal.body.split("## Counterfactual", 1)[1].split("\n##", 1)[0].strip()
+    assert len(section) <= MAX_BODY_STATEMENT_CHARS
+
+
+def test_followup_dedup_key_is_unchanged_by_wiring(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Richer counterfactual text must not move the DIC-17 dedup key."""
+    claim = _claim("c1", "Adoption of X reduces p99 latency", 0.85)
+    plain = _proposal_for(monkeypatch, claim, wired=False)
+    wired = _proposal_for(monkeypatch, claim, wired=True)
+    assert wired.source_key == plain.source_key
+    assert wired.provenance == plain.provenance
+    assert wired.body != plain.body
