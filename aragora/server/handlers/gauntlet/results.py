@@ -27,7 +27,7 @@ from ..base import (
     safe_error_message,
 )
 from ..openapi_decorator import api_endpoint
-from .storage import get_gauntlet_runs
+from .storage import _STORAGE_ERRORS, get_gauntlet_runs, resolve_gauntlet_run
 
 
 def _get_storage_proxy():
@@ -124,33 +124,20 @@ class GauntletResultsMixin:
         """Get gauntlet run status."""
         gauntlet_runs = get_gauntlet_runs()
 
-        # Check in-memory first (for pending/running)
-        if gauntlet_id in gauntlet_runs:
-            run = gauntlet_runs[gauntlet_id]
-            safe_run = {k: v for k, v in run.items() if k != "result_obj"}
-            return json_response(safe_run)
-
-        # Check persistent storage
         try:
-            storage = _get_storage_proxy()
-
-            # Check inflight table first (for in-progress runs after restart)
-            inflight = storage.get_inflight(gauntlet_id)
-            if inflight:
-                return json_response(inflight.to_dict())
-
-            # Check completed results table
-            stored = storage.get(gauntlet_id)
-            if stored:
-                return json_response(
-                    {
-                        "gauntlet_id": gauntlet_id,
-                        "status": "completed",
-                        "result": stored,
-                    }
-                )
-        except (OSError, RuntimeError, ValueError) as e:
+            run = await resolve_gauntlet_run(
+                gauntlet_id, gauntlet_runs.get(gauntlet_id), _get_storage_proxy
+            )
+            if run:
+                return json_response({k: v for k, v in run.items() if k != "result_obj"})
+        except _STORAGE_ERRORS as e:
             logger.warning("Storage lookup failed for %s: %s", gauntlet_id, e)
+            from aragora.gauntlet.errors import gauntlet_error_response
+
+            body, status = gauntlet_error_response(
+                "storage_error", {"reason": "Storage lookup failed"}
+            )
+            return json_response(body, status=status)
 
         return error_response(f"Gauntlet run not found: {gauntlet_id}", 404)
 
