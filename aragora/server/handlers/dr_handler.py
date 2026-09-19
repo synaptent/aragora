@@ -38,6 +38,12 @@ from aragora.rbac.decorators import require_permission
 logger = logging.getLogger(__name__)
 
 
+def _require_manager(manager: BackupManager | None, attribute: str) -> BackupManager:
+    if manager is None:
+        raise AttributeError(f"'NoneType' object has no attribute '{attribute}'")
+    return manager
+
+
 class DRHandler(BaseHandler):
     """
     HTTP handler for disaster recovery operations.
@@ -561,8 +567,7 @@ class DRHandler(BaseHandler):
         if check_storage:
             check = {"name": "storage_access", "status": "checking"}
             try:
-                if manager is None:
-                    raise AttributeError("'NoneType' object has no attribute 'backup_dir'")
+                manager = _require_manager(manager, "backup_dir")
                 backup_dir = manager.backup_dir
                 if backup_dir.exists() and backup_dir.is_dir():
                     # Test write permission
@@ -583,8 +588,7 @@ class DRHandler(BaseHandler):
 
         # Check retention policy
         check = {"name": "retention_policy", "status": "checking"}
-        if manager is None:
-            raise AttributeError("'NoneType' object has no attribute 'retention_policy'")
+        manager = _require_manager(manager, "retention_policy")
         policy = manager.retention_policy
         if policy.min_backups > 0:
             check["status"] = "passed"
