@@ -13,6 +13,7 @@ if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 
 import publish_rescue_productization_report as mod  # noqa: E402
+import render_rescue_productization_status as render_mod  # noqa: E402
 
 
 def _ledger_with_events(tmp_path: Path, events: list[RescueEvent]) -> RescueEventLedger:
@@ -466,6 +467,134 @@ def test_existing_empty_ledger_is_a_valid_zero_observation(tmp_path: Path) -> No
         "summary_truncated": False,
     }
     assert payload["summary"]["total_unique_classes"] == 0
+    assert payload["observation_status"] == {
+        "raw_inputs": "available",
+        "rescue_history": "complete",
+    }
+    assert "observation_limits" not in payload
+
+
+def _empty_productization_map(tmp_path: Path) -> Path:
+    productization_map_path = tmp_path / "rescue_productization.json"
+    mod.write_productization_map_payload(
+        productization_map_path,
+        {"schema_version": 1, "entries": []},
+    )
+    return productization_map_path
+
+
+def test_unavailable_source_marks_observations_unavailable(tmp_path: Path) -> None:
+    error = mod.RescueLedgerValidationError(
+        code="rescue_ledger_missing",
+        path=tmp_path / "rescue_events.jsonl",
+        detail="rescue event ledger does not exist",
+    )
+
+    payload = mod.build_unavailable_source_report(
+        ledger_path=tmp_path / "rescue_events.jsonl",
+        productization_map_path=tmp_path / "rescue_productization.json",
+        repo="synaptent/aragora",
+        error=error,
+    )
+
+    assert payload["observation_status"] == {
+        "raw_inputs": "unavailable",
+        "rescue_history": "unavailable",
+    }
+    assert set(payload["observation_limits"]["non_authoritative_fields"]) == {
+        "summary",
+        "repeated_classes",
+        "one_off_classes",
+        "below_threshold_classes",
+    }
+
+
+def test_truncated_summary_window_marks_rescue_history_incomplete(tmp_path: Path) -> None:
+    ledger = _ledger_with_events(
+        tmp_path,
+        [
+            RescueEvent(event_type="followup_prompt", reason=f"needs next step {index}")
+            for index in range(5)
+        ],
+    )
+
+    payload = mod.build_published_report(
+        ledger_path=ledger.path,
+        productization_map_path=_empty_productization_map(tmp_path),
+        repo="synaptent/aragora",
+        recent_limit=2,
+    )
+
+    assert payload["source"]["summary_truncated"] is True
+    assert payload["observation_status"]["rescue_history"] == "incomplete"
+    assert "most recent 2 of 5 ledger events" in payload["observation_limits"]["reason"]
+
+
+def test_torn_trailing_record_marks_rescue_history_incomplete(tmp_path: Path) -> None:
+    ledger = _ledger_with_events(
+        tmp_path,
+        [RescueEvent(event_type="followup_prompt", reason="needs explicit next step")],
+    )
+    with ledger.path.open("a", encoding="utf-8") as handle:
+        handle.write('{"event_type": "manual_mer')
+
+    payload = mod.build_published_report(
+        ledger_path=ledger.path,
+        productization_map_path=_empty_productization_map(tmp_path),
+        repo="synaptent/aragora",
+    )
+
+    assert payload["source"]["skipped_trailing_partial_line_count"] == 1
+    assert payload["observation_status"]["rescue_history"] == "incomplete"
+    assert "torn trailing ledger record" in payload["observation_limits"]["reason"]
+
+
+def test_published_payload_drives_renderer_observation_warning(tmp_path: Path) -> None:
+    productization_map_path = _empty_productization_map(tmp_path)
+    ledger = _ledger_with_events(
+        tmp_path,
+        [
+            RescueEvent(event_type="followup_prompt", reason=f"needs next step {index}")
+            for index in range(5)
+        ],
+    )
+
+    complete = mod.build_published_report(
+        ledger_path=ledger.path,
+        productization_map_path=productization_map_path,
+        repo="synaptent/aragora",
+    )
+    truncated = mod.build_published_report(
+        ledger_path=ledger.path,
+        productization_map_path=productization_map_path,
+        repo="synaptent/aragora",
+        recent_limit=2,
+    )
+    unavailable = mod.build_unavailable_source_report(
+        ledger_path=tmp_path / "missing.jsonl",
+        productization_map_path=productization_map_path,
+        repo="synaptent/aragora",
+        error=mod.RescueLedgerValidationError(
+            code="rescue_ledger_missing",
+            path=tmp_path / "missing.jsonl",
+            detail="rescue event ledger does not exist",
+        ),
+    )
+
+    report_path = tmp_path / "latest.json"
+    rendered_complete = render_mod.render_status_markdown(report_path=report_path, payload=complete)
+    rendered_truncated = render_mod.render_status_markdown(
+        report_path=report_path, payload=truncated
+    )
+    rendered_unavailable = render_mod.render_status_markdown(
+        report_path=report_path, payload=unavailable
+    )
+
+    assert "Observation availability warning" not in rendered_complete
+    assert "Observation availability warning" in rendered_truncated
+    assert "rescue history: `incomplete`" in rendered_truncated
+    assert "raw inputs: `unavailable`" in rendered_unavailable
+    assert "rescue history: `unavailable`" in rendered_unavailable
 
 
 def test_home_relative_path_collapses_home_rooted_path(monkeypatch, tmp_path):

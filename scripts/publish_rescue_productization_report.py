@@ -35,6 +35,12 @@ DEFAULT_PRODUCTIZATION_MAP_PATH = REPO_ROOT / "docs" / "benchmarks" / "rescue_pr
 
 DEFAULT_RESCUE_LEDGER_PATH = Path.home() / ".aragora" / "rescue_events.jsonl"
 DEFAULT_PUBLISH_DIR = REPO_ROOT / ".aragora" / "rescue_productization"
+OBSERVATION_DEPENDENT_FIELDS = (
+    "summary",
+    "repeated_classes",
+    "one_off_classes",
+    "below_threshold_classes",
+)
 
 
 class RescueLedgerValidationError(ValueError):
@@ -253,6 +259,67 @@ def validate_rescue_ledger(path: Path) -> dict[str, Any]:
     """Validate the rescue ledger and return provenance for the observed bytes."""
     source, _ = _read_validated_rescue_ledger(path)
     return source
+
+
+def build_observation_markers(source: dict[str, Any]) -> dict[str, Any]:
+    """Restate ledger provenance in the tracked-surface observation vocabulary.
+
+    The status renderers derive their availability warning from
+    ``observation_status``; a report carrying only ``source`` leaves an
+    unavailable or window-truncated run looking like an ordinary measured
+    count on the tracked surface.
+    """
+    if str(source.get("status") or "").strip() != "available":
+        return {
+            "observation_status": {
+                "raw_inputs": "unavailable",
+                "rescue_history": "unavailable",
+            },
+            "observation_limits": {
+                "reason": "The rescue event ledger could not be read, so no rescue class was observed.",
+                "value_semantics": (
+                    "Listed fields are placeholders for an unread source rather than "
+                    "measurements. Empty counts do not establish that no rescues occurred."
+                ),
+                "non_authoritative_fields": list(OBSERVATION_DEPENDENT_FIELDS),
+            },
+        }
+
+    truncated = bool(source.get("summary_truncated"))
+    skipped_partial_lines = int(source.get("skipped_trailing_partial_line_count") or 0)
+    if not truncated and not skipped_partial_lines:
+        return {
+            "observation_status": {
+                "raw_inputs": "available",
+                "rescue_history": "complete",
+            }
+        }
+
+    reasons: list[str] = []
+    if truncated:
+        reasons.append(
+            "The summary window covers only the most recent "
+            f"{source.get('summary_event_limit')} of {source.get('event_count')} ledger events."
+        )
+    if skipped_partial_lines:
+        reasons.append(
+            f"{skipped_partial_lines} torn trailing ledger record(s) could not be parsed "
+            "and were not observed."
+        )
+    return {
+        "observation_status": {
+            "raw_inputs": "available",
+            "rescue_history": "incomplete",
+        },
+        "observation_limits": {
+            "reason": " ".join(reasons),
+            "value_semantics": (
+                "Counts describe the observed window only. A rescue class absent from "
+                "this report may still occur outside that window."
+            ),
+            "non_authoritative_fields": list(OBSERVATION_DEPENDENT_FIELDS),
+        },
+    }
 
 
 def resolve_published_report_path(
@@ -569,6 +636,7 @@ def build_published_report(
         "repo": repo,
         "ledger_path": _repo_stable_path(ledger_path),
         "source": source,
+        **build_observation_markers(source),
         "productization_map_path": _repo_stable_path(productization_map_path),
         "summary": final_report.get("summary") or {},
         "repeated_classes": final_report.get("repeated_classes") or [],
@@ -590,19 +658,21 @@ def build_unavailable_source_report(
     recent_limit: int = 500,
 ) -> dict[str, Any]:
     """Build a truthful publication that makes unavailable input explicit."""
+    source: dict[str, Any] = {
+        "status": "unavailable",
+        "event_count": None,
+        "sha256": None,
+        "summary_event_limit": recent_limit,
+        "summary_truncated": None,
+        "error": error.to_dict(),
+    }
     return {
         "ok": False,
         "generated_at": normalize_generated_at(generated_at),
         "repo": repo,
         "ledger_path": _repo_stable_path(ledger_path),
-        "source": {
-            "status": "unavailable",
-            "event_count": None,
-            "sha256": None,
-            "summary_event_limit": recent_limit,
-            "summary_truncated": None,
-            "error": error.to_dict(),
-        },
+        "source": source,
+        **build_observation_markers(source),
         "productization_map_path": _repo_stable_path(productization_map_path),
         "summary": {},
         "repeated_classes": [],
