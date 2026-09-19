@@ -7,6 +7,9 @@ API handlers for inbox intelligence features:
 - Email categorization
 - Priority scoring
 - Email actions (send, archive, snooze, etc.)
+
+Additional modules (import directly, without expanding eager package exports):
+inbox_actions, inbox_command and inbox_services.
 """
 
 from .action_items import (

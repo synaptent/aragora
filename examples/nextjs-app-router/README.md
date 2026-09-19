@@ -1,6 +1,6 @@
 # Aragora Next.js App Router Template
 
-A starter template for building Aragora-powered applications with Next.js 14+ App Router.
+A starter template for building Aragora-powered applications with Next.js 16 App Router.
 
 ## Features
 
@@ -25,6 +25,18 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to see the app.
+
+Use Node.js 24 for the local validation commands:
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+Validation uses the published `@aragora/sdk` dependency, not local SDK source.
+Debate totals and votes are not synthesized when the SDK does not report them.
 
 ## Environment Variables
 
@@ -114,22 +126,23 @@ Subscribe to debate events with WebSockets:
 
 import { useEffect, useState } from 'react';
 import { getClientSideClient } from '@/lib/aragora';
+import { connectDebateStream, type StreamEvent } from '@/lib/debate-stream';
 
-export default function DebateStream({ debateId }) {
-  const [events, setEvents] = useState([]);
+export default function DebateStream({ debateId }: { debateId: string }) {
+  const [events, setEvents] = useState<StreamEvent[]>([]);
+  const [connected, setConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const client = getClientSideClient();
-    const stream = client.debates.stream(debateId);
-
-    stream.on('message', (event) => {
-      setEvents(prev => [...prev, event]);
+    return connectDebateStream(client.createWebSocket(), debateId, {
+      onEvent: event => setEvents(prev => [...prev.slice(-199), event]),
+      onConnected: setConnected,
+      onError: setError,
     });
-
-    return () => stream.close();
   }, [debateId]);
 
-  return <EventList events={events} />;
+  return <pre>{JSON.stringify({ connected, error, events }, null, 2)}</pre>;
 }
 ```
 
