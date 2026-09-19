@@ -194,13 +194,12 @@ def _load_receipt_json(path: Path) -> dict[str, Any] | None:
 
     Returns the parsed dict, or None on error (with message printed).
     """
-    if not path.exists():
-        print(f"Error: File not found: {path}", file=sys.stderr)
-        return None
-
     try:
+        if not path.exists():
+            print(f"Error: File not found: {path}", file=sys.stderr)
+            return None
         raw = path.read_text(encoding="utf-8")
-    except OSError as e:
+    except (OSError, UnicodeDecodeError) as e:
         print(f"Error: Cannot read file: {e}", file=sys.stderr)
         return None
 
@@ -431,14 +430,24 @@ def _cmd_view(args: argparse.Namespace) -> None:
     file_path = Path(receipt_path)
     no_browser = getattr(args, "no_browser", False)
 
-    if not file_path.exists():
+    try:
+        file_exists = file_path.exists()
+    except OSError as e:
+        print(f"Error: Cannot read file: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not file_exists:
         print(f"Error: File not found: {file_path}", file=sys.stderr)
         sys.exit(1)
 
     # If already HTML, open directly
     if file_path.suffix.lower() in (".html", ".htm"):
         if no_browser:
-            print(file_path.read_text(encoding="utf-8"))
+            try:
+                html = file_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as e:
+                print(f"Error: Cannot read file: {e}", file=sys.stderr)
+                sys.exit(1)
+            print(html)
         else:
             webbrowser.open(f"file://{file_path.resolve()}")
             print(f"Opened {file_path} in browser.")
@@ -705,8 +714,12 @@ def cmd_receipt_inspect(args: argparse.Namespace) -> None:
 def _resolve_receipt_data(receipt_ref: str) -> dict[str, Any] | None:
     """Resolve a receipt argument that may be a file path or a stored receipt ID."""
     path = Path(receipt_ref)
-    if path.exists():
-        return _load_receipt_json(path)
+    try:
+        if path.exists():
+            return _load_receipt_json(path)
+    except OSError as e:
+        print(f"Error: Cannot read file: {e}", file=sys.stderr)
+        return None
 
     # Not a file on disk — try the durable store, then the legacy store.
     # Store access errors are surfaced (not silently treated as "not found")
@@ -815,14 +828,23 @@ def cmd_receipt_export(args: argparse.Namespace) -> None:
                 content = receipt.to_csv()
             else:
                 content = receipt.to_json()
-        except (ImportError, AttributeError, KeyError, ValueError, TypeError):
-            # Fallback to simple formatter
+        except (ImportError, AttributeError, KeyError, ValueError, TypeError) as exc:
+            # A fallback must still produce the requested artifact format.
             if output_format == "html":
                 content = receipt_to_html(data)
             elif output_format in ("md", "markdown"):
                 content = receipt_to_markdown(data)
             else:
-                content = json.dumps(data, indent=2, default=str)
+                print(
+                    f"Error: Could not export receipt as {output_format.upper()}", file=sys.stderr
+                )
+                if output_format == "pdf" and isinstance(exc, ImportError):
+                    print(
+                        "PDF export requires weasyprint and its system dependencies; "
+                        "check that they are installed in this environment.",
+                        file=sys.stderr,
+                    )
+                sys.exit(1)
 
     if output_path:
         if isinstance(content, bytes):

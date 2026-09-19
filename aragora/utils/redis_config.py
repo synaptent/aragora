@@ -176,6 +176,16 @@ def get_redis_pool() -> Any | None:
             return None
 
 
+def redis_pool_initialized() -> bool:
+    """Report whether the shared Redis pool has already been built.
+
+    Read-only: never triggers pool initialization, never opens a socket, and
+    never latches ``_redis_available``. Intended for fast health probes that
+    must stay off the network (see ``readiness_probe_fast``).
+    """
+    return _redis_pool is not None
+
+
 def is_redis_available() -> bool:
     """Check if Redis is available.
 

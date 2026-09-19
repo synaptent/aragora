@@ -12,7 +12,12 @@ import re
 SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 SAFE_ID_PATTERN_WITH_DOTS = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$")
 SAFE_SLUG_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
-SAFE_AGENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,32}$")
+# Agent names may carry dotted model versions ("gemini-3.1-pro-preview",
+# "claude-fable-5.1", "qwen3.8-2.4t-a95b"), so "." is allowed after the first
+# character. "/" is never allowed: these are single path segments, and the
+# provider prefix of a slug ("anthropic/...") is not part of an agent name.
+# A leading "." is rejected so "." / ".." can never validate (#9994).
+SAFE_AGENT_PATTERN = re.compile(r"^[a-zA-Z0-9_-][a-zA-Z0-9._-]{0,31}$")
 
 # Plugin manifest patterns (stricter for submission)
 SAFE_PLUGIN_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9-]{0,62}[a-z0-9]?$")  # 1-64 chars, lowercase

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 def get_legal_hold_manager():  # type: ignore[override]
     """Indirection for tests that patch compliance_handler.get_legal_hold_manager."""
     try:
-        from aragora.server.handlers import compliance_handler as compat
+        from aragora.server.handlers.compliance import handler as compat
 
         return compat.get_legal_hold_manager()
     except (ImportError, AttributeError):
@@ -39,7 +39,7 @@ def get_legal_hold_manager():  # type: ignore[override]
 def get_audit_store():  # type: ignore[override]
     """Indirection for tests that patch compliance_handler.get_audit_store."""
     try:
-        from aragora.server.handlers import compliance_handler as compat
+        from aragora.server.handlers.compliance import handler as compat
 
         return compat.get_audit_store()
     except (ImportError, AttributeError):
