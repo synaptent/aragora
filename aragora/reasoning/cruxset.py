@@ -37,9 +37,25 @@ from typing import Any, Iterable
 
 CRUXSET_SCHEMA_VERSION = "1.0"
 
+# ``Crux.counterfactual`` is contracted as a short note, but the crux-finder
+# composes its condition text as "Resolve '<statement>' to high confidence",
+# embedding the agent-authored claim statement verbatim with no upper bound.
+# Consumers render the field as-is — the DIC-17 follow-up bridge truncates every
+# other free-text field it writes into an issue body but not this one — so the
+# bound is enforced here, where the value lands, rather than at any one caller.
+MAX_CRUX_COUNTERFACTUAL_CHARS = 800
+
 
 def _utc_now_iso() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
+
+
+def _clip_counterfactual(text: str, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -> str:
+    """Return ``text`` trimmed to ``limit`` characters, ellipsised when clipped."""
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "\u2026"
 
 
 @dataclass(frozen=True)
@@ -337,7 +353,9 @@ def build_cruxset_from_analysis(
     :func:`~aragora.reasoning.cruxset_emission.maybe_emit_cruxset_from_finder_result`).
     When supplied, it overrides the default ``resolution_impact`` text so
     the AGT-05 reputation flow and downstream consumers see the richer
-    condition/outcome text rather than the bare numeric score.
+    condition/outcome text rather than the bare numeric score. Each override
+    is coerced to text and clipped to :data:`MAX_CRUX_COUNTERFACTUAL_CHARS`;
+    an entry that is blank after clipping falls back to the default text.
     """
     raw_cruxes = list(analysis_payload.get("cruxes") or [])
     if not raw_cruxes:
@@ -369,8 +387,10 @@ def build_cruxset_from_analysis(
             )
         claim_id = str(entry.get("claim_id") or "")
         # DIC-15 hook: prefer the validation-pass counterfactual when available.
-        if claim_id in cf_map:
-            counterfactual_text = str(cf_map[claim_id])
+        # A blank override falls through rather than silently emptying the field.
+        override = _clip_counterfactual(str(cf_map.get(claim_id) or ""))
+        if override:
+            counterfactual_text = override
         elif entry.get("resolution_impact") is not None:
             counterfactual_text = (
                 f"Resolution impact {round(float(entry.get('resolution_impact') or 0.0), 4)}"
@@ -410,6 +430,7 @@ def build_cruxset_from_analysis(
 
 __all__ = [
     "CRUXSET_SCHEMA_VERSION",
+    "MAX_CRUX_COUNTERFACTUAL_CHARS",
     "Crux",
     "CruxPosition",
     "CruxSet",

@@ -26,7 +26,11 @@ import pytest
 from aragora.epistemic.followup import MAX_BODY_STATEMENT_CHARS, propose_followup_for_crux
 from aragora.reasoning import cruxset_emission as mod
 from aragora.reasoning.crux_detector import CruxAnalysisResult, CruxClaim
-from aragora.reasoning.cruxset import CruxSet, build_cruxset_from_analysis
+from aragora.reasoning.cruxset import (
+    MAX_CRUX_COUNTERFACTUAL_CHARS,
+    CruxSet,
+    build_cruxset_from_analysis,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -295,7 +299,7 @@ def _finder_counterfactuals(*claims: CruxClaim) -> list[dict[str, Any]]:
             "claim_id": c.claim_id,
             "condition": f"Resolve '{c.statement}' to high confidence",
             "outcome_change": f"Reduces total network uncertainty by {c.resolution_impact:.3f}",
-            "likelihood": round(min(1.0, c.uncertainty_score + 0.2), 3),
+            "likelihood": round(float(c.uncertainty_score), 4),
             "affected_claims": list(c.affected_claims),
         }
         for c in claims
@@ -313,7 +317,7 @@ def test_normal_length_counterfactual_is_not_clipped(monkeypatch: pytest.MonkeyP
     assert text.startswith("Resolve 'Adoption of X reduces p99 latency' to high confidence")
     assert "Reduces total network uncertainty by" in text
     assert "…" not in text
-    assert len(text) <= mod.MAX_CRUX_COUNTERFACTUAL_CHARS
+    assert len(text) <= MAX_CRUX_COUNTERFACTUAL_CHARS
 
 
 def test_long_statement_counterfactual_is_clipped(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -324,8 +328,21 @@ def test_long_statement_counterfactual_is_clipped(monkeypatch: pytest.MonkeyPatc
     cs = mod.maybe_emit_cruxset_from_finder_result(result)
     assert cs is not None
     text = cs.cruxes[0].counterfactual
-    assert len(text) == mod.MAX_CRUX_COUNTERFACTUAL_CHARS
+    assert len(text) == MAX_CRUX_COUNTERFACTUAL_CHARS
     assert text.startswith("Resolve 'AAA")
+    assert text.endswith("…")
+
+
+def test_builder_clips_overrides_from_any_caller() -> None:
+    """The bound belongs to the builder, so it holds for callers that bypass the bridge."""
+    payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
+    cs = build_cruxset_from_analysis(
+        question="Q?",
+        analysis_payload=payload,
+        counterfactuals_by_claim_id={"c1": "Z" * 5000},
+    )
+    text = cs.cruxes[0].counterfactual
+    assert len(text) == MAX_CRUX_COUNTERFACTUAL_CHARS
     assert text.endswith("…")
 
 
@@ -349,6 +366,33 @@ def test_explicit_cf_map_value_is_coerced_to_text() -> None:
         counterfactuals_by_claim_id={"c1": 42},  # type: ignore[dict-item]
     )
     assert cs.cruxes[0].counterfactual == "42"
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\n\t "])
+def test_blank_override_falls_back_instead_of_emptying_the_field(blank: str) -> None:
+    """A blank override must not suppress the resolution_impact default."""
+    payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
+    cs = build_cruxset_from_analysis(
+        question="Q?",
+        analysis_payload=payload,
+        counterfactuals_by_claim_id={"c1": blank},
+    )
+    assert "Resolution impact" in cs.cruxes[0].counterfactual
+
+
+def test_whitespace_only_finder_entry_is_not_mapped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bridge drops entries whose text is blank once stripped."""
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+    cfs = [{"claim_id": "c1", "condition": "   ", "outcome_change": "\n"}]
+    result = _result(_analysis(_claim("c1", "S", 0.8)), counterfactuals=cfs)
+    cs = mod.maybe_emit_cruxset_from_finder_result(result)
+    assert cs is not None
+    assert "Resolution impact" in cs.cruxes[0].counterfactual
+
+
+def test_producer_bound_fits_the_consumer_body_budget() -> None:
+    """Nothing couples the two constants, so pin the relation the DIC-17 body relies on."""
+    assert MAX_CRUX_COUNTERFACTUAL_CHARS <= MAX_BODY_STATEMENT_CHARS
 
 
 # ---------------------------------------------------------------------------

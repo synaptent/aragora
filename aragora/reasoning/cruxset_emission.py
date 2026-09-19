@@ -34,21 +34,6 @@ logger = logging.getLogger(__name__)
 
 CRUXSET_EMISSION_ENV_VAR = "ARAGORA_CRUXSET_EMISSION_ENABLED"
 
-# ``Crux.counterfactual`` is contracted as a short note, but the crux-finder's
-# condition text embeds the whole agent-authored claim statement, which has no
-# upper bound. Clip here so consumers that render the field verbatim — such as
-# the DIC-17 follow-up bridge, which truncates every other free-text field —
-# cannot be handed an unbounded note.
-MAX_CRUX_COUNTERFACTUAL_CHARS = 800
-
-
-def _clip_counterfactual(text: str, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -> str:
-    """Return ``text`` trimmed to ``limit`` characters, ellipsised when clipped."""
-    text = text.strip()
-    if len(text) <= limit:
-        return text
-    return text[: limit - 1].rstrip() + "\u2026"
-
 
 def cruxset_emission_enabled() -> bool:
     """Return True when the AGT-01 CruxSet emission surface is enabled.
@@ -216,6 +201,10 @@ def maybe_emit_cruxset_from_finder_result(
     # DIC-15 counterfactual hook: build a claim_id → rich-text map so
     # build_cruxset_from_analysis can populate Crux.counterfactual with the
     # condition/outcome_change text instead of the bare resolution_impact score.
+    # The builder clips each note; entries that are blank after stripping are
+    # dropped here so they fall back to the default text rather than map to "".
+    # provenance["counterfactuals"] deliberately keeps the unclipped entries:
+    # it is the full-fidelity audit record, Crux.counterfactual is the short note.
     cf_by_claim: dict[str, str] | None = None
     if counterfactuals:
         cf_by_claim = {}
@@ -225,13 +214,13 @@ def maybe_emit_cruxset_from_finder_result(
             cid = str(cf.get("claim_id") or "")
             if not cid:
                 continue
-            parts: list[str] = []
-            if cf.get("condition"):
-                parts.append(str(cf["condition"]))
-            if cf.get("outcome_change"):
-                parts.append(str(cf["outcome_change"]))
+            parts = [
+                text
+                for key in ("condition", "outcome_change")
+                if (text := str(cf.get(key) or "").strip())
+            ]
             if parts:
-                cf_by_claim[cid] = _clip_counterfactual("; ".join(parts))
+                cf_by_claim[cid] = "; ".join(parts)
 
     return maybe_emit_cruxset(
         question=result.question,
@@ -246,7 +235,6 @@ def maybe_emit_cruxset_from_finder_result(
 
 __all__ = [
     "CRUXSET_EMISSION_ENV_VAR",
-    "MAX_CRUX_COUNTERFACTUAL_CHARS",
     "cruxset_emission_enabled",
     "enable_cruxset_emission",
     "maybe_emit_cruxset",
