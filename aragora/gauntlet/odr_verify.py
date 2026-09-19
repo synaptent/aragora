@@ -109,11 +109,17 @@ class VerifyResult:
     def to_dict(self) -> dict[str, Any]:
         return {
             "ok": self.ok,
+            "authenticity_unverified": self.authenticity_unverified,
             "receipt_id": self.receipt_id,
             "odr_digest": self.odr_digest,
             "checks": [asdict(c) for c in self.checks],
             "warnings": list(self.warnings),
         }
+
+    @property
+    def authenticity_unverified(self) -> bool:
+        """True when authenticity was requested or implied but no signature was checked."""
+        return any(c.name == "signature" and c.status == SKIP for c in self.checks)
 
 
 # ---------------------------------------------------------------------------
@@ -750,7 +756,10 @@ def _check_signatures(
         )
     if not signatures and public_key is not None:
         return Check(
-            "signature", WARN, "receipt carries no signatures; nothing to verify with the key"
+            "signature",
+            SKIP,
+            "receipt carries no signatures; authenticity NOT established even though "
+            "a public key was supplied",
         )
     if signatures and public_key is None:
         return Check(
