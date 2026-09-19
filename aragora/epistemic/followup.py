@@ -69,11 +69,28 @@ def _without_boss_ready(labels: Iterable[str]) -> tuple[str, ...]:
     return tuple(sorted(label for label in labels if not _is_boss_ready_label(label)))
 
 
+def _fenced_block(text: str, *, info: str = "") -> str:
+    """Wrap *text* in a code fence that its own backtick runs cannot terminate.
+
+    Proposal bodies carry the queue-governance notice, so embedded free-form
+    content must not be able to open headings of its own or close the fence
+    early and forge a competing section.
+    """
+    longest_run = 0
+    run = 0
+    for char in text:
+        run = run + 1 if char == "`" else 0
+        longest_run = max(longest_run, run)
+    fence = "`" * max(3, longest_run + 1)
+    return f"{fence}{info}\n{text}\n{fence}"
+
+
 @dataclass(frozen=True)
 class FollowupProposal:
     """A proposed bounded follow-up issue.
 
-    - ``source_kind``: ``"crux"``, ``"failed_claim"``, or ``"coherence_issue"``
+    - ``source_kind``: ``"crux"``, ``"failed_claim"``, ``"coherence_issue"``,
+      or ``"repair_spec"``
     - ``source_key``: stable dedup key; callers should skip proposals
       whose source_key they have already filed
     - ``labels``: intentionally excludes ``boss-ready`` by default;
@@ -500,7 +517,9 @@ def propose_followup_for_repair_spec(
             [
                 "",
                 "## Proposed patch",
-                _truncate(spec.proposed_patch, MAX_BODY_STATEMENT_CHARS),
+                _fenced_block(
+                    _truncate(spec.proposed_patch, MAX_BODY_STATEMENT_CHARS), info="diff"
+                ),
             ]
         )
     body_lines.extend(
