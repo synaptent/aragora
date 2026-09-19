@@ -41,14 +41,23 @@ before Aragora emits 0.2 receipts by default (the staged rollout of spec §9.5).
   against that finding's own severity (P0/P1 are blocking), not just the two aggregate
   members, so a signed receipt whose P1 finding claims `blocking: false` no longer
   verifies.
-- The dependency-free structural walker types `quorum.method`, `quorum.reached`,
-  `quorum.independence` and `quorum.supporting_agents`, so an install without the
-  optional `schema` extra rejects the same malformed quorum shapes as one with it.
+- The dependency-free structural walker types every member the bundled schema states,
+  not only the `quorum` block: it selects the correct `oneOf` present/absent branch and
+  enforces `minLength`/`minItems` and `minimum`/`maximum`. Over a 342-document mutation
+  sweep, no verdict now depends on whether the optional `schema` extra is installed;
+  85 of those 342 did before.
 
 ### Changed
 - `ODR_VERSION` and `ODR_PROFILE_URI` now name `0.2` and the v0.2 profile URI. Both are
-  informational: `validate_structure` accepts `0.1` and `0.2` by literal, so every v0.1
-  receipt keeps verifying exactly as it did.
+  informational: `validate_structure` accepts `0.1` and `0.2` by literal, so every
+  *conformant* v0.1 receipt keeps verifying exactly as it did — each of the six
+  `docs/specs/examples/*.odr.json` receipts reaches the same verdict under 0.1.1 and
+  under 0.2.0. Malformed v0.1 receipts are covered by the behaviour change below.
+- **Behaviour change.** Because the walker now checks every member the schema states, a
+  default install *without* the `schema` extra FAILs `schema_conformance` on malformed
+  documents that 0.1.1 accepted — for example `source.system` set to a number, or
+  `quorum.independence.disclosed` set to a string. Installs with and without the extra
+  now agree; conformant documents are unaffected.
 - `load_bundled_schema()` parses the bundled schema once and returns a fresh deep copy
   per call, so repeated verification stops re-reading and re-parsing the file while
   callers can still mutate what they get.
@@ -62,6 +71,14 @@ before Aragora emits 0.2 receipts by default (the staged rollout of spec §9.5).
   (`aragora receipt export <file> --format odr -o receipt.odr.json`) instead of
   only listing twelve missing ODR members (issue #9185). Exit codes are
   unchanged.
+
+### Fixed
+- Two degenerate quorum members no longer abort the verifier in the default
+  `cryptography`-only install: `quorum.dissent.dissenting_agents` as JSON `null` raised
+  `TypeError: 'NoneType' object is not iterable`, and a non-numeric
+  `quorum.independence.distinct_model_families` raised `ValueError: invalid literal for
+  int() with base 10`. Both now return a verdict, so `python3 -m aragora_verify <doc>`
+  prints a verdict and exits 1 on such a document instead of printing a traceback.
 
 ### Security
 - Raise the standalone package's direct `cryptography` dependency floor to
