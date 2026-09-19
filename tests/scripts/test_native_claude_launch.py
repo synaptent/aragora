@@ -135,13 +135,22 @@ def assert_blocked(result):
     assert REFRESH not in result.stdout + result.stderr
 
 
-def test_launch_selects_fresh_token_without_touching_stored_credentials(launch):
+@pytest.mark.parametrize("teams", [None, "0", "1"])
+@pytest.mark.parametrize("scope", [0, 3])
+def test_launch_selects_fresh_token_without_touching_stored_credentials(launch, teams, scope):
     run, source, cfg, profile, _, _ = launch
+    if teams is not None:
+        put(
+            (profile, *profile.parents)[scope] / ".claude/settings.json",
+            {"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": teams}},
+        )
     before = {p: p.read_bytes() for p in (source, cfg, profile / ".claude/.credentials.json")}
     result = run(extra=("--output-format", "json"))
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
     assert data["fresh_auth"]
+    assert "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" not in data["env_keys"]
+    assert data["argv"][data["argv"].index("--setting-sources") + 1] == ""
     assert "--safe-mode" in data["argv"] and "--no-session-persistence" in data["argv"]
     assert data["argv"][data["argv"].index("--model") + 1] == "fixture-model"
     assert TOKEN not in result.stdout + result.stderr
@@ -240,6 +249,10 @@ def test_conflicting_environment_is_rejected(launch, name):
     [
         {"apiKeyHelper": "echo bad"},
         {"env": {"ANTHROPIC_API_KEY": "bad"}},
+        {"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1", "ANTHROPIC_API_KEY": "bad"}},
+        {"env": {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": True}},
+        {"env": {"UNRECOGNIZED_SETTING": "1"}},
+        {"env": ["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"]},
         {"forceLoginMethod": "gateway"},
         {"fallbackModel": "other-model"},
     ],

@@ -52,6 +52,9 @@ does not provide the repository access needed for grounded review.
 Conflicting authentication, cloud/gateway routing, model overrides, or profile
 selectors stop launch rather than being silently removed. Detected managed
 policy is held for explicit qualification, never disabled to make a probe pass.
+Ordinary settings may contain only the non-authentication agent-teams env toggle
+(`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS="0"` or `"1"`); it is never forwarded.
+All other env blocks still fail closed, and `--setting-sources ""` remains fixed.
 Claude Code 2.x is eligible only when the required runtime flags are available.
 Absent local policy files do not prove absence of uncached server-managed policy;
 that admission question must be resolved before activating a real account.

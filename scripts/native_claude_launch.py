@@ -242,6 +242,11 @@ def _conflicting_settings(data) -> bool:
     if not isinstance(data, dict):
         return False
     for key, value in data.items():
+        if key == "env" and value in (
+            {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "0"},
+            {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"},
+        ):
+            continue
         normalized = re.sub(r"[^a-z]", "", key.lower())
         if normalized == "env" or any(
             term in normalized
