@@ -29,8 +29,8 @@ def _ensure_supabase() -> bool:
     try:
         import supabase as _mod
 
-        Client = _mod.Client
-        create_client = _mod.create_client
+        Client = getattr(_mod, "Client")
+        create_client = getattr(_mod, "create_client")
         SUPABASE_AVAILABLE = True
     except (ImportError, AttributeError):
         SUPABASE_AVAILABLE = False

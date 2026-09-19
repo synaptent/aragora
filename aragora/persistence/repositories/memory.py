@@ -473,6 +473,15 @@ class MemoryRepository(BaseRepository[MemoryEntity]):
             (agent_name,),
         )
 
+        if row is None:
+            return {
+                "total_memories": 0,
+                "observations": 0,
+                "reflections": 0,
+                "insights": 0,
+                "avg_importance": 0.0,
+            }
+
         return {
             "total_memories": row[0] or 0,
             "observations": row[1] or 0,
