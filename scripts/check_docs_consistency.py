@@ -22,6 +22,9 @@ ARCHIVE_REFERENCE_WHITELIST = {
     "docs/OMNIVOROUS_ROADMAP.md": "redirect stub to the archived roadmap snapshot",
     "docs/STRATEGY_INDEX.md": "canonical map from retired docs to live replacements",
     "docs/archive/README.md": "archive policy and inventory",
+    "docs/ARCHITECTURE_REVIEW_RESPONSE.md": "redirect stub to the archived architecture-review-response snapshot",
+    "docs/status/COMMERCIAL_POSITIONING.md": "redirect stub to the archived commercial-positioning snapshot",
+    "docs/compliance/EU_AI_ACT_WALKTHROUGH_2026-06.md": "redirect stub to the archived EU AI Act walkthrough snapshot",
     "docs/reference/ROOT_ALLOWLIST.md": "root-clutter inventory documents archived former-root files",
 }
 # Files/patterns where metric numbers are intentionally historical, local-suite scoped,
