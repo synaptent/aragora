@@ -14,6 +14,8 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aragora.agents.api_agents.mistral import MistralAPIAgent, CodestralAgent
+from aragora.agents.api_agents.common import AgentStreamError
+from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
 
 
 class TestMistralAgentInitialization:
@@ -134,10 +136,11 @@ class TestMistralGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -160,10 +163,11 @@ class TestMistralGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -187,10 +191,11 @@ class TestMistralGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_mistral_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_mistral_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -225,12 +230,13 @@ class TestMistralGenerate:
             nonlocal captured_payload
             captured_payload = kwargs.get("json", {})
             return MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = capture_post
 
         context = [
@@ -272,10 +278,11 @@ class TestMistralStreaming:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
@@ -297,33 +304,17 @@ class TestMistralStreaming:
 
     @pytest.mark.asyncio
     async def test_streaming_error_handled(self, agent):
-        """Test streaming error is handled appropriately."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.text = AsyncMock(return_value="Server Error")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
-            )
-        )
+        """Test streaming with a non-quota 5xx raises AgentStreamError."""
+        mock_response = make_mock_response(status=500, text="Server Error")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            # May raise or yield error - verify error is detected
-            chunks = []
-            error_detected = False
-            try:
+            chunks: list[str] = []
+            with pytest.raises(AgentStreamError, match="streaming API error 500"):
                 async for chunk in agent.generate_stream("Test"):
                     chunks.append(chunk)
-                if chunks and "error" in "".join(chunks).lower():
-                    error_detected = True
-            except Exception:
-                error_detected = True
-
-            assert error_detected or chunks == []
+            # The error is raised before any stream data is read, so nothing is yielded.
+            assert chunks == []
 
 
 class TestMistralCritique:
@@ -418,10 +409,11 @@ class TestCodestralGenerate:
 
         mock_session = MagicMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock()
+        mock_session.__aexit__ = AsyncMock(return_value=False)
         mock_session.post = MagicMock(
             return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response), __aexit__=AsyncMock()
+                __aenter__=AsyncMock(return_value=mock_response),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 
