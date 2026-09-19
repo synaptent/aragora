@@ -89,3 +89,13 @@ def test_past_ttl_but_revalidated_is_valid():
         NOW,
     )
     assert problems == []
+
+
+def test_huge_int_ttl_is_valid_not_overflow_error():
+    problems = validate_belief_provenance([_belief(freshness_ttl_seconds=10**400)], NOW)
+    assert problems == []
+
+
+def test_huge_negative_int_ttl_is_invalid_problem_not_exception():
+    problems = validate_belief_provenance([_belief(freshness_ttl_seconds=-(10**400))], NOW)
+    assert problems == ["b1: invalid freshness_ttl_seconds"]

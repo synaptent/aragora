@@ -1291,6 +1291,16 @@ See [BOT_INTEGRATIONS.md](../integrations/BOT_INTEGRATIONS.md) for detailed setu
   `ARAGORA_SECRET_NAME` still falls back to `aragora/production` when Secrets Manager is enabled.
 - Use `python3 -m aragora.cli.main secrets health --json` to verify source status without printing secret values.
 
+### ODR Receipt Signing
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `ARAGORA_ODR_PROFILE_VERSION` | Optional | ODR export profile (`0.1` or `0.2`) for `aragora receipt export --format odr` and `scripts/emit_pr_receipt.py`. `--odr-version` overrides it; empty means unset; invalid values fail with usage exit 2 before writing. Default stays 0.1 until aragora-verify 0.2.0 is published. | `0.1` |
+| `ARAGORA_ODR_SIGNING_KEY_FILE` | Optional | Path to a PKCS#8 Ed25519 private-key PEM; empty means unset; unusable files fail closed. POSIX group/other-writable files are rejected; readable files warn. | - |
+| `ARAGORA_ODR_SIGNING_KEY_SECRET` | Optional | AWS Secrets Manager SecretId holding the signing PEM; used when no key file is configured. An explicit loader secret-name argument overrides the file. | `aragora/odr-signing-key` |
+| `ARAGORA_ODR_SIGNING_KEY_STRICT_MODE` | Optional | Reject POSIX group/other-readable key files instead of warning when true (`true`, `1`, `yes`, `on`, case-insensitive). | `false` |
+| `ARAGORA_ODR_SIGNING_ISSUER` | Optional | `signatures[].issuer` written by `aragora receipt export --format odr --odr-version 0.2` and `scripts/emit_pr_receipt.py` on v0.2 documents (signer-committed, spec §6); empty means unset. Ignored for v0.1 documents, which keep the three-member entry. | `aragora` |
+
 ## Knowledge System
 
 | Variable | Required | Description | Default |

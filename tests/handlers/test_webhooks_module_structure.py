@@ -597,17 +597,89 @@ def test_webhook_suite_patch_targets_bypass_the_deprecation_shim() -> None:
     assert len(canonical_targets) >= 8
 
 
+_SHIM_PARENT_PACKAGE = "aragora.server.handlers"
+_NATIVE_SUBMODULE = PACKAGE_NAME + ".github_app"
+
+
+def _reaches_shim_module(target: str) -> bool:
+    """True when a dotted path lands on the shim rather than the canonical
+    github_app subpackage that happens to live inside it."""
+    if target == PACKAGE_NAME:
+        return True
+    if not target.startswith(PACKAGE_NAME + "."):
+        return False
+    return target != _NATIVE_SUBMODULE and not target.startswith(_NATIVE_SUBMODULE + ".")
+
+
+def _call_name(func: ast.expr) -> str | None:
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    if isinstance(func, ast.Name):
+        return func.id
+    return None
+
+
+def _static_string_argument(node: ast.Call, keyword: str) -> str | None:
+    """First positional argument, else the named keyword, when a string constant."""
+    candidate: ast.expr | None = node.args[0] if node.args else None
+    if candidate is None:
+        candidate = next((kw.value for kw in node.keywords if kw.arg == keyword), None)
+    if isinstance(candidate, ast.Constant) and isinstance(candidate.value, str):
+        return candidate.value
+    return None
+
+
+def _shim_consumption_offenders(rel_path: str, source: str) -> list[str]:
+    """Census one test source for static shim-path consumption records."""
+    # Every catchable reach form spells the bare package name somewhere; the
+    # full dotted path is too narrow a pre-filter (a parent-package binding
+    # never contains it).
+    if "webhooks" not in source:
+        return []
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        # An unparseable file cannot import anything.
+        return []
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.level != 0 or node.module is None:
+                continue
+            if _reaches_shim_module(node.module):
+                offenders.append(f"{rel_path}:{node.lineno} from-import")
+            elif node.module == _SHIM_PARENT_PACKAGE and any(
+                alias.name == "webhooks" for alias in node.names
+            ):
+                offenders.append(f"{rel_path}:{node.lineno} parent-package from-import")
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if _reaches_shim_module(alias.name):
+                    offenders.append(f"{rel_path}:{node.lineno} import")
+        elif isinstance(node, ast.Call):
+            func_name = _call_name(node.func)
+            if func_name == "patch":
+                target = _static_string_argument(node, "target")
+                if target is not None and _reaches_shim_module(target):
+                    offenders.append(f"{rel_path}:{node.lineno} patch-target {target}")
+            elif func_name == "import_module":
+                module_name = _static_string_argument(node, "name")
+                if module_name is not None and _reaches_shim_module(module_name):
+                    offenders.append(f"{rel_path}:{node.lineno} import-module {module_name}")
+    return offenders
+
+
 def test_shim_path_consumption_is_confined_to_the_designated_shim_test() -> None:
     """Test-tree shim consumption stays intentional and singular.
 
     The deprecation shim exists for external callers; inside tests/ only this
     file exercises the legacy path (the explicit warn-and-delegate probe in
     test_canonical_module_is_silent_and_package_shim_warns), so any other
-    static shim-path import or shim-path patch target is drift, not coverage.
-    The github_app submodule is a canonical package resident, not shim surface.
+    static shim reach - imports (including parent-package bindings), string
+    importlib.import_module calls, or patch targets naming the shim - is
+    drift, not coverage. The github_app submodule is a canonical package
+    resident, not shim surface.
     """
-    deprecated = "aragora.server.handlers.webhooks"
-    native_submodule_prefix = deprecated + ".github_app"
     designated_files = {"tests/handlers/test_webhooks_module_structure.py"}
 
     offenders: list[str] = []
@@ -615,38 +687,103 @@ def test_shim_path_consumption_is_confined_to_the_designated_shim_test() -> None
         rel_path = path.relative_to(REPO_ROOT).as_posix()
         if rel_path in designated_files:
             continue
-        source = path.read_text(encoding="utf-8")
-        if deprecated not in source:
-            continue
-        try:
-            tree = ast.parse(source)
-        except SyntaxError:
-            # An unparseable file cannot import anything.
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom):
-                if node.level == 0 and node.module == deprecated:
-                    offenders.append(f"{rel_path}:{node.lineno} from-import")
-            elif isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name == deprecated:
-                        offenders.append(f"{rel_path}:{node.lineno} import")
-            elif isinstance(node, ast.Call):
-                func = node.func
-                func_name = (
-                    func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
-                )
-                if func_name != "patch":
-                    continue
-                if (
-                    node.args
-                    and isinstance(node.args[0], ast.Constant)
-                    and isinstance(node.args[0].value, str)
-                ):
-                    target = node.args[0].value
-                    if target.startswith(deprecated + ".") and not target.startswith(
-                        native_submodule_prefix + "."
-                    ):
-                        offenders.append(f"{rel_path}:{node.lineno} patch-target {target}")
+        offenders.extend(_shim_consumption_offenders(rel_path, path.read_text(encoding="utf-8")))
 
     assert offenders == []
+
+
+def test_census_matcher_flags_parent_package_shim_import() -> None:
+    """Binding the shim from its parent package is shim consumption."""
+    assert _shim_consumption_offenders(
+        "tests/synthetic/test_case.py",
+        "from aragora.server.handlers import webhooks\n",
+    ) == ["tests/synthetic/test_case.py:1 parent-package from-import"]
+    assert _shim_consumption_offenders(
+        "tests/synthetic/test_case.py",
+        "from aragora.server.handlers import webhooks as legacy_webhooks\n",
+    ) == ["tests/synthetic/test_case.py:1 parent-package from-import"]
+
+
+def test_census_matcher_flags_dynamic_import_module_of_shim() -> None:
+    """importlib.import_module string reach of the shim is shim consumption."""
+    assert _shim_consumption_offenders(
+        "tests/synthetic/test_case.py",
+        'import importlib\n\nimportlib.import_module("aragora.server.handlers.webhooks")\n',
+    ) == [
+        "tests/synthetic/test_case.py:3 import-module aragora.server.handlers.webhooks",
+    ]
+    assert _shim_consumption_offenders(
+        "tests/synthetic/test_case.py",
+        (
+            "from importlib import import_module\n\n"
+            'import_module("aragora.server.handlers.webhooks")\n'
+        ),
+    ) == [
+        "tests/synthetic/test_case.py:3 import-module aragora.server.handlers.webhooks",
+    ]
+
+
+def test_census_matcher_flags_keyword_patch_target_on_shim() -> None:
+    """patch(target=...) keyword spelling cannot bypass the census."""
+    source = (
+        "from unittest.mock import patch\n\n"
+        'patch(target="aragora.server.handlers.webhooks.WebhookHandler")\n'
+    )
+    assert _shim_consumption_offenders("tests/synthetic/test_case.py", source) == [
+        "tests/synthetic/test_case.py:3 patch-target "
+        "aragora.server.handlers.webhooks.WebhookHandler",
+    ]
+
+
+def test_census_matcher_flags_whole_module_patch_target_of_shim() -> None:
+    """Patching the shim module itself (no attribute suffix) is shim reach."""
+    source = 'from unittest.mock import patch\n\npatch("aragora.server.handlers.webhooks")\n'
+    assert _shim_consumption_offenders("tests/synthetic/test_case.py", source) == [
+        "tests/synthetic/test_case.py:3 patch-target aragora.server.handlers.webhooks",
+    ]
+
+
+def test_census_matcher_exempts_suffixless_github_app_patch_target() -> None:
+    """github_app is a real subpackage; a whole-module patch of it is not shim reach."""
+    source = (
+        'from unittest.mock import patch\n\npatch("aragora.server.handlers.webhooks.github_app")\n'
+    )
+    assert _shim_consumption_offenders("tests/synthetic/test_case.py", source) == []
+
+
+def test_census_matcher_still_flags_direct_legacy_forms() -> None:
+    """The pre-hardening catches stay caught."""
+    assert _shim_consumption_offenders(
+        "tests/synthetic/test_case.py",
+        "import aragora.server.handlers.webhooks\n",
+    ) == ["tests/synthetic/test_case.py:1 import"]
+    assert _shim_consumption_offenders(
+        "tests/synthetic/test_case.py",
+        "from aragora.server.handlers.webhooks import WebhookHandler\n",
+    ) == ["tests/synthetic/test_case.py:1 from-import"]
+    assert _shim_consumption_offenders(
+        "tests/synthetic/test_case.py",
+        (
+            "from unittest.mock import patch\n\n"
+            'patch("aragora.server.handlers.webhooks.WebhookHandler")\n'
+        ),
+    ) == [
+        "tests/synthetic/test_case.py:3 patch-target "
+        "aragora.server.handlers.webhooks.WebhookHandler",
+    ]
+
+
+def test_census_matcher_exempts_canonical_and_github_app_reach() -> None:
+    """Canonical-module and github_app-resident forms never trip the census."""
+    for source in (
+        "import aragora.server.handlers.webhook_management\n",
+        "from aragora.server.handlers import webhook_management\n",
+        "from aragora.server.handlers.webhooks.github_app import handle_github_webhook\n",
+        "import aragora.server.handlers.webhooks.github_app\n",
+        (
+            "from unittest.mock import patch\n\n"
+            'patch("aragora.server.handlers.webhooks.github_app.queue_code_review_debate")\n'
+        ),
+        'MESSAGE = "aragora.server.handlers.webhooks is deprecated"\n',
+    ):
+        assert _shim_consumption_offenders("tests/synthetic/test_case.py", source) == []

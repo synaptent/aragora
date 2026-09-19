@@ -20554,6 +20554,12 @@ paths:
             application/json:
               schema:
                 type: object
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
       x-method-inferred: false
       x-wired-registration: true
       x-aragora-stability: deprecated

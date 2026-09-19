@@ -1509,6 +1509,14 @@ async def run_unified_server(
     except (ImportError, OSError, RuntimeError, TypeError, ValueError) as e:
         logger.warning("[server] Config validation skipped: %s", e)
 
+    # Materialize the lazy auth singleton so a production boot without a token
+    # fails here with AuthenticationError instead of relying on whichever
+    # module-level auth_config import happens to fire first (a per-request
+    # failure if that import graph ever becomes lazy).
+    from aragora.server.auth import get_auth_config
+
+    get_auth_config()
+
     # Initialize storage from nomic directory (or default data dir in offline mode)
     storage = None
     if nomic_dir is None:

@@ -80813,6 +80813,15 @@ export interface operations {
                     "application/json": Record<string, never>;
                 };
             };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
         };
     };
     deleteIntegrationsBytype: {

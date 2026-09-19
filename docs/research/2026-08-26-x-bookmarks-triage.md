@@ -135,12 +135,18 @@ The outcome was a **failed consensus, and the receipt says so**:
   [`receipts/2026-08-29-x-intake-ranking-run.json`](receipts/2026-08-29-x-intake-ranking-run.json).
 
 Consequence: the per-candidate verdicts in this brief remain **analyst verdicts, not
-debate-settled ones** — exactly what the receipt-preserving posture requires us to say. Re-run
-after restoring claude CLI auth (`claude login`, or once API-key agents are reachable again):
+debate-settled ones** — exactly what the receipt-preserving posture requires us to say.
 
-```bash
-python3 scripts/rank_research_candidates.py docs/research/2026-08-26-x-bookmarks-triage.md --agents claude,codex --max-goals 10
-```
+**Re-run (2026-08-29, same day):** claude CLI auth was available again; the cause of the first
+run's 401 remains unverified. The debate re-ran and failed consensus *again*, this time because
+the codex proposer timed out at 240s on the 14-candidate topic,
+leaving claude's full grounded proposal (it verified candidate 11's code claim against `grok.py`
+itself) with no second perspective. Claude's own critique flagged that this mirrors candidate 1's
+collaboration-vs-independence failure mode. Artifacts:
+
+- Re-run receipt: [`receipts/2026-08-29-x-intake-ranking-rerun-receipt.json`](receipts/2026-08-29-x-intake-ranking-rerun-receipt.json) (verdict `FAIL`, cause only visible in `agent_responses`)
+- Claude's single-model ranking: [`receipts/2026-08-29-claude-ranking-proposal.md`](receipts/2026-08-29-claude-ranking-proposal.md) — promotes the DeepMind verifier-metric audit (#9868) to rank 1 and diverges from the analyst verdicts by rejecting candidates #3, #7, and #8
+- Defect filed: [#9872](https://github.com/synaptent/aragora/issues/9872) — MetaPlanner degrades silently when a proposer times out; fix that, then re-run for a true consensus receipt.
 
 ## Rules of the road for this brief
 

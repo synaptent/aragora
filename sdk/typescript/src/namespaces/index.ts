@@ -1655,7 +1655,6 @@ export {
   type PipelineGraphResponse,
   type PipelineReceiptResponse,
 } from './pipeline';
-export { PipelineTransitionsNamespace } from './pipeline-transitions';
 
 // DAG Operations (Pipeline graph-level automation)
 export {
@@ -1794,8 +1793,6 @@ export {
   type SearchOptions as IndexSearchOptions,
   type SearchIndexOptions,
   type CreateIndexOptions,
-  type IndexDocument,
-  type UpdateDocumentOptions,
 } from './vector-index';
 
 // Benchmarks

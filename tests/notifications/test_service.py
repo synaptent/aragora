@@ -930,7 +930,7 @@ class TestErrorHandling:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(side_effect=OSError("Connection refused")),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
 

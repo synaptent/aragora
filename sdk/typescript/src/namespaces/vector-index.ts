@@ -73,22 +73,6 @@ export interface CreateIndexOptions {
   description?: string;
 }
 
-/** Document to add to an index */
-export interface IndexDocument {
-  /** Document text content */
-  text: string;
-  /** Optional metadata */
-  metadata?: Record<string, unknown>;
-}
-
-/** Document update options */
-export interface UpdateDocumentOptions {
-  /** New text content (re-embeds if changed) */
-  text?: string;
-  /** Updated metadata */
-  metadata?: Record<string, unknown>;
-}
-
 // =============================================================================
 // Index API
 // =============================================================================
@@ -211,50 +195,5 @@ export class IndexAPI {
   /** Delete a vector index. */
   async deleteIndex(indexName: string): Promise<{ deleted: boolean }> {
     return this.client.request('DELETE', `/api/v1/index/${indexName}`);
-  }
-
-  /** Get statistics for a vector index. */
-  async getIndexStats(indexName: string): Promise<{ document_count: number; size_bytes: number; dimension: number }> {
-    return this.client.request('GET', `/api/v1/index/${indexName}/stats`);
-  }
-
-  // ===========================================================================
-  // Document Operations
-  // ===========================================================================
-
-  /** Add documents to an index. */
-  async addDocuments(indexName: string, documents: IndexDocument[]): Promise<{ added: number }> {
-    return this.client.request('POST', `/api/v1/index/${indexName}/documents`, {
-      json: { documents: documents as unknown as Record<string, unknown> },
-    });
-  }
-
-  /** Update a document in an index. */
-  async updateDocument(indexName: string, documentId: string, options: UpdateDocumentOptions): Promise<{ updated: boolean }> {
-    const data: Record<string, unknown> = {};
-    if (options.text !== undefined) data.text = options.text;
-    if (options.metadata !== undefined) data.metadata = options.metadata;
-    return this.client.request('PUT', `/api/v1/index/${indexName}/documents/${documentId}`, { json: data });
-  }
-
-  /** Delete documents from an index. */
-  async deleteDocuments(indexName: string, documentIds: string[]): Promise<{ deleted: number }> {
-    return this.client.request('DELETE', `/api/v1/index/${indexName}/documents`, {
-      json: { document_ids: documentIds },
-    });
-  }
-
-  // ===========================================================================
-  // Index Operations
-  // ===========================================================================
-
-  /** Rebuild an index from scratch. */
-  async rebuildIndex(indexName: string): Promise<{ status: string; job_id?: string }> {
-    return this.client.request('POST', `/api/v1/index/${indexName}/rebuild`);
-  }
-
-  /** Optimize an index for better search performance. */
-  async optimizeIndex(indexName: string): Promise<{ status: string }> {
-    return this.client.request('POST', `/api/v1/index/${indexName}/optimize`);
   }
 }

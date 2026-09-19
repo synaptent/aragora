@@ -35007,6 +35007,16 @@
                 }
               }
             }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "x-method-inferred": false,
