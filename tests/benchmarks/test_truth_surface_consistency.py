@@ -268,6 +268,11 @@ def test_tw03_rescue_productization_status_matches_latest_report_json() -> None:
         assert report_payload["issue_drafts"] == []
         return
 
+    if source is None:
+        observed = (report_payload.get("observation_status") or {}).get("raw_inputs")
+        if isinstance(observed, str) and observed != "available":
+            assert "Rescue ledger status: `available`" not in markdown
+
     summary = report_payload["summary"]
     linked_repeated_count = (
         summary["linked_fixture_count"]

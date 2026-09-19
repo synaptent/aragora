@@ -252,6 +252,165 @@ def test_render_unavailable_source_does_not_claim_zero_rescue_classes(tmp_path: 
     assert "No repeated rescue classes found" not in markdown
 
 
+def test_tracked_legacy_report_does_not_claim_available_rescue_ledger() -> None:
+    report_path = mod.DEFAULT_REPORT_ROOT / "latest.json"
+    payload = mod._load_json(report_path)
+    assert "source" not in payload
+    assert payload["observation_status"]["raw_inputs"] == "unavailable"
+
+    markdown = mod.render_status_markdown(report_path=report_path, payload=payload)
+
+    assert "Rescue ledger status: `available`" not in markdown
+    assert "Rescue ledger status: `unavailable`" in markdown
+    assert "Observation availability warning" in markdown
+    assert "raw inputs: `unavailable`" in markdown
+    # A legacy report carries no source error block, so no error detail may be invented.
+    assert "Rescue ledger error" not in markdown
+
+    summary = payload["summary"]
+    linked = (
+        summary["linked_fixture_count"]
+        + summary["linked_issue_count"]
+        + summary["linked_other_count"]
+    )
+    assert f"- Repeated rescue classes: `{summary['repeated_class_count']}`" in markdown
+    assert f"- Linked repeated classes: `{linked}`" in markdown
+    assert f"- Unlinked repeated classes: `{summary['unlinked_repeated_class_count']}`" in markdown
+    assert f"- One-off classes: `{summary['one_off_class_count']}`" in markdown
+    assert f"- Below-threshold classes: `{summary['below_threshold_class_count']}`" in markdown
+    assert f"- Issue drafts remaining: `{len(payload['issue_drafts'])}`" in markdown
+    assert "`n/a`" not in markdown
+    assert "Not evaluated because the source ledger is unavailable." not in markdown
+
+
+def test_legacy_unavailable_report_preserves_numeric_values(tmp_path: Path) -> None:
+    payload = {
+        "generated_at": "2026-05-01T00:00:00Z",
+        "ledger_path": "~/.aragora/rescue_events.jsonl",
+        "productization_map_path": "docs/benchmarks/rescue_productization.json",
+        "observation_status": {"raw_inputs": "unavailable", "rescue_history": "incomplete"},
+        "summary": {
+            "repeated_class_count": 3,
+            "linked_fixture_count": 1,
+            "linked_issue_count": 1,
+            "linked_other_count": 0,
+            "unlinked_repeated_class_count": 1,
+            "one_off_class_count": 2,
+            "below_threshold_class_count": 1,
+        },
+        "repeated_classes": [
+            {
+                "class": "manual_merge:required review gate",
+                "count": 4,
+                "productization_status": "unlinked",
+                "productization_target": "",
+                "issue_numbers": [],
+            }
+        ],
+        "one_off_classes": [{"class": "issue_rewrite:scope drift", "count": 1}],
+        "below_threshold_classes": [{"class": "flake:timeout", "count": 1}],
+        "issue_linkage_results": [],
+        "issue_drafts": [],
+    }
+
+    markdown = mod.render_status_markdown(report_path=tmp_path / "latest.json", payload=payload)
+
+    assert "Rescue ledger status: `unavailable`" in markdown
+    assert "Rescue ledger status: `available`" not in markdown
+    assert "Rescue ledger error" not in markdown
+    assert "- Repeated rescue classes: `3`" in markdown
+    assert "- Linked repeated classes: `2`" in markdown
+    assert "- One-off classes: `2`" in markdown
+    assert "- Below-threshold classes: `1`" in markdown
+    assert parse_repeated_class_rows(markdown) == expected_repeated_class_rows(
+        payload["repeated_classes"]
+    )
+    assert parse_counted_class_bullets(markdown, "One-Off Rescue Classes") == (
+        expected_counted_class_bullets(payload["one_off_classes"])
+    )
+    assert "Not evaluated because the source ledger is unavailable." not in markdown
+
+
+def test_legacy_report_without_provenance_markers_reports_unknown_status(tmp_path: Path) -> None:
+    payload = {
+        "generated_at": "2026-04-14T18:45:47Z",
+        "ledger_path": "~/.aragora/rescue_events.jsonl",
+        "productization_map_path": "docs/benchmarks/rescue_productization.json",
+        "summary": {
+            "repeated_class_count": 1,
+            "linked_fixture_count": 0,
+            "linked_issue_count": 0,
+            "linked_other_count": 0,
+            "unlinked_repeated_class_count": 1,
+            "one_off_class_count": 0,
+            "below_threshold_class_count": 0,
+        },
+        "repeated_classes": [
+            {
+                "class": "manual_merge:required review gate",
+                "count": 2,
+                "productization_status": "unlinked",
+                "productization_target": "",
+                "issue_numbers": [],
+            }
+        ],
+        "one_off_classes": [],
+        "below_threshold_classes": [],
+        "issue_linkage_results": [],
+        "issue_drafts": [],
+    }
+
+    markdown = mod.render_status_markdown(report_path=tmp_path / "latest.json", payload=payload)
+
+    assert "Rescue ledger status: `unknown`" in markdown
+    assert "Rescue ledger status: `available`" not in markdown
+    assert "Rescue ledger error" not in markdown
+    assert "- Repeated rescue classes: `1`" in markdown
+    assert parse_repeated_class_rows(markdown) == expected_repeated_class_rows(
+        payload["repeated_classes"]
+    )
+
+
+def test_recorded_available_source_still_renders_available(tmp_path: Path) -> None:
+    payload = {
+        "ok": True,
+        "generated_at": "2026-08-30T02:00:00Z",
+        "ledger_path": "~/.aragora/rescue_events.jsonl",
+        "productization_map_path": "docs/benchmarks/rescue_productization.json",
+        "source": {"status": "available", "event_count": 5, "sha256": "a" * 64},
+        "observation_status": {"raw_inputs": "available", "rescue_history": "complete"},
+        "summary": {
+            "repeated_class_count": 1,
+            "linked_fixture_count": 0,
+            "linked_issue_count": 0,
+            "linked_other_count": 0,
+            "unlinked_repeated_class_count": 1,
+            "one_off_class_count": 0,
+            "below_threshold_class_count": 0,
+        },
+        "repeated_classes": [
+            {
+                "class": "manual_merge:required review gate",
+                "count": 2,
+                "productization_status": "unlinked",
+                "productization_target": "",
+                "issue_numbers": [],
+            }
+        ],
+        "one_off_classes": [],
+        "below_threshold_classes": [],
+        "issue_linkage_results": [],
+        "issue_drafts": [],
+    }
+
+    markdown = mod.render_status_markdown(report_path=tmp_path / "latest.json", payload=payload)
+
+    assert "Rescue ledger status: `available`" in markdown
+    assert "Rescue ledger error" not in markdown
+    assert "- Repeated rescue classes: `1`" in markdown
+    assert "Observation availability warning" not in markdown
+
+
 def test_main_refuses_to_downgrade_existing_status_from_stale_report(tmp_path: Path) -> None:
     report_root = tmp_path / "generated" / "rescue_productization"
     report_root.mkdir(parents=True)

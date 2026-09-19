@@ -114,6 +114,21 @@ def _source_error_detail(source: dict[str, Any]) -> str:
     return str(error.get("detail") or error.get("code") or "n/a").strip()
 
 
+def _legacy_source_status(payload: dict[str, Any]) -> str:
+    """Report ledger provenance for a payload published before `source` existed.
+
+    Such a report carries no record of its own ledger, so availability may only be
+    read from the observations it did persist. With no recorded observation either,
+    provenance is unknown rather than available.
+    """
+    status = payload.get("observation_status")
+    if isinstance(status, dict):
+        raw_inputs = status.get("raw_inputs")
+        if isinstance(raw_inputs, str) and raw_inputs.strip():
+            return raw_inputs.strip()
+    return "unknown"
+
+
 def _render_linkage_actions(rows: list[dict[str, Any]]) -> list[str]:
     if not rows:
         return ["- none"]
@@ -202,8 +217,16 @@ def _render_snapshot_input_limits(generated_at: str, payload: dict[str, Any]) ->
 
 def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str:
     source = dict(payload.get("source") or {})
-    source_status = str(source.get("status") or "available").strip()
+    source_recorded = bool(source)
+    if source_recorded:
+        source_status = str(source.get("status") or "available").strip()
+    else:
+        source_status = _legacy_source_status(payload)
     source_available = source_status == "available"
+    # Only a report that actually recorded an unavailable ledger withholds its counts.
+    # A legacy report keeps publishing the values it already published; the rendered
+    # observation warning is what marks those values non-authoritative.
+    render_observations = source_available or not source_recorded
     summary = dict(payload.get("summary") or {})
     repeated_classes = list(payload.get("repeated_classes") or [])
     one_off_classes = list(payload.get("one_off_classes") or [])
@@ -225,20 +248,24 @@ def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str
         f"- Latest report: `{_repo_stable_path(report_path)}`",
         f"- Rescue ledger path: `{_format_value(payload.get('ledger_path'))}`",
         f"- Rescue ledger status: `{source_status}`",
-        *([] if source_available else [f"- Rescue ledger error: `{_source_error_detail(source)}`"]),
+        *(
+            [f"- Rescue ledger error: `{_source_error_detail(source)}`"]
+            if source_recorded and not source_available
+            else []
+        ),
         f"- Productization map: `{_format_value(payload.get('productization_map_path'))}`",
-        f"- Repeated rescue classes: `{_format_value(summary.get('repeated_class_count') if source_available else None)}`",
-        f"- Linked repeated classes: `{_format_value((summary.get('linked_fixture_count', 0) + summary.get('linked_issue_count', 0) + summary.get('linked_other_count', 0)) if source_available else None)}`",
-        f"- Unlinked repeated classes: `{_format_value(summary.get('unlinked_repeated_class_count') if source_available else None)}`",
-        f"- One-off classes: `{_format_value(summary.get('one_off_class_count') if source_available else None)}`",
-        f"- Below-threshold classes: `{_format_value(summary.get('below_threshold_class_count') if source_available else None)}`",
-        f"- Issue drafts remaining: `{_format_value(len(issue_drafts) if source_available else None)}`",
+        f"- Repeated rescue classes: `{_format_value(summary.get('repeated_class_count') if render_observations else None)}`",
+        f"- Linked repeated classes: `{_format_value((summary.get('linked_fixture_count', 0) + summary.get('linked_issue_count', 0) + summary.get('linked_other_count', 0)) if render_observations else None)}`",
+        f"- Unlinked repeated classes: `{_format_value(summary.get('unlinked_repeated_class_count') if render_observations else None)}`",
+        f"- One-off classes: `{_format_value(summary.get('one_off_class_count') if render_observations else None)}`",
+        f"- Below-threshold classes: `{_format_value(summary.get('below_threshold_class_count') if render_observations else None)}`",
+        f"- Issue drafts remaining: `{_format_value(len(issue_drafts) if render_observations else None)}`",
         "",
         "## Repeated Rescue Classes",
         "",
         *(
             _render_repeated_classes(repeated_classes)
-            if source_available
+            if render_observations
             else [
                 "- No rescue-class conclusion is asserted because the source ledger is unavailable."
             ]
@@ -248,7 +275,7 @@ def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str
         "",
         *(
             _render_linkage_actions(issue_linkage_results)
-            if source_available
+            if render_observations
             else ["- Not evaluated because the source ledger is unavailable."]
         ),
         "",
@@ -256,14 +283,14 @@ def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str
         "",
         *(
             _render_issue_drafts(issue_drafts)
-            if source_available
+            if render_observations
             else ["- Not evaluated because the source ledger is unavailable."]
         ),
         "",
         "## One-Off Rescue Classes",
         "",
     ]
-    if not source_available:
+    if not render_observations:
         lines.append("- Not evaluated because the source ledger is unavailable.")
     elif one_off_classes:
         lines.extend(
@@ -273,7 +300,7 @@ def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str
     else:
         lines.append("- none")
     lines.extend(["", "## Below-Threshold Rescue Classes", ""])
-    if not source_available:
+    if not render_observations:
         lines.append("- Not evaluated because the source ledger is unavailable.")
     elif below_threshold_classes:
         lines.extend(
