@@ -253,7 +253,9 @@ def test_render_unavailable_source_does_not_claim_zero_rescue_classes(tmp_path: 
 
 
 def test_tracked_legacy_report_does_not_claim_available_rescue_ledger() -> None:
-    report_path = mod.DEFAULT_REPORT_ROOT / "latest.json"
+    # Every publish rewrites latest.json, so the legacy shape is read from the
+    # timestamped publication, which the publisher never overwrites.
+    report_path = mod.DEFAULT_REPORT_ROOT / "rescue-productization-20260904T132839Z.json"
     payload = mod._load_json(report_path)
     assert "source" not in payload
     assert payload["observation_status"]["raw_inputs"] == "unavailable"
@@ -281,6 +283,40 @@ def test_tracked_legacy_report_does_not_claim_available_rescue_ledger() -> None:
     assert f"- Issue drafts remaining: `{len(payload['issue_drafts'])}`" in markdown
     assert "`n/a`" not in markdown
     assert "Not evaluated because the source ledger is unavailable." not in markdown
+
+
+def test_tracked_latest_report_status_never_contradicts_its_observations() -> None:
+    report_path = mod.DEFAULT_REPORT_ROOT / "latest.json"
+    payload = mod._load_json(report_path)
+
+    markdown = mod.render_status_markdown(report_path=report_path, payload=payload)
+
+    assert "- Rescue ledger status: `" in markdown
+    raw_inputs = (payload.get("observation_status") or {}).get("raw_inputs")
+    if isinstance(raw_inputs, str) and raw_inputs != "available":
+        assert "Rescue ledger status: `available`" not in markdown
+
+
+def test_recorded_source_without_status_is_not_reported_available(tmp_path: Path) -> None:
+    payload = {
+        "generated_at": "2026-08-30T03:00:00Z",
+        "ledger_path": "~/.aragora/rescue_events.jsonl",
+        "productization_map_path": "docs/benchmarks/rescue_productization.json",
+        "source": {"event_count": None, "sha256": None},
+        "summary": {"repeated_class_count": 4},
+        "repeated_classes": [],
+        "one_off_classes": [],
+        "below_threshold_classes": [],
+        "issue_linkage_results": [],
+        "issue_drafts": [],
+    }
+
+    markdown = mod.render_status_markdown(report_path=tmp_path / "latest.json", payload=payload)
+
+    assert "Rescue ledger status: `unknown`" in markdown
+    assert "Rescue ledger status: `available`" not in markdown
+    assert "- Repeated rescue classes: `n/a`" in markdown
+    assert "No rescue-class conclusion is asserted" in markdown
 
 
 def test_legacy_unavailable_report_preserves_numeric_values(tmp_path: Path) -> None:

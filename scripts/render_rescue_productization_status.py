@@ -219,7 +219,7 @@ def render_status_markdown(*, report_path: Path, payload: dict[str, Any]) -> str
     source = dict(payload.get("source") or {})
     source_recorded = bool(source)
     if source_recorded:
-        source_status = str(source.get("status") or "available").strip()
+        source_status = str(source.get("status") or "unknown").strip() or "unknown"
     else:
         source_status = _legacy_source_status(payload)
     source_available = source_status == "available"
