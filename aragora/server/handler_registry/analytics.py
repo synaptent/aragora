@@ -65,7 +65,7 @@ CostHandler = _safe_import("aragora.server.handlers.costs", "CostHandler")
 # =============================================================================
 
 UsageMeteringHandler = _safe_import(
-    "aragora.server.handlers.usage_metering", "UsageMeteringHandler"
+    "aragora.server.handlers.billing.usage_metering", "UsageMeteringHandler"
 )
 
 # =============================================================================
@@ -125,7 +125,7 @@ PlaybookHandler = _safe_import("aragora.server.handlers.catalog.playbooks", "Pla
 
 # Knowledge Flow (flywheel visualization)
 KnowledgeFlowHandler = _safe_import(
-    "aragora.server.handlers.knowledge_flow", "KnowledgeFlowHandler"
+    "aragora.server.handlers.knowledge.knowledge_flow", "KnowledgeFlowHandler"
 )
 
 # Decision Analytics (issue #281)
@@ -166,7 +166,7 @@ ReceiptExplorerHandler = _safe_import(
 DecompositionHandler = _safe_import(
     "aragora.server.handlers.pipeline.decomposition", "DecompositionHandler"
 )
-RunsHandler = _safe_import("aragora.server.handlers.runs", "RunsHandler")
+RunsHandler = _safe_import("aragora.server.handlers.governance.runs", "RunsHandler")
 
 # Differentiation and moderation analytics
 DifferentiationHandler = _safe_import(
@@ -178,7 +178,7 @@ ModerationAnalyticsHandler = _safe_import(
 
 # Ralph campaign observability dashboard
 RalphDashboardHandler = _safe_import(
-    "aragora.server.handlers.ralph_dashboard", "RalphDashboardHandler"
+    "aragora.server.handlers.autonomous.ralph_dashboard", "RalphDashboardHandler"
 )
 
 # =============================================================================

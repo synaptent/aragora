@@ -1,7 +1,7 @@
 """HTTP handlers for Mode 3 on-demand brief generation.
 
 Three endpoints layered on top of the existing
-:class:`aragora.server.handlers.review_queue.ReviewQueueHandler`:
+:class:`aragora.server.handlers.governance.review_queue.ReviewQueueHandler`:
 
 - ``POST   /api/v1/review-queue/prs/{number}/brief/generate``
 - ``GET    /api/v1/review-queue/prs/{number}/brief/state``
@@ -66,7 +66,7 @@ from aragora.pdb.worker import (
 )
 from aragora.review.policy import ReviewPolicy
 
-from .utils.responses import HandlerResult, error_response, json_response
+from ..utils.responses import HandlerResult, error_response, json_response
 
 logger = logging.getLogger(__name__)
 

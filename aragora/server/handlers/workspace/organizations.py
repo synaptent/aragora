@@ -36,8 +36,11 @@ from aragora.audit.unified import audit_admin, audit_data
 AuthorizationContext: Any
 check_permission: Any
 try:
-    from aragora.rbac import AuthorizationContext, check_permission
+    from aragora.rbac import AuthorizationContext as _AuthorizationContext
+    from aragora.rbac import check_permission as _check_permission
 
+    AuthorizationContext = _AuthorizationContext
+    check_permission = _check_permission
     RBAC_AVAILABLE = True
 except ImportError:
     RBAC_AVAILABLE = False
@@ -46,16 +49,16 @@ except ImportError:
 
 from aragora.server.handlers.utils.rbac_guard import rbac_fail_closed
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     handle_errors,
     json_response,
     log_request,
 )
-from .utils.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
-from .secure import SecureHandler
+from ..utils.decorators import require_permission
+from ..utils.rate_limit import RateLimiter, get_client_ip
+from ..secure import SecureHandler
 
 logger = logging.getLogger(__name__)
 

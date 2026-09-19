@@ -34,16 +34,16 @@ from typing import TYPE_CHECKING, Any
 
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     get_int_param,
     json_response,
     handle_errors,
 )
-from .secure import SecureHandler
-from .utils.auth_mixins import SecureEndpointMixin, require_permission
-from .utils.rate_limit import rate_limit
+from ..secure import SecureHandler
+from ..utils.auth_mixins import SecureEndpointMixin, require_permission
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 

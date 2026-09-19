@@ -295,7 +295,7 @@ class DeviceHandler(SecureHandler):
             return error_response(f"Missing required fields: {missing}", 400)
 
         device_type = body.get("device_type")
-        push_token = body.get("push_token")
+        push_token: Any = body.get("push_token")
 
         # Validate push token length (max 4KB for safety)
         if len(push_token) > 4096:

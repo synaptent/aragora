@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 from aragora.server.http_utils import run_async as _run_async
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     get_int_param,
@@ -46,9 +46,9 @@ from .base import (
     safe_error_message,
     handle_errors,
 )
-from .secure import SecureHandler
-from .utils.auth_mixins import SecureEndpointMixin, require_permission
-from .utils.rate_limit import rate_limit
+from ..secure import SecureHandler
+from ..utils.auth_mixins import SecureEndpointMixin, require_permission
+from ..utils.rate_limit import rate_limit
 
 from aragora.audit.unified import audit_admin, audit_security
 from aragora.exceptions import REDIS_CONNECTION_ERRORS
@@ -333,7 +333,7 @@ class NomicHandler(SecureEndpointMixin, SecureHandler):  # type: ignore[misc]  #
             # Collect warnings
             warnings = state.get("warnings", [])
             if stalled:
-                warnings.append(f"No activity for {stall_duration // 60} minutes")
+                warnings.append(f"No activity for {(stall_duration or 0) // 60} minutes")
 
             return json_response(
                 {

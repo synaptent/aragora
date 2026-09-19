@@ -538,7 +538,7 @@ class UnifiedHandler(  # type: ignore[misc]
 
     def _serve_live_spectate_stream(self, query: dict[str, Any]) -> bool:
         """Write a live SSE response for the public spectate stream endpoint."""
-        from aragora.server.handlers.spectate_ws import (
+        from aragora.server.handlers.streaming.spectate_ws import (
             _can_view_live_debates,
             _get_optional_user_from_request,
             iter_live_spectate_sse_frames,

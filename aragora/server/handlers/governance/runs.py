@@ -74,10 +74,11 @@ def _json_safe_value(value: Any) -> Any:
 
 def _stage_event_payload(event: Any) -> dict[str, Any]:
     """Serialize one stage event while preserving timeline details when present."""
+    payload: dict[str, Any]
     if isinstance(event, dict):
         payload = {str(key): _json_safe_value(value) for key, value in event.items()}
     else:
-        payload: dict[str, Any] = {}
+        payload = {}
 
         model_dump = getattr(event, "model_dump", None)
         if callable(model_dump):

@@ -20,16 +20,16 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from .base import (
+from ..base import (
     error_response,
     get_string_param,
     handle_errors,
     json_response,
 )
-from .utils.responses import HandlerResult
-from .secure import SecureHandler
-from .utils.decorators import require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.responses import HandlerResult
+from ..secure import SecureHandler
+from ..utils.decorators import require_permission
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -258,7 +258,7 @@ class SMESuccessDashboardHandler(SecureHandler):
             logger.debug("DebateAnalytics not available")
             return None
 
-    def _get_cost_tracker(self) -> Any | None:
+    def _get_cost_tracker(self) -> Any:
         """Get cost tracker instance."""
         from aragora.billing.cost_tracker import get_cost_tracker
 
@@ -267,7 +267,7 @@ class SMESuccessDashboardHandler(SecureHandler):
     def _get_onboarding_activation_metrics(self, org_id: str) -> dict[str, Any]:
         """Get onboarding activation/timing metrics for PM view."""
         try:
-            from aragora.server.handlers.onboarding import get_onboarding_analytics_snapshot
+            from .onboarding import get_onboarding_analytics_snapshot
 
             analytics = get_onboarding_analytics_snapshot(organization_id=org_id)
             funnel = analytics.get("funnel", {})

@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     pass
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -50,8 +50,8 @@ from .base import (
     json_response,
     safe_error_message,
 )
-from .utils.decorators import has_permission, require_permission
-from .utils.rate_limit import RateLimiter, get_client_ip
+from ..utils.decorators import has_permission, require_permission
+from ..utils.rate_limit import RateLimiter, get_client_ip
 
 logger = logging.getLogger(__name__)
 

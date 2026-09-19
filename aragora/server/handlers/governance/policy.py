@@ -28,7 +28,7 @@ from typing import Any
 from aragora.server.validation import validate_path_segment, SAFE_ID_PATTERN
 from aragora.audit.unified import audit_security
 
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,
@@ -37,8 +37,8 @@ from .base import (
     get_string_param,
     json_response,
 )
-from .utils.decorators import require_permission
-from .utils.rate_limit import rate_limit
+from ..utils.decorators import require_permission
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 

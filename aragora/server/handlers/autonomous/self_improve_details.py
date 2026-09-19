@@ -23,15 +23,15 @@ from typing import Any
 
 from aragora.server.versioning.compat import strip_version_prefix
 
-from .base import (
+from ..base import (
     HandlerResult,
     error_response,
     json_response,
     handle_errors,
 )
-from .secure import SecureHandler
-from .utils.auth_mixins import SecureEndpointMixin
-from .utils.rate_limit import rate_limit
+from ..secure import SecureHandler
+from ..utils.auth_mixins import SecureEndpointMixin
+from ..utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +293,7 @@ class SelfImproveDetailsHandler(SecureEndpointMixin, SecureHandler):  # type: ig
 
         # Get run state from self-improve handler's active tasks
         try:
-            from aragora.server.handlers.self_improve import _active_tasks
+            from .self_improve import _active_tasks
 
             for run_id, task in _active_tasks.items():
                 if not task.done():

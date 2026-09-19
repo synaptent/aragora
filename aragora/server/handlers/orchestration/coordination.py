@@ -23,7 +23,7 @@ import logging
 from typing import Any
 
 from aragora.rbac.decorators import require_permission
-from .base import (
+from ..base import (
     BaseHandler,
     HandlerResult,
     error_response,

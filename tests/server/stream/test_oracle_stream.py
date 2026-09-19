@@ -1050,7 +1050,7 @@ class TestHelpers:
         from aragora.server.stream.oracle_stream import _get_oracle_models
 
         # When playground import fails, should return defaults
-        with patch.dict("sys.modules", {"aragora.server.handlers.playground": None}):
+        with patch.dict("sys.modules", {"aragora.server.handlers.demo.playground": None}):
             # Force reimport path through ImportError
             models = _get_oracle_models()
             assert len(models) == 3
@@ -1058,14 +1058,14 @@ class TestHelpers:
     def test_get_tentacle_models_fallback(self):
         from aragora.server.stream.oracle_stream import _get_tentacle_models
 
-        with patch.dict("sys.modules", {"aragora.server.handlers.playground": None}):
+        with patch.dict("sys.modules", {"aragora.server.handlers.demo.playground": None}):
             models = _get_tentacle_models()
             assert isinstance(models, list)
 
     def test_build_oracle_prompt_fallback(self):
         from aragora.server.stream.oracle_stream import _build_oracle_prompt
 
-        with patch.dict("sys.modules", {"aragora.server.handlers.playground": None}):
+        with patch.dict("sys.modules", {"aragora.server.handlers.demo.playground": None}):
             result = _build_oracle_prompt("consult", "test question")
             # Fallback returns just the question
             assert "test question" in result
@@ -1288,7 +1288,7 @@ class TestGetOracleModelsFallback:
         primary path — not swap Sonnet for Opus."""
         from aragora.server.handlers.playground import _ORACLE_MODEL_ANTHROPIC
 
-        with patch.dict("sys.modules", {"aragora.server.handlers.playground": None}):
+        with patch.dict("sys.modules", {"aragora.server.handlers.demo.playground": None}):
             from aragora.server.stream.oracle_stream import _get_oracle_models
 
             _, anthropic_model, _ = _get_oracle_models()
@@ -1306,7 +1306,7 @@ class TestGetOracleModelsFallback:
             _ORACLE_MODEL_OPENAI,
         )
 
-        with patch.dict("sys.modules", {"aragora.server.handlers.playground": None}):
+        with patch.dict("sys.modules", {"aragora.server.handlers.demo.playground": None}):
             from aragora.server.stream.oracle_stream import _get_oracle_models
 
             fallback = _get_oracle_models()
