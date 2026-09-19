@@ -44,7 +44,7 @@ AnalyticsPlatformsHandler = _safe_import(
 
 MetricsHandler = _safe_import("aragora.server.handlers", "MetricsHandler")
 UnifiedMetricsHandler = _safe_import(
-    "aragora.server.handlers.metrics_endpoint", "UnifiedMetricsHandler"
+    "aragora.server.handlers.metrics.metrics_endpoint", "UnifiedMetricsHandler"
 )
 SLOHandler = _safe_import("aragora.server.handlers", "SLOHandler")
 
@@ -126,22 +126,24 @@ KnowledgeFlowHandler = _safe_import(
 
 # Decision Analytics (issue #281)
 DecisionAnalyticsHandler = _safe_import(
-    "aragora.server.handlers.decision_analytics", "DecisionAnalyticsHandler"
+    "aragora.server.handlers.analytics.decision_analytics", "DecisionAnalyticsHandler"
 )
 
 # Outcome Dashboard (issue #281 - consolidated dashboard)
 OutcomeDashboardHandler = _safe_import(
-    "aragora.server.handlers.outcome_dashboard", "OutcomeDashboardHandler"
+    "aragora.server.handlers.analytics_dashboard.outcome_dashboard", "OutcomeDashboardHandler"
 )
 
 # Spend Analytics Dashboard
 SpendAnalyticsDashboardHandler = _safe_import(
-    "aragora.server.handlers.spend_analytics_dashboard", "SpendAnalyticsDashboardHandler"
+    "aragora.server.handlers.analytics_dashboard.spend_analytics_dashboard",
+    "SpendAnalyticsDashboardHandler",
 )
 
 # Agent Evolution Dashboard (issue #307)
 AgentEvolutionDashboardHandler = _safe_import(
-    "aragora.server.handlers.agent_evolution_dashboard", "AgentEvolutionDashboardHandler"
+    "aragora.server.handlers.analytics_dashboard.agent_evolution_dashboard",
+    "AgentEvolutionDashboardHandler",
 )
 
 # Pipeline handlers
@@ -164,10 +166,10 @@ RunsHandler = _safe_import("aragora.server.handlers.runs", "RunsHandler")
 
 # Differentiation and moderation analytics
 DifferentiationHandler = _safe_import(
-    "aragora.server.handlers.differentiation", "DifferentiationHandler"
+    "aragora.server.handlers.analytics_dashboard.differentiation", "DifferentiationHandler"
 )
 ModerationAnalyticsHandler = _safe_import(
-    "aragora.server.handlers.moderation_analytics", "ModerationAnalyticsHandler"
+    "aragora.server.handlers.analytics.moderation_analytics", "ModerationAnalyticsHandler"
 )
 
 # Ralph campaign observability dashboard

@@ -509,10 +509,19 @@ class TestHandlePairwise:
 class TestInputValidation:
     """Tests for input validation on agent names."""
 
-    def test_invalid_agent_name_with_dots_returns_400(self, handler, mock_http_handler):
-        """Agent name containing dots fails validation."""
-        result = handler.handle("/api/v1/agents/bad.name/relationships", {}, mock_http_handler)
+    def test_dotted_agent_name_is_valid(self, handler, mock_http_handler):
+        """Dotted model-version names are valid agent names (#9994)."""
+        result = handler.handle(
+            "/api/v1/agents/claude-fable-5.1/relationships", {}, mock_http_handler
+        )
+        assert _status(result) == 200
+
+    def test_leading_dot_agent_name_returns_400(self, handler, mock_http_handler):
+        """A dot-led token can never be an agent name (guards '.' and '..')."""
+        result = handler.handle("/api/v1/agents/.bad/relationships", {}, mock_http_handler)
         assert _status(result) == 400
+        result = handler.handle("/api/v1/agents/../relationships", {}, mock_http_handler)
+        assert _status(result) != 200
 
     def test_agent_name_with_special_chars(self, handler, mock_http_handler):
         result = handler.handle("/api/v1/agents/bad%3Cscript/relationships", {}, mock_http_handler)

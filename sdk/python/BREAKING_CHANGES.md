@@ -10,6 +10,36 @@ This document tracks breaking changes specific to the Aragora Python SDK. For co
 
 #### Breaking Changes
 
+##### Typed HTTP transport failures
+
+Exhausted HTTP timeouts and connection-establishment failures now raise the
+existing `aragora_sdk.TimeoutError` and `aragora_sdk.ConnectionError`, respectively,
+instead of the generic `AragoraError`. Existing `except AragoraError` handlers,
+messages and chained transport causes remain compatible. Code checking exact
+exception types should accept the exported subclasses; Python's built-in
+exceptions with the same names are not these SDK classes. Attempt counts and
+backoff are unchanged. See [Python HTTP request lifecycle](REQUEST_LIFECYCLE.md#transport-failures-and-cancellation).
+
+##### Python rate-limit automatic waits
+
+`AragoraClient` and `AragoraAsyncClient` now automatically wait only for valid
+`Retry-After` hints from **0 through 60 seconds**, inclusive. Previously, integer
+hints such as `Retry-After: 120` could cause a 120-second wait and another attempt.
+Now a larger valid hint immediately raises the original `RateLimitError`, retaining
+its full `retry_after`, status, error code, trace ID and response body. The SDK
+neither clamps the hint nor retries before that hint permits. `max_retries` remains
+an upper bound, not a guarantee that every rate-limited call will exhaust it.
+
+Applications that relied on longer automatic waits must catch `RateLimitError`
+and defer or schedule another attempt under their own retry/deadline policy,
+using the retained hint. Do not retry unconditionally. The fixed safety limit
+has no constructor opt-out; this change adds no configuration option.
+Zero is honored as no delay. Unavailable hints retain the existing exponential
+fallback, including configured fallback delays above 60 seconds. Malformed or
+platform-timer-unrepresentable hints remain unavailable, as documented below.
+See [Python HTTP request lifecycle](REQUEST_LIFECYCLE.md) for complete parsing,
+retry-budget and error-handling details, including an error-handling example.
+
 Batch 06 removes 11 matched phantom operations from both Python index namespace implementations, `ReplaysAPI`, and `DocumentsAPI` (including every async twin).
 For each removed index method, the named route is absent from both OpenAPI documents and is not accepted by the knowledge-base handler: `get_index_stats` (`GET /api/v1/index/{name}/stats`), `add_documents` (`POST /api/v1/index/{name}/documents`), `update_document` (`PUT /api/v1/index/{name}/documents/{document_id}`), `delete_documents` (`DELETE /api/v1/index/{name}/documents`), `rebuild_index` (`POST /api/v1/index/{name}/rebuild`), and `optimize_index` (`POST /api/v1/index/{name}/optimize`).
 For each removed replay method, the named route is absent from both OpenAPI documents and is not accepted by `ReplaysHandler.can_handle`: `get_from_debate` (`GET /api/v1/debates/{debate_id}/replay`), `export` (`GET /api/v1/replays/{replay_id}/export`), and `get_summary` (`GET /api/v1/replays/{replay_id}/summary`). `replays.get_from_debate` was the only method removed in this batch that carried a runtime `DeprecationWarning`.
