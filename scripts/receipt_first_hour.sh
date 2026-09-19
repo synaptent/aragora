@@ -8,7 +8,8 @@
 # Usage:
 #   bash scripts/receipt_first_hour.sh [<pkg>==<ver> ...] [options]
 #
-# Versions are positional pins, so a run can be replayed exactly:
+# Versions are positional pins, so a run names the exact aragora and
+# aragora-verify under test; their dependencies resolve at install time:
 #   bash scripts/receipt_first_hour.sh aragora==2.9.0 aragora-verify==0.1.1
 #
 # Options:
