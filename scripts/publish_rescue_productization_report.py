@@ -40,7 +40,13 @@ OBSERVATION_DEPENDENT_FIELDS = (
     "repeated_classes",
     "one_off_classes",
     "below_threshold_classes",
+    "initial_issue_drafts",
+    "issue_drafts",
+    "issue_linkage_results",
 )
+# RescueEventLedger.repeated_classes and class_counts read a fixed 500-event
+# tail, so a --recent-limit above this cannot widen what the harvest observed.
+RESCUE_CLASS_HARVEST_EVENT_LIMIT = 500
 
 
 class RescueLedgerValidationError(ValueError):
@@ -596,8 +602,9 @@ def build_published_report(
 ) -> dict[str, Any]:
     normalized_generated_at = normalize_generated_at(generated_at)
     source, ledger_snapshot = _read_validated_rescue_ledger(ledger_path)
-    source["summary_event_limit"] = recent_limit
-    source["summary_truncated"] = int(source["event_count"]) > recent_limit
+    observed_event_limit = min(recent_limit, RESCUE_CLASS_HARVEST_EVENT_LIMIT)
+    source["summary_event_limit"] = observed_event_limit
+    source["summary_truncated"] = int(source["event_count"]) > observed_event_limit
     fixtures = _rescue_fixtures()
     with tempfile.TemporaryDirectory(prefix="aragora-rescue-ledger-") as temp_dir:
         snapshot_path = Path(temp_dir) / "rescue_events.jsonl"

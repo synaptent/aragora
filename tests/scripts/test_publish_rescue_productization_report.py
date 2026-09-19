@@ -506,7 +506,20 @@ def test_unavailable_source_marks_observations_unavailable(tmp_path: Path) -> No
         "repeated_classes",
         "one_off_classes",
         "below_threshold_classes",
+        "initial_issue_drafts",
+        "issue_drafts",
+        "issue_linkage_results",
     }
+    # Every ledger-derived field still emitted as an empty collection must be
+    # named, or a consumer reads "no issue drafts" as an observed conclusion.
+    emitted_empty_collections = {
+        key
+        for key, value in payload.items()
+        if isinstance(value, (list, dict)) and not value and key != "observation_limits"
+    }
+    assert emitted_empty_collections <= set(
+        payload["observation_limits"]["non_authoritative_fields"]
+    )
 
 
 def test_truncated_summary_window_marks_rescue_history_incomplete(tmp_path: Path) -> None:
@@ -547,6 +560,69 @@ def test_torn_trailing_record_marks_rescue_history_incomplete(tmp_path: Path) ->
     assert payload["source"]["skipped_trailing_partial_line_count"] == 1
     assert payload["observation_status"]["rescue_history"] == "incomplete"
     assert "torn trailing ledger record" in payload["observation_limits"]["reason"]
+
+
+def test_unavailable_publication_renders_only_non_numeric_counts(tmp_path: Path) -> None:
+    # The daily workflow publishes without --require-source and then renders into
+    # docs/status/, so the tracked truth-surface consistency check parses whatever
+    # this pair produces. Counts must read as `n/a`, never as a measured zero.
+    payload = mod.build_unavailable_source_report(
+        ledger_path=tmp_path / "missing.jsonl",
+        productization_map_path=_empty_productization_map(tmp_path),
+        repo="synaptent/aragora",
+        error=mod.RescueLedgerValidationError(
+            code="rescue_ledger_missing",
+            path=tmp_path / "missing.jsonl",
+            detail="rescue event ledger does not exist",
+        ),
+    )
+
+    markdown = render_mod.render_status_markdown(
+        report_path=tmp_path / "latest.json", payload=payload
+    )
+
+    count_bullets = {
+        line.split(":", 1)[0][2:]: line.split(":", 1)[1].strip().strip("`")
+        for line in markdown.splitlines()
+        if line.startswith("- ") and ":" in line
+    }
+    for label in (
+        "Repeated rescue classes",
+        "Linked repeated classes",
+        "Unlinked repeated classes",
+        "One-off classes",
+        "Below-threshold classes",
+        "Issue drafts remaining",
+    ):
+        assert count_bullets[label] == "n/a", label
+    assert payload["summary"] == {}
+    assert payload["issue_drafts"] == []
+
+
+def test_recent_limit_above_harvest_window_does_not_claim_complete(
+    tmp_path: Path, monkeypatch
+) -> None:
+    ledger = _ledger_with_events(
+        tmp_path,
+        [
+            RescueEvent(event_type="followup_prompt", reason=f"needs next step {index}")
+            for index in range(3)
+        ],
+    )
+    # The class harvest reads a fixed tail, so a wider --recent-limit cannot
+    # widen the observed window and must not upgrade the completeness claim.
+    monkeypatch.setattr(mod, "RESCUE_CLASS_HARVEST_EVENT_LIMIT", 2)
+
+    payload = mod.build_published_report(
+        ledger_path=ledger.path,
+        productization_map_path=_empty_productization_map(tmp_path),
+        repo="synaptent/aragora",
+        recent_limit=10_000,
+    )
+
+    assert payload["source"]["summary_event_limit"] == 2
+    assert payload["source"]["summary_truncated"] is True
+    assert payload["observation_status"]["rescue_history"] == "incomplete"
 
 
 def test_published_payload_drives_renderer_observation_warning(tmp_path: Path) -> None:
