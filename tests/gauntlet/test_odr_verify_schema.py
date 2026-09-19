@@ -188,15 +188,26 @@ def test_weakening_signals_do_not_fail() -> None:
     assert result.ok is True
 
 
-def test_non_numeric_model_families_warns_not_fails() -> None:
-    # Weakening signals warn, never fail (spec §8): a non-numeric
-    # distinct_model_families degrades to a warning instead of a FAIL check.
+def test_non_numeric_model_families_fails_schema_conformance() -> None:
+    # The schema types distinct_model_families as an integer, so a non-numeric
+    # value is a malformed member and not a weakening signal to warn about.
     doc = _valid_odr()
     doc["quorum"]["independence"]["distinct_model_families"] = "n/a"
     result = verify_odr_document(doc)
+    assert result.ok is False
+    assert [c.name for c in result.checks if c.status == FAIL] == ["schema_conformance"]
+    detail = next(c.detail for c in result.checks if c.name == "schema_conformance")
+    assert "quorum.independence.distinct_model_families" in detail
+
+
+def test_single_model_family_still_only_warns() -> None:
+    # A well-typed but weak value stays a warning: only malformed members fail.
+    doc = _valid_odr()
+    doc["quorum"]["independence"]["distinct_model_families"] = 1
+    doc["quorum"]["independence"]["model_families"] = ["anthropic"]
+    result = verify_odr_document(doc)
     assert result.ok is True
-    assert not any(c.name == "weakening_signals" and c.status == FAIL for c in result.checks)
-    assert any("not numeric" in w for w in result.warnings)
+    assert any("single model family" in w for w in result.warnings)
 
 
 # ---------------------------------------------------------------------------

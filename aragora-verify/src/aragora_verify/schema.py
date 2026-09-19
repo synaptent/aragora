@@ -314,9 +314,17 @@ def validate_structure(doc: Any) -> list[str]:
 def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
     """Validate only optional content extensions using their bundled schema definitions."""
 
-    def member(value: Any, spec: dict[str, Any], path: str) -> None:
+    def member(value: Any, spec: dict[str, Any], path: str, out: list[str] | None = None) -> None:
+        out = errors if out is None else out
         if "$ref" in spec:
             spec = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
+        if "oneOf" in spec:
+            # Every oneOf in the profile is <present block> | absent marker, so a strict
+            # marker satisfies the second branch and carries nothing else to check.
+            marker = isinstance(value, dict) and value.get("status") == "absent"
+            if marker and value.keys() <= {"status", "reason"}:
+                return
+            spec = spec["oneOf"][0]
         types: dict[str, type | tuple[type, ...]] = {
             "object": dict,
             "array": list,
@@ -334,25 +342,25 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
             and not (t == "integer" and isinstance(value, float) and not value.is_integer())
             for t in expected
         ):
-            errors.append(f"{path}: must have type {expected}")
+            out.append(f"{path}: must have type {expected}")
             return
         if ("enum" in spec and value not in spec["enum"]) or (
             "const" in spec and value != spec["const"]
         ):
-            errors.append(f"{path}: invalid value")
+            out.append(f"{path}: invalid value")
         if isinstance(value, list) and "items" in spec:
             for index, item in enumerate(value):
-                member(item, spec["items"], f"{path}[{index}]")
+                member(item, spec["items"], f"{path}[{index}]", out)
         if isinstance(value, dict):
             for name in spec.get("required", ()):
                 if name not in value:
-                    errors.append(f"{path}: missing required member: {name}")
+                    out.append(f"{path}: missing required member: {name}")
         if isinstance(value, dict) and "properties" in spec:
             for key, item in value.items():
                 if key in spec["properties"]:
-                    member(item, spec["properties"][key], f"{path}.{key}")
+                    member(item, spec["properties"][key], f"{path}.{key}", out)
                 elif spec.get("additionalProperties") is False:
-                    errors.append(f"{path}.{key}: unknown member")
+                    out.append(f"{path}.{key}: unknown member")
 
     # Members the v0.1 profile does not define: rejected outright on a "0.1" document.
     version_scoped = {
@@ -401,6 +409,21 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
                 errors.append(f"{member_path}: not in profile 0.1")
             else:
                 member(value[key], spec["properties"][key], member_path)
+
+    # Backstop over every member the schema types. The hand-written checks above leave
+    # members such as ``source.system`` and ``quorum.independence.distinct_model_families``
+    # untyped, which made the verdict depend on whether the optional ``jsonschema`` extra
+    # was installed. A finding is kept only when nothing above already named that member
+    # or the block holding it, so a malformed member yields exactly one diagnostic.
+    found: list[str] = []
+    for key, value in doc.items():
+        if key in schema["properties"]:
+            member(value, schema["properties"][key], key, found)
+    named = {error.partition(":")[0] for error in errors}
+    for error in found:
+        path = error.partition(":")[0]
+        if not any(path == name or path.startswith((f"{name}.", f"{name}[")) for name in named):
+            errors.append(error)
 
 
 _UNEXPECTED_MEMBERS = re.compile(
