@@ -331,7 +331,7 @@ def test_missing_required_members_reported_once_with_jsonschema():
     assert not [e for e in schema.validate_structure(doc) if "'subject' is a required" in e]
 
 
-def test_jsonschema_still_reports_paths_the_walker_does_not_reach():
+def test_walker_reaches_source_and_jsonschema_does_not_restate_it():
     pytest.importorskip("jsonschema")
     doc = valid_odr()
     doc["source"] = {
@@ -340,9 +340,7 @@ def test_jsonschema_still_reports_paths_the_walker_does_not_reach():
         "receipt_id": "r",
         "extra": 1,
     }
-    assert schema.validate_structure(doc) == [
-        "schema[source]: Additional properties are not allowed ('extra' was unexpected)"
-    ]
+    assert schema.validate_structure(doc) == ["source.extra: unknown member"]
 
 
 def test_v01_with_v02_members_has_one_line_per_path_with_jsonschema():

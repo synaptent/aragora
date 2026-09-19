@@ -10,6 +10,7 @@ tests measure; the parity test additionally runs the in-repo twin as installed.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -62,6 +63,12 @@ def test_degenerate_quorum_member_fails_schema_conformance(kind, walker_only) ->
     assert _failing(result) == ["schema_conformance"]
 
 
+def test_the_twin_under_comparison_is_the_in_repo_engine() -> None:
+    # A stale ``aragora`` in site-packages would measure a different engine and still pass.
+    module = pytest.importorskip("aragora.gauntlet.odr_verify")
+    assert Path(module.__file__).resolve().parents[2] == Path(__file__).resolve().parents[2]
+
+
 @pytest.mark.parametrize("kind", MUTANTS)
 def test_degenerate_quorum_agrees_with_in_repo_engine(kind, walker_only) -> None:
     """Both bundled engines must name the same failing check for each mutant."""
@@ -102,15 +109,12 @@ def _nonpass(result: Any) -> list[str]:
 
 
 @pytest.mark.parametrize("value", [None, "x", [], {}])
-def test_non_integer_family_count_warns_like_the_in_repo_engine(value, walker_only) -> None:
-    """A non-integer weakening signal degrades to a warning, never a crash or a FAIL.
+def test_non_integer_family_count_agrees_with_the_in_repo_engine(value, walker_only) -> None:
+    """A non-integer family count is a malformed member, never a crash.
 
-    Both dependency-free walkers leave ``distinct_model_families`` untyped (spec §8:
-    weakening signals warn rather than fail), so with the optional ``schema`` extra
-    absent the two engines must agree exactly. The bundled JSON schema does type the
-    member as ``integer``, so an install that also carries ``jsonschema`` reports
-    ``schema_conformance`` for these values instead; that is pre-existing behaviour of
-    the extra, which is why ``walker_only`` pins the dependency-free path here.
+    The bundled schema types ``distinct_model_families`` as an integer, so both
+    dependency-free walkers reject these values; ``walker_only`` pins that the
+    verdict comes from the walker and not from the optional ``jsonschema`` extra.
     """
     odr_verify = pytest.importorskip("aragora.gauntlet.odr_verify")
     doc = valid_odr()
@@ -118,6 +122,7 @@ def test_non_integer_family_count_warns_like_the_in_repo_engine(value, walker_on
 
     result = verify(doc)
     twin = odr_verify.verify_odr_document(doc)
+    assert (result.ok, _nonpass(result)) == (False, ["schema_conformance"])
     assert (result.ok, _nonpass(result)) == (
         twin.ok,
         sorted(check.name for check in twin.checks if check.status != "pass"),
