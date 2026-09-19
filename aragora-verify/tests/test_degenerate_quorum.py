@@ -2,8 +2,9 @@
 
 A default ``pip install aragora-verify`` resolves ``cryptography`` alone, so the
 dependency-free walker in :mod:`aragora_verify.schema` is the only structural
-check that runs. Every test here neutralises the optional ``jsonschema`` extra
-so that walker is what is actually measured.
+check that runs. The ``walker_only`` fixture neutralises the optional
+``jsonschema`` extra for the standalone verifier so that walker is what these
+tests measure; the parity test additionally runs the in-repo twin as installed.
 """
 
 from __future__ import annotations
@@ -79,6 +80,14 @@ def test_degenerate_quorum_exits_one_without_a_traceback(kind, walker_only, tmp_
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
     assert [c["name"] for c in payload["checks"] if c["status"] == "fail"] == ["schema_conformance"]
+
+
+@pytest.mark.parametrize("value", [None, "openai", 5, [], True])
+def test_non_object_dissent_fails_schema_conformance(value, walker_only) -> None:
+    doc = valid_odr()
+    doc["quorum"]["dissent"] = value
+    assert "quorum.dissent: must be a dict" in schema.validate_structure(doc)
+    assert _failing(verify(doc)) == ["schema_conformance"]
 
 
 def test_conformant_dissent_is_still_accepted(walker_only) -> None:
