@@ -83,6 +83,27 @@ def _check_reasoning(errors: list[str], value: Any) -> None:
         errors.append("reasoning.summary: required non-empty string when present")
 
 
+def _string_array(errors: list[str], path: str, value: Any) -> None:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        errors.append(f"{path}: must be an array of strings")
+
+
+def _check_dissent(errors: list[str], value: dict[str, Any]) -> None:
+    """Validate the members of a present ``quorum.dissent`` block (spec §4).
+
+    The optional v0.2 members (``findings``, ``severity_max``, ``blocking``) are
+    left to the extension walker, which is version-scoped.
+    """
+    for required in ("present", "dissenting_agents", "views"):
+        if required not in value:
+            errors.append(f"quorum.dissent.{required}: required")
+    if "present" in value and not isinstance(value["present"], bool):
+        errors.append("quorum.dissent.present: must be a boolean")
+    for member in ("dissenting_agents", "views"):
+        if member in value:
+            _string_array(errors, f"quorum.dissent.{member}", value[member])
+
+
 def _check_quorum(errors: list[str], value: Any) -> None:
     if _is_absent_marker(value):
         return
@@ -109,9 +130,9 @@ def _check_quorum(errors: list[str], value: Any) -> None:
     if "independence" in value and not isinstance(value["independence"], dict):
         errors.append("quorum.independence: must be an object")
     if "supporting_agents" in value:
-        agents = value["supporting_agents"]
-        if not isinstance(agents, list) or not all(isinstance(agent, str) for agent in agents):
-            errors.append("quorum.supporting_agents: must be an array of strings")
+        _string_array(errors, "quorum.supporting_agents", value["supporting_agents"])
+    if isinstance(value.get("dissent"), dict):
+        _check_dissent(errors, value["dissent"])
     participants = value.get("participants")
     if isinstance(participants, list):
         for i, p in enumerate(participants):

@@ -40,6 +40,7 @@ import base64
 import binascii
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -300,17 +301,24 @@ def _check_quorum_consistency(doc: dict[str, Any]) -> Check:
     quorum = doc.get("quorum")
     if not isinstance(quorum, dict) or quorum.get("status") != "present":
         return Check("quorum_consistency", SKIP, "no present quorum block to cross-check")
+
+    def _as_list(container: dict[str, Any], key: str) -> list[Any]:
+        # A member present but null is not an absent member, so dict.get's
+        # default never fires; schema_conformance is what reports the defect.
+        value = container.get(key)
+        return value if isinstance(value, list) else []
+
     participants = {
         str(p.get("agent"))
-        for p in quorum.get("participants", [])
+        for p in _as_list(quorum, "participants")
         if isinstance(p, dict) and p.get("agent")
     }
     referenced: set[str] = set()
-    referenced.update(str(a) for a in quorum.get("supporting_agents", []) if isinstance(a, str))
+    referenced.update(str(a) for a in _as_list(quorum, "supporting_agents") if isinstance(a, str))
     dissent = quorum.get("dissent")
     if isinstance(dissent, dict):
         referenced.update(
-            str(a) for a in dissent.get("dissenting_agents", []) if isinstance(a, str)
+            str(a) for a in _as_list(dissent, "dissenting_agents") if isinstance(a, str)
         )
     missing = sorted(referenced - participants)
     if missing:
@@ -493,10 +501,23 @@ def _weakening_warnings(doc: dict[str, Any]) -> list[str]:
         if isinstance(independence, dict):
             if not independence.get("disclosed", False):
                 warnings.append("quorum.independence: model diversity not disclosed")
-            elif int(independence.get("distinct_model_families", 0) or 0) < 2:
-                warnings.append(
-                    "quorum.independence: single model family — limited adversarial diversity"
-                )
+            else:
+                # Weakening signals warn, never fail (spec §8): a non-numeric
+                # families value degrades to a warning instead of raising, as
+                # aragora.gauntlet.odr_verify does for the same member.
+                try:
+                    families: int | None = int(independence.get("distinct_model_families", 0) or 0)
+                except (TypeError, ValueError):
+                    families = None
+                if families is None:
+                    warnings.append(
+                        "quorum.independence: distinct_model_families is not numeric — "
+                        "adversarial diversity unverifiable"
+                    )
+                elif families < 2:
+                    warnings.append(
+                        "quorum.independence: single model family — limited adversarial diversity"
+                    )
         participants = quorum.get("participants", [])
         if isinstance(participants, list) and any(
             isinstance(p, dict) and p.get("model_family") == "undisclosed" for p in participants
@@ -590,6 +611,20 @@ _NATIVE_RECEIPT_HINT = (
 # ---------------------------------------------------------------------------
 
 
+def _safe_check(name: str, fn: Callable[[], Check]) -> Check:
+    """Boundary contract: this engine verifies untrusted, possibly-tampered
+    receipts, so an exception raised while checking structurally-valid-but-
+    malformed input becomes a FAIL verdict instead of propagating as a crash
+    (mirrors ``aragora.gauntlet.odr_verify``). The v0.2 consistency checks are
+    not wrapped: they read only schema-validated members."""
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001 - boundary: malformed input -> FAIL, not crash
+        return Check(
+            name, FAIL, f"verification raised on malformed input: {type(exc).__name__}: {exc}"
+        )
+
+
 def verify(
     doc: Any,
     *,
@@ -625,7 +660,7 @@ def verify(
     checks.append(
         Check("schema_conformance", PASS, f"conforms to ODR v{doc['odr_version']} profile")
     )
-    checks.append(_check_quorum_consistency(doc))
+    checks.append(_safe_check("quorum_consistency", lambda: _check_quorum_consistency(doc)))
     checks.extend(_check_v02_consistency(doc))
 
     try:
@@ -645,7 +680,11 @@ def verify(
 
     warnings: list[str] = []
     verified: list[dict[str, Any]] = []
-    checks.append(_check_signatures(doc, digest_hex, public_key, warnings, verified))
+    checks.append(
+        _safe_check(
+            "signature", lambda: _check_signatures(doc, digest_hex, public_key, warnings, verified)
+        )
+    )
     checks.extend(_check_expiry(doc, now, strict_expiry, verified))
     if require_issuer is not None:
         found = doc["odr_version"] == "0.2" and any(
@@ -659,7 +698,7 @@ def verify(
                 + ("verified" if found else "no verifying v0.2 signature"),
             )
         )
-    checks.append(_check_chain(doc, digest_hex, chain))
+    checks.append(_safe_check("chain_link", lambda: _check_chain(doc, digest_hex, chain)))
     if acta is not None:
         checks.extend(_check_projection(acta, doc, public_key))
 
