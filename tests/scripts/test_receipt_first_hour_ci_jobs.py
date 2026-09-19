@@ -15,7 +15,9 @@ SCRIPT = "scripts/receipt_first_hour.sh"
 PINNED_SPEC = "aragora-verify==${{ github.event.inputs.version }}"
 
 
-def workflow(path: Path) -> dict[str, Any]:
+def workflow(path: Path) -> dict[Any, Any]:
+    # Keys stay untyped: YAML 1.1 resolves the unquoted `on:` key to the
+    # boolean True, so a workflow document is not keyed by strings alone.
     return yaml.safe_load(path.read_text())
 
 
@@ -23,8 +25,7 @@ def first_hour_job(path: Path) -> dict[str, Any]:
     return workflow(path)["jobs"][JOB_ID]
 
 
-def triggers(document: dict[str, Any]) -> dict[str, Any]:
-    # YAML 1.1 resolves the unquoted `on:` key to the boolean True.
+def triggers(document: dict[Any, Any]) -> dict[str, Any]:
     return document.get("on") or document[True]
 
 
