@@ -168,8 +168,12 @@ a **new** output directory, `--execute --timeout 180`, and
 `ARAGORA_MODEL_TRANSPORT=vibeproxy-required`. The existing
 `ARAGORA_VIBEPROXY_BASE_URL` must select the literal `127.0.0.1` HTTP gateway;
 no remote gateway, direct fallback, model mapping, or saved Claude login is used.
-Execution currently requires macOS `sandbox-exec` and Claude Code `2.1.263`.
-Unsupported containment or CLI versions fail closed.
+Execution requires macOS `sandbox-exec` and Claude Code `2.x`. The version gate
+accepts major version 2, including prerelease/build suffixes, and rejects other
+majors or malformed version output. Acceptance is not protocol certification:
+every execution must still pass the unchanged containment, tool/stream schema,
+coverage, model-provenance, and timeout checks. The exact CLI version and binary
+hash remain recorded. Diagnostic artifacts remain non-countable.
 
 The host materializes exact Git blobs into a read-only sandbox. Only bounded
 Read operations are permitted. It verifies returned line ranges against those

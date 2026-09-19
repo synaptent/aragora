@@ -178,6 +178,26 @@ Gauntlet produces one of three verdicts:
 | **CONDITIONAL** | Proceed with mitigations | High issues require attention |
 | **FAIL** | Do not proceed | Critical issues block deployment |
 
+### Command exit status
+
+Local and API-backed `aragora gauntlet` invocations use the same shell contract:
+
+| Exit | Verdicts (case-insensitive) | Meaning for scripts |
+|------|----------------------------|---------------------|
+| `0` | `PASS`, `APPROVED` | Unconditional approval |
+| `2` | `CONDITIONAL`, `APPROVED_WITH_CONDITIONS`, `NEEDS_REVIEW` | Human review or mitigations required; not shell success |
+| `1` | `FAIL`, `REJECTED`, missing or unknown verdict | Rejected or invalid result; do not proceed |
+
+An explicit completion status must be `completed` (case-insensitive). Failed,
+cancelled, pending, running, or unrecognized statuses exit `1` even if the verdict
+says `APPROVED`. Valid legacy receipts and local results without a status field
+remain supported. Exit `1` is also used for fatal operational errors.
+
+**Behavior change:** conditional approval now exits `2`, rather than implicitly
+succeeding. Scripts must handle that outcome explicitly; `aragora gauntlet ... &&
+deploy` proceeds only on unconditional approval. This exit contract reflects the
+reported result; it is not a guarantee that the stress-test found every defect.
+
 ### Verdict Criteria
 ```python
 # Default pass/fail criteria

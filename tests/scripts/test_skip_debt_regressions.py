@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -57,8 +59,8 @@ def test_required_scenarios_execute(suite, required, selection, tmp_path):
     report = tmp_path / "scenarios.xml"
     env = {
         "HOME": str(tmp_path),
-        "PATH": "/usr/bin:/bin",
-        "PYTHONPATH": f"{ROOT}:{ROOT / 'aragora-verify/src'}",
+        "PATH": os.defpath,
+        "PYTHONPATH": os.pathsep.join((str(ROOT), str(ROOT / "aragora-verify/src"))),
         "PYTHONNOUSERSITE": "1",
         "PYTHONDONTWRITEBYTECODE": "1",
         "ARAGORA_USE_SECRETS_MANAGER": "false",
@@ -67,6 +69,10 @@ def test_required_scenarios_execute(suite, required, selection, tmp_path):
         "ARAGORA_DATA_DIR": str(tmp_path / "data"),
         "ARAGORA_LOG_DIR": str(tmp_path / "logs"),
     }
+    for key in ("SYSTEMROOT", "SystemRoot", "TEMP", "TMP", "COMSPEC", "PATHEXT"):
+        if key in os.environ:
+            env[key] = os.environ[key]
+    env["USERPROFILE"] = env["HOME"]
     result = subprocess.run(
         [
             sys.executable,
@@ -108,3 +114,17 @@ def test_required_scenarios_execute(suite, required, selection, tmp_path):
     xpasses = [line for line in result.stdout.splitlines() if line.startswith("XPASS ")]
     assert not xpasses, f"XPASS semantic scenarios: {xpasses}\n{result.stdout}"
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_scenario_child_portable_environment(monkeypatch, tmp_path):
+    """Inspect path separation without launching a foreign-platform process."""
+    monkeypatch.setenv("SystemRoot", r"C:\Windows")
+    monkeypatch.setattr(os, "pathsep", ";")
+    with patch.object(subprocess, "run", side_effect=RuntimeError("environment captured")) as run:
+        with pytest.raises(RuntimeError, match="environment captured"):
+            test_required_scenarios_execute("unused.py", set(), "", tmp_path)
+    env = run.call_args.kwargs["env"]
+    assert env["SystemRoot"] == os.environ["SystemRoot"]
+    assert env["PATH"] == os.defpath
+    assert env["PYTHONPATH"] == os.pathsep.join((str(ROOT), str(ROOT / "aragora-verify/src")))
+    assert env["USERPROFILE"] == env["HOME"]
