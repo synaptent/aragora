@@ -285,18 +285,18 @@ def _worktree_is_dirty(path: Path) -> bool:
         return False
     try:
         proc = subprocess.run(
-            ["git", "status", "--short"],
+            ["git", "status", "--porcelain", "--untracked-files=all"],
             cwd=path,
             text=True,
             capture_output=True,
             check=False,
             timeout=DEFAULT_GIT_TIMEOUT_SECONDS,
         )
-    except subprocess.TimeoutExpired:
-        # Conservatively treat status timeouts as dirty so cleanup is blocked.
+    except (OSError, subprocess.TimeoutExpired):
+        # A failed inspection is not evidence that local work is absent.
         return True
     if proc.returncode != 0:
-        return False
+        return True
     return bool(proc.stdout.strip())
 
 
