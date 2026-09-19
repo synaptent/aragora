@@ -30,6 +30,7 @@ modules just to construct a proposal shape).
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -553,13 +554,16 @@ def propose_followup_for_repair_spec(
     labels = _without_boss_ready({"epistemic", "repair-required", spec.repair_kind, *extra_labels})
     # spec_id embeds propose_repair()'s per-call timestamp, so keying on it would
     # emit a fresh proposal for every rescan of the same decayed unit.
-    dedup_material = "|".join(
+    # JSON rather than delimiter-joined text: a code_unit_id containing the
+    # delimiter, or a single claim id spelling two, would otherwise collide.
+    dedup_material = json.dumps(
         [
             code_unit_id,
             repair_kind,
-            ",".join(sorted(linked_claims)),
-            ",".join(sorted(linked_crux_ids)),
-        ]
+            sorted(linked_claims),
+            sorted(linked_crux_ids),
+        ],
+        sort_keys=True,
     )
     source_key = _source_key("repair_spec", dedup_material)
 

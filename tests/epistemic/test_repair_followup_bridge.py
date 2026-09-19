@@ -11,6 +11,8 @@ Flag: ARAGORA_REPAIR_PIPELINE_ENABLED (required for non-report_only specs).
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from aragora.epistemic.decay_monitor import DecayReason, DecaySignal
@@ -372,14 +374,31 @@ class TestFreeFormFieldContainment:
 class TestSourceKeyStability:
     def test_source_key_stable_across_rescans_of_the_same_unit(self) -> None:
         # propose_repair() stamps created_at per call, so two scans of the same
-        # decayed unit must still dedup to one proposal.
+        # decayed unit must still dedup to one proposal. The second scan is
+        # built by replacement rather than a second propose_repair() call so the
+        # spec_id and created_at differ regardless of clock resolution.
         spec_a = propose_repair(_signal(), repair_kind="pr_candidate")
-        spec_b = propose_repair(_signal(), repair_kind="pr_candidate")
+        spec_b = replace(
+            spec_a,
+            spec_id=f"{spec_a.spec_id}-rescan",
+            created_at="2099-01-01T00:00:00+00:00",
+        )
         assert spec_a.spec_id != spec_b.spec_id
+        assert spec_a.created_at != spec_b.created_at
         p_a = propose_followup_for_repair_spec(spec_a)
         p_b = propose_followup_for_repair_spec(spec_b)
         assert p_a is not None and p_b is not None
         assert p_a.source_key == p_b.source_key
+
+    def test_source_key_does_not_collide_on_delimiter_lookalike_claims(self) -> None:
+        one = propose_followup_for_repair_spec(
+            propose_repair(_signal(), repair_kind="pr_candidate", linked_claims=["a,b"])
+        )
+        two = propose_followup_for_repair_spec(
+            propose_repair(_signal(), repair_kind="pr_candidate", linked_claims=["a", "b"])
+        )
+        assert one is not None and two is not None
+        assert one.source_key != two.source_key
 
     def test_source_key_differs_by_repair_kind(self) -> None:
         shadow = propose_followup_for_repair_spec(
