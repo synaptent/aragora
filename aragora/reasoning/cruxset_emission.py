@@ -134,6 +134,34 @@ def maybe_emit_cruxset(
         return None
 
 
+def _counterfactuals_by_claim_id(counterfactuals: list[Any]) -> dict[str, str] | None:
+    """Map claim_id to the finder's condition/outcome text for the DIC-15 hook.
+
+    Entries that are blank after stripping are dropped rather than mapped to
+    ``""``, so the builder falls back to its default resolution_impact text.
+    The builder also clips each note; ``provenance["counterfactuals"]``
+    deliberately keeps the unclipped entries as the full-fidelity audit record
+    while ``Crux.counterfactual`` is the short rendered note.
+    """
+    if not counterfactuals:
+        return None
+    by_claim: dict[str, str] = {}
+    for cf in counterfactuals:
+        if not isinstance(cf, dict):
+            continue
+        cid = str(cf.get("claim_id") or "")
+        if not cid:
+            continue
+        parts = [
+            text
+            for key in ("condition", "outcome_change")
+            if (text := str(cf.get(key) or "").strip())
+        ]
+        if parts:
+            by_claim[cid] = "; ".join(parts)
+    return by_claim
+
+
 def maybe_emit_cruxset_from_finder_result(
     result: Any,
     *,
@@ -181,6 +209,7 @@ def maybe_emit_cruxset_from_finder_result(
         analysis_payload = analysis.to_dict()
         cruxes = list(analysis.cruxes)
         counterfactuals = list(result.counterfactuals or [])
+        cf_by_claim = _counterfactuals_by_claim_id(counterfactuals)
         provenance: dict[str, Any] = {
             "debate_id": result.debate_id,
             "mode": "crux_finder",
@@ -197,30 +226,6 @@ def maybe_emit_cruxset_from_finder_result(
     if extra_provenance:
         # extra_provenance intentionally overwrites base keys — caller's responsibility
         provenance.update(extra_provenance)
-
-    # DIC-15 counterfactual hook: build a claim_id → rich-text map so
-    # build_cruxset_from_analysis can populate Crux.counterfactual with the
-    # condition/outcome_change text instead of the bare resolution_impact score.
-    # The builder clips each note; entries that are blank after stripping are
-    # dropped here so they fall back to the default text rather than map to "".
-    # provenance["counterfactuals"] deliberately keeps the unclipped entries:
-    # it is the full-fidelity audit record, Crux.counterfactual is the short note.
-    cf_by_claim: dict[str, str] | None = None
-    if counterfactuals:
-        cf_by_claim = {}
-        for cf in counterfactuals:
-            if not isinstance(cf, dict):
-                continue
-            cid = str(cf.get("claim_id") or "")
-            if not cid:
-                continue
-            parts = [
-                text
-                for key in ("condition", "outcome_change")
-                if (text := str(cf.get(key) or "").strip())
-            ]
-            if parts:
-                cf_by_claim[cid] = "; ".join(parts)
 
     return maybe_emit_cruxset(
         question=result.question,

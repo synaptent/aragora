@@ -344,8 +344,11 @@ def test_long_statement_counterfactual_is_clipped(monkeypatch: pytest.MonkeyPatc
     assert text.endswith("…")
 
 
-def test_builder_clips_overrides_from_any_caller() -> None:
-    """The bound belongs to the builder, so it holds for callers that bypass the bridge."""
+def test_builder_clips_overrides_from_direct_callers() -> None:
+    """The bound belongs to the builder, so it holds for callers that bypass the bridge.
+
+    It bounds what this builder produces, not what ``Crux.from_json`` accepts.
+    """
     payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
     cs = build_cruxset_from_analysis(
         question="Q?",
@@ -369,7 +372,11 @@ def test_clipped_counterfactual_keeps_cruxset_verifiable(monkeypatch: pytest.Mon
 
 
 def test_explicit_cf_map_value_is_coerced_to_text() -> None:
-    """A non-string override still yields a string field, like every other payload value."""
+    """A non-string override still yields a string field.
+
+    The annotated contract is ``dict[str, str]``; this pins the runtime
+    behaviour for callers that violate it, not a wider accepted type.
+    """
     payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
     cs = build_cruxset_from_analysis(
         question="Q?",
@@ -381,7 +388,11 @@ def test_explicit_cf_map_value_is_coerced_to_text() -> None:
 
 @pytest.mark.parametrize(("value", "expected"), [(0, "0"), (False, "False")])
 def test_present_but_falsy_override_is_coerced_not_dropped(value: object, expected: str) -> None:
-    """Only absence and blankness fall back; a falsy value is still a value."""
+    """Only absence and blankness fall back; a falsy value is still a value.
+
+    Like the coercion test above, this pins runtime behaviour for callers that
+    violate the annotated ``dict[str, str]`` contract.
+    """
     payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
     cs = build_cruxset_from_analysis(
         question="Q?",
@@ -401,6 +412,22 @@ def test_blank_override_falls_back_instead_of_emptying_the_field(blank: str) -> 
         counterfactuals_by_claim_id={"c1": blank},
     )
     assert "Resolution impact" in cs.cruxes[0].counterfactual
+
+
+def test_hostile_finder_entry_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The bridge is soft enrichment: a value that raises on str() must not escape."""
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+
+    class Unrenderable:
+        def __str__(self) -> str:
+            raise RuntimeError("cannot render")
+
+    claim = _claim("c1", "S", 0.7)
+    result = _result(
+        _analysis(claim),
+        counterfactuals=[{"claim_id": "c1", "condition": Unrenderable()}],
+    )
+    assert mod.maybe_emit_cruxset_from_finder_result(result) is None
 
 
 def test_whitespace_only_finder_entry_is_not_mapped(monkeypatch: pytest.MonkeyPatch) -> None:

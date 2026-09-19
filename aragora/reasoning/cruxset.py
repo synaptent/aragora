@@ -40,9 +40,10 @@ CRUXSET_SCHEMA_VERSION = "1.0"
 # ``Crux.counterfactual`` is contracted as a short note, but the crux-finder
 # composes its condition text as "Resolve '<statement>' to high confidence",
 # embedding the agent-authored claim statement verbatim with no upper bound.
-# Consumers render the field as-is — the DIC-17 follow-up bridge truncates every
-# other free-text field it writes into an issue body but not this one — so the
-# bound is enforced here, where the value lands, rather than at any one caller.
+# Consumers render the field as-is: the DIC-17 follow-up bridge truncates the
+# statement it copies into an issue body but writes this field through unbounded.
+# The bound is therefore enforced here, where the value lands, rather than at any
+# one caller. It does not reach a Crux rehydrated through ``Crux.from_json``.
 MAX_CRUX_COUNTERFACTUAL_CHARS = 800
 
 
