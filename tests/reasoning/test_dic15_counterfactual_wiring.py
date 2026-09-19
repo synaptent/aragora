@@ -174,8 +174,8 @@ def test_build_cruxset_empty_cf_map_uses_fallback() -> None:
     assert "Resolution impact" in cs.cruxes[0].counterfactual
 
 
-def test_build_cruxset_cf_map_does_not_affect_checksum_stability() -> None:
-    """Two CruxSets built with different cf text must have different checksums (content-addressed)."""
+def test_wired_counterfactual_is_covered_by_the_checksum() -> None:
+    """The wired text is part of the content-addressed payload, not free-floating metadata."""
     payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
     cs_plain = build_cruxset_from_analysis(question="Q?", analysis_payload=payload)
     cs_rich = build_cruxset_from_analysis(
@@ -183,9 +183,18 @@ def test_build_cruxset_cf_map_does_not_affect_checksum_stability() -> None:
         analysis_payload=payload,
         counterfactuals_by_claim_id={"c1": "Rich text changes the crux"},
     )
-    assert cs_plain.checksum != cs_rich.checksum
     assert cs_plain.verify_checksum()
     assert cs_rich.verify_checksum()
+    assert (
+        cs_plain.to_json()["cruxes"][0]["counterfactual"]
+        != cs_rich.to_json()["cruxes"][0]["counterfactual"]
+    )
+    # Comparing two freshly built CruxSets proves nothing: created_at is in the
+    # canonical payload, so their checksums differ regardless of this field.
+    # Tamper with only the counterfactual instead.
+    tampered = cs_rich.to_json()
+    tampered["cruxes"][0]["counterfactual"] = "Something else entirely"
+    assert not CruxSet.from_json(tampered).verify_checksum()
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +337,9 @@ def test_long_statement_counterfactual_is_clipped(monkeypatch: pytest.MonkeyPatc
     cs = mod.maybe_emit_cruxset_from_finder_result(result)
     assert cs is not None
     text = cs.cruxes[0].counterfactual
-    assert len(text) == MAX_CRUX_COUNTERFACTUAL_CHARS
+    # The clip rstrips before appending the ellipsis, so the bound is an upper
+    # limit rather than an exact width.
+    assert len(text) <= MAX_CRUX_COUNTERFACTUAL_CHARS
     assert text.startswith("Resolve 'AAA")
     assert text.endswith("…")
 
@@ -342,7 +353,7 @@ def test_builder_clips_overrides_from_any_caller() -> None:
         counterfactuals_by_claim_id={"c1": "Z" * 5000},
     )
     text = cs.cruxes[0].counterfactual
-    assert len(text) == MAX_CRUX_COUNTERFACTUAL_CHARS
+    assert len(text) <= MAX_CRUX_COUNTERFACTUAL_CHARS
     assert text.endswith("…")
 
 
@@ -366,6 +377,18 @@ def test_explicit_cf_map_value_is_coerced_to_text() -> None:
         counterfactuals_by_claim_id={"c1": 42},  # type: ignore[dict-item]
     )
     assert cs.cruxes[0].counterfactual == "42"
+
+
+@pytest.mark.parametrize(("value", "expected"), [(0, "0"), (False, "False")])
+def test_present_but_falsy_override_is_coerced_not_dropped(value: object, expected: str) -> None:
+    """Only absence and blankness fall back; a falsy value is still a value."""
+    payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
+    cs = build_cruxset_from_analysis(
+        question="Q?",
+        analysis_payload=payload,
+        counterfactuals_by_claim_id={"c1": value},  # type: ignore[dict-item]
+    )
+    assert cs.cruxes[0].counterfactual == expected
 
 
 @pytest.mark.parametrize("blank", ["", "   ", "\n\t "])

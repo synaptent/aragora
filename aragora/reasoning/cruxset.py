@@ -386,9 +386,10 @@ def build_cruxset_from_analysis(
                 ),
             )
         claim_id = str(entry.get("claim_id") or "")
-        # DIC-15 hook: prefer the validation-pass counterfactual when available.
-        # A blank override falls through rather than silently emptying the field.
-        override = _clip_counterfactual(str(cf_map.get(claim_id) or ""))
+        # A blank override falls through rather than silently emptying the field,
+        # but a present-and-falsy value is still coerced like any other payload value.
+        raw_override = cf_map.get(claim_id)
+        override = "" if raw_override is None else _clip_counterfactual(str(raw_override))
         if override:
             counterfactual_text = override
         elif entry.get("resolution_impact") is not None:
