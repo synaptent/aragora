@@ -319,12 +319,13 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
         if "$ref" in spec:
             spec = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
         if "oneOf" in spec:
-            # Every oneOf in the profile is <present block> | absent marker, so a strict
-            # marker satisfies the second branch and carries nothing else to check.
+            # Every oneOf in the profile is <present block> | absent marker. A value
+            # shaped like a marker is checked AGAINST the marker branch rather than
+            # waved through, so a marker missing its reason is still rejected.
             marker = isinstance(value, dict) and value.get("status") == "absent"
-            if marker and value.keys() <= {"status", "reason"}:
-                return
-            spec = spec["oneOf"][0]
+            spec = spec["oneOf"][1 if marker and value.keys() <= {"status", "reason"} else 0]
+            if "$ref" in spec:
+                spec = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
         types: dict[str, type | tuple[type, ...]] = {
             "object": dict,
             "array": list,
@@ -348,6 +349,11 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
             "const" in spec and value != spec["const"]
         ):
             out.append(f"{path}: invalid value")
+        if isinstance(value, str) and len(value) < spec.get("minLength", 0):
+            out.append(f"{path}: shorter than the schema's minLength {spec['minLength']}")
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            if value < spec.get("minimum", value) or value > spec.get("maximum", value):
+                out.append(f"{path}: outside the schema's permitted range")
         if isinstance(value, list) and "items" in spec:
             for index, item in enumerate(value):
                 member(item, spec["items"], f"{path}[{index}]", out)
@@ -421,7 +427,9 @@ def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[st
             member(value, schema["properties"][key], key, found)
     named = {error.partition(":")[0] for error in errors}
     for error in found:
-        path = error.partition(":")[0]
+        path, _, detail = error.partition(":")
+        if detail.startswith(" missing required member: "):
+            path = f"{path}.{detail.rsplit(': ', 1)[1]}"
         if not any(path == name or path.startswith((f"{name}.", f"{name}[")) for name in named):
             errors.append(error)
 

@@ -27,13 +27,19 @@ SCHEMA_TYPED_MEMBERS = [
     ("quorum.independence.distinct_model_families", "x"),
     ("quorum.independence.model_families", "x"),
     ("source", "x"),
-    ("source.artifact_hash", 5),
-    ("source.receipt_id", 5),
-    ("source.schema", 5),
-    ("source.schema_version", 5),
-    ("source.system", 5),
     ("subject.digest.alg", 5),
     ("subject.summary", 5),
+    ("quorum.independence.distinct_model_families", -1),  # schema minimum: 0
+] + [
+    (f"source.{m}", 5)
+    for m in ("artifact_hash", "receipt_id", "schema", "schema_version", "system")
+]
+
+# A marker is only the absent branch of its oneOf when it matches $defs/absent.
+MALFORMED_MARKERS = [
+    {"status": "absent"},
+    {"status": "absent", "reason": 5},
+    {"status": "absent", "reason": ""},
 ]
 
 
@@ -85,7 +91,16 @@ def test_schema_typed_member_fails_schema_conformance(path: str, value: Any) -> 
     failed = [c for c in result.checks if c.status == FAIL]
     assert [c.name for c in failed] == ["schema_conformance"]
     named = [item.partition(":")[0] for item in failed[0].detail.split("; ")]
-    assert any(path == name or path.startswith(f"{name}.") for name in named), failed[0].detail
+    assert any(path == n or path.startswith(f"{n}.") or n.startswith(f"{path}.") for n in named), (
+        failed[0].detail
+    )
+
+
+@pytest.mark.parametrize("marker", MALFORMED_MARKERS, ids=["none", "typed", "empty"])
+def test_malformed_absent_marker_is_rejected(marker: dict[str, Any]) -> None:
+    doc = conformant_doc()
+    doc["claim"]["statement"] = marker
+    assert verify_odr_document(doc).ok is False
 
 
 def test_absent_marker_is_not_typed_as_the_present_branch() -> None:
