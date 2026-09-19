@@ -210,6 +210,596 @@ def _valid_checks() -> list[dict[str, str]]:
     ]
 
 
+def _protected_comment(head: str) -> dict[str, Any]:
+    comment = _authorized_comment(head, include_branch_protection=False)
+    comment["body"] = settler._settlement_comment_template(
+        pr=7423, head=head, protected_squash_only=True
+    )
+    return comment
+
+
+def test_protected_settlement_template_grants_only_normal_squash() -> None:
+    body = _protected_comment("a" * 40)["body"]
+    assert "Authorized action: protected_squash_merge\n" in body
+    assert "admin_squash_merge" not in body
+    assert "branch_protection_reconcile" not in body
+    assert settler._comment_authorized_actions(body) == {"protected_merge"}
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "Do not authorize protected_squash_merge",
+        "> Authorized action: protected_squash_merge",
+        "Authorized action: not protected_squash_merge",
+        "Authorized action: protected_squash_merge_extra",
+        "Authorized action: protected_squash_merge and admin_squash_merge",
+        "Authorized action: protected_squash_merge\nAuthorized action: branch_protection_reconcile",
+        "Authorized action: protected_squash_merge\nAuthorized action: unknown_action",
+        "Authorized action: protected_squash_merge\n  Authorized action: unknown_action",
+        "Authorized action: protected_squash_merge\nAuthorized action: protected_squash_merge",
+        "```\nAuthorized action: protected_squash_merge\n```",
+        "~~~\nAuthorized action: protected_squash_merge\n~~~",
+    ],
+)
+def test_protected_settlement_rejects_ambiguous_action_lines(action: str) -> None:
+    body = f"{settler.AUTHORIZED_MARKER}\n{action}"
+    assert settler._comment_authorized_actions(body) == set()
+
+
+def test_protected_settlement_requires_first_heading() -> None:
+    body = _protected_comment("a" * 40)["body"]
+    assert settler._comment_authorized_actions(f"Example only:\n{body}") == set()
+
+
+@pytest.mark.parametrize(
+    "failure", ["head", "stale", "author", "checks", "status", "dissent", "quorum", "draft"]
+)
+def test_protected_settlement_retains_authority_and_evidence_gates(failure: str) -> None:
+    head = "a" * 40
+    comment = _protected_comment(head)
+    view = _pr_view(head, comments=[comment])
+    packet = _tier4_packet()
+    checks = _valid_checks()
+    if failure == "head":
+        view["headRefOid"] = "b" * 40
+    elif failure == "stale":
+        comment["createdAt"] = "2026-05-21T00:00:00Z"
+    elif failure == "author":
+        comment["authorAssociation"] = "CONTRIBUTOR"
+    elif failure == "checks":
+        checks[0]["state"] = "FAILURE"
+    elif failure == "status":
+        view["statusCheckRollup"] = []
+    elif failure == "dissent":
+        packet["entries"][0]["unresolved_dissent"] = True
+    elif failure == "quorum":
+        packet["entries"][0]["counted_reviewer_ids"] = ["openai"]
+    else:
+        view["isDraft"] = True
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=packet,
+        required_checks=checks,
+        protected_squash_only=True,
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+
+
+def test_protected_mode_accepts_newer_protected_grant_instead_of_escalating() -> None:
+    head = "a" * 40
+    protected = _protected_comment(head)
+    protected["createdAt"] = "2026-05-22T00:06:00Z"
+    view = _pr_view(head, comments=[_authorized_comment(head), protected])
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=True,
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["protected_merge"]
+    assert gate["authorization_diagnostics"][0]["accepted"] is False
+    view["comments"].pop()
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=True,
+    )
+    assert gate["ok"] is False
+
+
+@pytest.mark.parametrize("newest_protected", [False, True])
+@pytest.mark.parametrize("reverse_api_order", [False, True])
+def test_grant_precedence_uses_chronology_not_privilege_or_api_order(
+    newest_protected: bool, reverse_api_order: bool
+) -> None:
+    head = "a" * 40
+    grants = [_authorized_comment(head), _protected_comment(head)]
+    if not newest_protected:
+        grants.reverse()
+    grants[0]["url"] = "https://github.example/older"
+    grants[1].update(createdAt="2026-05-22T00:06:00Z", url="https://github.example/newer")
+    if reverse_api_order:
+        grants.reverse()
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=grants),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == (
+        ["protected_merge"] if newest_protected else ["branch_protection", "merge"]
+    )
+    diagnostics = {item["url"]: item for item in gate["authorization_diagnostics"]}
+    assert diagnostics["https://github.example/newer"]["selection_status"] == "selected"
+    assert diagnostics["https://github.example/older"]["selection_status"] == "superseded"
+    assert diagnostics["https://github.example/older"]["accepted"] is False
+
+
+@pytest.mark.parametrize("protected_mode", [False, True])
+def test_requested_mode_cannot_revive_superseded_grant(protected_mode: bool) -> None:
+    head = "a" * 40
+    grants = [_authorized_comment(head), _protected_comment(head)]
+    if protected_mode:
+        grants.reverse()
+    grants[1]["createdAt"] = "2026-05-22T00:06:00Z"
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=grants),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=protected_mode,
+        require_branch_protection_token=not protected_mode,
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+    assert gate["authorization_diagnostics"][0]["selection_status"] == "superseded"
+    assert gate["authorization_diagnostics"][1]["selection_status"] == "selected"
+    assert not any(item["accepted"] for item in gate["authorization_diagnostics"])
+
+
+def _unparsable_comment(head: str) -> dict[str, Any]:
+    comment = _protected_comment(head)
+    comment["body"] += "\nNo admin squash or branch protection reconcile is authorized."
+    comment.update(createdAt="2026-05-22T00:06:00Z", url="https://github.example/unparsable")
+    return comment
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        "Authorized action: protected_squash_merge\n"
+        "No admin squash or branch protection reconcile is authorized.",
+        "Authorized action: protected_squash_merge and admin_squash_merge",
+        "Authorized action: protected_squash_merge_extra",
+        "Authorized action: not protected_squash_merge",
+        "Authorized action: unknown_action",
+    ],
+)
+@pytest.mark.parametrize("source", ["comment", "review"])
+@pytest.mark.parametrize("reverse_api_order", [False, True])
+@pytest.mark.parametrize("mode", ["default", "protected", "protection"])
+def test_unparsable_newer_instruction_blocks_older_grant(
+    action: str, source: str, reverse_api_order: bool, mode: str
+) -> None:
+    head = "a" * 40
+    older = _protected_comment(head) if mode == "protected" else _authorized_comment(head)
+    newer = _unparsable_comment(head)
+    newer["body"] = f"{settler.AUTHORIZED_MARKER}\nExact head: {head}\n{action}"
+    assert settler._comment_authorized_actions(newer["body"]) == set()
+    if source == "review":
+        newer["submittedAt"] = newer.pop("createdAt")
+    grants = [older, newer]
+    if reverse_api_order:
+        grants.reverse()
+    view = _pr_view(head, comments=grants if source == "comment" else [])
+    if source == "review":
+        older["submittedAt"] = older.pop("createdAt")
+        view["reviews"] = grants
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=mode == "protected",
+        require_branch_protection_token=mode == "protection",
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+    assert settler.OPERATOR_COMMENT_BLOCKER in gate["blockers"]
+    diagnostics = {item["url"]: item for item in gate["authorization_diagnostics"]}
+    assert diagnostics[newer["url"]]["selection_status"] == "selected"
+    assert diagnostics[newer["url"]]["merge_action_present"] is False
+    assert diagnostics[older["url"]]["selection_status"] == "superseded"
+    assert not any(item["accepted"] for item in diagnostics.values())
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [None, "", "not-a-date", "2026-05-22T00:06:00", AUTH_CREATED_AT, "2026-05-21T19:05:00-05:00"],
+)
+@pytest.mark.parametrize("source", ["comment", "review"])
+def test_unparsable_instruction_with_unknown_or_tied_order_blocks_grant(
+    timestamp: str | None, source: str
+) -> None:
+    head = "a" * 40
+    instruction = _unparsable_comment(head)
+    instruction["createdAt"] = timestamp
+    view = _pr_view(head, comments=[_authorized_comment(head)])
+    if source == "review":
+        instruction["submittedAt"] = instruction.pop("createdAt")
+        view["reviews"] = [instruction]
+    else:
+        view["comments"].append(instruction)
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+    assert gate["authorization_selection"]["status"] == "ambiguous"
+    assert not any(item["accepted"] for item in gate["authorization_diagnostics"])
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["newer_legacy", "newer_protected", "untrusted", "wrong_head", "stale", "no_marker", "member"],
+)
+def test_unparsable_instruction_preserves_unrelated_or_newer_grants(case: str) -> None:
+    head = "a" * 40
+    instruction = _unparsable_comment(head)
+    protected_grant = case == "newer_protected"
+    grant = _protected_comment(head) if protected_grant else _authorized_comment(head)
+    if case.startswith("newer_"):
+        instruction["updatedAt"] = "2026-05-22T01:00:00Z"
+        grant["createdAt"] = "2026-05-22T00:07:00Z"
+    elif case == "untrusted":
+        instruction["authorAssociation"] = "CONTRIBUTOR"
+    elif case == "wrong_head":
+        instruction["body"] = instruction["body"].replace(head, "b" * 40)
+    elif case == "stale":
+        instruction["createdAt"] = "2026-05-21T23:59:00Z"
+    elif case == "no_marker":
+        instruction["body"] = instruction["body"].replace(settler.AUTHORIZED_MARKER, "Diagnostic")
+    else:
+        instruction["authorAssociation"] = "MEMBER"
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[instruction, grant]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        trusted_operator_logins=["owner-user"],
+        permission_checker=lambda login: False,
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == (
+        ["protected_merge"] if protected_grant else ["branch_protection", "merge"]
+    )
+    assert gate["authorization_diagnostics"][0]["selection_status"] == (
+        "superseded" if case.startswith("newer_") else "ineligible"
+    )
+    assert gate["authorization_diagnostics"][1]["selection_status"] == "selected"
+
+
+@pytest.mark.parametrize("mode", ["default", "protected", "protection"])
+def test_merge_apply_rejects_unparsable_newer_instruction_without_mutation(
+    monkeypatch: Any, tmp_path: Path, mode: str
+) -> None:
+    head = "a" * 40
+    older = (
+        _protected_comment(head)
+        if mode == "protected"
+        else _authorized_comment(head, include_branch_protection=mode == "protection")
+    )
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda *a, **kw: (
+            _pr_view(head, comments=[older, _unparsable_comment(head)]),
+            _tier4_packet(),
+            _valid_checks(),
+        ),
+    )
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(settler, "_apply_merge", lambda **kw: calls.append(kw) or [])
+    flags = ["--protected-squash-only"] if mode == "protected" else []
+    result = settler.main(
+        ["--merge-apply", "--pr", "7423", "--head", head, "--cwd", str(tmp_path), *flags]
+    )
+    assert result == 2
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        None,
+        "",
+        "not-a-date",
+        "2026-99-22T00:06:00Z",
+        "2026-05-22T00:06:00",
+        AUTH_CREATED_AT,
+        "2026-05-21T19:05:00-05:00",
+    ],
+)
+@pytest.mark.parametrize("protected_mode", [False, True])
+def test_grant_precedence_fails_closed_on_unknown_or_tied_order(
+    timestamp: str | None, protected_mode: bool
+) -> None:
+    head = "a" * 40
+    protected = _protected_comment(head)
+    protected["createdAt"] = timestamp
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[_authorized_comment(head), protected]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        protected_squash_only=protected_mode,
+    )
+    assert gate["ok"] is False
+    assert gate["authorized_actions"] == []
+    assert gate["authorization_selection"]["status"] == "ambiguous"
+    assert not any(item["accepted"] for item in gate["authorization_diagnostics"])
+
+
+def test_grant_precedence_orders_reviews_and_comments_by_absolute_time() -> None:
+    head = "a" * 40
+    protected = _protected_comment(head)
+    protected["createdAt"] = "2026-05-21T23:00:00Z"  # Draft creation is not publication.
+    protected["submittedAt"] = "2026-05-21T19:06:00-05:00"
+    view = _pr_view(head, comments=[_authorized_comment(head)])
+    view["reviews"] = [protected]
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["protected_merge"]
+    assert gate["authorization_diagnostics"][1]["kind"] == "review"
+
+
+def test_comment_edit_does_not_promote_older_grant() -> None:
+    head = "a" * 40
+    older = _authorized_comment(head)
+    older["updatedAt"] = "2026-05-22T01:00:00Z"
+    newer = _protected_comment(head)
+    newer["createdAt"] = "2026-05-22T00:06:00Z"
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[older, newer]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["protected_merge"]
+
+
+def test_review_missing_submission_time_blocks_ambiguous_order() -> None:
+    head = "a" * 40
+    view = _pr_view(head, comments=[_authorized_comment(head)])
+    view["reviews"] = [_protected_comment(head)]
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is False
+    assert gate["authorization_selection"]["status"] == "ambiguous"
+    assert gate["authorized_actions"] == []
+
+
+@pytest.mark.parametrize("newest_protected", [False, True])
+def test_merge_apply_uses_only_newest_grant(
+    monkeypatch: Any, tmp_path: Path, newest_protected: bool
+) -> None:
+    head = "a" * 40
+    grants = [_authorized_comment(head), _protected_comment(head)]
+    if not newest_protected:
+        grants.reverse()
+    grants[1]["createdAt"] = "2026-05-22T00:06:00Z"
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda *a, **kw: (_pr_view(head, comments=grants), _tier4_packet(), _valid_checks()),
+    )
+    calls: list[dict[str, Any]] = []
+    monkeypatch.setattr(settler, "_apply_merge", lambda **kw: calls.append(kw) or [])
+    assert (
+        settler.main(["--merge-apply", "--pr", "7423", "--head", head, "--cwd", str(tmp_path)]) == 0
+    )
+    assert len(calls) == 1
+    assert calls[0]["protected_squash_only"] is newest_protected
+    assert calls[0]["reconcile_branch_protection"] is not newest_protected
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_merge_apply_does_not_revive_old_protected_grant(
+    monkeypatch: Any, tmp_path: Path, ambiguous: bool
+) -> None:
+    head = "a" * 40
+    legacy = _authorized_comment(head)
+    if not ambiguous:
+        legacy["createdAt"] = "2026-05-22T00:06:00Z"
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda *a, **kw: (
+            _pr_view(head, comments=[_protected_comment(head), legacy]),
+            _tier4_packet(),
+            _valid_checks(),
+        ),
+    )
+    monkeypatch.setattr(settler, "_apply_merge", lambda **kw: pytest.fail("merge forbidden"))
+    assert (
+        settler.main(
+            [
+                "--merge-apply",
+                "--protected-squash-only",
+                "--pr",
+                "7423",
+                "--head",
+                head,
+                "--cwd",
+                str(tmp_path),
+            ]
+        )
+        == 2
+    )
+
+
+@pytest.mark.parametrize("invalid", ["untrusted", "wrong_head", "stale"])
+def test_invalid_grant_does_not_supersede_valid_protected_grant(invalid: str) -> None:
+    head = "a" * 40
+    invalid_grant = _authorized_comment(head)
+    invalid_grant["createdAt"] = "2026-05-22T00:06:00Z"
+    if invalid == "untrusted":
+        invalid_grant["authorAssociation"] = "CONTRIBUTOR"
+    elif invalid == "wrong_head":
+        invalid_grant["body"] = _authorized_comment("b" * 40)["body"]
+    else:
+        invalid_grant["createdAt"] = "2026-05-21T23:59:00Z"
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[invalid_grant, _protected_comment(head)]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["protected_merge"]
+
+
+@pytest.mark.parametrize("explicit_mode", [False, True])
+def test_protected_settle_check_merge_roundtrip_never_administers_protection(
+    monkeypatch: Any,
+    tmp_path: Path,
+    explicit_mode: bool,
+) -> None:
+    head = "a" * 40
+    view = _pr_view(head, comments=[], human_settlement_state=None)
+    packet = _tier4_repair_packet_missing_settlement()
+    checks = _valid_checks()
+    checks[1]["state"] = "FAILURE"
+    commands: list[list[str]] = []
+    monkeypatch.setattr(settler, "_load_live_inputs", lambda *a, **kw: (view, packet, checks))
+    monkeypatch.setattr(settler, "_current_gh_login", lambda **kw: "scarmani")
+    monkeypatch.setattr(settler, "_login_has_admin_permission", lambda *a, **kw: True)
+    monkeypatch.setattr(
+        settler, "_quorum_failure_log_proves_missing_settlement", lambda *a, **kw: True
+    )
+
+    def post_comment(command: list[str], **kwargs: Any) -> str:
+        commands.append(command)
+        comment = _authorized_comment(head)
+        comment["body"] = command[command.index("--body") + 1]
+        view["comments"].append(comment)
+        return "https://github.example/settlement"
+
+    def run(command: list[str], **kwargs: Any) -> None:
+        commands.append(command)
+        if "state=success" in command:
+            view["statusCheckRollup"] = [
+                {"context": "aragora/human-settlement", "state": "SUCCESS"}
+            ]
+
+    monkeypatch.setattr(settler, "_run_text_command", post_comment)
+    monkeypatch.setattr(settler, "_run_command", run)
+    for name in (
+        "_preflight_branch_protection_reconcile",
+        "_branch_protection_snapshot",
+        "_restore_branch_protection",
+    ):
+        monkeypatch.setattr(settler, name, lambda *a, **kw: pytest.fail("no protection access"))
+    args = [
+        "--pr",
+        "7423",
+        "--head",
+        head,
+        "--cwd",
+        str(tmp_path),
+        "--trusted-operator-login",
+        "scarmani",
+    ]
+    assert settler.main(["--settle-only", "--protected-squash-only", *args]) == 0
+    assert len(commands) == 2
+    assert settler._comment_authorized_actions(view["comments"][0]["body"]) == {"protected_merge"}
+    checks[1]["state"] = "SUCCESS"
+    packet.update(_tier4_packet())
+    mode = ["--protected-squash-only"] if explicit_mode else []
+    assert settler.main(["--check", *mode, *args]) == 0
+    assert len(commands) == 2
+    assert settler.main(["--merge-apply", *mode, *args]) == 0
+    assert commands[-1] == ["gh", "pr", "merge", "7423", "--squash", "--match-head-commit", head]
+
+
+def test_protected_merge_failure_never_attempts_admin_or_protection_rollback(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    commands: list[list[str]] = []
+
+    def fail(command: list[str], **kwargs: Any) -> None:
+        commands.append(command)
+        raise subprocess.CalledProcessError(1, command, stderr="branch protection blocked merge")
+
+    monkeypatch.setattr(settler, "_run_command", fail)
+    monkeypatch.setattr(
+        settler, "_restore_branch_protection", lambda **kw: pytest.fail("no rollback")
+    )
+    with pytest.raises(settler.Tier4ApplyError):
+        settler._apply_merge(
+            pr=7423,
+            head="a" * 40,
+            repo=settler.DEFAULT_REPO,
+            cwd=tmp_path,
+            protected_squash_only=True,
+        )
+    assert len(commands) == 1
+    assert "--admin" not in commands[0]
+
+
+def test_protected_merge_rejects_protection_reconcile_before_any_command(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        settler, "_preflight_branch_protection_reconcile", lambda **kw: pytest.fail("no preflight")
+    )
+    with pytest.raises(RuntimeError, match="protected squash"):
+        settler._apply_merge(
+            pr=7423,
+            head="a" * 40,
+            repo=settler.DEFAULT_REPO,
+            cwd=tmp_path,
+            protected_squash_only=True,
+            reconcile_branch_protection=True,
+        )
+
+
 def test_run_json_timeout_reports_runtime_error(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout"))
@@ -1411,6 +2001,166 @@ def test_cli_trusted_operator_login_authorizes_member_comment(
     )
 
     assert rc == 0
+
+
+@pytest.mark.parametrize("lookup", ["failed", "denied"])
+@pytest.mark.parametrize("parseable", [False, True])
+@pytest.mark.parametrize("timestamp", ["2026-05-22T00:06:00Z", None, AUTH_CREATED_AT])
+@pytest.mark.parametrize("older_author", ["owner", "same_member", "other_member"])
+@pytest.mark.parametrize("association", ["MEMBER", "COLLABORATOR"])
+@pytest.mark.parametrize("source", ["comment", "review"])
+@pytest.mark.parametrize("mode", ["default", "protected", "protection"])
+def test_permission_lookup_uncertainty_does_not_revive_grant(
+    monkeypatch: Any,
+    lookup: str,
+    parseable: bool,
+    timestamp: str | None,
+    older_author: str,
+    association: str,
+    source: str,
+    mode: str,
+) -> None:
+    head = "a" * 40
+    older = _protected_comment(head) if mode == "protected" else _authorized_comment(head)
+    newer = _unparsable_comment(head)
+    if parseable:
+        newer["body"] = _protected_comment(head)["body"]
+    newer.update(authorAssociation=association, author={"login": "new-admin"}, createdAt=timestamp)
+    if older_author != "owner":
+        older.update(
+            authorAssociation="MEMBER",
+            author={"login": ("new-admin" if older_author == "same_member" else "old-admin")},
+        )
+    calls: list[str] = []
+
+    def permission_response(command: list[str], **kwargs: Any) -> dict[str, Any]:
+        calls.append(command[-1])
+        if older_author != "owner" and len(calls) == 1:
+            return {"permission": "admin"}
+        if lookup == "failed":
+            raise RuntimeError("permission lookup transport unavailable")
+        return {"permission": "write"}
+
+    monkeypatch.setattr(settler, "_run_json", permission_response)
+    view = _pr_view(head, comments=[older])
+    if source == "review":
+        newer["submittedAt"] = newer.pop("createdAt")
+        view["reviews"] = [newer]
+    else:
+        view["comments"].append(newer)
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=view,
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        trusted_operator_logins=["new-admin", "old-admin"],
+        protected_squash_only=mode == "protected",
+        require_branch_protection_token=mode == "protection",
+    )
+    assert len(calls) == (1 if older_author == "owner" else 2)
+    assert gate["ok"] is (lookup == "denied")
+    diagnostic = gate["authorization_diagnostics"][-1]
+    if lookup == "failed":
+        assert gate["authorized_actions"] == []
+        assert diagnostic["admin_permission_lookup_failed"] is True
+        assert diagnostic["accepted"] is False
+        assert diagnostic["selection_status"] == (
+            "selected" if timestamp not in (None, AUTH_CREATED_AT) else "ambiguous"
+        )
+        assert any("lookup failed" in reason for reason in diagnostic["rejection_reasons"])
+    else:
+        assert gate["authorized_actions"] == (
+            ["protected_merge"] if mode == "protected" else ["branch_protection", "merge"]
+        )
+        assert diagnostic["selection_status"] == "ineligible"
+        assert any("lacks admin permission" in reason for reason in diagnostic["rejection_reasons"])
+
+
+@pytest.mark.parametrize(
+    "case", ["newer_grant", "wrong_head", "no_marker", "stale", "not_allowlisted"]
+)
+def test_permission_lookup_uncertainty_preserves_irrelevant_or_superseded_inputs(
+    monkeypatch: Any,
+    case: str,
+) -> None:
+    head = "a" * 40
+    grant, instruction = _authorized_comment(head), _unparsable_comment(head)
+    instruction.update(authorAssociation="MEMBER", author={"login": "new-admin"})
+    if case == "newer_grant":
+        grant["createdAt"] = "2026-05-22T00:07:00Z"
+    elif case == "wrong_head":
+        instruction["body"] = instruction["body"].replace(head, "b" * 40)
+    elif case == "no_marker":
+        instruction["body"] = "Not a settlement instruction"
+    elif case == "stale":
+        instruction["createdAt"] = "2026-05-21T23:59:00Z"
+    calls: list[str] = []
+
+    def unavailable(command: list[str], **kwargs: Any) -> dict[str, Any]:
+        calls.append(command[-1])
+        raise RuntimeError("permission lookup unavailable")
+
+    monkeypatch.setattr(settler, "_run_json", unavailable)
+    gate = settler.evaluate_tier4_gate(
+        pr=7423,
+        expected_head=head,
+        pr_view=_pr_view(head, comments=[instruction, grant]),
+        merge_packet=_tier4_packet(),
+        required_checks=_valid_checks(),
+        trusted_operator_logins=["other" if case == "not_allowlisted" else "new-admin"],
+    )
+    assert gate["ok"] is True
+    assert gate["authorized_actions"] == ["branch_protection", "merge"]
+    assert gate["authorization_diagnostics"][1]["selection_status"] == "selected"
+    if case == "not_allowlisted":
+        assert calls == []
+
+
+@pytest.mark.parametrize("protected", [False, True])
+def test_permission_lookup_uncertainty_prevents_merge_apply(
+    monkeypatch: Any, protected: bool
+) -> None:
+    head = "a" * 40
+    older = _protected_comment(head) if protected else _authorized_comment(head)
+    newer = _unparsable_comment(head)
+    newer.update(authorAssociation="MEMBER", author={"login": "new-admin"})
+    monkeypatch.setattr(
+        settler,
+        "_load_live_inputs",
+        lambda *a, **kw: (
+            _pr_view(head, comments=[older, newer]),
+            _tier4_packet(),
+            _valid_checks(),
+        ),
+    )
+
+    def unavailable(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("permission lookup unavailable")
+
+    monkeypatch.setattr(settler, "_run_json", unavailable)
+    mutations: list[str] = []
+    monkeypatch.setattr(
+        settler,
+        "_preflight_branch_protection_reconcile",
+        lambda **kw: mutations.append("preflight"),
+    )
+    monkeypatch.setattr(settler, "_apply_merge", lambda **kw: mutations.append("merge") or [])
+    flags = ["--protected-squash-only"] if protected else []
+    rc = settler.main(
+        [
+            "--merge-apply",
+            "--pr",
+            "7423",
+            "--head",
+            head,
+            "--trusted-operator-login",
+            "new-admin",
+            *flags,
+        ]
+    )
+    assert rc == 2
+    assert mutations == []
 
 
 def test_collaborator_permission_payload_only_treats_admin_as_admin() -> None:

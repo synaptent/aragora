@@ -180,10 +180,13 @@ merge-quorum-workflow: aragora-merge-quorum.yml    # enforcing, required check o
 receipt-verify: aragora verify <receipt.json>      # --format json available
 receipt-dir: .aragora/receipts
 
-# --- Authorization surfaces (read-only; neither merges) ---
+# --- Authorization surfaces (read-only unless marked OPERATOR ONLY; none of these is a merge) ---
 merge-packet: aragora review-queue merge-packet --pr <pr> --json
 settle-dry-run: python3 scripts/settle_one_pr.py --pr <pr> --json   # expect blockers == ['PR is draft']
-settle-tier4: python3 scripts/settle_tier4_pr.py --check --pr <pr> --head <sha>   # Tier 4 only, after operator signal
+settle-tier4-check: python3 scripts/settle_tier4_pr.py --check --pr <pr> --head <sha>   # read-only exact-head Tier 4 gate evaluation; mutates nothing
+settle-tier4-settle-only: python3 scripts/settle_tier4_pr.py --settle-only --pr <pr> --head <sha> --trusted-operator-login <login>   # OPERATOR ONLY: exact-head settlement mutation (comment + status); never merges
+# settle_tier4_pr.py --merge-apply is a legacy ADMIN-BYPASS mode (`gh pr merge --admin`): FORBIDDEN — never run, never recommend, never packet it
+protected-merge: gh pr merge <pr> --squash --match-head-commit <sha>   # the ONLY merge route, after the required operator settlement
 record-settlement: aragora review-queue record-settlement   # or: aragora review-queue act <pr> --approve|--defer
 
 # --- Settlement / tiers ---
@@ -194,6 +197,25 @@ approvals-dir: .approvals
 # --- Notification ---
 notification: pr-comment        # or slack-webhook via ELVES_SLACK_WEBHOOK
 ```
+
+### Tier 4 settlement helper modes (`scripts/settle_tier4_pr.py`)
+
+The helper takes exactly one of three mutually exclusive modes. They are not interchangeable:
+
+- **`--check`** — read-only. Evaluates the exact-head Tier 4 gate (head match, counted model
+  evidence, required checks, the operator's settlement markers, branch-protection preflight) and
+  prints `ok`/blockers. It writes nothing to GitHub. This is the only mode you run.
+- **`--settle-only`** — an operator mutation, never yours. Refuses unless the exact-head
+  preconditions hold AND the invoking `gh` login is in the `--trusted-operator-login` allowlist
+  with admin/OWNER authority; then posts the `Tier-4 Human Settlement Authorization` comment and
+  the `aragora/human-settlement` success status on that head. It never merges.
+- **`--merge-apply`** — legacy admin-bypass. It runs `gh pr merge --squash --admin` on the settled
+  head (plus optional branch-protection reconcile). **Forbidden:** do not run it, do not recommend
+  it, do not put it in a settlement packet. Mentioning it here is a warning, not an instruction.
+
+After the required operator settlement, the merge is the normal protected route and nothing else:
+`gh pr merge <pr> --squash --match-head-commit <sha>`. That command honours branch protection
+and the `aragora-merge-quorum` check; `--admin` in any form bypasses them and is never used.
 
 ---
 

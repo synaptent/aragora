@@ -141,6 +141,30 @@ def _run_gauntlet_api(
     )
 
 
+def _gauntlet_exit_status(result: Any) -> tuple[int, str | None]:
+    """Interpret completion and verdict identically for local and API results."""
+
+    def normalized(value: Any) -> str | None:
+        value = getattr(value, "value", value)
+        return value.strip().lower() if isinstance(value, str) else None
+
+    # Legacy completed receipts and local results have no status field; the typed
+    # API model represents that absence as None. Any explicit status must prove
+    # completion before its verdict can authorize success or conditional review.
+    status = getattr(result, "status", None)
+    if status is not None and normalized(status) != "completed":
+        return 1, "[UNSUCCESSFUL] Gauntlet did not report successful completion."
+
+    verdict = normalized(getattr(result, "verdict", None))
+    if verdict in {"pass", "approved"}:
+        return 0, None
+    if verdict in {"conditional", "approved_with_conditions", "needs_review"}:
+        return 2, "[NEEDS REVIEW] This input requires human review."
+    if verdict in {"fail", "rejected"}:
+        return 1, "[REJECTED] This input failed the stress-test."
+    return 1, "[INVALID RESULT] Missing or unrecognized verdict; cannot report success."
+
+
 def cmd_gauntlet(args: argparse.Namespace) -> None:
     """Handle 'gauntlet' command - adversarial stress-testing."""
     from aragora.agents.base import create_agent
@@ -228,7 +252,7 @@ def cmd_gauntlet(args: argparse.Namespace) -> None:
             print("\n" + "=" * 60)
             print("GAUNTLET RESULT")
             print("=" * 60)
-            print(f"Verdict: {receipt.verdict}")
+            print(f"Verdict: {getattr(receipt, 'verdict', None)}")
             print(f"Findings: {len(receipt.findings)}")
             if receipt.findings:
                 print("\n" + "-" * 60)
@@ -268,16 +292,10 @@ def cmd_gauntlet(args: argparse.Namespace) -> None:
                     output_file.write_text(json_module.dumps(receipt.model_dump(), indent=2))
                 print(f"\nDecision Receipt saved: {output_file}")
 
-            # Exit with non-zero if rejected
-            verdict_value = (
-                receipt.verdict.value if hasattr(receipt.verdict, "value") else str(receipt.verdict)
-            )
-            if verdict_value == "rejected":
-                print("\n[REJECTED] This input failed the stress-test.")
-                sys.exit(1)
-            elif verdict_value == "needs_review":
-                print("\n[NEEDS REVIEW] This input requires human review.")
-                sys.exit(2)
+            exit_code, message = _gauntlet_exit_status(receipt)
+            if exit_code:
+                print(f"\n{message}")
+                sys.exit(exit_code)
 
             return
 
@@ -449,13 +467,10 @@ def cmd_gauntlet(args: argparse.Namespace) -> None:
         print(f"\nDecision Receipt saved: {output_file}")
         print(f"Artifact Hash: {receipt.artifact_hash[:16]}...")
 
-    # Exit with non-zero if rejected
-    if result.verdict.value == "rejected":
-        print("\n[REJECTED] This input failed the stress-test.")
-        sys.exit(1)
-    elif result.verdict.value == "needs_review":
-        print("\n[NEEDS REVIEW] This input requires human review.")
-        sys.exit(2)
+    exit_code, message = _gauntlet_exit_status(result)
+    if exit_code:
+        print(f"\n{message}")
+        sys.exit(exit_code)
 
 
 def create_gauntlet_parser(subparsers: Any) -> argparse.ArgumentParser:
