@@ -741,3 +741,48 @@ class TestStatelessOdrVerification:
 
         assert result.status_code == 404
         assert "error" in json.loads(result.body)
+
+    @pytest.mark.asyncio
+    async def test_oversized_verify_body_is_never_read(self):
+        """The public route must reject on Content-Length, not after parsing."""
+        from aragora.server.handlers.decisions.receipts import MAX_VERIFY_BODY_BYTES
+
+        request = _make_mock_handler(method="POST")
+        request.headers["Content-Length"] = str(MAX_VERIFY_BODY_BYTES + 1)
+        handler = _receipts_handler()
+
+        result = await handler.handle(
+            method="POST", path="/api/v2/receipts/verify", handler=request
+        )
+
+        assert result.status_code == 413
+        assert "error" in json.loads(result.body)
+        request.rfile.read.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_ascii_body_under_the_cap_is_not_rejected(self):
+        """ensure_ascii escaping must not push a wire-legal document over the cap."""
+        from aragora.server.handlers.decisions.receipts import MAX_VERIFY_BODY_BYTES
+
+        handler = _receipts_handler()
+        document = {"odr_version": "0.2", "reasoning": {"padding": "é" * 130_000}}
+        assert len(json.dumps(document).encode("utf-8")) > MAX_VERIFY_BODY_BYTES
+        assert len(json.dumps(document, ensure_ascii=False).encode("utf-8")) < (
+            MAX_VERIFY_BODY_BYTES
+        )
+
+        result = await handler.handle("POST", "/api/v2/receipts/verify", document, {})
+
+        assert result.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_odr_export_branch_requires_get(self):
+        """A non-GET on the export path must not reach the unauthenticated branch."""
+        handler = _receipts_handler()
+
+        result = await handler.handle(
+            "POST", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+        )
+
+        assert result.status_code == 405
+        assert "error" in json.loads(result.body)

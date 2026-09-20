@@ -581,13 +581,16 @@ class ReceiptsHandler(BaseHandler):
         path = self._normalize_receipt_path(path)
         if query_params is None:
             query_params = {}
-        if body is None:
-            if handler and method in {"POST", "PUT", "PATCH"}:
-                body = self.read_json_body(handler) or {}
-            else:
-                body = {}
         if headers is None:
             headers = dict(handler.headers) if handler and hasattr(handler, "headers") else {}
+        if body is None:
+            if handler and method in {"POST", "PUT", "PATCH"}:
+                # The verify route is public, so it must not read or parse past
+                # its own cap; the generic reader would otherwise accept 10 MiB.
+                max_size = MAX_VERIFY_BODY_BYTES if path == "/api/v2/receipts/verify" else None
+                body = self.read_json_body(handler, max_size=max_size) or {}
+            else:
+                body = {}
 
         try:
             # ODR signing public key trust anchor (public endpoints, issue #8804).
@@ -688,6 +691,13 @@ class ReceiptsHandler(BaseHandler):
                 # surfacing the decorator's denial as a 500.
                 if len(parts) > 5 and parts[5] == "export":
                     if (query_params.get("format") or "json").strip().lower() == "odr":
+                        # The ODR branch is unauthenticated, so it stays read-only
+                        # instead of falling through to the permission-gated path.
+                        if method != "GET":
+                            return error_response(
+                                "Method not allowed: GET /api/v2/receipts/{id}/export?format=odr",
+                                405,
+                            )
                         return await self._export_odr(receipt_id, query_params)
                     auth_context = _request_auth_context(handler)
                     if auth_context is None:
@@ -1221,6 +1231,7 @@ class ReceiptsHandler(BaseHandler):
         ),
         tags=["Receipts", "Verification"],
         operation_id="verify_odr_document",
+        auth_required=False,
         responses={
             "200": {"description": "Verification verdict returned (verified true or false)"},
             "400": {"description": "Body is not a JSON object carrying odr_version"},
@@ -1237,7 +1248,9 @@ class ReceiptsHandler(BaseHandler):
         declared = _content_length(headers)
         if declared is None and isinstance(body, dict):
             try:
-                declared = len(json.dumps(body).encode("utf-8"))
+                # ensure_ascii would inflate non-ASCII documents past the cap
+                # that the same bytes stay under on the wire.
+                declared = len(json.dumps(body, ensure_ascii=False).encode("utf-8"))
             except (TypeError, ValueError):
                 declared = None
         if declared is not None and declared > MAX_VERIFY_BODY_BYTES:

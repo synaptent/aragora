@@ -846,8 +846,11 @@ _RECEIPT_ENDPOINTS = {
             "tags": ["Receipts", "Export"],
             "summary": "Export receipt",
             "operationId": "exportReceipt",
-            "description": "Export a receipt in the requested format.",
-            "security": AUTH_REQUIREMENTS["required"]["security"],
+            "description": (
+                "Export a receipt in the requested format. format=odr is public; "
+                "every other format requires receipts:read."
+            ),
+            "security": AUTH_REQUIREMENTS["optional"]["security"],
             "parameters": [
                 {
                     "name": "receipt_id",

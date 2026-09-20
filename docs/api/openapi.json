@@ -248227,12 +248227,7 @@
           "429": {
             "description": "Rate limit exceeded (60 requests per minute per client)"
           }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
+        }
       }
     },
     "/api/v2/receipts/{receipt_id}": {
@@ -248434,11 +248429,9 @@
         ],
         "summary": "Export receipt",
         "operationId": "exportReceipt",
-        "description": "Export a receipt in the requested format.",
+        "description": "Export a receipt in the requested format. format=odr is public; every other format requires receipts:read.",
         "security": [
-          {
-            "bearerAuth": []
-          }
+          {}
         ],
         "parameters": [
           {
