@@ -464,9 +464,13 @@ def test_compose_drops_the_condition_when_the_outcome_fills_the_budget() -> None
 
 
 def test_hostile_finder_entry_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The bridge is soft enrichment: a value that raises on str() must not escape."""
-    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+    """The bridge is soft enrichment: a hostile value must not escape as an exception.
 
+    Unlike a hostile override, which degrades a single field, the raw finder
+    entry also lands in ``provenance``, which the checksum must serialise. No
+    bundle can be built from it, so the whole emission fails closed.
+    """
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
     claim = _claim("c1", "S", 0.7)
     result = _result(
         _analysis(claim),

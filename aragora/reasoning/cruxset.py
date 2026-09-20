@@ -51,9 +51,20 @@ def _utc_now_iso() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
 
 
-def clip_counterfactual(text: str, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -> str:
-    """Return ``text`` trimmed to ``limit`` characters, ellipsised when clipped."""
-    text = text.strip()
+def clip_counterfactual(value: object, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -> str:
+    """Return ``value`` as stripped text trimmed to ``limit``, ellipsised when clipped.
+
+    Only types whose ``str()`` cannot raise are coerced; anything else yields
+    ``""``. Every caller sits on a soft-enrichment path, so a value with a
+    hostile ``__str__`` must degrade a single field rather than propagate out
+    of a debate.
+    """
+    if isinstance(value, str):
+        text = value.strip()
+    elif isinstance(value, (int, float)):
+        text = str(value)
+    else:
+        return ""
     if len(text) <= limit:
         return text
     if limit <= 0:
@@ -391,16 +402,8 @@ def build_cruxset_from_analysis(
             )
         claim_id = str(entry.get("claim_id") or "")
         # A blank override falls through rather than silently emptying the field,
-        # but a present-and-falsy value is still coerced like any other payload
-        # value. Only types whose str() cannot raise are coerced: this is a soft
-        # enrichment path, so an object with a hostile __str__ must degrade to the
-        # default text rather than propagate out of a debate.
-        raw_override = cf_map.get(claim_id)
-        override = (
-            clip_counterfactual(str(raw_override))
-            if isinstance(raw_override, (str, int, float))
-            else ""
-        )
+        # but a present-and-falsy value is still coerced like any other payload value.
+        override = clip_counterfactual(cf_map.get(claim_id))
         if override:
             counterfactual_text = override
         elif entry.get("resolution_impact") is not None:

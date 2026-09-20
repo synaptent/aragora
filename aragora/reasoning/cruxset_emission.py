@@ -130,7 +130,9 @@ def maybe_emit_cruxset(
             max_cruxes=top_k,
             counterfactuals_by_claim_id=counterfactuals_by_claim_id,
         )
-    except (ValueError, KeyError) as exc:
+    except (ValueError, KeyError, TypeError) as exc:
+        # TypeError covers a caller-supplied provenance value that the checksum's
+        # json.dumps cannot serialise: no bundle can be built, so fail closed.
         logger.warning(
             "cruxset emission could not build CruxSet for question=%r: %s",
             question[:80],
@@ -161,8 +163,9 @@ def _compose_counterfactual(condition: str, outcome_change: str) -> str:
 def _counterfactuals_by_claim_id(counterfactuals: list[Any]) -> dict[str, str] | None:
     """Map claim_id to the finder's condition/outcome text for the DIC-15 hook.
 
-    Entries that are blank after stripping are dropped rather than mapped to
-    ``""``, so the builder falls back to its default resolution_impact text.
+    Entries that are blank after stripping, and values of a type that cannot be
+    safely coerced, are dropped rather than mapped to ``""``, so the builder
+    falls back to its default resolution_impact text.
     ``provenance["counterfactuals"]`` deliberately keeps the unclipped entries as
     the full-fidelity audit record while ``Crux.counterfactual`` is the short note.
     """
@@ -172,12 +175,13 @@ def _counterfactuals_by_claim_id(counterfactuals: list[Any]) -> dict[str, str] |
     for cf in counterfactuals:
         if not isinstance(cf, dict):
             continue
-        cid = str(cf.get("claim_id") or "")
+        raw_cid = cf.get("claim_id")
+        cid = raw_cid.strip() if isinstance(raw_cid, str) else ""
         if not cid:
             continue
         text = _compose_counterfactual(
-            str(cf.get("condition") or "").strip(),
-            str(cf.get("outcome_change") or "").strip(),
+            clip_counterfactual(cf.get("condition")),
+            clip_counterfactual(cf.get("outcome_change")),
         )
         if text:
             by_claim[cid] = text
