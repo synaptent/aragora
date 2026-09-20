@@ -161,7 +161,7 @@ def test_malformed_subfields_produce_verdict_not_crash() -> None:
 def test_chain_non_dict_entry_does_not_crash() -> None:
     doc = _valid_odr()
     digest = odr_content_digest(doc)
-    chain = ["not-a-dict", {"hash": "h1", "odr_digest": digest}]
+    chain: list[Any] = ["not-a-dict", {"hash": "h1", "odr_digest": digest}]
     result = verify_odr_document(doc, chain=chain)  # must not raise
     assert result.ok is False
 
@@ -424,8 +424,8 @@ _SCHEMA_VIOLATIONS: list[Any] = [
         id="issued_at_not_string",
     ),
     pytest.param(
-        lambda d: d.__setitem__("odr_version", "0.2"),
-        "odr_version: must be '0.1'",
+        lambda d: d.__setitem__("odr_version", "0.3"),
+        "odr_version: must be '0.1' or '0.2'",
         id="odr_version_wrong_const",
     ),
     pytest.param(

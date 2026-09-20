@@ -1,9 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aragora.ai/specs/open-decision-receipt/v0.1/schema.json",
-  "title": "Open Decision Receipt (ODR) content profile v0.1",
+  "$id": "https://aragora.ai/specs/open-decision-receipt/v0.2/schema.json",
+  "title": "Open Decision Receipt (ODR) content profiles v0.1 and v0.2",
   "description": "Vendor-neutral decision-semantics receipt profile. Canonicalization basis: RFC 8785 (JCS). Designed to ride SCITT/COSE envelopes via detached signatures. See docs/specs/OPEN_DECISION_RECEIPT.md.",
   "type": "object",
+  "allOf": [
+    {
+      "if": {"properties": {"odr_version": {"const": "0.1"}}},
+      "then": {
+        "properties": {
+          "profile": {"const": "https://aragora.ai/specs/open-decision-receipt/v0.1"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"odr_version": {"const": "0.2"}}},
+      "then": {
+        "properties": {
+          "profile": {"const": "https://aragora.ai/specs/open-decision-receipt/v0.2"}
+        }
+      }
+    }
+  ],
   "required": [
     "odr_version",
     "profile",
@@ -22,11 +40,14 @@
   "properties": {
     "odr_version": {
       "type": "string",
-      "const": "0.1"
+      "enum": ["0.1", "0.2"]
     },
     "profile": {
       "type": "string",
-      "const": "https://aragora.ai/specs/open-decision-receipt/v0.1"
+      "enum": [
+        "https://aragora.ai/specs/open-decision-receipt/v0.1",
+        "https://aragora.ai/specs/open-decision-receipt/v0.2"
+      ]
     },
     "receipt_id": {
       "type": "string",
@@ -59,7 +80,11 @@
             { "$ref": "#/$defs/absent" }
           ]
         },
-        "summary": { "type": "string" }
+        "summary": { "type": "string" },
+        "repository": { "type": "string" },
+        "pr_number": { "type": "integer" },
+        "head_sha": { "type": "string" },
+        "base_sha": { "type": "string" }
       },
       "additionalProperties": false
     },
@@ -88,7 +113,19 @@
           "required": ["status", "summary"],
           "properties": {
             "status": { "const": "present" },
-            "summary": { "type": "string", "minLength": 1 }
+            "summary": { "type": "string", "minLength": 1 },
+            "observations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": { "enum": ["timeout", "failure", "rerun"] },
+                  "family": { "type": "string" },
+                  "detail": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
           },
           "additionalProperties": false
         },
@@ -112,6 +149,36 @@
             "status": { "const": "present" },
             "method": { "type": "string" },
             "reached": { "type": "boolean" },
+            "verdicts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "issuer": { "type": "string" },
+                  "role": { "type": "string" },
+                  "verdict": { "type": "string" },
+                  "model_family": { "type": "string" },
+                  "model_id": { "type": "string" },
+                  "head_sha": { "type": "string" },
+                  "posted_at": { "type": "string" },
+                  "grounded": { "type": "boolean" },
+                  "counted": { "type": "boolean" },
+                  "severity_max": { "$ref": "#/$defs/severity" },
+                  "blocking": { "type": "boolean" }
+                },
+                "additionalProperties": false
+              }
+            },
+            "rule": {
+              "type": "object",
+              "properties": {
+                "required_signals": { "type": "integer" },
+                "requires_western_frontier": { "type": "boolean" },
+                "western_only_counted": { "type": "boolean" },
+                "counted_families": { "type": "array", "items": { "type": "string" } }
+              },
+              "additionalProperties": false
+            },
             "supporting_agents": {
               "type": "array",
               "items": { "type": "string" }
@@ -151,6 +218,22 @@
               "required": ["present", "dissenting_agents", "views"],
               "properties": {
                 "present": { "type": "boolean" },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "issuer": { "type": "string" },
+                      "severity": { "$ref": "#/$defs/severity" },
+                      "blocking": { "type": "boolean" },
+                      "location": { "type": "string" },
+                      "text": { "type": "string" }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "severity_max": { "$ref": "#/$defs/severity" },
+                "blocking": { "type": "boolean" },
                 "dissenting_agents": {
                   "type": "array",
                   "items": { "type": "string" }
@@ -268,7 +351,14 @@
           "properties": {
             "type": { "type": "string" },
             "context": { "type": "string" },
-            "ref": { "type": "string" }
+            "ref": { "type": "string" },
+            "policy_version": { "type": "integer" },
+            "tier": { "type": ["integer", "null"] },
+            "tiered_gate": { "type": "boolean" },
+            "severity_gated": { "type": "boolean" },
+            "action": { "type": "string" },
+            "action_reason": { "type": "string" },
+            "record_ref": { "type": "string" }
           },
           "additionalProperties": true,
           "description": "How the attestation was recorded, e.g. settlement_status (aragora/human-settlement) or preapproval_comment, with a resolvable ref."
@@ -279,6 +369,21 @@
       },
       "then": {
         "required": ["disposition", "attestor"]
+      },
+      "additionalProperties": false
+    },
+    "adjudication": {
+      "type": "object",
+      "properties": {
+        "status": { "enum": ["present", "absent"] },
+        "kind": { "const": "review_adjudication.v1" },
+        "verdict": { "enum": ["settle", "block", "escalate", "not_applicable"] },
+        "reason": { "type": "string" },
+        "policy": { "type": "object" },
+        "assessments": { "type": "array", "items": { "type": "object" } },
+        "blocking_findings": { "type": "array", "items": { "type": "string" } },
+        "escalated_findings": { "type": "array", "items": { "type": "string" } },
+        "settled_findings": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false
     },
@@ -321,6 +426,7 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "severity": { "enum": ["P0", "P1", "P2", "P3"] },
     "absent": {
       "type": "object",
       "required": ["status", "reason"],

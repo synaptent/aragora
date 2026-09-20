@@ -118,6 +118,19 @@ class ComplianceHandler(
         """Initialize with server context."""
         super().__init__(server_context)
 
+    def _get_legal_hold_manager(self) -> Any:
+        """Keep handler-level provider overrides out of the mixin's imports."""
+        try:
+            return get_legal_hold_manager()
+        except (ImportError, AttributeError):
+            return super()._get_legal_hold_manager()
+
+    def _get_legal_hold_audit_store(self) -> Any:
+        try:
+            return get_audit_store()
+        except (ImportError, AttributeError):
+            return super()._get_legal_hold_audit_store()
+
     def can_handle(self, path: str, method: str = "GET") -> bool:
         """Check if this handler can process the request."""
         if path == "/api/v1/compliance/rbac-coverage":
