@@ -51,7 +51,7 @@ def _utc_now_iso() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
 
 
-def _clip_counterfactual(text: str, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -> str:
+def clip_counterfactual(text: str, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -> str:
     """Return ``text`` trimmed to ``limit`` characters, ellipsised when clipped."""
     text = text.strip()
     if len(text) <= limit:
@@ -390,7 +390,7 @@ def build_cruxset_from_analysis(
         # A blank override falls through rather than silently emptying the field,
         # but a present-and-falsy value is still coerced like any other payload value.
         raw_override = cf_map.get(claim_id)
-        override = "" if raw_override is None else _clip_counterfactual(str(raw_override))
+        override = "" if raw_override is None else clip_counterfactual(str(raw_override))
         if override:
             counterfactual_text = override
         elif entry.get("resolution_impact") is not None:
@@ -437,4 +437,5 @@ __all__ = [
     "CruxPosition",
     "CruxSet",
     "build_cruxset_from_analysis",
+    "clip_counterfactual",
 ]

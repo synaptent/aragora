@@ -341,7 +341,21 @@ def test_long_statement_counterfactual_is_clipped(monkeypatch: pytest.MonkeyPatc
     # limit rather than an exact width.
     assert len(text) <= MAX_CRUX_COUNTERFACTUAL_CHARS
     assert text.startswith("Resolve 'AAA")
-    assert text.endswith("…")
+
+
+def test_clipping_sacrifices_the_statement_not_the_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The uncertainty delta is the signal; a long statement must not push it out."""
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+    claim = _claim("c1", "A" * 5000, 0.85)
+    result = _result(_analysis(claim), counterfactuals=_finder_counterfactuals(claim))
+    cs = mod.maybe_emit_cruxset_from_finder_result(result)
+    assert cs is not None
+    text = cs.cruxes[0].counterfactual
+    assert len(text) <= MAX_CRUX_COUNTERFACTUAL_CHARS
+    assert "…" in text
+    assert text.endswith(f"Reduces total network uncertainty by {claim.resolution_impact:.3f}")
 
 
 def test_builder_clips_overrides_from_direct_callers() -> None:

@@ -25,7 +25,12 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
-from aragora.reasoning.cruxset import CruxSet, build_cruxset_from_analysis
+from aragora.reasoning.cruxset import (
+    MAX_CRUX_COUNTERFACTUAL_CHARS,
+    CruxSet,
+    build_cruxset_from_analysis,
+    clip_counterfactual,
+)
 
 if TYPE_CHECKING:
     from aragora.reasoning.belief import BeliefNetwork
@@ -134,14 +139,32 @@ def maybe_emit_cruxset(
         return None
 
 
+def _compose_counterfactual(condition: str, outcome_change: str) -> str:
+    """Join the finder's two fragments so the outcome survives the builder's clip.
+
+    ``condition`` embeds the unbounded agent-authored statement while
+    ``outcome_change`` carries the uncertainty delta. Clipping the joined string
+    would drop the delta entirely for a long statement, so the condition yields
+    first and the builder's clip stays the unconditional backstop.
+    """
+    if not condition:
+        return outcome_change
+    if not outcome_change:
+        return condition
+    separator = "; "
+    budget = MAX_CRUX_COUNTERFACTUAL_CHARS - len(outcome_change) - len(separator)
+    if budget > 0:
+        condition = clip_counterfactual(condition, budget)
+    return f"{condition}{separator}{outcome_change}"
+
+
 def _counterfactuals_by_claim_id(counterfactuals: list[Any]) -> dict[str, str] | None:
     """Map claim_id to the finder's condition/outcome text for the DIC-15 hook.
 
     Entries that are blank after stripping are dropped rather than mapped to
     ``""``, so the builder falls back to its default resolution_impact text.
-    The builder also clips each note; ``provenance["counterfactuals"]``
-    deliberately keeps the unclipped entries as the full-fidelity audit record
-    while ``Crux.counterfactual`` is the short rendered note.
+    ``provenance["counterfactuals"]`` deliberately keeps the unclipped entries as
+    the full-fidelity audit record while ``Crux.counterfactual`` is the short note.
     """
     if not counterfactuals:
         return None
@@ -152,13 +175,12 @@ def _counterfactuals_by_claim_id(counterfactuals: list[Any]) -> dict[str, str] |
         cid = str(cf.get("claim_id") or "")
         if not cid:
             continue
-        parts = [
-            text
-            for key in ("condition", "outcome_change")
-            if (text := str(cf.get(key) or "").strip())
-        ]
-        if parts:
-            by_claim[cid] = "; ".join(parts)
+        text = _compose_counterfactual(
+            str(cf.get("condition") or "").strip(),
+            str(cf.get("outcome_change") or "").strip(),
+        )
+        if text:
+            by_claim[cid] = text
     return by_claim
 
 
