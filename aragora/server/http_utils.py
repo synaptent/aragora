@@ -63,6 +63,9 @@ ALLOWED_QUERY_PARAMS = {
     "include_cruxes": 10,
     # Export
     "table": {"summary", "debates", "proposals", "votes", "critiques", "messages"},
+    # Validated against the ODR profile list by the export handler, which owns
+    # the supported-version error message.
+    "odr_version": 10,
     # Agent queries
     "agent": 100,
     "agent_a": 100,
