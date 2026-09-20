@@ -27,21 +27,24 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from aragora.gauntlet.odr_export import (  # noqa: E402
+    ODR_DEFAULT_VERSION,
+    ODR_VERSIONS,
     decision_receipt_to_odr,
     load_odr_schema,
     odr_content_digest,
+    resolve_odr_version,
     sign_odr_if_configured,
 )
 from aragora.gauntlet.odr_signing import OdrSigningError  # noqa: E402
-from aragora.swarm.quorum_evidence import collect_outcome_from_dict  # noqa: E402
 from aragora.swarm.quorum_receipt import collect_outcome_to_decision_receipt  # noqa: E402
 
 
-def build_receipt(outcome_dict: dict[str, Any]) -> dict[str, Any]:
+def build_receipt(
+    outcome_dict: dict[str, Any], *, odr_version: str = ODR_DEFAULT_VERSION
+) -> dict[str, Any]:
     """CollectOutcome dict -> portable ODR receipt dict (never fabricates)."""
-    outcome = collect_outcome_from_dict(outcome_dict)
-    receipt = collect_outcome_to_decision_receipt(outcome)
-    return sign_odr_if_configured(decision_receipt_to_odr(receipt))
+    receipt = collect_outcome_to_decision_receipt(outcome_dict)
+    return sign_odr_if_configured(decision_receipt_to_odr(receipt, odr_version=odr_version))
 
 
 def verify_receipt(odr: dict[str, Any]) -> tuple[str, bool]:
@@ -93,11 +96,20 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="append receipt_* key=value lines for GitHub Actions step outputs",
     )
+    parser.add_argument(
+        "--odr-version",
+        choices=ODR_VERSIONS,
+        help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > default (0.1)",
+    )
     args = parser.parse_args(argv)
+    try:
+        odr_version = resolve_odr_version(args.odr_version)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     outcome_dict = json.loads(args.outcome.read_text(encoding="utf-8"))
     try:
-        odr = build_receipt(outcome_dict)
+        odr = build_receipt(outcome_dict, odr_version=odr_version)
     except OdrSigningError:
         print(
             "Error: ODR signing key is configured but could not be used; "

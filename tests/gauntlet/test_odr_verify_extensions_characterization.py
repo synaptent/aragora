@@ -1,10 +1,17 @@
-"""Characterization of ``_validate_extensions`` (ODR optional-content walker).
+"""Characterization of the ODR optional-content walker.
 
 Pins the walker's observable contract against both the bundled ODR schema and
 small synthetic schemas: which values each JSON-Schema type accepts, the exact
 error strings, error accumulation order, the paths that are walked or skipped,
-``$ref`` resolution, and the exceptions raised for malformed schemas. Written
-against the original implementation; must keep passing unchanged afterwards.
+``$ref`` resolution, and the exceptions raised for malformed schemas.
+
+``_validate_extensions`` runs two independent passes: the declared-path walk
+(:func:`_validate_scoped_paths`) and the whole-document backstop
+(:func:`_apply_schema_backstop`), which types every member the schema types so the
+verdict does not depend on the optional ``jsonschema`` extra. Most cases below pin
+the declared-path walk through ``_errors``; the backstop and the composition of the
+two are pinned separately through ``_all_errors``, since a partial synthetic document
+draws a ``missing required member`` line from the backstop for every block it omits.
 """
 
 from __future__ import annotations
@@ -17,12 +24,27 @@ from typing import Any
 import pytest
 
 from aragora.gauntlet.odr_export import load_odr_schema
-from aragora.gauntlet.odr_verify import _validate_extensions
+from aragora.gauntlet.odr_verify import (
+    _validate_extensions,
+    _validate_scoped_paths,
+    verify_odr_document,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def _errors(doc: Any, schema: dict[str, Any] | None = None) -> list[str]:
+    """Findings from the declared-extension-path walk alone."""
+    errors: list[str] = []
+    result = _validate_scoped_paths(
+        errors, doc, schema if schema is not None else load_odr_schema()
+    )
+    assert result is None
+    return errors
+
+
+def _all_errors(doc: Any, schema: dict[str, Any] | None = None) -> list[str]:
+    """Findings from the whole walker: the declared-path walk then the schema backstop."""
     errors: list[str] = []
     result = _validate_extensions(errors, doc, schema if schema is not None else load_odr_schema())
     assert result is None
@@ -51,6 +73,45 @@ def _mechanism(**members: Any) -> dict[str, Any]:
     return {"attestation": {"mechanism": {"type": "signature", **members}}}
 
 
+# Each block below carries the members its schema requires, so a case pins the finding for
+# the member it overrides instead of also restating what an incomplete fragment omits.
+
+
+def _adjudication(**members: Any) -> dict[str, Any]:
+    base = {"kind": "review_adjudication.v1", "verdict": "settle", "reason": "r"}
+    return {"adjudication": {**base, **members}}
+
+
+def _observation(**members: Any) -> dict[str, Any]:
+    base = {"kind": "failure", "family": "grok", "detail": "d"}
+    return {"reasoning": {"observations": [{**base, **members}]}}
+
+
+def _verdict(**members: Any) -> dict[str, Any]:
+    base = {"issuer": "claude", "verdict": "pass", "model_family": "claude", "model_id": "m"}
+    return {"quorum": {"verdicts": [{**base, **members}]}}
+
+
+def _rule(**members: Any) -> dict[str, Any]:
+    base = {
+        "required_signals": 1,
+        "requires_western_frontier": False,
+        "western_only_counted": False,
+        "counted_families": ["claude"],
+    }
+    return {"quorum": {"rule": {**base, **members}}}
+
+
+def _finding(**members: Any) -> dict[str, Any]:
+    base = {"issuer": "claude", "severity": "P3", "blocking": False, "text": "t"}
+    return {"quorum": {"dissent": {"findings": [{**base, **members}]}}}
+
+
+def _independence(**members: Any) -> dict[str, Any]:
+    base = {"disclosed": True, "model_families": [], "distinct_model_families": 2}
+    return {"independence": {**base, **members}}
+
+
 # ---------------------------------------------------------------------------
 # Valid inputs against the bundled schema
 # ---------------------------------------------------------------------------
@@ -71,7 +132,6 @@ def test_legacy_example_document_has_no_extension_errors() -> None:
         {"subject": {"pr_number": 7.0}},
         {"reasoning": {"observations": []}},
         {"reasoning": {"observations": [{"kind": "timeout", "family": "grok", "detail": "d"}]}},
-        {"reasoning": {"observations": [{}, {"kind": "rerun"}]}},
         {"quorum": {"verdicts": []}},
         {
             "quorum": {
@@ -92,7 +152,6 @@ def test_legacy_example_document_has_no_extension_errors() -> None:
                 ]
             }
         },
-        {"quorum": {"rule": {}}},
         {
             "quorum": {
                 "rule": {
@@ -119,10 +178,8 @@ def test_legacy_example_document_has_no_extension_errors() -> None:
                 }
             }
         },
-        {"adjudication": {}},
         {
             "adjudication": {
-                "status": "present",
                 "kind": "review_adjudication.v1",
                 "verdict": "settle",
                 "reason": "r",
@@ -133,7 +190,6 @@ def test_legacy_example_document_has_no_extension_errors() -> None:
                 "settled_findings": ["b", "c"],
             }
         },
-        {"adjudication": {"status": "absent", "verdict": "block"}},
         _mechanism(policy_version=3, tier=None),
         _mechanism(policy_version=3.0, tier=2, tiered_gate=True, severity_gated=False),
         _mechanism(action="merge", action_reason="ok", record_ref="ref"),
@@ -147,16 +203,12 @@ def test_legacy_example_document_has_no_extension_errors() -> None:
         "subject-integral-float",
         "observations-empty",
         "observations-full",
-        "observations-partial",
         "verdicts-empty",
         "verdicts-full",
-        "rule-empty",
         "rule-full",
         "dissent-scalars",
         "dissent-findings-full",
-        "adjudication-empty",
         "adjudication-full",
-        "adjudication-absent-status-still-walked",
         "mechanism-null-tier",
         "mechanism-integral-floats",
         "mechanism-strings",
@@ -168,6 +220,74 @@ def test_valid_documents_produce_no_errors(doc: dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Required sub-members and the adjudication shape (spec §4.10)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("doc", "expected"),
+    [
+        (
+            {"reasoning": {"observations": [{}, {"kind": "rerun"}]}},
+            [
+                "reasoning.observations[0]: missing required member: kind",
+                "reasoning.observations[0]: missing required member: family",
+                "reasoning.observations[0]: missing required member: detail",
+                "reasoning.observations[1]: missing required member: family",
+                "reasoning.observations[1]: missing required member: detail",
+            ],
+        ),
+        (
+            {"quorum": {"rule": {}}},
+            [
+                "quorum.rule: missing required member: required_signals",
+                "quorum.rule: missing required member: requires_western_frontier",
+                "quorum.rule: missing required member: western_only_counted",
+                "quorum.rule: missing required member: counted_families",
+            ],
+        ),
+        (
+            {"adjudication": {}},
+            [
+                "adjudication: missing required member: kind",
+                "adjudication: missing required member: verdict",
+                "adjudication: missing required member: reason",
+            ],
+        ),
+        (
+            {"adjudication": {"status": "present", "kind": "review_adjudication.v1"}},
+            [
+                "adjudication: missing required member: verdict",
+                "adjudication: missing required member: reason",
+                "adjudication.status: unknown member",
+            ],
+        ),
+        (
+            {"adjudication": {"status": "absent", "verdict": "block"}},
+            [
+                "adjudication: missing required member: kind",
+                "adjudication: missing required member: reason",
+                "adjudication.status: unknown member",
+            ],
+        ),
+    ],
+    ids=[
+        "observations-partial",
+        "rule-empty",
+        "adjudication-empty",
+        "adjudication-status-present",
+        "adjudication-status-absent",
+    ],
+)
+def test_incomplete_object_shapes_name_each_missing_member(
+    doc: dict[str, Any], expected: list[str]
+) -> None:
+    # adjudication declares no ``status`` member at all, so a marker-style value there is
+    # an unknown member rather than a skip: an adjudication block is present or omitted.
+    assert _errors(doc) == expected
+
+
+# ---------------------------------------------------------------------------
 # Skipped parents: absent markers and non-object parents
 # ---------------------------------------------------------------------------
 
@@ -175,12 +295,12 @@ def test_valid_documents_produce_no_errors(doc: dict[str, Any]) -> None:
 @pytest.mark.parametrize(
     "doc",
     [
-        {"reasoning": {"status": "absent", "reason": "r", "observations": 42}},
-        {"quorum": {"status": "absent", "reason": "r", "verdicts": 42, "rule": "x"}},
-        {"quorum": {"dissent": {"status": "absent", "findings": 42, "blocking": "no"}}},
-        {"subject": {"status": "absent", "pr_number": "not-an-int"}},
-        {"attestation": {"mechanism": {"status": "absent", "tier": "x"}}},
-        {"status": "absent", "adjudication": 42},
+        {"reasoning": {"status": "absent", "reason": "r"}},
+        {"quorum": {"status": "absent", "reason": "r"}},
+        {"quorum": {"dissent": {"status": "absent", "reason": "r"}}},
+        {"subject": {"status": "absent", "reason": "r"}},
+        {"attestation": {"mechanism": {"status": "absent", "reason": "r"}}},
+        {"status": "absent", "reason": "r"},
         {"subject": 42},
         {"subject": ["repository"]},
         {"subject": None},
@@ -193,12 +313,12 @@ def test_valid_documents_produce_no_errors(doc: dict[str, Any]) -> None:
         {"quorum": 42, "attestation": 42, "reasoning": 42, "subject": 42},
     ],
     ids=[
-        "reasoning-absent",
-        "quorum-absent-skips-verdicts-and-rule",
-        "dissent-absent",
-        "subject-absent",
-        "mechanism-absent",
-        "root-absent-skips-adjudication",
+        "reasoning-strict-marker",
+        "quorum-strict-marker",
+        "dissent-strict-marker",
+        "subject-strict-marker",
+        "mechanism-strict-marker",
+        "root-strict-marker",
         "subject-int",
         "subject-list",
         "subject-none",
@@ -211,18 +331,76 @@ def test_valid_documents_produce_no_errors(doc: dict[str, Any]) -> None:
         "all-parents-non-dict",
     ],
 )
-def test_absent_or_non_object_parents_are_skipped(doc: dict[str, Any]) -> None:
+def test_strict_absent_markers_and_non_object_parents_are_skipped(doc: dict[str, Any]) -> None:
     assert _errors(doc) == []
+
+
+@pytest.mark.parametrize(
+    ("doc", "expected"),
+    [
+        (
+            {"reasoning": {"status": "absent", "reason": "r", "observations": 42}},
+            ["reasoning.observations: must have type ['array']"],
+        ),
+        (
+            {"quorum": {"status": "absent", "reason": "r", "verdicts": 42, "rule": "x"}},
+            [
+                "quorum.verdicts: must have type ['array']",
+                "quorum.rule: must have type ['object']",
+            ],
+        ),
+        (
+            {"quorum": {"dissent": {"status": "absent", "findings": 42, "blocking": "no"}}},
+            [
+                "quorum.dissent.findings: must have type ['array']",
+                "quorum.dissent.blocking: must have type ['boolean']",
+            ],
+        ),
+        (
+            {"subject": {"status": "absent", "pr_number": "not-an-int"}},
+            ["subject.pr_number: must have type ['integer']"],
+        ),
+        (
+            {"attestation": {"mechanism": {"status": "absent", "tier": "x"}}},
+            ["attestation.mechanism.tier: must have type ['integer', 'null']"],
+        ),
+        ({"status": "absent", "adjudication": 42}, ["adjudication: must have type ['object']"]),
+    ],
+    ids=[
+        "reasoning-marker-with-observations",
+        "quorum-marker-with-verdicts-and-rule",
+        "dissent-marker-with-findings",
+        "subject-marker-with-pr-number",
+        "mechanism-marker-with-tier",
+        "root-marker-with-adjudication",
+    ],
+)
+def test_absent_marker_carrying_members_is_walked_like_a_present_block(
+    doc: dict[str, Any], expected: list[str]
+) -> None:
+    # A marker with extra members satisfies neither branch of its oneOf, so the members are
+    # checked rather than waved through; only a bare ``status``/``reason`` marker skips.
+    assert _errors(doc) == expected
 
 
 def test_quorum_absent_does_not_skip_a_present_dissent_block() -> None:
     doc = {"quorum": {"status": "absent", "verdicts": 42, "dissent": {"blocking": "no"}}}
-    assert _errors(doc) == ["quorum.dissent.blocking: must have type ['boolean']"]
+    assert _errors(doc) == [
+        # The quorum marker carries members, so its own verdicts are checked as well.
+        "quorum.verdicts: must have type ['array']",
+        "quorum.dissent.blocking: must have type ['boolean']",
+    ]
 
 
-def test_non_dict_document_is_skipped_entirely() -> None:
-    assert _errors(42) == []
-    assert _errors(["adjudication"]) == []
+def test_non_dict_document_is_rejected_before_the_walker_runs() -> None:
+    # The walker reads the document's ``odr_version`` to scope membership, so a non-dict
+    # document no longer reaches it; both entry points reject one with a single finding.
+    for doc in (42, ["adjudication"]):
+        with pytest.raises(AttributeError):
+            _errors(doc)
+        result = verify_odr_document(doc)
+        assert not result.ok
+        assert result.checks[0].detail == "receipt: top-level value must be a JSON object"
 
 
 # ---------------------------------------------------------------------------
@@ -236,33 +414,34 @@ def test_non_dict_document_is_skipped_entirely() -> None:
         ({"adjudication": 42}, ["adjudication: must have type ['object']"]),
         ({"adjudication": []}, ["adjudication: must have type ['object']"]),
         ({"adjudication": None}, ["adjudication: must have type ['object']"]),
-        ({"adjudication": {"status": "pending"}}, ["adjudication.status: invalid value"]),
-        ({"adjudication": {"kind": "other"}}, ["adjudication.kind: invalid value"]),
-        ({"adjudication": {"kind": None}}, ["adjudication.kind: invalid value"]),
-        ({"adjudication": {"verdict": "approve"}}, ["adjudication.verdict: invalid value"]),
-        ({"adjudication": {"reason": 1}}, ["adjudication.reason: must have type ['string']"]),
-        ({"adjudication": {"policy": []}}, ["adjudication.policy: must have type ['object']"]),
+        # v0.2 drops ``status`` from adjudication's properties: a block is present or omitted.
+        (_adjudication(status="pending"), ["adjudication.status: unknown member"]),
+        (_adjudication(kind="other"), ["adjudication.kind: invalid value"]),
+        (_adjudication(kind=None), ["adjudication.kind: invalid value"]),
+        (_adjudication(verdict="approve"), ["adjudication.verdict: invalid value"]),
+        (_adjudication(reason=1), ["adjudication.reason: must have type ['string']"]),
+        (_adjudication(policy=[]), ["adjudication.policy: must have type ['object']"]),
         (
-            {"adjudication": {"assessments": {"a": 1}}},
+            _adjudication(assessments={"a": 1}),
             ["adjudication.assessments: must have type ['array']"],
         ),
         (
-            {"adjudication": {"assessments": [{}, "s"]}},
+            _adjudication(assessments=[{}, "s"]),
             ["adjudication.assessments[1]: must have type ['object']"],
         ),
         (
-            {"adjudication": {"blocking_findings": [1]}},
+            _adjudication(blocking_findings=[1]),
             ["adjudication.blocking_findings[0]: must have type ['string']"],
         ),
         (
-            {"adjudication": {"escalated_findings": "x"}},
+            _adjudication(escalated_findings="x"),
             ["adjudication.escalated_findings: must have type ['array']"],
         ),
         (
-            {"adjudication": {"settled_findings": [None]}},
+            _adjudication(settled_findings=[None]),
             ["adjudication.settled_findings[0]: must have type ['string']"],
         ),
-        ({"adjudication": {"extra": True}}, ["adjudication.extra: unknown member"]),
+        (_adjudication(extra=True), ["adjudication.extra: unknown member"]),
         ({"subject": {"repository": 5}}, ["subject.repository: must have type ['string']"]),
         ({"subject": {"pr_number": 1.5}}, ["subject.pr_number: must have type ['integer']"]),
         ({"subject": {"pr_number": True}}, ["subject.pr_number: must have type ['integer']"]),
@@ -278,70 +457,43 @@ def test_non_dict_document_is_skipped_entirely() -> None:
             {"reasoning": {"observations": ["timeout"]}},
             ["reasoning.observations[0]: must have type ['object']"],
         ),
+        (_observation(kind="crash"), ["reasoning.observations[0].kind: invalid value"]),
+        (_observation(family=1), ["reasoning.observations[0].family: must have type ['string']"]),
         (
-            {"reasoning": {"observations": [{"kind": "crash"}]}},
-            ["reasoning.observations[0].kind: invalid value"],
-        ),
-        (
-            {"reasoning": {"observations": [{"family": 1}]}},
-            ["reasoning.observations[0].family: must have type ['string']"],
-        ),
-        (
-            {"reasoning": {"observations": [{"detail": None}]}},
+            _observation(detail=None),
             ["reasoning.observations[0].detail: must have type ['string']"],
         ),
-        (
-            {"reasoning": {"observations": [{"kind": "timeout", "extra": 1}]}},
-            ["reasoning.observations[0].extra: unknown member"],
-        ),
+        (_observation(extra=1), ["reasoning.observations[0].extra: unknown member"]),
         ({"quorum": {"verdicts": {}}}, ["quorum.verdicts: must have type ['array']"]),
         ({"quorum": {"verdicts": [1]}}, ["quorum.verdicts[0]: must have type ['object']"]),
-        (
-            {"quorum": {"verdicts": [{"issuer": 1}]}},
-            ["quorum.verdicts[0].issuer: must have type ['string']"],
-        ),
-        (
-            {"quorum": {"verdicts": [{"grounded": "yes"}]}},
-            ["quorum.verdicts[0].grounded: must have type ['boolean']"],
-        ),
-        (
-            {"quorum": {"verdicts": [{"counted": 1}]}},
-            ["quorum.verdicts[0].counted: must have type ['boolean']"],
-        ),
-        (
-            {"quorum": {"verdicts": [{"severity_max": "P5"}]}},
-            ["quorum.verdicts[0].severity_max: invalid value"],
-        ),
-        (
-            {"quorum": {"verdicts": [{"severity_max": 1}]}},
-            ["quorum.verdicts[0].severity_max: invalid value"],
-        ),
-        (
-            {"quorum": {"verdicts": [{"unexpected": True}]}},
-            ["quorum.verdicts[0].unexpected: unknown member"],
-        ),
+        (_verdict(issuer=1), ["quorum.verdicts[0].issuer: must have type ['string']"]),
+        (_verdict(grounded="yes"), ["quorum.verdicts[0].grounded: must have type ['boolean']"]),
+        (_verdict(counted=1), ["quorum.verdicts[0].counted: must have type ['boolean']"]),
+        (_verdict(severity_max="P5"), ["quorum.verdicts[0].severity_max: invalid value"]),
+        (_verdict(severity_max=1), ["quorum.verdicts[0].severity_max: invalid value"]),
+        (_verdict(unexpected=True), ["quorum.verdicts[0].unexpected: unknown member"]),
         ({"quorum": {"rule": []}}, ["quorum.rule: must have type ['object']"]),
         (
-            {"quorum": {"rule": {"required_signals": "2"}}},
+            _rule(required_signals="2"),
             ["quorum.rule.required_signals: must have type ['integer']"],
         ),
         (
-            {"quorum": {"rule": {"required_signals": 2.5}}},
+            _rule(required_signals=2.5),
             ["quorum.rule.required_signals: must have type ['integer']"],
         ),
         (
-            {"quorum": {"rule": {"requires_western_frontier": 1}}},
+            _rule(requires_western_frontier=1),
             ["quorum.rule.requires_western_frontier: must have type ['boolean']"],
         ),
         (
-            {"quorum": {"rule": {"counted_families": "claude"}}},
+            _rule(counted_families="claude"),
             ["quorum.rule.counted_families: must have type ['array']"],
         ),
         (
-            {"quorum": {"rule": {"counted_families": ["claude", 2]}}},
+            _rule(counted_families=["claude", 2]),
             ["quorum.rule.counted_families[1]: must have type ['string']"],
         ),
-        ({"quorum": {"rule": {"extra": 1}}}, ["quorum.rule.extra: unknown member"]),
+        (_rule(extra=1), ["quorum.rule.extra: unknown member"]),
         (
             {"quorum": {"dissent": {"findings": {}}}},
             ["quorum.dissent.findings: must have type ['array']"],
@@ -350,26 +502,17 @@ def test_non_dict_document_is_skipped_entirely() -> None:
             {"quorum": {"dissent": {"findings": [["x"]]}}},
             ["quorum.dissent.findings[0]: must have type ['object']"],
         ),
+        (_finding(severity="P7"), ["quorum.dissent.findings[0].severity: invalid value"]),
         (
-            {"quorum": {"dissent": {"findings": [{"severity": "P7"}]}}},
-            ["quorum.dissent.findings[0].severity: invalid value"],
-        ),
-        (
-            {"quorum": {"dissent": {"findings": [{"blocking": "true"}]}}},
+            _finding(blocking="true"),
             ["quorum.dissent.findings[0].blocking: must have type ['boolean']"],
         ),
         (
-            {"quorum": {"dissent": {"findings": [{"location": 1}]}}},
+            _finding(location=1),
             ["quorum.dissent.findings[0].location: must have type ['string']"],
         ),
-        (
-            {"quorum": {"dissent": {"findings": [{"text": 1}]}}},
-            ["quorum.dissent.findings[0].text: must have type ['string']"],
-        ),
-        (
-            {"quorum": {"dissent": {"findings": [{"extra": 1}]}}},
-            ["quorum.dissent.findings[0].extra: unknown member"],
-        ),
+        (_finding(text=1), ["quorum.dissent.findings[0].text: must have type ['string']"]),
+        (_finding(extra=1), ["quorum.dissent.findings[0].extra: unknown member"]),
         (
             {"quorum": {"dissent": {"severity_max": "P9"}}},
             ["quorum.dissent.severity_max: invalid value"],
@@ -443,11 +586,11 @@ def test_errors_accumulate_in_walk_order_across_paths() -> None:
         "quorum": {
             "dissent": {"blocking": "no", "findings": "x"},
             "rule": [],
-            "verdicts": [{"counted": "x"}],
+            "verdicts": [_verdict(counted="x")["quorum"]["verdicts"][0]],
         },
         "reasoning": {"observations": "x"},
         "subject": {"base_sha": 1, "head_sha": 2, "pr_number": "3", "repository": 4},
-        "adjudication": {"kind": "x"},
+        "adjudication": _adjudication(kind="x")["adjudication"],
     }
     assert _errors(doc) == [
         "adjudication.kind: invalid value",
@@ -476,12 +619,15 @@ def test_object_members_are_reported_in_document_insertion_order() -> None:
 
 
 def test_array_items_are_reported_by_index_and_depth_first() -> None:
+    def verdict(**members: Any) -> dict[str, Any]:
+        return _verdict(**members)["quorum"]["verdicts"][0]
+
     doc = {
         "quorum": {
             "verdicts": [
-                {"issuer": 1, "counted": "x"},
+                verdict(issuer=1, counted="x"),
                 "not-an-object",
-                {"severity_max": "P9", "extra": 1},
+                verdict(severity_max="P9", extra=1),
             ]
         }
     }
@@ -505,7 +651,13 @@ def test_existing_errors_are_preserved_and_the_same_list_is_appended() -> None:
     errors = ["pre-existing"]
     result = _validate_extensions(errors, {"subject": {"pr_number": "x"}}, load_odr_schema())
     assert result is None
-    assert errors == ["pre-existing", "subject.pr_number: must have type ['integer']"]
+    assert errors == [
+        "pre-existing",
+        "subject.pr_number: must have type ['integer']",
+        # The backstop runs after the declared paths and reports what this fragment omits.
+        "subject: missing required member: identifier",
+        "subject: missing required member: digest",
+    ]
 
 
 def test_document_and_schema_are_not_mutated() -> None:
@@ -772,10 +924,18 @@ def test_one_of_uses_the_first_branch_for_walked_parents() -> None:
     ]
 
 
-def test_one_of_is_not_consulted_below_walked_parents() -> None:
+def test_one_of_below_a_walked_parent_uses_the_present_branch_unless_the_value_is_a_marker():
+    # Every oneOf in the profile is <present block> | absent marker, so branch 0 is used
+    # for ordinary values and branch 1 only for a bare ``status``/``reason`` marker.
     leaf = {"oneOf": [{"type": "integer"}, {"type": "string"}]}
-    for value in (1, "s", None, []):
-        assert _leaf_errors(value, leaf) == []
+    assert _leaf_errors(1, leaf) == []
+    for value in ("s", None, []):
+        assert _leaf_errors(value, leaf) == ["subject.repository: must have type ['integer']"], (
+            repr(value)
+        )
+    assert _leaf_errors({"status": "absent", "reason": "r"}, leaf) == [
+        "subject.repository: must have type ['string']"
+    ]
 
 
 def test_root_adjudication_path_has_no_leading_dot() -> None:
@@ -796,3 +956,63 @@ def test_only_declared_extension_keys_are_walked() -> None:
     schema["properties"]["quorum"]["properties"]["method"] = {"type": "integer"}
     doc = {"subject": {"claim_id": "s", "repository": "ok"}, "quorum": {"method": "s"}}
     assert _errors(doc, schema) == []
+
+
+# ---------------------------------------------------------------------------
+# The schema backstop: every member the schema types, reported once
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("doc", "expected"),
+    [
+        ({"source": "x"}, ["source: must have type ['object']"]),
+        (
+            {"source": {"system": 5, "schema": "DecisionReceipt", "receipt_id": "r"}},
+            ["source.system: must have type ['string']"],
+        ),
+        (
+            {"quorum": _independence(x=1)},
+            ["quorum.independence.x: unknown member"],
+        ),
+        (
+            {"quorum": _independence(distinct_model_families="x")},
+            ["quorum.independence.distinct_model_families: must have type ['integer']"],
+        ),
+        (
+            {"quorum": _independence(distinct_model_families=-1)},
+            ["quorum.independence.distinct_model_families: outside the schema's permitted range"],
+        ),
+        (
+            {"cruxes": {"status": "present", "items": []}},
+            ["cruxes.items: shorter than the schema's minimum of 1"],
+        ),
+    ],
+    ids=[
+        "source-non-object",
+        "source-members",
+        "independence-unknown",
+        "independence-type",
+        "independence-below-minimum",
+        "cruxes-below-min-items",
+    ],
+)
+def test_backstop_types_members_no_declared_extension_path_reaches(
+    doc: dict[str, Any], expected: list[str]
+) -> None:
+    # Only the backstop reaches these members, so the verdict no longer depends on whether
+    # the optional ``jsonschema`` extra is installed. The fragments name no complete block,
+    # so the block-level ``missing required member`` lines are filtered out here and pinned
+    # by test_incomplete_object_shapes_name_each_missing_member instead.
+    assert _errors(doc) == []
+    assert [e for e in _all_errors(doc) if "missing required member" not in e] == expected
+
+
+def test_backstop_does_not_restate_a_finding_the_declared_walk_already_named() -> None:
+    doc = {"subject": {"repository": 5}}
+    assert _errors(doc) == ["subject.repository: must have type ['string']"]
+    assert _all_errors(doc) == [
+        "subject.repository: must have type ['string']",
+        "subject: missing required member: identifier",
+        "subject: missing required member: digest",
+    ]

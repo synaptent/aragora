@@ -112,7 +112,7 @@ class ReprioritizeRequest(BaseModel):
 def _get_inbox_handler():
     """Get or create an InboxCommandHandler instance."""
     try:
-        from aragora.server.handlers.inbox_command import InboxCommandHandler
+        from aragora.server.handlers.inbox.inbox_command import InboxCommandHandler
 
         return InboxCommandHandler()
     except (ImportError, TypeError, RuntimeError) as e:

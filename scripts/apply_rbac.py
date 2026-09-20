@@ -50,7 +50,7 @@ EXCLUDED_PATHS = {
     "social/tts_helper.py",
     # Store implementations (internal, not endpoints)
     "auth/store.py",
-    "explainability_store.py",
+    "decisions/explainability_store.py",
     "features/marketplace/store.py",
     "openclaw/store.py",
 }
