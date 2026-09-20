@@ -181,8 +181,8 @@ from .utilities import (
 
 # Type checking imports - these are not executed at runtime
 if TYPE_CHECKING:
-    from .a2a import A2AHandler
-    from .action_canvas import ActionCanvasHandler
+    from .gateway.a2a import A2AHandler
+    from .canvas.action_canvas import ActionCanvasHandler
     from .admin import (
         AdminHandler,
         BillingHandler,
@@ -210,11 +210,11 @@ if TYPE_CHECKING:
     from .analytics_dashboard import AnalyticsDashboardHandler
     from .analytics._analytics_metrics_impl import AnalyticsMetricsHandler
     from .analytics.outcome_analytics import OutcomeAnalyticsHandler
-    from .ap_automation import APAutomationHandler
-    from .ar_automation import ARAutomationHandler
+    from .finance.ap_automation import APAutomationHandler
+    from .finance.ar_automation import ARAutomationHandler
     from .compliance.audit_trail import AuditTrailHandler
-    from .audience_suggestions import AudienceSuggestionsHandler
-    from .auditing import AuditingHandler
+    from .debates.audience_suggestions import AudienceSuggestionsHandler
+    from .debates.auditing import AuditingHandler
     from .security.security_debate import SecurityDebateHandler
     from .auth import AuthHandler
     from .autonomous import (
@@ -228,9 +228,9 @@ if TYPE_CHECKING:
     )
     from .approvals_inbox import UnifiedApprovalsHandler
     from .admin.backup_handler import BackupHandler
-    from .belief import BeliefHandler
-    from .benchmarking import BenchmarkingHandler
-    from .bindings import BindingsHandler
+    from .debates.belief import BeliefHandler
+    from .verification.benchmarking import BenchmarkingHandler
+    from .integrations.bindings import BindingsHandler
     from .analytics_dashboard.differentiation import DifferentiationHandler
     from .bots import (
         DiscordHandler,
@@ -240,25 +240,25 @@ if TYPE_CHECKING:
         WhatsAppHandler,
         ZoomHandler,
     )
-    from .breakpoints import BreakpointsHandler
-    from .debate_intervention import DebateInterventionHandler
+    from .debates.breakpoints import BreakpointsHandler
+    from .debates.debate_intervention import DebateInterventionHandler
     from .budgets import BudgetHandler
     from .canvas import CanvasHandler
-    from .checkpoints import CheckpointHandler
+    from .memory.checkpoints import CheckpointHandler
     from .code_review import CodeReviewHandler
     from .codebase import IntelligenceHandler
     from .compliance.compliance_reports import ComplianceReportHandler
-    from .composite import CompositeHandler
+    from .debates.composite import CompositeHandler
     from .connectors.management import ConnectorManagementHandler
-    from .context_budget import ContextBudgetHandler
-    from .computer_use_handler import ComputerUseHandler
-    from .consensus import ConsensusHandler
+    from .debates.context_budget import ContextBudgetHandler
+    from .integrations.computer_use_handler import ComputerUseHandler
+    from .memory.consensus import ConsensusHandler
     from .control_plane import ControlPlaneHandler
     from .billing.cost_dashboard import CostDashboardHandler
     from .costs import CostHandler
-    from .critique import CritiqueHandler
-    from .debate_stats import DebateStatsHandler
-    from .cross_pollination import (
+    from .debates.critique import CritiqueHandler
+    from .debates.debate_stats import DebateStatsHandler
+    from .evolution.cross_pollination import (
         CrossPollinationBridgeHandler,
         CrossPollinationKMCultureHandler,
         CrossPollinationKMHandler,
@@ -273,25 +273,25 @@ if TYPE_CHECKING:
     from .debates.decision_package import DecisionPackageHandler
     from .debates.public_viewer import PublicDebateViewerHandler
     from .debates.share import DebateShareHandler
-    from .decision import DecisionHandler
+    from .decisions.decision import DecisionHandler
     from .decisions import DecisionExplainHandler
-    from .deliberations import DeliberationsHandler
+    from .debates.deliberations import DeliberationsHandler
     from .dependency_analysis import DependencyAnalysisHandler
     from .devices import DeviceHandler
     from .admin.docs import DocsHandler
     from .admin.dr_handler import DRHandler
     from .email import EmailHandler
-    from .email_debate import EmailDebateHandler
-    from .email_services import EmailServicesHandler
-    from .email_triage import EmailTriageHandler
+    from .email.email_debate import EmailDebateHandler
+    from .email.email_services import EmailServicesHandler
+    from .email.email_triage import EmailTriageHandler
     from .observability.endpoint_analytics import EndpointAnalyticsHandler
-    from .erc8004 import ERC8004Handler
-    from .evaluation import EvaluationHandler
+    from .integrations.erc8004 import ERC8004Handler
+    from .verification.evaluation import EvaluationHandler
     from .evolution import EvolutionABTestingHandler, EvolutionHandler
-    from .expenses import ExpenseHandler
-    from .explainability import ExplainabilityHandler
-    from .external_agents import ExternalAgentsHandler
-    from .external_integrations import ExternalIntegrationsHandler
+    from .finance.expenses import ExpenseHandler
+    from .decisions.explainability import ExplainabilityHandler
+    from .agents.external_agents import ExternalAgentsHandler
+    from .integrations.external_integrations import ExternalIntegrationsHandler
     from .admin.feature_flags_read import FeatureFlagsHandler
     from .features import (
         AdvertisingHandler,
@@ -337,11 +337,11 @@ if TYPE_CHECKING:
     from .feedback import FeedbackRoutesHandler
     from .public.gallery import GalleryHandler
     from .gastown_dashboard import GasTownDashboardHandler
-    from .gateway_agents_handler import GatewayAgentsHandler
-    from .gateway_config_handler import GatewayConfigHandler
-    from .gateway_credentials_handler import GatewayCredentialsHandler
-    from .gateway_handler import GatewayHandler
-    from .gateway_health_handler import GatewayHealthHandler
+    from .gateway.gateway_agents_handler import GatewayAgentsHandler
+    from .gateway.gateway_config_handler import GatewayConfigHandler
+    from .gateway.gateway_credentials_handler import GatewayCredentialsHandler
+    from .gateway.gateway_handler import GatewayHandler
+    from .gateway.gateway_health_handler import GatewayHealthHandler
     from .gauntlet import GauntletHandler
     from .compliance.gdpr_deletion import GDPRDeletionHandler
     from .gauntlet_v1 import (
@@ -354,29 +354,29 @@ if TYPE_CHECKING:
         GauntletTemplatesListHandler,
         GauntletValidateReceiptHandler,
     )
-    from .genesis import GenesisHandler
-    from .harnesses import HarnessesHandler
+    from .evolution.genesis import GenesisHandler
+    from .agents.harnesses import HarnessesHandler
     from .github.audit_bridge import AuditGitHubBridgeHandler
     from .github.pr_review import PRReviewHandler
-    from .goal_canvas import GoalCanvasHandler
-    from .hybrid_debate_handler import HybridDebateHandler
-    from .idea_canvas import IdeaCanvasHandler
+    from .canvas.goal_canvas import GoalCanvasHandler
+    from .debates.hybrid_debate_handler import HybridDebateHandler
+    from .canvas.idea_canvas import IdeaCanvasHandler
     from .integrations.automation import AutomationHandler
     from .integrations.health import IntegrationHealthHandler
-    from .integration_management import (
+    from .integrations.integration_management import (
         IntegrationsHandler as IntegrationManagementHandler,
     )
-    from .introspection import IntrospectionHandler
-    from .invoices import InvoiceHandler
+    from .agents.introspection import IntrospectionHandler
+    from .finance.invoices import InvoiceHandler
     from .knowledge.adapters import KMAdapterStatusHandler
     from .knowledge.checkpoints import KMCheckpointHandler
     from .knowledge.sharing_notifications import SharingNotificationsHandler
     from .knowledge_base import KnowledgeHandler, KnowledgeMoundHandler
     from .knowledge_chat import KnowledgeChatHandler
-    from .laboratory import LaboratoryHandler
-    from .marketplace_browse import MarketplaceBrowseHandler
-    from .marketplace_pilot import MarketplacePilotHandler
-    from .mcp_tools_handler import MCPToolsHandler
+    from .agents.laboratory import LaboratoryHandler
+    from .catalog.marketplace_browse import MarketplaceBrowseHandler
+    from .catalog.marketplace_pilot import MarketplacePilotHandler
+    from .integrations.mcp_tools_handler import MCPToolsHandler
     from .memory import (
         CoordinatorHandler,
         InsightsHandler,
@@ -390,7 +390,7 @@ if TYPE_CHECKING:
     from .ml import MLHandler
     from .moderation import ModerationHandler
     from .analytics.moderation_analytics import ModerationAnalyticsHandler
-    from .moments import MomentsHandler
+    from .debates.moments import MomentsHandler
     from .nomic import NomicHandler
     from .notifications.history import NotificationHistoryHandler
     from .notifications.preferences import NotificationPreferencesHandler
@@ -408,39 +408,39 @@ if TYPE_CHECKING:
         handle_quick_start,
         handle_update_step,
     )
-    from .openclaw_gateway import OpenClawGatewayHandler
+    from .openclaw.openclaw_gateway import OpenClawGatewayHandler
     from .readiness_check import ReadinessCheckHandler
     from .orchestration import OrchestrationHandler
-    from .orchestration_canvas import OrchestrationCanvasHandler
+    from .canvas.orchestration_canvas import OrchestrationCanvasHandler
     from .organizations import OrganizationsHandler
-    from .partner import PartnerHandler
+    from .integrations.partner import PartnerHandler
     from .payments.handler import PaymentRoutesHandler
-    from .persona import PersonaHandler
-    from .pipeline_graph import PipelineGraphHandler
+    from .agents.persona import PersonaHandler
+    from .pipeline.pipeline_graph import PipelineGraphHandler
     from .pipeline.plans import PlanManagementHandler
     from .pipeline.provenance_explorer import ProvenanceExplorerHandler
     from .pipeline.transitions import PipelineTransitionsHandler
     from .pipeline.universal_graph import UniversalGraphHandler
-    from .plans import PlansHandler
-    from .playbooks import PlaybookHandler
+    from .decisions.plans import PlansHandler
+    from .catalog.playbooks import PlaybookHandler
     from .playground import PlaygroundHandler
     from .policy import PolicyHandler
     from .compliance.privacy import PrivacyHandler
     from .public import StatusPageHandler
     from .queue import QueueHandler
-    from .receipt_export import ReceiptExportHandler
-    from .receipts import ReceiptsHandler
-    from .replays import ReplaysHandler
+    from .decisions.receipt_export import ReceiptExportHandler
+    from .decisions.receipts import ReceiptsHandler
+    from .evolution.replays import ReplaysHandler
     from .repository import RepositoryHandler
     from .review_queue import ReviewQueueHandler
     from .reviews import ReviewsHandler
     from .rlm import RLMContextHandler
-    from .routing import RoutingHandler
-    from .sandbox import SandboxHandler
+    from .agents.routing import RoutingHandler
+    from .tasks.sandbox import SandboxHandler
     from .auth.scim_handler import SCIMHandler
-    from .selection import SelectionHandler
-    from .skill_marketplace import SkillMarketplaceHandler
-    from .skills import SkillsHandler
+    from .agents.selection import SelectionHandler
+    from .catalog.skill_marketplace import SkillMarketplaceHandler
+    from .catalog.skills import SkillsHandler
     from .observability.slo import SLOHandler
     from .sme.budget_controls import BudgetControlsHandler
     from .sme.receipt_delivery import ReceiptDeliveryHandler
@@ -466,19 +466,19 @@ if TYPE_CHECKING:
     from .streaming.handler import StreamingConnectorHandler
     from .tasks.execution import TaskExecutionHandler
     from .tasks.queue import TaskQueueHandler
-    from .template_discovery import TemplateDiscoveryHandler
-    from .template_marketplace import TemplateMarketplaceHandler
+    from .catalog.template_discovery import TemplateDiscoveryHandler
+    from .catalog.template_marketplace import TemplateMarketplaceHandler
     from .security.threat_intel import ThreatIntelHandler
-    from .tournaments import TournamentHandler
-    from .training import TrainingHandler
+    from .debates.tournaments import TournamentHandler
+    from .evolution.training import TrainingHandler
     from .transcription import TranscriptionHandler
-    from .uncertainty import UncertaintyHandler
+    from .debates.uncertainty import UncertaintyHandler
     from .usage_metering import UsageMeteringHandler
     from .verification import FormalVerificationHandler, VerificationHandler
-    from .verticals import VerticalsHandler
-    from .visualization import VisualizationHandler
+    from .agents.verticals import VerticalsHandler
+    from .debates.visualization import VisualizationHandler
     from .webhook_management import WebhookHandler
-    from .workflow_templates import (
+    from .catalog.workflow_templates import (
         SMEWorkflowsHandler,
         TemplateRecommendationsHandler,
         WorkflowCategoriesHandler,

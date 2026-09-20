@@ -527,7 +527,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "aragora-verify"
-version = "0.1.2"
+version = "0.2.0"
 source = { editable = "aragora-verify" }
 dependencies = [
     { name = "cryptography" },

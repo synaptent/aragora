@@ -40,6 +40,7 @@ import binascii
 import hashlib
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from .odr_export import (
@@ -47,6 +48,7 @@ from .odr_export import (
     load_odr_schema,
     odr_content_digest,
 )
+from .odr_jcs import odr_signature_message
 
 __all__ = [
     "Check",
@@ -123,14 +125,20 @@ class VerifyResult:
 # schema is enforced here member-for-member. Keep the two in lockstep — a
 # schema change without a matching change here reopens the #8765 bypass class.
 #
-# One deliberate, test-pinned deviation: the schema types
-# ``quorum.independence.distinct_model_families`` as a non-negative integer,
-# but a malformed value there degrades to a *weakening warning* (see
-# ``_weakening_warnings``) rather than a schema FAIL, per the prior #8389
-# review round (head e0e7df74: "weakening signals warn-only").
+# ``_validate_extensions`` closes with a backstop that walks the loaded schema over
+# the whole document, so a member these checks forget to type is still typed: a
+# verdict must never depend on whether the optional ``jsonschema`` extra is installed.
 # ---------------------------------------------------------------------------
 
 _ALLOWED_TOP_LEVEL = frozenset(_REQUIRED_MEMBERS) | {"source", "adjudication"}
+
+_SIGNATURE_ROLES = ("emitter", "reviewer", "attestor", "notary")
+_SIGNATURE_MEMBERS = frozenset(
+    {"alg", "key_id", "signature", "issuer", "role", "signed_at", "expires_at"}
+)
+#: Members a v0.1 signature cannot commit; their presence on a v0.1 document
+#: is reported as unauthenticated (``signed_at`` was always a legal v0.1 member).
+_UNAUTHENTICATED_V01_MEMBERS = ("issuer", "role", "expires_at")
 
 _QUORUM_REQUIRED = (
     "method",
@@ -344,9 +352,6 @@ def _validate_independence(errors: list[str], value: Any) -> None:
             errors.append(f"quorum.independence.{required}: required")
     if "disclosed" in value and not isinstance(value["disclosed"], bool):
         errors.append("quorum.independence.disclosed: must be a boolean")
-    # Deliberate schema deviation (see section comment): a non-integer
-    # ``distinct_model_families`` degrades to a weakening warning, never a
-    # schema FAIL — the member need only be present here.
     if "model_families" in value:
         _string_array(errors, "quorum.independence.model_families", value["model_families"])
     _optional_string(errors, "quorum.independence", value, "note")
@@ -506,7 +511,7 @@ def _validate_routing(errors: list[str], value: Any) -> None:
         return
     _unknown_members(errors, "routing", value, frozenset({"status"}))
     if value.get("status") != "reserved":
-        errors.append("routing.status: must be 'reserved' in v0.1")
+        errors.append("routing.status: must be 'reserved'")
 
 
 def _validate_signatures(errors: list[str], value: Any) -> None:
@@ -517,20 +522,20 @@ def _validate_signatures(errors: list[str], value: Any) -> None:
         if not isinstance(sig, dict):
             errors.append(f"signatures[{i}]: must be an object")
             continue
-        _unknown_members(
-            errors,
-            f"signatures[{i}]",
-            sig,
-            frozenset({"alg", "key_id", "signature", "signed_at"}),
-        )
+        _unknown_members(errors, f"signatures[{i}]", sig, _SIGNATURE_MEMBERS)
         for field_name in ("alg", "key_id", "signature"):
             if not isinstance(sig.get(field_name), str) or not sig.get(field_name):
                 errors.append(f"signatures[{i}].{field_name}: required non-empty string")
         if isinstance(sig.get("alg"), str) and sig.get("alg") != "Ed25519":
-            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined in v0.1")
-        # signed_at is optional but strictly a string when present: a non-string
-        # value would silently corrupt the signing-time audit trail.
+            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined")
+        # Metadata is optional on both versions (one schema for both) but strictly
+        # typed when present; only a v0.2 signature commits it (spec §6).
+        if "issuer" in sig and (not isinstance(sig["issuer"], str) or not sig["issuer"]):
+            errors.append(f"signatures[{i}].issuer: must be a non-empty string")
+        if "role" in sig and sig["role"] not in _SIGNATURE_ROLES:
+            errors.append(f"signatures[{i}].role: must be one of {', '.join(_SIGNATURE_ROLES)}")
         _optional_string(errors, f"signatures[{i}]", sig, "signed_at")
+        _optional_string(errors, f"signatures[{i}]", sig, "expires_at")
 
 
 _EXTENSION_TYPES: dict[str, type | tuple[type, ...]] = {
@@ -543,12 +548,19 @@ _EXTENSION_TYPES: dict[str, type | tuple[type, ...]] = {
     "null": type(None),
 }
 
-_EXTENSION_PATHS: dict[str, tuple[str, ...]] = {
+# Members the v0.1 profile does not define: rejected outright on a "0.1" document.
+_VERSION_SCOPED_PATHS: dict[str, tuple[str, ...]] = {
     "": ("adjudication",),
     "subject": ("repository", "pr_number", "head_sha", "base_sha"),
     "reasoning": ("observations",),
     "quorum": ("verdicts", "rule"),
     "quorum.dissent": ("findings", "severity_max", "blocking"),
+}
+
+# attestation.mechanism is additionalProperties: true, so its typed extras stay legal
+# on every version and are only shape-checked.
+_EXTENSION_PATHS: dict[str, tuple[str, ...]] = {
+    **_VERSION_SCOPED_PATHS,
     "attestation.mechanism": (
         "policy_version",
         "tier",
@@ -569,48 +581,168 @@ def _extension_type_matches(value: Any, type_name: str) -> bool:
     return not (type_name == "integer" and isinstance(value, float) and not value.is_integer())
 
 
-def _validate_extension_member(
-    errors: list[str], value: Any, spec: dict[str, Any], path: str, schema: dict[str, Any]
-) -> None:
-    if "$ref" in spec:
-        spec = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
+def _deref(spec: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
+    if "$ref" not in spec:
+        return spec
+    target: dict[str, Any] = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
+    return target
+
+
+def _resolve_spec(spec: dict[str, Any], value: Any, schema: dict[str, Any]) -> dict[str, Any]:
+    spec = _deref(spec, schema)
+    if "oneOf" not in spec:
+        return spec
+    # Every oneOf in the profile is <present block> | absent marker. A value shaped like a
+    # marker is checked AGAINST the marker branch rather than waved through, so a marker
+    # missing its reason is still rejected.
+    marker = isinstance(value, dict) and value.get("status") == "absent"
+    branch = 1 if marker and value.keys() <= {"status", "reason"} else 0
+    return _deref(spec["oneOf"][branch], schema)
+
+
+def _check_extension_type(errors: list[str], value: Any, spec: dict[str, Any], path: str) -> bool:
+    """Record a type mismatch; ``False`` means the type rules out every later check."""
     expected = spec.get("type", [])
     expected = [expected] if isinstance(expected, str) else expected
     if expected and not any(_extension_type_matches(value, t) for t in expected):
         errors.append(f"{path}: must have type {expected}")
-        return
+        return False
+    return True
+
+
+def _check_extension_value(errors: list[str], value: Any, spec: dict[str, Any], path: str) -> None:
+    """Apply the schema's enum/const, length-floor and numeric-range constraints."""
     if ("enum" in spec and value not in spec["enum"]) or (
         "const" in spec and value != spec["const"]
     ):
         errors.append(f"{path}: invalid value")
+    floor = spec.get("minLength", spec.get("minItems", 0))
+    if isinstance(value, (str, list)) and len(value) < floor:
+        errors.append(f"{path}: shorter than the schema's minimum of {floor}")
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        if value < spec.get("minimum", value) or value > spec.get("maximum", value):
+            errors.append(f"{path}: outside the schema's permitted range")
+
+
+def _check_extension_members(
+    errors: list[str],
+    value: dict[str, Any],
+    spec: dict[str, Any],
+    path: str,
+    schema: dict[str, Any],
+) -> None:
+    """Check a mapping's required members and walk the properties the schema types."""
+    for name in spec.get("required", ()):
+        if name not in value:
+            errors.append(f"{path}: missing required member: {name}")
+    if "properties" not in spec:
+        return
+    for key, item in value.items():
+        if key in spec["properties"]:
+            _validate_extension_member(
+                errors, item, spec["properties"][key], f"{path}.{key}", schema
+            )
+        elif spec.get("additionalProperties") is False:
+            errors.append(f"{path}.{key}: unknown member")
+
+
+def _validate_extension_member(
+    errors: list[str], value: Any, spec: dict[str, Any], path: str, schema: dict[str, Any]
+) -> None:
+    """Walk one schema-typed member, appending every conformance finding to ``errors``."""
+    spec = _resolve_spec(spec, value, schema)
+    if not _check_extension_type(errors, value, spec, path):
+        return
+    _check_extension_value(errors, value, spec, path)
     if isinstance(value, list) and "items" in spec:
         for index, item in enumerate(value):
             _validate_extension_member(errors, item, spec["items"], f"{path}[{index}]", schema)
-    if isinstance(value, dict) and "properties" in spec:
-        for key, item in value.items():
-            if key in spec["properties"]:
-                _validate_extension_member(
-                    errors, item, spec["properties"][key], f"{path}.{key}", schema
-                )
-            elif spec.get("additionalProperties") is False:
-                errors.append(f"{path}.{key}: unknown member")
+    if isinstance(value, dict):
+        _check_extension_members(errors, value, spec, path, schema)
+
+
+def _resolve_extension_block(
+    doc: dict[str, Any], schema: dict[str, Any], path: str
+) -> tuple[Any, dict[str, Any]]:
+    """Walk a dotted extension path into the document and the schema branch that types it."""
+    value: Any = doc
+    spec = schema
+    for part in path.split(".") if path else []:
+        value = value.get(part, {}) if isinstance(value, dict) else {}
+        spec = spec["properties"][part]
+        # oneOf[0] is the present-block branch; the absent-marker $ref is oneOf[1].
+        spec = spec.get("oneOf", [spec])[0]
+    return value, spec
+
+
+def _validate_extension_block(
+    errors: list[str],
+    value: dict[str, Any],
+    spec: dict[str, Any],
+    path: str,
+    keys: tuple[str, ...],
+    schema: dict[str, Any],
+    v01: bool,
+) -> None:
+    """Check the declared members of one resolved extension block."""
+    for key in keys:
+        if key not in value:
+            continue
+        member_path = f"{path}.{key}".lstrip(".")
+        if v01 and path in _VERSION_SCOPED_PATHS:
+            errors.append(f"{member_path}: not in profile 0.1")
+        else:
+            _validate_extension_member(
+                errors, value[key], spec["properties"][key], member_path, schema
+            )
+
+
+def _validate_scoped_paths(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
+    """Check every declared extension path, version-scoping the v0.2-only members."""
+    v01 = doc.get("odr_version") == "0.1"
+    for path, keys in _EXTENSION_PATHS.items():
+        value, spec = _resolve_extension_block(doc, schema, path)
+        if not isinstance(value, dict):
+            continue
+        # A strict absent marker carries nothing to check; a marker that also carries
+        # members is neither branch of its oneOf, so those members are checked as present.
+        if value.get("status") == "absent" and value.keys() <= {"status", "reason"}:
+            continue
+        _validate_extension_block(errors, value, spec, path, keys, schema, v01)
+
+
+def _backstop_path(error: str) -> str:
+    """The member a backstop finding names, folding a missing-member detail into the path."""
+    path, _, detail = error.partition(":")
+    if detail.startswith(" missing required member: "):
+        return f"{path}.{detail.rsplit(': ', 1)[1]}"
+    return path
+
+
+def _apply_schema_backstop(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
+    """Type every member the schema types, keeping only findings nothing above already named.
+
+    The hand-written checks leave members such as ``source.system`` and
+    ``quorum.independence.distinct_model_families`` untyped, which made the verdict depend on
+    whether the optional ``jsonschema`` extra was installed. A finding is kept only when
+    nothing above already named that member or the block holding it, so a malformed member
+    yields exactly one walker diagnostic.
+    """
+    found: list[str] = []
+    for key, value in doc.items():
+        if key in schema["properties"]:
+            _validate_extension_member(found, value, schema["properties"][key], key, schema)
+    named = {error.partition(":")[0] for error in errors}
+    for error in found:
+        path = _backstop_path(error)
+        if not any(path == name or path.startswith((f"{name}.", f"{name}[")) for name in named):
+            errors.append(error)
 
 
 def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
     """Validate only optional content extensions using their bundled schema definitions."""
-    for path, keys in _EXTENSION_PATHS.items():
-        value, spec = doc, schema
-        for part in path.split(".") if path else []:
-            value = value.get(part, {}) if isinstance(value, dict) else {}
-            spec = spec["properties"][part]
-            spec = spec.get("oneOf", [spec])[0]
-        if not isinstance(value, dict) or value.get("status") == "absent":
-            continue
-        for key in keys:
-            if key in value:
-                _validate_extension_member(
-                    errors, value[key], spec["properties"][key], f"{path}.{key}".lstrip("."), schema
-                )
+    _validate_scoped_paths(errors, doc, schema)
+    _apply_schema_backstop(errors, doc, schema)
 
 
 def _validate_source(errors: list[str], value: Any) -> None:
@@ -714,11 +846,14 @@ def _decode_signature(value: str) -> bytes | None:
 # ---------------------------------------------------------------------------
 
 
-def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> Check:
-    signatures = doc.get("signatures")
-    signatures = signatures if isinstance(signatures, list) else []
+def _nothing_to_verify(doc: dict[str, Any], signatures: list[Any], public_key: Any) -> Check | None:
+    """The verdict when no signature can be checked, or ``None`` to go on and check them."""
     if not signatures and public_key is None:
-        return Check("signature", WARN, "receipt is unsigned (v0.1); authenticity not established")
+        return Check(
+            "signature",
+            WARN,
+            f"receipt is unsigned (v{doc['odr_version']}); authenticity not established",
+        )
     if not signatures and public_key is not None:
         return Check(
             "signature", WARN, "receipt carries no signatures; nothing to verify with the key"
@@ -729,6 +864,21 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> 
             SKIP,
             f"{len(signatures)} signature(s) present but no public key supplied; not verified",
         )
+    return None
+
+
+def _check_signatures(
+    doc: dict[str, Any],
+    digest_hex: str,
+    public_key: Any,
+    warnings: list[str],
+    verified: list[dict[str, Any]],
+) -> Check:
+    signatures = doc.get("signatures")
+    signatures = signatures if isinstance(signatures, list) else []
+    unverifiable = _nothing_to_verify(doc, signatures, public_key)
+    if unverifiable is not None:
+        return unverifiable
 
     loaded = _load_ed25519()
     if loaded is None:
@@ -738,7 +888,7 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> 
             "signatures present but 'cryptography' is not installed; not verified",
         )
     _, _, invalid_signature = loaded
-    message = bytes.fromhex(digest_hex)
+    odr_version = doc.get("odr_version")
     provided_key_id = compute_key_id(public_key)
     verified_any = False
     failed_matching = False
@@ -748,12 +898,18 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> 
         if not isinstance(sig, dict):
             continue
         key_id = str(sig.get("key_id") or "")
+        if key_id != provided_key_id:
+            warnings.append(f"signatures[{i}]: key_id_mismatch: {key_id} != {provided_key_id}")
         raw_sig = _decode_signature(str(sig.get("signature") or ""))
         if raw_sig is None:
             notes.append(f"sig[{i}]: undecodable signature")
             if key_id == provided_key_id:
                 failed_matching = True
             continue
+        # Spec §6: the DOCUMENT's version picks the construction; a 0.2 entry's
+        # protected members are rebuilt from the entry, so tampering fails here.
+        protected = {k: v for k, v in sig.items() if k != "signature"}
+        message = odr_signature_message(digest_hex, odr_version, protected)
         try:
             public_key.verify(raw_sig, message)
         except invalid_signature:
@@ -766,6 +922,7 @@ def _check_signatures(doc: dict[str, Any], digest_hex: str, public_key: Any) -> 
         # mismatched key_id would let a tampered key_id claim a false signer.
         if key_id == provided_key_id:
             verified_any = True
+            verified.append(sig)
             notes.append(f"sig[{i}] (key_id={key_id or '?'}): verified")
         else:
             key_id_mismatch = True
@@ -829,6 +986,89 @@ def _check_quorum_consistency(doc: dict[str, Any]) -> Check:
     )
 
 
+def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
+    """Cross-check recorded content, never infer gate dissent from findings."""
+    quorum = doc["quorum"]
+    if doc["odr_version"] != "0.2" or quorum.get("status") != "present":
+        return []
+    checks = []
+    participants = {p["agent"] for p in quorum["participants"]}
+    missing = sorted({v["issuer"] for v in quorum.get("verdicts", [])} - participants)
+    if missing:
+        checks.append(
+            Check(
+                "verdicts_consistency", FAIL, "issuers not in participants: " + ", ".join(missing)
+            )
+        )
+    dissent = quorum["dissent"]
+    if "findings" in dissent:
+        for i, finding in enumerate(dissent["findings"]):
+            want = finding["severity"] in ("P0", "P1")
+            if finding["blocking"] != want:
+                detail = f"findings[{i}].blocking: expected {want!r} for {finding['severity']}"
+                checks.append(Check("dissent_consistency", FAIL, f"quorum.dissent.{detail}"))
+        severities = [f["severity"] for f in dissent["findings"]]
+        expected = {
+            "severity_max": min(severities, default=None),
+            "blocking": any(s in ("P0", "P1") for s in severities),
+        }
+        for member, value in expected.items():
+            if member in dissent and dissent[member] != value:
+                checks.append(
+                    Check(
+                        "dissent_consistency",
+                        FAIL,
+                        f"quorum.dissent.{member}: expected {value!r} from findings",
+                    )
+                )
+    rule = quorum.get("rule")
+    if rule:
+        # The recorded rule is a necessary bar; merge-quorum also requires posting.
+        families = set(rule["counted_families"])
+        reached = len(families) >= rule["required_signals"]
+        if rule["requires_western_frontier"]:
+            reached = reached and bool(families & {"claude", "openai"})
+        if dissent.get("present") or dissent.get("dissenting_agents"):
+            reached = False
+        if reached != quorum["reached"] and (
+            quorum["reached"] or quorum["method"] != "merge-quorum"
+        ):
+            checks.append(
+                Check(
+                    "quorum_rule",
+                    WARN,
+                    f"quorum.reached: recorded {quorum['reached']}, rule implies {reached}",
+                )
+            )
+    return checks
+
+
+def _check_expiry(
+    doc: dict[str, Any], now: datetime | None, strict: bool, verified: list[dict[str, Any]]
+) -> list[Check]:
+    if doc["odr_version"] != "0.2":
+        return []
+    clock = now if now is not None else datetime.now(timezone.utc)
+    checks = []
+    for i, sig in enumerate(doc["signatures"]):
+        if sig not in verified or "expires_at" not in sig:
+            continue
+        detail = ""
+        try:
+            expires = datetime.fromisoformat(sig["expires_at"].replace("Z", "+00:00"))
+            if expires.utcoffset() is None or clock.utcoffset() is None:
+                raise ValueError("a timezone is required")
+            if clock >= expires:
+                detail = f"signatures[{i}]: expired at {sig['expires_at']}"
+        except ValueError:
+            detail = (
+                f"signatures[{i}]: cannot evaluate expires_at (timezone-aware timestamps required)"
+            )
+        if detail:
+            checks.append(Check("signature_expiry", FAIL if strict else WARN, detail))
+    return checks
+
+
 def _check_chain(doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any]] | None) -> Check:
     if chain is None:
         return Check("chain_link", SKIP, "no chain supplied")
@@ -865,6 +1105,27 @@ def _check_chain(doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any
     return Check("chain_link", PASS, f"receipt anchored in chain; {link_note}")
 
 
+def _independence_warnings(warnings: list[str], independence: Any) -> None:
+    if not isinstance(independence, dict):
+        return
+    if not independence.get("disclosed", False):
+        warnings.append("quorum.independence: model diversity not disclosed")
+        return
+    # Weakening signals warn, never fail (spec §8): a non-numeric
+    # families value degrades to a warning instead of raising.
+    try:
+        families = int(independence.get("distinct_model_families", 0) or 0)
+    except (TypeError, ValueError):
+        families = None
+    if families is None:
+        warnings.append(
+            "quorum.independence: distinct_model_families is not numeric — "
+            "adversarial diversity unverifiable"
+        )
+    elif families < 2:
+        warnings.append("quorum.independence: single model family — limited adversarial diversity")
+
+
 def _weakening_warnings(doc: dict[str, Any]) -> list[str]:
     warnings: list[str] = []
     attestation = doc.get("attestation")
@@ -875,26 +1136,7 @@ def _weakening_warnings(doc: dict[str, Any]) -> list[str]:
     if isinstance(quorum, dict) and quorum.get("status") == "absent":
         warnings.append("quorum: absent — no adversarial review recorded")
     elif isinstance(quorum, dict) and quorum.get("status") == "present":
-        independence = quorum.get("independence", {})
-        if isinstance(independence, dict):
-            if not independence.get("disclosed", False):
-                warnings.append("quorum.independence: model diversity not disclosed")
-            else:
-                # Weakening signals warn, never fail (spec §8): a non-numeric
-                # families value degrades to a warning instead of raising.
-                try:
-                    families = int(independence.get("distinct_model_families", 0) or 0)
-                except (TypeError, ValueError):
-                    families = None
-                if families is None:
-                    warnings.append(
-                        "quorum.independence: distinct_model_families is not numeric — "
-                        "adversarial diversity unverifiable"
-                    )
-                elif families < 2:
-                    warnings.append(
-                        "quorum.independence: single model family — limited adversarial diversity"
-                    )
+        _independence_warnings(warnings, quorum.get("independence", {}))
         participants = quorum.get("participants", [])
         if isinstance(participants, list) and any(
             isinstance(p, dict) and p.get("model_family") == "undisclosed" for p in participants
@@ -910,6 +1152,17 @@ def _weakening_warnings(doc: dict[str, Any]) -> list[str]:
     reasoning = doc.get("reasoning")
     if isinstance(reasoning, dict) and reasoning.get("status") == "absent":
         warnings.append("reasoning: absent — no recorded justification")
+
+    # A v0.1 signature covers only the digest, so entry metadata on a v0.1
+    # document is a claim nobody signed (spec §6); v0.2 entries commit it.
+    if doc.get("odr_version") != "0.2":
+        for i, sig in enumerate(doc.get("signatures") or ()):
+            loose = [m for m in _UNAUTHENTICATED_V01_MEMBERS if isinstance(sig, dict) and m in sig]
+            if loose:
+                warnings.append(
+                    f"signatures[{i}]: unauthenticated signature metadata ({', '.join(loose)}) "
+                    "— a v0.1 signature does not cover these members"
+                )
     return warnings
 
 
@@ -923,9 +1176,13 @@ def verify_odr_document(
     *,
     public_key: Any | None = None,
     chain: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
+    strict_expiry: bool = False,
 ) -> VerifyResult:
     """Verify an ODR document. ``public_key`` is a loaded Ed25519 key
     (see :func:`load_public_key`); ``chain`` is a list of parsed chain entries.
+    ``now`` overrides the timezone-aware expiry clock; ``strict_expiry`` turns
+    expiry warnings into failures. Neither changes v0.1 verification.
     """
     receipt_id = str(doc.get("receipt_id") or "") if isinstance(doc, dict) else ""
     checks: list[Check] = []
@@ -934,12 +1191,14 @@ def verify_odr_document(
     if structure_errors:
         checks.append(Check("schema_conformance", FAIL, "; ".join(structure_errors[:12])))
         return VerifyResult(ok=False, receipt_id=receipt_id, odr_digest="", checks=checks)
-    checks.append(Check("schema_conformance", PASS, "conforms to ODR v0.1 profile"))
+    checks.append(
+        Check("schema_conformance", PASS, f"conforms to ODR v{doc['odr_version']} profile")
+    )
 
     # Boundary contract: this engine verifies untrusted/possibly-tampered receipts,
     # so any exception raised while checking structurally-valid-but-malformed input
-    # must become a FAIL verdict — never propagate as a crash. Each check below is
-    # run through this guard so one malformed subfield cannot abort verification.
+    # must become a FAIL verdict — never propagate as a crash. Legacy checks use
+    # this guard; v0.2 consistency checks read only schema-validated members.
     def _safe_check(name: str, fn: Callable[[], Check]) -> Check:
         try:
             return fn()
@@ -948,6 +1207,8 @@ def verify_odr_document(
                 name, FAIL, f"verification raised on malformed input: {type(exc).__name__}: {exc}"
             )
 
+    checks.append(_safe_check("quorum_consistency", lambda: _check_quorum_consistency(doc)))
+    checks.extend(_check_v02_consistency(doc))
     try:
         digest_hex = odr_content_digest(doc)
     except Exception as exc:  # noqa: BLE001 - boundary: malformed input -> FAIL, not crash
@@ -958,13 +1219,23 @@ def verify_odr_document(
         )
         return VerifyResult(ok=False, receipt_id=receipt_id, odr_digest="", checks=checks)
     checks.append(Check("canonical_digest", PASS, f"sha-256:{digest_hex}"))
-    checks.append(_safe_check("signature", lambda: _check_signatures(doc, digest_hex, public_key)))
-    checks.append(_safe_check("quorum_consistency", lambda: _check_quorum_consistency(doc)))
+    warnings: list[str] = []
+    verified: list[dict[str, Any]] = []
+    checks.append(
+        _safe_check(
+            "signature", lambda: _check_signatures(doc, digest_hex, public_key, warnings, verified)
+        )
+    )
+    checks.extend(_check_expiry(doc, now, strict_expiry, verified))
     checks.append(_safe_check("chain_link", lambda: _check_chain(doc, digest_hex, chain)))
 
-    warnings: list[str] = []
+    warnings.extend(
+        c.detail
+        for c in checks
+        if c.status == WARN and c.name in ("quorum_rule", "signature_expiry")
+    )
     try:
-        warnings = _weakening_warnings(doc)
+        warnings.extend(_weakening_warnings(doc))
     except Exception as exc:  # noqa: BLE001 - boundary: malformed input -> WARN, not crash
         # Weakening signals warn, never fail (spec §8): an unscannable receipt
         # loses its advisory signals but that alone cannot flip the verdict.

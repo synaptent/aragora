@@ -13,6 +13,9 @@ The probe body is the VAL-P4B-007 script verbatim.
 import importlib
 import sys
 import warnings
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 name = sys.argv[1]
 with warnings.catch_warnings(record=True) as w:
