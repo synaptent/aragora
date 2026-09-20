@@ -434,18 +434,21 @@ class _Unrenderable:
         raise RuntimeError("cannot render")
 
 
-def test_emission_fails_closed_on_a_hostile_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    """maybe_emit_cruxset promises not to break a debate, including on this new param."""
+def test_hostile_override_degrades_to_the_default_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    """maybe_emit_cruxset promises not to break a debate, including on this new param.
+
+    The builder coerces only types whose ``str()`` cannot raise, so a hostile
+    object degrades this one field instead of losing the whole CruxSet.
+    """
     monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
     payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
-    assert (
-        mod.maybe_emit_cruxset(
-            question="Q?",
-            analysis_payload=payload,
-            counterfactuals_by_claim_id={"c1": _Unrenderable()},  # type: ignore[dict-item]
-        )
-        is None
+    cs = mod.maybe_emit_cruxset(
+        question="Q?",
+        analysis_payload=payload,
+        counterfactuals_by_claim_id={"c1": _Unrenderable()},  # type: ignore[dict-item]
     )
+    assert cs is not None
+    assert "Resolution impact" in cs.cruxes[0].counterfactual
 
 
 def test_clip_counterfactual_never_exceeds_a_non_positive_limit() -> None:

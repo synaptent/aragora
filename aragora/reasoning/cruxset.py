@@ -356,9 +356,10 @@ def build_cruxset_from_analysis(
     :func:`~aragora.reasoning.cruxset_emission.maybe_emit_cruxset_from_finder_result`).
     When supplied, it overrides the default ``resolution_impact`` text so
     the AGT-05 reputation flow and downstream consumers see the richer
-    condition/outcome text rather than the bare numeric score. Each override
-    is coerced to text and clipped to :data:`MAX_CRUX_COUNTERFACTUAL_CHARS`;
-    an entry that is blank after clipping falls back to the default text.
+    condition/outcome text rather than the bare numeric score. A string or
+    numeric override is coerced to text and clipped to
+    :data:`MAX_CRUX_COUNTERFACTUAL_CHARS`; any other type, and an override
+    blank after clipping, falls back to the default text.
     """
     raw_cruxes = list(analysis_payload.get("cruxes") or [])
     if not raw_cruxes:
@@ -390,9 +391,16 @@ def build_cruxset_from_analysis(
             )
         claim_id = str(entry.get("claim_id") or "")
         # A blank override falls through rather than silently emptying the field,
-        # but a present-and-falsy value is still coerced like any other payload value.
+        # but a present-and-falsy value is still coerced like any other payload
+        # value. Only types whose str() cannot raise are coerced: this is a soft
+        # enrichment path, so an object with a hostile __str__ must degrade to the
+        # default text rather than propagate out of a debate.
         raw_override = cf_map.get(claim_id)
-        override = "" if raw_override is None else clip_counterfactual(str(raw_override))
+        override = (
+            clip_counterfactual(str(raw_override))
+            if isinstance(raw_override, (str, int, float))
+            else ""
+        )
         if override:
             counterfactual_text = override
         elif entry.get("resolution_impact") is not None:
