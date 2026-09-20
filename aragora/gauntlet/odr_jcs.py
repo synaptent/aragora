@@ -19,9 +19,14 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+from collections.abc import Mapping
 from typing import Any
 
-__all__ = ["jcs_canonicalize", "odr_content_digest"]
+__all__ = ["jcs_canonicalize", "odr_content_digest", "odr_signature_message"]
+
+#: Domain-separation constant inside the v0.2 signed message; a v0.1 message
+#: (raw digest bytes) can never equal a v0.2 message (a JCS object).
+ODR_SIGNATURE_INPUT_V02 = "0.2"
 
 
 # ---------------------------------------------------------------------------
@@ -150,3 +155,20 @@ def odr_content_digest(odr: dict[str, Any]) -> str:
     """
     payload = {k: v for k, v in odr.items() if k != "signatures"}
     return hashlib.sha256(jcs_canonicalize(payload)).hexdigest()
+
+
+def odr_signature_message(
+    digest_hex: str, odr_version: str | None, protected: Mapping[str, Any]
+) -> bytes:
+    """Bytes an Ed25519 detached signature covers, chosen by the document's version.
+
+    Spec §6, no fallback between the two: ``"0.2"`` signs the JCS bytes of
+    ``{"odr_digest", "odr_signature_input", "protected"}`` (``protected`` = the
+    entry minus ``signature``, so its metadata is signer-committed); anything
+    else (``"0.1"``, or a non-ODR payload reusing the signer) signs the 32 raw
+    digest bytes and ``protected`` is ignored.
+    """
+    if odr_version != ODR_SIGNATURE_INPUT_V02:
+        return bytes.fromhex(digest_hex)
+    signed = {"odr_digest": digest_hex, "odr_signature_input": ODR_SIGNATURE_INPUT_V02}
+    return jcs_canonicalize({**signed, "protected": dict(protected)})
