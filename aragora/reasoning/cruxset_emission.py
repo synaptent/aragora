@@ -130,7 +130,10 @@ def maybe_emit_cruxset(
             max_cruxes=top_k,
             counterfactuals_by_claim_id=counterfactuals_by_claim_id,
         )
-    except (ValueError, KeyError) as exc:
+    except Exception as exc:  # noqa: BLE001 - soft enrichment must not crash debate
+        # Deliberately as wide as the detector guard above: caller-supplied
+        # provenance and counterfactual values are coerced downstream, and a
+        # value that raises on str() or json.dumps must not fail the debate.
         logger.warning(
             "cruxset emission could not build CruxSet for question=%r: %s",
             question[:80],
@@ -153,9 +156,9 @@ def _compose_counterfactual(condition: str, outcome_change: str) -> str:
         return condition
     separator = "; "
     budget = MAX_CRUX_COUNTERFACTUAL_CHARS - len(outcome_change) - len(separator)
-    if budget > 0:
-        condition = clip_counterfactual(condition, budget)
-    return f"{condition}{separator}{outcome_change}"
+    if budget <= 0:
+        return outcome_change
+    return f"{clip_counterfactual(condition, budget)}{separator}{outcome_change}"
 
 
 def _counterfactuals_by_claim_id(counterfactuals: list[Any]) -> dict[str, str] | None:

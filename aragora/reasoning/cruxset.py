@@ -56,6 +56,8 @@ def clip_counterfactual(text: str, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -
     text = text.strip()
     if len(text) <= limit:
         return text
+    if limit <= 0:
+        return ""
     return text[: limit - 1].rstrip() + "\u2026"
 
 

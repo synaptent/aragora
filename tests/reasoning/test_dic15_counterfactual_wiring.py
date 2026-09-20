@@ -30,6 +30,7 @@ from aragora.reasoning.cruxset import (
     MAX_CRUX_COUNTERFACTUAL_CHARS,
     CruxSet,
     build_cruxset_from_analysis,
+    clip_counterfactual,
 )
 
 
@@ -428,18 +429,45 @@ def test_blank_override_falls_back_instead_of_emptying_the_field(blank: str) -> 
     assert "Resolution impact" in cs.cruxes[0].counterfactual
 
 
+class _Unrenderable:
+    def __str__(self) -> str:
+        raise RuntimeError("cannot render")
+
+
+def test_emission_fails_closed_on_a_hostile_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """maybe_emit_cruxset promises not to break a debate, including on this new param."""
+    monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
+    payload = _analysis(_claim("c1", "S", 0.7)).to_dict()
+    assert (
+        mod.maybe_emit_cruxset(
+            question="Q?",
+            analysis_payload=payload,
+            counterfactuals_by_claim_id={"c1": _Unrenderable()},  # type: ignore[dict-item]
+        )
+        is None
+    )
+
+
+def test_clip_counterfactual_never_exceeds_a_non_positive_limit() -> None:
+    """The exported helper must honour its bound for every limit, not just the default."""
+    assert clip_counterfactual("some text", 0) == ""
+    assert clip_counterfactual("some text", -5) == ""
+
+
+def test_compose_drops_the_condition_when_the_outcome_fills_the_budget() -> None:
+    """With no room for both, the signal-bearing half wins outright."""
+    outcome = "Y" * MAX_CRUX_COUNTERFACTUAL_CHARS
+    assert mod._compose_counterfactual("Resolve 'X' to high confidence", outcome) == outcome
+
+
 def test_hostile_finder_entry_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     """The bridge is soft enrichment: a value that raises on str() must not escape."""
     monkeypatch.setenv(mod.CRUXSET_EMISSION_ENV_VAR, "1")
 
-    class Unrenderable:
-        def __str__(self) -> str:
-            raise RuntimeError("cannot render")
-
     claim = _claim("c1", "S", 0.7)
     result = _result(
         _analysis(claim),
-        counterfactuals=[{"claim_id": "c1", "condition": Unrenderable()}],
+        counterfactuals=[{"claim_id": "c1", "condition": _Unrenderable()}],
     )
     assert mod.maybe_emit_cruxset_from_finder_result(result) is None
 
