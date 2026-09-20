@@ -242,7 +242,7 @@ def maybe_emit_cruxset_from_finder_result(
             "rounds": result.rounds,
             "agents": list(result.agents),
         }
-    except Exception as exc:  # noqa: BLE001 - malformed finder output must fail closed
+    except (ValueError, TypeError, AttributeError, KeyError) as exc:
         logger.warning("maybe_emit_cruxset_from_finder_result: malformed CruxFinderResult: %s", exc)
         return None
 
