@@ -485,7 +485,9 @@ def _receipts_handler(receipt_id: str = "r-odr-1") -> Any:
     from aragora.server.handlers.decisions.receipts import ReceiptsHandler
 
     handler = ReceiptsHandler(MagicMock())
-    handler._store = _StaticReceiptStore({receipt_id: _gauntlet_receipt_payload(receipt_id)})
+    handler._store = _StaticReceiptStore(  # type: ignore[assignment]
+        {receipt_id: _gauntlet_receipt_payload(receipt_id)}
+    )
     return handler
 
 
