@@ -38,6 +38,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import io
+import json
 import logging
 import secrets
 import zipfile
@@ -65,6 +66,95 @@ from aragora.rbac.decorators import require_permission
 from aragora.server.validation.query_params import safe_query_int
 
 logger = logging.getLogger(__name__)
+
+#: Largest ODR document the stateless verification endpoint will read. The
+#: endpoint is public, so the cap is enforced here rather than relying on the
+#: generic body limit, and it is reported as 413 instead of a parse error.
+MAX_VERIFY_BODY_BYTES = 262_144
+
+
+def _request_auth_context(handler: Any) -> Any | None:
+    """Return the AuthorizationContext the auth layer attached to a request, if any."""
+    from aragora.rbac.models import AuthorizationContext
+
+    context = getattr(handler, "_auth_context", None)
+    return context if isinstance(context, AuthorizationContext) else None
+
+
+def _auth_enabled() -> bool:
+    """True when the deployment requires authentication for protected routes."""
+    from aragora.server.auth import auth_config
+
+    return bool(auth_config.enabled)
+
+
+def _auth_required_response() -> HandlerResult:
+    """401 envelope matching the one the server's own auth layer emits."""
+    return json_response({"error": "Authentication required", "code": "auth_required"}, status=401)
+
+
+def _content_length(headers: dict[str, str] | None) -> int | None:
+    """Parse Content-Length case-insensitively; None when absent or unparseable."""
+    for key, value in (headers or {}).items():
+        if isinstance(key, str) and key.lower() == "content-length":
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _dissent_trail(document: dict[str, Any]) -> list[Any]:
+    """Dissent entries recorded on an ODR document's quorum block."""
+    quorum = document.get("quorum")
+    dissent = quorum.get("dissent") if isinstance(quorum, dict) else None
+    return list(dissent) if isinstance(dissent, list) else []
+
+
+def _stored_receipt_payload(receipt: Any) -> dict[str, Any]:
+    """Return the stored receipt payload unfiltered.
+
+    The ODR mapper reads gauntlet receipt members (quorum, agent responses,
+    risk summary) that the HTML/PDF exporter's constructor does not accept, so
+    this keeps every stored member instead of filtering to that constructor.
+    """
+    if isinstance(receipt, dict):
+        nested = receipt.get("data")
+        payload = dict(nested) if isinstance(nested, dict) else dict(receipt)
+        plain: Any = receipt
+    else:
+        nested = getattr(receipt, "data", None)
+        if isinstance(nested, dict):
+            payload = dict(nested)
+        elif hasattr(receipt, "to_dict"):
+            value = receipt.to_dict()
+            payload = dict(value) if isinstance(value, dict) else {}
+        else:
+            payload = {}
+        plain = receipt.to_dict() if hasattr(receipt, "to_dict") else {}
+
+    if isinstance(plain, dict):
+        for key in ("receipt_id", "gauntlet_id", "timestamp", "checksum"):
+            payload.setdefault(key, plain.get(key))
+    return payload
+
+
+def _build_odr_document(payload: dict[str, Any], odr_version: str) -> dict[str, Any]:
+    """Map a stored receipt payload onto an ODR document, signed when a key is configured."""
+    from aragora.gauntlet.odr_export import (
+        calibration_provenance_for_receipt,
+        decision_receipt_to_odr,
+        sign_odr_if_configured,
+    )
+    from aragora.gauntlet.receipt_models import DecisionReceipt
+
+    receipt = DecisionReceipt.from_dict(payload)
+    odr = decision_receipt_to_odr(
+        receipt,
+        odr_version=odr_version,
+        calibration_provenance=calibration_provenance_for_receipt(receipt),
+    )
+    return sign_odr_if_configured(odr)
 
 
 async def _call_nonblocking(target: Any, method_name: str, *args: Any, **kwargs: Any) -> Any:
@@ -508,6 +598,16 @@ class ReceiptsHandler(BaseHandler):
             if path == "/api/v2/receipts/signing-key" and method == "GET":
                 return await self._get_signing_key()
 
+            # Stateless ODR verification (public endpoint). Checked before the
+            # generic /api/v2/receipts/{id} parsing so "verify" is never read
+            # as a receipt id.
+            if path == "/api/v2/receipts/verify":
+                if method == "POST":
+                    return await self._verify_odr_document(body, headers)
+                return error_response(
+                    "Not found: POST an ODR document to /api/v2/receipts/verify", 404
+                )
+
             # Stats endpoint
             if path == "/api/v2/receipts/stats" and method == "GET":
                 return await self._get_stats()
@@ -582,9 +682,21 @@ class ReceiptsHandler(BaseHandler):
 
                 receipt_id = parts[4]
 
-                # Export endpoint
+                # Export endpoint. The ODR format is a public trust surface and
+                # is served without an AuthorizationContext; every other format
+                # stays behind receipts:read and answers 401 rather than
+                # surfacing the decorator's denial as a 500.
                 if len(parts) > 5 and parts[5] == "export":
-                    return await self._export_receipt(receipt_id, query_params)
+                    if (query_params.get("format") or "json").strip().lower() == "odr":
+                        return await self._export_odr(receipt_id, query_params)
+                    auth_context = _request_auth_context(handler)
+                    if auth_context is None:
+                        if _auth_enabled():
+                            return _auth_required_response()
+                        return await self._export_receipt(receipt_id, query_params)
+                    return await self._export_receipt(
+                        receipt_id, query_params, context=auth_context
+                    )
 
                 # Combined verification (signature + integrity)
                 if len(parts) > 5 and parts[5] == "verify" and method == "GET":
@@ -845,32 +957,64 @@ class ReceiptsHandler(BaseHandler):
         method="GET",
         path="/api/v2/receipts/{receipt_id}/export",
         summary="Export receipt",
-        description="Export receipt in specified format (json, html, md, pdf, sarif, csv).",
+        description=(
+            "Export receipt in specified format (json, html, md, pdf, sarif, csv, odr). "
+            "The odr format returns the JCS-canonical Open Decision Receipt document and "
+            "is public: it is served without authentication so external auditors can "
+            "verify it offline. Every other format requires receipts:read."
+        ),
         tags=["Receipts", "Export"],
         parameters=[
             {"name": "receipt_id", "in": "path", "required": True, "schema": {"type": "string"}},
             {
                 "name": "format",
                 "in": "query",
+                "description": (
+                    "Export format. Use odr for the signed Open Decision Receipt document."
+                ),
                 "schema": {
                     "type": "string",
                     "default": "json",
-                    "enum": ["json", "html", "md", "pdf", "sarif", "csv"],
+                    "enum": ["json", "html", "md", "pdf", "sarif", "csv", "odr"],
                 },
+            },
+            {
+                "name": "odr_version",
+                "in": "query",
+                "description": (
+                    "ODR profile version for format=odr (0.1 or 0.2). "
+                    "Defaults to the deployment's configured profile version."
+                ),
+                "schema": {"type": "string", "enum": ["0.1", "0.2"]},
             },
             {"name": "signed", "in": "query", "schema": {"type": "boolean", "default": True}},
         ],
         responses={
             "200": {
-                "description": "Export returned in requested format. PDF format falls back to printable HTML if weasyprint unavailable (check X-PDF-Fallback header)"
+                "description": "Export returned in requested format. PDF format falls back to printable HTML if weasyprint unavailable (check X-PDF-Fallback header)",
+                "headers": {
+                    "X-ODR-Digest": {
+                        "description": (
+                            "JCS content digest of the ODR document as 64 lowercase hex "
+                            "characters (format=odr responses only)."
+                        ),
+                        "schema": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                    }
+                },
             },
-            "400": {"description": "Unsupported format"},
+            "400": {"description": "Unsupported format or invalid odr_version"},
+            "401": {"description": "Authentication required for non-ODR formats"},
             "404": {"description": "Receipt not found"},
             "500": {"description": "Export failed"},
         },
     )
     @require_permission("receipts:read")
-    async def _export_receipt(self, receipt_id: str, query_params: dict[str, str]) -> HandlerResult:
+    async def _export_receipt(
+        self,
+        receipt_id: str,
+        query_params: dict[str, str],
+        context: Any = None,
+    ) -> HandlerResult:
         """
         Export receipt in specified format.
 
@@ -878,6 +1022,7 @@ class ReceiptsHandler(BaseHandler):
             format: Export format (json, html, md, pdf, sarif, csv)
             signed: Include signature if available (true/false)
         """
+        del context  # consumed by @require_permission
         store = self._get_store()
         receipt = await _call_nonblocking(store, "get", receipt_id)
 
@@ -1021,6 +1166,119 @@ class ReceiptsHandler(BaseHandler):
         except (ImportError, KeyError, ValueError, TypeError, OSError) as e:
             logger.exception("Export failed: %s", e)
             return error_response(safe_error_message(e, "receipt export"), 500)
+
+    async def _export_odr(self, receipt_id: str, query_params: dict[str, str]) -> HandlerResult:
+        """Serve a receipt as a JCS-canonical Open Decision Receipt document.
+
+        Public by design (architecture §2.10): an auditor holding only a
+        receipt id must be able to fetch the document and verify it offline
+        against the published signing key.
+        """
+        from aragora.gauntlet.odr_export import resolve_odr_version
+        from aragora.gauntlet.odr_jcs import jcs_canonicalize, odr_content_digest
+        from aragora.gauntlet.odr_signing import OdrSigningError
+
+        try:
+            odr_version = resolve_odr_version(query_params.get("odr_version") or None)
+        except ValueError as e:
+            return error_response(str(e), 400)
+
+        store = self._get_store()
+        receipt = await _call_nonblocking(store, "get", receipt_id)
+        if not receipt:
+            return error_response("Receipt not found", 404)
+
+        try:
+            document = await asyncio.to_thread(
+                _build_odr_document, _stored_receipt_payload(receipt), odr_version
+            )
+            body = jcs_canonicalize(document)
+            digest = odr_content_digest(document)
+        except (ImportError, KeyError, ValueError, TypeError, OSError, OdrSigningError) as e:
+            logger.exception("ODR export failed: %s", e)
+            return error_response(safe_error_message(e, "ODR receipt export"), 500)
+
+        headers = {"X-ODR-Digest": digest}
+        if query_params.get("download", "false").lower() == "true":
+            headers["Content-Disposition"] = f"attachment; filename=receipt-{receipt_id}.odr.json"
+        return HandlerResult(
+            status_code=200,
+            content_type="application/json",
+            body=body,
+            headers=headers,
+        )
+
+    @api_endpoint(
+        method="POST",
+        path="/api/v2/receipts/verify",
+        summary="Verify an ODR document",
+        description=(
+            "Verify an Open Decision Receipt document supplied in the request body. "
+            "Stateless and public: nothing is persisted and the document does not have "
+            "to originate from this deployment. Signatures are checked against this "
+            "deployment's configured ODR signing key, so a document signed by another "
+            "issuer conforms structurally but reports a failing signature check."
+        ),
+        tags=["Receipts", "Verification"],
+        operation_id="verify_odr_document",
+        responses={
+            "200": {"description": "Verification verdict returned (verified true or false)"},
+            "400": {"description": "Body is not a JSON object carrying odr_version"},
+            "413": {"description": "Request body exceeds 262144 bytes"},
+            "429": {"description": "Rate limit exceeded (60 requests per minute per client)"},
+        },
+    )
+    async def _verify_odr_document(
+        self, body: Any, headers: dict[str, str] | None = None
+    ) -> HandlerResult:
+        """Verify a caller-supplied ODR document without persisting anything."""
+        from aragora.gauntlet.odr_verify import load_public_key, verify_odr_document
+
+        declared = _content_length(headers)
+        if declared is None and isinstance(body, dict):
+            try:
+                declared = len(json.dumps(body).encode("utf-8"))
+            except (TypeError, ValueError):
+                declared = None
+        if declared is not None and declared > MAX_VERIFY_BODY_BYTES:
+            return error_response(
+                f"ODR document exceeds the {MAX_VERIFY_BODY_BYTES} byte verification limit",
+                413,
+            )
+
+        if not isinstance(body, dict) or not body.get("odr_version"):
+            return error_response(
+                "Request body must be a JSON ODR document carrying an odr_version member",
+                400,
+            )
+
+        resolved = await self._get_signing_public_key()
+        key_id = resolved[1] if resolved is not None else None
+        public_key = None
+        if resolved is not None:
+            try:
+                public_key = await asyncio.to_thread(load_public_key, resolved[0].encode("utf-8"))
+            except (ValueError, TypeError, OSError) as e:
+                logger.warning("ODR signing public key unusable for verification: %s", e)
+
+        result = await asyncio.to_thread(verify_odr_document, body, public_key=public_key)
+        return json_response(
+            {
+                "verified": result.ok,
+                "receipt_id": result.receipt_id,
+                "odr_digest": result.odr_digest,
+                # chain_link is omitted: a hosted verifier holds no chain, so the
+                # check carries no information the caller can act on.
+                "checks": [
+                    {"name": c.name, "status": c.status, "detail": c.detail}
+                    for c in result.checks
+                    if c.name != "chain_link"
+                ],
+                "warnings": list(result.warnings),
+                "dissent_trail": _dissent_trail(body),
+                "key_id": key_id,
+            }
+        )
 
     @api_endpoint(
         method="GET",
@@ -1252,6 +1510,22 @@ class ReceiptsHandler(BaseHandler):
             headers={"Cache-Control": "public, max-age=300"},
         )
 
+    @api_endpoint(
+        method="GET",
+        path="/.well-known/aragora-odr-signing-key",
+        summary="Get ODR signing public key (PEM)",
+        description=(
+            "Return the Ed25519 public key used to sign Open Decision Receipts on "
+            "this deployment as raw PEM. Public trust anchor for offline verification; "
+            "no authentication is required. Returns 404 when no signing key is configured."
+        ),
+        tags=["Receipts"],
+        operation_id="get_odr_signing_key_pem",
+        responses={
+            "200": {"description": "Signing public key returned as PEM"},
+            "404": {"description": "No ODR signing key is configured"},
+        },
+    )
     async def _get_signing_key_pem(self) -> HandlerResult:
         """Serve the ODR signing public key as raw PEM (/.well-known route)."""
         resolved = await self._get_signing_public_key()

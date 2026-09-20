@@ -490,6 +490,12 @@ DEFAULT_ROUTE_PERMISSIONS = [
         r"^/\.well-known/aragora-odr-signing-key$", "GET", "", allow_unauthenticated=True
     ),
     RoutePermission(r"^/api/v2/receipts/signing-key$", "GET", "", allow_unauthenticated=True),
+    # Public ODR receipt surface (architecture §2.10): the ODR export document
+    # and the stateless verifier are the two routes an external auditor needs
+    # without credentials. The export handler still requires receipts:read for
+    # every non-ODR format.
+    RoutePermission(r"^/api/v2/receipts/[^/]+/export$", "GET", "", allow_unauthenticated=True),
+    RoutePermission(r"^/api/v2/receipts/verify$", "POST", "", allow_unauthenticated=True),
     # Health endpoints (additional patterns)
     RoutePermission(
         r"^/api/(v1/)?health(/detailed|/deep|/stores)?$", "GET", "", allow_unauthenticated=True
