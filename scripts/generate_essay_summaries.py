@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ESSAY_PATH = REPO_ROOT / "aragora" / "server" / "handlers" / "oracle_essay.md"
+ESSAY_PATH = REPO_ROOT / "aragora" / "server" / "handlers" / "demo" / "oracle_essay.md"
 OUTPUT_DIR = REPO_ROOT / "aragora" / "server" / "handlers" / "essay_summaries"
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
