@@ -95,6 +95,54 @@ class ReceiptsAPI:
             params={"format": format_value},
         )
 
+    def export_odr(
+        self,
+        receipt_id: str,
+        odr_version: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Export a decision receipt as an Open Decision Receipt (ODR) document.
+
+        Public endpoint (no auth required). The document is signed when the
+        deployment configures a signing key, and carries ``signatures: []``
+        otherwise.
+
+        Args:
+            receipt_id: Receipt identifier.
+            odr_version: Requested ODR profile version ("0.1" or "0.2").
+                Omitted means the deployment's default.
+
+        Returns:
+            The ODR document as JSON.
+        """
+        params: dict[str, Any] = {"format": "odr"}
+        if odr_version:
+            params["odr_version"] = odr_version
+        return self._client.request(
+            "GET",
+            f"/api/v2/receipts/{receipt_id}/export",
+            params=params,
+        )
+
+    def verify_document(self, document: dict[str, Any]) -> dict[str, Any]:
+        """
+        Verify an ODR document statelessly against the deployment's key.
+
+        Public endpoint (no auth required). The document is not persisted.
+
+        Args:
+            document: An ODR document carrying ``odr_version``.
+
+        Returns:
+            Dict with ``verified``, ``checks``, ``warnings``, ``dissent_trail``
+            and ``key_id``.
+        """
+        return self._client.request(
+            "POST",
+            "/api/v2/receipts/verify",
+            json=document,
+        )
+
     def formatted(
         self,
         receipt_id: str,
@@ -662,6 +710,54 @@ class AsyncReceiptsAPI:
             "GET",
             f"/api/v2/receipts/{receipt_id}/export",
             params={"format": format_value},
+        )
+
+    async def export_odr(
+        self,
+        receipt_id: str,
+        odr_version: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Export a decision receipt as an Open Decision Receipt (ODR) document.
+
+        Public endpoint (no auth required). The document is signed when the
+        deployment configures a signing key, and carries ``signatures: []``
+        otherwise.
+
+        Args:
+            receipt_id: Receipt identifier.
+            odr_version: Requested ODR profile version ("0.1" or "0.2").
+                Omitted means the deployment's default.
+
+        Returns:
+            The ODR document as JSON.
+        """
+        params: dict[str, Any] = {"format": "odr"}
+        if odr_version:
+            params["odr_version"] = odr_version
+        return await self._client.request(
+            "GET",
+            f"/api/v2/receipts/{receipt_id}/export",
+            params=params,
+        )
+
+    async def verify_document(self, document: dict[str, Any]) -> dict[str, Any]:
+        """
+        Verify an ODR document statelessly against the deployment's key.
+
+        Public endpoint (no auth required). The document is not persisted.
+
+        Args:
+            document: An ODR document carrying ``odr_version``.
+
+        Returns:
+            Dict with ``verified``, ``checks``, ``warnings``, ``dissent_trail``
+            and ``key_id``.
+        """
+        return await self._client.request(
+            "POST",
+            "/api/v2/receipts/verify",
+            json=document,
         )
 
     async def formatted(
