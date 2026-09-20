@@ -463,6 +463,24 @@ def test_compose_drops_the_condition_when_the_outcome_fills_the_budget() -> None
     assert mod._compose_counterfactual("Resolve 'X' to high confidence", outcome) == outcome
 
 
+def test_compose_drops_a_condition_too_short_to_carry_meaning() -> None:
+    """A lone ellipsis prefix is noise, so the condition yields entirely."""
+    outcome = "Y" * (MAX_CRUX_COUNTERFACTUAL_CHARS - 3)
+    assert mod._compose_counterfactual("Resolve 'X' to high confidence", outcome) == outcome
+
+
+def test_finder_claim_id_is_keyed_exactly_as_the_builder_reads_it() -> None:
+    """A key normalised on only one side would silently never match."""
+    claim = _claim("  c1  ", "S", 0.7)
+    mapped = mod._counterfactuals_by_claim_id(_finder_counterfactuals(claim))
+    assert mapped is not None
+    payload = _analysis(claim).to_dict()
+    cs = build_cruxset_from_analysis(
+        question="Q?", analysis_payload=payload, counterfactuals_by_claim_id=mapped
+    )
+    assert "Resolution impact" not in cs.cruxes[0].counterfactual
+
+
 def test_hostile_finder_entry_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     """The bridge is soft enrichment: a hostile value must not escape as an exception.
 

@@ -39,6 +39,10 @@ logger = logging.getLogger(__name__)
 
 CRUXSET_EMISSION_ENV_VAR = "ARAGORA_CRUXSET_EMISSION_ENABLED"
 
+# Below this, a clipped condition is an ellipsis with no readable content left,
+# so the note reads better carrying the outcome alone.
+_MIN_CONDITION_CHARS = 16
+
 
 def cruxset_emission_enabled() -> bool:
     """Return True when the AGT-01 CruxSet emission surface is enabled.
@@ -155,7 +159,7 @@ def _compose_counterfactual(condition: str, outcome_change: str) -> str:
         return condition
     separator = "; "
     budget = MAX_CRUX_COUNTERFACTUAL_CHARS - len(outcome_change) - len(separator)
-    if budget <= 0:
+    if budget < _MIN_CONDITION_CHARS:
         return outcome_change
     return f"{clip_counterfactual(condition, budget)}{separator}{outcome_change}"
 
@@ -176,7 +180,9 @@ def _counterfactuals_by_claim_id(counterfactuals: list[Any]) -> dict[str, str] |
         if not isinstance(cf, dict):
             continue
         raw_cid = cf.get("claim_id")
-        cid = raw_cid.strip() if isinstance(raw_cid, str) else ""
+        # Not stripped: build_cruxset_from_analysis keys the map with the raw
+        # claim_id, and a key normalised on only one side would never match.
+        cid = raw_cid if isinstance(raw_cid, str) else ""
         if not cid:
             continue
         text = _compose_counterfactual(
