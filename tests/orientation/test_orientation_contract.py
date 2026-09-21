@@ -306,6 +306,9 @@ def test_mission_projection_requires_an_evidence_handle(validator: Any) -> None:
         "/absolute/local/path",
         "https://example.invalid/a b",
         "https://example.invalid/a\n",
+        "C:\\data\\orientation.json",
+        "c:/data/orientation.json",
+        "x:",
     ],
 )
 def test_evidence_uris_must_be_portable(validator: Any, unusable_uri: str) -> None:
@@ -313,6 +316,21 @@ def test_evidence_uris_must_be_portable(validator: Any, unusable_uri: str) -> No
     document["facts"][0]["evidence_refs"][0]["uri"] = unusable_uri
     with pytest.raises(jsonschema.ValidationError):
         validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    "usable_uri",
+    [
+        "git:head",
+        "https://api.github.com/repos/synaptent/aragora/pulls/1",
+        "aragora://synaptent/aragora/missions/m1",
+        "urn:uuid:8f1a",
+    ],
+)
+def test_evidence_uris_accept_real_schemes(validator: Any, usable_uri: str) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["facts"][0]["evidence_refs"][0]["uri"] = usable_uri
+    validator.validate(document)
 
 
 def test_no_change_envelope_can_be_judged_for_freshness(validator: Any) -> None:

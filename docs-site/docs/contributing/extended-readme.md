@@ -342,7 +342,7 @@ aragora/
 ```
 
 <!-- metrics:begin extended-readme-scale -->
-**Scale:** 4,332 tracked Python files | 145 top-level modules | 227,104 test functions across 5,623 test files | canonical counts in [METRICS.md](https://github.com/synaptent/aragora/blob/main/docs/METRICS.md)
+**Scale:** 4,332 tracked Python files | 145 top-level modules | 227,105 test functions across 5,623 test files | canonical counts in [METRICS.md](https://github.com/synaptent/aragora/blob/main/docs/METRICS.md)
 <!-- metrics:end -->
 
 ---

@@ -105,8 +105,9 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "uri": {
+          "description": "A portable absolute URI. The scheme needs two or more characters, which is what separates a real scheme from a Windows drive letter.",
           "type": "string",
-          "pattern": "^(?![Ff][Ii][Ll][Ee]:)[A-Za-z][A-Za-z0-9+.\\-]*:\\S*(?![\\s\\S])"
+          "pattern": "^(?![Ff][Ii][Ll][Ee]:)[A-Za-z][A-Za-z0-9+.\\-]+:\\S*(?![\\s\\S])"
         },
         "authority": { "$ref": "#/$defs/authority" },
         "fingerprint": { "$ref": "#/$defs/fingerprint" },
