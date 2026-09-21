@@ -190,6 +190,38 @@ class TestReceiptExportExemptionPattern:
             assert not handler._is_path_exempt_for_get(path)
 
 
+class TestReceiptExportRoutePermission:
+    """The RBAC route rule must admit exactly what the GET exemption pattern admits.
+
+    Both layers carry the same regex, so a request denied by one is denied by the
+    other; neither relies on the order the server runs its gates in.
+    """
+
+    RESERVED_SEGMENTS = ("dsar", "share", "search", "stats", "verify")
+
+    @pytest.fixture
+    def rbac(self):
+        """Middleware carrying the default route permissions."""
+        from aragora.rbac.middleware import RBACMiddleware, RBACMiddlewareConfig
+
+        return RBACMiddleware(RBACMiddlewareConfig(), validate_permissions=False)
+
+    @pytest.mark.parametrize("segment", RESERVED_SEGMENTS)
+    def test_reserved_segment_export_requires_authentication(self, rbac, segment):
+        """Path /api/v2/receipts/<reserved>/export must not be allowed unauthenticated."""
+        allowed, _reason, _permission = rbac.check_request(
+            f"/api/v2/receipts/{segment}/export", "GET", None
+        )
+        assert allowed is False
+
+    def test_receipt_id_export_allows_unauthenticated(self, rbac):
+        """A real receipt id keeps the public ODR export exemption at this layer."""
+        allowed, _reason, _permission = rbac.check_request(
+            "/api/v2/receipts/crux-1a2b3c4d/export", "GET", None
+        )
+        assert allowed is True
+
+
 class TestOAuthQueryParams:
     """Tests for OAuth query parameter whitelist."""
 
