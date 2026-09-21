@@ -16,17 +16,15 @@
   "$defs": {
     "fingerprint": {
       "type": "string",
-      "pattern": "^sha256:[0-9a-f]{64}$"
+      "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])"
     },
     "timestamp": {
       "type": "string",
       "format": "date-time",
-      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+      "pattern": "^(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8]))|(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)(?![\\s\\S])"
     },
     "nullableTimestamp": {
-      "type": ["string", "null"],
-      "format": "date-time",
-      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+      "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
     },
     "authority": {
       "type": "string",
@@ -154,8 +152,8 @@
       "properties": {
         "repository_id": { "type": "string", "minLength": 1 },
         "repository_name": { "type": "string", "minLength": 1 },
-        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-        "tree_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}(?![\\s\\S])" },
+        "tree_sha": { "type": "string", "pattern": "^[0-9a-f]{40}(?![\\s\\S])" },
         "branch": { "type": ["string", "null"] },
         "clean": { "type": "boolean" },
         "fingerprint": { "$ref": "#/$defs/fingerprint" }
@@ -180,7 +178,11 @@
         "status": { "enum": ["healthy", "degraded", "unavailable", "ambiguous"] },
         "authority": { "$ref": "#/$defs/authority" },
         "observed_at": { "$ref": "#/$defs/timestamp" },
-        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidenceHandle" } },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceHandle" }
+        },
         "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
         "next_legal_action": { "type": ["string", "null"] }
       },

@@ -73,6 +73,17 @@ def validator() -> Any:
     return jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker())
 
 
+@pytest.fixture(scope="module")
+def bare_validator() -> Any:
+    """A validator with no format checker: the shape of a locked runtime env.
+
+    `jsonschema` only asserts `format: date-time` when `rfc3339-validator` is
+    installed, which nothing in this repository pins, so every constraint the
+    envelope relies on has to hold without it.
+    """
+    return jsonschema.Draft202012Validator(_load(SCHEMA_PATH))
+
+
 @pytest.mark.parametrize("fixture_name", sorted(FIXTURE_NAMES))
 def test_trace_conforms_to_orientation_v1(validator: Any, fixture_name: str) -> None:
     validator.validate(_load(FIXTURE_DIR / fixture_name))
@@ -210,6 +221,66 @@ def test_schema_accepts_rfc3339_timestamps(validator: Any, well_formed: str) -> 
     document = _load(FIXTURE_DIR / "fresh_orientation.json")
     document["generated_at"] = well_formed
     validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    "impossible_date",
+    [
+        "2026-02-29T13:30:00Z",
+        "2026-02-30T13:30:00Z",
+        "2026-02-31T13:30:00Z",
+        "2026-04-31T13:30:00Z",
+        "2026-06-31T13:30:00Z",
+        "2100-02-29T13:30:00Z",
+        "1900-02-29T13:30:00Z",
+    ],
+)
+def test_schema_rejects_impossible_calendar_dates(
+    bare_validator: Any, impossible_date: str
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["generated_at"] = impossible_date
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    "leap_day", ["2024-02-29T13:30:00Z", "2000-02-29T13:30:00Z", "2400-02-29T13:30:00Z"]
+)
+def test_schema_accepts_real_leap_days(bare_validator: Any, leap_day: str) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["generated_at"] = leap_day
+    bare_validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    "pointer",
+    [
+        ("generated_at",),
+        ("orientation_fingerprint",),
+        ("repository_anchor", "commit_sha"),
+        ("repository_anchor", "tree_sha"),
+    ],
+)
+@pytest.mark.parametrize("trailer", ["\n", " ", "\r\n", "\t"])
+def test_anchored_patterns_reject_trailing_whitespace(
+    bare_validator: Any, pointer: tuple[str, ...], trailer: str
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    target: Any = document
+    for key in pointer[:-1]:
+        target = target[key]
+    target[pointer[-1]] = f"{target[pointer[-1]]}{trailer}"
+
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+def test_source_observation_requires_at_least_one_evidence_handle(validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["source_observations"][0]["evidence_refs"] = []
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(document)
 
 
 def test_evidence_handles_bind_one_fingerprint_per_uri() -> None:
