@@ -162,6 +162,7 @@ def test_since_unchanged_retains_compact_response(monkeypatch: Any, capsys: Any)
         "changed": False,
         "cursor": current.cursor(),
         "anchor": current.anchor["head"],
+        "covers": situation.CURSOR_SCOPE,
     }
 
 
@@ -281,6 +282,50 @@ def test_successful_local_probes_retain_observed_values(
     situation.add_local_beliefs(cap)
     assert {b.key: b.value for b in cap.beliefs}["working_tree"] == expected
     assert not cap.degraded and not cap.unknowns
+
+
+def _capsule_for_pr_set(monkeypatch: Any, prs: list[dict[str, Any]]) -> Any:
+    cap = _capsule(beliefs=[])
+    monkeypatch.setattr(situation.shutil, "which", lambda _: "/fixture/gh")
+    monkeypatch.setattr(
+        situation,
+        "sh",
+        lambda cmd, **k: (0, json.dumps(prs if cmd[1] == "pr" else [{"conclusion": "success"}])),
+    )
+    situation.add_github_beliefs(cap)
+    return cap
+
+
+def test_a_changed_pr_set_at_equal_counts_shares_a_cursor(monkeypatch: Any) -> None:
+    """Characterises the cursor's deliberate blind spot so it stays deliberate.
+
+    Digesting PR identities was measured and rejected: in a continuously
+    turning queue it fires on most ticks and blows the delta budget. The
+    contract is stated instead, and ``--pr N`` covers a specific PR.
+    """
+    before = _capsule_for_pr_set(
+        monkeypatch, [{"number": 9948, "isDraft": False}, {"number": 9949, "isDraft": True}]
+    )
+    after = _capsule_for_pr_set(
+        monkeypatch, [{"number": 9950, "isDraft": False}, {"number": 9949, "isDraft": True}]
+    )
+
+    assert {b.key: b.value for b in before.beliefs} == {b.key: b.value for b in after.beliefs}
+    assert before.cursor() == after.cursor()
+    assert "not PR identities" in situation.CURSOR_SCOPE
+
+
+def test_the_quiet_answer_states_what_it_covers(monkeypatch: Any, capsys: Any) -> None:
+    """ "changed: false" must not be readable as "nothing happened anywhere"."""
+    current = _capsule()
+    monkeypatch.setattr(situation, "build", lambda *a, **k: current)
+    monkeypatch.setattr(sys, "argv", ["situation", "--since", current.cursor()])
+
+    assert situation.main() == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["changed"] is False
+    assert payload["covers"] == situation.CURSOR_SCOPE
 
 
 def test_an_unresolvable_head_is_not_laundered_into_the_anchor(monkeypatch: Any) -> None:

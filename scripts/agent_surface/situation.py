@@ -28,7 +28,7 @@ Modes:
 
   situation.py                 compact view, emits a cursor        (measured 709 tokens)
   situation.py --no-fleet      git and GitHub only, no fleet probe (measured 552 tokens)
-  situation.py --since CURSOR  delta only; ~30 tokens when quiet   (measured  31 tokens)
+  situation.py --since CURSOR  delta only; ~40 tokens when quiet   (measured  41 tokens)
   situation.py --json          full structured payload
 
 Every belief carries its own ``source`` field, so provenance is already in the
@@ -82,6 +82,8 @@ REPO_SLUG_RE = re.compile(r"\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\Z")
 
 # scripts/merge_executor.py treats all of these as a failed run. Counting only
 # "failure" here would report a quiet 0 while main was timing out.
+CURSOR_SCOPE = "reported beliefs and both anchor revisions; PR counts, not PR identities"
+
 FAILURE_LIKE_CONCLUSIONS = frozenset(
     {"failure", "error", "cancelled", "timed_out", "startup_failure", "action_required"}
 )
@@ -156,6 +158,16 @@ class Capsule:
 
         Deliberately excludes ``generated_at`` -- otherwise every tick would
         report a change and the delta path would be worthless.
+
+        Scope, which callers must not over-read: this digests what the capsule
+        REPORTS -- both anchor revisions, the rendered beliefs (aggregate PR
+        counts, not PR identities), unknowns, frontier, obligations, and any
+        per-PR beliefs added by ``--pr N``. Two different open-PR sets with the
+        same counts therefore share a cursor. Digesting PR identities was
+        measured instead: in a repo whose queue turns over continuously it
+        reported a change on most ticks and cost 999 tokens against a 200-token
+        budget, which destroys the delta path it exists to serve. Track a
+        specific PR with ``--pr N``, whose state IS in this digest.
         """
         material = {
             "anchor": {k: v for k, v in self.anchor.items() if k != "generated_at"},
@@ -800,7 +812,18 @@ def main() -> int:
     if args.since:
         if args.since == cursor:
             # The whole point of the quiet path: ~30 tokens to say "nothing".
-            print(json.dumps({"changed": False, "cursor": cursor, "anchor": cap.anchor["head"]}))
+            # "covers" is part of the answer, not decoration: without it a
+            # reader takes this for "nothing happened anywhere".
+            print(
+                json.dumps(
+                    {
+                        "changed": False,
+                        "cursor": cursor,
+                        "anchor": cap.anchor["head"],
+                        "covers": CURSOR_SCOPE,
+                    }
+                )
+            )
             return 0
         changed = {b.key: b.value for b in cap.beliefs}
         print(
@@ -809,6 +832,7 @@ def main() -> int:
                     "changed": True,
                     "cursor": cursor,
                     "anchor": cap.anchor["head"],
+                    "covers": CURSOR_SCOPE,
                     "beliefs": changed,
                     "belief_details": [asdict(b) for b in cap.beliefs],
                     "unknowns": [asdict(u) for u in cap.unknowns],

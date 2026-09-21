@@ -190,7 +190,7 @@ Two stages. The first composed git and GitHub only; the second added
 |---|---:|---:|---|---|
 | cold orientation, git+GitHub | 1 | 552 | **PASS** | 24,272 → 552 (**44x**) |
 | cold orientation, **composed** | 1 | 709 | **PASS** | 24,272 → 709 (**34x**) |
-| quiet re-check, composed | 1 | 31 | **PASS** | 4,011 → 31 (**129x**) |
+| quiet re-check, composed | 1 | 41 | **PASS** | 4,011 → 41 (**98x**) |
 
 Composition costs 157 tokens and buys fleet state across the hemisphere seam
 plus per-PR settlement — the two things findings 1 and 2 said were missing.
@@ -250,7 +250,7 @@ Stated plainly so this document is not read as more finished than it is.
 | Journey measurement harness | **implemented** | `scripts/agent_surface/measure.py`, runs, exit 0/3/4 |
 | Baseline measurements, 4 journeys | **implemented** | table above, reproducible |
 | Six-field capsule, GitHub + git | **implemented** | `situation.py`, measured PASS on both budgets |
-| Cheap delta via cursor | **implemented** | 31 tokens measured; cursor stability verified |
+| Cheap delta via cursor | **implemented** | 41 tokens measured; cursor stability verified; scope stated in the answer |
 | Capsule composes existing aggregators | **partial** | 2 of ~17: `loop_control_status.py`, `settle_status.py` |
 | Cross-hemisphere composition | **implemented** | fleet beliefs from `.aragora*` state, measured |
 | `--repo` inference for `settle_status.py` | **implemented** | slug taken from the anchor |
