@@ -281,6 +281,28 @@ def _probe_rows(cap: Capsule, source: str, output: str) -> list[dict[str, Any]] 
     return rows
 
 
+def _probe_object(cap: Capsule, source: str, output: str) -> dict[str, Any] | None:
+    """Same guard for probes that answer with an object rather than rows.
+
+    A composed tool that changes shape must cost its own beliefs, not the whole
+    capsule: a traceback here would deny the caller the fields that did parse.
+    """
+    try:
+        data = json.loads(output)
+    except json.JSONDecodeError:
+        cap.degraded.append(f"{source} returned unparseable JSON")
+        return None
+    if not isinstance(data, dict):
+        cap.degraded.append(f"{source} returned {type(data).__name__}, expected an object")
+        return None
+    return data
+
+
+def _count(value: Any) -> int:
+    """Coerce a reported count, treating anything non-numeric as zero."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
 def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str, Any]:
     """One `gh pr list` and one `gh run list`. Returns raw PR rows for delta use."""
     raw: dict[str, Any] = {"prs": []}
@@ -449,17 +471,26 @@ def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
         )
         return
 
-    try:
-        data = json.loads(out)
-    except json.JSONDecodeError:
-        cap.degraded.append("loop_control_status returned unparseable JSON")
+    data = _probe_object(cap, "loop_control_status", out)
+    if data is None:
         return
 
-    summary = data.get("summary", {})
-    by_state = summary.get("by_state", {})
-    unknown_n = int(by_state.get("unknown", 0))
-    total = sum(int(v) for v in by_state.values()) or len(data.get("records", []))
-    shape = " / ".join(f"{n} {s}" for s, n in sorted(by_state.items()))
+    summary = data.get("summary")
+    if not isinstance(summary, dict):
+        cap.degraded.append(
+            "loop_control_status returned no usable summary; fleet beliefs withheld"
+        )
+        return
+    by_state = summary.get("by_state")
+    if not isinstance(by_state, dict):
+        cap.degraded.append("loop_control_status returned an invalid by_state; loop shape withheld")
+        by_state = {}
+    records = data.get("records")
+    unknown_n = _count(by_state.get("unknown"))
+    total = sum(_count(v) for v in by_state.values()) or (
+        len(records) if isinstance(records, list) else 0
+    )
+    shape = " / ".join(f"{_count(n)} {s}" for s, n in sorted(by_state.items()))
 
     cap.beliefs.append(
         Belief(
@@ -552,13 +583,12 @@ def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None
         )
         return
 
-    try:
-        s = json.loads(out)
-    except json.JSONDecodeError:
-        cap.degraded.append(f"settle_status returned unparseable JSON for PR {pr}")
+    s = _probe_object(cap, f"settle_status for PR {pr}", out)
+    if s is None:
         return
 
-    pr_head = s.get("head_sha", "")
+    head_sha = s.get("head_sha")
+    pr_head = head_sha if isinstance(head_sha, str) else ""
     cap.beliefs.append(Belief(f"pr{pr}_tier", s.get("tier"), "settle_status.py", "live", "derived"))
     cap.beliefs.append(
         Belief(
@@ -567,7 +597,11 @@ def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None
             "settle_status.py",
             "live",
             "derived",
-            note=f"true only at head {pr_head[:12]}; a new push invalidates it",
+            note=(
+                f"true only at head {pr_head[:12]}; a new push invalidates it"
+                if pr_head
+                else "settle_status reported no head; this cannot be tied to a revision"
+            ),
         )
     )
     cap.beliefs.append(

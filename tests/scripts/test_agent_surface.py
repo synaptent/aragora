@@ -284,6 +284,50 @@ def test_successful_local_probes_retain_observed_values(
     assert not cap.degraded and not cap.unknowns
 
 
+_MALFORMED_FLEET_PAYLOADS = [
+    None,
+    [1, 2, 3],
+    {"summary": None},
+    {"summary": {"by_state": ["running"]}},
+    {"summary": {"by_state": {"running": "many"}}},
+    {"summary": {"by_state": {}}, "records": "not-a-list"},
+]
+
+
+def test_fleet_shape_drift_degrades_instead_of_killing_the_capsule(monkeypatch: Any) -> None:
+    """A composed tool that changes shape must cost its own beliefs only."""
+    for payload in _MALFORMED_FLEET_PAYLOADS:
+        cap = _capsule(beliefs=[])
+        monkeypatch.setattr(situation, "sh", lambda *a, _p=payload, **k: (0, json.dumps(_p)))
+
+        situation.add_fleet_beliefs(cap)
+
+        assert cap.degraded, f"expected a degraded note for {payload!r}"
+        assert not any(b.key == "fleet_safe_to_continue" for b in cap.beliefs)
+
+
+def test_settlement_shape_drift_degrades_instead_of_killing_the_capsule(monkeypatch: Any) -> None:
+    for payload in (None, [], "a string"):
+        cap = _capsule(beliefs=[])
+        monkeypatch.setattr(situation, "sh", lambda *a, _p=payload, **k: (0, json.dumps(_p)))
+
+        situation.add_pr_beliefs(cap, 9948)
+
+        assert any("expected an object" in d for d in cap.degraded), payload
+        assert not any(b.key.startswith("pr9948_") for b in cap.beliefs)
+
+
+def test_a_settlement_without_a_head_sha_says_so(monkeypatch: Any) -> None:
+    payload = {"tier": 2, "quorum_conclusion": "FAILURE", "head_sha": None}
+    monkeypatch.setattr(situation, "sh", lambda *a, **k: (0, json.dumps(payload)))
+    cap = _capsule(beliefs=[])
+
+    situation.add_pr_beliefs(cap, 9948)
+
+    quorum = next(b for b in cap.beliefs if b.key == "pr9948_quorum")
+    assert "cannot be tied to a revision" in quorum.note
+
+
 def _capsule_for_pr_set(monkeypatch: Any, prs: list[dict[str, Any]]) -> Any:
     cap = _capsule(beliefs=[])
     monkeypatch.setattr(situation.shutil, "which", lambda _: "/fixture/gh")
