@@ -18,6 +18,16 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+    },
+    "nullableTimestamp": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$"
+    },
     "authority": {
       "type": "string",
       "enum": [
@@ -27,13 +37,57 @@
         "derived_recommendation"
       ]
     },
+    "authorityMonotonicity": {
+      "allOf": [
+        {
+          "if": { "properties": { "authority": { "const": "live_authority" } } },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "items": { "properties": { "authority": { "const": "live_authority" } } }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "authority": { "const": "durable_state" } } },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "items": {
+                  "properties": {
+                    "authority": { "enum": ["live_authority", "durable_state"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "authority": { "const": "commit_evidence" } } },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "items": {
+                  "properties": {
+                    "authority": {
+                      "enum": ["live_authority", "durable_state", "commit_evidence"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
     "freshness": {
       "type": "object",
       "required": ["status", "observed_at"],
       "properties": {
         "status": { "enum": ["fresh", "stale", "unknown"] },
-        "observed_at": { "type": "string", "format": "date-time" },
-        "expires_at": { "type": ["string", "null"], "format": "date-time" }
+        "observed_at": { "$ref": "#/$defs/timestamp" },
+        "expires_at": { "$ref": "#/$defs/nullableTimestamp" }
       },
       "additionalProperties": false
     },
@@ -125,11 +179,12 @@
         "source": { "type": "string" },
         "status": { "enum": ["healthy", "degraded", "unavailable", "ambiguous"] },
         "authority": { "$ref": "#/$defs/authority" },
-        "observed_at": { "type": "string", "format": "date-time" },
+        "observed_at": { "$ref": "#/$defs/timestamp" },
         "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidenceHandle" } },
         "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
         "next_legal_action": { "type": ["string", "null"] }
       },
+      "allOf": [{ "$ref": "#/$defs/authorityMonotonicity" }],
       "additionalProperties": false
     },
     "fact": {
@@ -147,48 +202,7 @@
         "freshness": { "$ref": "#/$defs/freshness" },
         "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       },
-      "allOf": [
-        {
-          "if": { "properties": { "authority": { "const": "live_authority" } } },
-          "then": {
-            "properties": {
-              "evidence_refs": {
-                "items": { "properties": { "authority": { "const": "live_authority" } } }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "authority": { "const": "durable_state" } } },
-          "then": {
-            "properties": {
-              "evidence_refs": {
-                "items": {
-                  "properties": {
-                    "authority": { "enum": ["live_authority", "durable_state"] }
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "authority": { "const": "commit_evidence" } } },
-          "then": {
-            "properties": {
-              "evidence_refs": {
-                "items": {
-                  "properties": {
-                    "authority": {
-                      "enum": ["live_authority", "durable_state", "commit_evidence"]
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      ],
+      "allOf": [{ "$ref": "#/$defs/authorityMonotonicity" }],
       "additionalProperties": false
     },
     "workRecommendation": {
@@ -340,7 +354,7 @@
         "kind": { "const": "orientation" },
         "mode": { "const": "full" },
         "orientation_fingerprint": { "$ref": "#/$defs/fingerprint" },
-        "generated_at": { "type": "string", "format": "date-time" },
+        "generated_at": { "$ref": "#/$defs/timestamp" },
         "repository_anchor": { "$ref": "#/$defs/repositoryAnchor" },
         "mission": { "$ref": "#/$defs/mission" },
         "work_recommendations": { "type": "array", "items": { "$ref": "#/$defs/workRecommendation" } },

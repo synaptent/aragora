@@ -47,6 +47,7 @@ AUTHORITY_PRECEDENCE = (
     "commit_evidence",
     "derived_recommendation",
 )
+EVIDENCE_COLLECTIONS = (*DERIVED_COLLECTIONS, "source_observations", "facts")
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -55,6 +56,14 @@ def _load(path: Path) -> dict[str, Any]:
 
 def _canonical_bytes(document: dict[str, Any]) -> bytes:
     return json.dumps(document, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def _evidence_handles(document: dict[str, Any]) -> list[dict[str, Any]]:
+    handles: list[dict[str, Any]] = []
+    for collection in EVIDENCE_COLLECTIONS:
+        for record in document.get(collection, ()):
+            handles.extend(record["evidence_refs"])
+    return handles
 
 
 @pytest.fixture(scope="module")
@@ -97,10 +106,7 @@ def test_schema_rejects_undeclared_derived_fields(
 def test_traces_exercise_portable_lower_layer_evidence() -> None:
     handles: list[dict[str, Any]] = []
     for fixture_name in FIXTURE_NAMES - {"quiet_no_change.json"}:
-        document = _load(FIXTURE_DIR / fixture_name)
-        for collection in (*DERIVED_COLLECTIONS, "source_observations", "facts"):
-            for record in document[collection]:
-                handles.extend(record["evidence_refs"])
+        handles.extend(_evidence_handles(_load(FIXTURE_DIR / fixture_name)))
     assert handles
     assert all(urlsplit(handle["uri"]).scheme not in {"", "file"} for handle in handles)
 
@@ -134,6 +140,86 @@ def test_fact_authority_cannot_exceed_cited_evidence(
             validator.validate(document)
     else:
         validator.validate(document)
+
+
+@pytest.mark.parametrize("observation_authority", AUTHORITY_PRECEDENCE)
+@pytest.mark.parametrize("evidence_authority", AUTHORITY_PRECEDENCE)
+def test_source_observation_authority_cannot_exceed_cited_evidence(
+    validator: Any, observation_authority: str, evidence_authority: str
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    observation = document["source_observations"][0]
+    observation["authority"] = observation_authority
+    observation["evidence_refs"][0]["authority"] = evidence_authority
+
+    exceeds = AUTHORITY_PRECEDENCE.index(observation_authority) < AUTHORITY_PRECEDENCE.index(
+        evidence_authority
+    )
+    if exceeds:
+        with pytest.raises(jsonschema.ValidationError):
+            validator.validate(document)
+    else:
+        validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        "not-a-date",
+        "2026-08-31",
+        "2026-08-31 13:30:00Z",
+        "2026-13-31T13:30:00Z",
+        "2026-08-31T25:30:00Z",
+        "2026-08-31T13:30:00",
+        "",
+    ],
+)
+@pytest.mark.parametrize(
+    ("fixture_name", "pointer"),
+    [
+        ("fresh_orientation.json", ("generated_at",)),
+        ("fresh_orientation.json", ("source_observations", 0, "observed_at")),
+        ("fresh_orientation.json", ("facts", 0, "freshness", "observed_at")),
+        ("fresh_orientation.json", ("facts", 0, "freshness", "expires_at")),
+    ],
+)
+def test_schema_rejects_malformed_timestamps(
+    validator: Any, fixture_name: str, pointer: tuple[Any, ...], malformed: str
+) -> None:
+    document = _load(FIXTURE_DIR / fixture_name)
+    target: Any = document
+    for key in pointer[:-1]:
+        target = target[key]
+    target[pointer[-1]] = malformed
+
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    "well_formed",
+    [
+        "2026-08-31T13:30:00Z",
+        "2026-08-31T13:30:00.123456Z",
+        "2026-08-31T13:30:00+05:30",
+        "2026-08-31T13:30:00-08:00",
+        "2026-12-01T00:00:00Z",
+    ],
+)
+def test_schema_accepts_rfc3339_timestamps(validator: Any, well_formed: str) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["generated_at"] = well_formed
+    validator.validate(document)
+
+
+def test_evidence_handles_bind_one_fingerprint_per_uri() -> None:
+    for fixture_name in sorted(FIXTURE_NAMES):
+        document = _load(FIXTURE_DIR / fixture_name)
+        by_uri: dict[str, set[str]] = {}
+        for handle in _evidence_handles(document):
+            by_uri.setdefault(handle["uri"], set()).add(handle["fingerprint"])
+        divergent = {uri: prints for uri, prints in by_uri.items() if len(prints) > 1}
+        assert not divergent, f"{fixture_name} binds one uri to several fingerprints: {divergent}"
 
 
 def test_live_blocker_overrides_ready_recommendation() -> None:
