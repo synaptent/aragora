@@ -306,6 +306,35 @@ def test_fleet_shape_drift_degrades_instead_of_killing_the_capsule(monkeypatch: 
         assert not any(b.key == "fleet_safe_to_continue" for b in cap.beliefs)
 
 
+def test_an_unreadable_loop_shape_withholds_the_green_verdict(monkeypatch: Any) -> None:
+    """Coercing bad counts to zero would publish an uncaveated green as a live belief."""
+    payload = {
+        "summary": {"fleet_safe_to_continue": True, "by_state": {"running": "many"}},
+    }
+    monkeypatch.setattr(situation, "sh", lambda *a, **k: (0, json.dumps(payload)))
+    cap = _capsule(beliefs=[])
+
+    situation.add_fleet_beliefs(cap)
+
+    assert not any(b.key == "fleet_safe_to_continue" for b in cap.beliefs)
+    assert not any(b.key == "fleet_loops" for b in cap.beliefs)
+    assert cap.unknowns, "an unreadable fleet must leave a stated unknown"
+
+
+def test_volatile_probe_detail_does_not_churn_the_cursor() -> None:
+    """A rate-limit message with a timestamp must not disable the delta path."""
+    first = _capsule(beliefs=[])
+    first.degraded = ["gh pr list failed: API rate limit exceeded at 15:04:01"]
+    second = _capsule(beliefs=[])
+    second.degraded = ["gh pr list failed: API rate limit exceeded at 15:09:44"]
+
+    assert first.cursor() == second.cursor()
+
+    different = _capsule(beliefs=[])
+    different.degraded = ["loop_control_status unavailable: boom"]
+    assert different.cursor() != first.cursor()
+
+
 def test_settlement_shape_drift_degrades_instead_of_killing_the_capsule(monkeypatch: Any) -> None:
     for payload in (None, [], "a string"):
         cap = _capsule(beliefs=[])

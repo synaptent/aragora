@@ -134,14 +134,15 @@ are fossils of a missing composed view. The most severe:
 
 - **Rollup poison** — the newest check-run row for a name can be a *cancelled
   advisory run*, so reading latest-per-name yields a red that "is not evidence
-  that the PR introduced violations" (`docs/runbooks/MERGE_STATE_UNSTABLE_SETTLEMENT.md:118`).
+  that the PR introduced private paths or portability" problems
+  (`docs/runbooks/MERGE_STATE_UNSTABLE_SETTLEMENT.md:71`).
 - **Settlement replay** — a human settlement status from an old head read as
   authority for a new one; "if a new commit is pushed, the head SHA changes and
-  the settlement signal no longer applies" (`docs/governance/MERGE_GATE_RECONCILIATION.md:102`).
+  the settlement signal no longer applies" (`docs/governance/MERGE_GATE_RECONCILIATION.md:138`).
 - **Skipped ≠ red** — "Reviewers and dashboards sometimes look at `gh run list
   --branch main` and conclude CI is broken because most runs show as `skipped`.
   This is a misread of the telemetry, not a real failure mode"
-  (`docs/CI_LANES.md:109`).
+  (`docs/CI_LANES.md:111`).
 - **Liveness disagreement** — `owner_liveness.assessed` and `liveness_state` are
   deliberately separate and can legitimately disagree; reading the wrong one
   "declares a live owner dead" (`scripts/identify_lane_owner.py:1-60`).

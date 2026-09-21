@@ -80,10 +80,10 @@ GH_TIMEOUT = 90
 # distinguish an answer from a failure.
 REPO_SLUG_RE = re.compile(r"\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\Z")
 
-# scripts/merge_executor.py treats all of these as a failed run. Counting only
-# "failure" here would report a quiet 0 while main was timing out.
 CURSOR_SCOPE = "reported beliefs and both anchor revisions; PR counts, not PR identities"
 
+# scripts/merge_executor.py treats all of these as a failed run. Counting only
+# "failure" here would report a quiet 0 while main was timing out.
 FAILURE_LIKE_CONCLUSIONS = frozenset(
     {"failure", "error", "cancelled", "timed_out", "startup_failure", "action_required"}
 )
@@ -176,7 +176,10 @@ class Capsule:
             "unknowns": [asdict(u) for u in self.unknowns],
             "frontier": [asdict(a) for a in self.frontier],
             "obligations": self.obligations,
-            "degraded": self.degraded,
+            # Only the stable prefix of each note: the detail after the colon is
+            # raw probe stderr, so a rate-limit message carrying a timestamp
+            # would churn the cursor on every tick exactly when GitHub is flaky.
+            "degraded": [note.split(":", 1)[0] for note in self.degraded],
         }
         blob = json.dumps(material, sort_keys=True, default=str)
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
@@ -298,9 +301,9 @@ def _probe_object(cap: Capsule, source: str, output: str) -> dict[str, Any] | No
     return data
 
 
-def _count(value: Any) -> int:
-    """Coerce a reported count, treating anything non-numeric as zero."""
-    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+def _is_count(value: Any) -> bool:
+    """True only for a real integer count; bools are not counts."""
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str, Any]:
@@ -482,15 +485,28 @@ def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
         )
         return
     by_state = summary.get("by_state")
-    if not isinstance(by_state, dict):
-        cap.degraded.append("loop_control_status returned an invalid by_state; loop shape withheld")
-        by_state = {}
+    # Coercing an unreadable shape to zero would render "0 running" and compute an
+    # uncaveated green verdict: a quiet lie in place of a loud unknown.
+    if not isinstance(by_state, dict) or not all(_is_count(v) for v in by_state.values()):
+        cap.degraded.append(
+            "loop_control_status returned an unreadable by_state; "
+            "loop shape and fleet verdict withheld"
+        )
+        cap.unknowns.append(
+            Unknown(
+                "Are the background loops safe to continue?",
+                "Dispatching work into a halted or blocked fleet wastes the run.",
+                "python3 scripts/loop_control_status.py --json",
+                3100,
+            )
+        )
+        return
     records = data.get("records")
-    unknown_n = _count(by_state.get("unknown"))
-    total = sum(_count(v) for v in by_state.values()) or (
+    unknown_n = int(by_state.get("unknown", 0))
+    total = sum(int(v) for v in by_state.values()) or (
         len(records) if isinstance(records, list) else 0
     )
-    shape = " / ".join(f"{_count(n)} {s}" for s, n in sorted(by_state.items()))
+    shape = " / ".join(f"{n} {s}" for s, n in sorted(by_state.items()))
 
     cap.beliefs.append(
         Belief(
