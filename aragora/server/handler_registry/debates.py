@@ -69,15 +69,17 @@ ReviewQueueHandler = _safe_import("aragora.server.handlers", "ReviewQueueHandler
 EvaluationHandler = _safe_import("aragora.server.handlers", "EvaluationHandler")
 
 # Receipts handler
-ReceiptsHandler = _safe_import("aragora.server.handlers.receipts", "ReceiptsHandler")
+ReceiptsHandler = _safe_import("aragora.server.handlers.decisions.receipts", "ReceiptsHandler")
 
 # Hybrid debates
 HybridDebateHandler = _safe_import(
-    "aragora.server.handlers.hybrid_debate_handler", "HybridDebateHandler"
+    "aragora.server.handlers.debates.hybrid_debate_handler", "HybridDebateHandler"
 )
 
 # Email debate handler
-EmailDebateHandler = _safe_import("aragora.server.handlers.email_debate", "EmailDebateHandler")
+EmailDebateHandler = _safe_import(
+    "aragora.server.handlers.email.email_debate", "EmailDebateHandler"
+)
 
 # Security debate handler
 SecurityDebateHandler = _safe_import(
@@ -86,15 +88,17 @@ SecurityDebateHandler = _safe_import(
 
 # Template discovery handler
 TemplateDiscoveryHandler = _safe_import(
-    "aragora.server.handlers.template_discovery", "TemplateDiscoveryHandler"
+    "aragora.server.handlers.catalog.template_discovery", "TemplateDiscoveryHandler"
 )
 
 # Prompt engine handler
 PromptEngineHandler = _safe_import("aragora.server.handlers.prompt_engine", "PromptEngineHandler")
 
 # Composite, stats, share, interventions, settlement, spectate, receipt export
-CompositeHandler = _safe_import("aragora.server.handlers.composite", "CompositeHandler")
-DebateStatsHandler = _safe_import("aragora.server.handlers.debate_stats", "DebateStatsHandler")
+CompositeHandler = _safe_import("aragora.server.handlers.debates.composite", "CompositeHandler")
+DebateStatsHandler = _safe_import(
+    "aragora.server.handlers.debates.debate_stats", "DebateStatsHandler"
+)
 DebateShareHandler = _safe_import("aragora.server.handlers.debates.share", "DebateShareHandler")
 PublicDebateViewerHandler = _safe_import(
     "aragora.server.handlers.debates.public_viewer", "PublicDebateViewerHandler"
@@ -111,7 +115,7 @@ DebateDecisionBridgeHandler = _safe_import(
 SettlementHandler = _safe_import("aragora.server.handlers.settlements", "SettlementHandler")
 SpectateStreamHandler = _safe_import("aragora.server.handlers.spectate_ws", "SpectateStreamHandler")
 ReceiptExportHandler = _safe_import(
-    "aragora.server.handlers.receipt_export", "ReceiptExportHandler"
+    "aragora.server.handlers.decisions.receipt_export", "ReceiptExportHandler"
 )
 
 # =============================================================================
