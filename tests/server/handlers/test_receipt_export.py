@@ -757,6 +757,29 @@ class TestStatelessOdrVerification:
         assert statuses["canonical_digest"] == "pass"
 
     @pytest.mark.asyncio
+    async def test_unsigned_document_is_unverified_when_a_key_is_served(self):
+        _, pem, key_id = _signing_material()
+        handler = _receipts_handler()
+        export = await handler.handle(
+            "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+        )
+        document = json.loads(export.body)
+        assert document["signatures"] == []
+
+        async def _resolved() -> tuple[str, str]:
+            return pem, key_id
+
+        handler._get_signing_public_key = _resolved  # type: ignore[method-assign]
+        payload = json.loads(
+            (await handler.handle("POST", "/api/v2/receipts/verify", document, {})).body
+        )
+
+        assert payload["verified"] is False
+        statuses = {check["name"]: check["status"] for check in payload["checks"]}
+        assert statuses["signature"] == "warn"
+        assert payload["key_id"] == key_id
+
+    @pytest.mark.asyncio
     async def test_empty_object_is_a_400_naming_odr_version(self):
         handler = _receipts_handler()
         result = await handler.handle("POST", "/api/v2/receipts/verify", {}, {})
