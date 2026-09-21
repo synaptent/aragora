@@ -850,7 +850,7 @@ Provide your comparison:"""
 
         except ImportError:
             # Fallback to direct API call using HTTP pool
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             api_key = get_api_key("ANTHROPIC_API_KEY", required=False)
             if not api_key:

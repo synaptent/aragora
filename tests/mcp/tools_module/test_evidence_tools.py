@@ -257,7 +257,7 @@ class TestVerifyCitationTool:
         mock_pool.get_session.return_value = mock_session_ctx
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await verify_citation_tool(url="https://example.com/paper")
@@ -284,7 +284,7 @@ class TestVerifyCitationTool:
         mock_pool.get_session.return_value = mock_session_ctx
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await verify_citation_tool(url="https://example.com/missing")
@@ -309,7 +309,7 @@ class TestVerifyCitationTool:
         mock_pool.get_session.return_value = mock_session_ctx
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await verify_citation_tool(url="https://slow.example.com")
@@ -331,7 +331,7 @@ class TestVerifyCitationTool:
         mock_pool.get_session.return_value = mock_session_ctx
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await verify_citation_tool(url="https://broken.example.com")
