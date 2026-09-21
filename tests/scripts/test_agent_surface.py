@@ -283,6 +283,59 @@ def test_successful_local_probes_retain_observed_values(
     assert not cap.degraded and not cap.unknowns
 
 
+def test_probe_success_with_empty_stdout_never_returns_stderr() -> None:
+    """`git status --porcelain` answers "clean" with silence, so an empty
+    stdout on exit 0 is an answer and must not fall through to stderr."""
+    code, output = situation.sh(
+        [sys.executable, "-c", "import sys; print('warning: advisory', file=sys.stderr)"]
+    )
+    assert (code, output) == (0, "")
+
+
+def test_a_clean_tree_that_warns_is_not_reported_as_dirty(monkeypatch: Any) -> None:
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = "warning: safe.directory advice: detected dubious ownership\n"
+
+    monkeypatch.setattr(situation.subprocess, "run", lambda *a, **kw: Result())
+    cap = _capsule()
+    situation.add_local_beliefs(cap)
+
+    working_tree = next(b for b in cap.beliefs if b.key == "working_tree")
+    assert working_tree.value == "clean"
+    assert not any("uncommitted" in a.label for a in cap.frontier)
+
+
+def test_failure_like_run_conclusions_are_counted_and_named(monkeypatch: Any) -> None:
+    cap = _capsule(beliefs=[])
+    runs = [{"conclusion": c} for c in ["timed_out", "cancelled", "success", "skipped"]]
+    monkeypatch.setattr(situation.shutil, "which", lambda _: "/fixture/gh")
+    monkeypatch.setattr(
+        situation, "sh", lambda cmd, **k: (0, json.dumps([] if cmd[1] == "pr" else runs))
+    )
+    situation.add_github_beliefs(cap)
+
+    failures = next(b for b in cap.beliefs if b.key == "main_recent_failures")
+    assert failures.value == 2
+    assert "cancelled" in failures.note and "timed_out" in failures.note
+    assert "skipped is correct self-gating" in failures.note
+
+
+def test_settlement_frontier_is_runnable_only_when_the_pr_is_known() -> None:
+    known = _capsule()
+    situation.add_frontier(known, pr=9948)
+    concrete = next(a for a in known.frontier if "settlement" in a.label.lower())
+    assert "--pr 9948" in concrete.command
+    assert not concrete.prerequisite
+
+    unknown = _capsule()
+    situation.add_frontier(unknown)
+    placeholder = next(a for a in unknown.frontier if "settlement" in a.label.lower())
+    assert "--pr <N>" in placeholder.command
+    assert placeholder.prerequisite
+
+
 def test_shell_probe_uses_explicit_cwd(tmp_path: Path) -> None:
     code, output = situation.sh(
         [sys.executable, "-c", "from pathlib import Path; print(Path.cwd())"], cwd=tmp_path

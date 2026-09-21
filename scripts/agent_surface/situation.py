@@ -26,8 +26,9 @@ Six fields, fixed order, always present (the capsule contract):
 
 Modes:
 
-  situation.py                 compact view, emits a cursor        (measured 552 tokens)
-  situation.py --since CURSOR  delta only; ~30 tokens when quiet   (measured  32 tokens)
+  situation.py                 compact view, emits a cursor        (measured 709 tokens)
+  situation.py --no-fleet      git and GitHub only, no fleet probe (measured 552 tokens)
+  situation.py --since CURSOR  delta only; ~30 tokens when quiet   (measured  31 tokens)
   situation.py --json          full structured payload
 
 Every belief carries its own ``source`` field, so provenance is already in the
@@ -79,6 +80,12 @@ GH_TIMEOUT = 90
 # distinguish an answer from a failure.
 REPO_SLUG_RE = re.compile(r"\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\Z")
 
+# scripts/merge_executor.py treats all of these as a failed run. Counting only
+# "failure" here would report a quiet 0 while main was timing out.
+FAILURE_LIKE_CONCLUSIONS = frozenset(
+    {"failure", "error", "cancelled", "timed_out", "startup_failure", "action_required"}
+)
+
 
 # --------------------------------------------------------------------------
 # probes
@@ -86,10 +93,16 @@ REPO_SLUG_RE = re.compile(r"\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\Z")
 
 
 def sh(cmd: list[str], timeout: int = 30, *, cwd: Path | None = None) -> tuple[int, str]:
-    """Run a probe. A failed probe is data (it becomes an UNKNOWN), not a crash."""
+    """Run a probe. A failed probe is data (it becomes an UNKNOWN), not a crash.
+
+    On success only stdout is the answer. Some probes answer legitimately with
+    nothing (``git status --porcelain`` on a clean tree), and falling through to
+    stderr would hand back an unrelated warning as if the probe had reported it.
+    """
     try:
         p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout)
-        return p.returncode, (p.stdout or p.stderr).strip()
+        out = p.stdout if p.returncode == 0 else (p.stdout or p.stderr)
+        return p.returncode, out.strip()
     except FileNotFoundError:
         return 127, f"{cmd[0]} not installed"
     except subprocess.TimeoutExpired:
@@ -354,8 +367,15 @@ def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str,
     else:
         cap.degraded.append(f"gh run list failed: {out[:120]}")
     if runs is not None:
-        failures = [r for r in runs if r.get("conclusion") == "failure"]
+        failures = [r for r in runs if r.get("conclusion") in FAILURE_LIKE_CONCLUSIONS]
         skipped = sum(1 for r in runs if r.get("conclusion") == "skipped")
+        counted = sorted({str(r.get("conclusion")) for r in failures})
+        notes = [f"counted as failure-like: {', '.join(counted)}"] if counted else []
+        if skipped:
+            notes.append(
+                f"{skipped}/{len(runs)} runs skipped -- skipped is correct "
+                "self-gating here, NOT a red main"
+            )
         cap.beliefs.append(
             Belief(
                 "main_recent_failures",
@@ -363,12 +383,7 @@ def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str,
                 "gh run list --branch main --limit 15",
                 "live",
                 "derived",
-                note=(
-                    f"{skipped}/{len(runs)} runs skipped -- skipped is correct "
-                    "self-gating here, NOT a red main"
-                )
-                if skipped
-                else "",
+                note="; ".join(notes),
             )
         )
         # Deliberately an UNKNOWN, not a belief: run conclusions are not the
@@ -576,7 +591,7 @@ def add_objective(cap: Capsule, repo_root: Path | None = None) -> None:
     }
 
 
-def add_frontier(cap: Capsule) -> None:
+def add_frontier(cap: Capsule, pr: int | None = None) -> None:
     """Actions legal RIGHT NOW, given what we established above."""
     b = {x.key: x.value for x in cap.beliefs}
     branch = cap.anchor.get("branch", "")
@@ -586,14 +601,16 @@ def add_frontier(cap: Capsule) -> None:
     # placeholder the agent must resolve has pushed the join back onto it.
     slug = cap.anchor.get("repo", "")
     if "/" in slug:
+        target = str(pr) if pr is not None else "<N>"
         cap.frontier.append(
             Action(
                 "Inspect a specific PR's settlement",
-                f"python3 scripts/agent_surface/situation.py --pr N   "
-                f"# direct: scripts/settle_status.py --repo {slug} --pr N",
+                f"python3 scripts/agent_surface/situation.py --pr {target}   "
+                f"# direct: scripts/settle_status.py --repo {slug} --pr {target}",
                 "cheap",
                 "none",
                 True,
+                prerequisite="" if pr is not None else "substitute the PR number you mean",
             )
         )
     else:
@@ -739,7 +756,7 @@ def build(repo_root: Path, pr: int | None = None, fleet: bool = True) -> Capsule
         add_pr_beliefs(cap, pr, repo_root)
     add_objective(cap, repo_root)
     add_standing_unknowns(cap)
-    add_frontier(cap)
+    add_frontier(cap, pr)
     return cap
 
 
