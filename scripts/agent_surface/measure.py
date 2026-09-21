@@ -30,13 +30,15 @@ Output: one JSON object on stdout::
 
     {journey, question, calls[{label, cmd, exit_code, out_tokens, err_tokens,
      out_bytes, wall_ms, truncated}], totals{calls, tokens, wall_ms},
-     budget{name, limit_calls, limit_tokens, verdict, margin}, tokenizer,
-     measured_at}
+     budget{name, limit_calls, limit_tokens, verdict, failed_calls, margin},
+     tokenizer, measured_at}
 
 Exit codes (so a wrapper or CI lane can branch on ``$?``):
 
 - 0 -- journey ran and met its budget
 - 3 -- journey ran and BLEW its budget (a result, not an error)
+- 4 -- journey could not be measured: at least one call exited non-zero, so its
+  cheapness is the absence of an answer rather than an efficient one
 - 1 -- harness failure (bad journey file, unknown journey name)
 
 Token accounting: counts are produced with ``tiktoken`` ``cl100k_base``, which is
@@ -58,7 +60,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shlex
 import subprocess
 import sys
 import time
@@ -228,6 +229,9 @@ def score(result: JourneyResult) -> dict[str, Any]:
     spec = BUDGETS.get(result.budget, BUDGETS["none"])
     limit_calls = spec["limit_calls"]
     limit_tokens = spec["limit_tokens"]
+    # A failed call costs almost no tokens, so cheapness here is the absence of
+    # an answer rather than an efficient one. Scoring it would let silence win.
+    failed_calls = [c.label for c in result.calls if c.exit_code != 0]
 
     if limit_calls is None:
         return {
@@ -237,12 +241,16 @@ def score(result: JourneyResult) -> dict[str, Any]:
             "limit_tokens": None,
             "actual_calls": len(result.calls),
             "actual_tokens": result.total_tokens,
+            "failed_calls": failed_calls,
             "verdict": "UNSCORED",
         }
 
     over_calls = len(result.calls) > limit_calls
     over_tokens = result.total_tokens > limit_tokens
-    verdict = "FAIL" if (over_calls or over_tokens) else "PASS"
+    if failed_calls:
+        verdict = "INVALID"
+    else:
+        verdict = "FAIL" if (over_calls or over_tokens) else "PASS"
 
     return {
         "name": result.budget,
@@ -251,6 +259,7 @@ def score(result: JourneyResult) -> dict[str, Any]:
         "limit_tokens": limit_tokens,
         "actual_calls": len(result.calls),
         "actual_tokens": result.total_tokens,
+        "failed_calls": failed_calls,
         "verdict": verdict,
         "over_calls_by": max(0, len(result.calls) - limit_calls),
         "over_tokens_by": max(0, result.total_tokens - limit_tokens),
@@ -291,6 +300,11 @@ def render_human(result: JourneyResult, budget: dict[str, Any]) -> str:
         )
         if budget["verdict"] == "FAIL" and budget.get("overshoot_x"):
             lines.append(f"  overshoot: {budget['overshoot_x']}x the token budget")
+    if budget.get("failed_calls"):
+        lines.append(
+            f"  not measured: {len(budget['failed_calls'])} call(s) exited non-zero "
+            f"({', '.join(budget['failed_calls'])})"
+        )
     return "\n".join(lines)
 
 
@@ -327,6 +341,7 @@ def main() -> int:
     stamp = time.strftime("%Y-%m-%dT%H:%M:%S%z")
     payloads: list[dict[str, Any]] = []
     any_fail = False
+    any_invalid = False
 
     for name in names:
         j = journeys[name]
@@ -344,6 +359,7 @@ def main() -> int:
 
         budget = score(result)
         any_fail = any_fail or budget["verdict"] == "FAIL"
+        any_invalid = any_invalid or bool(budget.get("failed_calls"))
 
         payload = asdict(result)
         payload["totals"] = {
@@ -361,6 +377,8 @@ def main() -> int:
     if args.json:
         print(json.dumps({"results": payloads}, indent=2))
 
+    if any_invalid:
+        return 4
     return 3 if any_fail else 0
 
 

@@ -627,7 +627,7 @@ def test_stderr_counts_against_the_budget() -> None:
         measure.CallRecord(
             label="c",
             cmd="true",
-            exit_code=1,
+            exit_code=0,
             out_tokens=0,
             err_tokens=500,
             out_bytes=0,
@@ -636,6 +636,58 @@ def test_stderr_counts_against_the_budget() -> None:
     )
     assert r.total_tokens == 500
     assert measure.score(r)["verdict"] == "FAIL"
+
+
+def _failing_result(budget: str) -> Any:
+    r = measure.JourneyResult(journey="t", question="q", budget=budget)
+    r.calls.append(
+        measure.CallRecord(
+            label="the capsule itself",
+            cmd="situation.py",
+            exit_code=7,
+            out_tokens=0,
+            err_tokens=0,
+            out_bytes=0,
+            wall_ms=1,
+        )
+    )
+    return r
+
+
+def test_a_failed_call_can_never_certify_a_budget() -> None:
+    """Zero tokens from a command that did not run is not an efficient answer."""
+    s = measure.score(_failing_result("cold_orientation"))
+    assert s["verdict"] == "INVALID"
+    assert s["failed_calls"] == ["the capsule itself"]
+
+
+def test_failed_calls_are_named_even_when_the_budget_is_unscored() -> None:
+    s = measure.score(_failing_result("no_such_budget"))
+    assert s["verdict"] == "UNSCORED"
+    assert s["failed_calls"] == ["the capsule itself"]
+
+
+def test_cli_reports_an_unmeasurable_journey_distinctly(
+    monkeypatch: Any, tmp_path: Path, capsys: Any
+) -> None:
+    spec = {
+        "journeys": {
+            "broken": {
+                "question": "q",
+                "budget": "cold_orientation",
+                "calls": [{"label": "broken probe", "cmd": "exit 7"}],
+            }
+        }
+    }
+    path = tmp_path / "journeys.json"
+    path.write_text(json.dumps(spec))
+    monkeypatch.setattr(sys, "argv", ["measure", "broken", "--file", str(path)])
+
+    assert measure.main() == 4
+
+    out = capsys.readouterr().out
+    assert "INVALID" in out
+    assert "not measured" in out
 
 
 # --------------------------------------------------------------------------
