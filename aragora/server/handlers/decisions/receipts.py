@@ -62,7 +62,7 @@ from aragora.server.handlers.utils.receipt_delivery_history import (
 )
 from aragora.server.handlers.utils.rate_limit import rate_limit
 from aragora.server.handlers.openapi_decorator import api_endpoint
-from aragora.rbac.decorators import require_permission
+from aragora.rbac.decorators import PermissionDeniedError, require_permission
 from aragora.server.validation.query_params import safe_query_int
 
 logger = logging.getLogger(__name__)
@@ -735,7 +735,7 @@ class ReceiptsHandler(BaseHandler):
 
                 # Export endpoint. The ODR format is a public trust surface and
                 # is served without an AuthorizationContext; every other format
-                # stays behind receipts:read and answers 401 rather than
+                # stays behind receipts:read and answers 401 or 403 rather than
                 # surfacing the decorator's denial as a 500.
                 if len(parts) > 5 and parts[5] == "export":
                     export_params = _last_query_values(query_params)
@@ -753,9 +753,15 @@ class ReceiptsHandler(BaseHandler):
                         if _auth_enabled():
                             return _auth_required_response()
                         return await self._export_receipt(receipt_id, export_params)
-                    return await self._export_receipt(
-                        receipt_id, export_params, context=auth_context
-                    )
+                    try:
+                        return await self._export_receipt(
+                            receipt_id, export_params, context=auth_context
+                        )
+                    except PermissionDeniedError as exc:
+                        return json_response(
+                            {"error": f"Permission denied: {exc}", "code": "permission_denied"},
+                            status=403,
+                        )
 
                 # Combined verification (signature + integrity)
                 if len(parts) > 5 and parts[5] == "verify" and method == "GET":

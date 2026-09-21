@@ -648,6 +648,28 @@ class TestPublicOdrExport:
         assert result.status_code == 200
         assert json.loads(result.body)["receipt_id"] == "r-odr-1"
 
+    @pytest.mark.no_auto_auth
+    @pytest.mark.asyncio
+    async def test_legacy_format_denies_a_context_without_receipts_read(self):
+        """The conftest RBAC bypass is opted out of so the real checker decides."""
+        from aragora.rbac.models import AuthorizationContext
+
+        request = _make_mock_handler()
+        request._auth_context = AuthorizationContext(
+            user_id="u-member", roles={"member"}, permissions=set()
+        )
+        handler = _receipts_handler()
+
+        with patch("aragora.server.handlers.decisions.receipts._auth_enabled", return_value=True):
+            result = await handler.handle(
+                "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "json"}, {}, request
+            )
+
+        assert result.status_code == 403
+        body = json.loads(result.body)
+        assert body["error"].startswith("Permission denied: ")
+        assert body["code"] == "permission_denied"
+
 
 class TestStatelessOdrVerification:
     """POST /api/v2/receipts/verify checks a caller-supplied document."""
