@@ -101,6 +101,11 @@ record from acquiring the authority of the live or durable state it summarizes.
   `truncated` and `omitted` always agree: an untruncated envelope omits nothing.
 - A fact's authority cannot exceed the authority of any cited evidence handle,
   and a derived record cites only layers below it, never other derived guidance.
+  Mission records are durable state, so they too are barred from citing derived
+  guidance as their basis.
+- Timestamps are RFC 3339 instants with a real calendar date. Leap seconds are
+  rejected even though RFC 3339 admits them, because no orientation source can
+  produce one: the emitters read `datetime`, which has no `:60`.
 - High-risk or permission-missing actions stop at `requires_authorization`; an
   orientation response never performs an effect.
 

@@ -19,6 +19,7 @@ on:
       - 'scripts/generate_cli_reference.py'
       - 'aragora/capabilities.yaml'
       - 'aragora/capability_surfaces.yaml'
+      - 'docs/schemas/**'
       - 'docs/CAPABILITY_MATRIX.md'
       - 'docs/reference/CLI_REFERENCE.md'
       - 'docs-site/docs/contributing/capability-matrix.md'

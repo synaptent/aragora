@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 from pathlib import Path
 from typing import Any
@@ -9,9 +10,12 @@ from urllib.parse import urlsplit
 
 import jsonschema
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_PATH = ROOT / "docs" / "schemas" / "orientation.v1.json"
+SCHEMA_PATH_IN_REPO = "docs/schemas/orientation.v1.json"
+SCHEMA_PATH = ROOT / SCHEMA_PATH_IN_REPO
+TEST_WORKFLOW = ROOT / ".github" / "workflows" / "test.yml"
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
 FIXTURE_NAMES = {
     "fresh_orientation.json",
@@ -339,9 +343,30 @@ def test_derived_records_cannot_cite_derived_evidence(bare_validator: Any, colle
         bare_validator.validate(document)
 
 
+def test_mission_cannot_cite_derived_evidence(bare_validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["mission"]["evidence_refs"][0]["authority"] = "derived_recommendation"
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize("authority", ["live_authority", "durable_state", "commit_evidence"])
+def test_mission_accepts_every_grounding_layer(bare_validator: Any, authority: str) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["mission"]["evidence_refs"][0]["authority"] = authority
+    bare_validator.validate(document)
+
+
 def test_timestamps_reject_non_ascii_digits(bare_validator: Any) -> None:
     document = _load(FIXTURE_DIR / "fresh_orientation.json")
     document["generated_at"] = "٢٠٢٦-08-31T13:30:00Z"
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+def test_timestamps_reject_leap_seconds(bare_validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["generated_at"] = "2026-06-30T23:59:60Z"
     with pytest.raises(jsonschema.ValidationError):
         bare_validator.validate(document)
 
@@ -473,3 +498,37 @@ def test_no_change_rejects_a_second_fingerprint(validator: Any) -> None:
 )
 def test_canonical_sources_link_to_operating_loop(doc_path: str) -> None:
     assert "agent-operating-loop.md" in (ROOT / doc_path).read_text(encoding="utf-8")
+
+
+def _glob_matches(pattern: str, path: str) -> bool:
+    # GitHub's `**` spans directory separators, which is exactly what fnmatch's
+    # single `*` already does, so collapsing the two is faithful here.
+    return fnmatch.fnmatchcase(path, pattern.replace("**", "*"))
+
+
+def _infra_shard(workflow: dict[str, Any]) -> dict[str, Any]:
+    categories = workflow["jobs"]["test-fast"]["strategy"]["matrix"]["category"]
+    return next(entry for entry in categories if entry["name"] == "infra")
+
+
+@pytest.mark.parametrize(
+    "changed_path", ["tests/orientation/test_orientation_contract.py", SCHEMA_PATH_IN_REPO]
+)
+def test_pull_request_ci_runs_this_suite_for_its_own_sources(changed_path: str) -> None:
+    """A shard filter is inert unless the workflow trigger admits the same path."""
+    workflow = yaml.safe_load(TEST_WORKFLOW.read_text(encoding="utf-8"))
+    # PyYAML resolves the unquoted `on:` key to the boolean True.
+    triggers = workflow[True]["pull_request"]["paths"]
+    assert any(_glob_matches(pattern, changed_path) for pattern in triggers), (
+        f"{changed_path} does not trigger the Tests workflow at all"
+    )
+
+    infra = _infra_shard(workflow)
+    scope_step = next(
+        step
+        for step in workflow["jobs"]["test-shard-scope"]["steps"]
+        if "filters" in (step.get("with") or {})
+    )
+    filters = yaml.safe_load(scope_step["with"]["filters"])
+    assert any(_glob_matches(pattern, changed_path) for pattern in filters[infra["scope"]])
+    assert "tests/orientation" in infra["pytest_args"].split()
