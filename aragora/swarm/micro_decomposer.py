@@ -66,6 +66,10 @@ def build_micro_work_orders(
 
     work_orders: list[dict] = []
     order_idx = 0
+    requires_test_only = _requires_test_only_resolution(
+        goal=goal,
+        acceptance_criteria=acceptance_criteria,
+    )
     prefers_test_first = _prefers_test_first_resolution(
         goal=goal,
         acceptance_criteria=acceptance_criteria,
@@ -118,7 +122,7 @@ def build_micro_work_orders(
         validation_wo = _build_validation_work_order(
             index=order_idx,
             acceptance_criteria=acceptance_criteria,
-            file_scope=file_scope_hints,
+            file_scope=test_files if requires_test_only and test_files else file_scope_hints,
             dependency_ids=[wo["pipeline_task_id"] for wo in work_orders],
         )
         work_orders.append(validation_wo)
@@ -158,10 +162,14 @@ def _prefers_test_first_resolution(
     if not acceptance_criteria or not impl_files or not test_files:
         return False
 
-    lowered = " ".join(
-        part.strip().lower() for part in [goal, *acceptance_criteria] if part and part.strip()
+    lowered = _normalized_resolution_text(
+        goal=goal,
+        acceptance_criteria=acceptance_criteria,
     )
-    prefers_test_only = any(
+    prefers_test_only = _requires_test_only_resolution(
+        goal=goal,
+        acceptance_criteria=acceptance_criteria,
+    ) or any(
         marker in lowered
         for marker in (
             "prefer a test-only fix",
@@ -188,8 +196,44 @@ def _prefers_test_first_resolution(
     return prefers_test_only or (conditional_impl and test_led_acceptance)
 
 
+def _normalized_resolution_text(
+    *,
+    goal: str,
+    acceptance_criteria: list[str] | None,
+) -> str:
+    return " ".join(
+        part.strip().lower()
+        for part in [goal, *(acceptance_criteria or [])]
+        if part and part.strip()
+    )
+
+
+def _requires_test_only_resolution(
+    *,
+    goal: str,
+    acceptance_criteria: list[str] | None,
+) -> bool:
+    """Return true when the issue explicitly forbids implementation edits."""
+    lowered = _normalized_resolution_text(
+        goal=goal,
+        acceptance_criteria=acceptance_criteria,
+    )
+    return any(
+        marker in lowered
+        for marker in (
+            "only create/modify test files",
+            "only create or modify test files",
+            "no modifications to the source module",
+            "no modifications to source module",
+            "no source modifications",
+            "do not modify the source module",
+            "do not modify source files",
+        )
+    )
+
+
 def _resolve_file_hints(hints: list[str], root: Path) -> list[str]:
-    """Resolve file scope hints to actual file paths."""
+    """Resolve existing scope hints and explicit create targets."""
     resolved: list[str] = []
     for hint in hints:
         hint = hint.strip().removeprefix("./")
@@ -204,7 +248,22 @@ def _resolve_file_hints(hints: list[str], root: Path) -> list[str]:
                 rel = str(py_file.relative_to(root))
                 if "__pycache__" not in rel and not rel.endswith("__init__.py"):
                     resolved.append(rel)
+        elif _is_creatable_file_hint(hint, root):
+            resolved.append(hint)
     return resolved[:15]  # Hard cap
+
+
+def _is_creatable_file_hint(hint: str, root: Path) -> bool:
+    """Accept a missing test file only when its existing parent bounds it."""
+    relative = Path(hint)
+    if (
+        relative.is_absolute()
+        or ".." in relative.parts
+        or not relative.suffix
+        or not _is_test_file(hint)
+    ):
+        return False
+    return (root / relative).parent.is_dir()
 
 
 def _is_test_file(filepath: str) -> bool:

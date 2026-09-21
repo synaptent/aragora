@@ -6,7 +6,7 @@ listing RBAC profiles. Used as a mixin class by WorkspaceHandler in
 workspace_module.py.
 
 All references to ``extract_user_from_request`` and privacy types are resolved
-at *call time* via ``aragora.server.handlers.workspace_module`` so that test
+at *call time* via ``aragora.server.handlers.workspace.workspace_module`` so that test
 patches on that module are respected.
 
 Stability: STABLE
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def _mod() -> Any:
     """Lazy import of workspace_module to avoid circular imports and respect patches."""
-    import aragora.server.handlers.workspace_module as m
+    import aragora.server.handlers.workspace.workspace_module as m
 
     return m
 

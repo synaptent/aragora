@@ -62,7 +62,7 @@ LearningHandler = _safe_import("aragora.server.handlers", "LearningHandler")
 
 # Autonomous learning handler
 AutonomousLearningHandler = _safe_import(
-    "aragora.server.handlers.autonomous_learning", "AutonomousLearningHandler"
+    "aragora.server.handlers.autonomous.autonomous_learning", "AutonomousLearningHandler"
 )
 
 # Evidence enrichment
@@ -93,31 +93,31 @@ MomentsHandler = _safe_import("aragora.server.handlers", "MomentsHandler")
 # =============================================================================
 
 CrossPollinationBridgeHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationBridgeHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationBridgeHandler"
 )
 CrossPollinationStatsHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationStatsHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationStatsHandler"
 )
 CrossPollinationSubscribersHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationSubscribersHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationSubscribersHandler"
 )
 CrossPollinationMetricsHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationMetricsHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationMetricsHandler"
 )
 CrossPollinationResetHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationResetHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationResetHandler"
 )
 CrossPollinationKMHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationKMHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationKMHandler"
 )
 CrossPollinationKMSyncHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationKMSyncHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationKMSyncHandler"
 )
 CrossPollinationKMStalenessHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationKMStalenessHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationKMStalenessHandler"
 )
 CrossPollinationKMCultureHandler = _safe_import(
-    "aragora.server.handlers.cross_pollination", "CrossPollinationKMCultureHandler"
+    "aragora.server.handlers.evolution.cross_pollination", "CrossPollinationKMCultureHandler"
 )
 
 # =============================================================================
@@ -130,7 +130,7 @@ UnifiedMemoryHandler = _safe_import(
 
 # Memory unified gateway handler (fan-out, retention, dedup)
 MemoryUnifiedGatewayHandler = _safe_import(
-    "aragora.server.handlers.memory_unified", "MemoryUnifiedHandler"
+    "aragora.server.handlers.memory.memory_unified", "MemoryUnifiedHandler"
 )
 
 # =============================================================================
@@ -144,7 +144,7 @@ SharingNotificationsHandler = _safe_import(
 
 # Context budget handler
 ContextBudgetHandler = _safe_import(
-    "aragora.server.handlers.context_budget", "ContextBudgetHandler"
+    "aragora.server.handlers.debates.context_budget", "ContextBudgetHandler"
 )
 
 # =============================================================================

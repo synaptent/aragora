@@ -12,7 +12,7 @@ import pytest
 from threading import Thread
 from contextlib import contextmanager
 
-from aragora.server.metrics import (
+from aragora.observability.server_metrics import (
     Counter,
     Gauge,
     Histogram,

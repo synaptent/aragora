@@ -73,7 +73,7 @@ class ZoomOAuthManager:
         try:
             import base64
 
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             auth_str = f"{self.client_id}:{self.client_secret}"
             auth_bytes = base64.b64encode(auth_str.encode()).decode()
@@ -266,7 +266,7 @@ class AragoraZoomBot:
     ) -> None:
         """Generate and send post-meeting summary using debate analysis."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             meeting_data = payload.get("object", {})
             topic = meeting_data.get("topic", "Untitled Meeting")
@@ -307,7 +307,7 @@ class AragoraZoomBot:
     ) -> dict[str, Any]:
         """Send a chat message via Zoom API."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             token = await self.oauth.get_access_token()
             if not token:

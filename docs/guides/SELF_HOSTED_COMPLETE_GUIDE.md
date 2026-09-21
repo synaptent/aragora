@@ -1,7 +1,7 @@
 # Aragora Self-Hosted Complete Guide
 
-**Version:** 2.6.3
-**Last Updated:** 2026-01-27
+**Version:** 2.10.0
+**Last Updated:** 2026-09-04
 
 The definitive guide for deploying Aragora on your own infrastructure—from 5-minute quick starts to enterprise-grade high availability.
 
@@ -186,7 +186,7 @@ Expected response:
 ```json
 {
   "status": "healthy",
-  "version": "2.6.3",
+  "version": "2.10.0",
   "database": "connected",
   "agents_available": 15
 }
@@ -1271,7 +1271,7 @@ curl http://localhost:8080/api/health
 ```bash
 # Update image
 kubectl -n aragora set image deployment/aragora \
-  aragora=ghcr.io/synaptent/aragora/backend:2.9.0
+  aragora=ghcr.io/synaptent/aragora/backend:2.10.0
 
 # Watch rollout
 kubectl -n aragora rollout status deployment/aragora
@@ -1781,4 +1781,4 @@ See `docs/ENVIRONMENT.md` for the complete reference (70+ variables).
 
 ---
 
-*Version: 2.6.3 | Updated: 2026-02-03*
+*Version: 2.10.0 | Updated: 2026-09-04*

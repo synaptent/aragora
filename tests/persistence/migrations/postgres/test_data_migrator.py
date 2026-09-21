@@ -83,7 +83,7 @@ def mock_pool():
     # Create acquire context manager
     mock_acquire = MagicMock()
     mock_acquire.__aenter__ = AsyncMock(return_value=mock_conn)
-    mock_acquire.__aexit__ = AsyncMock()
+    mock_acquire.__aexit__ = AsyncMock(return_value=False)
     pool.acquire = MagicMock(return_value=mock_acquire)
     pool.close = AsyncMock()
 

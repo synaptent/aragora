@@ -1,0 +1,54 @@
+Candidate 11's codebase claim checks out: `grok.py:77-84` treats the xAI Live Search 410 deprecation as a fallback trigger, and `GrokAgent` has no search-tool support — it's a plain OpenAI-compatible chat agent. That's the only candidate I can verify internally; here is my proposal.
+
+# Proposal: Ranking of the 14 Research Candidates + Improvement Goals
+
+## Epistemic status (stated up front, per task rules)
+
+All 14 candidates cite X posts dated July–August 2026, **after my January 2026 knowledge cutoff**. I cannot verify any of these posts, papers, or products from training knowledge — not the Anthropic multiagent report, not Simile, QM, Prime Intellect's verifiers v1, buzz, Not Diamond Code, OmniRoute, Open-Kritt, the DeepMind verifier paper, Recuris, or RSI-Exam. I am ranking the *supplied claims* by their fit to the decision-integrity roadmap, conditional on those claims being accurate. Every high-ranked candidate therefore gets a "verify the source first" step baked into its goal. The one exception is candidate 11, whose codebase-side claim I verified directly (above). I also cannot verify issue numbers (#8233, #9695, #9709) beyond what the prompt supplies.
+
+## Ranking (highest expected impact first)
+
+**Tier 1 — direct hits on the integrity of receipts themselves**
+
+1. **#12 DeepMind: verifiers score the wrong metric.** Highest expected impact *if the paper says what the summary claims*. Aragora ships `enable_truth_ratio_weighting`, a cross-verification phase, and receipt confidence values. If verifier scores are systematically misaligned with correctness, that bias flows straight into decision receipts — the product's core artifact. Even a partial confirmation forces a calibration audit. Risk: the summary is second-hand ("via marfinxx", "reportedly showing"); the claim must be read from the actual paper before any roadmap change.
+2. **#1 Anthropic: patterns and problems in multiagent systems.** Primary published evidence bearing on Aragora's foundational claim (heterogeneous adversarial review > independent review). The 266-vs-21 finding cuts both ways: collaboration finds more, but "low unique/validated rates" is exactly the hollow-consensus failure mode the Trickster feature exists for. The concrete, cheap deliverable — a *reviewer-independence attribute* in receipts — is a genuinely good idea regardless of which way the evidence points, because it lets customers see whether findings were independently derived or cross-contaminated.
+3. **#2 Simile: trained confidence model.** A dedicated model predicting when the primary model is trustworthy is a concrete architecture for calibrated receipt confidence, and it pairs naturally with #12 (if verifiers are miscalibrated, a trained meta-model is one remedy). Ranked below #12/#1 because it's one company's product post, not evidence — it's a design pattern to evaluate, not a result to act on.
+
+**Tier 2 — strengthens the proof/benchmark lane**
+
+4. **#14 RSI-Exam.** 88 executable tasks is exactly the class of external, falsifiable yardstick the Nomic loop's proof-first gate needs — self-improvement claims are currently self-graded, which is a credibility gap. Executable benchmarks are cheap to pilot and hard to game. Contingent on the benchmark actually existing and being runnable.
+5. **#11 Grok x_search / xAI Agent Tools API.** The only candidate with an internally verified premise: the code already routes *around* the deprecated Live Search API but never adopted its replacement. Bounded scope, real capability gain (live X-corpus evidence for debates), and it strengthens evidence attribution in receipts. Ranked mid-tier because it's a single-agent capability, not a roadmap-level shift.
+6. **#13 Google skill-library paper + Recuris.** The traces/wiki/skills three-way split is a useful external reference model for auditing Knowledge Mound tiering and the skills registry. Value is diagnostic (benchmark our design against it), not a feature. Fold candidate #9 into this.
+
+**Tier 3 — relevant but conditional or premature**
+
+7. **#6 Not Diamond Code.** Adjacent to dormant decision-stakes routing (#8233). But "20–65% cost reduction" is a vendor claim, and routing is a cost/quality concern, not a decision-integrity concern — it only earns priority if it funds more heterogeneous quorum coverage per dollar. Watch-and-evaluate, not build.
+8. **#5 buzz (jack).** Cryptographic identity for people + agents is squarely relevant to ODR-2 signing and claim-to-identity binding (#9695/#9709). But a weeks-old open-source workspace is a risky dependency for an identity layer; the right move is to study its identity *model*, not adopt the project. Survives scrutiny as a design input only.
+9. **#4 Prime Intellect.** The governance angle is the real content: a receipt should attest *what changed in a self-modifying harness and who approved it*. That's a genuinely Aragora-shaped idea (it's what the Nomic loop's protected-files/approval machinery already gestures at). The harness itself is not something to chase. Keep the governance requirement, drop the rest.
+10. **#9 Alibaba structured context.** Reasonable pattern, but "context assembly as code, permissioned and attributable" is directionally what the memory coordinator and RLM work already do. Merge into #13's benchmark-comparison exercise rather than tracking separately.
+11. **#10 Open-weight quorum candidates (Apodex 1.1, GLM-5.3).** Routine model-evaluation work, already covered by the existing OpenRouter path and agent registry. Low ceiling; the GLM governance anecdote is a marketing narrative, not evidence.
+
+**Rejected (do not survive scrutiny)**
+
+12. **#3 YC QM.** Competitive/market context, not a roadmap input. "Closest public artifact to our Chief-of-Staff stages" tells us the space is validated, but yields no testable design decision, no receipt improvement, no verifiable claim. Reading it is a 30-minute analyst task, not a goal. **Reject as a ranked candidate.**
+13. **#7 OmniRoute.** "Free MIT gateway, 340 providers" from a trending-repos aggregator account is precisely the profile of an unvetted supply-chain risk — routing production API keys and debate traffic through an unaudited proxy contradicts the security pillar. OpenRouter fallback already exists. **Reject; revisit only if it accrues independent adoption evidence.**
+14. **#8 Open-Kritt (+ pentest-harness, V12).** AGPL is a hard licensing problem for a commercial platform's integration path, the V12 vuln claims (QEMU escape, LPEs) are unverified hype-profile claims, and the comparables are competitive context, not inputs. The one salvageable idea — using an external finding-set as a *benchmark* for grounded-finding quality — is folded into the benchmark goal below. **Reject as an integration candidate; retain only as benchmark material.**
+
+## Proposed improvement goals (ordered by priority)
+
+**1. Verifier-calibration audit of the truth scorer and cross-verification phase** — *Track: Core* (requires approval) — **Impact: High.**
+First read the actual DeepMind paper (#12) and Anthropic report (#1) to confirm the claims; then measure Aragora's own verifier/truth-scorer outputs against ground-truth outcomes on debates with known-correct answers, and report where receipt confidence is miscalibrated. This is prioritized first because it tests whether the product's central artifact — receipt confidence — is trustworthy, and every other candidate (Simile-style confidence models included) is downstream of knowing the answer. Deliverable is a calibration report plus a go/no-go on a Simile-style trained confidence model (#2).
+
+**2. Reviewer-independence attribute in decision receipts** — *Track: Core* (requires approval; receipt schema surface) — **Impact: High.**
+Add a receipt field recording whether each finding was independently derived or produced under cross-agent visibility, per the collaboration-vs-independence distinction in #1. Small schema change, large differentiation value: it operationalizes the one robust lesson from the Anthropic data (collaboration inflates volume but contaminates independence) and lets customers weight findings accordingly. Depends on goal 1 only for framing, not for code — can proceed in parallel.
+
+**3. External executable benchmark lane for self-improvement and finding-quality claims** — *Track: QA* — **Impact: Medium-High.**
+Pilot RSI-Exam (#14) as an external yardstick for Nomic-loop improvement claims, and evaluate one external vulnerability finding-set (from #8's ecosystem, as data — not an AGPL code integration) as a grounded-finding quality benchmark for the audit/bug-detector modules. Rationale: the proof-first gate currently lacks any yardstick Aragora doesn't grade itself; this is the cheapest credibility win in the list. First step is verifying RSI-Exam exists and runs.
+
+**4. Grok Agent Tools API adoption for evidence-grade search** — *Track: Core* (agent change; small blast radius) — **Impact: Medium.**
+Replace the routed-around Live Search path with xAI's Agent Tools / x_search support in `GrokAgent` (`aragora/agents/api_agents/grok.py`), wiring results into evidence collection with source attribution. This is the only candidate with a verified internal premise and a bounded scope; it converts a dead code path into live-corpus evidence for debates.
+
+**5. Identity-and-provenance design study: harness-change attestation + agent identity binding** — *Track: Security* — **Impact: Medium.**
+A design-only spike (no dependency adoption) combining the two governance ideas that survived scrutiny: (a) receipts that attest what changed in a self-modifying harness and who approved it (#4), and (b) an evaluation of buzz's identity model (#5) against the ODR-2 signing and claim-to-identity work (#9695/#9709). Ranked last because it's forward-looking design rather than a measurable near-term integrity gain, but it's the right preparation for Tier-4 claims.
+
+**Anticipated objections.** (a) *"Three of five goals lean on unverified posts"* — correct, which is why goals 1, 3, and 5 each begin with source verification and are scoped to fail cheap if the source doesn't hold up; goal 4 rests on verified code, and goal 2 is a good schema change even if the Anthropic numbers shift. (b) *"Two Core goals need approval"* — yes, but decision-integrity is a Core property; a ranking that avoided Core to dodge approval would optimize for convenience over the stated objective. (c) *"Why reject OmniRoute when quorum diversity is a pillar?"* — because candidate #10's open-weight models achieve the same diversity through the already-trusted OpenRouter path without inserting an unaudited proxy into the key path.

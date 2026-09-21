@@ -1,0 +1,135 @@
+{
+  "schema_version": "decision-quality-outcomes/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "corpus_sha256": "17bce195c719c30c128b0ce86e906754c076e2c03da4a10f6421d9e80f57943b",
+  "outcomes": [
+    {
+      "case_id": "policy-dev-sec-cyber-disclosure-2023",
+      "resolved_at": "2023-07-26T00:00:00Z",
+      "correct_option_id": "prepare_for_2023_rule",
+      "resolution_summary": "The SEC adopted the final public-company cybersecurity disclosure rules on 2023-07-26, before the benchmark's September deadline.",
+      "authoritative_sources": [
+        {
+          "source_id": "sec-cyber-disclosure-final-2023-08-04",
+          "title": "Cybersecurity Risk Management, Strategy, Governance, and Incident Disclosure - Final Rule",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2023-08-04/pdf/2023-16194.pdf",
+          "published_at": "2023-08-04T00:00:00Z",
+          "content_sha256": "ab846792ef65cd6884e9d53984e730582ee6865fcd25e04d28ecbfe3d15302c6"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "commission_rulemaking_followthrough",
+          "description": "Whether the Commission would advance the 2022 proposal to a final vote during 2023 rather than continue the comment process.",
+          "aliases": ["SEC adoption timing", "rulemaking follow-through"]
+        },
+        {
+          "crux_id": "material_incident_disclosure_scope",
+          "description": "Whether the material-incident and governance requirements could be narrowed enough to reach a final rule.",
+          "aliases": ["Form 8-K scope", "cyber disclosure scope"]
+        },
+        {
+          "crux_id": "issuer_implementation_feasibility",
+          "description": "Whether registrants could operationalize materiality, incident reporting, and governance disclosures on the contemplated schedule.",
+          "aliases": ["compliance readiness", "implementation burden"]
+        }
+      ]
+    },
+    {
+      "case_id": "policy-dev-fda-food-traceability-2022",
+      "resolved_at": "2022-11-21T00:00:00Z",
+      "correct_option_id": "prepare_for_2022_final_rule",
+      "resolution_summary": "The FDA published the final food traceability rule on 2022-11-21, establishing additional recordkeeping requirements for foods on the Food Traceability List.",
+      "authoritative_sources": [
+        {
+          "source_id": "fda-food-traceability-final-2022-11-21",
+          "title": "Requirements for Additional Traceability Records for Certain Foods - Final Rule",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2022-11-21/pdf/2022-24417.pdf",
+          "published_at": "2022-11-21T00:00:00Z",
+          "content_sha256": "d4abaa56c3adef020e94e3898d32cc3a886575cf6bd496f61b8e4a829fd618d9"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "fsma_traceability_mandate",
+          "description": "Whether the statutory traceability mandate and food-safety objective would keep the rulemaking on an active path.",
+          "aliases": ["FSMA mandate", "traceability authority"]
+        },
+        {
+          "crux_id": "recordkeeping_scope_workability",
+          "description": "Whether FDA could define critical tracking events and key data elements that were workable across heterogeneous supply chains.",
+          "aliases": ["KDE and CTE scope", "recordkeeping feasibility"]
+        },
+        {
+          "crux_id": "compliance_burden_accommodations",
+          "description": "Whether exemptions, phase-in timing, and implementation accommodations could address burden concerns without delaying finalization beyond 2022.",
+          "aliases": ["industry burden", "phase-in design"]
+        }
+      ]
+    },
+    {
+      "case_id": "policy-dev-sec-climate-disclosure-2023",
+      "resolved_at": "2024-03-06T00:00:00Z",
+      "correct_option_id": "defer_binding_implementation",
+      "resolution_summary": "The SEC did not adopt the final climate-related disclosure rules during 2023; adoption occurred on 2024-03-06.",
+      "authoritative_sources": [
+        {
+          "source_id": "sec-climate-disclosure-final-2024-03-28",
+          "title": "The Enhancement and Standardization of Climate-Related Disclosures for Investors - Final Rules",
+          "url": "https://www.govinfo.gov/content/pkg/FR-2024-03-28/pdf/2024-05137.pdf",
+          "published_at": "2024-03-28T00:00:00Z",
+          "content_sha256": "01406c70425ceda5d9d93ece86d34fc491f773bbcf11714379c4d50c08f50232"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "rule_scope_revision",
+          "description": "Whether the Commission could reconcile comments on emissions, financial metrics, attestation, and phase-in requirements in time for a 2023 vote.",
+          "aliases": ["final rule scope", "proposal revision complexity"]
+        },
+        {
+          "crux_id": "statutory_authority_risk",
+          "description": "Whether legal-authority and litigation concerns would delay or materially narrow final adoption.",
+          "aliases": ["legal challenge risk", "SEC authority"]
+        },
+        {
+          "crux_id": "commission_schedule_capacity",
+          "description": "Whether the Commission's rulemaking schedule had enough capacity to complete this complex rule before year-end 2023.",
+          "aliases": ["agenda timing", "adoption schedule"]
+        }
+      ]
+    },
+    {
+      "case_id": "policy-dev-nist-csf2-july-2023",
+      "resolved_at": "2023-08-08T00:00:00Z",
+      "correct_option_id": "wait_for_public_draft",
+      "resolution_summary": "NIST released the CSF 2.0 initial public draft on 2023-08-08, after the benchmark's July 31 deadline.",
+      "authoritative_sources": [
+        {
+          "source_id": "nist-csf2-withdrawn-draft-release-record-2024-02-26",
+          "title": "Public Draft: The NIST Cybersecurity Framework 2.0 - withdrawal and publication record",
+          "url": "https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.ipd.pdf",
+          "published_at": "2024-02-26T00:00:00Z",
+          "content_sha256": "bf0e108a8af79f3db741e4da9ba9cd2d2876c97e89f9d02d894eedfc506bfee5"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "public_feedback_processing",
+          "description": "Whether NIST could incorporate concept-paper and workshop feedback quickly enough to publish before the end of July.",
+          "aliases": ["comment synthesis", "feedback processing time"]
+        },
+        {
+          "crux_id": "framework_scope_changes",
+          "description": "Whether proposed changes to scope, governance, profiles, and implementation resources would require additional drafting time.",
+          "aliases": ["CSF 2.0 design breadth", "scope complexity"]
+        },
+        {
+          "crux_id": "summer_schedule_precision",
+          "description": "Whether NIST's stated intent to issue a draft during summer implied publication by July rather than later in the season.",
+          "aliases": ["draft schedule credibility", "summer release timing"]
+        }
+      ]
+    }
+  ]
+}

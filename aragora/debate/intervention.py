@@ -379,7 +379,7 @@ class InterventionManager:
             return
 
         try:
-            from aragora.server.stream.events import StreamEvent, StreamEventType
+            from aragora.events.types import StreamEvent, StreamEventType
 
             self._emitter.emit(
                 StreamEvent(

@@ -181,7 +181,7 @@ The short version on April 21, 2026:
 - **Agent types**: 43
 - **API operations**: 3,100+ across 2,600+ paths
 - **RBAC permissions**: 420+
-- **Version**: v2.9.0
+- **Version**: v2.10.0
 
 ---
 
@@ -585,7 +585,7 @@ Independent verification found substantial launch-ready infrastructure, but Arag
 
 ## Current Release
 
-Current released version is **v2.9.0**.
+Current released version is **v2.10.0** (released 2026-09-04).
 
 ### v2.5.0 - Type Safety & SDK Expansion (January 2026)
 

@@ -144,7 +144,7 @@ class ConcreteGitHubHandler(GitHubOAuthMixin):
 # Fixtures
 # ---------------------------------------------------------------------------
 
-_IMPL_MODULE = "aragora.server.handlers._oauth_impl"
+_IMPL_MODULE = "aragora.server.handlers.oauth._oauth_impl"
 
 
 @pytest.fixture(autouse=True)
