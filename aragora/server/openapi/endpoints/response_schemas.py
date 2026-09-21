@@ -850,7 +850,9 @@ _RECEIPT_ENDPOINTS = {
                 "Export a receipt in the requested format. format=odr is public; "
                 "every other format requires receipts:read."
             ),
-            "security": AUTH_REQUIREMENTS["optional"]["security"],
+            # Anonymous for format=odr, bearer for every protected format; the
+            # shared "optional" constant declares only the anonymous half.
+            "security": [{}, {"bearerAuth": []}],
             "parameters": [
                 {
                     "name": "receipt_id",

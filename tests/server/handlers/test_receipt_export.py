@@ -15,6 +15,7 @@ Tests cover:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -821,3 +822,29 @@ class TestStatelessOdrVerification:
 
         assert result.status_code == 405
         assert "error" in json.loads(result.body)
+
+
+class TestExportOperationSecurity:
+    """exportReceipt is callable anonymously (format=odr) or with a bearer token."""
+
+    EXPORT_PATH = "/api/v2/receipts/{receipt_id}/export"
+
+    def test_committed_spec_declares_anonymous_and_bearer(self):
+        """The published contract offers an external generator both call shapes."""
+        repo_root = Path(__file__).resolve().parents[3]
+        spec = json.loads((repo_root / "docs" / "api" / "openapi.json").read_text())
+
+        security = spec["paths"][self.EXPORT_PATH]["get"]["security"]
+
+        assert {} in security
+        assert {"bearerAuth": []} in security
+
+    def test_canonical_source_matches_the_committed_spec(self):
+        """Set at the source, so a later regeneration preserves it."""
+        from aragora.server.openapi.endpoints.response_schemas import (
+            RESPONSE_SCHEMA_ENDPOINTS,
+        )
+
+        security = RESPONSE_SCHEMA_ENDPOINTS[self.EXPORT_PATH]["get"]["security"]
+
+        assert security == [{}, {"bearerAuth": []}]

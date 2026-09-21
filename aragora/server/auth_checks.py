@@ -412,13 +412,15 @@ class AuthChecksMixin:
         # "/api/v1/nomic/",
     )
 
-    # Exact GET routes exempt from authentication, matched by pattern rather
-    # than prefix. A prefix like "/api/v2/receipts/" would expose every stored
-    # receipt; these patterns exempt one route each.
+    # GET routes exempt from authentication, matched by pattern rather than a
+    # prefix: a prefix like "/api/v2/receipts/" would expose every stored
+    # receipt. Each pattern admits one route template, so its parameter segment
+    # excludes the sibling route segments the handler dispatches first -- "dsar"
+    # reaches the GDPR subject-access branch, which stays authenticated.
     AUTH_EXEMPT_GET_PATTERNS: tuple[re.Pattern[str], ...] = (
         # ODR export document: public trust surface (architecture §2.10). The
         # handler itself still requires receipts:read for non-ODR formats.
-        re.compile(r"^/api/v2/receipts/[^/]+/export$"),
+        re.compile(r"^/api/v2/receipts/(?!(?:dsar|share|search|stats|verify)/)[^/]+/export$"),
     )
 
     # Type stubs for attributes expected from parent class

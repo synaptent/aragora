@@ -160,6 +160,36 @@ class TestAuthExemptGetPrefixes:
             assert matches, f"Path {path} should match a GET-only exempt prefix"
 
 
+class TestReceiptExportExemptionPattern:
+    """The public ODR export exemption must not admit a sibling receipt route."""
+
+    RESERVED_SEGMENTS = ("dsar", "share", "search", "stats", "verify")
+
+    @pytest.fixture
+    def handler(self):
+        """An uninitialised handler; the exemption checks read class state only."""
+        from aragora.server.unified_server import UnifiedHandler
+
+        return UnifiedHandler.__new__(UnifiedHandler)
+
+    @pytest.mark.parametrize("segment", RESERVED_SEGMENTS)
+    def test_reserved_segment_export_is_not_exempt(self, handler, segment):
+        """Path /api/v2/receipts/<reserved>/export must never bypass authentication."""
+        path = f"/api/v2/receipts/{segment}/export"
+        assert not handler._is_path_exempt_for_get(path)
+        assert not handler._is_path_exempt(path)
+
+    def test_receipt_id_export_stays_exempt(self, handler):
+        """A real receipt id keeps the public ODR export exemption."""
+        assert handler._is_path_exempt_for_get("/api/v2/receipts/crux-1a2b3c4d/export")
+
+    def test_dsar_still_requires_authentication(self, handler):
+        """No DSAR path is exempt by any mechanism, for any request shape."""
+        for path in ("/api/v2/receipts/dsar/export", "/api/v2/receipts/dsar/user-42"):
+            assert not handler._is_path_exempt(path)
+            assert not handler._is_path_exempt_for_get(path)
+
+
 class TestOAuthQueryParams:
     """Tests for OAuth query parameter whitelist."""
 

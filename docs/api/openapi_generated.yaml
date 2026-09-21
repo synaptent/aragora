@@ -140823,6 +140823,7 @@ paths:
       description: Export a receipt in the requested format. format=odr is public; every other format requires receipts:read.
       security:
       - {}
+      - bearerAuth: []
       parameters:
       - name: receipt_id
         in: path
