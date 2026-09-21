@@ -180,7 +180,7 @@ def build_anchor(cap: Capsule, repo_root: Path | None = None) -> bool:
     if code != 0:
         cap.degraded.append("not a git repository; no anchor possible")
         return False
-    _, head = sh(["git", "rev-parse", "--short=12", "HEAD"], cwd=repo_root)
+    head_code, head = sh(["git", "rev-parse", "--short=12", "HEAD"], cwd=repo_root)
     main_code, main_sha = sh(["git", "rev-parse", "--short=12", "origin/main"], cwd=repo_root)
     slug_code, slug = sh(
         ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
@@ -191,10 +191,12 @@ def build_anchor(cap: Capsule, repo_root: Path | None = None) -> bool:
     cap.anchor = {
         "repo": slug if slug_resolved else "unknown",
         "branch": branch,
-        "head": head,
+        "head": head if head_code == 0 else "unresolved",
         "main": main_sha if main_code == 0 else "unresolved",
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
     }
+    if head_code != 0:
+        cap.degraded.append("HEAD unresolved; every belief below is unanchored")
     if main_code != 0:
         cap.degraded.append("origin/main unresolved; ahead/behind beliefs withheld")
     if not slug_resolved:
@@ -594,10 +596,10 @@ def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None
 
 def add_objective(cap: Capsule, repo_root: Path | None = None) -> None:
     branch = cap.anchor.get("branch", "")
-    _, subject = sh(["git", "log", "-1", "--pretty=%s"], cwd=repo_root)
+    subject_code, subject = sh(["git", "log", "-1", "--pretty=%s"], cwd=repo_root)
     cap.objective = {
         "branch": branch,
-        "last_commit": subject[:100],
+        "last_commit": subject[:100] if subject_code == 0 else "unresolved",
         "inferred": (
             "detached/main -- no branch-scoped objective"
             if branch in {"main", "HEAD"}

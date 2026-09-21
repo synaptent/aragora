@@ -283,6 +283,26 @@ def test_successful_local_probes_retain_observed_values(
     assert not cap.degraded and not cap.unknowns
 
 
+def test_an_unresolvable_head_is_not_laundered_into_the_anchor(monkeypatch: Any) -> None:
+    """ANCHOR is what every other field claims to be true of, so a failed
+    rev-parse must not supply its own error text as the revision."""
+
+    def probe(cmd: list[str], **kwargs: Any) -> tuple[int, str]:
+        if "--abbrev-ref" in cmd:
+            return 0, "main"
+        if cmd[:2] == ["git", "rev-parse"]:
+            return 128, "fatal: ambiguous argument 'HEAD': unknown revision"
+        return 0, "synaptent/aragora"
+
+    monkeypatch.setattr(situation, "sh", probe)
+    cap = situation.Capsule()
+
+    assert situation.build_anchor(cap) is True
+
+    assert cap.anchor["head"] == "unresolved"
+    assert any("HEAD unresolved" in d for d in cap.degraded)
+
+
 def test_probe_success_with_empty_stdout_never_returns_stderr() -> None:
     """`git status --porcelain` answers "clean" with silence, so an empty
     stdout on exit 0 is an answer and must not fall through to stderr."""
@@ -299,11 +319,13 @@ def test_a_clean_tree_that_warns_is_not_reported_as_dirty(monkeypatch: Any) -> N
         stderr = "warning: safe.directory advice: detected dubious ownership\n"
 
     monkeypatch.setattr(situation.subprocess, "run", lambda *a, **kw: Result())
-    cap = _capsule()
+    cap = _capsule(beliefs=[])
     situation.add_local_beliefs(cap)
+    situation.add_frontier(cap)
 
     working_tree = next(b for b in cap.beliefs if b.key == "working_tree")
     assert working_tree.value == "clean"
+    assert cap.frontier, "expected add_frontier to produce actions to assert against"
     assert not any("uncommitted" in a.label for a in cap.frontier)
 
 
