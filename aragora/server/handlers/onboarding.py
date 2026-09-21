@@ -551,7 +551,7 @@ _PATTERN_DEFAULTS: dict[str, tuple[int, int, int]] = {
 def _load_marketplace_templates() -> list[StarterTemplate]:
     """Load marketplace templates and convert to StarterTemplate format."""
     try:
-        from aragora.server.handlers.template_marketplace import (
+        from aragora.server.handlers.catalog.template_marketplace import (
             _marketplace_templates,
             _seed_marketplace_templates,
         )

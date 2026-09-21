@@ -56,7 +56,7 @@ from aragora.server.handlers.compliance.audit_trail import (
 )
 
 # Re-export from auditing.py
-from aragora.server.handlers.auditing import (
+from aragora.server.handlers.debates.auditing import (
     AuditRequestParser,
     AuditAgentFactory,
     AuditResultRecorder,
