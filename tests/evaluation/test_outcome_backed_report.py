@@ -106,6 +106,25 @@ def _holdout_snapshot(exposure_count: int = 2) -> dict[str, object]:
     }
 
 
+def _exposure_reports(
+    verdict: str,
+    custody: dict[str, object],
+    *,
+    reverse_baselines: bool = False,
+) -> list[dict[str, object]]:
+    """Build one holdout analysis per exposure recorded in ``custody``."""
+
+    registries = custody["registries"]
+    assert isinstance(registries, list)
+    labels = registries[0]["run_labels"] if registries else []
+    reports = []
+    for label in labels:
+        report = _analysis_report("holdout", verdict, reverse_baselines=reverse_baselines)
+        report["run_label"] = label
+        reports.append(report)
+    return reports
+
+
 def _verdict(
     development: str,
     holdout: str,
@@ -113,11 +132,12 @@ def _verdict(
     budgets: list[dict[str, object]] | None = None,
     custody: dict[str, object] | None = None,
 ) -> str:
+    resolved_custody = custody or _holdout_snapshot()
     return final_verdict(
         _analysis_report("development", development),
-        _analysis_report("holdout", holdout),
+        _exposure_reports(holdout, resolved_custody),
         budgets or [_budget_snapshot()],
-        custody or _holdout_snapshot(),
+        resolved_custody,
     )
 
 
@@ -178,55 +198,73 @@ def test_analysis_input_defects_fail_closed(
     value: object,
     message: str,
 ) -> None:
+    custody = _holdout_snapshot()
     development = _analysis_report("development", "team_outperforms")
-    holdout = _analysis_report("holdout", "team_outperforms")
-    report = development if target == "development" else holdout
-    report[field] = value
+    holdouts = _exposure_reports("team_outperforms", custody)
+    if target == "development":
+        development[field] = value
+    else:
+        for report in holdouts:
+            report[field] = value
 
     with pytest.raises(ValueError, match=message):
-        final_verdict(development, holdout, [_budget_snapshot()], _holdout_snapshot())
+        final_verdict(development, holdouts, [_budget_snapshot()], custody)
 
 
 def test_analysis_phase_and_claimed_verdict_must_match_metrics() -> None:
+    custody = _holdout_snapshot()
     development = _analysis_report("development", "team_outperforms")
-    holdout = _analysis_report("holdout", "team_outperforms")
-    holdout["phase"] = "development"
-    with pytest.raises(ValueError, match="phase mismatch"):
-        final_verdict(development, holdout, [_budget_snapshot()], _holdout_snapshot())
 
-    holdout = _analysis_report("holdout", "team_outperforms")
-    holdout["verdict"] = "no_difference"
+    holdouts = _exposure_reports("team_outperforms", custody)
+    holdouts[0]["phase"] = "development"
+    with pytest.raises(ValueError, match="phase mismatch"):
+        final_verdict(development, holdouts, [_budget_snapshot()], custody)
+
+    holdouts = _exposure_reports("team_outperforms", custody)
+    holdouts[0]["verdict"] = "no_difference"
     with pytest.raises(ValueError, match="verdict does not match"):
-        final_verdict(development, holdout, [_budget_snapshot()], _holdout_snapshot())
+        final_verdict(development, holdouts, [_budget_snapshot()], custody)
 
 
 def test_strongest_baseline_must_match_metrics() -> None:
+    custody = _holdout_snapshot()
     development = _analysis_report("development", "team_outperforms")
-    holdout = _analysis_report("holdout", "team_outperforms")
     development["strongest_baseline_id"] = "openai"
 
     with pytest.raises(ValueError, match="strongest baseline does not match"):
-        final_verdict(development, holdout, [_budget_snapshot()], _holdout_snapshot())
+        final_verdict(
+            development,
+            _exposure_reports("team_outperforms", custody),
+            [_budget_snapshot()],
+            custody,
+        )
 
 
 def test_summary_delta_must_match_reported_means() -> None:
+    custody = _holdout_snapshot()
     development = _analysis_report("development", "team_outperforms")
-    holdout = _analysis_report("holdout", "team_outperforms")
     summaries = development["per_baseline"]
     assert isinstance(summaries, list)
     summaries[0]["mean_composite_delta"] = 0.2
 
     with pytest.raises(ValueError, match="mean_composite_delta does not match"):
-        final_verdict(development, holdout, [_budget_snapshot()], _holdout_snapshot())
+        final_verdict(
+            development,
+            _exposure_reports("team_outperforms", custody),
+            [_budget_snapshot()],
+            custody,
+        )
 
 
 def test_complete_report_rejects_insufficient_data_claim() -> None:
+    custody = _holdout_snapshot()
     development = _analysis_report("development", "team_outperforms")
-    holdout = _analysis_report("holdout", "no_difference")
-    holdout["verdict"] = "insufficient_data"
+    holdouts = _exposure_reports("no_difference", custody)
+    for report in holdouts:
+        report["verdict"] = "insufficient_data"
 
     with pytest.raises(ValueError, match="verdict does not match"):
-        final_verdict(development, holdout, [_budget_snapshot()], _holdout_snapshot())
+        final_verdict(development, holdouts, [_budget_snapshot()], custody)
 
 
 def _scored_rows(prefix: str, count: int, *, brier: float) -> list[dict[str, object]]:
@@ -265,15 +303,16 @@ def test_real_development_and_holdout_analysis_can_produce_go() -> None:
         phase="holdout",
     ).to_dict()
 
-    assert (
-        final_verdict(
-            development,
-            holdout,
-            [_budget_snapshot()],
-            _holdout_snapshot(),
-        )
-        == "go"
-    )
+    custody = _holdout_snapshot()
+    registries = custody["registries"]
+    assert isinstance(registries, list)
+    submissions = []
+    for label in registries[0]["run_labels"]:
+        submission = dict(holdout)
+        submission["run_label"] = label
+        submissions.append(submission)
+
+    assert final_verdict(development, submissions, [_budget_snapshot()], custody) == "go"
 
 
 def test_budget_shape_defect_fails_closed() -> None:
@@ -297,16 +336,21 @@ def test_holdout_shape_and_version_defects_fail_closed() -> None:
 
 
 def test_render_report_is_byte_identical_and_stably_ordered() -> None:
+    custody = _holdout_snapshot()
     development = _analysis_report("development", "team_outperforms")
-    holdout = _analysis_report("holdout", "no_difference")
     budgets = [_budget_snapshot("2026-08-31"), _budget_snapshot("2026-08-30")]
 
-    first = render_report(development, holdout, budgets, _holdout_snapshot())
+    first = render_report(
+        development,
+        _exposure_reports("no_difference", custody),
+        budgets,
+        custody,
+    )
     second = render_report(
         _analysis_report("development", "team_outperforms", reverse_baselines=True),
-        _analysis_report("holdout", "no_difference", reverse_baselines=True),
+        list(reversed(_exposure_reports("no_difference", custody, reverse_baselines=True))),
         list(reversed(deepcopy(budgets))),
-        _holdout_snapshot(),
+        custody,
     )
 
     assert first == second
@@ -316,3 +360,168 @@ def test_render_report_is_byte_identical_and_stably_ordered() -> None:
     assert "## 7. Gate Decision" in first
     assert "`conditional_go`" in first
     assert "not a claim of statistical significance" in first
+
+
+def _holdout_report(
+    verdict: str,
+    *,
+    run_label: str,
+    team_condition_id: str = "aragora_team",
+) -> dict[str, object]:
+    report = _analysis_report("holdout", verdict)
+    report["team_condition_id"] = team_condition_id
+    report["run_label"] = run_label
+    return report
+
+
+def _covering_holdout_reports(
+    verdicts: list[str],
+    *,
+    team_condition_id: str = "aragora_team",
+) -> list[dict[str, object]]:
+    return [
+        _holdout_report(
+            verdict,
+            run_label=f"holdout-r{index + 1}",
+            team_condition_id=team_condition_id,
+        )
+        for index, verdict in enumerate(verdicts)
+    ]
+
+
+def test_holdout_analysis_must_be_bound_to_a_recorded_exposure() -> None:
+    unrecorded = [_holdout_report("team_outperforms", run_label="never-recorded")]
+
+    with pytest.raises(ValueError, match="is not a recorded holdout exposure"):
+        final_verdict(
+            _analysis_report("development", "team_outperforms"),
+            unrecorded,
+            [_budget_snapshot()],
+            _holdout_snapshot(2),
+        )
+
+
+def test_holdout_analyses_must_cover_every_recorded_exposure() -> None:
+    """Three exposures are recorded; submitting the one favourable repetition is refused."""
+
+    cherry_picked = [_holdout_report("team_outperforms", run_label="holdout-r2")]
+
+    with pytest.raises(ValueError, match="must cover every recorded exposure"):
+        final_verdict(
+            _analysis_report("development", "team_outperforms"),
+            cherry_picked,
+            [_budget_snapshot()],
+            _holdout_snapshot(3),
+        )
+
+
+def test_duplicate_run_label_cannot_stand_in_for_a_second_exposure() -> None:
+    doubled = [
+        _holdout_report("team_outperforms", run_label="holdout-r1"),
+        _holdout_report("team_outperforms", run_label="holdout-r1"),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate run label"):
+        final_verdict(
+            _analysis_report("development", "team_outperforms"),
+            doubled,
+            [_budget_snapshot()],
+            _holdout_snapshot(2),
+        )
+
+
+@pytest.mark.parametrize(
+    ("holdout_verdicts", "expected"),
+    [
+        (["team_outperforms", "team_outperforms"], "go"),
+        (["team_outperforms", "no_difference"], "conditional_go"),
+        (["no_difference", "team_outperforms"], "conditional_go"),
+        (["team_outperforms", "baseline_outperforms"], "no_go"),
+        (["baseline_outperforms", "no_difference"], "no_go"),
+    ],
+)
+def test_least_favourable_recorded_exposure_governs(
+    holdout_verdicts: list[str],
+    expected: str,
+) -> None:
+    assert (
+        final_verdict(
+            _analysis_report("development", "team_outperforms"),
+            _covering_holdout_reports(holdout_verdicts),
+            [_budget_snapshot()],
+            _holdout_snapshot(2),
+        )
+        == expected
+    )
+
+
+def test_team_condition_id_must_match_across_phases() -> None:
+    mismatched = _covering_holdout_reports(
+        ["team_outperforms", "team_outperforms"],
+        team_condition_id="some-other-team",
+    )
+
+    with pytest.raises(ValueError, match="team_condition_id does not match"):
+        final_verdict(
+            _analysis_report("development", "team_outperforms"),
+            mismatched,
+            [_budget_snapshot()],
+            _holdout_snapshot(2),
+        )
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    ["evil | 999 | pwned", "back`tick", "line\nbreak", "carriage\rreturn"],
+)
+def test_markdown_unsafe_team_condition_id_is_rejected(hostile: str) -> None:
+    development = _analysis_report("development", "team_outperforms")
+    development["team_condition_id"] = hostile
+
+    with pytest.raises(ValueError, match="must not contain"):
+        render_report(
+            development,
+            _covering_holdout_reports(
+                ["team_outperforms", "team_outperforms"],
+                team_condition_id=hostile,
+            ),
+            [_budget_snapshot()],
+            _holdout_snapshot(2),
+        )
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    ["evil | 999 | pwned", "back`tick", "line\nbreak", "carriage\rreturn"],
+)
+def test_markdown_unsafe_run_label_is_rejected(hostile: str) -> None:
+    custody = _holdout_snapshot(2)
+    registries = custody["registries"]
+    assert isinstance(registries, list)
+    registries[0]["run_labels"] = [hostile, "holdout-r2"]
+    holdouts = [
+        _holdout_report("team_outperforms", run_label=hostile),
+        _holdout_report("team_outperforms", run_label="holdout-r2"),
+    ]
+
+    with pytest.raises(ValueError, match="must not contain"):
+        render_report(
+            _analysis_report("development", "team_outperforms"),
+            holdouts,
+            [_budget_snapshot()],
+            custody,
+        )
+
+
+def test_rendered_report_lists_every_recorded_exposure() -> None:
+    rendered = render_report(
+        _analysis_report("development", "team_outperforms"),
+        _covering_holdout_reports(["team_outperforms", "no_difference"]),
+        [_budget_snapshot()],
+        _holdout_snapshot(2),
+    )
+
+    assert "Holdout `holdout-r1`" in rendered
+    assert "Holdout `holdout-r2`" in rendered
+    assert rendered.index("holdout-r1") < rendered.index("holdout-r2")
+    assert "`conditional_go`" in rendered

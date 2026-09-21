@@ -5,6 +5,15 @@ maps the pre-registered development and holdout analysis results, paid-call
 budget custody, and holdout exposure custody to exactly one public verdict:
 ``go``, ``conditional_go``, or ``no_go``.
 
+The holdout side is submitted as one analysis per recorded exposure.  Each
+analysis names the ``run_label`` of the exposure it was computed from, every
+submitted label must be one the holdout ledger recorded, and the submitted set
+must cover the recorded set exactly.  When the recorded exposures disagree the
+least favourable of them governs.  Together those rules are what make the
+holdout evidence unselectable after the fact: an operator who ran the holdout
+three times cannot submit only the repetition that reads ``team_outperforms``,
+because the two omitted exposures are recorded and their absence is detected.
+
 Malformed or version-mismatched inputs raise ``ValueError``.  Valid negative
 evidence does not: a baseline win, budget breach, unsettled reservation, or
 holdout custody violation deterministically worsens the result to ``no_go``.
@@ -22,6 +31,8 @@ import re
 
 from aragora.evaluation.outcome_backed_analysis import (
     ANALYSIS_CONTRACT_VERSION,
+    DEVELOPMENT_CASE_COUNT,
+    HOLDOUT_CASE_COUNT,
     AnalysisPhase,
     classify_analysis_verdict,
 )
@@ -29,7 +40,7 @@ from aragora.evaluation.outcome_backed_budget import (
     BUDGET_LEDGER_SCHEMA,
     DAILY_BUDGET_CAP_USD,
 )
-from aragora.evaluation.outcome_backed_corpus import BENCHMARK_ID, SPLIT_COUNTS
+from aragora.evaluation.outcome_backed_corpus import BENCHMARK_ID
 from aragora.evaluation.outcome_backed_holdout import (
     HOLDOUT_CONTRACT_VERSION,
     MAX_HOLDOUT_EXPOSURES,
@@ -46,10 +57,26 @@ _ANALYSIS_VERDICTS = frozenset(
 _FINAL_VERDICTS = frozenset({"go", "conditional_go", "no_go"})
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
+# Every one of these reaches the rendered Markdown verbatim, so a caller-supplied
+# identifier carrying one could forge a table row or a code span in the report.
+_MARKDOWN_UNSAFE_CHARACTERS = ("\n", "\r", "|", "`")
+
+# Ordered from most to least favourable. Used to pick the governing holdout
+# result when the recorded exposures disagree.
+_HOLDOUT_VERDICT_SEVERITY = {
+    "team_outperforms": 0,
+    "no_difference": 1,
+    "baseline_outperforms": 2,
+    "insufficient_data": 3,
+}
+
 
 def _required_text(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a non-empty string")
+    for character in _MARKDOWN_UNSAFE_CHARACTERS:
+        if character in value:
+            raise ValueError(f"{field} must not contain {character!r}")
     return value
 
 
@@ -357,49 +384,128 @@ def _holdout_custody_is_clean(snapshot: Mapping[str, object]) -> bool:
     return MIN_REQUIRED_HOLDOUT_EXPOSURES <= exposure_count <= MAX_HOLDOUT_EXPOSURES
 
 
+def _recorded_run_labels(custody: Mapping[str, object]) -> tuple[str, ...]:
+    registry = _single_registry(custody)
+    run_labels = registry.get("run_labels")
+    if not isinstance(run_labels, list):
+        raise ValueError("normalized holdout registry must contain run labels")
+    return tuple(str(label) for label in run_labels)
+
+
+def _bound_holdout_reports(
+    holdout_reports: Sequence[Mapping[str, object]],
+    *,
+    development: Mapping[str, object],
+    custody: Mapping[str, object],
+) -> tuple[dict[str, object], ...]:
+    if isinstance(holdout_reports, (str, bytes, Mapping)) or not isinstance(
+        holdout_reports, Sequence
+    ):
+        raise ValueError("holdout_reports must be an array of holdout analyses")
+
+    recorded = _recorded_run_labels(custody)
+    documents: list[dict[str, object]] = []
+    submitted: set[str] = set()
+    for index, raw_report in enumerate(holdout_reports):
+        document = _analysis_report(
+            raw_report,
+            phase="holdout",
+            expected_count=HOLDOUT_CASE_COUNT,
+        )
+        run_label = _required_text(
+            raw_report.get("run_label"), f"holdout_reports[{index}].run_label"
+        )
+        if run_label not in recorded:
+            raise ValueError(
+                f"holdout_reports[{index}].run_label {run_label!r} "
+                "is not a recorded holdout exposure"
+            )
+        if run_label in submitted:
+            raise ValueError(f"holdout_reports has duplicate run label {run_label!r}")
+        submitted.add(run_label)
+        if document["team_condition_id"] != development["team_condition_id"]:
+            raise ValueError(
+                f"holdout_reports[{index}].team_condition_id does not match "
+                "development_report.team_condition_id"
+            )
+        document["run_label"] = run_label
+        documents.append(document)
+
+    missing = sorted(set(recorded) - submitted)
+    if missing:
+        raise ValueError(
+            "holdout_reports must cover every recorded exposure; missing: " + ", ".join(missing)
+        )
+    return tuple(sorted(documents, key=lambda document: str(document["run_label"])))
+
+
+def _governing_holdout_verdict(holdouts: Sequence[Mapping[str, object]]) -> str:
+    if not holdouts:
+        # A ledger that recorded no exposure has nothing to govern with, so the
+        # least favourable reading is the honest one. Custody is already
+        # violated in that state and the final verdict is no_go regardless.
+        return "insufficient_data"
+    return max(
+        (str(document["verdict"]) for document in holdouts),
+        key=lambda verdict: _HOLDOUT_VERDICT_SEVERITY[verdict],
+    )
+
+
 def _validated_inputs(
     development_report: Mapping[str, object],
-    holdout_report: Mapping[str, object],
+    holdout_reports: Sequence[Mapping[str, object]],
     budget_snapshots: Sequence[Mapping[str, object]],
     holdout_snapshot: Mapping[str, object],
-) -> tuple[dict[str, object], dict[str, object], tuple[dict[str, object], ...], dict[str, object]]:
+) -> tuple[
+    dict[str, object],
+    tuple[dict[str, object], ...],
+    tuple[dict[str, object], ...],
+    dict[str, object],
+]:
     development = _analysis_report(
         development_report,
         phase="development",
-        expected_count=SPLIT_COUNTS["development"],
-    )
-    holdout = _analysis_report(
-        holdout_report,
-        phase="holdout",
-        expected_count=SPLIT_COUNTS["holdout"],
+        expected_count=DEVELOPMENT_CASE_COUNT,
     )
     budgets = _budget_documents(budget_snapshots)
     custody = _holdout_document(holdout_snapshot)
-    return development, holdout, budgets, custody
+    holdouts = _bound_holdout_reports(
+        holdout_reports,
+        development=development,
+        custody=custody,
+    )
+    return development, holdouts, budgets, custody
 
 
 def final_verdict(
     development_report: Mapping[str, object],
-    holdout_report: Mapping[str, object],
+    holdout_reports: Sequence[Mapping[str, object]],
     budget_snapshots: Sequence[Mapping[str, object]],
     holdout_snapshot: Mapping[str, object],
 ) -> str:
     """Return the frozen final benchmark verdict.
 
-    ``go`` requires the team to outperform in both the complete development
-    and holdout analyses with settled, under-cap budget custody and two or
-    three recorded holdout exposures.  ``conditional_go`` requires a
-    development win and a complete but statistically unconfirmed holdout
-    result (``no_difference``) under the same custody gates.  Every baseline
-    win, inconclusive development result, budget
-    violation, or holdout custody violation returns ``no_go``.
+    ``holdout_reports`` carries one analysis per recorded holdout exposure,
+    each naming the ``run_label`` it was computed from.  Every submitted label
+    must be recorded in the holdout ledger snapshot, labels may not repeat, and
+    the submitted set must cover the recorded set exactly.  When the recorded
+    exposures disagree, the least favourable of them governs.
 
-    Missing, malformed, or version-mismatched inputs raise ``ValueError``.
+    ``go`` requires the team to outperform in the complete development analysis
+    and in every recorded holdout exposure, with settled, under-cap budget
+    custody and two or three recorded exposures.  ``conditional_go`` requires a
+    development win and a governing holdout result that is complete but
+    statistically unconfirmed (``no_difference``) under the same custody gates.
+    Every baseline win, inconclusive development result, budget violation, or
+    holdout custody violation returns ``no_go``.
+
+    Missing, malformed, unbound, or version-mismatched inputs raise
+    ``ValueError``.
     """
 
-    development, holdout, budgets, custody = _validated_inputs(
+    development, holdouts, budgets, custody = _validated_inputs(
         development_report,
-        holdout_report,
+        holdout_reports,
         budget_snapshots,
         holdout_snapshot,
     )
@@ -407,9 +513,10 @@ def final_verdict(
         return "no_go"
     if development["verdict"] != "team_outperforms":
         return "no_go"
-    if holdout["verdict"] == "team_outperforms":
+    governing = _governing_holdout_verdict(holdouts)
+    if governing == "team_outperforms":
         return "go"
-    if holdout["verdict"] == "no_difference":
+    if governing == "no_difference":
         return "conditional_go"
     return "no_go"
 
@@ -431,42 +538,60 @@ def _format_metric(value: object) -> str:
 
 def _verdict_reasons(
     development: Mapping[str, object],
-    holdout: Mapping[str, object],
+    holdouts: Sequence[Mapping[str, object]],
     budgets: Sequence[Mapping[str, object]],
     custody: Mapping[str, object],
 ) -> tuple[str, ...]:
     reasons = [
         f"Development analysis: `{development['verdict']}`.",
-        f"Holdout analysis: `{holdout['verdict']}`.",
-        "Budget custody: `clean`." if _budget_is_clean(budgets) else "Budget custody: `violated`.",
         (
-            "Holdout custody: `clean`."
-            if _holdout_custody_is_clean(custody)
-            else "Holdout custody: `violated or incomplete`."
+            f"Holdout analyses: {len(holdouts)}, one for each recorded exposure of the "
+            "frozen registry."
         ),
     ]
+    reasons.extend(
+        f"Holdout exposure `{holdout['run_label']}`: `{holdout['verdict']}`."
+        for holdout in holdouts
+    )
+    reasons.extend(
+        [
+            (
+                "Governing holdout analysis (least favourable recorded exposure): "
+                f"`{_governing_holdout_verdict(holdouts)}`."
+            ),
+            (
+                "Budget custody: `clean`."
+                if _budget_is_clean(budgets)
+                else "Budget custody: `violated`."
+            ),
+            (
+                "Holdout custody: `clean`."
+                if _holdout_custody_is_clean(custody)
+                else "Holdout custody: `violated or incomplete`."
+            ),
+        ]
+    )
     return tuple(reasons)
 
 
 def render_report(
     development_report: Mapping[str, object],
-    holdout_report: Mapping[str, object],
+    holdout_reports: Sequence[Mapping[str, object]],
     budget_snapshots: Sequence[Mapping[str, object]],
     holdout_snapshot: Mapping[str, object],
 ) -> str:
     """Render byte-deterministic Markdown for the final benchmark report."""
 
-    development, holdout, budgets, custody = _validated_inputs(
+    development, holdouts, budgets, custody = _validated_inputs(
         development_report,
-        holdout_report,
+        holdout_reports,
         budget_snapshots,
         holdout_snapshot,
     )
-    verdict = final_verdict(development_report, holdout_report, budget_snapshots, holdout_snapshot)
+    verdict = final_verdict(development_report, holdout_reports, budget_snapshots, holdout_snapshot)
     if verdict not in _FINAL_VERDICTS:  # pragma: no cover - defensive contract assertion
         raise ValueError("final verdict is not recognized")
     development_summary = _strongest_summary(development)
-    holdout_summary = _strongest_summary(holdout)
     registry = _single_registry(custody)
     run_labels = registry.get("run_labels")
     if not isinstance(run_labels, list):
@@ -497,39 +622,54 @@ def render_report(
             f"| Development | {development['n']} | `{development['team_condition_id']}` | "
             f"`{development['strongest_baseline_id']}` | `{development['verdict']}` |"
         ),
-        (
-            f"| Holdout | {holdout['n']} | `{holdout['team_condition_id']}` | "
-            f"`{holdout['strongest_baseline_id']}` | `{holdout['verdict']}` |"
-        ),
-        "",
-        "## 4. Primary Metrics",
-        "",
-        "| Phase | Team composite | Best-single composite | Composite delta | "
-        "Brier improvement | Exact p-value |",
-        "|---|---:|---:|---:|---:|---:|",
-        (
-            f"| Development | {_format_metric(development_summary['team_mean_composite_score'])} | "
-            f"{_format_metric(development_summary['baseline_mean_composite_score'])} | "
-            f"{_format_metric(development_summary['mean_composite_delta'])} | "
-            f"{_format_metric(development_summary['mean_brier_improvement'])} | "
-            f"{_format_metric(development_summary['exact_sign_flip_p_value'])} |"
-        ),
-        (
-            f"| Holdout | {_format_metric(holdout_summary['team_mean_composite_score'])} | "
+    ]
+    lines.extend(
+        f"| Holdout `{holdout['run_label']}` | {holdout['n']} | "
+        f"`{holdout['team_condition_id']}` | `{holdout['strongest_baseline_id']}` | "
+        f"`{holdout['verdict']}` |"
+        for holdout in holdouts
+    )
+    lines.extend(
+        [
+            "",
+            "## 4. Primary Metrics",
+            "",
+            "| Phase | Team composite | Best-single composite | Composite delta | "
+            "Brier improvement | Exact p-value |",
+            "|---|---:|---:|---:|---:|---:|",
+            (
+                "| Development | "
+                f"{_format_metric(development_summary['team_mean_composite_score'])} | "
+                f"{_format_metric(development_summary['baseline_mean_composite_score'])} | "
+                f"{_format_metric(development_summary['mean_composite_delta'])} | "
+                f"{_format_metric(development_summary['mean_brier_improvement'])} | "
+                f"{_format_metric(development_summary['exact_sign_flip_p_value'])} |"
+            ),
+        ]
+    )
+    for holdout in holdouts:
+        holdout_summary = _strongest_summary(holdout)
+        lines.append(
+            f"| Holdout `{holdout['run_label']}` | "
+            f"{_format_metric(holdout_summary['team_mean_composite_score'])} | "
             f"{_format_metric(holdout_summary['baseline_mean_composite_score'])} | "
             f"{_format_metric(holdout_summary['mean_composite_delta'])} | "
             f"{_format_metric(holdout_summary['mean_brier_improvement'])} | "
             f"{_format_metric(holdout_summary['exact_sign_flip_p_value'])} |"
-        ),
-        "",
-        "The frozen absolute Brier-improvement target is `>= 0.05`; uncertainty is "
-        "descriptive and this corpus does not justify a broad significance claim.",
-        "",
-        "## 5. Cost and Custody",
-        "",
-        "| UTC date | Settled USD | Reserved USD | Committed USD | Cap USD | Open reservations | Status |",
-        "|---|---:|---:|---:|---:|---:|---|",
-    ]
+        )
+    lines.extend(
+        [
+            "",
+            "The frozen absolute Brier-improvement target is `>= 0.05`; uncertainty is "
+            "descriptive and this corpus does not justify a broad significance claim.",
+            "",
+            "## 5. Cost and Custody",
+            "",
+            "| UTC date | Settled USD | Reserved USD | Committed USD | Cap USD | "
+            "Open reservations | Status |",
+            "|---|---:|---:|---:|---:|---:|---|",
+        ]
+    )
     for snapshot in budgets:
         status = "violation" if snapshot["exceeded"] or snapshot["open_reservations"] else "clean"
         lines.append(
@@ -554,7 +694,7 @@ def render_report(
         ]
     )
     lines.extend(
-        f"- {reason}" for reason in _verdict_reasons(development, holdout, budgets, custody)
+        f"- {reason}" for reason in _verdict_reasons(development, holdouts, budgets, custody)
     )
     lines.extend(
         [

@@ -3,15 +3,18 @@ from __future__ import annotations
 from itertools import product
 import json
 import math
+from pathlib import Path
 
 import pytest
 
+from aragora.evaluation import outcome_backed_analysis
 from aragora.evaluation.outcome_backed_analysis import (
     MIN_ABSOLUTE_BRIER_IMPROVEMENT,
     TIE_EPSILON,
     analyze_scored_conditions,
     exact_paired_sign_flip_p_value,
 )
+from aragora.evaluation.outcome_backed_corpus import SPLIT_COUNTS
 from aragora.evaluation.outcome_backed_scoring import SCORER_CONTRACT_VERSION
 
 
@@ -239,3 +242,19 @@ def test_pre_registered_verdicts(
     team, baseline = _rows(16, team_brier=team_brier, baseline_brier=baseline_brier)
 
     assert _analyze(team, baseline).verdict == expected
+
+
+def test_frozen_case_counts_are_literals_not_corpus_aliases() -> None:
+    source = Path(outcome_backed_analysis.__file__).read_text(encoding="utf-8")
+
+    assert "DEVELOPMENT_CASE_COUNT = 16" in source
+    assert "HOLDOUT_CASE_COUNT = 8" in source
+    assert outcome_backed_analysis.DEVELOPMENT_CASE_COUNT == SPLIT_COUNTS["development"]
+    assert outcome_backed_analysis.HOLDOUT_CASE_COUNT == SPLIT_COUNTS["holdout"]
+
+
+def test_corpus_split_drift_fails_closed() -> None:
+    with pytest.raises(RuntimeError, match="frozen analysis case counts"):
+        outcome_backed_analysis._assert_frozen_case_counts({"development": 12, "holdout": 8})
+
+    outcome_backed_analysis._assert_frozen_case_counts(SPLIT_COUNTS)

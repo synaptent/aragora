@@ -32,8 +32,8 @@ from aragora.evaluation.outcome_backed_scoring import SCORER_CONTRACT_VERSION
 
 ANALYSIS_CONTRACT_VERSION = "outcome-backed-decision-quality-analysis/1.1"
 AnalysisPhase = Literal["development", "holdout"]
-DEVELOPMENT_CASE_COUNT = SPLIT_COUNTS["development"]
-HOLDOUT_CASE_COUNT = SPLIT_COUNTS["holdout"]
+DEVELOPMENT_CASE_COUNT = 16
+HOLDOUT_CASE_COUNT = 8
 MAX_EXACT_CASE_COUNT = 16
 TIE_EPSILON = 1e-9
 P_VALUE_THRESHOLD = 0.05
@@ -49,6 +49,26 @@ _UNIT_INTERVAL_METRICS = (
     "provenance_completeness",
     "receipt_verification_rate",
 )
+
+
+def _assert_frozen_case_counts(split_counts: Mapping[str, int]) -> None:
+    """Refuse to import when the corpus split counts drift from the frozen counts.
+
+    The case counts are pre-registered, so they are literals here rather than
+    aliases of the corpus. This check is what keeps the two in step: a corpus
+    edit fails loudly at import instead of silently relocating a frozen
+    threshold that the analysis and report contracts are pinned to.
+    """
+
+    frozen = {"development": DEVELOPMENT_CASE_COUNT, "holdout": HOLDOUT_CASE_COUNT}
+    if dict(split_counts) != frozen:
+        raise RuntimeError(
+            "frozen analysis case counts disagree with the benchmark corpus: "
+            f"frozen={frozen}, corpus={dict(split_counts)}"
+        )
+
+
+_assert_frozen_case_counts(SPLIT_COUNTS)
 
 
 @dataclass(frozen=True)
