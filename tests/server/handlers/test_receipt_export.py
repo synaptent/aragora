@@ -780,6 +780,32 @@ class TestStatelessOdrVerification:
         assert payload["key_id"] == key_id
 
     @pytest.mark.asyncio
+    async def test_signed_document_is_unverified_when_no_key_is_served(self):
+        from aragora.gauntlet import odr_signing
+
+        private_key, _, _ = _signing_material()
+        handler = _receipts_handler()
+        with patch.object(odr_signing, "load_signing_key_from_secrets", return_value=private_key):
+            export = await handler.handle(
+                "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+            )
+        document = json.loads(export.body)
+        assert document["signatures"]
+
+        async def _unconfigured() -> None:
+            return None
+
+        handler._get_signing_public_key = _unconfigured  # type: ignore[method-assign]
+        for candidate in (document, dict(document, claim=dict(document["claim"], statement="x"))):
+            payload = json.loads(
+                (await handler.handle("POST", "/api/v2/receipts/verify", candidate, {})).body
+            )
+            assert payload["verified"] is False
+            statuses = {check["name"]: check["status"] for check in payload["checks"]}
+            assert statuses["signature"] == "skip"
+            assert payload["key_id"] is None
+
+    @pytest.mark.asyncio
     async def test_empty_object_is_a_400_naming_odr_version(self):
         handler = _receipts_handler()
         result = await handler.handle("POST", "/api/v2/receipts/verify", {}, {})

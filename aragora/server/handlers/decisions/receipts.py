@@ -1330,11 +1330,13 @@ class ReceiptsHandler(BaseHandler):
                 logger.warning("ODR signing public key unusable for verification: %s", e)
 
         result = await asyncio.to_thread(verify_odr_document, body, public_key=public_key)
-        # A configured key that verifies nothing is not a pass: the verdict maps the
-        # packaged CLI's exit code, which is 3 for an unsigned document under --pubkey.
+        # The verdict maps the packaged CLI's exit code (0 <=> true): with a key it
+        # exits 3 for an unsigned document, and without one it exits 3 whenever
+        # signatures are present but skipped, so neither reads as verified here.
         signature = next((c for c in result.checks if c.name == "signature"), None)
         authenticated = signature is not None and signature.status == "pass"
-        verified = result.ok and (public_key is None or authenticated)
+        unchecked = signature is not None and signature.status == "skip"
+        verified = result.ok and (authenticated if public_key is not None else not unchecked)
         return json_response(
             {
                 "verified": verified,
