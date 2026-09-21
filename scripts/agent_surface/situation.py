@@ -176,10 +176,7 @@ class Capsule:
             "unknowns": [asdict(u) for u in self.unknowns],
             "frontier": [asdict(a) for a in self.frontier],
             "obligations": self.obligations,
-            # Only the stable prefix of each note: the detail after the colon is
-            # raw probe stderr, so a rate-limit message carrying a timestamp
-            # would churn the cursor on every tick exactly when GitHub is flaky.
-            "degraded": [note.split(":", 1)[0] for note in self.degraded],
+            "degraded": [_stable_note(note) for note in self.degraded],
         }
         blob = json.dumps(material, sort_keys=True, default=str)
         return hashlib.sha256(blob.encode()).hexdigest()[:16]
@@ -304,6 +301,23 @@ def _probe_object(cap: Capsule, source: str, output: str) -> dict[str, Any] | No
 def _is_count(value: Any) -> bool:
     """True only for a real integer count; bools are not counts."""
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+_VOLATILE_HEX_RE = re.compile(r"\b[0-9a-fA-F]{7,}\b")
+_VOLATILE_NUM_RE = re.compile(r"\d+")
+
+
+def _stable_note(note: str) -> str:
+    """Drop the churning parts of a probe diagnostic, keeping its failure class.
+
+    Degraded notes carry raw probe stderr, so a rate-limit message with a
+    timestamp would otherwise re-key the cursor every tick exactly when GitHub
+    is flaky. Truncating at the colon would go too far the other way: it
+    collapses "rate limit" and "authentication failed" into one value, hiding a
+    change of failure -- and of the remediation it implies -- behind
+    ``changed: false``.
+    """
+    return _VOLATILE_NUM_RE.sub("#", _VOLATILE_HEX_RE.sub("#", note))
 
 
 def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str, Any]:

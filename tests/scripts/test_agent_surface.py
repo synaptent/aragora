@@ -321,18 +321,26 @@ def test_an_unreadable_loop_shape_withholds_the_green_verdict(monkeypatch: Any) 
     assert cap.unknowns, "an unreadable fleet must leave a stated unknown"
 
 
+def _cursor_with_degraded(note: str) -> str:
+    cap = _capsule(beliefs=[])
+    cap.degraded = [note]
+    return cap.cursor()
+
+
 def test_volatile_probe_detail_does_not_churn_the_cursor() -> None:
     """A rate-limit message with a timestamp must not disable the delta path."""
-    first = _capsule(beliefs=[])
-    first.degraded = ["gh pr list failed: API rate limit exceeded at 15:04:01"]
-    second = _capsule(beliefs=[])
-    second.degraded = ["gh pr list failed: API rate limit exceeded at 15:09:44"]
+    assert _cursor_with_degraded(
+        "gh pr list failed: API rate limit exceeded at 15:04:01"
+    ) == _cursor_with_degraded("gh pr list failed: API rate limit exceeded at 15:09:44")
 
-    assert first.cursor() == second.cursor()
 
-    different = _capsule(beliefs=[])
-    different.degraded = ["loop_control_status unavailable: boom"]
-    assert different.cursor() != first.cursor()
+def test_a_different_failure_class_still_changes_the_cursor() -> None:
+    """Same probe, different remediation: the caller must not be told nothing changed."""
+    rate_limited = _cursor_with_degraded("gh pr list failed: API rate limit exceeded")
+    unauthenticated = _cursor_with_degraded("gh pr list failed: authentication failed")
+    other_probe = _cursor_with_degraded("loop_control_status unavailable: boom")
+
+    assert len({rate_limited, unauthenticated, other_probe}) == 3
 
 
 def test_settlement_shape_drift_degrades_instead_of_killing_the_capsule(monkeypatch: Any) -> None:
