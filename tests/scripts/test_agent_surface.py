@@ -72,7 +72,7 @@ def test_cursor_is_stable_for_identical_state() -> None:
 def test_cursor_ignores_generated_at() -> None:
     """Wall-clock must not enter the digest.
 
-    If it did, every tick would report a change and the 31-token quiet path
+    If it did, every tick would report a change and the quiet path
     would never fire -- the design would be dead while still appearing to work.
     """
     a = _capsule()
@@ -325,6 +325,27 @@ def _cursor_with_degraded(note: str) -> str:
     cap = _capsule(beliefs=[])
     cap.degraded = [note]
     return cap.cursor()
+
+
+def test_a_new_scheduled_run_on_main_does_not_rekey_the_cursor(monkeypatch: Any) -> None:
+    """A rolling ratio in a note would void the delta path for every caller."""
+
+    def cursor_for(skipped: int, total: int) -> str:
+        runs = [{"conclusion": "skipped"}] * skipped + [{"conclusion": "success"}] * (
+            total - skipped
+        )
+        cap = _capsule(beliefs=[])
+        monkeypatch.setattr(situation.shutil, "which", lambda _: "/fixture/gh")
+        monkeypatch.setattr(
+            situation,
+            "sh",
+            lambda cmd, **k: (0, json.dumps([] if cmd[1] == "pr" else runs)),
+        )
+        situation.add_github_beliefs(cap)
+        return cap.cursor()
+
+    assert cursor_for(12, 15) == cursor_for(11, 15)
+    assert cursor_for(12, 15) != cursor_for(0, 15)
 
 
 def test_volatile_probe_detail_does_not_churn_the_cursor() -> None:

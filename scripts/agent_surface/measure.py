@@ -21,10 +21,12 @@ Inputs:
                                 "budget": str,
                                 "calls": [{"label": str, "cmd": str}, ...]}}}
 
-2. Nothing else. The harness never writes to the repo, never calls a mutating
-   command on the caller's behalf, and never touches the network itself -- though
-   a journey's own commands may (e.g. ``gh``), which is the point: that cost is
-   what we are measuring.
+2. Nothing else. The harness never writes to the repo and never calls a mutating
+   command on the caller's behalf. A journey's own commands may reach the
+   network (e.g. ``gh``), which is the point: that cost is what we are
+   measuring. The harness itself reaches the network only under ``--exact``,
+   which posts each captured stdout/stderr to the Anthropic count-tokens API to
+   replace the proxy count; without that flag it is entirely local.
 
 Output: one JSON object on stdout::
 

@@ -302,6 +302,17 @@ def _probe_object(cap: Capsule, source: str, output: str) -> dict[str, Any] | No
     return data
 
 
+def _default_repo_root() -> Path:
+    """Resolve the checkout root, not the caller's directory.
+
+    The composed tools are invoked by repo-relative path, so defaulting to the
+    cwd makes every one of them degrade when the caller happens to be in a
+    subdirectory, while the git probes beside them still succeed.
+    """
+    code, out = sh(["git", "rev-parse", "--show-toplevel"])
+    return Path(out) if code == 0 and out else Path.cwd()
+
+
 def _is_count(value: Any) -> bool:
     """True only for a real integer count; bools are not counts."""
     return isinstance(value, int) and not isinstance(value, bool)
@@ -434,8 +445,12 @@ def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str,
         counted = sorted({str(r.get("conclusion")) for r in failures})
         notes = [f"counted as failure-like: {', '.join(counted)}"] if counted else []
         if skipped:
+            # Deliberately not "{skipped}/{len(runs)}": notes are digested into
+            # the cursor, and a rolling ratio over the last N runs re-keys it
+            # every time any scheduled run lands, even though the answer this
+            # belief gives -- the failure count -- has not moved.
             notes.append(
-                f"{skipped}/{len(runs)} runs skipped -- skipped is correct "
+                "some of these runs are skipped -- skipped is correct "
                 "self-gating here, NOT a red main"
             )
         cap.beliefs.append(
@@ -884,10 +899,13 @@ def main() -> int:
         action="store_true",
         help="skip loop_control_status (saves ~15s wall time, loses fleet beliefs)",
     )
-    ap.add_argument("--repo-root", type=Path, default=Path.cwd())
+    ap.add_argument("--repo-root", type=Path, default=None)
     args = ap.parse_args()
+    # Resolved only when the caller left it unset, so an explicit root is never
+    # second-guessed by a probe run outside it.
+    repo_root = args.repo_root or _default_repo_root()
 
-    cap = build(args.repo_root, pr=args.pr, fleet=not args.no_fleet)
+    cap = build(repo_root, pr=args.pr, fleet=not args.no_fleet)
     if not cap.anchor:
         print("no anchor: not a git repository", file=sys.stderr)
         return 1
