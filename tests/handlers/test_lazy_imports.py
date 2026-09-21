@@ -282,7 +282,7 @@ class TestConsistency:
         ]
         for name in onboarding_funcs:
             assert name in HANDLER_MODULES, f"Onboarding function {name!r} not in HANDLER_MODULES"
-            assert HANDLER_MODULES[name] == "aragora.server.handlers.onboarding"
+            assert HANDLER_MODULES[name] == "aragora.server.handlers.sme.onboarding"
 
 
 # ============================================================================

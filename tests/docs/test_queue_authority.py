@@ -17,12 +17,12 @@ EXPECTED_STORAGE_IMPORTERS = {
     "aragora/nomic/testfixer/queue_worker.py",
     "aragora/queue/workers/transcription_worker.py",
     "aragora/server/handlers/admin/health/workers.py",
-    "aragora/server/handlers/transcription.py",
+    "aragora/server/handlers/voice/transcription.py",
     "aragora/server/workers/gauntlet_worker.py",
     "aragora/server/workers/routing_worker.py",
 }
 EXPECTED_DYNAMIC_REFERENCERS = {
-    "aragora/server/handlers/transcription.py",
+    "aragora/server/handlers/voice/transcription.py",
     "aragora/server/initialization.py",
     "scripts/init_postgres_db.py",
 }
@@ -57,7 +57,7 @@ EXPECTED_BACKEND_CALLS = {
         "store:get_stats": 2,
         "symbol:get_job_store": 1,
     },
-    "aragora/server/handlers/transcription.py": {
+    "aragora/server/handlers/voice/transcription.py": {
         "dynamic_factory:get": 2,
         "store:enqueue": 2,
         "store:get": 1,
@@ -451,7 +451,7 @@ def test_arch_015_is_the_binding_queue_authority() -> None:
 def test_queue_entrypoints_and_backend_split_remain_explicit() -> None:
     for relative_path in (
         "scripts/queue_worker.py",
-        "aragora/server/handlers/queue.py",
+        "aragora/server/handlers/control_plane/queue.py",
         "aragora/server/startup/workers.py",
     ):
         assert (ROOT / relative_path).is_file(), relative_path

@@ -65,8 +65,11 @@ from aragora.protocols import HTTPRequestHandler
 AuthorizationContext: Any = None
 check_permission: Any = None
 try:
-    from aragora.rbac import AuthorizationContext, check_permission
+    from aragora.rbac import AuthorizationContext as _AuthorizationContext
+    from aragora.rbac import check_permission as _check_permission
 
+    AuthorizationContext = _AuthorizationContext
+    check_permission = _check_permission
     RBAC_AVAILABLE = True
 except ImportError:
     RBAC_AVAILABLE = False
@@ -92,13 +95,16 @@ from aragora.server.validation.query_params import safe_query_int  # noqa: F401 
 RBACProfile: Any = None
 try:
     from aragora.rbac.profiles import (
-        RBACProfile,  # noqa: F401
+        RBACProfile as _RBACProfile,
+    )
+    from aragora.rbac.profiles import (
+        get_available_roles_for_assignment,  # noqa: F401
+        get_lite_role_summary,  # noqa: F401
         get_profile_config,  # noqa: F401
         get_profile_roles,  # noqa: F401
-        get_lite_role_summary,  # noqa: F401
-        get_available_roles_for_assignment,  # noqa: F401
     )
 
+    RBACProfile = _RBACProfile
     PROFILES_AVAILABLE = True
 except ImportError:
     PROFILES_AVAILABLE = False
@@ -134,7 +140,7 @@ PERM_AUDIT_READ = "audit:read"
 PERM_AUDIT_REPORT = "audit:report"
 PERM_AUDIT_VERIFY = "audit:verify"
 
-from .base import (
+from ..base import (
     HandlerResult,
     ServerContext,
     error_response,
@@ -144,11 +150,11 @@ from .base import (
 )
 from aragora.server.handlers.openapi_decorator import api_endpoint  # noqa: F401 - used by mixin modules via _mod()
 from aragora.server.versioning.compat import strip_version_prefix
-from .secure import SecureHandler
-from .utils.rate_limit import rate_limit  # noqa: F401 - used by mixin modules via _mod()
+from ..secure import SecureHandler
+from ..utils.rate_limit import rate_limit  # noqa: F401 - used by mixin modules via _mod()
 
 # Import utilities from the workspace package
-from .workspace.workspace_utils import (
+from .workspace_utils import (
     WorkspaceCircuitBreaker,
     get_workspace_circuit_breaker_status,
     _validate_workspace_id,
@@ -157,11 +163,11 @@ from .workspace.workspace_utils import (
 )
 
 # Import mixin classes providing handler method implementations
-from .workspace.crud import WorkspaceCrudMixin
-from .workspace.policies import WorkspacePoliciesMixin
-from .workspace.members import WorkspaceMembersMixin
-from .workspace.invites import WorkspaceInvitesMixin
-from .workspace.settings import WorkspaceSettingsMixin
+from .crud import WorkspaceCrudMixin
+from .policies import WorkspacePoliciesMixin
+from .members import WorkspaceMembersMixin
+from .invites import WorkspaceInvitesMixin
+from .settings import WorkspaceSettingsMixin
 
 if TYPE_CHECKING:
     pass
