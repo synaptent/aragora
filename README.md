@@ -491,7 +491,7 @@ metric. *(docs/plans/ agent-civilization designs)*
   assumptions decay, epistemic decay signals proposing bounded repair, and a read-only
   organizational truth map. Initial shape is manifest-based and read-only.
 - **Trust-Compound plan (🔄 TCP-1..7).** Make the large surface *legible without
-  deletion*: a canonical-metrics manifest verified in CI (so a claim like "46 adapters"
+  deletion*: a canonical-metrics manifest verified in CI (so a claim like "47 adapters"
   passes or fails the build), packaging clarity, hotspot-file splits, wire/showcase/
   shelve classification per subsystem, generated artifacts as build outputs, this README
   rewrite, and public CruxSets at `aragora.ai/cruxes`.
