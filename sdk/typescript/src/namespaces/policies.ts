@@ -215,20 +215,6 @@ export class PoliciesAPI {
   }
 
   /**
-   * Enable a policy.
-   */
-  async enable(policyId: string): Promise<{ enabled: boolean }> {
-    return this.client.request('POST', `/api/policies/${policyId}/enable`);
-  }
-
-  /**
-   * Disable a policy.
-   */
-  async disable(policyId: string): Promise<{ enabled: boolean }> {
-    return this.client.request('POST', `/api/policies/${policyId}/disable`);
-  }
-
-  /**
    * Get violations for a specific policy.
    */
   async getViolations(

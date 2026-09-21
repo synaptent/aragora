@@ -163,23 +163,6 @@ describe('PoliciesAPI Namespace', () => {
       expect(result.enabled).toBe(false);
     });
 
-    it('should enable policy', async () => {
-      mockClient.request.mockResolvedValue({ enabled: true });
-
-      const result = await api.enable('p1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/policies/p1/enable');
-      expect(result.enabled).toBe(true);
-    });
-
-    it('should disable policy', async () => {
-      mockClient.request.mockResolvedValue({ enabled: false });
-
-      const result = await api.disable('p1');
-
-      expect(mockClient.request).toHaveBeenCalledWith('POST', '/api/policies/p1/disable');
-      expect(result.enabled).toBe(false);
-    });
   });
 
   // ===========================================================================
