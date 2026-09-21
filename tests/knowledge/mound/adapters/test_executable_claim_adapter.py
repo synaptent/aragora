@@ -333,3 +333,49 @@ class TestRealMound:
                 assert stored is not None, f"mound.get({node_id!r}) found nothing"
 
         asyncio.run(_ingest())
+
+
+class TestAdapterRegistration:
+    """Discovery wiring: package export, factory spec, and default-off runtime."""
+
+    def test_adapter_is_exported_from_the_adapters_package(self) -> None:
+        from aragora.knowledge.mound import adapters as adapters_pkg
+
+        assert adapters_pkg.ExecutableClaimAdapter is ExecutableClaimAdapter
+        assert adapters_pkg.ClaimIngestionResult is ClaimIngestionResult
+        assert "ExecutableClaimAdapter" in adapters_pkg.__all__
+        assert "ClaimIngestionResult" in adapters_pkg.__all__
+
+    def test_factory_spec_is_registered_and_names_a_real_method(self) -> None:
+        from aragora.knowledge.mound.adapters.factory import ADAPTER_SPECS
+
+        spec = ADAPTER_SPECS["executable_claim"]
+        assert spec.adapter_class is ExecutableClaimAdapter
+        assert spec.required_deps == []
+        assert spec.reverse_method is None
+        assert callable(getattr(ExecutableClaimAdapter, spec.forward_method))
+
+    def test_factory_creates_the_adapter_with_no_subsystems_present(self) -> None:
+        from aragora.knowledge.mound.adapters.factory import AdapterFactory
+
+        created = AdapterFactory().create_from_subsystems()
+
+        assert "executable_claim" in created
+        assert isinstance(created["executable_claim"].adapter, ExecutableClaimAdapter)
+
+    def test_factory_created_adapter_stores_nothing_while_the_flag_is_off(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from aragora.knowledge.mound.adapters.factory import AdapterFactory
+
+        monkeypatch.delenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", raising=False)
+        adapter = AdapterFactory().create_from_subsystems()["executable_claim"].adapter
+        mound = _mound()
+        adapter.set_mound(mound)
+
+        r = asyncio.run(adapter.ingest_claim_results([_r(cid="c1"), _r(cid="c2")]))
+
+        assert r.claims_ingested == 0
+        assert r.skipped == 2
+        assert r.knowledge_item_ids == []
+        mound.store.assert_not_awaited()
