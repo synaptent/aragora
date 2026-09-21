@@ -63,6 +63,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -72,6 +73,11 @@ from pathlib import Path
 from typing import Any
 
 GH_TIMEOUT = 90
+
+# A failed probe reports its diagnostics on the same channel a slug arrives on,
+# and gh errors routinely embed a URL or a path, so "contains a slash" cannot
+# distinguish an answer from a failure.
+REPO_SLUG_RE = re.compile(r"\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\Z")
 
 
 # --------------------------------------------------------------------------
@@ -163,13 +169,14 @@ def build_anchor(cap: Capsule, repo_root: Path | None = None) -> bool:
         return False
     _, head = sh(["git", "rev-parse", "--short=12", "HEAD"], cwd=repo_root)
     main_code, main_sha = sh(["git", "rev-parse", "--short=12", "origin/main"], cwd=repo_root)
-    _, slug = sh(
+    slug_code, slug = sh(
         ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
         cwd=repo_root,
     )
+    slug_resolved = slug_code == 0 and REPO_SLUG_RE.match(slug) is not None
 
     cap.anchor = {
-        "repo": slug if slug and "/" in slug else "unknown",
+        "repo": slug if slug_resolved else "unknown",
         "branch": branch,
         "head": head,
         "main": main_sha if main_code == 0 else "unresolved",
@@ -177,6 +184,10 @@ def build_anchor(cap: Capsule, repo_root: Path | None = None) -> bool:
     }
     if main_code != 0:
         cap.degraded.append("origin/main unresolved; ahead/behind beliefs withheld")
+    if not slug_resolved:
+        cap.degraded.append(
+            "repo slug unresolved; GitHub-scoped beliefs and slug-bearing commands withheld"
+        )
     return True
 
 

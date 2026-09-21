@@ -204,6 +204,70 @@ def test_failed_branch_position_probe_is_explicit(
     assert any("git rev-list" in d for d in cap.degraded)
 
 
+_SLUG_PROBE_ERROR = "error connecting to api.github.com/repos: dial tcp: no such host"
+
+
+def _anchor_probe(slug_result: tuple[int, str]) -> Any:
+    def probe(cmd: list[str], **kwargs: Any) -> tuple[int, str]:
+        if cmd[:3] == ["gh", "repo", "view"]:
+            return slug_result
+        if "--abbrev-ref" in cmd:
+            return 0, "main"
+        return 0, "abc123def456"
+
+    return probe
+
+
+def test_failed_slug_probe_is_not_laundered_into_the_anchor(monkeypatch: Any) -> None:
+    """A gh diagnostic must never be reported as the repo's identity.
+
+    ANCHOR is the field every other field claims to be true of, so a probe
+    failure rendered there is the worst available place to lose provenance.
+    """
+    monkeypatch.setattr(situation, "sh", _anchor_probe((1, _SLUG_PROBE_ERROR)))
+    cap = situation.Capsule()
+
+    assert situation.build_anchor(cap) is True
+
+    assert cap.anchor["repo"] == "unknown"
+    assert any("slug unresolved" in note for note in cap.degraded)
+
+
+def test_unresolvable_slug_withholds_settlement_and_keeps_frontier_runnable(
+    monkeypatch: Any,
+) -> None:
+    """Both slug consumers must take their documented withholding path."""
+    monkeypatch.setattr(situation, "sh", _anchor_probe((1, _SLUG_PROBE_ERROR)))
+    cap = situation.Capsule()
+    situation.build_anchor(cap)
+
+    shelled: list[list[str]] = []
+
+    def record(cmd: list[str], **kwargs: Any) -> tuple[int, str]:
+        shelled.append(cmd)
+        return 0, "{}"
+
+    monkeypatch.setattr(situation, "sh", record)
+    situation.add_pr_beliefs(cap, 9924)
+    situation.add_frontier(cap)
+
+    assert not shelled, "must not invoke settle_status.py with an unusable slug"
+    assert not any(b.key.startswith("pr9924_") for b in cap.beliefs)
+    assert not any(_SLUG_PROBE_ERROR in action.command for action in cap.frontier)
+    settlement = next(a for a in cap.frontier if "settlement" in a.label.lower())
+    assert settlement.prerequisite, "an unrunnable command must say what is missing"
+
+
+def test_well_formed_slug_is_retained(monkeypatch: Any) -> None:
+    monkeypatch.setattr(situation, "sh", _anchor_probe((0, "synaptent/aragora")))
+    cap = situation.Capsule()
+
+    assert situation.build_anchor(cap) is True
+
+    assert cap.anchor["repo"] == "synaptent/aragora"
+    assert cap.degraded == []
+
+
 @pytest.mark.parametrize(
     "status,expected", [("", "clean"), (" M file.py", "1 uncommitted path(s)")]
 )
