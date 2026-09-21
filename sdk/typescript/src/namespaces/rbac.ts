@@ -235,18 +235,6 @@ export class RBACAPI {
   }
 
   /**
-   * Get all effective permissions for a user.
-   *
-   * Resolves all permissions from assigned roles, including inherited permissions.
-   *
-   * @param userId - User ID
-   * @returns List of all permissions the user has
-   */
-  async getEffectivePermissions(userId: string): Promise<{ permissions: string[]; roles: string[] }> {
-    return this.client.request('GET', `/api/v1/rbac/users/${userId}/permissions`);
-  }
-
-  /**
    * List all assignments for a role.
    *
    * @param roleId - Role ID
@@ -285,27 +273,6 @@ export class RBACAPI {
    */
   async listUsers(params?: PaginationParams): Promise<{ users: unknown[]; total: number }> {
     return this.client.request('GET', '/api/users', { params });
-  }
-
-  /**
-   * Remove a user from organization.
-   *
-   * @param userId - User ID to remove
-   * @returns Removal result
-   */
-  async removeUser(userId: string): Promise<{ removed: boolean }> {
-    return this.client.request('DELETE', `/api/users/${userId}`);
-  }
-
-  /**
-   * Change user's role in organization.
-   *
-   * @param userId - User ID
-   * @param role - New role to assign
-   * @returns Update result
-   */
-  async changeUserRole(userId: string, role: string): Promise<{ updated: boolean }> {
-    return this.client.request('PUT', `/api/users/${userId}/role`, { json: { role } });
   }
 
   // =========================================================================

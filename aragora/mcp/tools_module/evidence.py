@@ -148,7 +148,7 @@ async def verify_citation_tool(
     if not url:
         return {"error": "url is required"}
 
-    from aragora.server.http_client_pool import get_http_pool
+    from aragora.observability.http_client_pool import get_http_pool
 
     try:
         pool = get_http_pool()

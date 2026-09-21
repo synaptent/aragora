@@ -305,11 +305,6 @@ export class DecisionsAPI {
     return this.client.request('GET', `/api/v1/decisions/plans/${planId}/outcome`);
   }
 
-  /** Get the outcome for a decision. */
-  async getOutcome(decisionId: string): Promise<Record<string, unknown>> {
-    return this.client.get(`/api/v1/decisions/${decisionId}/outcome`);
-  }
-
   /** List all outcomes for a decision. */
   async listOutcomes(decisionId: string): Promise<Record<string, unknown>> {
     return this.client.get(`/api/v1/decisions/${decisionId}/outcomes`);

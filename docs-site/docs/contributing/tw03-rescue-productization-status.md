@@ -5,9 +5,21 @@ description: TW-03 Rescue Productization Status
 
 # TW-03 Rescue Productization Status
 
-Last updated: 2026-07-28T14:02:57Z
+Last updated: 2026-09-04T13:28:39Z
 
 This is the repo-tracked recurring `TW-03` publication surface for repeated rescue-class harvest and conversion.
+
+## Snapshot History And Input Limits
+
+Counts describe the observations available to this snapshot, not a cumulative history. Zero current observations do not erase historical rescues and do not establish zero execution time. Missing elapsed observations must not be interpreted as measured zero-duration execution.
+
+Observation availability warning: raw inputs: `unavailable`; elapsed time: `unmeasured`; rescue history: `incomplete`; independent raw-input replay: `unmeasured`.
+
+Unavailable, incomplete, or unknown observations leave dependent values non-authoritative. Consult `observation_status` and `observation_limits` in the JSON where present; legacy snapshots without these markers do not establish input completeness. Empty class lists are not a verified absence of rescues.
+
+Snapshot-specific disclosure: this joint B0/TW03 publication omits observations present in prior published snapshots. The B0 `2026-09-01T13:38:29Z` rev-7 scorecard retains a `rescue_worker_crash` observation that is absent from the current B0 rescue counts. TW03's empty current class lists do not retract that historical rescue or demonstrate that no rescues have occurred.
+
+The original raw metrics/rescue inputs are unavailable for this snapshot, so independent raw-input replay remains unmeasured. An input reset or replacement has not been independently proven. The preserved JSON values do not establish zero execution time.
 
 ## Summary
 

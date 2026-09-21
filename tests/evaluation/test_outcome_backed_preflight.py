@@ -9,7 +9,11 @@ import pytest
 
 import aragora.evaluation.outcome_backed_preflight as preflight_module
 from aragora.evaluation.outcome_backed_conditions import FROZEN_CONDITION_ROSTER
-from aragora.config.secrets import SecretPresence
+from aragora.agents.transports.vibeproxy import (
+    VibeProxyCatalog,
+    VibeProxyMetadata,
+    VibeProxyUnavailableError,
+)
 from aragora.evaluation.outcome_backed_corpus import (
     BENCHMARK_ID,
     CorpusIntegrityReport,
@@ -24,11 +28,51 @@ from aragora.evaluation.outcome_backed_preflight import (
 
 HEAD = "a" * 40
 TODAY = date(2026, 8, 31)
-ENV = {
-    "ANTHROPIC_API_KEY": "anthropic-secret",
-    "OPENAI_API_KEY": "openai-secret",
-    "GEMINI_API_KEY": "gemini-secret",
-}
+REQUIRED_ROUTE = "POST /v1/chat/completions"
+
+
+class FakeVibeProxyClient:
+    base_url = "http://127.0.0.1:8318/v1"
+
+    def __init__(
+        self,
+        *,
+        models: frozenset[str] | None = None,
+        owners: frozenset[tuple[str, str]] | None = None,
+        routes: tuple[str, ...] = ("GET /v1/models", REQUIRED_ROUTE),
+        loopback: bool = True,
+        failure: Exception | None = None,
+    ) -> None:
+        identities = tuple(condition.members for condition in FROZEN_CONDITION_ROSTER[:3])
+        members = tuple(items[0] for items in identities)
+        self._models = models or frozenset(member.requested_model for member in members)
+        self._owners = owners or frozenset(
+            (member.requested_model, member.catalog_owner) for member in members
+        )
+        self._routes = routes
+        self.is_loopback = loopback
+        self._failure = failure
+
+    def catalog(self, *, force: bool, timeout: float) -> VibeProxyCatalog:
+        assert force is True
+        assert timeout > 0
+        if self._failure is not None:
+            raise self._failure
+        return VibeProxyCatalog(
+            models=self._models,
+            fetched_at=0.0,
+            model_owners=self._owners,
+        )
+
+    def metadata(self, *, timeout: float) -> VibeProxyMetadata:
+        assert timeout > 0
+        if self._failure is not None:
+            raise self._failure
+        return VibeProxyMetadata(
+            advertised_routes=self._routes,
+            version=None,
+            version_source="unknown",
+        )
 
 
 def _case(index: int) -> dict[str, object]:
@@ -142,7 +186,7 @@ def test_preflight_renders_all_prompts_without_mutating_budget(
         packet_dir,
         ledger_path,
         implementation_sha=HEAD,
-        environ=ENV,
+        vibeproxy_client=FakeVibeProxyClient(),
         utc_date=TODAY,
     )
     second = preflight_development_run(
@@ -150,7 +194,7 @@ def test_preflight_renders_all_prompts_without_mutating_budget(
         packet_dir,
         ledger_path,
         implementation_sha=HEAD,
-        environ=ENV,
+        vibeproxy_client=FakeVibeProxyClient(),
         utc_date=TODAY,
     )
 
@@ -162,44 +206,48 @@ def test_preflight_renders_all_prompts_without_mutating_budget(
     assert first.condition_ids == tuple(item.condition_id for item in FROZEN_CONDITION_ROSTER)
     assert not ledger_path.exists()
     serialized = json.dumps(first.to_dict())
-    assert "anthropic-secret" not in serialized
-    assert "openai-secret" not in serialized
-    assert "gemini-secret" not in serialized
+    assert "API_KEY" not in serialized
+    assert {item["observed_catalog_owner"] for item in first.transport_readiness} == {
+        "anthropic",
+        "openai",
+        "antigravity",
+    }
+    assert all(item["ready"] is True for item in first.transport_readiness)
 
 
-def test_missing_credential_blocks_without_exposing_values(
+def test_missing_catalog_model_blocks_before_inference(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     corpus_dir, packet_dir, ledger_path = _install_valid_inputs(tmp_path, monkeypatch)
-    env = {**ENV, "OPENAI_API_KEY": ""}
+    members = tuple(condition.members[0] for condition in FROZEN_CONDITION_ROSTER[:3])
+    models = frozenset(member.requested_model for member in members if member.family != "openai")
 
     report = preflight_development_run(
         corpus_dir,
         packet_dir,
         ledger_path,
         implementation_sha=HEAD,
-        environ=env,
+        vibeproxy_client=FakeVibeProxyClient(models=models),
         utc_date=TODAY,
     )
 
     assert report.ready is False
-    assert [item.code for item in report.blockers] == ["missing_provider_credential"]
-    openai = next(item for item in report.credential_readiness if item["family"] == "openai")
-    assert openai["credential_available"] is False
+    assert [item.code for item in report.blockers] == ["vibeproxy_model_unavailable"]
+    openai = next(item for item in report.transport_readiness if item["family"] == "openai")
+    assert openai["catalog_model_present"] is False
+    assert openai["ready"] is False
 
 
-def test_canonical_secret_presence_accepts_aws_credentials(
+def test_catalog_owner_must_match_frozen_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     corpus_dir, packet_dir, ledger_path = _install_valid_inputs(tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        preflight_module,
-        "get_secret_presence_report",
-        lambda names: [
-            SecretPresence(name=name, source="aws", critical=True, managed=True) for name in names
-        ],
+    members = tuple(condition.members[0] for condition in FROZEN_CONDITION_ROSTER[:3])
+    owners = frozenset(
+        (member.requested_model, "other" if member.family == "gemini" else member.catalog_owner)
+        for member in members
     )
 
     report = preflight_development_run(
@@ -207,11 +255,81 @@ def test_canonical_secret_presence_accepts_aws_credentials(
         packet_dir,
         ledger_path,
         implementation_sha=HEAD,
+        vibeproxy_client=FakeVibeProxyClient(owners=owners),
         utc_date=TODAY,
     )
 
-    assert report.ready is True
-    assert {item["credential_source"] for item in report.credential_readiness} == {"aws"}
+    assert report.ready is False
+    assert [item.code for item in report.blockers] == ["vibeproxy_owner_mismatch"]
+    gemini = next(item for item in report.transport_readiness if item["family"] == "gemini")
+    assert gemini["expected_catalog_owner"] == "antigravity"
+    assert gemini["observed_catalog_owner"] == "other"
+    assert gemini["ready"] is False
+
+
+def test_ambiguous_catalog_owner_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    corpus_dir, packet_dir, ledger_path = _install_valid_inputs(tmp_path, monkeypatch)
+    members = tuple(condition.members[0] for condition in FROZEN_CONDITION_ROSTER[:3])
+    owners = frozenset(
+        (member.requested_model, member.catalog_owner) for member in members
+    ) | frozenset({(members[0].requested_model, "other")})
+
+    report = preflight_development_run(
+        corpus_dir,
+        packet_dir,
+        ledger_path,
+        implementation_sha=HEAD,
+        vibeproxy_client=FakeVibeProxyClient(owners=owners),
+        utc_date=TODAY,
+    )
+
+    assert report.ready is False
+    assert [item.code for item in report.blockers] == ["vibeproxy_owner_mismatch"]
+    claude = next(item for item in report.transport_readiness if item["family"] == "claude")
+    assert claude["observed_catalog_owner"] is None
+    assert claude["ready"] is False
+
+
+@pytest.mark.parametrize(
+    ("client", "blocker"),
+    [
+        (
+            FakeVibeProxyClient(
+                loopback=False,
+                failure=AssertionError("non-loopback endpoint must not be probed"),
+            ),
+            "vibeproxy_not_loopback",
+        ),
+        (FakeVibeProxyClient(routes=("GET /v1/models",)), "vibeproxy_protocol_unavailable"),
+        (
+            FakeVibeProxyClient(failure=VibeProxyUnavailableError("credential detail")),
+            "vibeproxy_unavailable",
+        ),
+    ],
+)
+def test_transport_probe_fails_closed_without_exposing_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    client: FakeVibeProxyClient,
+    blocker: str,
+) -> None:
+    corpus_dir, packet_dir, ledger_path = _install_valid_inputs(tmp_path, monkeypatch)
+
+    report = preflight_development_run(
+        corpus_dir,
+        packet_dir,
+        ledger_path,
+        implementation_sha=HEAD,
+        vibeproxy_client=client,
+        utc_date=TODAY,
+    )
+
+    assert report.ready is False
+    assert blocker in {item.code for item in report.blockers}
+    assert "credential detail" not in json.dumps(report.to_dict())
 
 
 def test_packet_tampering_blocks_before_inference(
@@ -232,7 +350,7 @@ def test_packet_tampering_blocks_before_inference(
         packet_dir,
         ledger_path,
         implementation_sha=HEAD,
-        environ=ENV,
+        vibeproxy_client=FakeVibeProxyClient(),
         utc_date=TODAY,
     )
 
@@ -264,7 +382,7 @@ def test_open_budget_reservation_blocks_and_snapshot_is_read_only(
         packet_dir,
         ledger_path,
         implementation_sha=HEAD,
-        environ=ENV,
+        vibeproxy_client=FakeVibeProxyClient(),
         utc_date=TODAY,
     )
 
@@ -283,6 +401,6 @@ def test_invalid_implementation_sha_fails_closed(
             tmp_path,
             tmp_path / "budget.jsonl",
             implementation_sha=sha,
-            environ=ENV,
+            vibeproxy_client=FakeVibeProxyClient(),
             utc_date=TODAY,
         )

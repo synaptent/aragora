@@ -9,7 +9,7 @@ from typing import Any
 from aragora.evaluation.outcome_backed_corpus import BENCHMARK_ID, canonical_json_sha256
 
 
-CONDITION_ROSTER_SCHEMA = "outcome-backed-condition-roster/1.0"
+CONDITION_ROSTER_SCHEMA = "outcome-backed-condition-roster/2.0"
 CLAUDE_SINGLE = "claude-single"
 OPENAI_SINGLE = "openai-single"
 GEMINI_SINGLE = "gemini-single"
@@ -22,22 +22,26 @@ class ConditionRosterError(ValueError):
 
 @dataclass(frozen=True)
 class ModelIdentity:
-    """An exact model binding; aliases and fallback are intentionally forbidden."""
+    """An exact model and credentialless transport binding."""
 
     family: str
-    agent_type: str
     requested_model: str
     expected_resolved_model: str
-    transport: str = "direct-api"
+    transport: str
+    protocol: str
+    catalog_owner: str
+    identity_attestation: str
     allow_fallback: bool = False
 
     def to_dict(self) -> dict[str, str | bool]:
         return {
             "family": self.family,
-            "agent_type": self.agent_type,
             "requested_model": self.requested_model,
             "expected_resolved_model": self.expected_resolved_model,
             "transport": self.transport,
+            "protocol": self.protocol,
+            "catalog_owner": self.catalog_owner,
+            "identity_attestation": self.identity_attestation,
             "allow_fallback": self.allow_fallback,
         }
 
@@ -73,21 +77,30 @@ class ConditionRosterAttestation:
 
 CLAUDE_IDENTITY = ModelIdentity(
     family="claude",
-    agent_type="anthropic-api",
     requested_model="claude-opus-5",
     expected_resolved_model="claude-opus-5",
+    transport="vibeproxy-required",
+    protocol="openai-chat",
+    catalog_owner="anthropic",
+    identity_attestation="catalog-owner+exact-response-model",
 )
 OPENAI_IDENTITY = ModelIdentity(
     family="openai",
-    agent_type="openai-api",
     requested_model="gpt-5.6-sol",
     expected_resolved_model="gpt-5.6-sol",
+    transport="vibeproxy-required",
+    protocol="openai-chat",
+    catalog_owner="openai",
+    identity_attestation="catalog-owner+exact-response-model",
 )
 GEMINI_IDENTITY = ModelIdentity(
     family="gemini",
-    agent_type="gemini",
-    requested_model="gemini-3.1-pro-preview",
-    expected_resolved_model="gemini-3.1-pro-preview",
+    requested_model="gemini-3.1-pro-low",
+    expected_resolved_model="gemini-3.1-pro-low",
+    transport="vibeproxy-required",
+    protocol="openai-chat",
+    catalog_owner="antigravity",
+    identity_attestation="catalog-owner+exact-response-model",
 )
 
 FROZEN_CONDITION_ROSTER = (
@@ -116,7 +129,7 @@ def _validate_member(member: ModelIdentity, *, path: str) -> None:
     if member != expected:
         raise ConditionRosterError(
             f"{path} must use the exact frozen {member.family!r} identity; "
-            "aliases, substitutions, alternate transports, and fallback are forbidden"
+            "model substitutions, owner drift, alternate transports, and fallback are forbidden"
         )
 
 

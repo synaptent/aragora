@@ -1652,6 +1652,95 @@ def _parse_http_response(raw: bytes) -> tuple[dict[str, str], bytes]:
     return headers, body
 
 
+# Counters GitHub embeds in repository objects tick on activity unrelated to
+# the governed content: issue open/close, pushes to any branch, stars, forks,
+# watchers, and size recomputation. They appear at the top level of
+# `repos/{owner}/{repo}` and nested as `base.repo` / `head.repo` inside pull
+# request bodies, so a multi-minute run observes them moving while every
+# governed field stays put. Only these fields leave the identity plane; main
+# movement stays independently bound through the raw `branches/{branch}` body.
+_VOLATILE_REPOSITORY_FIELDS = (
+    "forks",
+    "forks_count",
+    "network_count",
+    "open_issues",
+    "open_issues_count",
+    "pushed_at",
+    "size",
+    "stargazers_count",
+    "subscribers_count",
+    "updated_at",
+    "watchers",
+    "watchers_count",
+)
+_REPOSITORY_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+$")
+_PULL_REQUEST_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+/pulls/[0-9]+$")
+_RELEASE_ENDPOINT_RE = re.compile(r"^repos/[^/?]+/[^/?]+/releases/[0-9]+$")
+_RELEASE_LISTING_ENDPOINT_RE = re.compile(
+    r"^repos/[^/?]+/[^/?]+/releases\?per_page=[0-9]+&page=[0-9]+$"
+)
+
+
+def _without_volatile_repository_fields(repository: Any) -> Any:
+    if not isinstance(repository, dict):
+        return repository
+    return {
+        key: value for key, value in repository.items() if key not in _VOLATILE_REPOSITORY_FIELDS
+    }
+
+
+def _without_asset_download_counts(release: Any) -> Any:
+    if not isinstance(release, dict) or not isinstance(release.get("assets"), list):
+        return release
+    normalized = dict(release)
+    normalized["assets"] = [
+        {key: value for key, value in asset.items() if key != "download_count"}
+        if isinstance(asset, dict)
+        else asset
+        for asset in release["assets"]
+    ]
+    return normalized
+
+
+def _normalize_volatile_counters(endpoint: str, payload: Any) -> tuple[Any, list[str] | None]:
+    """Return the identity-plane view of a GitHub body plus the excluded fields.
+
+    Endpoints outside the four classified shapes keep the raw-body plane
+    (``None``): their weak ETag and exact bytes still bind. The verifier's own
+    paired octet-stream asset downloads bump ``assets[].download_count`` inside
+    the release body it captured beforehand, so release bodies and the
+    paginated release listing are classified alongside repository and pull
+    request objects. The excluded list is the declared policy for the endpoint
+    class, not the fields that happened to be present.
+    """
+    if _REPOSITORY_ENDPOINT_RE.match(endpoint):
+        return _without_volatile_repository_fields(payload), list(_VOLATILE_REPOSITORY_FIELDS)
+    if _PULL_REQUEST_ENDPOINT_RE.match(endpoint):
+        normalized = payload
+        if isinstance(payload, dict):
+            normalized = dict(payload)
+            for side in ("base", "head"):
+                reference = payload.get(side)
+                if isinstance(reference, dict) and isinstance(reference.get("repo"), dict):
+                    normalized[side] = {
+                        **reference,
+                        "repo": _without_volatile_repository_fields(reference["repo"]),
+                    }
+        return normalized, [
+            f"{side}.repo.{field}"
+            for side in ("base", "head")
+            for field in _VOLATILE_REPOSITORY_FIELDS
+        ]
+    if _RELEASE_ENDPOINT_RE.match(endpoint):
+        return _without_asset_download_counts(payload), ["assets[].download_count"]
+    if _RELEASE_LISTING_ENDPOINT_RE.match(endpoint):
+        normalized = payload
+        if isinstance(payload, list):
+            normalized = [_without_asset_download_counts(item) for item in payload]
+        return normalized, ["[].assets[].download_count"]
+    return payload, None
+
+
 def _gh_api_get(
     endpoint: str,
     *,
@@ -1675,13 +1764,24 @@ def _gh_api_get(
         payload = json.loads(body, object_pairs_hook=_duplicate_key_object)
     except (json.JSONDecodeError, ValueError) as exc:
         raise ValueError(f"GitHub response for {endpoint} is malformed: {exc}") from exc
+    normalized, excluded_fields = _normalize_volatile_counters(endpoint, payload)
+    if excluded_fields is None:
+        identity_bytes = body
+        etag = headers.get("etag")
+    else:
+        # GitHub's weak ETag is derived from the raw body, so it moves with
+        # the excluded counters and cannot stay in the identity plane.
+        identity_bytes = _canonical_json_bytes(normalized)
+        etag = None
     identity = {
-        "byte_length": len(body),
-        "etag": headers.get("etag"),
+        "byte_length": len(identity_bytes),
+        "etag": etag,
         "link": headers.get("link"),
-        "sha256": _sha256_bytes(body),
-        "updated_at": payload.get("updated_at") if isinstance(payload, dict) else None,
+        "sha256": _sha256_bytes(identity_bytes),
+        "updated_at": normalized.get("updated_at") if isinstance(normalized, dict) else None,
     }
+    if excluded_fields is not None:
+        identity["excluded_volatile_fields"] = excluded_fields
     _append_operation(
         operation_log,
         kind="remote_resource",
@@ -1690,6 +1790,8 @@ def _gh_api_get(
         raw=body,
         response_identity=identity,
     )
+    if excluded_fields is not None:
+        operation_log[-1]["raw_etag"] = headers.get("etag")
     if preserve_raw:
         raw_response = body.decode("utf-8", errors="strict")
         operation_log[-1]["raw_response"] = raw_response
@@ -1721,7 +1823,9 @@ def _gh_api_get_stable(
         operation_log[-2]["movement_observed"] = moved
         operation_log[-1]["movement_observed"] = moved
         if not moved:
-            if before_payload != after_payload:
+            before_view, _excluded = _normalize_volatile_counters(endpoint, before_payload)
+            after_view, _excluded = _normalize_volatile_counters(endpoint, after_payload)
+            if before_view != after_view:
                 raise ValueError(
                     f"authenticated GitHub resource contradicted stable identity: {endpoint}"
                 )

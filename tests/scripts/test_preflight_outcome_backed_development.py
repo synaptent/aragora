@@ -36,7 +36,7 @@ def _report(*, ready: bool) -> DevelopmentPreflightReport:
         case_ids=tuple(f"case-{index:02d}" for index in range(16)),
         condition_ids=("claude-single", "openai-single", "gemini-single", "aragora-team"),
         prompt_set_sha256="e" * 64,
-        credential_readiness=(),
+        transport_readiness=(),
         budget={"remaining_usd": "25"},
         blockers=blockers,
     )

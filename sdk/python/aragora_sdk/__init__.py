@@ -265,7 +265,7 @@ from .generated_types import Code as ErrorCode
 from .pagination import AsyncPaginator, SyncPaginator
 from .websocket import AragoraWebSocket, WebSocketEvent, WebSocketOptions, stream_debate
 
-__version__ = "2.9.0"
+__version__ = "2.10.0"
 __all__ = [
     # --- Client ---
     "AragoraClient",

@@ -285,7 +285,7 @@ async def _shutdown_triage_storage() -> None:
         logger.debug("Triage shared-pool shutdown skipped: %s", exc)
 
     try:
-        from aragora.server.http_client_pool import close_http_pool
+        from aragora.observability.http_client_pool import close_http_pool
 
         await close_http_pool()
     except (ImportError, OSError, RuntimeError) as exc:

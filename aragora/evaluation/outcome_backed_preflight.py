@@ -11,9 +11,15 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Protocol
 
-from aragora.config.secrets import get_secret_presence_report
+from aragora.agents.transports.vibeproxy import (
+    VibeProxyClient,
+    VibeProxyCatalog,
+    VibeProxyConfigurationError,
+    VibeProxyMetadata,
+    VibeProxyUnavailableError,
+)
 
 from aragora.evaluation.outcome_backed_budget import (
     DAILY_BUDGET_CAP_USD,
@@ -37,20 +43,28 @@ from aragora.evaluation.outcome_backed_prompt import (
 )
 
 
-DEVELOPMENT_PREFLIGHT_SCHEMA = "outcome-backed-development-preflight/1.0"
+DEVELOPMENT_PREFLIGHT_SCHEMA = "outcome-backed-development-preflight/2.0"
 EXPECTED_DEVELOPMENT_CASES = 16
 EXPECTED_CONDITIONS = 4
 EXPECTED_PROMPTS = EXPECTED_DEVELOPMENT_CASES * EXPECTED_CONDITIONS
 _IMPLEMENTATION_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
-_CREDENTIAL_ENV_VARS = {
-    "claude": ("ANTHROPIC_API_KEY",),
-    "openai": ("OPENAI_API_KEY",),
-    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
-}
+_REQUIRED_VIBEPROXY_ROUTE = "POST /v1/chat/completions"
+_VIBEPROXY_PREFLIGHT_TIMEOUT_SECONDS = 3.0
 
 
 class OutcomeBackedPreflightError(ValueError):
     """Raised when preflight inputs cannot be represented safely."""
+
+
+class VibeProxyReadinessClient(Protocol):
+    """No-inference VibeProxy surface required by development preflight."""
+
+    base_url: str
+    is_loopback: bool
+
+    def catalog(self, *, force: bool, timeout: float) -> VibeProxyCatalog: ...
+
+    def metadata(self, *, timeout: float) -> VibeProxyMetadata: ...
 
 
 @dataclass(frozen=True)
@@ -71,7 +85,7 @@ class DevelopmentPreflightReport:
     case_ids: tuple[str, ...]
     condition_ids: tuple[str, ...]
     prompt_set_sha256: str | None
-    credential_readiness: tuple[Mapping[str, object], ...]
+    transport_readiness: tuple[Mapping[str, object], ...]
     budget: Mapping[str, object] | None
     blockers: tuple[PreflightBlocker, ...]
 
@@ -93,7 +107,7 @@ class DevelopmentPreflightReport:
             "condition_count": len(self.condition_ids),
             "prompt_count": EXPECTED_PROMPTS if self.prompt_set_sha256 else 0,
             "prompt_set_sha256": self.prompt_set_sha256,
-            "credential_readiness": [dict(item) for item in self.credential_readiness],
+            "transport_readiness": [dict(item) for item in self.transport_readiness],
             "budget": dict(self.budget) if self.budget is not None else None,
             "blockers": [blocker.to_dict() for blocker in self.blockers],
             "ready": self.ready,
@@ -212,68 +226,100 @@ def _validate_packet_against_case(
             )
 
 
-def _credential_readiness(
+def _transport_readiness(
     roster_members: tuple[Mapping[str, object], ...],
-    environ: Mapping[str, str] | None,
+    client: VibeProxyReadinessClient | None,
 ) -> tuple[tuple[Mapping[str, object], ...], tuple[PreflightBlocker, ...]]:
     readiness: list[Mapping[str, object]] = []
     blockers: list[PreflightBlocker] = []
-    env_names = tuple(
-        name for member in roster_members for name in _CREDENTIAL_ENV_VARS[str(member["family"])]
-    )
-    if environ is None:
+    resolved_client = client
+    if resolved_client is None:
         try:
-            credential_sources = {
-                status.name: status.source for status in get_secret_presence_report(env_names)
-            }
-        except (OSError, RuntimeError, ValueError) as exc:
-            credential_sources = {}
+            resolved_client = VibeProxyClient()
+        except VibeProxyConfigurationError as exc:
             blockers.append(
                 PreflightBlocker(
-                    "credential_discovery_failed",
-                    f"credential presence discovery failed ({type(exc).__name__})",
+                    "vibeproxy_configuration_invalid",
+                    f"VibeProxy configuration is invalid ({type(exc).__name__})",
                 )
             )
-    else:
-        credential_sources = {
-            name: "provided_environment" if environ.get(name, "").strip() else "missing"
-            for name in env_names
-        }
+            return (), tuple(blockers)
+
+    if not resolved_client.is_loopback:
+        blockers.append(
+            PreflightBlocker(
+                "vibeproxy_not_loopback",
+                "outcome-backed inference requires a loopback VibeProxy endpoint",
+            )
+        )
+        return (), tuple(blockers)
+
+    try:
+        catalog = resolved_client.catalog(
+            force=True,
+            timeout=_VIBEPROXY_PREFLIGHT_TIMEOUT_SECONDS,
+        )
+        metadata = resolved_client.metadata(timeout=_VIBEPROXY_PREFLIGHT_TIMEOUT_SECONDS)
+    except VibeProxyUnavailableError as exc:
+        blockers.append(
+            PreflightBlocker(
+                "vibeproxy_unavailable",
+                f"VibeProxy readiness probe failed ({type(exc).__name__})",
+            )
+        )
+        return (), tuple(blockers)
+
+    route_available = _REQUIRED_VIBEPROXY_ROUTE in metadata.advertised_routes
+    if not route_available:
+        blockers.append(
+            PreflightBlocker(
+                "vibeproxy_protocol_unavailable",
+                f"VibeProxy does not advertise {_REQUIRED_VIBEPROXY_ROUTE}",
+            )
+        )
 
     for member in roster_members:
         family = str(member["family"])
-        accepted = _CREDENTIAL_ENV_VARS[family]
-        available_name = next(
-            (
-                name
-                for name in accepted
-                if credential_sources.get(name) in {"aws", "env", "provided_environment"}
-            ),
-            None,
+        model = str(member["requested_model"])
+        expected_owner = str(member["catalog_owner"])
+        model_present = model in catalog.models
+        observed_owner = catalog.owner_for(model) if model_present else None
+        ready = (
+            resolved_client.is_loopback
+            and route_available
+            and model_present
+            and observed_owner == expected_owner
         )
-        available = available_name is not None
         readiness.append(
             {
                 "family": family,
-                "agent_type": member["agent_type"],
-                "requested_model": member["requested_model"],
+                "requested_model": model,
                 "expected_resolved_model": member["expected_resolved_model"],
                 "transport": member["transport"],
+                "protocol": member["protocol"],
+                "identity_attestation": member["identity_attestation"],
                 "allow_fallback": member["allow_fallback"],
-                "accepted_environment_variables": list(accepted),
-                "credential_available": available,
-                "credential_source": (
-                    credential_sources.get(available_name, "missing")
-                    if available_name
-                    else "missing"
-                ),
+                "endpoint_loopback": resolved_client.is_loopback,
+                "required_route": _REQUIRED_VIBEPROXY_ROUTE,
+                "route_available": route_available,
+                "catalog_model_present": model_present,
+                "expected_catalog_owner": expected_owner,
+                "observed_catalog_owner": observed_owner,
+                "ready": ready,
             }
         )
-        if not available:
+        if not model_present:
             blockers.append(
                 PreflightBlocker(
-                    "missing_provider_credential",
-                    f"{family} direct-api credential is unavailable",
+                    "vibeproxy_model_unavailable",
+                    f"{family} frozen model is absent from the VibeProxy catalog",
+                )
+            )
+        elif observed_owner != expected_owner:
+            blockers.append(
+                PreflightBlocker(
+                    "vibeproxy_owner_mismatch",
+                    f"{family} frozen model lacks its exact catalog owner",
                 )
             )
     return tuple(readiness), tuple(blockers)
@@ -285,7 +331,7 @@ def preflight_development_run(
     budget_ledger_path: Path | str,
     *,
     implementation_sha: str,
-    environ: Mapping[str, str] | None = None,
+    vibeproxy_client: VibeProxyReadinessClient | None = None,
     utc_date: date | None = None,
 ) -> DevelopmentPreflightReport:
     """Attest development-run readiness without model calls or ledger writes."""
@@ -300,7 +346,7 @@ def preflight_development_run(
     prompt_set_sha256: str | None = None
     case_ids: tuple[str, ...] = ()
     condition_ids: tuple[str, ...] = ()
-    credential_readiness: tuple[Mapping[str, object], ...] = ()
+    transport_readiness: tuple[Mapping[str, object], ...] = ()
     budget: Mapping[str, object] | None = None
     root = Path(corpus_dir)
 
@@ -350,10 +396,10 @@ def preflight_development_run(
         for condition in roster.conditions:
             for member in condition.members:
                 unique_members.setdefault(member.family, member.to_dict())
-        credential_readiness, credential_blockers = _credential_readiness(
-            tuple(unique_members.values()), environ
+        transport_readiness, transport_blockers = _transport_readiness(
+            tuple(unique_members.values()), vibeproxy_client
         )
-        blockers.extend(credential_blockers)
+        blockers.extend(transport_blockers)
 
     packet_root = Path(packet_dir)
     prompt_entries: list[dict[str, str]] = []
@@ -444,7 +490,7 @@ def preflight_development_run(
         case_ids=case_ids,
         condition_ids=condition_ids,
         prompt_set_sha256=prompt_set_sha256,
-        credential_readiness=credential_readiness,
+        transport_readiness=transport_readiness,
         budget=budget,
         blockers=unique_blockers,
     )

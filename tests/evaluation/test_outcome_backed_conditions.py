@@ -46,6 +46,18 @@ def test_frozen_roster_preflight_is_stable_and_content_bound() -> None:
         "openai",
         "gemini",
     ]
+    assert {member.transport for member in first.conditions[-1].members} == {"vibeproxy-required"}
+    assert {member.protocol for member in first.conditions[-1].members} == {"openai-chat"}
+    assert [member.catalog_owner for member in first.conditions[-1].members] == [
+        "anthropic",
+        "openai",
+        "antigravity",
+    ]
+    assert first.conditions[2].members[0].requested_model == "gemini-3.1-pro-low"
+    assert all(
+        member.requested_model == member.expected_resolved_model
+        for member in first.conditions[-1].members
+    )
     payload = first.to_dict()
     digest = payload.pop("roster_sha256")
     assert payload["schema_version"] == CONDITION_ROSTER_SCHEMA
@@ -82,8 +94,10 @@ def test_preflight_rejects_condition_reordering() -> None:
     [
         ("requested_model", "claude-opus-latest"),
         ("expected_resolved_model", "claude-opus-4-8"),
-        ("agent_type", "claude"),
-        ("transport", "vibeproxy"),
+        ("transport", "direct-api"),
+        ("protocol", "anthropic-messages"),
+        ("catalog_owner", "other"),
+        ("identity_attestation", "command-line-only"),
         ("allow_fallback", True),
     ],
 )
