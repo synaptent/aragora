@@ -455,6 +455,56 @@ def test_least_favourable_recorded_exposure_governs(
     )
 
 
+def _rebaseline(
+    report: dict[str, object],
+    condition_ids: tuple[str, ...],
+) -> dict[str, object]:
+    """Re-point a report's baseline rows at ``condition_ids``, keeping its metrics."""
+
+    summaries = report["per_baseline"]
+    assert isinstance(summaries, list)
+    report["per_baseline"] = [
+        {**summary, "condition_id": condition_id}
+        for summary, condition_id in zip(summaries, condition_ids, strict=False)
+    ]
+    report["strongest_baseline_id"] = min(condition_ids)
+    return report
+
+
+def test_holdout_baseline_set_must_match_development() -> None:
+    """A holdout measured against other baselines does not confirm the development result."""
+
+    against_weaker = [
+        _rebaseline(report, ("weak-baseline-a", "weak-baseline-b"))
+        for report in _covering_holdout_reports(["team_outperforms", "team_outperforms"])
+    ]
+
+    with pytest.raises(ValueError, match="baseline set does not match"):
+        final_verdict(
+            _analysis_report("development", "team_outperforms"),
+            against_weaker,
+            [_budget_snapshot()],
+            _holdout_snapshot(2),
+        )
+
+
+def test_holdout_may_not_drop_a_development_baseline() -> None:
+    """Dropping the baseline the team loses to is the same selection hole as dropping a run."""
+
+    partial = [
+        _rebaseline(report, ("claude",))
+        for report in _covering_holdout_reports(["team_outperforms", "team_outperforms"])
+    ]
+
+    with pytest.raises(ValueError, match="baseline set does not match"):
+        final_verdict(
+            _analysis_report("development", "team_outperforms"),
+            partial,
+            [_budget_snapshot()],
+            _holdout_snapshot(2),
+        )
+
+
 def test_team_condition_id_must_match_across_phases() -> None:
     mismatched = _covering_holdout_reports(
         ["team_outperforms", "team_outperforms"],

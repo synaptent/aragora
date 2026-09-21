@@ -4,6 +4,7 @@ from itertools import product
 import json
 import math
 from pathlib import Path
+import re
 
 import pytest
 
@@ -246,9 +247,18 @@ def test_pre_registered_verdicts(
 
 def test_frozen_case_counts_are_literals_not_corpus_aliases() -> None:
     source = Path(outcome_backed_analysis.__file__).read_text(encoding="utf-8")
+    # Reading the assignment rather than the imported value is the point: an alias such as
+    # SPLIT_COUNTS["development"] would satisfy every equality check below while letting a
+    # corpus edit silently move a threshold that is supposed to be frozen.
+    assigned = dict(
+        re.findall(
+            r"^(DEVELOPMENT_CASE_COUNT|HOLDOUT_CASE_COUNT)\s*(?::[^=\n]+)?=\s*(\d+)\s*$",
+            source,
+            flags=re.MULTILINE,
+        )
+    )
 
-    assert "DEVELOPMENT_CASE_COUNT = 16" in source
-    assert "HOLDOUT_CASE_COUNT = 8" in source
+    assert assigned == {"DEVELOPMENT_CASE_COUNT": "16", "HOLDOUT_CASE_COUNT": "8"}
     assert outcome_backed_analysis.DEVELOPMENT_CASE_COUNT == SPLIT_COUNTS["development"]
     assert outcome_backed_analysis.HOLDOUT_CASE_COUNT == SPLIT_COUNTS["holdout"]
 

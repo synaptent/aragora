@@ -14,6 +14,13 @@ holdout evidence unselectable after the fact: an operator who ran the holdout
 three times cannot submit only the repetition that reads ``team_outperforms``,
 because the two omitted exposures are recorded and their absence is detected.
 
+Both phases must also describe the same comparison: every holdout analysis
+names the same team condition as the development analysis and measures it
+against the same set of baseline conditions.  A holdout scored against a
+different or narrower baseline set is not a confirmation of the development
+result, and swapping the baselines is the same after-the-fact selection as
+dropping an exposure.
+
 Malformed or version-mismatched inputs raise ``ValueError``.  Valid negative
 evidence does not: a baseline win, budget breach, unsettled reservation, or
 holdout custody violation deterministically worsens the result to ``no_go``.
@@ -392,6 +399,17 @@ def _recorded_run_labels(custody: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(str(label) for label in run_labels)
 
 
+def _baseline_condition_ids(document: Mapping[str, object]) -> tuple[str, ...]:
+    summaries = document.get("per_baseline")
+    if not isinstance(summaries, list):
+        raise ValueError("normalized analysis report must contain baseline summaries")
+    return tuple(
+        sorted(
+            str(summary["condition_id"]) for summary in summaries if isinstance(summary, Mapping)
+        )
+    )
+
+
 def _bound_holdout_reports(
     holdout_reports: Sequence[Mapping[str, object]],
     *,
@@ -404,6 +422,7 @@ def _bound_holdout_reports(
         raise ValueError("holdout_reports must be an array of holdout analyses")
 
     recorded = _recorded_run_labels(custody)
+    development_baselines = _baseline_condition_ids(development)
     documents: list[dict[str, object]] = []
     submitted: set[str] = set()
     for index, raw_report in enumerate(holdout_reports):
@@ -427,6 +446,11 @@ def _bound_holdout_reports(
             raise ValueError(
                 f"holdout_reports[{index}].team_condition_id does not match "
                 "development_report.team_condition_id"
+            )
+        if _baseline_condition_ids(document) != development_baselines:
+            raise ValueError(
+                f"holdout_reports[{index}] baseline set does not match "
+                "development_report.per_baseline"
             )
         document["run_label"] = run_label
         documents.append(document)
