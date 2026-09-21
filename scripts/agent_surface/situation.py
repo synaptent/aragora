@@ -106,6 +106,10 @@ def sh(cmd: list[str], timeout: int = 30, *, cwd: Path | None = None) -> tuple[i
         out = p.stdout if p.returncode == 0 else (p.stdout or p.stderr)
         return p.returncode, out.strip()
     except FileNotFoundError:
+        # subprocess raises this for a missing cwd as well as a missing binary,
+        # and blaming the tool would send the caller down the wrong path.
+        if cwd is not None and not Path(cwd).is_dir():
+            return 127, f"working directory does not exist: {cwd}"
         return 127, f"{cmd[0]} not installed"
     except subprocess.TimeoutExpired:
         return 124, f"timeout after {timeout}s"
@@ -321,7 +325,12 @@ def _stable_note(note: str) -> str:
 
 
 def add_github_beliefs(cap: Capsule, repo_root: Path | None = None) -> dict[str, Any]:
-    """One `gh pr list` and one `gh run list`. Returns raw PR rows for delta use."""
+    """One `gh pr list` and one `gh run list`.
+
+    Returns the raw PR rows for callers embedding this module; the CLI works
+    from the beliefs alone, and the cursor deliberately digests PR counts rather
+    than identities.
+    """
     raw: dict[str, Any] = {"prs": []}
 
     if not shutil.which("gh"):
@@ -619,24 +628,36 @@ def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None
 
     head_sha = s.get("head_sha")
     pr_head = head_sha if isinstance(head_sha, str) else ""
-    cap.beliefs.append(Belief(f"pr{pr}_tier", s.get("tier"), "settle_status.py", "live", "derived"))
-    cap.beliefs.append(
-        Belief(
-            f"pr{pr}_quorum",
-            s.get("quorum_conclusion"),
-            "settle_status.py",
-            "live",
-            "derived",
-            note=(
-                f"true only at head {pr_head[:12]}; a new push invalidates it"
-                if pr_head
-                else "settle_status reported no head; this cannot be tied to a revision"
-            ),
+    # A missing field is not a value: reporting None as a live belief would put
+    # "no tier" and "tier unknown" on the same footing.
+    for reported, key in (("tier", "tier"), ("signal_count", "signals")):
+        if reported in s:
+            cap.beliefs.append(
+                Belief(f"pr{pr}_{key}", s[reported], "settle_status.py", "live", "derived")
+            )
+        else:
+            cap.degraded.append(f"settle_status.py omitted {reported} for PR {pr}; belief withheld")
+
+    if "quorum_conclusion" in s:
+        cap.beliefs.append(
+            Belief(
+                f"pr{pr}_quorum",
+                s["quorum_conclusion"],
+                "settle_status.py",
+                "live",
+                "derived",
+                note=(
+                    f"true only at head {pr_head[:12]}; a new push invalidates it"
+                    if pr_head
+                    else "settle_status reported no head; this cannot be tied to a revision"
+                ),
+            )
         )
-    )
-    cap.beliefs.append(
-        Belief(f"pr{pr}_signals", s.get("signal_count"), "settle_status.py", "live", "derived")
-    )
+    else:
+        cap.degraded.append(
+            f"settle_status.py omitted quorum_conclusion for PR {pr}; belief withheld"
+        )
+
     if "human_settlement_present" in s:
         cap.beliefs.append(
             Belief(

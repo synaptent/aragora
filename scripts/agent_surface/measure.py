@@ -240,6 +240,8 @@ def run_call(label: str, cmd: str, counter: TokenCounter, cwd: Path, timeout: in
 
 
 def score(result: JourneyResult) -> dict[str, Any]:
+    # main() rejects an unknown budget before measuring; this fallback only
+    # covers direct library use, where UNSCORED is the honest answer.
     spec = BUDGETS.get(result.budget, BUDGETS["none"])
     limit_calls = spec["limit_calls"]
     limit_tokens = spec["limit_tokens"]
@@ -349,6 +351,17 @@ def main() -> int:
     if unknown:
         print(f"error: unknown journey(s): {', '.join(unknown)}", file=sys.stderr)
         print(f"known: {', '.join(journeys) or '(none)'}", file=sys.stderr)
+        return 1
+
+    # A misspelled budget would otherwise fall back to "none" and report a
+    # green, unscored lane: the budget silently stops applying.
+    misbudgeted = {
+        n: journeys[n]["budget"] for n in names if journeys[n].get("budget", "none") not in BUDGETS
+    }
+    if misbudgeted:
+        for n, b in misbudgeted.items():
+            print(f"error: journey {n!r} names unknown budget {b!r}", file=sys.stderr)
+        print(f"known budgets: {', '.join(BUDGETS)}", file=sys.stderr)
         return 1
 
     counter = TokenCounter(exact=args.exact)

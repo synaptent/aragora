@@ -354,6 +354,25 @@ def test_settlement_shape_drift_degrades_instead_of_killing_the_capsule(monkeypa
         assert not any(b.key.startswith("pr9948_") for b in cap.beliefs)
 
 
+def test_missing_settlement_fields_are_withheld_not_valued_none(monkeypatch: Any) -> None:
+    """A field the tool did not report is unknown, not a value of None."""
+    monkeypatch.setattr(situation, "sh", lambda *a, **k: (0, json.dumps({"head_sha": "a" * 40})))
+    cap = _capsule(beliefs=[])
+
+    situation.add_pr_beliefs(cap, 9948)
+
+    assert not any(b.value is None for b in cap.beliefs)
+    for field in ("tier", "signal_count", "quorum_conclusion"):
+        assert any(field in note for note in cap.degraded), field
+
+
+def test_a_missing_working_directory_is_not_blamed_on_the_tool() -> None:
+    code, out = situation.sh(["git", "status"], cwd=Path("/nonexistent-path-for-this-test"))
+
+    assert code == 127
+    assert "working directory does not exist" in out
+
+
 def test_a_settlement_without_a_head_sha_says_so(monkeypatch: Any) -> None:
     payload = {"tier": 2, "quorum_conclusion": "FAILURE", "head_sha": None}
     monkeypatch.setattr(situation, "sh", lambda *a, **k: (0, json.dumps(payload)))
@@ -898,6 +917,29 @@ def test_cli_reports_an_unmeasurable_journey_distinctly(
     out = capsys.readouterr().out
     assert "INVALID" in out
     assert "not measured" in out
+
+
+def test_a_misspelled_budget_stops_the_run_instead_of_going_unscored(
+    monkeypatch: Any, tmp_path: Path, capsys: Any
+) -> None:
+    """Falling back to "none" would silently retire the budget it meant to name."""
+    spec = {
+        "journeys": {
+            "typo": {
+                "question": "q",
+                "budget": "cold_orientaton",
+                "calls": [{"label": "cheap", "cmd": "echo hi"}],
+            }
+        }
+    }
+    path = tmp_path / "journeys.json"
+    path.write_text(json.dumps(spec))
+    monkeypatch.setattr(sys, "argv", ["measure", "typo", "--file", str(path)])
+
+    assert measure.main() == 1
+
+    err = capsys.readouterr().err
+    assert "unknown budget" in err and "cold_orientaton" in err
 
 
 # --------------------------------------------------------------------------
