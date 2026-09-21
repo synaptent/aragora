@@ -283,6 +283,51 @@ def test_source_observation_requires_at_least_one_evidence_handle(validator: Any
         validator.validate(document)
 
 
+def test_mission_projection_requires_an_evidence_handle(validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    assert document["mission"]["evidence_refs"]
+    document["mission"]["evidence_refs"] = []
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    "unusable_uri",
+    [
+        "file:///tmp/orientation.json",
+        "../architecture/agent-operating-loop.md",
+        "README.md",
+        "/absolute/local/path",
+        "https://example.invalid/a b",
+        "https://example.invalid/a\n",
+    ],
+)
+def test_evidence_uris_must_be_portable(validator: Any, unusable_uri: str) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["facts"][0]["evidence_refs"][0]["uri"] = unusable_uri
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(document)
+
+
+def test_no_change_envelope_can_be_judged_for_freshness(validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "quiet_no_change.json")
+    assert document["generated_at"]
+    validator.validate(document)
+
+    del document["generated_at"]
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(document)
+
+
+def test_no_change_envelope_carries_exactly_one_next_legal_action(validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "quiet_no_change.json")
+    assert len(document["next_legal_actions"]) == 1
+
+    document["next_legal_actions"] = []
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(document)
+
+
 def test_evidence_handles_bind_one_fingerprint_per_uri() -> None:
     for fixture_name in sorted(FIXTURE_NAMES):
         document = _load(FIXTURE_DIR / fixture_name)
@@ -301,6 +346,26 @@ def test_live_blocker_overrides_ready_recommendation() -> None:
     assert affordance["evidence_refs"][0]["authority"] == "live_authority"
     assert affordance["disposition"] == "blocked"
     assert affordance["blocked_by"] == ["settlement:BLOCKED"]
+
+
+def test_named_sources_sit_in_the_layer_the_contract_assigns() -> None:
+    """Pin the two sources whose layer the contract names explicitly.
+
+    Live check state outranks the work board, while the lease a lane must hold
+    open is ledger state. Reclassifying either silently would let a derived
+    recommendation outrank a blocker, so both are asserted rather than implied.
+    """
+    document = _load(FIXTURE_DIR / "interrupted_resumption.json")
+    settlement = document["affordances"][0]["evidence_refs"][0]
+    lease = document["obligations"][0]["evidence_refs"][0]
+
+    assert settlement["id"] == "settlement:PR-2"
+    assert settlement["authority"] == "live_authority"
+    assert lease["id"] == "lease:lease-1"
+    assert lease["authority"] == "durable_state"
+    assert AUTHORITY_PRECEDENCE.index(settlement["authority"]) < AUTHORITY_PRECEDENCE.index(
+        document["work_recommendations"][0]["authority"]
+    )
 
 
 def test_high_risk_trace_requests_authorization_without_effect() -> None:

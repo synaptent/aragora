@@ -17,10 +17,11 @@ them more authoritative.
 
 An agent should begin by assuming four layers are sufficient:
 
-1. **Live authority:** exact Git anchor, halt, lease, permissions, and protected
-   checks.
-2. **Durable state:** mission, session, work ledger, settlements, and outstanding
-   obligations.
+1. **Live authority:** exact Git anchor, halt, lease liveness, permissions, and
+   protected checks, including the live settlement state behind a pull request.
+2. **Durable state:** mission, session, work ledger, recorded settlement
+   outcomes, and the outstanding obligations a lane must preserve, such as its
+   lease.
 3. **Commit evidence:** verified Nomic packs, planning results, and receipts bound
    to the exact repository identity and commit.
 4. **Derived guidance:** work recommendations, beliefs, questions, and proposed
@@ -71,7 +72,9 @@ envelope contains:
 A compact `no_change` variant proves that the prior orientation fingerprint still
 matches. Its sole `orientation_fingerprint` is the value matched from `--since`,
 so the representation cannot encode two disagreeing fingerprints. It carries the
-current anchor and next legal action but does not repeat the full envelope.
+current anchor, its `generated_at`, and exactly one next legal action, but does
+not repeat the full envelope. Without `generated_at` a caller could not tell a
+fresh match from a stale one, which is the only question the variant answers.
 
 Every derived record carries its lower-layer `basis_fingerprint`, evidence
 references, authority, freshness, invalidators, and bounded cost. Evidence

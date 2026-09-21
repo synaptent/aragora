@@ -104,7 +104,10 @@
       "required": ["id", "uri", "authority", "fingerprint", "freshness", "invalidators"],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
-        "uri": { "type": "string", "minLength": 1 },
+        "uri": {
+          "type": "string",
+          "pattern": "^(?!file:)[A-Za-z][A-Za-z0-9+.\\-]*:\\S*(?![\\s\\S])"
+        },
         "authority": { "$ref": "#/$defs/authority" },
         "fingerprint": { "$ref": "#/$defs/fingerprint" },
         "freshness": { "$ref": "#/$defs/freshness" },
@@ -288,7 +291,11 @@
       "properties": {
         "objective": { "type": "string" },
         "progress": { "type": "number", "minimum": 0, "maximum": 1 },
-        "evidence_refs": { "type": "array", "items": { "$ref": "#/$defs/evidenceHandle" } }
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceHandle" }
+        }
       },
       "additionalProperties": false
     },
@@ -381,6 +388,7 @@
         "kind",
         "mode",
         "orientation_fingerprint",
+        "generated_at",
         "repository_anchor",
         "changed",
         "next_legal_actions",
@@ -391,9 +399,15 @@
         "kind": { "const": "orientation" },
         "mode": { "const": "no_change" },
         "orientation_fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "generated_at": { "$ref": "#/$defs/timestamp" },
         "repository_anchor": { "$ref": "#/$defs/repositoryAnchor" },
         "changed": { "const": false },
-        "next_legal_actions": { "type": "array", "items": { "type": "string" }, "maxItems": 1 },
+        "next_legal_actions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "maxItems": 1
+        },
         "mutations": { "type": "array", "maxItems": 0 }
       },
       "additionalProperties": false
