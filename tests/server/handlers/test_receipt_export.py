@@ -535,6 +535,17 @@ class TestPublicOdrExport:
         assert "X-ODR-Digest" in result.headers
 
     @pytest.mark.asyncio
+    async def test_repeated_format_parameter_resolves_to_the_last_value(self):
+        handler = _receipts_handler()
+        result = await handler.handle(
+            "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": ["odr", "json"]}
+        )
+
+        assert result.status_code == 200
+        assert "X-ODR-Digest" not in result.headers
+        assert "odr_version" not in json.loads(result.body)
+
+    @pytest.mark.asyncio
     async def test_explicit_odr_version_is_honoured(self):
         handler = _receipts_handler()
         result = await handler.handle(
@@ -661,8 +672,32 @@ class TestStatelessOdrVerification:
         assert "chain_link" not in names
         assert all({"name", "status", "detail"} == set(check) for check in payload["checks"])
         assert isinstance(payload["warnings"], list)
-        assert isinstance(payload["dissent_trail"], list)
+        assert payload["dissent_trail"], "the fixture records a dissenting agent"
+        assert any("grok-agent" in entry for entry in payload["dissent_trail"])
         assert "key_id" in payload
+
+    @pytest.mark.asyncio
+    async def test_dissent_findings_render_like_the_packaged_verifier(self):
+        handler = _receipts_handler()
+        export = await handler.handle(
+            "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+        )
+        document = json.loads(export.body)
+        document["quorum"]["dissent"]["findings"] = [
+            {
+                "issuer": "claude",
+                "severity": "P1",
+                "blocking": True,
+                "text": "latency budget is unproven",
+            },
+            {"issuer": "openai", "severity": "P3", "blocking": False, "text": "naming nit"},
+        ]
+
+        result = await handler.handle("POST", "/api/v2/receipts/verify", document, {})
+
+        trail = json.loads(result.body)["dissent_trail"]
+        assert trail[0] == "[P1] claude (blocking): latency budget is unproven"
+        assert trail[1] == "[P3] openai (advisory): naming nit"
 
     @pytest.mark.asyncio
     async def test_signed_document_verifies_and_tampering_fails_the_signature(self):

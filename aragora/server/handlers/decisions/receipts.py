@@ -104,11 +104,59 @@ def _content_length(headers: dict[str, str] | None) -> int | None:
     return None
 
 
+def _last_query_values(query_params: dict[str, Any]) -> dict[str, Any]:
+    """Collapse repeated query parameters to their last value.
+
+    ``request_lifecycle`` builds the mapping with ``parse_qs``, which flattens a
+    single occurrence but leaves a repeated parameter as a list. The last
+    occurrence is the conventional HTTP reading, and collapsing here keeps every
+    downstream read free to treat the value as a string.
+    """
+    return {
+        key: (value[-1] if value else "") if isinstance(value, (list, tuple)) else value
+        for key, value in query_params.items()
+    }
+
+
 def _dissent_trail(document: dict[str, Any]) -> list[Any]:
-    """Dissent entries recorded on an ODR document's quorum block."""
+    """Dissent entries recorded on an ODR document's quorum block.
+
+    Mirrors ``aragora_verify.verifier._dissent_trail`` so the hosted endpoint and
+    the packaged CLI describe the same document the same way. The emitter always
+    writes ``quorum.dissent`` as an object, so the list form is kept only as a
+    forward-compatibility fallback.
+    """
     quorum = document.get("quorum")
     dissent = quorum.get("dissent") if isinstance(quorum, dict) else None
-    return list(dissent) if isinstance(dissent, list) else []
+    if isinstance(dissent, list):
+        return list(dissent)
+    if not isinstance(dissent, dict):
+        return []
+
+    trail: list[Any] = []
+    findings = dissent.get("findings")
+    for finding in findings if isinstance(findings, list) else []:
+        if not isinstance(finding, dict):
+            continue
+        severity = str(finding.get("severity", ""))
+        label = "blocking" if severity in ("P0", "P1") else "advisory"
+        issuer = finding.get("issuer", "")
+        trail.append(f"[{severity}] {issuer} ({label}): {finding.get('text', '')}")
+    if not trail:
+        # A document exported without settlement metadata carries no findings, so
+        # the recorded agents and views are the only dissent a reader can see.
+        for noun, key in (("agent", "dissenting_agents"), ("view", "views")):
+            values = dissent.get(key)
+            if isinstance(values, list):
+                trail.extend(f"Dissenting {noun}: {value}" for value in values)
+
+    adjudication = document.get("adjudication")
+    if isinstance(adjudication, dict):
+        if not trail:
+            trail.append("(no dissent recorded)")
+        verdict = adjudication.get("verdict", "")
+        trail.append(f"Adjudication: {verdict} — {adjudication.get('reason', '')}")
+    return trail
 
 
 def _stored_receipt_payload(receipt: Any) -> dict[str, Any]:
@@ -690,7 +738,8 @@ class ReceiptsHandler(BaseHandler):
                 # stays behind receipts:read and answers 401 rather than
                 # surfacing the decorator's denial as a 500.
                 if len(parts) > 5 and parts[5] == "export":
-                    if (query_params.get("format") or "json").strip().lower() == "odr":
+                    export_params = _last_query_values(query_params)
+                    if (export_params.get("format") or "json").strip().lower() == "odr":
                         # The ODR branch is unauthenticated, so it stays read-only
                         # instead of falling through to the permission-gated path.
                         if method != "GET":
@@ -698,14 +747,14 @@ class ReceiptsHandler(BaseHandler):
                                 "Method not allowed: GET /api/v2/receipts/{id}/export?format=odr",
                                 405,
                             )
-                        return await self._export_odr(receipt_id, query_params)
+                        return await self._export_odr(receipt_id, export_params)
                     auth_context = _request_auth_context(handler)
                     if auth_context is None:
                         if _auth_enabled():
                             return _auth_required_response()
-                        return await self._export_receipt(receipt_id, query_params)
+                        return await self._export_receipt(receipt_id, export_params)
                     return await self._export_receipt(
-                        receipt_id, query_params, context=auth_context
+                        receipt_id, export_params, context=auth_context
                     )
 
                 # Combined verification (signature + integrity)
