@@ -267,7 +267,7 @@ class DeprecationEnforcer:
             self._stats.record_blocked()
             # Record Prometheus metric for blocked requests
             try:
-                from aragora.server.prometheus import record_v1_api_sunset_blocked
+                from aragora.observability.prometheus import record_v1_api_sunset_blocked
 
                 record_v1_api_sunset_blocked(path, method)
             except ImportError:

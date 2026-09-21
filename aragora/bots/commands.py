@@ -599,7 +599,7 @@ def _register_builtin_commands(registry: CommandRegistry) -> None:
     )
     async def cmd_implement(ctx: CommandContext) -> CommandResult:
         """Start a debate and generate an implementation plan with context snapshot."""
-        from aragora.server.decision_integrity_utils import extract_execution_overrides
+        from aragora.pipeline.decision_integrity_utils import extract_execution_overrides
 
         cleaned_topic, overrides = extract_execution_overrides(ctx.raw_args)
         return await _run_debate(

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from aragora.memory.consensus import ConsensusMemory, DissentRetriever
     from aragora.persistence.supabase import SupabaseClient
     from aragora.ranking.elo import EloSystem
-    from aragora.server.documents import DocumentStore
+    from aragora.documents.parsing import DocumentStore
     from aragora.server.stream.canvas_stream import CanvasStreamServer
     from aragora.storage import UserStore
 import logging

@@ -761,7 +761,7 @@ class PostDebateCoordinator:
             )
             gate = decision.to_dict()
             try:
-                from aragora.server.metrics import track_execution_gate_decision
+                from aragora.observability.server_metrics import track_execution_gate_decision
 
                 track_execution_gate_decision(
                     gate,

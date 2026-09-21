@@ -156,7 +156,7 @@ class TestCiteEvidenceTool:
         mock_db.update = MagicMock()
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await cite_evidence_tool(
@@ -176,7 +176,7 @@ class TestCiteEvidenceTool:
     async def test_cite_storage_not_available(self):
         """Test citation when storage not available."""
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
         ):
             result = await cite_evidence_tool(
@@ -195,7 +195,7 @@ class TestCiteEvidenceTool:
         mock_db.get.return_value = None
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await cite_evidence_tool(
@@ -217,7 +217,7 @@ class TestCiteEvidenceTool:
         mock_db.update = MagicMock()
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await cite_evidence_tool(

@@ -96,7 +96,7 @@ async def cite_evidence_tool(
         return {"error": "debate_id and evidence_id are required"}
 
     try:
-        from aragora.server.storage import get_debates_db
+        from aragora.storage.debate_storage import get_debates_db
 
         db = get_debates_db()
         if not db:

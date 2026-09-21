@@ -828,7 +828,7 @@ class NomicPipelineBridge:
             A PlanOutcome with execution results, receipt ID, and lessons.
         """
         from aragora.pipeline.executor import PlanExecutor
-        from aragora.server.decision_integrity_utils import execute_decision_plan_with_backbone
+        from aragora.pipeline.decision_integrity_utils import execute_decision_plan_with_backbone
 
         plan = self.build_decision_plan(
             goal=goal,
