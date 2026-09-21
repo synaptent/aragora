@@ -121,7 +121,7 @@ def _last_query_values(query_params: dict[str, Any]) -> dict[str, Any]:
 def _dissent_trail(document: dict[str, Any]) -> list[Any]:
     """Dissent entries recorded on an ODR document's quorum block.
 
-    Mirrors ``aragora_verify.verifier._dissent_trail`` so the hosted endpoint and
+    Extends ``aragora_verify.verifier._dissent_trail`` so the hosted endpoint and
     the packaged CLI describe the same document the same way. The emitter always
     writes ``quorum.dissent`` as an object, so the list form is kept only as a
     forward-compatibility fallback.
