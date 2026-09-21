@@ -565,11 +565,12 @@ def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
         if unknown_n
         else ""
     )
-    if "fleet_safe_to_continue" in summary:
+    verdict = summary.get("fleet_safe_to_continue")
+    if isinstance(verdict, bool):
         cap.beliefs.append(
             Belief(
                 "fleet_safe_to_continue",
-                summary["fleet_safe_to_continue"],
+                verdict,
                 "loop_control_status summary",
                 "live",
                 "derived",
@@ -578,7 +579,7 @@ def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
         )
     else:
         cap.degraded.append(
-            "loop_control_status omitted fleet_safe_to_continue; fleet verdict withheld"
+            "loop_control_status gave no usable fleet_safe_to_continue; fleet verdict withheld"
         )
 
     if summary.get("any_blocked"):

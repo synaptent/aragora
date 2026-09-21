@@ -1,12 +1,12 @@
 {
   "_comment": [
-    "Four agent journeys against aragora AS IT EXISTS TODAY. These are the",
+    "Six agent journeys against aragora AS IT EXISTS TODAY. These are the",
     "baseline: what an agent currently pays to answer one operational question.",
     "Every command here is read-only. Do not add a mutating command to this file.",
     "",
-    "Journeys 1 and 4 are the two that carry hard budgets, because they are the",
-    "two an agent pays on EVERY session and every tick respectively. Journeys 2",
-    "and 3 are scored against full_situation.",
+    "Every journey names a budget. cold_orientation and quiet_recheck are the",
+    "strict ones, because an agent pays them on EVERY session and every tick",
+    "respectively; the others are scored against full_situation.",
     "",
     "PR 9924 is used as the live subject. It was READY at capture time; if it has",
     "since merged, re-point these at any open ready PR -- the shape of the",

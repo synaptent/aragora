@@ -365,7 +365,8 @@ def test_a_different_failure_class_still_changes_the_cursor() -> None:
 
 
 def test_settlement_shape_drift_degrades_instead_of_killing_the_capsule(monkeypatch: Any) -> None:
-    for payload in (None, [], "a string"):
+    payloads: tuple[Any, ...] = (None, [], "a string")
+    for payload in payloads:
         cap = _capsule(beliefs=[])
         monkeypatch.setattr(situation, "sh", lambda *a, _p=payload, **k: (0, json.dumps(_p)))
 

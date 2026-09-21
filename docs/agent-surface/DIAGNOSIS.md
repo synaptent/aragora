@@ -105,8 +105,8 @@ the composers.
 
 ### 2. Two disjoint hemispheres of truth, with two bridges
 
-The settlement/merge family (`settle_status.py`, `merge_quorum_io.py`,
-`reconcile_merge_quorum.py`) reads **only GitHub, via `gh` subprocess** — nothing
+The settlement/merge family (`scripts/settle_status.py`,
+`aragora/swarm/merge_quorum_io.py`, `scripts/reconcile_merge_quorum.py`) reads **only GitHub, via `gh` subprocess** — nothing
 durable on disk. The fleet/queue/worktree family reads **only `.aragora*`
 filesystem state**, with `gh` as optional enrichment.
 

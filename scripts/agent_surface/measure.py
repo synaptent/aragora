@@ -32,7 +32,8 @@ Output: one JSON object on stdout::
 
     {journey, question, calls[{label, cmd, exit_code, out_tokens, err_tokens,
      out_bytes, wall_ms, truncated}], totals{calls, tokens, wall_ms},
-     budget{name, limit_calls, limit_tokens, verdict, failed_calls, margin},
+     budget{name, limit_calls, limit_tokens, actual_calls, actual_tokens,
+            failed_calls, verdict},
      tokenizer, measured_at}
 
 Exit codes (so a wrapper or CI lane can branch on ``$?``):
@@ -74,6 +75,11 @@ DEFAULT_JOURNEYS = Path(__file__).with_name("journeys.json")
 # Hard budgets from the v3 design constraints. These are pass/fail, not targets.
 # A journey names which budget applies to it; "none" opts out of scoring while
 # still recording measurements.
+# scripts/consult_claude.py keeps claude-fable-5 in API_UNSUPPORTED_MODELS, so
+# counting against it would reject every call and leave --exact permanently on
+# the proxy. Overridable because a pin outlives this file.
+EXACT_COUNT_MODEL = os.environ.get("ARAGORA_COUNT_TOKENS_MODEL", "claude-opus-5")
+
 BUDGETS: dict[str, dict[str, Any]] = {
     "cold_orientation": {
         "limit_calls": 1,
@@ -188,7 +194,7 @@ class TokenCounter:
         if self._client is not None:
             try:
                 resp = self._client.messages.count_tokens(
-                    model="claude-fable-5",
+                    model=EXACT_COUNT_MODEL,
                     messages=[{"role": "user", "content": text}],
                 )
                 return int(resp.input_tokens)
