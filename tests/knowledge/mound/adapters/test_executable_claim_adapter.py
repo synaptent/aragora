@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -14,6 +15,7 @@ from aragora.knowledge.mound.adapters.executable_claim_adapter import (
     ExecutableClaimAdapter,
     _stable_id,
 )
+from aragora.knowledge.mound.types import IngestionRequest, IngestionResult
 from aragora.knowledge.unified.types import ConfidenceLevel, KnowledgeSource
 
 
@@ -197,3 +199,92 @@ class TestIngestionContract:
         assert r.claims_ingested == 1
         assert r.knowledge_item_ids == ["stored-2"]
         assert len(r.errors) == 1 and "c1" in r.errors[0]
+
+
+class TestIngestionRequestContract:
+    def test_store_receives_an_ingestion_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        mound = _mound()
+        asyncio.run(ExecutableClaimAdapter(mound=mound).ingest_claim_results([_r()]))
+        (request,) = mound.store.await_args.args
+        assert isinstance(request, IngestionRequest)
+        assert request.node_type == "claim"
+        assert request.source_type == KnowledgeSource.BELIEF
+        assert request.metadata["claim_id"] == "b0.claim"
+        assert request.metadata["knowledge_item_id"].startswith("claim_km_")
+
+    def test_rejected_ingestion_result_is_not_counted_as_ingested(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        mound = MagicMock()
+        mound.store = AsyncMock(
+            return_value=IngestionResult(node_id="", success=False, message="Validation error")
+        )
+        r = asyncio.run(ExecutableClaimAdapter(mound=mound).ingest_claim_results([_r()]))
+        assert r.claims_ingested == 0
+        assert r.knowledge_item_ids == []
+        assert "Validation error" in r.errors[0]
+
+    def test_explicit_workspace_id_wins_over_the_mound_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        mound = _mound()
+        mound.workspace_id = "mound-workspace"
+        adapter = ExecutableClaimAdapter(mound=mound, workspace_id="explicit-workspace")
+        asyncio.run(adapter.ingest_claim_results([_r()]))
+        (request,) = mound.store.await_args.args
+        assert request.workspace_id == "explicit-workspace"
+
+    def test_workspace_id_defaults_to_the_mound_workspace(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        mound = _mound()
+        mound.workspace_id = "mound-workspace"
+        asyncio.run(ExecutableClaimAdapter(mound=mound).ingest_claim_results([_r()]))
+        (request,) = mound.store.await_args.args
+        assert request.workspace_id == "mound-workspace"
+
+
+class TestRealMound:
+    """Persistence against a real mound, which mock mounds cannot demonstrate.
+
+    A ``MagicMock`` mound accepts any argument shape and satisfies ``hasattr``
+    for every attribute, so the tests above hold whether or not the adapter
+    speaks the mound's actual ingestion contract.
+    """
+
+    def test_claims_persist_into_a_real_sqlite_mound(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        from aragora.knowledge.mound.facade import KnowledgeMound
+        from aragora.knowledge.mound.types import MoundConfig
+
+        # Semantic indexing reaches the embedding service; with no provider
+        # credentials present it uses the offline hash fallback.
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+
+        results = [
+            _r(ClaimStatus.PASS, cid="real.pass"),
+            _r(ClaimStatus.FAIL, cid="real.fail"),
+            _r(ClaimStatus.ERROR, cid="real.error"),
+        ]
+
+        async def _ingest() -> None:
+            mound = KnowledgeMound(config=MoundConfig(sqlite_path=str(tmp_path / "mound.db")))
+            await mound.initialize()
+
+            r = await ExecutableClaimAdapter(mound=mound).ingest_claim_results(results)
+
+            assert r.errors == []
+            assert r.claims_ingested == len(results)
+            assert len(r.knowledge_item_ids) == len(results)
+            for node_id in r.knowledge_item_ids:
+                stored = await mound.get(node_id)
+                assert stored is not None, f"mound.get({node_id!r}) found nothing"
+
+        asyncio.run(_ingest())
