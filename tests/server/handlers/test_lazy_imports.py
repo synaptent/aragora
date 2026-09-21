@@ -76,7 +76,10 @@ class TestHandlerModules:
             assert name in HANDLER_MODULES, f"Core handler {name!r} missing from HANDLER_MODULES"
 
     def test_ralph_dashboard_handler_is_registered(self):
-        assert HANDLER_MODULES["RalphDashboardHandler"] == "aragora.server.handlers.ralph_dashboard"
+        assert (
+            HANDLER_MODULES["RalphDashboardHandler"]
+            == "aragora.server.handlers.autonomous.ralph_dashboard"
+        )
         assert "RalphDashboardHandler" in ALL_HANDLER_NAMES
 
     def test_handler_names_use_handler_suffix_convention(self):

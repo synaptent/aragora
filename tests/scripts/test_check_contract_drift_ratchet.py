@@ -4598,21 +4598,200 @@ def _genesis_authority(authority: dict[str, Any]) -> dict[str, Any]:
     return genesis
 
 
-def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses():
+def _paydown_waves(authority: dict[str, Any]) -> list[tuple[str, list[str]]]:
+    """Group the committed paydown into digest-bound waves, in replay order.
+
+    Every resolved record's final event binds the active set it leaves behind,
+    so the records sharing one digest form a wave and the waves chain from
+    genesis: a wave is next exactly when its digest equals the digest of the
+    remaining set minus its own ids. Returns ``(digest, sorted ids)`` pairs.
+    """
+    waves: dict[str, list[str]] = {}
+    as_of_by_digest: dict[str, str] = {}
+    for item in authority["active_inventory"]:
+        last = item["disposition_history"][-1]
+        if item["status"] == "active":
+            assert len(item["disposition_history"]) == 1
+            continue
+        assert item["status"] == "resolved" and last["status"] == "resolved"
+        digest = last["evidence"]["fact"]["active_original_record_ids_sha256"]
+        waves.setdefault(digest, []).append(item["original_record_id"])
+        as_of_by_digest.setdefault(digest, last["as_of"])
+        assert as_of_by_digest[digest] == last["as_of"]
+    remaining = {item["original_record_id"] for item in authority["active_inventory"]}
+    replayed: list[tuple[str, list[str]]] = []
+    while waves:
+        bound = [
+            digest
+            for digest, ids in waves.items()
+            if ratchet._sha256_bytes(ratchet._canonical_json_bytes(sorted(remaining - set(ids))))
+            == digest
+        ]
+        assert len(bound) == 1, "paydown wave is not bound to the active set it leaves"
+        ids = sorted(waves.pop(bound[0]))
+        remaining -= set(ids)
+        replayed.append((bound[0], ids))
+    dates = [as_of_by_digest[digest] for digest, _ids in replayed]
+    assert dates == sorted(dates), "paydown waves replay out of chronological order"
+    return replayed
+
+
+def _replay_committed_paydown(
+    authority: dict[str, Any], *, repo_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> list[tuple[str, list[str]]]:
+    """Replay the committed paydown through the production comparator.
+
+    ``compare_accepted_authorities`` binds the appended events of one head to
+    that head's live digest, so a multi-wave authority is judged one wave at a
+    time: wave k's base carries waves < k and its head carries waves <= k,
+    each validated against the baseline witnesses of its own moment. Those
+    witnesses are the committed baselines plus the cohort literals of every
+    later wave, served through ``load_git_docs`` under synthetic refs; the
+    analyzer bundle is still checked against the real tree.
+    """
+    waves = _paydown_waves(authority)
+    records = {
+        record["original_record_id"]: record
+        for record in authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    }
+    alias_of = {
+        list_key: alias for alias, (_p, keys) in gen.BASELINE_SPECS.items() for list_key in keys
+    }
+    committed_docs = gen.load_working_docs(repo_root)
+    docs_by_ref: dict[str, dict[str, Any]] = {}
+    for index in range(len(waves) + 1):
+        docs = copy.deepcopy(committed_docs)
+        for _digest, ids in waves[index:]:
+            for record_id in ids:
+                record = records[record_id]
+                docs[alias_of[record["source_json_key"]]][record["source_json_key"]].append(
+                    record["exact_historical_literal_record"]
+                )
+        docs_by_ref[f"wave-{index}"] = docs
+
+    def fake_git_docs(root: Path, ref: str) -> dict[str, dict[str, Any]]:
+        return copy.deepcopy(docs_by_ref[ref])
+
+    real_validate_bundle = ratchet._validate_bundle
+    monkeypatch.setattr(ratchet.inventory_mod, "load_git_docs", fake_git_docs)
+    monkeypatch.setattr(
+        ratchet, "_validate_bundle", lambda auth, root, ref=None: real_validate_bundle(auth, root)
+    )
+    committed = {item["original_record_id"]: item for item in authority["active_inventory"]}
+    previous = _genesis_authority(authority)
+    for index, (_digest, ids) in enumerate(waves, start=1):
+        applied = {record_id for _d, wave_ids in waves[:index] for record_id in wave_ids}
+        head = copy.deepcopy(previous)
+        head["active_inventory"] = [
+            copy.deepcopy(committed[item["original_record_id"]])
+            if item["original_record_id"] in applied
+            else item
+            for item in head["active_inventory"]
+        ]
+        head["active_inventory_sha256"] = ratchet._sha256_bytes(
+            ratchet._canonical_json_bytes(head["active_inventory"])
+        )
+        _relink_authority_manifest(head)
+        compared = ratchet.compare_accepted_authorities(
+            previous,
+            head,
+            repo_root=repo_root,
+            base_ref=f"wave-{index - 1}",
+            head_ref=f"wave-{index}",
+        )
+        assert (compared["passing"], compared["status"]) == (True, "pass")
+        assert compared["added_original_record_ids"] == []
+        assert compared["removed_original_record_ids"] == ids
+        previous = head
+    assert previous == authority
+    return waves
+
+
+def test_served_replay_html_remains_active_in_accepted_inventory():
+    authority, root = _accepted_authority(), Path(ratchet.__file__).parents[1]
+    record = next(
+        item
+        for item in authority["canonical_artifacts"]["original_cohort"]["original_records"]
+        if item["exact_historical_literal_record"] == "GET /api/replays/{param}/html"
+    )
+    record_id = record["original_record_id"]
+    disposition = next(
+        item for item in authority["active_inventory"] if item["original_record_id"] == record_id
+    )
+    assert disposition["status"] == "active"
+    assert disposition["disposition_history"] == [ratchet.GENESIS_DISPOSITION]
+    summary = ratchet.validate_accepted_authority(authority, repo_root=root)
+    assert record_id in summary["live_original_record_ids"]
+
+
+def test_accepted_authority_keeps_genesis_and_reconciles_live_witnesses(
+    monkeypatch: pytest.MonkeyPatch,
+):
     authority, root = _accepted_authority(), Path(ratchet.__file__).parents[1]
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     assert (summary["original_record_total"], summary["sdk_provenance_record_total"]) == (655, 598)
-    assert (len(summary["active_original_record_ids"]), len(summary["live_original_record_ids"])) == (398, 398)  # fmt: skip
-    # The committed authority equals the genesis authority plus exactly the
-    # 257-record digest-bound catch-up paydown (255 historical + the 2
-    # VAL-CDG-016 serve-side literals), each event bound to the live digest.
+    assert (len(summary["active_original_record_ids"]), len(summary["live_original_record_ids"])) == (263, 263)  # fmt: skip
+    # The committed authority equals the genesis authority plus the digest-bound
+    # paydown waves (255 historical + the 2 VAL-CDG-016 serve-side literals,
+    # then 59 TypeScript and 51 SDK literals, then 25 SDK literals): 392 resolved records, each wave
+    # passing the production comparator against the wave before it.
     genesis = _genesis_authority(authority)
     genesis_summary = ratchet.validate_accepted_authority(genesis, repo_root=root)
     assert len(genesis_summary["active_original_record_ids"]) == 655
-    compared = ratchet.compare_accepted_authorities(genesis, authority, repo_root=root)
-    assert compared["passing"] and compared["status"] == "pass"
-    assert compared["added_original_record_ids"] == []
-    assert len(compared["removed_original_record_ids"]) == 257
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    assert [len(ids) for _digest, ids in waves] == [257, 59, 51, 25]
+    removed = sorted(record_id for _digest, ids in waves for record_id in ids)
+    assert removed == sorted(
+        set(genesis_summary["active_original_record_ids"])
+        - set(summary["active_original_record_ids"])
+    )
+    live_digest = ratchet._sha256_bytes(
+        ratchet._canonical_json_bytes(sorted(summary["live_original_record_ids"]))
+    )
+    assert waves[-1][0] == live_digest
+
+
+@pytest.mark.parametrize(
+    ("wave_index", "expected_counts", "resolved_on"),
+    [
+        (1, {"typescript_sdk_drift": 59}, "2026-09-04"),
+        (2, {"python_sdk_drift": 20, "typescript_sdk_drift": 31}, "2026-09-06"),
+    ],
+)
+def test_sdk_paydowns_are_resolved_in_legacy_inventory(
+    wave_index: int, expected_counts: dict[str, int], resolved_on: str
+):
+    root = Path(ratchet.__file__).parents[1]
+    authority = _accepted_authority()
+    # Skip only the historical wave; retain batch 1 coverage alongside batch 2.
+    retired_ids = set(_paydown_waves(authority)[wave_index][1])
+    assert len(retired_ids) == sum(expected_counts.values())
+    cohort_records = {
+        record["original_record_id"]: record
+        for record in authority["canonical_artifacts"]["original_cohort"]["original_records"]
+    }
+    dispositions = {
+        item["original_record_id"]: item["disposition_history"][-1]
+        for item in authority["active_inventory"]
+    }
+    inventory = json.loads((root / "scripts/baselines/contract_drift_inventory.json").read_text())
+    rows = {item["id"]: item for item in inventory["items"]}
+
+    for source, count in expected_counts.items():
+        source_ids = {
+            record_id
+            for record_id in retired_ids
+            if cohort_records[record_id]["source_json_key"] == source
+        }
+        assert len(source_ids) == count
+        for record_id in source_ids:
+            literal = gen.normalize_key(
+                cohort_records[record_id]["exact_historical_literal_record"]
+            )
+            row = rows[f"{source}:{literal}"]
+            assert row["status"] == "resolved", row["id"]
+            assert row["resolved_on"] == resolved_on
+            assert row["resolved_on"] == dispositions[record_id]["as_of"]
 
 
 def test_accepted_authority_rejects_unbound_paydown_and_bundle():
@@ -4667,7 +4846,7 @@ def test_live_residue_is_frozen_shrink_only_against_tolerance_ref(monkeypatch):
     kwargs = {"repo_root": root, "live_ref": "candidate-ref", "residue_ref": "tolerance-ref"}
     removal_live = ratchet._live_witnesses(authority, **kwargs)
     equal_live = ratchet._live_witnesses(authority, repo_root=root, live_ref="tolerance-ref", residue_ref="tolerance-ref")  # fmt: skip
-    assert removal_live == equal_live and len(equal_live) == 398
+    assert removal_live == equal_live and len(equal_live) == 263
     head_docs["routes"]["missing_in_spec"].append(f"{entry}/guard-v2-new")
     with pytest.raises(ValueError, match="new live baseline keys outside immutable original cohort") as one_new:  # fmt: skip
         ratchet._live_witnesses(authority, **kwargs)
@@ -4890,7 +5069,7 @@ def test_accepted_main_modes_bind_non_head_ref_and_ignore_dirty_worktree_authori
     if mode == "program":
         assert result["program"]["source_sha"] == source
         assert result["program"]["start_date"] == "2026-04-17"
-        assert result["current"]["total_items"] == 398
+        assert result["current"]["total_items"] == 263
     else:
         assert result["source_sha"] == source
         assert result["authority"]["first_parent_chain"][0] == source
@@ -5861,7 +6040,9 @@ def test_pr_mode_reports_complete_exact_original_record_set_diagnostics(
     assert not compared["passing"]
 
 
-def test_pr_mode_passes_equal_or_subset_original_record_ids(tmp_path: Path):
+def test_pr_mode_passes_equal_or_subset_original_record_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     # Equal head: identical baselines pass with empty deltas.
     paths, repo, base = _seed(tmp_path, program=RED_PROGRAM)
     equal = _result(paths, "2026-07-16", repo=repo, cohort=base, mode="pr", base_ref=base)
@@ -5902,17 +6083,19 @@ def test_pr_mode_passes_equal_or_subset_original_record_ids(tmp_path: Path):
         }
     # Accepted-authority layer: an exact evidenced paydown subset passes with
     # the complete sorted removed set and no added IDs. The committed head IS
-    # that paydown relative to its reconstructed all-active genesis base.
+    # that paydown relative to its reconstructed all-active genesis base,
+    # one comparator-verified wave at a time.
     root = Path(ratchet.__file__).parents[1]
     authority = _accepted_authority()
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     live = set(summary["live_original_record_ids"])
-    genesis = _genesis_authority(authority)
-    compared = ratchet.compare_accepted_authorities(genesis, authority, repo_root=root)
-    assert (compared["passing"], compared["status"]) == (True, "pass")
-    assert compared["added_original_record_ids"] == []
-    removed = compared["removed_original_record_ids"]
-    assert removed == sorted(removed) and len(removed) == 257
+    genesis_summary = ratchet.validate_accepted_authority(
+        _genesis_authority(authority), repo_root=root
+    )
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    removed = sorted(record_id for _digest, ids in waves for record_id in ids)
+    assert set(genesis_summary["active_original_record_ids"]) - set(removed) == live
+    assert removed == sorted(removed) and len(removed) == 392
     assert set(removed).isdisjoint(live)
 
 
@@ -6031,7 +6214,7 @@ def test_accepted_inventory_annotation_tamper_does_not_change_enforcement():
     # Untampered enforcement outcome (the invariant being defended).
     summary = ratchet.validate_accepted_authority(_accepted_authority(), repo_root=root)
     assert summary["original_record_total"] == 655
-    assert len(summary["live_original_record_ids"]) == 398
+    assert len(summary["live_original_record_ids"]) == 263
     # Any annotation key added to an accepted-inventory row fails closed: the
     # row schema is exactly {category, disposition_history, original_record_id,
     # status}, so tamper can never ride along as metadata.
@@ -7509,7 +7692,9 @@ def test_pr_mode_exact_original_record_diagnostics_are_sorted_complete_and_untru
     assert result["pr_delta"]["counts"]["verify_python_sdk_drift"]["delta"] == 25
 
 
-def test_pr_mode_passes_strict_original_record_subset(tmp_path: Path):
+def test_pr_mode_passes_strict_original_record_subset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     # A strict subset in two categories (with matching resolutions) passes
     # while the program schedule stays honestly red.
     paths, repo, base = _seed(tmp_path, program=RED_PROGRAM)
@@ -7536,19 +7721,20 @@ def test_pr_mode_passes_strict_original_record_subset(tmp_path: Path):
     assert result["pr_delta"]["counts"]["routes_missing_in_spec"]["delta"] == -1
     # Accepted-authority layer: a global+per-category strict subset head
     # passes with exact removed IDs and empty added IDs. The committed head
-    # is that subset relative to its reconstructed all-active genesis base.
+    # is that subset relative to its reconstructed all-active genesis base,
+    # reached through comparator-verified paydown waves.
     root = Path(ratchet.__file__).parents[1]
     authority = _accepted_authority()
     summary = ratchet.validate_accepted_authority(authority, repo_root=root)
     live = set(summary["live_original_record_ids"])
-    genesis = _genesis_authority(authority)
-    genesis_summary = ratchet.validate_accepted_authority(genesis, repo_root=root)
-    compared = ratchet.compare_accepted_authorities(genesis, authority, repo_root=root)
-    assert compared["passing"] and compared["status"] == "pass"
-    assert compared["added_original_record_ids"] == []
+    genesis_summary = ratchet.validate_accepted_authority(
+        _genesis_authority(authority), repo_root=root
+    )
+    waves = _replay_committed_paydown(authority, repo_root=root, monkeypatch=monkeypatch)
+    replayed_removed = sorted(record_id for _digest, ids in waves for record_id in ids)
     expected_removed = sorted(set(genesis_summary["active_original_record_ids"]) - live)
-    assert compared["removed_original_record_ids"] == expected_removed
-    assert len(expected_removed) == 257
+    assert replayed_removed == expected_removed
+    assert len(expected_removed) == 392
 
 
 # ---- VAL-CDG-008: exact UTC week arithmetic, non-backdated final as-of
@@ -9698,7 +9884,7 @@ def test_transition_reconstructs_all_655_ids_and_598_provenance_records():
     summary = ratchet.validate_accepted_authority(_real_authority(), repo_root=_REPO_ROOT)
     assert summary["original_record_total"] == 655
     assert summary["sdk_provenance_record_total"] == 598
-    assert len(summary["active_original_record_ids"]) == 398
+    assert len(summary["active_original_record_ids"]) == 263
     # The genesis reconstruction of the committed authority still spans the
     # full 655-record cohort — paydown resolves records, never removes them.
     genesis_summary = ratchet.validate_accepted_authority(
@@ -9932,7 +10118,7 @@ def test_strict_subset_requires_separate_authenticated_paydown():
     resolve(paydown, live_digest)
     compared = ratchet.compare_accepted_authorities(genesis, paydown, repo_root=root)
     assert compared["passing"] is True
-    assert len(compared["removed_original_record_ids"]) == 257
+    assert len(compared["removed_original_record_ids"]) == 392
     assert compared["authority"] == {"source": "accepted_authority"}
     assert "transition" not in compared
     # The same subset without the exact appended active-set digest cannot be
@@ -11136,3 +11322,399 @@ def test_live_evidence_plane_accepts_stale_base_squash_and_rejects_foreign_delta
 
     with pytest.raises(ValueError, match="lacks first-parent or tree equality"):
         _live_pr_files_probe(tmp_path / "claim", monkeypatch, mutate=wrong_receipt_tree)
+
+
+def _github_json_transport(bodies: dict[str, Any]) -> Any:
+    # GitHub's weak entity tags are derived from the exact response body, so
+    # any byte change to the body also changes the ETag header.
+    def run(argv: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        body = ratchet._canonical_json_bytes(bodies[argv[-1]])
+        etag = hashlib.sha256(body).hexdigest()[:32].encode()
+        stdout = b'HTTP/2 200 OK\r\nETag: W/"' + etag + b'"\r\n\r\n' + body
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr=b"")
+
+    return run
+
+
+def _github_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+    body: Any,
+) -> dict[str, Any]:
+    monkeypatch.setattr(ratchet, "_run_read_only", _github_json_transport({endpoint: body}))
+    _payload, identity = ratchet._gh_api_get(endpoint, operation_log=[])
+    return identity
+
+
+def _tick(value: Any) -> Any:
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, int):
+        return value + 1
+    return f"{value}-ticked"
+
+
+def _volatile_fixture_repository() -> dict[str, Any]:
+    return {
+        "default_branch": "main",
+        "description": "fixture",
+        "forks": 3,
+        "forks_count": 3,
+        "full_name": "synaptent/aragora",
+        "id": 1126097105,
+        "name": "aragora",
+        "network_count": 3,
+        "open_issues": 1019,
+        "open_issues_count": 1019,
+        "pushed_at": "2026-09-02T03:27:50Z",
+        "size": 4096,
+        "stargazers_count": 7,
+        "subscribers_count": 2,
+        "updated_at": "2026-09-01T00:00:00Z",
+        "watchers": 7,
+        "watchers_count": 7,
+    }
+
+
+def _volatile_fixture_pull_request(end_sha: str) -> dict[str, Any]:
+    return {
+        "additions": 400,
+        "base": {"ref": "main", "repo": _volatile_fixture_repository(), "sha": "f" * 40},
+        "changed_files": 1,
+        "deletions": 400,
+        "head": {"ref": "structex/fixture", "repo": _volatile_fixture_repository(), "sha": end_sha},
+        "merge_commit_sha": "e" * 40,
+        "mergeable": None,
+        "mergeable_state": "unknown",
+        "merged_at": "2026-08-31T00:00:00Z",
+        "number": 8766,
+        "title": "fixture",
+        "updated_at": "2026-08-31T00:00:00Z",
+    }
+
+
+def _volatile_fixture_release(end_sha: str) -> dict[str, Any]:
+    tag = f"cdg-route_truth-{end_sha}"
+    return {
+        "assets": [
+            {
+                "digest": "sha256:" + "1" * 64,
+                "download_count": 12,
+                "id": 538132370,
+                "name": "checksums.txt",
+                "size": 159,
+                "updated_at": "2026-08-31T14:55:16Z",
+            },
+            {
+                "digest": "sha256:" + "2" * 64,
+                "download_count": 12,
+                "id": 538132327,
+                "name": "manifest.json",
+                "size": 302,
+                "updated_at": "2026-08-31T14:55:14Z",
+            },
+            {
+                "digest": "sha256:" + "3" * 64,
+                "download_count": 12,
+                "id": 538132338,
+                "name": "payload.json",
+                "size": 90447,
+                "updated_at": "2026-08-31T14:55:15Z",
+            },
+        ],
+        "draft": False,
+        "id": 379772162,
+        "immutable": True,
+        "prerelease": False,
+        "tag_name": tag,
+        "target_commitish": end_sha,
+        "updated_at": "2026-08-31T14:56:04Z",
+    }
+
+
+def _bump_download_counts(release: dict[str, Any], by: int = 6) -> dict[str, Any]:
+    ticked = copy.deepcopy(release)
+    for asset in ticked["assets"]:
+        asset["download_count"] += by
+    return ticked
+
+
+def _tick_repository_counters(repository: dict[str, Any]) -> dict[str, Any]:
+    ticked = dict(repository)
+    for field in ratchet._VOLATILE_REPOSITORY_FIELDS:
+        ticked[field] = _tick(repository[field])
+    return ticked
+
+
+def test_release_identity_excludes_only_asset_download_counts(monkeypatch: pytest.MonkeyPatch):
+    # The verifier's own paired octet-stream asset downloads bump every
+    # assets[].download_count inside the release body it captured before the
+    # downloads, so that counter alone must not read as concurrent movement.
+    end_sha = "2b94459bc0e316c3c0c1eb285695bf2a0c73c647"
+    endpoint = f"repos/synaptent/aragora/releases/{379772162}"
+    release = _volatile_fixture_release(end_sha)
+    before = _github_identity(monkeypatch, endpoint, release)
+    ticked = _github_identity(monkeypatch, endpoint, _bump_download_counts(release))
+    assert ratchet._remote_identity_moved(before, ticked) is False
+    assert before["excluded_volatile_fields"] == ["assets[].download_count"]
+    assert before["etag"] is None
+    assert before["updated_at"] == release["updated_at"]
+    assert before["sha256"] == ticked["sha256"]
+
+    def mutate_asset(index: int, field: str) -> Any:
+        def apply(body: dict[str, Any]) -> None:
+            body["assets"][index][field] = _tick(body["assets"][index][field])
+
+        return apply
+
+    def mutate_field(field: str) -> Any:
+        def apply(body: dict[str, Any]) -> None:
+            body[field] = _tick(body[field])
+
+        return apply
+
+    semantic = {
+        "asset size": mutate_asset(0, "size"),
+        "asset digest": mutate_asset(1, "digest"),
+        "asset id": mutate_asset(2, "id"),
+        "asset name": mutate_asset(0, "name"),
+        "tag_name": mutate_field("tag_name"),
+        "target_commitish": mutate_field("target_commitish"),
+        "draft": mutate_field("draft"),
+        "immutable": mutate_field("immutable"),
+        "prerelease": mutate_field("prerelease"),
+        "updated_at": mutate_field("updated_at"),
+    }
+    for label, apply in semantic.items():
+        moved_body = _bump_download_counts(release)
+        apply(moved_body)
+        moved = _github_identity(monkeypatch, endpoint, moved_body)
+        assert ratchet._remote_identity_moved(before, moved) is True, label
+
+    # The paginated release listing embeds the same per-asset counters and is
+    # reauthenticated too; a newly published release still moves it.
+    listing = "repos/synaptent/aragora/releases?per_page=100&page=1"
+    listing_before = _github_identity(monkeypatch, listing, [release])
+    listing_ticked = _github_identity(monkeypatch, listing, [_bump_download_counts(release)])
+    assert ratchet._remote_identity_moved(listing_before, listing_ticked) is False
+    assert listing_before["excluded_volatile_fields"] == ["[].assets[].download_count"]
+    extra = copy.deepcopy(release)
+    extra["id"] = 379772163
+    extra["tag_name"] = "v-other"
+    listing_grown = _github_identity(monkeypatch, listing, [release, extra])
+    assert ratchet._remote_identity_moved(listing_before, listing_grown) is True
+
+
+def test_repository_and_pull_request_identity_exclude_only_embedded_activity_counters(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # Issue open/close, pushes to any branch, and stars tick counters inside
+    # the repository object (also nested as base.repo/head.repo in governed
+    # PR bodies) during a multi-minute run; only those counters are excluded.
+    end_sha = "2b94459bc0e316c3c0c1eb285695bf2a0c73c647"
+    repo_endpoint = "repos/synaptent/aragora"
+    repository = _volatile_fixture_repository()
+    before = _github_identity(monkeypatch, repo_endpoint, repository)
+    assert before["etag"] is None
+    assert before["updated_at"] is None
+    assert before["excluded_volatile_fields"] == list(ratchet._VOLATILE_REPOSITORY_FIELDS)
+    assert set(ratchet._VOLATILE_REPOSITORY_FIELDS) == {
+        "forks",
+        "forks_count",
+        "network_count",
+        "open_issues",
+        "open_issues_count",
+        "pushed_at",
+        "size",
+        "stargazers_count",
+        "subscribers_count",
+        "updated_at",
+        "watchers",
+        "watchers_count",
+    }
+    for field in ratchet._VOLATILE_REPOSITORY_FIELDS:
+        ticked = dict(repository)
+        ticked[field] = _tick(repository[field])
+        moved = ratchet._remote_identity_moved(
+            before, _github_identity(monkeypatch, repo_endpoint, ticked)
+        )
+        assert moved is False, field
+    all_ticked = _github_identity(monkeypatch, repo_endpoint, _tick_repository_counters(repository))
+    assert ratchet._remote_identity_moved(before, all_ticked) is False
+    for field in ("default_branch", "description", "full_name", "id", "name"):
+        changed = _tick_repository_counters(repository)
+        changed[field] = _tick(repository[field])
+        moved = ratchet._remote_identity_moved(
+            before, _github_identity(monkeypatch, repo_endpoint, changed)
+        )
+        assert moved is True, field
+
+    pr_endpoint = "repos/synaptent/aragora/pulls/8766"
+    pull_request = _volatile_fixture_pull_request(end_sha)
+    pr_before = _github_identity(monkeypatch, pr_endpoint, pull_request)
+    assert pr_before["etag"] is None
+    assert pr_before["updated_at"] == pull_request["updated_at"]
+    assert pr_before["excluded_volatile_fields"] == [
+        f"{side}.repo.{field}"
+        for side in ("base", "head")
+        for field in ratchet._VOLATILE_REPOSITORY_FIELDS
+    ]
+    ticked_pr = copy.deepcopy(pull_request)
+    for side in ("base", "head"):
+        ticked_pr[side]["repo"] = _tick_repository_counters(pull_request[side]["repo"])
+    assert (
+        ratchet._remote_identity_moved(
+            pr_before, _github_identity(monkeypatch, pr_endpoint, ticked_pr)
+        )
+        is False
+    )
+
+    def nested(path: tuple[str, ...]) -> Any:
+        def apply(body: dict[str, Any]) -> None:
+            target = body
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = _tick(target[path[-1]])
+
+        return apply
+
+    semantic = {
+        "head sha": nested(("head", "sha")),
+        "base sha": nested(("base", "sha")),
+        "head ref": nested(("head", "ref")),
+        "head repo full_name": nested(("head", "repo", "full_name")),
+        "merge_commit_sha": nested(("merge_commit_sha",)),
+        "mergeable_state": nested(("mergeable_state",)),
+        "merged_at": nested(("merged_at",)),
+        "changed_files": nested(("changed_files",)),
+        "title": nested(("title",)),
+        "updated_at": nested(("updated_at",)),
+    }
+    for label, apply in semantic.items():
+        moved_body = copy.deepcopy(ticked_pr)
+        apply(moved_body)
+        moved = ratchet._remote_identity_moved(
+            pr_before, _github_identity(monkeypatch, pr_endpoint, moved_body)
+        )
+        assert moved is True, label
+
+    # Endpoints outside the three normalized classes keep the raw-body plane.
+    branch = "repos/synaptent/aragora/branches/main"
+    raw = _github_identity(monkeypatch, branch, {"commit": {"sha": end_sha}, "name": "main"})
+    assert raw["etag"] is not None
+    assert "excluded_volatile_fields" not in raw
+
+
+def test_stable_get_tolerates_counter_ticks_between_paired_fetches_and_blocks_on_content(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    endpoint = "repos/synaptent/aragora"
+    repository = _volatile_fixture_repository()
+    served = iter([repository, _tick_repository_counters(repository)])
+
+    def ticking(argv: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        return _github_json_transport({endpoint: next(served)})(argv)
+
+    monkeypatch.setattr(ratchet, "_run_read_only", ticking)
+    operation_log: list[dict[str, Any]] = []
+    payload, identity = ratchet._gh_api_get_stable(endpoint, operation_log=operation_log)
+    assert payload["open_issues_count"] == repository["open_issues_count"] + 1
+    assert payload["full_name"] == "synaptent/aragora"
+    assert identity["etag"] is None
+    assert [entry["movement_observed"] for entry in operation_log] == [False, False]
+    assert all(entry["raw_etag"] for entry in operation_log)
+    assert operation_log[0]["sha256"] != operation_log[1]["sha256"]
+    assert operation_log[0]["response_identity"] == operation_log[1]["response_identity"]
+
+    flipping = iter([repository, {**repository, "default_branch": "develop"}] * 3)
+
+    def content_moves(argv: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        return _github_json_transport({endpoint: next(flipping)})(argv)
+
+    monkeypatch.setattr(ratchet, "_run_read_only", content_moves)
+    blocked_log: list[dict[str, Any]] = []
+    with pytest.raises(ratchet.BoundaryBlocked, match="moved concurrently"):
+        ratchet._gh_api_get_stable(endpoint, operation_log=blocked_log)
+    assert [entry["movement_observed"] for entry in blocked_log] == [True] * 6
+
+
+def test_reauthentication_tolerates_volatile_counter_ticks_and_blocks_on_content_movement(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    end_sha = "2b94459bc0e316c3c0c1eb285695bf2a0c73c647"
+    repo_endpoint = "repos/synaptent/aragora"
+    pr_endpoint = "repos/synaptent/aragora/pulls/8766"
+    release_endpoint = "repos/synaptent/aragora/releases/379772162"
+    listing_endpoint = "repos/synaptent/aragora/releases?per_page=100&page=1"
+    release = _volatile_fixture_release(end_sha)
+    before_bodies: dict[str, Any] = {
+        repo_endpoint: _volatile_fixture_repository(),
+        pr_endpoint: _volatile_fixture_pull_request(end_sha),
+        release_endpoint: release,
+        listing_endpoint: [release],
+    }
+    monkeypatch.setattr(ratchet, "_run_read_only", _github_json_transport(before_bodies))
+    operation_log: list[dict[str, Any]] = []
+    endpoint_identities: dict[str, dict[str, Any]] = {}
+    for endpoint in sorted(before_bodies):
+        _payload, identity = ratchet._gh_api_get_stable(endpoint, operation_log=operation_log)
+        endpoint_identities[endpoint] = identity
+    context = {
+        "asset_identities": {},
+        "endpoint_identities": endpoint_identities,
+        "github_repository": "synaptent/aragora",
+        "local_asset_identities": {},
+        "verification_commands": [],
+    }
+    before_snapshot = {
+        "assets": {},
+        "endpoints": endpoint_identities,
+        "local_assets": {},
+        "repository": "synaptent/aragora",
+        "verifications": [],
+    }
+    # End of run: the janitor ticked the repository counters and the
+    # verifier's own asset downloads bumped every download_count.
+    ticked_pr = copy.deepcopy(before_bodies[pr_endpoint])
+    for side in ("base", "head"):
+        ticked_pr[side]["repo"] = _tick_repository_counters(ticked_pr[side]["repo"])
+    ticked_bodies: dict[str, Any] = {
+        repo_endpoint: _tick_repository_counters(before_bodies[repo_endpoint]),
+        pr_endpoint: ticked_pr,
+        release_endpoint: _bump_download_counts(release),
+        listing_endpoint: [_bump_download_counts(release)],
+    }
+    monkeypatch.setattr(ratchet, "_run_read_only", _github_json_transport(ticked_bodies))
+    after_snapshot = ratchet._reauthenticate_live_context(
+        context,
+        operation_log=operation_log,
+        end_sha=end_sha,
+    )
+    assert ratchet._canonical_json_bytes(after_snapshot) == ratchet._canonical_json_bytes(
+        before_snapshot
+    )
+
+    def move_head_sha(body: dict[str, Any]) -> None:
+        body["head"]["sha"] = "d" * 40
+
+    def move_asset_digest(body: dict[str, Any]) -> None:
+        body["assets"][2]["digest"] = "sha256:" + "f" * 64
+
+    def move_repository_name(body: dict[str, Any]) -> None:
+        body["full_name"] = "synaptent/renamed"
+
+    def publish_extra_release(body: list[dict[str, Any]]) -> None:
+        body.append({**copy.deepcopy(release), "id": 379772163, "tag_name": "v-other"})
+
+    for endpoint, apply in (
+        (pr_endpoint, move_head_sha),
+        (release_endpoint, move_asset_digest),
+        (repo_endpoint, move_repository_name),
+        (listing_endpoint, publish_extra_release),
+    ):
+        moved_bodies = copy.deepcopy(ticked_bodies)
+        apply(moved_bodies[endpoint])
+        monkeypatch.setattr(ratchet, "_run_read_only", _github_json_transport(moved_bodies))
+        with pytest.raises(ratchet.BoundaryBlocked, match="moved concurrently") as excinfo:
+            ratchet._reauthenticate_live_context(context, operation_log=[], end_sha=end_sha)
+        assert str(excinfo.value).endswith(endpoint)

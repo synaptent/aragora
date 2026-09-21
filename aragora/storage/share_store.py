@@ -25,6 +25,7 @@ from aragora.storage.backends import (
     PostgreSQLBackend,
 )
 from aragora.storage.base_store import SQLiteStore
+from aragora.storage.connection_factory import is_postgres_backend
 from aragora.storage.share_models import DebateVisibility, ShareSettings
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,9 @@ class ShareLinkStore(SQLiteStore):
 
         if backend is None:
             env_backend = os.environ.get("ARAGORA_DB_BACKEND", "sqlite").lower()
-            backend = "postgresql" if (actual_url and env_backend == "postgresql") else "sqlite"
+            backend = (
+                "postgresql" if (actual_url and is_postgres_backend(env_backend)) else "sqlite"
+            )
 
         self.backend_type = backend
         self._backend: DatabaseBackend | None = None

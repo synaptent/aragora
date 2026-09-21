@@ -51,7 +51,7 @@ GOVERNANCE_READ_PERMISSION = "governance:read"
 GOVERNANCE_WRITE_PERMISSION = "governance:write"
 
 # Re-export from policy.py
-from aragora.server.handlers.policy import (
+from aragora.server.handlers.governance.policy import (
     PolicyHandler,
 )
 

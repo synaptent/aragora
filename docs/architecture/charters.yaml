@@ -3,14 +3,14 @@
 # as any change to charter §2/§3. IDs are permanent: never reused, never renumbered.
 meta:
   charter: docs/architecture/INTENDED_ARCHITECTURE.md
-  version: "0.5"
+  version: "0.6"
   status: DRAFT
   # Ratified iff the charter file exists on main with 'Status: RATIFIED vN.N' via an
   # operator-approved PR. While DRAFT, only entries with binding_in_draft: true bind.
   # Entries carrying 'ruled: 2026-07-06' encode operator adopt-or-retire rulings (#8851,
   # decision packet + four adversarial salvage audits); they remain PROPOSED pending
   # ratification — the ruling fixes the disposition, not the binding status.
-  generated: "2026-07-06"
+  generated: "2026-08-18"
 
 authorities:
   - id: ARCH-001
@@ -119,12 +119,17 @@ authorities:
     authority: aragora/queue
     layer: L3
     disposition: adopt
+    binding_in_draft: true
+    decision_record: docs/architecture/QUEUE_ADOPTION_DISPOSITION.md
     registry_refs: [CHR-P4A-004]
     ruled: "2026-07-06"
     notes: >-
-      ADOPT as authority confirmed — operator ruling 2026-07-06 (#8851), salvage-audited.
-      LIVE, not dormant: GauntletWorker default-on in aragora/server/startup/workers.py;
-      scripts/queue_worker.py entrypoint
+      ADOPT as the public durable-job API and transport authority — operator ruling
+      2026-07-06 and binding activation 2026-08-18 (#8851 item 3). LIVE via
+      scripts/queue_worker.py and API/bot producers. aragora/storage/job_queue_store.py
+      is a bounded current backend split used by existing workers; it may not gain new
+      direct consumers and must converge behind aragora/queue rather than become a peer
+      authority.
   - id: ARCH-016
     concern: product-dag-workflows
     authority: aragora/workflow
