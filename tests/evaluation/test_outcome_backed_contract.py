@@ -264,6 +264,53 @@ def test_team_success_requires_complete_topology_and_verified_receipt() -> None:
         validate_result_record(record, _manifest())
 
 
+def _team_failure(kept_calls: int) -> dict[str, Any]:
+    """A team result that aborted after `kept_calls` logical calls, the first of which failed."""
+    record = _record(TEAM_CONDITION_ID)
+    record["calls"] = record["calls"][:kept_calls]
+    record["calls"][0]["attempts"] = [_attempt(status="model_error")]
+    record["output"] = None
+    record["error"] = {"error_class": "model_error", "message": "proposal failed"}
+    record["receipt"] = {"hash": None, "verification": "missing"}
+    return record
+
+
+@pytest.mark.parametrize("kept_calls", [1, 3, 6, 7])
+def test_team_failure_records_only_the_calls_it_actually_made(kept_calls: int) -> None:
+    costs = validate_result_record(_team_failure(kept_calls), _manifest())
+
+    assert costs == {"2026-08-30": pytest.approx(kept_calls * 0.1)}
+
+
+def test_team_failure_must_not_record_calls_outside_the_frozen_topology() -> None:
+    record = _team_failure(3)
+    record["calls"].append({**record["calls"][0], "call_id": "proposal-claude-retry"})
+    with pytest.raises(ValueError, match="exceeds the frozen team topology"):
+        validate_result_record(record, _manifest())
+
+    record = _team_failure(3)
+    record["calls"][2]["role"] = "rebuttal"
+    with pytest.raises(ValueError, match="unknown team role"):
+        validate_result_record(record, _manifest())
+
+
+def test_team_failure_still_requires_a_failed_call() -> None:
+    record = _team_failure(3)
+    record["calls"][0]["attempts"] = [_attempt()]
+    with pytest.raises(ValueError, match="failed logical call"):
+        validate_result_record(record, _manifest())
+
+
+@pytest.mark.parametrize("condition_id", [CONDITION_IDS[0], CONDITION_IDS[3]])
+def test_a_failure_result_must_still_record_at_least_one_call(condition_id: str) -> None:
+    record = _record(condition_id)
+    record["calls"] = []
+    record["output"] = None
+    record["error"] = {"error_class": "model_error", "message": "no call was made"}
+    with pytest.raises(ValueError, match="result.calls must not be empty"):
+        validate_result_record(record, _manifest())
+
+
 def test_result_rejects_manifest_or_holdout_freeze_drift() -> None:
     record = _record(split="holdout", repetition=2)
     validate_result_record(record, _manifest())
@@ -325,3 +372,51 @@ def test_complete_batch_enforces_matrix_and_daily_cost_cap() -> None:
             split="development",
             repetition=1,
         )
+
+
+def test_daily_cost_cap_is_not_tripped_by_float_accumulation_drift() -> None:
+    """A batch whose per-call costs are exact cents summing to the cap must validate.
+
+    Accumulating these particular costs left to right in binary floating point lands on
+    25.00000000000001, which a naive ``> 25.0`` comparison rejects as over budget.
+    """
+    manifest = _manifest()
+    case_ids = [f"case-{index:03d}" for index in range(1, 17)]
+    records = []
+    for index, case_id in enumerate(case_ids):
+        single_cost, team_cost = (0.03, 0.21) if index < 12 else (0.01, 0.22)
+        for condition in CONDITION_IDS:
+            cost = team_cost if condition == TEAM_CONDITION_ID else single_cost
+            records.append(_record(condition, case_id=case_id, cost=cost))
+
+    assert validate_result_batch(
+        records,
+        manifest,
+        expected_case_ids=case_ids,
+        split="development",
+        repetition=1,
+    ) == {"2026-08-30": 25.0}
+
+
+def test_split_is_rejected_as_text_before_it_is_looked_up() -> None:
+    record = _record()
+    record["split"] = ["development"]
+    with pytest.raises(ValueError, match="result.split must be a non-empty string"):
+        validate_result_record(record, _manifest())
+
+    with pytest.raises(ValueError, match="split must be a non-empty string"):
+        validate_result_batch(
+            [],
+            _manifest(),
+            expected_case_ids=["case-001"],
+            split=["development"],  # type: ignore[arg-type]
+            repetition=1,
+        )
+
+
+@pytest.mark.parametrize("value", [True, 1.0])
+def test_attempt_index_must_be_an_integer(value: object) -> None:
+    record = _record()
+    record["calls"][0]["attempts"][0]["attempt"] = value
+    with pytest.raises(ValueError, match=r"attempt must be an integer"):
+        validate_result_record(record, _manifest())

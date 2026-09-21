@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from datetime import datetime
+from decimal import Decimal
 import math
 import re
 from typing import Any
@@ -128,6 +129,15 @@ def _number(value: Any, field: str, *, maximum: float | None = None) -> float:
     if maximum is not None and result > maximum:
         raise ValueError(f"{field} must be <= {maximum}")
     return result
+
+
+def _money(value: float) -> Decimal:
+    """Read a cost as the decimal amount it is written as, not its binary approximation.
+
+    Accumulating costs as floats drifts: a day of exact-cent calls totalling $25.00 sums to
+    25.00000000000001, which a bare comparison against the cap rejects as over budget.
+    """
+    return Decimal(str(value))
 
 
 def _sequence(value: Any, field: str, *, allow_empty: bool = False) -> Sequence[Any]:
@@ -306,6 +316,7 @@ def _validate_calls(
     *,
     started_at: datetime,
     completed_at: datetime,
+    require_complete_topology: bool,
 ) -> tuple[bool, list[tuple[datetime, float]]]:
     calls = _sequence(calls_value, "result.calls")
     members = _condition_members(condition)
@@ -339,7 +350,9 @@ def _validate_calls(
             attempt_field = f"{field}.attempts[{attempt_index}]"
             attempt = _mapping(raw_attempt, attempt_field)
             _keys(attempt, _ATTEMPT_KEYS, attempt_field)
-            if attempt["attempt"] != attempt_index + 1:
+            if _integer(attempt["attempt"], f"{attempt_field}.attempt", minimum=1) != (
+                attempt_index + 1
+            ):
                 raise ValueError(f"{attempt_field}.attempt must be sequential from 1")
             status = _text(attempt["status"], f"{attempt_field}.status")
             if status not in _ATTEMPT_STATUSES:
@@ -375,10 +388,15 @@ def _validate_calls(
         non_synthesis = Counter(
             {key: count for key, count in topology.items() if key[0] != "synthesis"}
         )
-        if non_synthesis != expected or synthesis_count != 1:
-            raise ValueError("result.calls does not match the frozen team topology")
         if any(role not in {"proposal", "adversarial", "synthesis"} for role, _family in topology):
             raise ValueError("result.calls contains an unknown team role")
+        if require_complete_topology:
+            if non_synthesis != expected or synthesis_count != 1:
+                raise ValueError("result.calls does not match the frozen team topology")
+        # A run that aborts on an unrecoverable failure records only the calls it made,
+        # so a failure result carries a subset of the frozen topology and never more.
+        elif synthesis_count > 1 or non_synthesis - expected:
+            raise ValueError("result.calls exceeds the frozen team topology")
         return all_succeeded, costs
     if topology != expected:
         raise ValueError("result.calls does not match the frozen single-model topology")
@@ -402,7 +420,7 @@ def validate_result_record(
     if result["implementation_sha"] != manifest["implementation_sha"]:
         raise ValueError("result.implementation_sha does not bind the frozen implementation")
     _text(result["case_id"], "result.case_id")
-    split = result["split"]
+    split = _text(result["split"], "result.split")
     if split not in SPLIT_COUNTS:
         raise ValueError("result.split must be development or holdout")
     repetition = _integer(result["repetition"], "result.repetition", minimum=1)
@@ -417,11 +435,15 @@ def validate_result_record(
     completed_at = _timestamp(result["completed_at"], "result.completed_at")
     if completed_at < started_at:
         raise ValueError("result.completed_at must not precede result.started_at")
+    successful_result = result["output"] is not None
     all_succeeded, costs = _validate_calls(
-        result["calls"], conditions[condition_id], started_at=started_at, completed_at=completed_at
+        result["calls"],
+        conditions[condition_id],
+        started_at=started_at,
+        completed_at=completed_at,
+        require_complete_topology=successful_result,
     )
 
-    successful_result = result["output"] is not None
     if successful_result:
         if not all_succeeded:
             raise ValueError("a successful result requires every logical call to succeed")
@@ -440,10 +462,10 @@ def validate_result_record(
         require_verified=successful_result and condition_id == TEAM_CONDITION_ID,
     )
 
-    totals: defaultdict[str, float] = defaultdict(float)
+    totals: defaultdict[str, Decimal] = defaultdict(Decimal)
     for occurred_at, cost in costs:
-        totals[occurred_at.date().isoformat()] += cost
-    return dict(sorted(totals.items()))
+        totals[occurred_at.date().isoformat()] += _money(cost)
+    return {day: float(total) for day, total in sorted(totals.items())}
 
 
 def validate_result_batch(
@@ -456,6 +478,7 @@ def validate_result_batch(
 ) -> dict[str, float]:
     """Validate a complete condition matrix and enforce the $25 UTC-day cap."""
     validate_benchmark_manifest(manifest)
+    split = _text(split, "split")
     if split not in SPLIT_COUNTS:
         raise ValueError("split must be development or holdout")
     case_ids = tuple(_text(case_id, "expected_case_ids[]") for case_id in expected_case_ids)
@@ -467,7 +490,7 @@ def validate_result_batch(
         )
     expected = {(case_id, condition_id) for case_id in case_ids for condition_id in CONDITION_IDS}
     actual: set[tuple[str, str]] = set()
-    daily_costs: defaultdict[str, float] = defaultdict(float)
+    daily_costs: defaultdict[str, Decimal] = defaultdict(Decimal)
     for index, record in enumerate(records):
         cost_entries = validate_result_record(record, manifest)
         if record["split"] != split or record["repetition"] != repetition:
@@ -477,19 +500,20 @@ def validate_result_batch(
             raise ValueError(f"records contains duplicate result {identity[0]}/{identity[1]}")
         actual.add(identity)
         for day, cost in cost_entries.items():
-            daily_costs[day] += cost
+            daily_costs[day] += _money(cost)
     if actual != expected:
         missing = sorted(expected - actual)
         unexpected = sorted(actual - expected)
         raise ValueError(
             f"result batch is incomplete or unexpected; missing={missing}, unexpected={unexpected}"
         )
-    for day, cost in sorted(daily_costs.items()):
-        if cost > DAILY_COST_CAP_USD:
+    cap = _money(DAILY_COST_CAP_USD)
+    for day, day_total in sorted(daily_costs.items()):
+        if day_total > cap:
             raise ValueError(
-                f"UTC-day cost cap exceeded on {day}: {cost:.6f} > {DAILY_COST_CAP_USD:.2f}"
+                f"UTC-day cost cap exceeded on {day}: {day_total:.6f} > {DAILY_COST_CAP_USD:.2f}"
             )
-    return dict(sorted(daily_costs.items()))
+    return {day: float(total) for day, total in sorted(daily_costs.items())}
 
 
 __all__ = (
