@@ -22,6 +22,10 @@ from collections.abc import Generator
 
 import pytest
 
+# Keep the explicitly configured integration DSN across autouse env isolation;
+# pass it directly to this fixture's connections, never back into the environment.
+_RECEIPT_TEST_DATABASE_URL = os.environ.get("DATABASE_URL", "")
+
 # Skip all tests if PostgreSQL is not configured
 pytestmark = pytest.mark.skipif(
     not os.environ.get("DATABASE_URL", "").startswith("postgresql://"),
@@ -83,6 +87,88 @@ def clean_test_schema(pg_backend, test_table_name):
         cursor = conn.cursor()
         cursor.execute(f"DROP TABLE IF EXISTS {test_table_name}")
         conn.commit()
+
+
+class TestReceiptStoreBootstrap:
+    """Exercise the receipt store's synchronous backend on an isolated real schema."""
+
+    @pytest.fixture
+    def receipt_database_url(self):
+        import psycopg2
+        from psycopg2 import sql
+        from psycopg2.extensions import make_dsn
+
+        if not _RECEIPT_TEST_DATABASE_URL.startswith("postgresql://"):
+            pytest.skip("DATABASE_URL not set or not PostgreSQL")
+        schema = f"receipt_bootstrap_{uuid.uuid4().hex}"
+        connection = psycopg2.connect(_RECEIPT_TEST_DATABASE_URL)
+        connection.autocommit = True
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+            try:
+                yield make_dsn(_RECEIPT_TEST_DATABASE_URL, options=f"-c search_path={schema}")
+            finally:
+                with connection.cursor() as cursor:
+                    cursor.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema)))
+        finally:
+            connection.close()
+
+    @pytest.mark.parametrize("legacy", [False, True])
+    def test_bootstrap_and_reopen_preserve_receipts(self, receipt_database_url, legacy):
+        from aragora.storage.backends import PostgreSQLBackend
+        from aragora.storage.receipt_store import ReceiptStore
+
+        if legacy:
+            backend = PostgreSQLBackend(receipt_database_url)
+            try:
+                old_schema = "\n".join(
+                    line
+                    for line in ReceiptStore.SCHEMA_STATEMENTS_POSTGRESQL[0].splitlines()
+                    if not line.strip().startswith(("timestamp_", "legal_hold"))
+                )
+                backend.execute_write(old_schema)
+                backend.execute_write(
+                    "INSERT INTO receipts (receipt_id, gauntlet_id, created_at, verdict, "
+                    "confidence, risk_level, checksum, data_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    ("old", "old-gauntlet", 1.0, "APPROVED", 0.8, "LOW", "old", "{}"),
+                )
+            finally:
+                backend.close()
+
+        store = ReceiptStore(
+            backend="postgresql", database_url=receipt_database_url, file_receipt_dirs=[]
+        )
+        try:
+            store.save(
+                {
+                    "receipt_id": "bootstrap",
+                    "gauntlet_id": "bootstrap-gauntlet",
+                    "verdict": "APPROVED",
+                    "confidence": 0.8,
+                    "statement": "retained across reinitialization",
+                }
+            )
+        finally:
+            store.close()
+
+        reopened = ReceiptStore(
+            backend="postgresql", database_url=receipt_database_url, file_receipt_dirs=[]
+        )
+        try:
+            receipt = reopened.get("bootstrap")
+            assert receipt is not None
+            assert receipt.data["statement"] == "retained across reinitialization"
+            if legacy:
+                assert reopened.get("old") is not None
+            assert reopened._backend is not None
+            indexes = reopened._backend.fetch_all(
+                "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema()"
+            )
+            assert "idx_receipts_legal_hold" in {row[0] for row in indexes}
+            assert "idx_receipts_data_gin" in {row[0] for row in indexes}
+        finally:
+            reopened.close()
 
 
 class TestPostgresBackend:

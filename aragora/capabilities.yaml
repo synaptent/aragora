@@ -438,7 +438,7 @@ capabilities:
     description: |
       Zapier, Make, and n8n webhook integrations for automation.
     key_files:
-      - aragora/server/handlers/external_integrations.py
+      - aragora/server/handlers/integrations/external_integrations.py
       - aragora/integrations/zapier.py
     feature_flags:
       - enable_webhooks

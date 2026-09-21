@@ -209,7 +209,7 @@ class TestPipelineContractParity:
 
     def test_handler_routes_match_canonical(self):
         """Handler ROUTES list matches the canonical endpoint set."""
-        handler_file = ROOT / "aragora/server/handlers/canvas_pipeline.py"
+        handler_file = ROOT / "aragora/server/handlers/canvas/canvas_pipeline.py"
         source = handler_file.read_text()
 
         # Extract ROUTES list entries

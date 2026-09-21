@@ -415,7 +415,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.14.14" },
     { name = "supabase", marker = "extra == 'all'", specifier = ">=2.31.0,<3.0" },
     { name = "supabase", marker = "extra == 'enterprise'", specifier = ">=2.31.0,<3.0" },
-    { name = "twine", marker = "extra == 'test'", specifier = ">=6.2.0,<7.0" },
+    { name = "twine", marker = "extra == 'test'", specifier = ">=6.2.0,<8.0" },
     { name = "typer", specifier = ">=0.26.8,<1.0" },
     { name = "types-croniter", marker = "extra == 'dev'", specifier = ">=6.2.2.20260518,<7.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.12.20260518,<7.0" },
@@ -509,7 +509,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "aragora-verify"
-version = "0.1.2"
+version = "0.2.0"
 source = { editable = "aragora-verify" }
 dependencies = [
     { name = "cryptography" },

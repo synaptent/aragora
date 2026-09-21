@@ -310,7 +310,7 @@ def snooze_processor_task() -> None:
             try:
                 import json
 
-                from aragora.server.handlers.email_services import (
+                from aragora.server.handlers.email.email_services import (
                     handle_process_due_snoozes,
                 )
 
