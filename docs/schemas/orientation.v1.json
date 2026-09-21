@@ -21,7 +21,7 @@
     "timestamp": {
       "type": "string",
       "format": "date-time",
-      "pattern": "^(?:\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|02-(?:0[1-9]|1\\d|2[0-8]))|(?:\\d{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)T(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|[+-](?:[01]\\d|2[0-3]):[0-5]\\d)(?![\\s\\S])"
+      "pattern": "^(?:[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-8]))|(?:[0-9]{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])(?![\\s\\S])"
     },
     "nullableTimestamp": {
       "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
@@ -106,7 +106,7 @@
         "id": { "type": "string", "minLength": 1 },
         "uri": {
           "type": "string",
-          "pattern": "^(?!file:)[A-Za-z][A-Za-z0-9+.\\-]*:\\S*(?![\\s\\S])"
+          "pattern": "^(?![Ff][Ii][Ll][Ee]:)[A-Za-z][A-Za-z0-9+.\\-]*:\\S*(?![\\s\\S])"
         },
         "authority": { "$ref": "#/$defs/authority" },
         "fingerprint": { "$ref": "#/$defs/fingerprint" },
@@ -114,6 +114,15 @@
         "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       },
       "additionalProperties": false
+    },
+    "groundedEvidenceHandle": {
+      "$ref": "#/$defs/evidenceHandle",
+      "properties": {
+        "authority": {
+          "description": "Derived guidance is the top of the tower, so citing it back carries no grounding.",
+          "enum": ["live_authority", "durable_state", "commit_evidence"]
+        }
+      }
     },
     "derivedMetadata": {
       "type": "object",
@@ -130,7 +139,7 @@
         "evidence_refs": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/evidenceHandle" }
+          "items": { "$ref": "#/$defs/groundedEvidenceHandle" }
         },
         "authority": {
           "description": "A synthesized record is never more authoritative than its cited basis.",
@@ -247,7 +256,17 @@
       "unevaluatedProperties": false
     },
     "affordance": {
-      "allOf": [{ "$ref": "#/$defs/derivedMetadata" }],
+      "allOf": [
+        { "$ref": "#/$defs/derivedMetadata" },
+        {
+          "if": {
+            "properties": { "disposition": { "const": "allowed" } },
+            "required": ["disposition"]
+          },
+          "then": { "properties": { "blocked_by": { "maxItems": 0 } } },
+          "else": { "properties": { "blocked_by": { "minItems": 1 } } }
+        }
+      ],
       "type": "object",
       "required": [
         "id",
@@ -311,6 +330,15 @@
         "receipt_ref": { "type": "string" },
         "dissent": { "type": "array", "items": { "type": "string" } }
       },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "verified" } }, "required": ["state"] },
+          "then": {
+            "properties": { "exact_commit_match": { "const": true } },
+            "required": ["pack_ref", "receipt_ref"]
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "sourceHealth": {
@@ -333,6 +361,13 @@
         "truncated": { "type": "boolean" },
         "omitted": { "type": "array", "items": { "type": "string" } }
       },
+      "allOf": [
+        {
+          "if": { "properties": { "truncated": { "const": true } }, "required": ["truncated"] },
+          "then": { "properties": { "omitted": { "minItems": 1 } } },
+          "else": { "properties": { "omitted": { "maxItems": 0 } } }
+        }
+      ],
       "additionalProperties": false
     },
     "fullEnvelope": {

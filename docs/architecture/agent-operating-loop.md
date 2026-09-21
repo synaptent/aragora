@@ -95,8 +95,12 @@ record from acquiring the authority of the live or durable state it summarizes.
 - Anchor movement invalidates commit-bound Nomic results and decision evidence.
 - Truncation is explicit, deterministic, and never silently removes a blocker.
   `truncation.emitted_bytes` is the exact byte length of the complete envelope
-  serialized as compact, key-sorted UTF-8 JSON.
-- A fact's authority cannot exceed the authority of any cited evidence handle.
+  serialized as compact, key-sorted UTF-8 JSON. Because the field is counted
+  inside the envelope it measures, widening it can widen the envelope; where more
+  than one value is self-consistent, the smallest one is canonical.
+  `truncated` and `omitted` always agree: an untruncated envelope omits nothing.
+- A fact's authority cannot exceed the authority of any cited evidence handle,
+  and a derived record cites only layers below it, never other derived guidance.
 - High-risk or permission-missing actions stop at `requires_authorization`; an
   orientation response never performs an effect.
 

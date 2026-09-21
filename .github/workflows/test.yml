@@ -672,6 +672,8 @@ jobs:
               - 'tests/compliance/**'
               - 'tests/gauntlet/**'
               - 'tests/cli/**'
+              - 'tests/orientation/**'
+              - 'docs/schemas/**'
 
       - name: Report scopes
         run: |
@@ -723,7 +725,7 @@ jobs:
             scope: storage
             timeout: 30
           - name: infra
-            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli
+            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli tests/orientation
             scope: infra
             timeout: 30
 

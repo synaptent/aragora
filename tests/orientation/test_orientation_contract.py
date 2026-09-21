@@ -295,6 +295,8 @@ def test_mission_projection_requires_an_evidence_handle(validator: Any) -> None:
     "unusable_uri",
     [
         "file:///tmp/orientation.json",
+        "File:///tmp/orientation.json",
+        "FILE:///tmp/orientation.json",
         "../architecture/agent-operating-loop.md",
         "README.md",
         "/absolute/local/path",
@@ -326,6 +328,74 @@ def test_no_change_envelope_carries_exactly_one_next_legal_action(validator: Any
     document["next_legal_actions"] = []
     with pytest.raises(jsonschema.ValidationError):
         validator.validate(document)
+
+
+@pytest.mark.parametrize("collection", DERIVED_COLLECTIONS)
+def test_derived_records_cannot_cite_derived_evidence(bare_validator: Any, collection: str) -> None:
+    fixture_name = next(name for name, coll in DERIVED_EXAMPLES if coll == collection)
+    document = _load(FIXTURE_DIR / fixture_name)
+    document[collection][0]["evidence_refs"][0]["authority"] = "derived_recommendation"
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+def test_timestamps_reject_non_ascii_digits(bare_validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["generated_at"] = "٢٠٢٦-08-31T13:30:00Z"
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize(
+    ("disposition", "blocked_by"),
+    [
+        ("allowed", ["settlement:BLOCKED"]),
+        ("blocked", []),
+        ("requires_authorization", []),
+        ("wait", []),
+    ],
+)
+def test_affordance_disposition_must_agree_with_its_blockers(
+    bare_validator: Any, disposition: str, blocked_by: list[str]
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    affordance = document["affordances"][0]
+    affordance["disposition"] = disposition
+    affordance["blocked_by"] = blocked_by
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+@pytest.mark.parametrize(("truncated", "omitted"), [(True, []), (False, ["beliefs"])])
+def test_truncation_flag_must_agree_with_omissions(
+    bare_validator: Any, truncated: bool, omitted: list[str]
+) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["truncation"]["truncated"] = truncated
+    document["truncation"]["omitted"] = omitted
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+
+def test_verified_nomic_state_requires_an_exact_commit_and_refs(bare_validator: Any) -> None:
+    document = _load(FIXTURE_DIR / "fresh_orientation.json")
+    document["nomic"] = {
+        "state": "verified",
+        "exact_commit_match": False,
+        "evidence_coverage": 1.0,
+        "pack_ref": "pack-1",
+        "receipt_ref": "receipt-1",
+        "dissent": [],
+    }
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
+
+    document["nomic"]["exact_commit_match"] = True
+    bare_validator.validate(document)
+
+    del document["nomic"]["receipt_ref"]
+    with pytest.raises(jsonschema.ValidationError):
+        bare_validator.validate(document)
 
 
 def test_evidence_handles_bind_one_fingerprint_per_uri() -> None:
