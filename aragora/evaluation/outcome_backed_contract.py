@@ -25,7 +25,8 @@ from aragora.evaluation.outcome_backed_scoring import (
 
 MANIFEST_SCHEMA = "outcome-backed-decision-quality-manifest/1.0"
 RESULT_SCHEMA = "outcome-backed-decision-quality-result/1.0"
-CONDITION_IDS = ("claude_single", "openai_single", "gemini_single", "aragora_team")
+CONDITION_IDS = ("claude-single", "openai-single", "gemini-single", "aragora-team")
+TEAM_CONDITION_ID = CONDITION_IDS[3]
 MODEL_FAMILIES = ("claude", "openai", "gemini")
 SINGLE_CONDITION_FAMILIES = dict(zip(CONDITION_IDS[:3], MODEL_FAMILIES, strict=True))
 DAILY_COST_CAP_USD = 25.0
@@ -234,7 +235,7 @@ def _validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Mapping[str, An
                 raise ValueError(f"{field} must contain only the {expected_family} single model")
             if adversarial_rounds != 0 or syntheses != 0:
                 raise ValueError(f"{field} single-model topology must have zero team rounds")
-        elif condition_id == "aragora_team":
+        elif condition_id == TEAM_CONDITION_ID:
             if kind != "aragora_team" or set(families) != set(MODEL_FAMILIES):
                 raise ValueError(f"{field} must contain exactly the three fixed model families")
             if adversarial_rounds != 1 or syntheses != 1:
@@ -436,7 +437,7 @@ def validate_result_record(
         _text(error["message"], "result.error.message")
     _validate_receipt(
         result["receipt"],
-        require_verified=successful_result and condition_id == "aragora_team",
+        require_verified=successful_result and condition_id == TEAM_CONDITION_ID,
     )
 
     totals: defaultdict[str, float] = defaultdict(float)
@@ -493,6 +494,6 @@ def validate_result_batch(
 
 __all__ = (
     "CONDITION_IDS DAILY_COST_CAP_USD FROZEN_CORPUS_DIGESTS HOLDOUT_REPETITIONS MANIFEST_SCHEMA "
-    "MAX_INFRASTRUCTURE_RETRIES_PER_CALL MODEL_FAMILIES RESULT_SCHEMA "
+    "MAX_INFRASTRUCTURE_RETRIES_PER_CALL MODEL_FAMILIES RESULT_SCHEMA TEAM_CONDITION_ID "
     "validate_benchmark_manifest validate_result_batch validate_result_record"
 ).split()

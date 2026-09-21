@@ -9,6 +9,7 @@ from aragora.evaluation.outcome_backed_contract import (
     FROZEN_CORPUS_DIGESTS,
     MANIFEST_SCHEMA,
     RESULT_SCHEMA,
+    TEAM_CONDITION_ID,
     validate_benchmark_manifest,
     validate_result_batch,
     validate_result_record,
@@ -30,7 +31,6 @@ def _member(family: str) -> dict[str, str]:
     }
 
 
-TEAM_CONDITION_ID = CONDITION_IDS[-1]
 SINGLE_CONDITION_FAMILIES = dict(
     zip(CONDITION_IDS[:3], ("claude", "openai", "gemini"), strict=True)
 )
