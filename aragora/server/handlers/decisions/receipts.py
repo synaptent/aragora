@@ -187,7 +187,9 @@ def _stored_receipt_payload(receipt: Any) -> dict[str, Any]:
     return payload
 
 
-def _build_odr_document(payload: dict[str, Any], odr_version: str) -> dict[str, Any]:
+def _build_odr_document(
+    payload: dict[str, Any], odr_version: str, key_loader: Any = None
+) -> dict[str, Any]:
     """Map a stored receipt payload onto an ODR document, signed when a key is configured."""
     from aragora.gauntlet.odr_export import (
         calibration_provenance_for_receipt,
@@ -202,7 +204,7 @@ def _build_odr_document(payload: dict[str, Any], odr_version: str) -> dict[str, 
         odr_version=odr_version,
         calibration_provenance=calibration_provenance_for_receipt(receipt),
     )
-    return sign_odr_if_configured(odr)
+    return sign_odr_if_configured(odr, key_loader=key_loader)
 
 
 async def _call_nonblocking(target: Any, method_name: str, *args: Any, **kwargs: Any) -> Any:
@@ -544,9 +546,16 @@ class ReceiptsHandler(BaseHandler):
         self._store = None  # Set by tests or lazy init
         self._share_store = None  # Set by tests or lazy init
         # Cached (monotonic_timestamp, (public_key_pem, key_id) | None) for the
-        # ODR signing-key endpoints; only PUBLIC key material is ever cached.
+        # ODR signing-key endpoints; only PUBLIC key material is cached here.
         # A cached None is a negative entry (resolution failed recently).
         self._signing_key_cache: tuple[float, tuple[str, str] | None] | None = None
+        # Cached (monotonic_timestamp, private_key | OdrSigningError) for the
+        # public ODR export, which would otherwise reload the private key on
+        # every anonymous request. Same TTLs as the public-key cache; a cached
+        # error is re-raised so an export storm cannot amplify into Secrets
+        # Manager. The private key already lives in process memory for the
+        # duration of each signing call; this keeps it resident for the TTL.
+        self._export_signing_key_cache: tuple[float, Any] | None = None
 
     def _get_store(self):
         """Get receipt store (lazy initialization)."""
@@ -1255,7 +1264,10 @@ class ReceiptsHandler(BaseHandler):
 
         try:
             document = await asyncio.to_thread(
-                _build_odr_document, _stored_receipt_payload(receipt), odr_version
+                _build_odr_document,
+                _stored_receipt_payload(receipt),
+                odr_version,
+                self._load_export_signing_key,
             )
             body = jcs_canonicalize(document)
             digest = odr_content_digest(document)
@@ -1549,6 +1561,39 @@ class ReceiptsHandler(BaseHandler):
 
         self._signing_key_cache = (now, resolved)
         return resolved
+
+    def _load_export_signing_key(self) -> Any:
+        """Return the private ODR signing key, reloaded once the TTL has lapsed.
+
+        Runs in a worker thread from :meth:`_export_odr`. A concurrent first
+        call may load the key twice; the tuple swap is atomic, so both see a
+        usable entry.
+        """
+        import time
+
+        from aragora.gauntlet.odr_signing import OdrSigningError, load_signing_key_from_secrets
+
+        now = time.monotonic()
+        cached = self._export_signing_key_cache
+        if cached is not None:
+            failed = isinstance(cached[1], OdrSigningError)
+            ttl = (
+                self.SIGNING_KEY_NEGATIVE_CACHE_TTL_SECONDS
+                if failed
+                else self.SIGNING_KEY_CACHE_TTL_SECONDS
+            )
+            if now - cached[0] < ttl:
+                if failed:
+                    raise cached[1]
+                return cached[1]
+
+        try:
+            loaded: Any = load_signing_key_from_secrets()
+        except OdrSigningError as e:
+            self._export_signing_key_cache = (now, e)
+            raise
+        self._export_signing_key_cache = (now, loaded)
+        return loaded
 
     @api_endpoint(
         method="GET",

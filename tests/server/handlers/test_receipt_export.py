@@ -614,6 +614,54 @@ class TestPublicOdrExport:
         assert first.headers["X-ODR-Digest"] == second.headers["X-ODR-Digest"]
 
     @pytest.mark.asyncio
+    async def test_signing_key_is_loaded_once_per_ttl(self, monkeypatch):
+        import time
+
+        from aragora.gauntlet import odr_signing
+
+        private_key, _, key_id = _signing_material()
+        clock = [1000.0]
+        monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+        loader = MagicMock(return_value=private_key)
+        handler = _receipts_handler()
+
+        with patch.object(odr_signing, "load_signing_key_from_secrets", loader):
+            for _ in range(5):
+                result = await handler.handle(
+                    "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+                )
+                assert json.loads(result.body)["signatures"][0]["key_id"] == key_id
+            assert loader.call_count == 1
+
+            clock[0] += handler.SIGNING_KEY_CACHE_TTL_SECONDS
+            await handler.handle("GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"})
+            assert loader.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_unconfigured_signing_key_is_negative_cached(self, monkeypatch):
+        import time
+
+        from aragora.gauntlet import odr_signing
+
+        clock = [1000.0]
+        monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+        loader = MagicMock(side_effect=odr_signing.OdrSigningUnconfiguredError("no key"))
+        handler = _receipts_handler()
+
+        with patch.object(odr_signing, "load_signing_key_from_secrets", loader):
+            for _ in range(3):
+                result = await handler.handle(
+                    "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+                )
+                assert result.status_code == 200
+                assert json.loads(result.body).get("signatures", []) == []
+            assert loader.call_count == 1
+
+            clock[0] += handler.SIGNING_KEY_NEGATIVE_CACHE_TTL_SECONDS
+            await handler.handle("GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"})
+            assert loader.call_count == 2
+
+    @pytest.mark.asyncio
     async def test_legacy_format_needs_a_context_when_auth_is_enabled(self):
         handler = _receipts_handler()
         with patch("aragora.server.handlers.decisions.receipts._auth_enabled", return_value=True):
