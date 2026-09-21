@@ -30,20 +30,26 @@ def _member(family: str) -> dict[str, str]:
     }
 
 
+TEAM_CONDITION_ID = CONDITION_IDS[-1]
+SINGLE_CONDITION_FAMILIES = dict(
+    zip(CONDITION_IDS[:3], ("claude", "openai", "gemini"), strict=True)
+)
+
+
 def _manifest() -> dict[str, Any]:
     conditions = [
         {
-            "condition_id": f"{family}_single",
+            "condition_id": condition_id,
             "kind": "single_model",
             "members": [_member(family)],
             "adversarial_rounds": 0,
             "syntheses": 0,
         }
-        for family in ("claude", "openai", "gemini")
+        for condition_id, family in SINGLE_CONDITION_FAMILIES.items()
     ]
     conditions.append(
         {
-            "condition_id": "aragora_team",
+            "condition_id": TEAM_CONDITION_ID,
             "kind": "aragora_team",
             "members": [_member(family) for family in ("claude", "openai", "gemini")],
             "adversarial_rounds": 1,
@@ -110,7 +116,7 @@ def _output() -> dict[str, Any]:
 
 
 def _record(
-    condition_id: str = "claude_single",
+    condition_id: str = CONDITION_IDS[0],
     *,
     case_id: str = "case-001",
     split: str = "development",
@@ -118,7 +124,7 @@ def _record(
     cost: float = 0.1,
 ) -> dict[str, Any]:
     manifest = _manifest()
-    if condition_id == "aragora_team":
+    if condition_id == TEAM_CONDITION_ID:
         calls = [
             _call(f"proposal-{family}", "proposal", family, cost=cost)
             for family in ("claude", "openai", "gemini")
@@ -129,10 +135,11 @@ def _record(
         ]
         calls.append(_call("synthesis", "synthesis", "claude", cost=cost))
         receipt = {"hash": SHA256, "verification": "verified"}
-    else:
-        family = condition_id.removesuffix("_single")
-        calls = [_call("decision", "decision", family, cost=cost)]
+    elif condition_id in SINGLE_CONDITION_FAMILIES:
+        calls = [_call("decision", "decision", SINGLE_CONDITION_FAMILIES[condition_id], cost=cost)]
         receipt = {"hash": None, "verification": "missing"}
+    else:
+        raise AssertionError(f"{condition_id} is not a condition of the frozen manifest")
     return {
         "schema_version": RESULT_SCHEMA,
         "benchmark_id": BENCHMARK_ID,
@@ -153,6 +160,24 @@ def _record(
 
 def test_valid_manifest_is_deterministic_and_frozen() -> None:
     assert validate_benchmark_manifest(_manifest()) == validate_benchmark_manifest(_manifest())
+
+
+def test_condition_ids_match_the_frozen_condition_roster() -> None:
+    conditions = pytest.importorskip("aragora.evaluation.outcome_backed_conditions")
+
+    assert CONDITION_IDS == tuple(spec.condition_id for spec in conditions.FROZEN_CONDITION_ROSTER)
+
+
+def test_results_produced_under_the_frozen_roster_validate() -> None:
+    conditions = pytest.importorskip("aragora.evaluation.outcome_backed_conditions")
+    manifest = _manifest()
+
+    assert validate_result_record(_record(conditions.CLAUDE_SINGLE), manifest) == {
+        "2026-08-30": 0.1
+    }
+    assert validate_result_record(_record(conditions.ARAGORA_TEAM), manifest)[
+        "2026-08-30"
+    ] == pytest.approx(0.7)
 
 
 @pytest.mark.parametrize(
@@ -182,9 +207,9 @@ def test_valid_single_and_team_results_bind_exact_roster() -> None:
     manifest = _manifest()
 
     assert validate_result_record(_record(), manifest) == {"2026-08-30": 0.1}
-    assert validate_result_record(_record("aragora_team"), manifest)["2026-08-30"] == pytest.approx(
-        0.7
-    )
+    assert validate_result_record(_record(TEAM_CONDITION_ID), manifest)[
+        "2026-08-30"
+    ] == pytest.approx(0.7)
 
 
 def test_rejects_model_family_or_transport_substitution() -> None:
@@ -228,12 +253,12 @@ def test_failed_call_is_recorded_without_fabricated_output() -> None:
 
 
 def test_team_success_requires_complete_topology_and_verified_receipt() -> None:
-    record = _record("aragora_team")
+    record = _record(TEAM_CONDITION_ID)
     record["calls"].pop()
     with pytest.raises(ValueError, match="frozen team topology"):
         validate_result_record(record, _manifest())
 
-    record = _record("aragora_team")
+    record = _record(TEAM_CONDITION_ID)
     record["receipt"] = {"hash": None, "verification": "missing"}
     with pytest.raises(ValueError, match="independently verified receipt"):
         validate_result_record(record, _manifest())
