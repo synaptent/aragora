@@ -337,7 +337,7 @@ async def check_server() -> list[HealthCheck]:
     checks: list[HealthCheck] = []
 
     try:
-        from aragora.observability.http_client_pool import get_http_pool
+        from aragora.server.http_client_pool import get_http_pool
 
         pool = get_http_pool()
         try:
