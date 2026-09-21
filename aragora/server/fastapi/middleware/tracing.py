@@ -60,7 +60,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
         if ctx is not None:
             try:
                 from aragora.server.middleware.request_logging import REQUEST_ID_HEADER
-                from aragora.server.middleware.tracing import (
+                from aragora.observability.middleware.tracing import (
                     PARENT_SPAN_HEADER,
                     SPAN_ID_HEADER,
                     TRACE_ID_HEADER,

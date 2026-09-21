@@ -1011,7 +1011,7 @@ def init_handler_stores(nomic_dir: Path) -> dict:
 
     # DocumentStore for file uploads
     try:
-        from aragora.server.documents import DocumentStore
+        from aragora.documents.parsing import DocumentStore
 
         doc_dir = nomic_dir / "documents"
         stores["document_store"] = DocumentStore(doc_dir)
