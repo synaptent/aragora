@@ -216,7 +216,7 @@ class OutlookConnector(EnterpriseConnector):
         """
         import os
 
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         client_id = (
             os.environ.get("OUTLOOK_CLIENT_ID")
@@ -291,7 +291,7 @@ class OutlookConnector(EnterpriseConnector):
         """Refresh the access token using refresh token."""
         import os
 
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         if not self._refresh_token:
             raise ValueError("No refresh token available")
@@ -361,7 +361,7 @@ class OutlookConnector(EnterpriseConnector):
         """Make a request to Microsoft Graph API with circuit breaker protection."""
         import httpx
 
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         # Check circuit breaker first
         if not self.check_circuit_breaker():
