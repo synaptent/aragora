@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_store() -> Any:  # type: ignore[override]
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_get_store", None)
         if patched is not None and patched is not _get_store:
@@ -71,7 +71,7 @@ def _get_store() -> Any:  # type: ignore[override]
 
 
 def _get_rules_store() -> Any:  # type: ignore[override]
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_get_rules_store", None)
         if patched is not None and patched is not _get_rules_store:
@@ -80,7 +80,7 @@ def _get_rules_store() -> Any:  # type: ignore[override]
 
 
 def _get_activity_store() -> Any:  # type: ignore[override]
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_get_activity_store", None)
         if patched is not None and patched is not _get_activity_store:
@@ -89,7 +89,7 @@ def _get_activity_store() -> Any:  # type: ignore[override]
 
 
 def _log_activity(*args: Any, **kwargs: Any) -> Any:  # type: ignore[override]
-    module = sys.modules.get("aragora.server.handlers._shared_inbox_handler")
+    module = sys.modules.get("aragora.server.handlers.shared_inbox._shared_inbox_handler")
     if module is not None:
         patched = getattr(module, "_log_activity", None)
         if patched is not None and hasattr(patched, "assert_called"):

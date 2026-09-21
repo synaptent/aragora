@@ -1297,7 +1297,7 @@ async def _send_via_sendgrid(
 ) -> dict[str, Any] | None:
     """Send email via SendGrid API."""
     try:
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
     except ImportError:
         logger.warning("HTTPClientPool not available, cannot send via SendGrid")
         return None

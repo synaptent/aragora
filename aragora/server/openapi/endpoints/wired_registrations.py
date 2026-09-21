@@ -212,6 +212,14 @@ WIRED_REGISTRATION_ENDPOINTS = {
     ),
 }
 
+# The integration PUT route returns 201 when it creates a configuration and
+# 200 when it updates one. Preserve both runtime outcomes in the source-backed
+# legacy route contract.
+WIRED_REGISTRATION_ENDPOINTS["/api/integrations/{type}"]["put"]["responses"]["201"] = {
+    "description": "Created",
+    "content": {"application/json": {"schema": _json_object_schema()}},
+}
+
 _PRESERVED_OPERATION_IDS = {
     ("/api/v1/inbox/actions", "post"): "createInboxActions",
     ("/api/v1/inbox/bulk-actions", "post"): "createInboxBulkActions",

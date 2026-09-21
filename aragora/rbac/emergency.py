@@ -142,12 +142,14 @@ class EmergencyAccessRecord:
     @classmethod
     def from_storage_dict(cls, data: dict[str, Any]) -> EmergencyAccessRecord:
         """Reconstruct from storage dictionary."""
-        # Parse timestamps
-        activated_at = data.get("activated_at")
+        # Parse timestamps. Annotated Any: storage rows may legitimately lack
+        # these keys, and the historical contract passes that through unchanged
+        # rather than raising here.
+        activated_at: Any = data.get("activated_at")
         if isinstance(activated_at, str):
             activated_at = datetime.fromisoformat(activated_at.replace("Z", "+00:00"))
 
-        expires_at = data.get("expires_at")
+        expires_at: Any = data.get("expires_at")
         if isinstance(expires_at, str):
             expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
 
@@ -250,7 +252,7 @@ class BreakGlassAccess:
             return self._redis
 
         try:
-            from aragora.server.redis_config import get_redis_client
+            from aragora.utils.redis_config import get_redis_client
 
             self._redis = get_redis_client()
             self._redis_checked = True

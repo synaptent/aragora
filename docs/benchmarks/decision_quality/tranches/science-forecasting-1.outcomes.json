@@ -1,0 +1,135 @@
+{
+  "schema_version": "decision-quality-outcomes/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "corpus_sha256": "2fc5525c8b7a23c5f57faed12967cb170be1e83c6afcba58ac45b43cefa18445",
+  "outcomes": [
+    {
+      "case_id": "science-dev-dart-orbit-change",
+      "resolved_at": "2022-10-11T00:00:00Z",
+      "correct_option_id": "retain_measurement_campaign",
+      "resolution_summary": "DART successfully impacted Dimorphos, and NASA measured an orbital-period reduction of roughly 32 minutes, far exceeding the 73-second minimum success criterion.",
+      "authoritative_sources": [
+        {
+          "source_id": "nasa-dart-final-report-2023-10-01",
+          "title": "Final Technical Report for the Double Asteroid Redirection Test Mission",
+          "url": "https://ntrs.nasa.gov/api/citations/20230015804/downloads/DART%20Final%20Technical%20Report.pdf",
+          "published_at": "2023-10-01T00:00:00Z",
+          "content_sha256": "c7fb2ac0011a5fab5a3a369ea9937dca09dfddfd9050244408143212b299bc44"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "autonomous_targeting_success",
+          "description": "Whether DART's autonomous navigation could identify and strike Dimorphos accurately enough to execute the experiment.",
+          "aliases": ["SMART Nav performance", "impact targeting accuracy"]
+        },
+        {
+          "crux_id": "momentum_transfer_magnitude",
+          "description": "Whether the impact and ejecta would transfer enough momentum to exceed the minimum measurable orbital-period change.",
+          "aliases": ["kinetic coupling", "deflection magnitude"]
+        },
+        {
+          "crux_id": "ground_observation_precision",
+          "description": "Whether the observing campaign could determine the post-impact binary period precisely enough to verify the threshold.",
+          "aliases": ["light-curve precision", "telescope measurement readiness"]
+        }
+      ]
+    },
+    {
+      "case_id": "science-dev-atlantic-2023-storm-count",
+      "resolved_at": "2023-12-07T00:00:00Z",
+      "correct_option_id": "retain_high_activity_contingency",
+      "resolution_summary": "NOAA's post-season monitoring recorded 20 Atlantic named storms in 2023, above the 1991-2020 average of 14.",
+      "authoritative_sources": [
+        {
+          "source_id": "noaa-global-ocean-monitoring-2023-12-11",
+          "title": "NOAA Global Ocean Monitoring: Recent Evolution, Current Status, and Predictions",
+          "url": "https://www.cpc.ncep.noaa.gov/products/GODAS/ocean_briefing_gif/global_ocean_monitoring_2023_12.pdf",
+          "published_at": "2023-12-11T03:13:10Z",
+          "content_sha256": "7d1b277db5571b7fdbf6043e41ad8ef4bd82dda93e319e03a257bbf6f4c3de09"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "el_nino_shear_suppression",
+          "description": "Whether developing El Nino wind shear would suppress Atlantic storm formation strongly enough to cap the seasonal count.",
+          "aliases": ["ENSO suppression", "vertical wind shear"]
+        },
+        {
+          "crux_id": "atlantic_sst_amplification",
+          "description": "Whether exceptionally warm tropical Atlantic sea-surface temperatures would offset the expected El Nino suppression.",
+          "aliases": ["warm Atlantic", "main development region temperatures"]
+        },
+        {
+          "crux_id": "short_lived_storm_frequency",
+          "description": "Whether environmental conditions would support numerous named storms even without an unusually high major-hurricane count.",
+          "aliases": ["storm count versus intensity", "short-duration systems"]
+        }
+      ]
+    },
+    {
+      "case_id": "science-dev-psyche-2022-launch",
+      "resolved_at": "2022-06-24T00:00:00Z",
+      "correct_option_id": "rebaseline_after_2022",
+      "resolution_summary": "NASA stood down from Psyche's 2022 launch opportunity after late flight-software delivery, immature testbeds, incomplete verification, and operations-readiness concerns.",
+      "authoritative_sources": [
+        {
+          "source_id": "nasa-psyche-independent-review-2022-11-04",
+          "title": "Psyche Independent Review Board Report and NASA-JPL Response",
+          "url": "https://www.nasa.gov/wp-content/uploads/2022/11/psyche_irb_report_and_response_nov_2022.pdf",
+          "published_at": "2022-11-04T00:00:00Z",
+          "content_sha256": "b13961ae0ffa2c18ae8a29c2515e8eb19cfc69b80e01605c05666973fe879535"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "flight_software_delivery",
+          "description": "Whether guidance, navigation, control, and fault-protection software would reach a testable flight configuration with sufficient margin.",
+          "aliases": ["GNC software maturity", "flight software schedule"]
+        },
+        {
+          "crux_id": "testbed_verification_readiness",
+          "description": "Whether the spacecraft simulators and verification program were mature enough to complete required validation before the launch window.",
+          "aliases": ["testbed maturity", "verification and validation"]
+        },
+        {
+          "crux_id": "experienced_staff_capacity",
+          "description": "Whether the project and institution had enough experienced personnel to close technical and operations-readiness work safely.",
+          "aliases": ["workforce capacity", "operations staffing"]
+        }
+      ]
+    },
+    {
+      "case_id": "science-dev-starliner-cft-july-2023",
+      "resolved_at": "2023-08-01T00:00:00Z",
+      "correct_option_id": "rebaseline_after_july",
+      "resolution_summary": "Starliner's first crewed flight test did not launch by July 2023; after additional delays, it launched in June 2024.",
+      "authoritative_sources": [
+        {
+          "source_id": "nasa-oig-iss-operations-risk-2024-09-26",
+          "title": "NASA's Management of Risks to Sustaining ISS Operations through 2030",
+          "url": "https://oig.nasa.gov/wp-content/uploads/2024/09/ig-24-020.pdf",
+          "published_at": "2024-09-26T00:00:00Z",
+          "content_sha256": "61059ffef51f599e0426868db370f4d69335a8f1bf6f9f358363a803c21d3006"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "open_technical_issue_closure",
+          "description": "Whether the remaining spacecraft technical issues could be resolved before fueling and final flight-readiness decisions.",
+          "aliases": ["technical closure", "hardware readiness"]
+        },
+        {
+          "crux_id": "certification_schedule_margin",
+          "description": "Whether the July target retained enough schedule margin for NASA and Boeing certification work without accepting excess crew risk.",
+          "aliases": ["flight-readiness margin", "certification timing"]
+        },
+        {
+          "crux_id": "iss_manifest_integration",
+          "description": "Whether ISS traffic and mission-integration constraints would still support the targeted crew-flight window after technical slips.",
+          "aliases": ["station schedule", "launch manifest integration"]
+        }
+      ]
+    }
+  ]
+}

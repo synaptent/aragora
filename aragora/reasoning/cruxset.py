@@ -37,9 +37,39 @@ from typing import Any, Iterable
 
 CRUXSET_SCHEMA_VERSION = "1.0"
 
+# ``Crux.counterfactual`` is contracted as a short note, but the crux-finder
+# composes its condition text as "Resolve '<statement>' to high confidence",
+# embedding the agent-authored claim statement verbatim with no upper bound.
+# Consumers render the field as-is: the DIC-17 follow-up bridge truncates the
+# statement it copies into an issue body but writes this field through unbounded.
+# The bound is therefore enforced here, where the value lands, rather than at any
+# one caller. It does not reach a Crux rehydrated through ``Crux.from_json``.
+MAX_CRUX_COUNTERFACTUAL_CHARS = 800
+
 
 def _utc_now_iso() -> str:
     return datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
+
+
+def clip_counterfactual(value: object, limit: int = MAX_CRUX_COUNTERFACTUAL_CHARS) -> str:
+    """Return ``value`` as stripped text trimmed to ``limit``, ellipsised when clipped.
+
+    Only types whose ``str()`` cannot raise are coerced; anything else yields
+    ``""``. Every caller sits on a soft-enrichment path, so a value with a
+    hostile ``__str__`` must degrade a single field rather than propagate out
+    of a debate.
+    """
+    if isinstance(value, str):
+        text = value.strip()
+    elif isinstance(value, (int, float)):
+        text = str(value)
+    else:
+        return ""
+    if len(text) <= limit:
+        return text
+    if limit <= 0:
+        return ""
+    return text[: limit - 1].rstrip() + "\u2026"
 
 
 @dataclass(frozen=True)
@@ -316,6 +346,7 @@ def build_cruxset_from_analysis(
     receipt_id: str = "",
     provenance: dict[str, Any] | None = None,
     max_cruxes: int = 5,
+    counterfactuals_by_claim_id: dict[str, str] | None = None,
 ) -> CruxSet:
     """Convert a :class:`CruxAnalysisResult` payload into a CruxSet.
 
@@ -329,10 +360,23 @@ def build_cruxset_from_analysis(
     composes from influence × disagreement × uncertainty × centrality
     × resolution_impact). The first ``max_cruxes`` are taken; the
     ``load_bearing_score`` is the analyser's ``crux_score``.
+
+    ``counterfactuals_by_claim_id`` is the DIC-15 counterfactual hook: a
+    mapping from ``claim_id`` to a human-readable counterfactual string
+    computed by the crux-finder validation pass (see
+    :func:`~aragora.reasoning.cruxset_emission.maybe_emit_cruxset_from_finder_result`).
+    When supplied, it overrides the default ``resolution_impact`` text so
+    the AGT-05 reputation flow and downstream consumers see the richer
+    condition/outcome text rather than the bare numeric score. A string or
+    numeric override is coerced to text and clipped to
+    :data:`MAX_CRUX_COUNTERFACTUAL_CHARS`; any other type, and an override
+    blank after clipping, falls back to the default text.
     """
     raw_cruxes = list(analysis_payload.get("cruxes") or [])
     if not raw_cruxes:
         raise ValueError("analysis_payload contains no cruxes; cannot build CruxSet")
+
+    cf_map: dict[str, str] = counterfactuals_by_claim_id or {}
 
     cruxes: list[Crux] = []
     for entry in raw_cruxes[:max_cruxes]:
@@ -356,18 +400,26 @@ def build_cruxset_from_analysis(
                     rationale="contesting agents",
                 ),
             )
+        claim_id = str(entry.get("claim_id") or "")
+        # A blank override falls through rather than silently emptying the field,
+        # but a present-and-falsy value is still coerced like any other payload value.
+        override = clip_counterfactual(cf_map.get(claim_id))
+        if override:
+            counterfactual_text = override
+        elif entry.get("resolution_impact") is not None:
+            counterfactual_text = (
+                f"Resolution impact {round(float(entry.get('resolution_impact') or 0.0), 4)}"
+            )
+        else:
+            counterfactual_text = ""
         cruxes.append(
             Crux(
-                crux_id=str(entry.get("claim_id") or ""),
+                crux_id=claim_id,
                 statement=str(entry.get("statement") or ""),
                 positions=positions,
                 load_bearing_score=float(entry.get("crux_score") or 0.0),
                 evidence_gaps=tuple(),
-                counterfactual=(
-                    f"Resolution impact {round(float(entry.get('resolution_impact') or 0.0), 4)}"
-                    if entry.get("resolution_impact") is not None
-                    else ""
-                ),
+                counterfactual=counterfactual_text,
                 candidate_verifier="",
             )
         )
@@ -393,8 +445,10 @@ def build_cruxset_from_analysis(
 
 __all__ = [
     "CRUXSET_SCHEMA_VERSION",
+    "MAX_CRUX_COUNTERFACTUAL_CHARS",
     "Crux",
     "CruxPosition",
     "CruxSet",
     "build_cruxset_from_analysis",
+    "clip_counterfactual",
 ]

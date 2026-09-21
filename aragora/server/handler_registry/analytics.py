@@ -44,7 +44,7 @@ AnalyticsPlatformsHandler = _safe_import(
 
 MetricsHandler = _safe_import("aragora.server.handlers", "MetricsHandler")
 UnifiedMetricsHandler = _safe_import(
-    "aragora.server.handlers.metrics_endpoint", "UnifiedMetricsHandler"
+    "aragora.server.handlers.metrics.metrics_endpoint", "UnifiedMetricsHandler"
 )
 SLOHandler = _safe_import("aragora.server.handlers", "SLOHandler")
 
@@ -65,7 +65,7 @@ CostHandler = _safe_import("aragora.server.handlers.costs", "CostHandler")
 # =============================================================================
 
 UsageMeteringHandler = _safe_import(
-    "aragora.server.handlers.usage_metering", "UsageMeteringHandler"
+    "aragora.server.handlers.billing.usage_metering", "UsageMeteringHandler"
 )
 
 # =============================================================================
@@ -73,21 +73,23 @@ UsageMeteringHandler = _safe_import(
 # =============================================================================
 
 CanvasPipelineHandler = _safe_import(
-    "aragora.server.handlers.canvas_pipeline", "CanvasPipelineHandler"
+    "aragora.server.handlers.canvas.canvas_pipeline", "CanvasPipelineHandler"
 )
 
 # Idea Canvas
-IdeaCanvasHandler = _safe_import("aragora.server.handlers.idea_canvas", "IdeaCanvasHandler")
+IdeaCanvasHandler = _safe_import("aragora.server.handlers.canvas.idea_canvas", "IdeaCanvasHandler")
 
 # Goal Canvas
-GoalCanvasHandler = _safe_import("aragora.server.handlers.goal_canvas", "GoalCanvasHandler")
+GoalCanvasHandler = _safe_import("aragora.server.handlers.canvas.goal_canvas", "GoalCanvasHandler")
 
 # Action Canvas
-ActionCanvasHandler = _safe_import("aragora.server.handlers.action_canvas", "ActionCanvasHandler")
+ActionCanvasHandler = _safe_import(
+    "aragora.server.handlers.canvas.action_canvas", "ActionCanvasHandler"
+)
 
 # Orchestration Canvas
 OrchestrationCanvasHandler = _safe_import(
-    "aragora.server.handlers.orchestration_canvas", "OrchestrationCanvasHandler"
+    "aragora.server.handlers.canvas.orchestration_canvas", "OrchestrationCanvasHandler"
 )
 
 # Universal Graph Pipeline
@@ -107,41 +109,45 @@ ProvenanceExplorerHandler = _safe_import(
 
 # DAG Operations
 DAGOperationsHandler = _safe_import(
-    "aragora.server.handlers.dag_operations", "DAGOperationsHandler"
+    "aragora.server.handlers.pipeline.dag_operations", "DAGOperationsHandler"
 )
 
 # Outcome Tracking
 OutcomeHandler = _safe_import("aragora.server.handlers.governance.outcomes", "OutcomeHandler")
 
 # Decision Benchmarking
-BenchmarkingHandler = _safe_import("aragora.server.handlers.benchmarking", "BenchmarkingHandler")
+BenchmarkingHandler = _safe_import(
+    "aragora.server.handlers.verification.benchmarking", "BenchmarkingHandler"
+)
 
 # Decision Playbooks
-PlaybookHandler = _safe_import("aragora.server.handlers.playbooks", "PlaybookHandler")
+PlaybookHandler = _safe_import("aragora.server.handlers.catalog.playbooks", "PlaybookHandler")
 
 # Knowledge Flow (flywheel visualization)
 KnowledgeFlowHandler = _safe_import(
-    "aragora.server.handlers.knowledge_flow", "KnowledgeFlowHandler"
+    "aragora.server.handlers.knowledge.knowledge_flow", "KnowledgeFlowHandler"
 )
 
 # Decision Analytics (issue #281)
 DecisionAnalyticsHandler = _safe_import(
-    "aragora.server.handlers.decision_analytics", "DecisionAnalyticsHandler"
+    "aragora.server.handlers.analytics.decision_analytics", "DecisionAnalyticsHandler"
 )
 
 # Outcome Dashboard (issue #281 - consolidated dashboard)
 OutcomeDashboardHandler = _safe_import(
-    "aragora.server.handlers.outcome_dashboard", "OutcomeDashboardHandler"
+    "aragora.server.handlers.analytics_dashboard.outcome_dashboard", "OutcomeDashboardHandler"
 )
 
 # Spend Analytics Dashboard
 SpendAnalyticsDashboardHandler = _safe_import(
-    "aragora.server.handlers.spend_analytics_dashboard", "SpendAnalyticsDashboardHandler"
+    "aragora.server.handlers.analytics_dashboard.spend_analytics_dashboard",
+    "SpendAnalyticsDashboardHandler",
 )
 
 # Agent Evolution Dashboard (issue #307)
 AgentEvolutionDashboardHandler = _safe_import(
-    "aragora.server.handlers.agent_evolution_dashboard", "AgentEvolutionDashboardHandler"
+    "aragora.server.handlers.analytics_dashboard.agent_evolution_dashboard",
+    "AgentEvolutionDashboardHandler",
 )
 
 # Pipeline handlers
@@ -149,7 +155,7 @@ PipelineExecuteHandler = _safe_import(
     "aragora.server.handlers.pipeline.execute", "PipelineExecuteHandler"
 )
 PipelineGraphHandler = _safe_import(
-    "aragora.server.handlers.pipeline_graph", "PipelineGraphHandler"
+    "aragora.server.handlers.pipeline.pipeline_graph", "PipelineGraphHandler"
 )
 PlanManagementHandler = _safe_import(
     "aragora.server.handlers.pipeline.plans", "PlanManagementHandler"
@@ -160,19 +166,19 @@ ReceiptExplorerHandler = _safe_import(
 DecompositionHandler = _safe_import(
     "aragora.server.handlers.pipeline.decomposition", "DecompositionHandler"
 )
-RunsHandler = _safe_import("aragora.server.handlers.runs", "RunsHandler")
+RunsHandler = _safe_import("aragora.server.handlers.governance.runs", "RunsHandler")
 
 # Differentiation and moderation analytics
 DifferentiationHandler = _safe_import(
-    "aragora.server.handlers.differentiation", "DifferentiationHandler"
+    "aragora.server.handlers.analytics_dashboard.differentiation", "DifferentiationHandler"
 )
 ModerationAnalyticsHandler = _safe_import(
-    "aragora.server.handlers.moderation_analytics", "ModerationAnalyticsHandler"
+    "aragora.server.handlers.analytics.moderation_analytics", "ModerationAnalyticsHandler"
 )
 
 # Ralph campaign observability dashboard
 RalphDashboardHandler = _safe_import(
-    "aragora.server.handlers.ralph_dashboard", "RalphDashboardHandler"
+    "aragora.server.handlers.autonomous.ralph_dashboard", "RalphDashboardHandler"
 )
 
 # =============================================================================

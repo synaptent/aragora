@@ -47,12 +47,12 @@ class TestHasPermissionDefault:
 
     @pytest.fixture(autouse=True)
     def _clear_gateway_module(self):
-        saved = sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+        saved = sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
         try:
             yield
         finally:
             if saved is not None:
-                sys.modules["aragora.server.handlers.openclaw_gateway"] = saved
+                sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = saved
 
     def test_delegates_to_canonical_has_permission(self):
         """When no gateway module override exists, delegates to the canonical function."""
@@ -77,7 +77,7 @@ class TestHasPermissionDefault:
     def test_no_gateway_module_loaded(self):
         """When openclaw_gateway module is not in sys.modules, falls back."""
         # Ensure the gateway module is absent
-        saved = sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+        saved = sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
         try:
             with patch(
                 "aragora.server.handlers.openclaw._base.has_permission",
@@ -88,14 +88,14 @@ class TestHasPermissionDefault:
                 assert result is True
         finally:
             if saved is not None:
-                sys.modules["aragora.server.handlers.openclaw_gateway"] = saved
+                sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = saved
 
     def test_gateway_module_without_has_permission_attr(self):
         """When gateway module exists but lacks has_permission, uses canonical."""
-        fake_module = types.ModuleType("aragora.server.handlers.openclaw_gateway")
+        fake_module = types.ModuleType("aragora.server.handlers.openclaw.openclaw_gateway")
         # No has_permission attr on it
-        saved = sys.modules.get("aragora.server.handlers.openclaw_gateway")
-        sys.modules["aragora.server.handlers.openclaw_gateway"] = fake_module
+        saved = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
+        sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = fake_module
         try:
             with patch(
                 "aragora.server.handlers.openclaw._base.has_permission",
@@ -106,9 +106,9 @@ class TestHasPermissionDefault:
                 assert result is False
         finally:
             if saved is not None:
-                sys.modules["aragora.server.handlers.openclaw_gateway"] = saved
+                sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = saved
             else:
-                sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+                sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
 
 
 class TestHasPermissionOverride:
@@ -116,16 +116,16 @@ class TestHasPermissionOverride:
 
     def _install_override(self, override_fn):
         """Install a fake gateway module with a custom has_permission override."""
-        fake_module = types.ModuleType("aragora.server.handlers.openclaw_gateway")
+        fake_module = types.ModuleType("aragora.server.handlers.openclaw.openclaw_gateway")
         fake_module.has_permission = override_fn
-        self._saved = sys.modules.get("aragora.server.handlers.openclaw_gateway")
-        sys.modules["aragora.server.handlers.openclaw_gateway"] = fake_module
+        self._saved = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
+        sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = fake_module
 
     def _restore(self):
         if self._saved is not None:
-            sys.modules["aragora.server.handlers.openclaw_gateway"] = self._saved
+            sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = self._saved
         else:
-            sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+            sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
 
     def test_override_called_instead_of_canonical(self):
         """When override is present and different from canonical, it is called."""
@@ -158,10 +158,10 @@ class TestHasPermissionOverride:
 
         canonical_hp = base_mod.has_permission
 
-        fake_module = types.ModuleType("aragora.server.handlers.openclaw_gateway")
+        fake_module = types.ModuleType("aragora.server.handlers.openclaw.openclaw_gateway")
         fake_module.has_permission = canonical_hp  # Same object identity
-        saved = sys.modules.get("aragora.server.handlers.openclaw_gateway")
-        sys.modules["aragora.server.handlers.openclaw_gateway"] = fake_module
+        saved = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
+        sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = fake_module
         try:
             # Don't patch has_permission - keep it as the real function so
             # override IS has_permission (same identity) and the check skips
@@ -172,9 +172,9 @@ class TestHasPermissionOverride:
             assert result == expected
         finally:
             if saved is not None:
-                sys.modules["aragora.server.handlers.openclaw_gateway"] = saved
+                sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = saved
             else:
-                sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+                sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
 
     def test_override_with_empty_role(self):
         """Override is still called with empty role string."""
@@ -204,14 +204,14 @@ class TestHasPermissionExceptionHandling:
 
     def test_import_error_falls_through(self):
         """ImportError during override call falls back to canonical."""
-        fake_module = types.ModuleType("aragora.server.handlers.openclaw_gateway")
+        fake_module = types.ModuleType("aragora.server.handlers.openclaw.openclaw_gateway")
 
         def bad_override(role, perm):
             raise ImportError("simulated import error")
 
         fake_module.has_permission = bad_override
-        saved = sys.modules.get("aragora.server.handlers.openclaw_gateway")
-        sys.modules["aragora.server.handlers.openclaw_gateway"] = fake_module
+        saved = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
+        sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = fake_module
         try:
             with patch(
                 "aragora.server.handlers.openclaw._base.has_permission",
@@ -222,20 +222,20 @@ class TestHasPermissionExceptionHandling:
                 assert result is True
         finally:
             if saved is not None:
-                sys.modules["aragora.server.handlers.openclaw_gateway"] = saved
+                sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = saved
             else:
-                sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+                sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
 
     def test_attribute_error_falls_through(self):
         """AttributeError during override call falls back to canonical."""
-        fake_module = types.ModuleType("aragora.server.handlers.openclaw_gateway")
+        fake_module = types.ModuleType("aragora.server.handlers.openclaw.openclaw_gateway")
 
         def bad_override(role, perm):
             raise AttributeError("simulated attr error")
 
         fake_module.has_permission = bad_override
-        saved = sys.modules.get("aragora.server.handlers.openclaw_gateway")
-        sys.modules["aragora.server.handlers.openclaw_gateway"] = fake_module
+        saved = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
+        sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = fake_module
         try:
             with patch(
                 "aragora.server.handlers.openclaw._base.has_permission",
@@ -246,20 +246,20 @@ class TestHasPermissionExceptionHandling:
                 assert result is True
         finally:
             if saved is not None:
-                sys.modules["aragora.server.handlers.openclaw_gateway"] = saved
+                sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = saved
             else:
-                sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+                sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
 
     def test_type_error_falls_through(self):
         """TypeError from override call falls back to canonical."""
-        fake_module = types.ModuleType("aragora.server.handlers.openclaw_gateway")
+        fake_module = types.ModuleType("aragora.server.handlers.openclaw.openclaw_gateway")
 
         def bad_override(role, perm):
             raise TypeError("bad call")
 
         fake_module.has_permission = bad_override
-        saved = sys.modules.get("aragora.server.handlers.openclaw_gateway")
-        sys.modules["aragora.server.handlers.openclaw_gateway"] = fake_module
+        saved = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
+        sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = fake_module
         try:
             # The TypeError is raised by the override *call*, not the shim lookup.
             # The except clause catches ImportError, AttributeError, TypeError, KeyError
@@ -275,20 +275,20 @@ class TestHasPermissionExceptionHandling:
                 assert result is True
         finally:
             if saved is not None:
-                sys.modules["aragora.server.handlers.openclaw_gateway"] = saved
+                sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = saved
             else:
-                sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+                sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
 
     def test_debug_log_on_exception(self, caplog):
         """Exception during shim lookup emits a debug log."""
-        fake_module = types.ModuleType("aragora.server.handlers.openclaw_gateway")
+        fake_module = types.ModuleType("aragora.server.handlers.openclaw.openclaw_gateway")
 
         def bad_override(role, perm):
             raise TypeError("test type err")
 
         fake_module.has_permission = bad_override
-        saved = sys.modules.get("aragora.server.handlers.openclaw_gateway")
-        sys.modules["aragora.server.handlers.openclaw_gateway"] = fake_module
+        saved = sys.modules.get("aragora.server.handlers.openclaw.openclaw_gateway")
+        sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = fake_module
         try:
             with patch(
                 "aragora.server.handlers.openclaw._base.has_permission",
@@ -301,9 +301,9 @@ class TestHasPermissionExceptionHandling:
                     assert any("Permission shim lookup failed" in r.message for r in caplog.records)
         finally:
             if saved is not None:
-                sys.modules["aragora.server.handlers.openclaw_gateway"] = saved
+                sys.modules["aragora.server.handlers.openclaw.openclaw_gateway"] = saved
             else:
-                sys.modules.pop("aragora.server.handlers.openclaw_gateway", None)
+                sys.modules.pop("aragora.server.handlers.openclaw.openclaw_gateway", None)
 
 
 # ============================================================================

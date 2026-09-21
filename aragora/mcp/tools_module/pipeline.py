@@ -216,7 +216,7 @@ async def advance_pipeline_stage_tool(
     try:
         from aragora.canvas.stages import PipelineStage
         from aragora.pipeline.idea_to_execution import IdeaToExecutionPipeline
-        from aragora.server.handlers.canvas_pipeline import _pipeline_objects
+        from aragora.server.handlers.canvas.canvas_pipeline import _pipeline_objects
 
         result_obj = _pipeline_objects.get(pipeline_id)
         if not result_obj:

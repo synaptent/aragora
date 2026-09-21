@@ -42,7 +42,7 @@ class TestRotateAnthropic:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             new_key, meta = await handler._rotate_anthropic(
@@ -103,7 +103,7 @@ class TestRotateAnthropic:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             with pytest.raises(RotationError, match="programmatic rotation failed"):
@@ -144,7 +144,7 @@ class TestRotateAnthropic:
         handler._validate_anthropic = AsyncMock(return_value=True)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler.rotate(
@@ -192,7 +192,7 @@ class TestRotateStripe:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             new_key, meta = await handler._rotate_stripe(
@@ -232,7 +232,7 @@ class TestRotateStripe:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             with pytest.raises(RotationError, match="programmatic rotation failed"):
@@ -279,7 +279,7 @@ class TestRotateCloudflare:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             new_token, meta = await handler._rotate_cloudflare(
@@ -330,7 +330,7 @@ class TestRotateCloudflare:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             with pytest.raises(RotationError, match="token creation failed"):
@@ -364,7 +364,7 @@ class TestValidateStripe:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._validate_stripe("STRIPE_KEY", "sk_live_test", {})
@@ -388,7 +388,7 @@ class TestValidateStripe:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._validate_stripe("STRIPE_KEY", "bad_key", {})
@@ -421,7 +421,7 @@ class TestValidateCloudflare:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._validate_cloudflare("CF_TOKEN", "cf-token", {})
@@ -446,7 +446,7 @@ class TestValidateCloudflare:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._validate_cloudflare("CF_TOKEN", "bad-token", {})
@@ -478,7 +478,7 @@ class TestValidateXai:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._validate_xai("XAI_KEY", "xai-test-key", {})
@@ -499,7 +499,7 @@ class TestValidateXai:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._validate_xai("XAI_KEY", "xai-key", {})
@@ -531,7 +531,7 @@ class TestValidateDeepseek:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._validate_deepseek("DS_KEY", "ds-test-key", {})
@@ -555,7 +555,7 @@ class TestValidateDeepseek:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._validate_deepseek("DS_KEY", "bad-key", {})
@@ -587,7 +587,7 @@ class TestRevokeAnthropic:
         )
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await handler._revoke_anthropic(

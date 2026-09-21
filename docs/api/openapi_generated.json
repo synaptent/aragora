@@ -35007,6 +35007,16 @@
                 }
               }
             }
+          },
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         },
         "x-method-inferred": false,
@@ -39279,7 +39289,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "total_agents": {
+                      "type": "integer"
+                    },
+                    "avg_elo": {
+                      "type": "number"
+                    },
+                    "max_elo": {
+                      "type": "number"
+                    },
+                    "min_elo": {
+                      "type": "number"
+                    },
+                    "total_matches": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -50502,7 +50529,30 @@
           "Reputation"
         ],
         "summary": "Get domain reputation scores",
-        "description": "Return domain-level reputation scores or reputation summaries.",
+        "description": "Return domain-level reputation scores or reputation summaries. Requires the critiques:read permission.",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "description": "Domain token matched against agent names.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum reputations to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Domain reputation",
@@ -50524,12 +50574,51 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "domain": {
+                      "type": "string"
+                    },
+                    "reputations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number"
+                          },
+                          "vote_weight": {
+                            "type": "number"
+                          },
+                          "proposal_acceptance_rate": {
+                            "type": "number"
+                          },
+                          "critique_value": {
+                            "type": "number"
+                          },
+                          "debates_participated": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "deprecated": true,
         "x-aragora-stability": "deprecated",
         "operationId": "listReputationDomain"
@@ -50541,7 +50630,48 @@
           "Reputation"
         ],
         "summary": "Get reputation history",
-        "description": "List historical reputation events or score snapshots.",
+        "description": "List historical reputation events or score snapshots. Requires the critiques:read permission.",
+        "parameters": [
+          {
+            "name": "agent",
+            "in": "query",
+            "required": false,
+            "description": "Restrict snapshots to a single agent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 lower bound; invalid values are a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 upper bound; invalid values are a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum snapshots to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Reputation history",
@@ -50563,15 +50693,42 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "timestamp": {
+                            "type": "string"
+                          },
+                          "agent": {
+                            "type": "string"
+                          },
+                          "reputation": {
+                            "type": "number"
+                          },
+                          "event": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "deprecated": true,
         "x-aragora-stability": "deprecated",
         "operationId": "listReputationHistory"
@@ -182676,7 +182833,24 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "total_agents": {
+                      "type": "integer"
+                    },
+                    "avg_elo": {
+                      "type": "number"
+                    },
+                    "max_elo": {
+                      "type": "number"
+                    },
+                    "min_elo": {
+                      "type": "number"
+                    },
+                    "total_matches": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
@@ -215735,8 +215909,31 @@
           "Reputation"
         ],
         "summary": "Get domain reputation scores",
-        "description": "Return domain-level reputation scores or reputation summaries.",
+        "description": "Return domain-level reputation scores or reputation summaries. Requires the critiques:read permission.",
         "operationId": "getReputationDomain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "required": true,
+            "description": "Domain token matched against agent names.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum reputations to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Domain reputation",
@@ -215758,12 +215955,51 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "domain": {
+                      "type": "string"
+                    },
+                    "reputations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "agent": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number"
+                          },
+                          "vote_weight": {
+                            "type": "number"
+                          },
+                          "proposal_acceptance_rate": {
+                            "type": "number"
+                          },
+                          "critique_value": {
+                            "type": "number"
+                          },
+                          "debates_participated": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-aragora-stability": "stable"
       }
     },
@@ -215773,8 +216009,49 @@
           "Reputation"
         ],
         "summary": "Get reputation history",
-        "description": "List historical reputation events or score snapshots.",
+        "description": "List historical reputation events or score snapshots. Requires the critiques:read permission.",
         "operationId": "getReputationHistory",
+        "parameters": [
+          {
+            "name": "agent",
+            "in": "query",
+            "required": false,
+            "description": "Restrict snapshots to a single agent.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 lower bound; invalid values are a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "description": "ISO-8601 upper bound; invalid values are a 400.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum snapshots to return.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Reputation history",
@@ -215796,15 +216073,42 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "timestamp": {
+                            "type": "string"
+                          },
+                          "agent": {
+                            "type": "string"
+                          },
+                          "reputation": {
+                            "type": "number"
+                          },
+                          "event": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
                   }
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "x-aragora-stability": "stable"
       }
     },

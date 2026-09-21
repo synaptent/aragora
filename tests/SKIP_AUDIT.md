@@ -1,7 +1,7 @@
 # Test Skip Marker Audit
 
-**Generated**: 2026-08-29
-**Total Skip Markers**: 89
+**Generated**: 2026-09-21
+**Total Skip Markers**: 93
 
 ---
 
@@ -9,20 +9,20 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| integration_dependency | 27 | 30.3% |
-| missing_feature | 22 | 24.7% |
-| uncategorized | 20 | 22.5% |
-| optional_dependency | 9 | 10.1% |
-| platform_specific | 6 | 6.7% |
-| performance | 4 | 4.5% |
+| integration_dependency | 28 | 30.1% |
+| missing_feature | 21 | 22.6% |
+| uncategorized | 21 | 22.6% |
+| optional_dependency | 9 | 9.7% |
+| platform_specific | 9 | 9.7% |
+| performance | 4 | 4.3% |
 | known_bug | 1 | 1.1% |
 
 ## Summary by Marker Type
 
 | Type | Count |
 |------|-------|
-| `pytest.skip` | 43 |
-| `skipif` | 39 |
+| `pytest.skip` | 46 |
+| `skipif` | 40 |
 | `pytest.importorskip` | 5 |
 | `skip` | 2 |
 
@@ -36,10 +36,10 @@
 | `tests/plugins/test_plugin_sandbox.py` | 4 |
 | `tests/debate/test_convergence_root.py` | 3 |
 | `tests/inbox/test_inbox_receipt_convergence.py` | 2 |
+| `tests/integration/test_postgres.py` | 2 |
+| `tests/server/middleware/rate_limit/test_distributed_integration.py` | 2 |
+| `tests/server/startup/test_validation.py` | 2 |
 | `tests/triage/test_auto_handle_calibration.py` | 2 |
-| `tests/storage/test_integration_store.py` | 2 |
-| `tests/verification/test_proofs_root.py` | 2 |
-| `tests/performance/test_load.py` | 2 |
 
 ---
 
@@ -71,7 +71,7 @@
 
 ## Skip Count Baseline
 
-Current baseline: **89** skips
+Current baseline: **93** skips
 
 CI will warn if skip count exceeds this baseline.
 Update `tests/.skip_baseline` when intentionally adding skips.
