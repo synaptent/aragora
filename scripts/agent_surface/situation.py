@@ -418,8 +418,10 @@ def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
     This is the composition rule in miniature: summarize downward, and never let
     the summary claim more certainty than the thing it summarizes.
     """
+    # Same interpreter, not whatever `python3` resolves to: this tool imports
+    # aragora packages that are only installed in the environment running us.
     code, out = sh(
-        ["python3", "scripts/loop_control_status.py", "--json"], timeout=120, cwd=repo_root
+        [sys.executable, "scripts/loop_control_status.py", "--json"], timeout=120, cwd=repo_root
     )
     if code != 0:
         cap.degraded.append(f"loop_control_status unavailable: {out[:100]}")
@@ -455,7 +457,6 @@ def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
         )
     )
 
-    safe = summary.get("fleet_safe_to_continue")
     # Do NOT restate a green verdict computed over loops that could not be read.
     caveat = (
         (
@@ -465,16 +466,21 @@ def add_fleet_beliefs(cap: Capsule, repo_root: Path | None = None) -> None:
         if unknown_n
         else ""
     )
-    cap.beliefs.append(
-        Belief(
-            "fleet_safe_to_continue",
-            safe,
-            "loop_control_status summary",
-            "live",
-            "derived",
-            note=caveat,
+    if "fleet_safe_to_continue" in summary:
+        cap.beliefs.append(
+            Belief(
+                "fleet_safe_to_continue",
+                summary["fleet_safe_to_continue"],
+                "loop_control_status summary",
+                "live",
+                "derived",
+                note=caveat,
+            )
         )
-    )
+    else:
+        cap.degraded.append(
+            "loop_control_status omitted fleet_safe_to_continue; fleet verdict withheld"
+        )
 
     if summary.get("any_blocked"):
         cap.beliefs.append(
@@ -516,7 +522,7 @@ def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None
         return
 
     code, out = sh(
-        ["python3", "scripts/settle_status.py", "--repo", slug, "--pr", str(pr), "--json"],
+        [sys.executable, "scripts/settle_status.py", "--repo", slug, "--pr", str(pr), "--json"],
         timeout=120,
         cwd=repo_root,
     )
@@ -553,15 +559,21 @@ def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None
     cap.beliefs.append(
         Belief(f"pr{pr}_signals", s.get("signal_count"), "settle_status.py", "live", "derived")
     )
-    cap.beliefs.append(
-        Belief(
-            f"pr{pr}_human_settlement",
-            "present" if s.get("human_settlement_present") else "absent",
-            "commit status aragora/human-settlement",
-            "live",
-            "observed",
+    if "human_settlement_present" in s:
+        cap.beliefs.append(
+            Belief(
+                f"pr{pr}_human_settlement",
+                "present" if s["human_settlement_present"] else "absent",
+                "commit status aragora/human-settlement",
+                "live",
+                "observed",
+            )
         )
-    )
+    else:
+        cap.degraded.append(
+            f"settle_status.py omitted human_settlement_present for PR {pr}; "
+            "settlement presence withheld"
+        )
 
     nxt = s.get("next_action")
     if nxt:
@@ -572,7 +584,10 @@ def add_pr_beliefs(cap: Capsule, pr: int, repo_root: Path | None = None) -> None
             {
                 "kind": "advisory_next_action",
                 "detail": f"settle_status.py says for PR {pr}: {nxt}",
-                "verifies_by": f"re-run settle_status.py --pr {pr} at the same head",
+                "verifies_by": (
+                    f"re-run python3 scripts/settle_status.py --repo {slug} "
+                    f"--pr {pr} at the same head"
+                ),
             }
         )
 

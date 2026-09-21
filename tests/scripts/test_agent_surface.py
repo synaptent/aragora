@@ -322,6 +322,45 @@ def test_failure_like_run_conclusions_are_counted_and_named(monkeypatch: Any) ->
     assert "skipped is correct self-gating" in failures.note
 
 
+def test_a_missing_settlement_field_is_withheld_not_assumed(monkeypatch: Any) -> None:
+    """settle_status.py output without the key must not become "absent"."""
+    payload = {"head_sha": "a" * 40, "tier": 2, "quorum_conclusion": "FAILURE"}
+    monkeypatch.setattr(situation, "sh", lambda *a, **k: (0, json.dumps(payload)))
+    cap = _capsule(beliefs=[])
+    situation.add_pr_beliefs(cap, 9948)
+
+    assert not any(b.key == "pr9948_human_settlement" for b in cap.beliefs)
+    assert any("human_settlement_present" in d for d in cap.degraded)
+
+
+def test_a_missing_fleet_verdict_is_withheld_not_valued_none(monkeypatch: Any) -> None:
+    payload = {"summary": {"by_state": {"running": 1}, "any_blocked": False}}
+    monkeypatch.setattr(situation, "sh", lambda *a, **k: (0, json.dumps(payload)))
+    cap = _capsule(beliefs=[])
+    situation.add_fleet_beliefs(cap)
+
+    assert not any(b.key == "fleet_safe_to_continue" for b in cap.beliefs)
+    assert any("fleet_safe_to_continue" in d for d in cap.degraded)
+
+
+def test_composed_tools_run_under_the_current_interpreter(monkeypatch: Any) -> None:
+    """loop_control_status.py imports aragora packages that only the
+    interpreter running this capsule is guaranteed to have."""
+    seen: list[list[str]] = []
+
+    def record(cmd: list[str], **kwargs: Any) -> tuple[int, str]:
+        seen.append(cmd)
+        return 1, "unavailable"
+
+    monkeypatch.setattr(situation, "sh", record)
+    cap = _capsule(beliefs=[])
+    situation.add_fleet_beliefs(cap)
+    situation.add_pr_beliefs(cap, 9948)
+
+    assert seen, "expected the composed tools to be invoked"
+    assert all(cmd[0] == sys.executable for cmd in seen)
+
+
 def test_settlement_frontier_is_runnable_only_when_the_pr_is_known() -> None:
     known = _capsule()
     situation.add_frontier(known, pr=9948)
@@ -665,6 +704,29 @@ def test_failed_calls_are_named_even_when_the_budget_is_unscored() -> None:
     s = measure.score(_failing_result("no_such_budget"))
     assert s["verdict"] == "UNSCORED"
     assert s["failed_calls"] == ["the capsule itself"]
+
+
+def test_a_mixed_exact_run_never_reports_itself_as_purely_exact(monkeypatch: Any) -> None:
+    """A per-call API failure degrades that call to the proxy, so the record
+    must not keep claiming the exact tokenizer produced every count."""
+
+    class FakeClient:
+        class messages:
+            @staticmethod
+            def count_tokens(**kwargs: Any) -> Any:
+                raise RuntimeError("upstream unavailable")
+
+    fake_sdk = SimpleNamespace(Anthropic=lambda *a, **k: FakeClient())
+    monkeypatch.setitem(sys.modules, "anthropic", fake_sdk)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "unused-by-this-fake")
+
+    counter = measure.TokenCounter(exact=True)
+    assert counter.name == "anthropic/count_tokens (exact)"
+
+    counter.count("some output an agent would have to read")
+
+    assert "exact" in counter.name
+    assert "proxy on 1 call(s)" in counter.name
 
 
 def test_cli_reports_an_unmeasurable_journey_distinctly(

@@ -247,7 +247,7 @@ Stated plainly so this document is not read as more finished than it is.
 
 | capability | status | evidence |
 |---|---|---|
-| Journey measurement harness | **implemented** | `scripts/agent_surface/measure.py`, runs, exit 0/3 |
+| Journey measurement harness | **implemented** | `scripts/agent_surface/measure.py`, runs, exit 0/3/4 |
 | Baseline measurements, 4 journeys | **implemented** | table above, reproducible |
 | Six-field capsule, GitHub + git | **implemented** | `situation.py`, measured PASS on both budgets |
 | Cheap delta via cursor | **implemented** | 31 tokens measured; cursor stability verified |

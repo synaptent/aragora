@@ -133,23 +133,36 @@ class TokenCounter:
     """Counts tokens, and is honest about which tokenizer produced the count."""
 
     def __init__(self, exact: bool = False) -> None:
-        self.name = "unavailable"
+        self._name = "unavailable"
         self._encoder: Any = None
         self._client: Any = None
+        self._fell_back = 0
 
         try:
             import tiktoken
 
             self._encoder = tiktoken.get_encoding("cl100k_base")
-            self.name = "tiktoken/cl100k_base (proxy)"
+            self._name = "tiktoken/cl100k_base (proxy)"
         except Exception as exc:  # noqa: BLE001 - degrade, never crash the run
             print(
                 f"warning: tiktoken unavailable ({exc}); falling back to chars/4", file=sys.stderr
             )
-            self.name = "chars/4 (crude fallback)"
+            self._name = "chars/4 (crude fallback)"
 
         if exact:
             self._try_enable_exact()
+
+    @property
+    def name(self) -> str:
+        """The tokenizer that actually produced the counts so far.
+
+        A per-call API failure silently degrades that call to the proxy, so a
+        record still labelled "exact" would misstate the provenance of a mixed
+        run.
+        """
+        if self._fell_back:
+            return f"{self._name} + proxy on {self._fell_back} call(s)"
+        return self._name
 
     def _try_enable_exact(self) -> None:
         if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -163,7 +176,7 @@ class TokenCounter:
             import anthropic
 
             self._client = anthropic.Anthropic()
-            self.name = "anthropic/count_tokens (exact)"
+            self._name = "anthropic/count_tokens (exact)"
         except Exception as exc:  # noqa: BLE001 - degrade, never crash the run
             print(f"warning: exact counting unavailable ({exc}); keeping proxy", file=sys.stderr)
 
@@ -178,6 +191,7 @@ class TokenCounter:
                 )
                 return int(resp.input_tokens)
             except Exception as exc:  # noqa: BLE001 - degrade to proxy per-call
+                self._fell_back += 1
                 print(f"warning: exact count failed ({exc}); proxy for this call", file=sys.stderr)
         if self._encoder is not None:
             return len(self._encoder.encode(text, disallowed_special=()))
@@ -356,6 +370,9 @@ def main() -> int:
             result.calls.append(
                 run_call(call["label"], call["cmd"], counter, args.repo, args.timeout)
             )
+        # Re-read after the calls: a mid-journey fallback changes what the
+        # counts on this record actually came from.
+        result.tokenizer = counter.name
 
         budget = score(result)
         any_fail = any_fail or budget["verdict"] == "FAIL"
