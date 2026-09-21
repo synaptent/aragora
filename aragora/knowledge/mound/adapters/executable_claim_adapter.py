@@ -179,22 +179,28 @@ class ExecutableClaimAdapter(KnowledgeMoundAdapter):
         if not self._mound:
             return None
         if hasattr(self._mound, "store"):
-            return _persisted_id(await self._mound.store(self._build_request(item)), item)
+            return _persisted_id(await self._mound.store(self._build_request(item)), self._mound)
         if hasattr(self._mound, "ingest"):
-            return _persisted_id(await self._mound.ingest(self._build_request(item)), item)
+            return _persisted_id(await self._mound.ingest(self._build_request(item)), self._mound)
         raise TypeError(f"mound {type(self._mound).__name__} exposes neither store() nor ingest()")
 
 
-def _persisted_id(stored: Any, item: KnowledgeItem) -> str:
+def _persisted_id(stored: Any, mound: Any) -> str:
     # A mound answering with an IngestionResult reports rejection in-band rather
-    # than raising, so an unsuccessful result must not be counted as ingested.
+    # than raising, and a configured mound that answers with no id at all has
+    # persisted nothing; neither may be counted as an ingestion.
     node_id = getattr(stored, "node_id", None)
-    if node_id is None:
-        return str(stored) if stored else item.id
-    if not node_id or not getattr(stored, "success", True):
-        reason = getattr(stored, "message", None) or "mound returned no node id"
-        raise RuntimeError(f"mound rejected the claim item: {reason}")
-    return str(node_id)
+    if node_id is not None:
+        if not node_id or not getattr(stored, "success", True):
+            reason = getattr(stored, "message", None) or "mound returned no node id"
+            raise RuntimeError(f"mound rejected the claim item: {reason}")
+        return str(node_id)
+    if isinstance(stored, str) and stored:
+        return stored
+    raise RuntimeError(
+        f"mound {type(mound).__name__} returned no usable node id: "
+        f"{type(stored).__name__} {stored!r}"
+    )
 
 
 def _stable_id(claim_id: str, status: str) -> str:

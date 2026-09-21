@@ -248,6 +248,51 @@ class TestIngestionRequestContract:
         assert request.workspace_id == "mound-workspace"
 
 
+class TestUnusableStoreReturn:
+    """A configured mound that hands back no usable node id has persisted nothing."""
+
+    @pytest.mark.parametrize("returned", [None, False, "", 7])
+    def test_configured_mound_without_a_usable_node_id_is_not_counted_as_ingested(
+        self, monkeypatch: pytest.MonkeyPatch, returned: object
+    ) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        mound = MagicMock()
+        mound.store = AsyncMock(return_value=returned)
+        r = asyncio.run(
+            ExecutableClaimAdapter(mound=mound).ingest_claim_results([_r(cid="c.unusable")])
+        )
+        assert r.claims_ingested == 0
+        assert r.knowledge_item_ids == []
+        assert r.success is False
+        assert len(r.errors) == 1
+        assert "c.unusable" in r.errors[0]
+        assert "MagicMock" in r.errors[0]
+
+    def test_unusable_return_does_not_abort_remaining_claims(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        mound = MagicMock()
+        mound.store = AsyncMock(side_effect=[None, "stored-2"])
+        r = asyncio.run(
+            ExecutableClaimAdapter(mound=mound).ingest_claim_results([_r(cid="c1"), _r(cid="c2")])
+        )
+        assert r.claims_ingested == 1
+        assert r.knowledge_item_ids == ["stored-2"]
+        assert len(r.errors) == 1 and "c1" in r.errors[0]
+
+    def test_non_empty_string_return_is_still_accepted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        r = asyncio.run(
+            ExecutableClaimAdapter(mound=_mound("duck-typed-id")).ingest_claim_results([_r()])
+        )
+        assert r.claims_ingested == 1
+        assert r.knowledge_item_ids == ["duck-typed-id"]
+        assert r.errors == []
+
+
 class TestRealMound:
     """Persistence against a real mound, which mock mounds cannot demonstrate.
 
