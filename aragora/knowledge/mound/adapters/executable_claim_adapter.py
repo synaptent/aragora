@@ -94,7 +94,10 @@ class ExecutableClaimAdapter(KnowledgeMoundAdapter):
                 item = self._build_item(result, now)
                 stored = await self._store(item)
                 item_ids.append(stored if stored else item.id)
-            except (RuntimeError, TypeError, ValueError, OSError) as exc:
+            # A mound whose store() disagrees with the KnowledgeItem shape surfaces
+            # the mismatch as AttributeError from inside the mound, which is an
+            # ingestion failure for this claim rather than a reason to drop the rest.
+            except (AttributeError, RuntimeError, TypeError, ValueError, OSError) as exc:
                 msg = f"claim {result.claim_id}: {exc}"
                 logger.warning("ExecutableClaimAdapter – %s", msg)
                 errors.append(msg)
@@ -127,6 +130,9 @@ class ExecutableClaimAdapter(KnowledgeMoundAdapter):
         )
 
     async def _store(self, item: KnowledgeItem) -> str | None:
+        # Returning None means schema-only mode, which the caller records as a
+        # generated id; a configured mound that cannot ingest must not take that
+        # path or the batch would report items it never persisted.
         if not self._mound:
             return None
         if hasattr(self._mound, "store"):
@@ -135,7 +141,7 @@ class ExecutableClaimAdapter(KnowledgeMoundAdapter):
         if hasattr(self._mound, "ingest"):
             await self._mound.ingest(item)
             return item.id
-        return None
+        raise TypeError(f"mound {type(self._mound).__name__} exposes neither store() nor ingest()")
 
 
 def _stable_id(claim_id: str, status: str) -> str:

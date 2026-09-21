@@ -153,3 +153,47 @@ def test_no_mound_returns_generated_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", raising=False)
     r = asyncio.run(ExecutableClaimAdapter().ingest_claim_result(_r(), require_enabled=False))
     assert r.claims_ingested == 1 and r.knowledge_item_ids[0].startswith("claim_km_")
+
+
+# ── real-mound ingestion contract ─────────────────────────────────────────────
+
+
+class _NoIngestionContractMound:
+    """A configured mound exposing neither ``store`` nor ``ingest``."""
+
+
+class TestIngestionContract:
+    def test_mound_without_ingestion_contract_is_not_counted_as_ingested(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        r = asyncio.run(
+            ExecutableClaimAdapter(mound=_NoIngestionContractMound()).ingest_claim_results([_r()])
+        )
+        assert r.claims_ingested == 0
+        assert r.knowledge_item_ids == []
+        assert r.success is False
+        assert "store" in r.errors[0] and "ingest" in r.errors[0]
+
+    def test_attribute_error_from_store_is_captured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        bad = MagicMock()
+        bad.store = AsyncMock(
+            side_effect=AttributeError("'KnowledgeItem' object has no attribute 'workspace_id'")
+        )
+        r = asyncio.run(ExecutableClaimAdapter(mound=bad).ingest_claim_results([_r()]))
+        assert r.claims_ingested == 0
+        assert "workspace_id" in r.errors[0]
+
+    def test_store_failure_does_not_abort_remaining_claims(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ARAGORA_EPISTEMIC_CLAIMS_ENABLED", "1")
+        mound = MagicMock()
+        mound.store = AsyncMock(side_effect=[AttributeError("workspace_id"), "stored-2"])
+        r = asyncio.run(
+            ExecutableClaimAdapter(mound=mound).ingest_claim_results([_r(cid="c1"), _r(cid="c2")])
+        )
+        assert r.claims_ingested == 1
+        assert r.knowledge_item_ids == ["stored-2"]
+        assert len(r.errors) == 1 and "c1" in r.errors[0]
