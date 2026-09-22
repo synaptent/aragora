@@ -86,9 +86,11 @@ exit "${FAKE_VERIFY_EXIT:-0}"
 # list`` stands in for gh's own `--json ... --jq ...` filtering and prints the
 # already-resolved tag (``FAKE_GH_TAG``, empty when no receipts-* release
 # exists); ``release download`` drops ``FAKE_GH_ASSETS`` into the ``-D`` target.
+# ``FAKE_GH_LIST_SLEEP`` stands in for a blackholed or very slow API call.
 FAKE_GH = """#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$FAKE_LOG/gh.log"
 if [ "${1:-}" = "release" ] && [ "${2:-}" = "list" ]; then
+  [ -z "${FAKE_GH_LIST_SLEEP:-}" ] || sleep "$FAKE_GH_LIST_SLEEP"
   [ -z "${FAKE_GH_TAG:-}" ] || printf '%s\\n' "$FAKE_GH_TAG"
   exit "${FAKE_GH_LIST_EXIT:-0}"
 fi
@@ -492,6 +494,49 @@ def test_a_failing_gh_release_list_is_its_own_skip_reason(
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     assert "published receipt: skipped (gh could not list releases, exit=4)" in proc.stdout
     assert "skipped (no receipts-* release)" not in proc.stdout
+
+
+def test_a_hung_gh_release_list_is_stopped_at_the_budget(
+    fake_toolchain: dict[str, Path],
+) -> None:
+    """The tag lookup is a network call, so the budget bounds it like every other."""
+    started = time.monotonic()
+    proc = _run(
+        fake_toolchain,
+        env_extra={"RECEIPT_FIRST_HOUR_BUDGET": "3", "FAKE_GH_LIST_SLEEP": "8"},
+    )
+    elapsed = time.monotonic() - started
+
+    # SIGTERM from the watchdog, not the lookup answering "no release"
+    assert proc.returncode == 143, (proc.returncode, proc.stdout, proc.stderr)
+    assert elapsed < 5, elapsed
+    assert "receipts-list step was stopped at the 3s budget" in proc.stderr
+    assert "skipped (no receipts-* release)" not in proc.stdout
+    assert "skipped (gh could not list releases" not in proc.stdout
+
+
+def test_a_failing_gh_release_download_is_its_own_skip_reason(
+    fake_toolchain: dict[str, Path], released_key: Path
+) -> None:
+    """A download that fails is transport, which the header promises is not an error."""
+    proc = _run(
+        fake_toolchain,
+        env_extra={
+            "FAKE_GH_TAG": "receipts-2026-09-22",
+            "FAKE_GH_ASSET_SRC": str(released_key),
+            "FAKE_GH_DOWNLOAD_EXIT": "1",
+        },
+    )
+
+    # an otherwise complete first hour still succeeds
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert (
+        "published receipt: skipped (gh could not download receipts-2026-09-22 "
+        "assets, exit=1)" in proc.stdout
+    )
+    assert "receipt-download step failed" not in proc.stderr
+    # the skip is decided on the download's own status, before the assets are read
+    assert "--pubkey" not in _log(fake_toolchain, "verify.log").splitlines()[-1]
 
 
 def test_the_explicit_path_reports_whether_the_supplied_key_is_anchored(

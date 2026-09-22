@@ -28,8 +28,9 @@
 # against the public key shipped beside it, which must be one of the keys
 # committed under docs/specs/keys. That step is skipped, with a line naming the
 # reason and exit 0 preserved, when there is no such release, when `gh` is not
-# installed, or when `gh` cannot list releases (an untokenized or rate-limited
-# runner). Only a release whose receipt or key fails a check is an error.
+# installed, or when `gh` cannot list releases or cannot download its assets (an
+# untokenized or rate-limited runner). Only a release whose receipt or key fails
+# a check is an error.
 #
 # Transcript: one `step: <install|demo|export|verify|published>` line as each step
 # starts, `venv: <path>` and `odr: <path>` once they exist, and a final
@@ -79,6 +80,13 @@ wheel_path() {
   printf '%s/%s\n' "$(cd -- "$dir" && pwd)" "$base"
 }
 
+# A step that returned non-zero with the budget already gone was stopped by the
+# watchdog rather than answering, which is what tells a transport skip apart
+# from the run being out of time.
+budget_exhausted() {
+  [ $(($(date +%s) - START)) -ge "$BUDGET_SECONDS" ]
+}
+
 finish() {
   local elapsed=$(($(date +%s) - START))
   printf 'total wall time: %ss\n' "$elapsed"
@@ -96,7 +104,7 @@ finish() {
 
 fail() {
   printf 'receipt-first-hour: %s step failed, exit=%s\n' "$1" "$2" >&2
-  if [ $(($(date +%s) - START)) -ge "$BUDGET_SECONDS" ]; then
+  if budget_exhausted; then
     printf 'receipt-first-hour: %s step was stopped at the %ss budget\n' \
       "$1" "$BUDGET_SECONDS" >&2
   fi
@@ -170,12 +178,16 @@ sweep_completed_scratch() {
   done
 }
 
-# Resolve the newest published receipts-* release tag, or print nothing.
+# Resolve the newest published receipts-* release tag into TAG_FILE, or leave it
+# empty. This runs under run_step like every other network call, and run_step
+# backgrounds its child, so the tag travels through a file rather than through
+# command substitution.
 resolve_receipts_tag() {
   gh release list -R "$PUBLISHED_REPO" --limit 100 \
     --json tagName,isDraft,publishedAt \
     --jq 'map(select(.isDraft == false and (.tagName | startswith("receipts-"))))
-          | sort_by(.publishedAt) | last | .tagName // empty'
+          | sort_by(.publishedAt) | last | .tagName // empty' \
+    > "$TAG_FILE" 2> /dev/null
 }
 
 # The published key is the trust anchor: a key an attacker can substitute makes
@@ -338,8 +350,16 @@ elif ! command -v gh > /dev/null 2>&1; then
   printf 'published receipt: skipped (gh not available)\n'
 else
   printf 'step: published\n'
-  RECEIPTS_TAG=$(resolve_receipts_tag 2> /dev/null)
+  TAG_FILE="$WORK/receipts-tag"
+  : > "$TAG_FILE"
+  run_step resolve_receipts_tag
   TAG_STATUS=$?
+  RECEIPTS_TAG=$(tr -d '\n' < "$TAG_FILE")
+  if [ "$TAG_STATUS" -ne 0 ] && budget_exhausted; then
+    # The watchdog stopped the lookup, so the run is out of time. That is the
+    # budget ending the run, not `gh` reporting on the release list.
+    fail receipts-list "$TAG_STATUS"
+  fi
   if [ "$TAG_STATUS" -ne 0 ]; then
     # An unauthenticated, rate-limited or offline `gh` is a reason the check
     # could not run, not evidence that no release exists -- so it gets its own
@@ -352,8 +372,22 @@ else
   else
     printf 'published receipt: %s %s\n' "$PUBLISHED_REPO" "$RECEIPTS_TAG"
     run_step gh release download "$RECEIPTS_TAG" -R "$PUBLISHED_REPO" -D "$WORK" \
-      -p 'pr*-clean.odr.json' -p 'aragora-odr-signing.pub.pem' --clobber \
-      || fail receipt-download $?
+      -p 'pr*-clean.odr.json' -p 'aragora-odr-signing.pub.pem' --clobber
+    DOWNLOAD_STATUS=$?
+    if [ "$DOWNLOAD_STATUS" -ne 0 ] && budget_exhausted; then
+      fail receipt-download "$DOWNLOAD_STATUS"
+    fi
+    if [ "$DOWNLOAD_STATUS" -ne 0 ]; then
+      # Same reasoning as the failing `release list` above: a non-zero download
+      # is a transient 5xx, a DNS blip or the same tokenless state, not evidence
+      # about the release. A release that did answer still has to pass the
+      # asset, anchor and verifier checks below, which stay fatal.
+      printf 'published receipt: skipped (gh could not download %s assets, exit=%s)\n' \
+        "$RECEIPTS_TAG" "$DOWNLOAD_STATUS"
+      # This is the run's last step, so the skip ends it exactly as falling
+      # through to the bottom would.
+      finish 0
+    fi
     PUBLISHED_ODR=""
     for candidate in "$WORK"/pr*-clean.odr.json; do
       if [ -f "$candidate" ]; then

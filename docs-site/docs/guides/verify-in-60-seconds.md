@@ -7,10 +7,10 @@ description: Verify an Aragora decision receipt in 60 seconds
 
 These four receipts are real. Each one records what a heterogeneous model
 quorum decided about a specific commit of a specific merged pull request in
-this repository, and each is signed. You do not need an Aragora account, an API
-key, or any trust in us to check them: the verifier is a standalone package
-with no Aragora dependency, and the public key is published beside the
-receipts.
+this repository, and each is signed. Checking one takes no Aragora account, no
+API key and no call to any Aragora server: the signature and the digest it
+covers are checked on your own machine, against a public key that is published
+beside the receipts and committed in this repository.
 
 The receipts are attached to the
 [`receipts-2026-09-22`](https://github.com/synaptent/aragora/releases/tag/receipts-2026-09-22)
@@ -47,6 +47,19 @@ aragora-verify pr8822-clean.odr.json --pubkey aragora-odr-signing.pub.pem
 The install line has two halves on purpose. The first asks PyPI for
 `aragora-verify>=0.2.0`; if that version is not on PyPI yet, the second
 installs the identical wheel published as a release asset.
+
+Be precise about what that proves. The signature check tells you these exact
+bytes were signed by the holder of the published key, and it reaches that
+answer locally. It does not tell you the verifier is honest. The verifier is
+open source (the [`aragora-verify` package](https://github.com/synaptent/aragora/blob/main/aragora-verify/README.md) in
+this repository), but on the second half of the install line it ships from the
+same release as the receipts and the key, so one compromised release could
+supply all three. For a verifier that does not share a distribution channel
+with the receipts, take the first half of the install line (PyPI, once 0.2.0 is
+published there) or build the package from source at a commit you pin yourself.
+The [Open Decision Receipt specification](../specs/open-decision-receipt)
+and the signed example documents beside it under `docs/specs/examples/`
+describe the format completely enough to write your own verifier instead.
 
 ## What you should see
 
