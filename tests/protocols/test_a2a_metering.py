@@ -6,8 +6,10 @@ serialisation.  No network, no subprocess, no queue mutation.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+from typing import Any
 
 import pytest
 
@@ -198,6 +200,56 @@ class TestCreateMeteringRecord:
         enable_agent_metering()
         with pytest.raises(ValueError, match="verifier_cost_usd"):
             create_metering_record(agent_id="ag-1", session_id="s-1", verifier_cost_usd=-0.01)
+
+    @pytest.mark.parametrize("field", ["compute_units", "debate_cost_usd", "verifier_cost_usd"])
+    @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+    def test_rejects_non_finite_values(self, field: str, value: float) -> None:
+        enable_agent_metering()
+        overrides: dict[str, Any] = {field: value}
+        with pytest.raises(ValueError, match=field):
+            create_metering_record(agent_id="ag-1", session_id="s-1", **overrides)
+
+    def test_rejects_total_cost_overflow(self) -> None:
+        enable_agent_metering()
+        with pytest.raises(ValueError, match="total_cost_usd"):
+            create_metering_record(
+                agent_id="ag-1",
+                session_id="s-1",
+                debate_cost_usd=1e308,
+                verifier_cost_usd=1e308,
+            )
+
+    def test_finite_record_round_trips_through_a2a_result(self) -> None:
+        from aragora.protocols.a2a.types import TaskResult, TaskStatus
+
+        enable_agent_metering()
+        rec = create_metering_record(
+            agent_id="ag-1",
+            session_id="s-1",
+            compute_units=1.25,
+            debate_cost_usd=0.125,
+            verifier_cost_usd=0.0625,
+            timestamp="2026-08-25T00:00:00Z",
+        )
+        result = TaskResult(
+            task_id=rec.session_id,
+            agent_name=rec.agent_id,
+            status=TaskStatus.COMPLETED,
+            metadata={"metering": rec.to_dict()},
+        )
+        restored = TaskResult.from_dict(json.loads(json.dumps(result.to_dict(), allow_nan=False)))
+        payload = restored.metadata["metering"]
+        assert payload == json.loads(rec.to_json())
+        assert payload["total_cost_usd"] == 0.1875
+        canonical = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"content_hash", "total_cost_usd"}
+        }
+        expected_hash = hashlib.sha256(
+            json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        assert payload["content_hash"] == expected_hash
 
 
 # ---------------------------------------------------------------------------

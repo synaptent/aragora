@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -166,8 +167,8 @@ def create_metering_record(
     set so metering records cannot be created accidentally in production paths
     that haven't opted in.
 
-    Raises :exc:`ValueError` for invalid field values (negative costs, empty
-    identifiers).
+    Raises :exc:`ValueError` for invalid field values (negative or non-finite
+    units/costs, non-finite total cost, empty identifiers).
     """
     if not agent_metering_enabled():
         raise RuntimeError(
@@ -179,12 +180,14 @@ def create_metering_record(
         raise ValueError("agent_id must be a non-empty string")
     if not session_id or not session_id.strip():
         raise ValueError("session_id must be a non-empty string")
-    if compute_units < 0:
-        raise ValueError(f"compute_units must be >= 0, got {compute_units}")
-    if debate_cost_usd < 0:
-        raise ValueError(f"debate_cost_usd must be >= 0, got {debate_cost_usd}")
-    if verifier_cost_usd < 0:
-        raise ValueError(f"verifier_cost_usd must be >= 0, got {verifier_cost_usd}")
+    if not math.isfinite(compute_units) or compute_units < 0:
+        raise ValueError(f"compute_units must be finite and >= 0, got {compute_units}")
+    if not math.isfinite(debate_cost_usd) or debate_cost_usd < 0:
+        raise ValueError(f"debate_cost_usd must be finite and >= 0, got {debate_cost_usd}")
+    if not math.isfinite(verifier_cost_usd) or verifier_cost_usd < 0:
+        raise ValueError(f"verifier_cost_usd must be finite and >= 0, got {verifier_cost_usd}")
+    if not math.isfinite(debate_cost_usd + verifier_cost_usd):
+        raise ValueError("total_cost_usd must be finite")
 
     ts = timestamp or datetime.now(tz=UTC).isoformat().replace("+00:00", "Z")
     canonical = _canonical_payload(
