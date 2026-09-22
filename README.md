@@ -97,6 +97,11 @@ for the receipt-specific inputs/outputs, secret-dependent limits (receipts are
 unsigned; reviewer defaults need reachable provider keys), and a committed
 example receipt you can verify right now without running any CI.
 
+Want to check one of ours instead? [**Verify an Aragora decision receipt in 60
+seconds**](docs/receipts/VERIFY_IN_60_SECONDS.md) walks through four signed
+receipts from real merged PRs in this repository — a clean pass, an adjudicated
+dissent, and a blocked head with the later head that fixed it.
+
 We run this gate on our own repository — every substantive merge is reviewed
 by a heterogeneous model quorum, dissent preserved, receipts written. The
 evidence, with reproducible queries and caught-bug case studies:

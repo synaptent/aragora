@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -80,6 +81,34 @@ printf 'Open Decision Receipt\\n'
 exit "${FAKE_VERIFY_EXIT:-0}"
 """
 
+# `gh` answers only the two subcommands the self-resolve path uses. ``release
+# list`` stands in for gh's own `--json ... --jq ...` filtering and prints the
+# already-resolved tag (``FAKE_GH_TAG``, empty when no receipts-* release
+# exists); ``release download`` drops ``FAKE_GH_ASSETS`` into the ``-D`` target.
+FAKE_GH = """#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$FAKE_LOG/gh.log"
+if [ "${1:-}" = "release" ] && [ "${2:-}" = "list" ]; then
+  [ -z "${FAKE_GH_TAG:-}" ] || printf '%s\\n' "$FAKE_GH_TAG"
+  exit "${FAKE_GH_LIST_EXIT:-0}"
+fi
+if [ "${1:-}" = "release" ] && [ "${2:-}" = "download" ]; then
+  dest=""
+  prev=""
+  for arg in "$@"; do
+    case "$prev" in
+      -D) dest="$arg" ;;
+    esac
+    prev="$arg"
+  done
+  [ -n "$dest" ] || exit 1
+  for name in ${FAKE_GH_ASSETS-pr1-clean.odr.json aragora-odr-signing.pub.pem}; do
+    printf 'x\\n' > "$dest/$name"
+  done
+  exit "${FAKE_GH_DOWNLOAD_EXIT:-0}"
+fi
+exit 1
+"""
+
 
 @pytest.fixture
 def fake_toolchain(tmp_path: Path) -> dict[str, Path]:
@@ -101,6 +130,9 @@ def fake_toolchain(tmp_path: Path) -> dict[str, Path]:
     python = pathdir / "python3"
     python.write_text(FAKE_PYTHON, encoding="utf-8")
     python.chmod(0o755)
+    gh = pathdir / "gh"
+    gh.write_text(FAKE_GH, encoding="utf-8")
+    gh.chmod(0o755)
     return {"bin": bindir, "path": pathdir, "log": logdir, "tmp": tmpdir}
 
 
@@ -331,6 +363,182 @@ def test_published_receipt_requires_a_pubkey_url(fake_toolchain: dict[str, Path]
 
     assert proc.returncode == 2, (proc.stdout, proc.stderr)
     assert "--pubkey-url" in proc.stdout + proc.stderr
+
+
+def test_no_flag_run_skips_cleanly_when_no_receipts_release_exists(
+    fake_toolchain: dict[str, Path],
+) -> None:
+    """Without a published release the run still succeeds and says why."""
+    proc = _run(fake_toolchain)
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert "published receipt: skipped (no receipts-* release)" in proc.stdout
+    assert "gh release download" not in _log(fake_toolchain, "gh.log")
+
+
+def test_no_flag_run_self_resolves_the_newest_receipts_release(
+    fake_toolchain: dict[str, Path],
+) -> None:
+    """With a release present the run downloads and verifies its clean receipt."""
+    proc = _run(fake_toolchain, env_extra={"FAKE_GH_TAG": "receipts-2026-09-22"})
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert "step: published" in proc.stdout
+    assert "published receipt: synaptent/aragora receipts-2026-09-22" in proc.stdout
+
+    gh_log = _log(fake_toolchain, "gh.log")
+    assert "release list -R synaptent/aragora --limit 100" in gh_log
+    assert "release download receipts-2026-09-22" in gh_log
+
+    # the receipt AND the key both come from that release, checked together
+    verify_args = _log(fake_toolchain, "verify.log").splitlines()[-1]
+    assert verify_args.endswith("aragora-odr-signing.pub.pem")
+    assert "pr1-clean.odr.json --pubkey" in verify_args
+
+
+def test_self_resolved_release_without_the_expected_assets_fails(
+    fake_toolchain: dict[str, Path],
+) -> None:
+    """A receipts-* release missing the receipt/key pair is an error, not a pass."""
+    proc = _run(
+        fake_toolchain,
+        env_extra={"FAKE_GH_TAG": "receipts-2026-09-22", "FAKE_GH_ASSETS": ""},
+    )
+
+    assert proc.returncode != 0, (proc.stdout, proc.stderr)
+    assert "no pr*-clean.odr.json" in proc.stdout + proc.stderr
+
+
+def test_self_resolve_is_skipped_when_gh_is_absent(fake_toolchain: dict[str, Path]) -> None:
+    """A host without ``gh`` still finishes the offline first hour successfully."""
+    gh_free = [
+        d
+        for d in os.environ["PATH"].split(os.pathsep)
+        if d and not os.access(os.path.join(d, "gh"), os.X_OK)
+    ]
+    env = dict(os.environ)
+    env.pop("PYTHONPATH", None)
+    env["PATH"] = os.pathsep.join([str(fake_toolchain["path"]), *gh_free])
+    env["FAKE_BIN"] = str(fake_toolchain["bin"])
+    env["FAKE_LOG"] = str(fake_toolchain["log"])
+    env["TMPDIR"] = str(fake_toolchain["tmp"])
+    os.remove(fake_toolchain["path"] / "gh")
+    proc = subprocess.run(
+        ["bash", str(SCRIPT)], text=True, capture_output=True, check=False, env=env
+    )
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert "published receipt: skipped (gh not available)" in proc.stdout
+
+
+def test_published_receipt_path_labels_its_step_and_its_two_downloads(
+    fake_toolchain: dict[str, Path],
+) -> None:
+    """The explicit path announces itself and names which download failed."""
+    proc = _run(
+        fake_toolchain,
+        [
+            "--published-receipt",
+            "https://127.0.0.1:1/r.odr.json",
+            "--pubkey-url",
+            "https://127.0.0.1:1/k.pem",
+        ],
+    )
+
+    assert proc.returncode != 0, (proc.stdout, proc.stderr)
+    assert "step: published" in proc.stdout
+    assert "receipt-download step failed" in proc.stderr
+    assert "pubkey-download step failed" not in proc.stderr
+
+
+def test_public_key_fetch_pins_https_and_bounds_its_redirects() -> None:
+    """The key fetch cannot be redirected off https or led on a long chain."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    fetch = text.split("fetch_pubkey() {", 1)[1].split("}", 1)[0]
+
+    assert "--proto '=https'" in fetch
+    assert "--proto-redir '=https'" in fetch
+    assert "--max-redirs 2" in fetch
+
+
+def test_budget_stops_a_hung_step_instead_of_waiting_for_it(
+    fake_toolchain: dict[str, Path], tmp_path: Path
+) -> None:
+    """A step that outlasts the budget is stopped mid-run, with the exit contract."""
+    hang = fake_toolchain["bin"] / "aragora"
+    hang.write_text("#!/usr/bin/env bash\nsleep 120\n", encoding="utf-8")
+    hang.chmod(0o755)
+
+    started = time.monotonic()
+    proc = _run(fake_toolchain, env_extra={"RECEIPT_FIRST_HOUR_BUDGET": "3"})
+    elapsed = time.monotonic() - started
+
+    assert proc.returncode != 0, (proc.stdout, proc.stderr)
+    assert elapsed < 60, elapsed
+    assert re.search(r"receipt-first-hour: demo step failed, exit=\d+", proc.stderr)
+    assert "step was stopped at the 3s budget" in proc.stderr
+    assert re.search(r"^total wall time: [0-9]+s$", proc.stdout, re.MULTILINE)
+
+
+def test_missing_ensurepip_is_named_instead_of_a_bare_exit_code(
+    fake_toolchain: dict[str, Path], tmp_path: Path
+) -> None:
+    """A host without ``ensurepip`` gets an actionable message, not exit 127 alone."""
+    stub = fake_toolchain["path"] / "python3"
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ "${1:-}" = "-c" ]; then\n'
+        '  case "${2:-}" in *ensurepip*) exit 1 ;; esac\n'
+        "fi\n"
+        f'exec {sys.executable} "$@"\n',
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+
+    proc = _run(fake_toolchain)
+
+    assert proc.returncode == 127, (proc.stdout, proc.stderr)
+    assert "ensurepip" in proc.stderr
+    assert "python3-venv" in proc.stderr
+    assert "install step failed, exit=127" in proc.stderr
+
+
+def test_a_completed_earlier_scratch_tree_is_reclaimed_and_a_failed_one_is_not(
+    fake_toolchain: dict[str, Path],
+) -> None:
+    """The persistent-runner leak stops without destroying a failure's evidence."""
+    scratch = fake_toolchain["tmp"]
+    old_clean = scratch / "receipt-first-hour.oldok"
+    old_failed = scratch / "receipt-first-hour.oldbad"
+    fresh_clean = scratch / "receipt-first-hour.recent"
+    for d in (old_clean, old_failed, fresh_clean):
+        (d / "venv" / "lib").mkdir(parents=True)
+    stale = time.time() - 3600
+    for marker in (old_clean / ".complete", fresh_clean / ".complete"):
+        marker.write_text("", encoding="utf-8")
+    os.utime(old_clean / ".complete", (stale, stale))
+
+    proc = _run(fake_toolchain)
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert not old_clean.exists(), "an idle completed tree is the leak and must go"
+    assert old_failed.is_dir(), "a failed run's tree is the reader's evidence"
+    assert fresh_clean.is_dir(), "a just-finished tree may still be in use"
+    assert f"reclaimed: {old_clean}" in proc.stdout
+
+    # this run's own tree survives: `venv:` and `odr:` still point at real paths
+    venv = next(ln for ln in proc.stdout.splitlines() if ln.startswith("venv: "))
+    assert Path(venv.split(" ", 1)[1]).is_dir()
+
+
+def test_a_failed_run_leaves_no_completion_marker(fake_toolchain: dict[str, Path]) -> None:
+    """Only a clean finish marks a tree reclaimable by a later run."""
+    proc = _run(fake_toolchain, env_extra={"FAKE_VERIFY_EXIT": "3"})
+
+    assert proc.returncode == 3
+    roots = list(fake_toolchain["tmp"].glob("receipt-first-hour.*"))
+    assert roots, "the failing run's scratch tree is left behind"
+    assert not any((root / ".complete").exists() for root in roots)
 
 
 def test_script_honours_the_contract_greps() -> None:
