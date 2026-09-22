@@ -126,6 +126,101 @@ async def test_contradictory_later_page_preserves_delivered_work_and_offset(
     assert [c.kwargs["params"]["offset"] for c in client.request.call_args_list] == [0, 1, 1]
 
 
+async def test_later_page_omitting_metadata_keeps_known_total_and_fails_closed(
+    client_api: Any,
+) -> None:
+    client, api = client_api
+    client.request.side_effect = [
+        {"debates": [{"id": "a"}], "total": 2, "has_more": True},
+        {"debates": []},
+        {"debates": [{"id": "b"}], "total": 2, "has_more": False},
+    ]
+    paginator = api.list_all()
+    assert await pull(paginator) == {"id": "a"}
+    with pytest.raises(AragoraError):
+        await pull(paginator)
+    assert paginator.total == 2
+    assert paginator._offset == 1
+    assert await collect(paginator) == [{"id": "b"}]
+    assert [c.kwargs["params"]["offset"] for c in client.request.call_args_list] == [0, 1, 1]
+
+
+async def test_short_pages_omitting_metadata_retain_known_remaining_total(
+    client_api: Any,
+) -> None:
+    client, api = client_api
+    client.request.side_effect = [
+        {"debates": [{"id": "a"}], "total": 3, "has_more": True},
+        {"debates": [{"id": "b"}]},
+        {"debates": [{"id": "c"}]},
+    ]
+    paginator = api.list_all(page_size=20)
+    assert await collect(paginator) == [{"id": "a"}, {"id": "b"}, {"id": "c"}]
+    assert paginator.total == 3
+    assert client.request.call_count == 3
+
+
+@pytest.mark.parametrize(
+    "later",
+    [
+        {"debates": [], "has_more": False},
+        {"debates": [{"id": "private-payload"}], "has_more": True},
+    ],
+)
+async def test_later_page_contradicting_known_total_is_rejected(
+    client_api: Any, later: Any
+) -> None:
+    client, api = client_api
+    client.request.side_effect = [
+        {"debates": [{"id": "a"}], "total": 2, "has_more": True},
+        later,
+    ]
+    paginator = api.list_all()
+    assert await pull(paginator) == {"id": "a"}
+    with pytest.raises(AragoraError) as error:
+        await pull(paginator)
+    assert "private-payload" not in str(error.value)
+    assert paginator.total == 2
+    assert paginator._offset == 1
+
+
+async def test_empty_page_after_has_more_without_total_is_rejected(client_api: Any) -> None:
+    client, api = client_api
+    client.request.side_effect = [
+        {"debates": [{"id": "a"}], "has_more": True},
+        {"debates": []},
+    ]
+    paginator = api.list_all()
+    assert await pull(paginator) == {"id": "a"}
+    with pytest.raises(AragoraError):
+        await pull(paginator)
+    assert paginator.total is None
+    assert paginator._offset == 1
+
+
+async def test_full_page_without_metadata_then_empty_page_terminates(client_api: Any) -> None:
+    client, api = client_api
+    client.request.side_effect = [
+        {"debates": [{"id": "a"}], "has_more": True},
+        {"debates": [{"id": "b"}]},
+        {"debates": []},
+    ]
+    assert await collect(api.list_all(page_size=1)) == [{"id": "a"}, {"id": "b"}]
+    assert client.request.call_count == 3
+
+
+async def test_later_page_supplying_fresh_total_replaces_known_total(client_api: Any) -> None:
+    client, api = client_api
+    client.request.side_effect = [
+        {"debates": [{"id": "a"}], "total": 2, "has_more": True},
+        {"debates": [{"id": "b"}], "total": 3, "has_more": True},
+        {"debates": [{"id": "c"}], "total": 3, "has_more": False},
+    ]
+    paginator = api.list_all()
+    assert await collect(paginator) == [{"id": "a"}, {"id": "b"}, {"id": "c"}]
+    assert paginator.total == 3
+
+
 @pytest.mark.parametrize(
     "page",
     [
