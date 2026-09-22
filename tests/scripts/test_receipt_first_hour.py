@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -113,6 +114,29 @@ fi
 exit 1
 """
 
+# Only active when FAKE_CURL_SRC is set: it then answers a download from that
+# directory, keyed by the URL's last path segment. Otherwise it is the real
+# curl, so the unreachable-URL failure tests keep testing real behaviour.
+FAKE_CURL = """#!/usr/bin/env bash
+if [ -z "${FAKE_CURL_SRC:-}" ]; then
+  exec @REAL_CURL@ "$@"
+fi
+out=""
+url=""
+prev=""
+for arg in "$@"; do
+  case "$prev" in
+    -o) out="$arg" ;;
+  esac
+  case "$arg" in
+    http*) url="$arg" ;;
+  esac
+  prev="$arg"
+done
+[ -n "$out" ] && [ -n "$url" ] || exit 2
+cp "$FAKE_CURL_SRC/${url##*/}" "$out"
+"""
+
 
 @pytest.fixture
 def fake_toolchain(tmp_path: Path) -> dict[str, Path]:
@@ -137,6 +161,11 @@ def fake_toolchain(tmp_path: Path) -> dict[str, Path]:
     gh = pathdir / "gh"
     gh.write_text(FAKE_GH, encoding="utf-8")
     gh.chmod(0o755)
+    real_curl = shutil.which("curl")
+    assert real_curl, "curl is required for the unreachable-URL failure paths"
+    curl = pathdir / "curl"
+    curl.write_text(FAKE_CURL.replace("@REAL_CURL@", real_curl), encoding="utf-8")
+    curl.chmod(0o755)
     return {"bin": bindir, "path": pathdir, "log": logdir, "tmp": tmpdir}
 
 
@@ -426,7 +455,7 @@ def test_self_resolved_key_must_match_a_key_committed_in_the_repo(
     proc = _run(fake_toolchain, env_extra={"FAKE_GH_TAG": "receipts-2026-09-22"})
 
     assert proc.returncode != 0, (proc.stdout, proc.stderr)
-    assert "matches no key committed under docs/specs/keys" in proc.stderr
+    assert "publishes a key that matches none committed under docs/specs/keys" in proc.stderr
     assert "pubkey-anchor step failed" in proc.stderr
     # the anchor is checked BEFORE the receipt is verified against that key
     assert "--pubkey" not in _log(fake_toolchain, "verify.log").splitlines()[-1]
@@ -453,16 +482,48 @@ def test_self_resolved_key_equal_to_the_committed_key_is_accepted(
     assert "--pubkey" in _log(fake_toolchain, "verify.log").splitlines()[-1]
 
 
-def test_a_failing_gh_release_list_is_not_reported_as_no_release(
+def test_a_failing_gh_release_list_is_its_own_skip_reason(
     fake_toolchain: dict[str, Path],
 ) -> None:
-    """An unauthenticated or rate-limited ``gh`` fails loudly, it does not skip."""
+    """A tokenless or rate-limited ``gh`` is named as such, not read as no release."""
     proc = _run(fake_toolchain, env_extra={"FAKE_GH_LIST_EXIT": "4"})
 
-    assert proc.returncode == 4, (proc.stdout, proc.stderr)
-    assert "gh could not list releases of synaptent/aragora" in proc.stderr
-    assert "release-lookup step failed, exit=4" in proc.stderr
+    # an otherwise complete first hour still succeeds
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert "published receipt: skipped (gh could not list releases, exit=4)" in proc.stdout
     assert "skipped (no receipts-* release)" not in proc.stdout
+
+
+def test_the_explicit_path_reports_whether_the_supplied_key_is_anchored(
+    fake_toolchain: dict[str, Path], released_key: Path, tmp_path: Path
+) -> None:
+    """A caller's own key is legitimate, so the run states what it proved."""
+    unknown = tmp_path / "unknown"
+    unknown.mkdir()
+    (unknown / "k.pem").write_text("not our key\n", encoding="utf-8")
+    (unknown / "r.odr.json").write_text("{}\n", encoding="utf-8")
+    (released_key / "r.odr.json").write_text("{}\n", encoding="utf-8")
+    (released_key / "k.pem").write_bytes(
+        (released_key / "aragora-odr-signing.pub.pem").read_bytes()
+    )
+    flags = [
+        "--published-receipt",
+        "https://example.invalid/r.odr.json",
+        "--pubkey-url",
+        "https://example.invalid/k.pem",
+    ]
+
+    foreign = _run(fake_toolchain, flags, env_extra={"FAKE_CURL_SRC": str(unknown)})
+    assert foreign.returncode == 0, (foreign.stdout, foreign.stderr)
+    assert "published key: not anchored (matches no key committed in this repo)" in foreign.stdout
+
+    ours = _run(fake_toolchain, flags, env_extra={"FAKE_CURL_SRC": str(released_key)})
+    assert ours.returncode == 0, (ours.stdout, ours.stderr)
+    assert re.search(
+        r"^published key: matches docs/specs/keys/aragora-odr-signing-.+\.pub\.pem$",
+        ours.stdout,
+        re.MULTILINE,
+    ), ours.stdout
 
 
 def test_self_resolved_release_without_the_expected_assets_fails(

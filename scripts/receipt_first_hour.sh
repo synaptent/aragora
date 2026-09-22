@@ -25,8 +25,11 @@
 #
 # With neither --published-receipt nor --pubkey-url the run resolves the newest
 # published `receipts-*` release itself and verifies that release's clean receipt
-# against the public key shipped beside it. With no such release it prints
-# `published receipt: skipped (no receipts-* release)` and still exits 0.
+# against the public key shipped beside it, which must be one of the keys
+# committed under docs/specs/keys. That step is skipped, with a line naming the
+# reason and exit 0 preserved, when there is no such release, when `gh` is not
+# installed, or when `gh` cannot list releases (an untokenized or rate-limited
+# runner). Only a release whose receipt or key fails a check is an error.
 #
 # Transcript: one `step: <install|demo|export|verify|published>` line as each step
 # starts, `venv: <path>` and `odr: <path>` once they exist, and a final
@@ -116,6 +119,7 @@ run_step() {
   set -m
   "$@" &
   local cmd_pid=$! dog_pid rc
+  STEP_PGID=$cmd_pid
   # The watchdog gets a group of its own for the same reason: killing the
   # subshell alone would leave its `sleep` running for the rest of the budget.
   (
@@ -130,8 +134,20 @@ run_step() {
   rc=$?
   kill -TERM -"$dog_pid" 2> /dev/null
   wait "$dog_pid" 2> /dev/null
+  STEP_PGID=""
   return "$rc"
 }
+
+# A step in its own process group no longer receives the terminal's Ctrl-C, so
+# the signal is forwarded by hand and then re-raised with the default handler,
+# which keeps the interrupted exit status honest.
+forward_signal() {
+  [ -z "${STEP_PGID:-}" ] || kill -"$1" -"$STEP_PGID" 2> /dev/null
+  trap - INT TERM
+  kill -"$1" $$
+}
+trap 'forward_signal INT' INT
+trap 'forward_signal TERM' TERM
 
 # The scratch tree is deliberately left behind so the `venv:` and `odr:` lines
 # keep pointing at real paths, but in CI this script runs on a PERSISTENT
@@ -176,24 +192,32 @@ fetch_pubkey() {
 # Verifying a release's receipt against that same release's key only proves the
 # release is internally consistent: a job that signed with the wrong key and
 # published it alongside would still pass. The independent anchor is the key
-# committed in this repository, so the downloaded key must be byte-equal to one
-# of those. Checked only when the checkout is present -- the script is also run
-# standalone, where there is nothing to anchor against and saying so is honest.
-anchor_pubkey() {
+# committed in this repository. Prints the matching committed path and returns
+# 0; returns 1 for no match and 2 when there is no checkout to anchor against
+# (the script is also run standalone).
+pubkey_anchor_name() {
   local keydir="$REPO_ROOT/docs/specs/keys" committed
-  if [ ! -d "$keydir" ]; then
-    printf 'published key: not anchored (no checkout at %s)\n' "$REPO_ROOT"
-    return 0
-  fi
+  [ -d "$keydir" ] || return 2
   for committed in "$keydir"/aragora-odr-signing-*.pub.pem; do
     if [ -f "$committed" ] && cmp -s "$1" "$committed"; then
-      printf 'published key: matches %s\n' "${committed#"$REPO_ROOT"/}"
+      printf '%s\n' "${committed#"$REPO_ROOT"/}"
       return 0
     fi
   done
-  printf 'receipt-first-hour: the published key matches no key committed under %s\n' \
-    "docs/specs/keys" >&2
   return 1
+}
+
+# The caller chose this key, so a key we do not publish is legitimate here (a
+# fork's receipt, another org's). Report what was proven instead of deciding.
+report_pubkey_anchor() {
+  local name status
+  name=$(pubkey_anchor_name "$1")
+  status=$?
+  case "$status" in
+    0) printf 'published key: matches %s\n' "$name" ;;
+    2) printf 'published key: not anchored (no checkout at %s)\n' "$REPO_ROOT" ;;
+    *) printf 'published key: not anchored (matches no key committed in this repo)\n' ;;
+  esac
 }
 
 while [ $# -gt 0 ]; do
@@ -307,22 +331,23 @@ if [ -n "$PUBLISHED_RECEIPT" ]; then
   run_step curl -fsSL --max-time 60 \
     -o "$WORK/published.odr.json" "$PUBLISHED_RECEIPT" || fail receipt-download $?
   run_step fetch_pubkey "$PUBKEY_URL" || fail pubkey-download $?
+  report_pubkey_anchor "$WORK/published.pub.pem"
   run_step "$VENV/bin/aragora-verify" "$WORK/published.odr.json" \
     --pubkey "$WORK/published.pub.pem" || fail published $?
 elif ! command -v gh > /dev/null 2>&1; then
   printf 'published receipt: skipped (gh not available)\n'
 else
   printf 'step: published\n'
-  # An unauthenticated, rate-limited or offline `gh` must not read as "no
-  # release exists": that would silently skip the check while reporting a fact
-  # this run never established.
   RECEIPTS_TAG=$(resolve_receipts_tag 2> /dev/null)
   TAG_STATUS=$?
   if [ "$TAG_STATUS" -ne 0 ]; then
-    printf 'receipt-first-hour: gh could not list releases of %s\n' "$PUBLISHED_REPO" >&2
-    fail release-lookup "$TAG_STATUS"
-  fi
-  if [ -z "$RECEIPTS_TAG" ]; then
+    # An unauthenticated, rate-limited or offline `gh` is a reason the check
+    # could not run, not evidence that no release exists -- so it gets its own
+    # skip line rather than being folded into the no-release one. It is not
+    # fatal: `gh` is preinstalled but tokenless on hosted runners, and failing
+    # here would fail an otherwise complete first hour.
+    printf 'published receipt: skipped (gh could not list releases, exit=%s)\n' "$TAG_STATUS"
+  elif [ -z "$RECEIPTS_TAG" ]; then
     printf 'published receipt: skipped (no receipts-* release)\n'
   else
     printf 'published receipt: %s %s\n' "$PUBLISHED_REPO" "$RECEIPTS_TAG"
@@ -341,7 +366,16 @@ else
         "$RECEIPTS_TAG" >&2
       fail published 1
     fi
-    anchor_pubkey "$WORK/aragora-odr-signing.pub.pem" || fail pubkey-anchor 1
+    ANCHOR=$(pubkey_anchor_name "$WORK/aragora-odr-signing.pub.pem")
+    case "$?" in
+      0) printf 'published key: matches %s\n' "$ANCHOR" ;;
+      2) printf 'published key: not anchored (no checkout at %s)\n' "$REPO_ROOT" ;;
+      *)
+        printf 'receipt-first-hour: release %s publishes a key that matches none committed under docs/specs/keys\n' \
+          "$RECEIPTS_TAG" >&2
+        fail pubkey-anchor 1
+        ;;
+    esac
     run_step "$VENV/bin/aragora-verify" "$PUBLISHED_ODR" \
       --pubkey "$WORK/aragora-odr-signing.pub.pem" || fail published $?
   fi
