@@ -97,6 +97,7 @@ test = [
     "pydantic>=2.13.4,<3.0",
     "pydantic-settings>=2.14.2,<3.0",
     "PyYAML>=6.0.3,<7.0",
+    "jsonschema>=4.23,<5.0",
     "pytest>=9.1.1,<10.0",
     "pytest-asyncio>=1.4.0,<2.0",
     "twine>=6.2.0,<8.0",

@@ -19,6 +19,7 @@ on:
       - 'scripts/generate_cli_reference.py'
       - 'aragora/capabilities.yaml'
       - 'aragora/capability_surfaces.yaml'
+      - 'docs/schemas/**'
       - 'docs/CAPABILITY_MATRIX.md'
       - 'docs/reference/CLI_REFERENCE.md'
       - 'docs-site/docs/contributing/capability-matrix.md'
@@ -672,6 +673,8 @@ jobs:
               - 'tests/compliance/**'
               - 'tests/gauntlet/**'
               - 'tests/cli/**'
+              - 'tests/orientation/**'
+              - 'docs/schemas/**'
 
       - name: Report scopes
         run: |
@@ -723,7 +726,7 @@ jobs:
             scope: storage
             timeout: 30
           - name: infra
-            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli
+            pytest_args: tests/nomic tests/control_plane tests/rbac tests/events tests/observability tests/compliance tests/gauntlet tests/cli tests/orientation
             scope: infra
             timeout: 30
 

@@ -62,6 +62,7 @@ LEGACY_CONTROL_PLANE_DEV_DEPS=(
 )
 
 LEGACY_CONTROL_PLANE_TEST_EXTRA_DEPS=(
+  "jsonschema>=4.23,<5.0"
   "aiosqlite>=0.19,<1.0"
   "supabase>=2.0,<3.0"
   "redis>=5.0.0,<8.0"

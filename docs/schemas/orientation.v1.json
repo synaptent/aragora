@@ -1,0 +1,453 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aragora.ai/schemas/orientation.v1.json",
+  "title": "Aragora Agent Orientation Envelope v1",
+  "description": "Read-only, evidence-preserving projection over native repository operating state.",
+  "oneOf": [
+    { "$ref": "#/$defs/fullEnvelope" },
+    { "$ref": "#/$defs/noChangeEnvelope" }
+  ],
+  "x-aragora-authority-precedence": [
+    "live_authority",
+    "durable_state",
+    "commit_evidence",
+    "derived_recommendation"
+  ],
+  "$defs": {
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-8]))|(?:[0-9]{2}(?:0[48]|[2468][048]|[13579][26])|(?:[02468][048]|[13579][26])00)-02-29)T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]+)?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])(?![\\s\\S])"
+    },
+    "nullableTimestamp": {
+      "anyOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }]
+    },
+    "authority": {
+      "type": "string",
+      "enum": [
+        "live_authority",
+        "durable_state",
+        "commit_evidence",
+        "derived_recommendation"
+      ]
+    },
+    "authorityMonotonicity": {
+      "allOf": [
+        {
+          "if": { "properties": { "authority": { "const": "live_authority" } } },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "items": { "properties": { "authority": { "const": "live_authority" } } }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "authority": { "const": "durable_state" } } },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "items": {
+                  "properties": {
+                    "authority": { "enum": ["live_authority", "durable_state"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "authority": { "const": "commit_evidence" } } },
+          "then": {
+            "properties": {
+              "evidence_refs": {
+                "items": {
+                  "properties": {
+                    "authority": {
+                      "enum": ["live_authority", "durable_state", "commit_evidence"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "freshness": {
+      "type": "object",
+      "required": ["status", "observed_at"],
+      "properties": {
+        "status": { "enum": ["fresh", "stale", "unknown"] },
+        "observed_at": { "$ref": "#/$defs/timestamp" },
+        "expires_at": { "$ref": "#/$defs/nullableTimestamp" }
+      },
+      "additionalProperties": false
+    },
+    "boundedCost": {
+      "type": "object",
+      "required": ["estimated_calls", "estimated_bytes", "estimated_seconds"],
+      "properties": {
+        "estimated_calls": { "type": "integer", "minimum": 0 },
+        "estimated_bytes": { "type": "integer", "minimum": 0 },
+        "estimated_seconds": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "evidenceHandle": {
+      "type": "object",
+      "required": ["id", "uri", "authority", "fingerprint", "freshness", "invalidators"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "uri": {
+          "description": "A portable absolute URI. The scheme needs two or more characters, which is what separates a real scheme from a Windows drive letter.",
+          "type": "string",
+          "pattern": "^(?![Ff][Ii][Ll][Ee]:)[A-Za-z][A-Za-z0-9+.\\-]+:\\S*(?![\\s\\S])"
+        },
+        "authority": { "$ref": "#/$defs/authority" },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "freshness": { "$ref": "#/$defs/freshness" },
+        "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "groundedEvidenceHandle": {
+      "$ref": "#/$defs/evidenceHandle",
+      "properties": {
+        "authority": {
+          "description": "Derived guidance is the top of the tower, so citing it back grounds nothing.",
+          "enum": ["live_authority", "durable_state", "commit_evidence"]
+        }
+      }
+    },
+    "derivedMetadata": {
+      "type": "object",
+      "required": [
+        "basis_fingerprint",
+        "evidence_refs",
+        "authority",
+        "freshness",
+        "invalidators",
+        "bounded_cost"
+      ],
+      "properties": {
+        "basis_fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/groundedEvidenceHandle" }
+        },
+        "authority": {
+          "description": "A synthesized record is never more authoritative than its cited basis.",
+          "const": "derived_recommendation"
+        },
+        "freshness": { "$ref": "#/$defs/freshness" },
+        "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "bounded_cost": { "$ref": "#/$defs/boundedCost" }
+      }
+    },
+    "repositoryAnchor": {
+      "type": "object",
+      "required": [
+        "repository_id",
+        "repository_name",
+        "commit_sha",
+        "tree_sha",
+        "branch",
+        "clean",
+        "fingerprint"
+      ],
+      "properties": {
+        "repository_id": { "type": "string", "minLength": 1 },
+        "repository_name": { "type": "string", "minLength": 1 },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{40}(?![\\s\\S])" },
+        "tree_sha": { "type": "string", "pattern": "^[0-9a-f]{40}(?![\\s\\S])" },
+        "branch": { "type": ["string", "null"] },
+        "clean": { "type": "boolean" },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" }
+      },
+      "additionalProperties": false
+    },
+    "sourceObservation": {
+      "type": "object",
+      "required": [
+        "id",
+        "source",
+        "status",
+        "authority",
+        "observed_at",
+        "evidence_refs",
+        "invalidators",
+        "next_legal_action"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "source": { "type": "string" },
+        "status": { "enum": ["healthy", "degraded", "unavailable", "ambiguous"] },
+        "authority": { "$ref": "#/$defs/authority" },
+        "observed_at": { "$ref": "#/$defs/timestamp" },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceHandle" }
+        },
+        "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "next_legal_action": { "type": ["string", "null"] }
+      },
+      "allOf": [{ "$ref": "#/$defs/authorityMonotonicity" }],
+      "additionalProperties": false
+    },
+    "fact": {
+      "type": "object",
+      "required": ["id", "statement", "authority", "evidence_refs", "freshness", "invalidators"],
+      "properties": {
+        "id": { "type": "string" },
+        "statement": { "type": "string" },
+        "authority": { "$ref": "#/$defs/authority" },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceHandle" }
+        },
+        "freshness": { "$ref": "#/$defs/freshness" },
+        "invalidators": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      },
+      "allOf": [{ "$ref": "#/$defs/authorityMonotonicity" }],
+      "additionalProperties": false
+    },
+    "workRecommendation": {
+      "allOf": [{ "$ref": "#/$defs/derivedMetadata" }],
+      "type": "object",
+      "required": ["id", "work_id", "summary", "classification"],
+      "properties": {
+        "id": { "type": "string" },
+        "work_id": { "type": "string" },
+        "summary": { "type": "string" },
+        "classification": {
+          "enum": ["ready", "needs-polish", "blocked", "duplicate", "stale", "review-only", "human-gated"]
+        }
+      },
+      "unevaluatedProperties": false
+    },
+    "belief": {
+      "allOf": [{ "$ref": "#/$defs/derivedMetadata" }],
+      "type": "object",
+      "required": ["id", "claim", "confidence"],
+      "properties": {
+        "id": { "type": "string" },
+        "claim": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "unevaluatedProperties": false
+    },
+    "question": {
+      "allOf": [{ "$ref": "#/$defs/derivedMetadata" }],
+      "type": "object",
+      "required": ["id", "question", "evidence_deficit"],
+      "properties": {
+        "id": { "type": "string" },
+        "question": { "type": "string" },
+        "evidence_deficit": { "type": "string" }
+      },
+      "unevaluatedProperties": false
+    },
+    "affordance": {
+      "allOf": [
+        { "$ref": "#/$defs/derivedMetadata" },
+        {
+          "if": {
+            "properties": { "disposition": { "const": "allowed" } },
+            "required": ["disposition"]
+          },
+          "then": { "properties": { "blocked_by": { "maxItems": 0 } } },
+          "else": { "properties": { "blocked_by": { "minItems": 1 } } }
+        }
+      ],
+      "type": "object",
+      "required": [
+        "id",
+        "action",
+        "disposition",
+        "prerequisites",
+        "risk_tier",
+        "permissions",
+        "reversible",
+        "information_value",
+        "blocked_by"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string" },
+        "disposition": { "enum": ["allowed", "blocked", "requires_authorization", "wait"] },
+        "prerequisites": { "type": "array", "items": { "type": "string" } },
+        "risk_tier": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "permissions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "reversible": { "type": "boolean" },
+        "information_value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "blocked_by": { "type": "array", "items": { "type": "string" } }
+      },
+      "unevaluatedProperties": false
+    },
+    "obligation": {
+      "allOf": [{ "$ref": "#/$defs/derivedMetadata" }],
+      "type": "object",
+      "required": ["id", "obligation_kind", "summary", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "obligation_kind": { "enum": ["wait", "lease", "settlement", "verification", "other"] },
+        "summary": { "type": "string" },
+        "status": { "enum": ["active", "blocked", "due", "satisfied", "expired"] }
+      },
+      "unevaluatedProperties": false
+    },
+    "mission": {
+      "type": ["object", "null"],
+      "required": ["objective", "progress", "evidence_refs"],
+      "properties": {
+        "objective": { "type": "string" },
+        "progress": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence_refs": {
+          "description": "A mission is durable state, so derived guidance cannot stand as its basis.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/groundedEvidenceHandle" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "nomic": {
+      "type": ["object", "null"],
+      "required": ["state", "exact_commit_match", "evidence_coverage"],
+      "properties": {
+        "state": { "enum": ["absent", "verified", "stale", "invalid"] },
+        "exact_commit_match": { "type": "boolean" },
+        "evidence_coverage": { "type": "number", "minimum": 0, "maximum": 1 },
+        "pack_ref": { "type": "string" },
+        "result_ref": { "type": "string" },
+        "receipt_ref": { "type": "string" },
+        "dissent": { "type": "array", "items": { "type": "string" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "verified" } }, "required": ["state"] },
+          "then": {
+            "properties": { "exact_commit_match": { "const": true } },
+            "required": ["pack_ref", "receipt_ref"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "sourceHealth": {
+      "type": "object",
+      "required": ["source", "status", "next_legal_action"],
+      "properties": {
+        "source": { "type": "string" },
+        "status": { "enum": ["healthy", "degraded", "unavailable", "ambiguous"] },
+        "detail": { "type": "string" },
+        "next_legal_action": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "truncation": {
+      "type": "object",
+      "required": ["budget_bytes", "emitted_bytes", "truncated", "omitted"],
+      "properties": {
+        "budget_bytes": { "type": "integer", "minimum": 1 },
+        "emitted_bytes": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean" },
+        "omitted": { "type": "array", "items": { "type": "string" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "truncated": { "const": true } }, "required": ["truncated"] },
+          "then": { "properties": { "omitted": { "minItems": 1 } } },
+          "else": { "properties": { "omitted": { "maxItems": 0 } } }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "fullEnvelope": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "kind",
+        "mode",
+        "orientation_fingerprint",
+        "generated_at",
+        "repository_anchor",
+        "mission",
+        "work_recommendations",
+        "nomic",
+        "source_observations",
+        "facts",
+        "beliefs",
+        "questions",
+        "affordances",
+        "obligations",
+        "source_health",
+        "truncation",
+        "next_legal_actions",
+        "mutations"
+      ],
+      "properties": {
+        "schema_version": { "const": "aragora.orientation.v1" },
+        "kind": { "const": "orientation" },
+        "mode": { "const": "full" },
+        "orientation_fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "generated_at": { "$ref": "#/$defs/timestamp" },
+        "repository_anchor": { "$ref": "#/$defs/repositoryAnchor" },
+        "mission": { "$ref": "#/$defs/mission" },
+        "work_recommendations": { "type": "array", "items": { "$ref": "#/$defs/workRecommendation" } },
+        "nomic": { "$ref": "#/$defs/nomic" },
+        "source_observations": { "type": "array", "items": { "$ref": "#/$defs/sourceObservation" } },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/fact" } },
+        "beliefs": { "type": "array", "items": { "$ref": "#/$defs/belief" } },
+        "questions": { "type": "array", "items": { "$ref": "#/$defs/question" } },
+        "affordances": { "type": "array", "items": { "$ref": "#/$defs/affordance" } },
+        "obligations": { "type": "array", "items": { "$ref": "#/$defs/obligation" } },
+        "source_health": { "type": "array", "items": { "$ref": "#/$defs/sourceHealth" } },
+        "truncation": { "$ref": "#/$defs/truncation" },
+        "next_legal_actions": { "type": "array", "items": { "type": "string" } },
+        "mutations": { "type": "array", "maxItems": 0 }
+      },
+      "additionalProperties": false
+    },
+    "noChangeEnvelope": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "kind",
+        "mode",
+        "orientation_fingerprint",
+        "generated_at",
+        "repository_anchor",
+        "changed",
+        "next_legal_actions",
+        "mutations"
+      ],
+      "properties": {
+        "schema_version": { "const": "aragora.orientation.v1" },
+        "kind": { "const": "orientation" },
+        "mode": { "const": "no_change" },
+        "orientation_fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "generated_at": { "$ref": "#/$defs/timestamp" },
+        "repository_anchor": { "$ref": "#/$defs/repositoryAnchor" },
+        "changed": { "const": false },
+        "next_legal_actions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "mutations": { "type": "array", "maxItems": 0 }
+      },
+      "additionalProperties": false
+    }
+  }
+}

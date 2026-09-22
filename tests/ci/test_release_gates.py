@@ -208,6 +208,14 @@ class TestSharedCiInstaller:
         )
         assert str(anthropic_dep.specifier) == "<1.0,>=0.111"
 
+    def test_control_plane_test_deps_install_jsonschema(self):
+        script = (PROJECT_ROOT / "scripts" / "ci_install_project.sh").read_text()
+        deps = _shell_array_values(script, "LEGACY_CONTROL_PLANE_TEST_EXTRA_DEPS")
+        jsonschema_dep = next(
+            Requirement(dep) for dep in deps if Requirement(dep).name == "jsonschema"
+        )
+        assert str(jsonschema_dep.specifier) == "<5.0,>=4.23"
+
 
 class TestAragoraReviewGateWorkflow:
     """Validate Aragora PR review gate structure."""
