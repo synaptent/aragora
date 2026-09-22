@@ -173,12 +173,12 @@ for await (const event of stream) {
 
 ### Multi-Tenant Setup
 
-Inspect tenant isolation for enterprise deployments. Tenant creation, membership
-and quota administration have no Python SDK method; call the server API directly.
+Inspect tenant isolation for enterprise deployments. Tenant membership and quota
+administration have no `aragora_sdk` method; call the server API directly.
 
 ```python
 # List tenants
-tenants = await client.tenants.list(limit=50, status="active")
+tenants = client.tenants.list(limit=50, status="active")
 ```
 
 ### Custom Agent Selection

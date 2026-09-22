@@ -476,11 +476,13 @@ result = client.policies.check(
 
 ### Tenants
 
-List tenants for multi-tenant deployments. Tenant creation, usage reporting and
-quota administration have no Python SDK method; call the server API directly.
+Administer tenants for multi-tenant deployments.
 
 ```python
-tenants = client.tenants.list(limit=50, status="active")
+tenants, total = client.tenants.list()
+tenant = client.tenants.create(name="Acme Corp", slug="acme", tier="enterprise")
+usage = client.tenants.get_usage(tenant.id)
+client.tenants.update_quotas(tenant.id, {"debates_per_month": 5000})
 ```
 
 ### Health Check
