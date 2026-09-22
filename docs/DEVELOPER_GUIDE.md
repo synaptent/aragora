@@ -173,12 +173,25 @@ for await (const event of stream) {
 
 ### Multi-Tenant Setup
 
-Inspect tenant isolation for enterprise deployments. Tenant membership and quota
-administration have no `aragora_sdk` method; call the server API directly.
+Membership and quota administration are served by the organization and quota
+namespaces, not by `client.tenants`. `sdk/python/BREAKING_CHANGES.md` carries the
+route-by-route mapping, including the tenant routes the default server does not
+dispatch.
 
 ```python
-# List tenants
-tenants = client.tenants.list(limit=50, status="active")
+org_id = "org_acme"
+
+# Sync client; AragoraAsyncClient exposes the same methods with await.
+members = client.organizations.list_members(org_id)
+client.organizations.invite_member(org_id, email="user@acme.com", role="admin")
+
+quotas = client.quotas.list()
+usage = client.quotas.get_usage(period="30d")
+client.quotas.request_increase(
+    "debates",
+    requested_limit=500,
+    justification="Q3 rollout",
+)
 ```
 
 ### Custom Agent Selection
