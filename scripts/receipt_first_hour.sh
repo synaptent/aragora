@@ -57,6 +57,7 @@ EXTRA_SPECS=()
 PUBLISHED_RECEIPT=""
 PUBKEY_URL=""
 PUBLISHED_REPO=synaptent/aragora
+REPO_ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 
 usage() {
   awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
@@ -115,7 +116,8 @@ run_step() {
   set -m
   "$@" &
   local cmd_pid=$! dog_pid rc
-  set +m
+  # The watchdog gets a group of its own for the same reason: killing the
+  # subshell alone would leave its `sleep` running for the rest of the budget.
   (
     sleep "$remaining"
     kill -TERM -"$cmd_pid" 2> /dev/null
@@ -123,19 +125,23 @@ run_step() {
     kill -KILL -"$cmd_pid" 2> /dev/null
   ) > /dev/null 2>&1 &
   dog_pid=$!
+  set +m
   wait "$cmd_pid"
   rc=$?
-  kill "$dog_pid" 2> /dev/null
+  kill -TERM -"$dog_pid" 2> /dev/null
   wait "$dog_pid" 2> /dev/null
   return "$rc"
 }
 
 # The scratch tree is deliberately left behind so the `venv:` and `odr:` lines
-# keep pointing at real paths, but the first-hour CI job runs on a PERSISTENT
-# self-hosted runner where that means one abandoned virtualenv per publish and
+# keep pointing at real paths, but in CI this script runs on a PERSISTENT
+# self-hosted runner, where that means one abandoned virtualenv per run and
 # nothing to reclaim it. Each run therefore sweeps earlier runs' trees, and only
 # those that recorded a clean finish and have been idle far longer than the
 # budget -- never a concurrent run, and never a failure left for a human.
+# A run that failed, was killed or ran over budget keeps its tree indefinitely;
+# that is the deliberate trade, because those are exactly the runs whose venv
+# and partial output someone still needs to read.
 sweep_completed_scratch() {
   local dir
   for dir in "${TMPROOT%/}"/receipt-first-hour.*; do
@@ -165,6 +171,29 @@ resolve_receipts_tag() {
 fetch_pubkey() {
   curl -fsSL --proto '=https' --proto-redir '=https' --max-redirs 2 \
     --max-time 60 -o "$WORK/published.pub.pem" "$1"
+}
+
+# Verifying a release's receipt against that same release's key only proves the
+# release is internally consistent: a job that signed with the wrong key and
+# published it alongside would still pass. The independent anchor is the key
+# committed in this repository, so the downloaded key must be byte-equal to one
+# of those. Checked only when the checkout is present -- the script is also run
+# standalone, where there is nothing to anchor against and saying so is honest.
+anchor_pubkey() {
+  local keydir="$REPO_ROOT/docs/specs/keys" committed
+  if [ ! -d "$keydir" ]; then
+    printf 'published key: not anchored (no checkout at %s)\n' "$REPO_ROOT"
+    return 0
+  fi
+  for committed in "$keydir"/aragora-odr-signing-*.pub.pem; do
+    if [ -f "$committed" ] && cmp -s "$1" "$committed"; then
+      printf 'published key: matches %s\n' "${committed#"$REPO_ROOT"/}"
+      return 0
+    fi
+  done
+  printf 'receipt-first-hour: the published key matches no key committed under %s\n' \
+    "docs/specs/keys" >&2
+  return 1
 }
 
 while [ $# -gt 0 ]; do
@@ -270,6 +299,11 @@ run_step "$VENV/bin/aragora-verify" "$WORK/r.odr.json" || fail verify $?
 if [ -n "$PUBLISHED_RECEIPT" ]; then
   printf 'step: published\n'
   printf 'published receipt: %s\n' "$PUBLISHED_RECEIPT"
+  # Unlike the key fetch, the receipt URL is not scheme-pinned: this flag is how
+  # a caller points the run at an arbitrary candidate document, including one
+  # served over plain http from localhost to prove that tampering is caught.
+  # The receipt needs no transport trust -- the signature check is what decides
+  # it, and that is made against the pinned key.
   run_step curl -fsSL --max-time 60 \
     -o "$WORK/published.odr.json" "$PUBLISHED_RECEIPT" || fail receipt-download $?
   run_step fetch_pubkey "$PUBKEY_URL" || fail pubkey-download $?
@@ -279,13 +313,19 @@ elif ! command -v gh > /dev/null 2>&1; then
   printf 'published receipt: skipped (gh not available)\n'
 else
   printf 'step: published\n'
-  RECEIPTS_TAG=$(resolve_receipts_tag 2> /dev/null) || RECEIPTS_TAG=""
+  # An unauthenticated, rate-limited or offline `gh` must not read as "no
+  # release exists": that would silently skip the check while reporting a fact
+  # this run never established.
+  RECEIPTS_TAG=$(resolve_receipts_tag 2> /dev/null)
+  TAG_STATUS=$?
+  if [ "$TAG_STATUS" -ne 0 ]; then
+    printf 'receipt-first-hour: gh could not list releases of %s\n' "$PUBLISHED_REPO" >&2
+    fail release-lookup "$TAG_STATUS"
+  fi
   if [ -z "$RECEIPTS_TAG" ]; then
     printf 'published receipt: skipped (no receipts-* release)\n'
   else
     printf 'published receipt: %s %s\n' "$PUBLISHED_REPO" "$RECEIPTS_TAG"
-    # Both assets come from the SAME release, so the key that is checked is the
-    # one that release published alongside the receipt.
     run_step gh release download "$RECEIPTS_TAG" -R "$PUBLISHED_REPO" -D "$WORK" \
       -p 'pr*-clean.odr.json' -p 'aragora-odr-signing.pub.pem' --clobber \
       || fail receipt-download $?
@@ -301,6 +341,7 @@ else
         "$RECEIPTS_TAG" >&2
       fail published 1
     fi
+    anchor_pubkey "$WORK/aragora-odr-signing.pub.pem" || fail pubkey-anchor 1
     run_step "$VENV/bin/aragora-verify" "$PUBLISHED_ODR" \
       --pubkey "$WORK/aragora-odr-signing.pub.pem" || fail published $?
   fi

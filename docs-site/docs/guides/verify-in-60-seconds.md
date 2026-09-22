@@ -112,7 +112,7 @@ over the canonical digest of all of it.
 
 You can confirm the key independently: `aragora-odr-signing.pub.pem` on the
 release is byte-for-byte the key committed at
-[`docs/specs/keys/aragora-odr-signing-ed25519-44c316618e9a0f58.pub.pem`](../specs/keys/aragora-odr-signing-ed25519-44c316618e9a0f58.pub.pem),
+[`docs/specs/keys/aragora-odr-signing-ed25519-44c316618e9a0f58.pub.pem`](https://github.com/synaptent/aragora/blob/main/docs/specs/keys/aragora-odr-signing-ed25519-44c316618e9a0f58.pub.pem),
 and the release README lists the `sha256` of every `.odr.json` plus the
 Disagreement Atlas record IDs the receipts were replayed from.
 

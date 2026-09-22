@@ -98,9 +98,11 @@ unsigned; reviewer defaults need reachable provider keys), and a committed
 example receipt you can verify right now without running any CI.
 
 Want to check one of ours instead? [**Verify an Aragora decision receipt in 60
-seconds**](docs/receipts/VERIFY_IN_60_SECONDS.md) walks through four signed
-receipts from real merged PRs in this repository — a clean pass, an adjudicated
-dissent, and a blocked head with the later head that fixed it.
+seconds**](docs/receipts/VERIFY_IN_60_SECONDS.md) walks through four receipts
+from real merged PRs in this repository — a clean pass, an adjudicated dissent,
+and a blocked head with the later head that fixed it. Those four are published
+with a signature, verifiable against a key we publish, which is what the
+Action's own receipts lack until you give it a signing key.
 
 We run this gate on our own repository — every substantive merge is reviewed
 by a heterogeneous model quorum, dissent preserved, receipts written. The

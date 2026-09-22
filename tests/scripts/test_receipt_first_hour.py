@@ -102,7 +102,11 @@ if [ "${1:-}" = "release" ] && [ "${2:-}" = "download" ]; then
   done
   [ -n "$dest" ] || exit 1
   for name in ${FAKE_GH_ASSETS-pr1-clean.odr.json aragora-odr-signing.pub.pem}; do
-    printf 'x\\n' > "$dest/$name"
+    if [ -f "${FAKE_GH_ASSET_SRC:-/nonexistent}/$name" ]; then
+      cp "$FAKE_GH_ASSET_SRC/$name" "$dest/$name"
+    else
+      printf 'x\\n' > "$dest/$name"
+    fi
   done
   exit "${FAKE_GH_DOWNLOAD_EXIT:-0}"
 fi
@@ -134,6 +138,19 @@ def fake_toolchain(tmp_path: Path) -> dict[str, Path]:
     gh.write_text(FAKE_GH, encoding="utf-8")
     gh.chmod(0o755)
     return {"bin": bindir, "path": pathdir, "log": logdir, "tmp": tmpdir}
+
+
+@pytest.fixture
+def released_key(tmp_path: Path) -> Path:
+    """Stage a release whose public key is the one committed in this repository."""
+    committed = sorted(
+        (REPO_ROOT / "docs" / "specs" / "keys").glob("aragora-odr-signing-*.pub.pem")
+    )
+    assert committed, "the repository publishes at least one signing key"
+    served = tmp_path / "release-assets"
+    served.mkdir()
+    (served / "aragora-odr-signing.pub.pem").write_bytes(committed[0].read_bytes())
+    return served
 
 
 def _run(
@@ -377,10 +394,16 @@ def test_no_flag_run_skips_cleanly_when_no_receipts_release_exists(
 
 
 def test_no_flag_run_self_resolves_the_newest_receipts_release(
-    fake_toolchain: dict[str, Path],
+    fake_toolchain: dict[str, Path], released_key: Path
 ) -> None:
     """With a release present the run downloads and verifies its clean receipt."""
-    proc = _run(fake_toolchain, env_extra={"FAKE_GH_TAG": "receipts-2026-09-22"})
+    proc = _run(
+        fake_toolchain,
+        env_extra={
+            "FAKE_GH_TAG": "receipts-2026-09-22",
+            "FAKE_GH_ASSET_SRC": str(released_key),
+        },
+    )
 
     assert proc.returncode == 0, (proc.stdout, proc.stderr)
     assert "step: published" in proc.stdout
@@ -394,6 +417,52 @@ def test_no_flag_run_self_resolves_the_newest_receipts_release(
     verify_args = _log(fake_toolchain, "verify.log").splitlines()[-1]
     assert verify_args.endswith("aragora-odr-signing.pub.pem")
     assert "pr1-clean.odr.json --pubkey" in verify_args
+
+
+def test_self_resolved_key_must_match_a_key_committed_in_the_repo(
+    fake_toolchain: dict[str, Path],
+) -> None:
+    """A release's own key is not evidence about itself; the checkout anchors it."""
+    proc = _run(fake_toolchain, env_extra={"FAKE_GH_TAG": "receipts-2026-09-22"})
+
+    assert proc.returncode != 0, (proc.stdout, proc.stderr)
+    assert "matches no key committed under docs/specs/keys" in proc.stderr
+    assert "pubkey-anchor step failed" in proc.stderr
+    # the anchor is checked BEFORE the receipt is verified against that key
+    assert "--pubkey" not in _log(fake_toolchain, "verify.log").splitlines()[-1]
+
+
+def test_self_resolved_key_equal_to_the_committed_key_is_accepted(
+    fake_toolchain: dict[str, Path], released_key: Path
+) -> None:
+    """The published key that matches the committed anchor verifies the receipt."""
+    proc = _run(
+        fake_toolchain,
+        env_extra={
+            "FAKE_GH_TAG": "receipts-2026-09-22",
+            "FAKE_GH_ASSET_SRC": str(released_key),
+        },
+    )
+
+    assert proc.returncode == 0, (proc.stdout, proc.stderr)
+    assert re.search(
+        r"^published key: matches docs/specs/keys/aragora-odr-signing-.+\.pub\.pem$",
+        proc.stdout,
+        re.MULTILINE,
+    ), proc.stdout
+    assert "--pubkey" in _log(fake_toolchain, "verify.log").splitlines()[-1]
+
+
+def test_a_failing_gh_release_list_is_not_reported_as_no_release(
+    fake_toolchain: dict[str, Path],
+) -> None:
+    """An unauthenticated or rate-limited ``gh`` fails loudly, it does not skip."""
+    proc = _run(fake_toolchain, env_extra={"FAKE_GH_LIST_EXIT": "4"})
+
+    assert proc.returncode == 4, (proc.stdout, proc.stderr)
+    assert "gh could not list releases of synaptent/aragora" in proc.stderr
+    assert "release-lookup step failed, exit=4" in proc.stderr
+    assert "skipped (no receipts-* release)" not in proc.stdout
 
 
 def test_self_resolved_release_without_the_expected_assets_fails(
