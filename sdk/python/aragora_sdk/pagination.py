@@ -17,9 +17,20 @@ if TYPE_CHECKING:
 
 
 def _named_page(
-    response: Any, items_key: str, offset: int, page_size: int
-) -> tuple[list[dict[str, Any]], int | None, bool]:
-    """Validate an opted-in endpoint envelope before changing iterator state."""
+    response: Any,
+    items_key: str,
+    offset: int,
+    page_size: int,
+    *,
+    known_total: int | None = None,
+    known_has_more: bool | None = None,
+) -> tuple[list[dict[str, Any]], int | None, bool, bool | None]:
+    """Validate an opted-in endpoint envelope before changing iterator state.
+
+    ``known_total`` and ``known_has_more`` carry the metadata declared by the
+    previous page, so a later page that omits metadata is still checked against
+    what the server already promised instead of being read as a complete result.
+    """
     if not isinstance(response, dict) or not isinstance(response.get(items_key), list):
         raise AragoraError("Invalid pagination response: expected named item list")
     items = response[items_key]
@@ -28,9 +39,12 @@ def _named_page(
     total = response.get("total")
     if total is not None and (type(total) is not int or total < 0):
         raise AragoraError("Invalid pagination response: expected non-negative total")
+    if total is None:
+        total = known_total
     next_offset = offset + len(items)
     if total is not None and (next_offset > total or (not items and next_offset < total)):
         raise AragoraError("Invalid pagination response: inconsistent total")
+    has_more: bool | None = None
     if "has_more" in response:
         has_more = response["has_more"]
         if not isinstance(has_more, bool) or (has_more and not items):
@@ -41,9 +55,11 @@ def _named_page(
         exhausted = not has_more
     elif total is not None:
         exhausted = next_offset >= total
+    elif known_has_more and not items:
+        raise AragoraError("Invalid pagination response: inconsistent has_more")
     else:
         exhausted = len(items) < page_size
-    return items, total, exhausted
+    return items, total, exhausted, has_more
 
 
 class SyncPaginator(Iterator[dict[str, Any]]):
@@ -87,6 +103,7 @@ class SyncPaginator(Iterator[dict[str, Any]]):
         self._buffer: list[dict[str, Any]] = []
         self._exhausted = False
         self._total: int | None = None
+        self._has_more: bool | None = None
 
     def __iter__(self) -> SyncPaginator:
         return self
@@ -110,12 +127,18 @@ class SyncPaginator(Iterator[dict[str, Any]]):
         response = self._client.request("GET", self._path, params=params)
 
         if self._items_key is not None:
-            page, total, exhausted = _named_page(
-                response, self._items_key, self._offset, self._page_size
+            page, total, exhausted, has_more = _named_page(
+                response,
+                self._items_key,
+                self._offset,
+                self._page_size,
+                known_total=self._total,
+                known_has_more=self._has_more,
             )
             self._buffer.extend(page)
             self._offset += len(page)
             self._total = total
+            self._has_more = has_more
             self._exhausted = exhausted
             return
 
@@ -186,6 +209,7 @@ class AsyncPaginator(AsyncIterator[dict[str, Any]]):
         self._buffer: list[dict[str, Any]] = []
         self._exhausted = False
         self._total: int | None = None
+        self._has_more: bool | None = None
 
     def __aiter__(self) -> AsyncPaginator:
         return self
@@ -209,12 +233,18 @@ class AsyncPaginator(AsyncIterator[dict[str, Any]]):
         response = await self._client.request("GET", self._path, params=params)
 
         if self._items_key is not None:
-            page, total, exhausted = _named_page(
-                response, self._items_key, self._offset, self._page_size
+            page, total, exhausted, has_more = _named_page(
+                response,
+                self._items_key,
+                self._offset,
+                self._page_size,
+                known_total=self._total,
+                known_has_more=self._has_more,
             )
             self._buffer.extend(page)
             self._offset += len(page)
             self._total = total
+            self._has_more = has_more
             self._exhausted = exhausted
             return
 
