@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -326,3 +327,86 @@ class TestFromDictValidation:
     def test_non_mapping_raises(self):
         with pytest.raises(RegistrationError, match="mapping"):
             AgentRegistrationRecord.from_dict(["agent_id"])  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# Write/read parity and capability membership
+# ---------------------------------------------------------------------------
+
+
+class TestWriteReadParity:
+    """A record ``register_agent`` accepts must survive its own persisted round trip,
+    and both paths must hold capabilities to the same standard as ``AgentCard``."""
+
+    @pytest.fixture(autouse=True)
+    def enable(self, monkeypatch):
+        monkeypatch.setenv("ARAGORA_A2A_REGISTRATION_ENABLED", "1")
+
+    @staticmethod
+    def _round_trip(rec: AgentRegistrationRecord) -> AgentRegistrationRecord:
+        return AgentRegistrationRecord.from_dict(json.loads(json.dumps(rec.to_dict())))
+
+    @pytest.mark.parametrize("key", ["public_key", "endpoint_url"])
+    @pytest.mark.parametrize("bad", ["", "  "])
+    def test_write_rejects_blank_optional_strings(self, key, bad):
+        with pytest.raises(RegistrationError, match=key):
+            register_agent("p-1", ["debate"], store=_store(), **{key: bad})
+
+    @pytest.mark.parametrize("caps", [[""], ["   "], ["debate", ""], [42], ["debate", None]])
+    def test_write_rejects_blank_or_non_string_capabilities(self, caps):
+        with pytest.raises(RegistrationError, match="capabilities"):
+            register_agent("p-2", caps, store=_store())
+
+    def test_write_strips_capability_whitespace(self):
+        rec = register_agent("p-3", ["  debate  "], store=_store())
+        assert rec.capabilities == frozenset({"debate"})
+        assert self._round_trip(rec) == rec
+
+    def test_write_rejects_naive_registered_at(self):
+        with pytest.raises(RegistrationError, match="registered_at"):
+            register_agent("p-4", ["debate"], store=_store(), registered_at=datetime(2026, 1, 1))
+
+    def test_write_rejects_naive_registered_at_without_store_side_effect(self):
+        store = _store()
+        with pytest.raises(RegistrationError):
+            register_agent("p-5", ["debate"], store=store, registered_at=datetime(2026, 1, 1))
+        assert len(store) == 0
+
+    @pytest.mark.parametrize("unknown", ["bogus", "DEBATE", "code-review"])
+    def test_write_rejects_capabilities_outside_agent_capability(self, unknown):
+        with pytest.raises(RegistrationError, match="capabilit"):
+            register_agent("p-6", [unknown], store=_store())
+
+    @pytest.mark.parametrize("unknown", ["bogus", "DEBATE"])
+    def test_from_dict_rejects_capabilities_outside_agent_capability(self, unknown):
+        with pytest.raises(RegistrationError, match="capabilit"):
+            AgentRegistrationRecord.from_dict(
+                {
+                    "agent_id": "p-7",
+                    "capabilities": [unknown],
+                    "public_key": None,
+                    "endpoint_url": None,
+                    "registered_at": "2026-06-01T00:00:00+00:00",
+                }
+            )
+
+    @pytest.mark.parametrize("member", list(AgentCapability))
+    def test_every_capability_member_round_trips_as_enum_and_string(self, member):
+        as_enum = register_agent("p-8", [member], store=_store())
+        as_str = register_agent("p-8", [member.value], store=_store())
+        assert as_enum.capabilities == as_str.capabilities == frozenset({member.value})
+        assert self._round_trip(as_enum) == as_enum
+        assert self._round_trip(as_str) == as_str
+
+    def test_accepted_registration_round_trips_with_all_fields(self):
+        rec = register_agent(
+            "  p-9  ",
+            [AgentCapability.AUDIT, "debate", " critique "],
+            public_key="pk==",
+            endpoint_url="https://p9.example/a2a",
+            store=_store(),
+            registered_at=datetime(2026, 1, 1, 12, 0, tzinfo=timezone(timedelta(hours=2))),
+        )
+        assert rec.agent_id == "p-9"
+        assert rec.capabilities == frozenset({"audit", "debate", "critique"})
+        assert self._round_trip(rec) == rec
