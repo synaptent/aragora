@@ -339,8 +339,8 @@ proves. *(docs/CANONICAL_GOALS.md, docs/vision/MAXIMALIST_VISION.md)*
 > Scale (canonical counts in [`docs/METRICS.md`](docs/METRICS.md), rounded):
 > **~4,300 Python files · ~2.0M LOC · 140+ top-level modules · 200,000+ test
 > functions across ~5,600 files · 3,205 API operations across 2,912 paths ·
-> 35+ allowlisted agent types across 12+ providers · 41 Knowledge Mound adapter specs
-> (46 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.10.0.**
+> 35+ allowlisted agent types across 12+ providers · 42 Knowledge Mound adapter specs
+> (47 files) · 360+ RBAC permissions · Python + TypeScript SDKs · v2.10.0.**
 > (Practical real-time debate uses 2–6 agents; the value is *heterogeneity*, not raw
 > count — see docs/HONEST_ASSESSMENT.md.)
 <!-- metrics:end -->
@@ -491,7 +491,7 @@ metric. *(docs/plans/ agent-civilization designs)*
   assumptions decay, epistemic decay signals proposing bounded repair, and a read-only
   organizational truth map. Initial shape is manifest-based and read-only.
 - **Trust-Compound plan (🔄 TCP-1..7).** Make the large surface *legible without
-  deletion*: a canonical-metrics manifest verified in CI (so a claim like "46 adapters"
+  deletion*: a canonical-metrics manifest verified in CI (so a claim like "47 adapters"
   passes or fails the build), packaging clarity, hotspot-file splits, wire/showcase/
   shelve classification per subsystem, generated artifacts as build outputs, this README
   rewrite, and public CruxSets at `aragora.ai/cruxes`.
