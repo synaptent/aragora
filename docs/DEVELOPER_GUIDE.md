@@ -173,28 +173,12 @@ for await (const event of stream) {
 
 ### Multi-Tenant Setup
 
-Configure tenant isolation for enterprise deployments:
+Inspect tenant isolation for enterprise deployments. Tenant creation, membership
+and quota administration have no Python SDK method; call the server API directly.
 
 ```python
-# Create a tenant
-tenant = await client.tenants.create(
-    name="Acme Corp",
-    settings={"max_debates_per_day": 100}
-)
-
-# Add members
-await client.tenants.add_member(
-    tenant.id,
-    email="user@acme.com",
-    role="admin"
-)
-
-# Set quotas
-await client.tenants.update_quotas(
-    tenant.id,
-    debates_limit=500,
-    agents_limit=20
-)
+# List tenants
+tenants = await client.tenants.list(limit=50, status="active")
 ```
 
 ### Custom Agent Selection
