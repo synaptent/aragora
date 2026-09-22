@@ -32,6 +32,7 @@ from aragora.debate.phases.vote_collector import (
     _VoteTaskOwner,
     VoteCollector,
     VoteCollectorConfig,
+    VoterSlot,
     create_vote_collector,
 )
 
@@ -872,6 +873,59 @@ class TestRLMEarlyTermination:
             votes = await asyncio.wait_for(collector.collect_votes(ctx), timeout=0.2)
             assert len(votes) == 6
             hook.assert_called_once_with(leader="winner", votes_collected=6, total_agents=10)
+
+            release_cleanup.set()
+            await asyncio.sleep(0.02)
+            assert [type(context.get("exception")) for context in loop_contexts] == [VoteAbort]
+            assert all(
+                context.get("message") != "Task exception was never retrieved"
+                for context in loop_contexts
+            )
+        finally:
+            release_cleanup.set()
+            await asyncio.sleep(0)
+            loop.set_exception_handler(old_handler)
+
+    @pytest.mark.asyncio
+    async def test_majority_early_stop_forwards_detached_returned_control_flow(self):
+        """A detached slot task that returns control flow is reported, not dropped."""
+
+        class VoteAbort(BaseException):
+            pass
+
+        release_cleanup = asyncio.Event()
+        loop_contexts: list[dict[str, Any]] = []
+
+        async def mock_vote(agent, proposals, task):
+            if agent.name != "agent3":
+                return make_vote(agent=agent.name, choice="winner")
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                await release_cleanup.wait()
+            return VoteAbort("late control flow returned as a result")
+
+        collector = VoteCollector(VoteCollectorConfig(vote_with_agent=mock_vote))
+        agents = [MockAgent(name=f"agent{i}") for i in range(4)]
+        ctx = make_context(agents=agents)
+        roster = tuple(
+            (VoterSlot(index=index, name=agent.name), agent) for index, agent in enumerate(agents)
+        )
+
+        def should_stop(ballots):
+            return len(ballots) >= 3, "winner"
+
+        loop = asyncio.get_running_loop()
+        old_handler = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: loop_contexts.append(context))
+
+        try:
+            collection = await asyncio.wait_for(
+                collector.collect_majority_votes(ctx, roster, should_stop=should_stop),
+                timeout=0.2,
+            )
+            assert len(collection.ballots) == 3
+            assert [slot.index for slot in collection.skipped_slots] == [3]
 
             release_cleanup.set()
             await asyncio.sleep(0.02)

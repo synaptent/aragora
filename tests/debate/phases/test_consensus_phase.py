@@ -1997,6 +1997,39 @@ class TestImmutableMajoritySnapshot:
         assert ctx.result.verification_bonuses == {}
         assert "process_verification" not in ctx.result.metadata
 
+    @pytest.mark.asyncio
+    async def test_records_participation_when_result_lacks_metadata(self):
+        agents = [MockAgent(name=name) for name in ("voter-a", "voter-b", "voter-c")]
+        ctx, protocol = make_context(
+            agents=agents,
+            proposals={"alpha": "Alpha", "beta": "Beta"},
+            consensus_mode="majority",
+        )
+        protocol.consensus_threshold = 0.6
+        protocol.min_participation_count = 2
+        protocol.enable_rlm_early_termination = False
+        del ctx.result.metadata
+        assert not hasattr(ctx.result, "metadata")
+
+        async def vote_with_agent(agent, proposals, task):
+            return make_vote(agent=agent.name, choice="alpha")
+
+        phase = ConsensusPhase(
+            deps=ConsensusDependencies(protocol=protocol),
+            callbacks=ConsensusCallbacks(vote_with_agent=vote_with_agent),
+        )
+
+        await phase._handle_majority_consensus(ctx)
+
+        assert ctx.result.winner == "alpha"
+        assert ctx.result.consensus_reached is True
+        assert ctx.result.metadata["vote_participation"] == {
+            "eligible": 3,
+            "received": 3,
+            "failed": 0,
+            "skipped": 0,
+        }
+
 
 # =============================================================================
 # Additional Coverage: Formal Verification Tests
