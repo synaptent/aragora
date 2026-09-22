@@ -379,3 +379,26 @@ class TestAdapterRegistration:
         assert r.skipped == 2
         assert r.knowledge_item_ids == []
         mound.store.assert_not_awaited()
+
+    def test_registered_adapter_is_excluded_from_automatic_forward_sync(self) -> None:
+        from aragora.knowledge.mound.adapters.factory import (
+            ADAPTER_SPECS,
+            AdapterFactory,
+        )
+        from aragora.knowledge.mound.bidirectional_coordinator import (
+            BidirectionalCoordinator,
+        )
+
+        factory = AdapterFactory()
+        created = factory.create_from_subsystems()["executable_claim"]
+        coordinator = BidirectionalCoordinator()
+
+        assert factory.register_with_coordinator(coordinator, {"executable_claim": created}) == 1
+
+        results = asyncio.run(coordinator.sync_all_to_km())
+
+        assert [res.adapter_name for res in results if not res.success] == []
+        assert [res.adapter_name for res in results] == []
+        assert "executable_claim" in coordinator.get_registered_adapters()
+        assert coordinator.get_status()["adapters"]["executable_claim"]["enabled"] is False
+        assert ADAPTER_SPECS["executable_claim"].enabled_by_default is False
