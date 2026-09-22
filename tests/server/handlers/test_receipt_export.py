@@ -538,9 +538,10 @@ class TestPublicOdrExport:
     @pytest.mark.asyncio
     async def test_repeated_format_parameter_resolves_to_the_last_value(self):
         handler = _receipts_handler()
-        result = await handler.handle(
-            "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": ["odr", "json"]}
-        )
+        with patch("aragora.server.handlers.decisions.receipts._auth_enabled", return_value=False):
+            result = await handler.handle(
+                "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": ["odr", "json"]}
+            )
 
         assert result.status_code == 200
         assert "X-ODR-Digest" not in result.headers
@@ -585,11 +586,29 @@ class TestPublicOdrExport:
     @pytest.mark.asyncio
     async def test_unsupported_format_is_a_400(self):
         handler = _receipts_handler()
-        result = await handler.handle(
-            "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "xlsx"}
-        )
+        with patch("aragora.server.handlers.decisions.receipts._auth_enabled", return_value=False):
+            result = await handler.handle(
+                "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "xlsx"}
+            )
 
         assert result.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_download_query_parameter_reaches_the_attachment_branch(self):
+        """The server-level allow-list gates the query before the handler sees it."""
+        from aragora.server.http_utils import validate_query_params
+
+        assert validate_query_params({"download": ["true"]}) == (True, "")
+        handler = _receipts_handler()
+        result = await handler.handle(
+            "GET",
+            "/api/v2/receipts/r-odr-1/export",
+            {},
+            {"format": "odr", "download": "true"},
+        )
+
+        assert result.status_code == 200
+        assert result.headers["Content-Disposition"].startswith("attachment; ")
 
     @pytest.mark.asyncio
     async def test_unsigned_deployment_exports_without_signatures(self):
@@ -723,7 +742,7 @@ class TestStatelessOdrVerification:
     """POST /api/v2/receipts/verify checks a caller-supplied document."""
 
     @pytest.mark.asyncio
-    async def test_exported_document_verifies(self):
+    async def test_exported_document_is_unverified_on_a_keyless_deployment(self):
         handler = _receipts_handler()
         export = await handler.handle(
             "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
@@ -734,7 +753,8 @@ class TestStatelessOdrVerification:
 
         assert result.status_code == 200
         payload = json.loads(result.body)
-        assert payload["verified"] is True
+        assert payload["verified"] is False
+        assert {c["name"]: c["status"] for c in payload["checks"]}["signature"] == "warn"
         assert payload["receipt_id"] == "r-odr-1"
         names = [check["name"] for check in payload["checks"]]
         assert "schema_conformance" in names
@@ -745,7 +765,7 @@ class TestStatelessOdrVerification:
         assert isinstance(payload["warnings"], list)
         assert payload["dissent_trail"], "the fixture records a dissenting agent"
         assert any("grok-agent" in entry for entry in payload["dissent_trail"])
-        assert "key_id" in payload
+        assert payload["key_id"] is None
 
     @pytest.mark.asyncio
     async def test_dissent_findings_render_like_the_packaged_verifier(self):
