@@ -59,6 +59,47 @@ class RegistrationError(RuntimeError):
     or when a conflict or lookup failure occurs."""
 
 
+# Field validators shared by the write path (``register_agent``) and the read
+# path (``from_dict``), so a record accepted on write always survives its own
+# persisted round trip.
+
+
+def _normalize_capabilities(raw: Sequence[object]) -> frozenset[str]:
+    """Strip each entry and require it to name an :class:`AgentCapability` member.
+
+    Mirrors ``AgentCard.from_dict``, which also refuses unknown strings.
+    """
+    normalized: set[str] = set()
+    for entry in raw:
+        value = entry.value if isinstance(entry, AgentCapability) else entry
+        if not isinstance(value, str) or not value.strip():
+            raise RegistrationError("capabilities must be a non-empty list of non-empty strings")
+        value = value.strip()
+        try:
+            AgentCapability(value)
+        except ValueError as exc:
+            known = ", ".join(sorted(c.value for c in AgentCapability))
+            raise RegistrationError(
+                f"unknown capability {value!r}; capabilities must be one of: {known}"
+            ) from exc
+        normalized.add(value)
+    return frozenset(normalized)
+
+
+def _optional_str(key: str, value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise RegistrationError(f"{key} must be a non-empty string or null")
+    return value
+
+
+def _require_aware(ts: datetime) -> datetime:
+    if ts.tzinfo is None or ts.utcoffset() is None:
+        raise RegistrationError("registered_at must be timezone-aware")
+    return ts
+
+
 @dataclass(frozen=True)
 class AgentRegistrationRecord:
     """Immutable snapshot of a registered agent's identity and capabilities.
@@ -101,7 +142,7 @@ class AgentRegistrationRecord:
         raw_caps = data.get("capabilities", [])
         if not isinstance(raw_caps, list):
             raise RegistrationError("capabilities must be a list")
-        if not raw_caps or not all(isinstance(c, str) and c.strip() for c in raw_caps):
+        if not raw_caps:
             raise RegistrationError("capabilities must be a non-empty list of non-empty strings")
 
         raw_ts = data.get("registered_at")
@@ -111,23 +152,13 @@ class AgentRegistrationRecord:
             ts = datetime.fromisoformat(raw_ts)
         except ValueError as exc:
             raise RegistrationError(f"registered_at is not ISO-8601: {raw_ts!r}") from exc
-        if ts.tzinfo is None or ts.utcoffset() is None:
-            raise RegistrationError("registered_at must be timezone-aware")
-
-        def _optional_str(key: str) -> str | None:
-            value = data.get(key)
-            if value is None:
-                return None
-            if not isinstance(value, str) or not value.strip():
-                raise RegistrationError(f"{key} must be a non-empty string or null")
-            return value
 
         return cls(
             agent_id=raw_id.strip(),
-            capabilities=frozenset(c.strip() for c in raw_caps),
-            public_key=_optional_str("public_key"),
-            endpoint_url=_optional_str("endpoint_url"),
-            registered_at=ts,
+            capabilities=_normalize_capabilities(raw_caps),
+            public_key=_optional_str("public_key", data.get("public_key")),
+            endpoint_url=_optional_str("endpoint_url", data.get("endpoint_url")),
+            registered_at=_require_aware(ts),
         )
 
 
@@ -183,8 +214,12 @@ def register_agent(
 ) -> AgentRegistrationRecord:
     """Register an agent, returning the persisted :class:`AgentRegistrationRecord`.
 
-    Raises :class:`RegistrationError` if the gate is off or if ``agent_id`` is
-    already present in the store and ``overwrite`` is False.
+    Inputs are validated with the same rules :meth:`AgentRegistrationRecord.from_dict`
+    applies, so every accepted record survives its own persisted round trip.
+
+    Raises :class:`RegistrationError` if the gate is off, if any field is
+    invalid, or if ``agent_id`` is already present in the store and
+    ``overwrite`` is False.
     """
     _require_enabled()
     if not agent_id or not agent_id.strip():
@@ -192,15 +227,12 @@ def register_agent(
     if not capabilities:
         raise RegistrationError("At least one capability is required.")
 
-    cap_strings: frozenset[str] = frozenset(
-        c.value if isinstance(c, AgentCapability) else str(c) for c in capabilities
-    )
     record = AgentRegistrationRecord(
         agent_id=agent_id.strip(),
-        capabilities=cap_strings,
-        public_key=public_key,
-        endpoint_url=endpoint_url,
-        registered_at=registered_at or datetime.now(tz=UTC),
+        capabilities=_normalize_capabilities(capabilities),
+        public_key=_optional_str("public_key", public_key),
+        endpoint_url=_optional_str("endpoint_url", endpoint_url),
+        registered_at=_require_aware(registered_at or datetime.now(tz=UTC)),
     )
     target = store if store is not None else _get_default_store()
     target.put(record, overwrite=overwrite)
