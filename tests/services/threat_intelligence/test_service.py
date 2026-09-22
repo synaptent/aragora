@@ -144,7 +144,7 @@ class TestVirusTotalFileHashLookups:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -182,7 +182,7 @@ class TestVirusTotalFileHashLookups:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -221,7 +221,7 @@ class TestVirusTotalFileHashLookups:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -244,7 +244,7 @@ class TestVirusTotalFileHashLookups:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -262,7 +262,7 @@ class TestVirusTotalFileHashLookups:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -279,7 +279,7 @@ class TestVirusTotalFileHashLookups:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(side_effect=asyncio.TimeoutError()),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -312,7 +312,7 @@ class TestVirusTotalFileHashLookups:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -354,7 +354,7 @@ class TestAbuseIPDBIPReputation:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -391,7 +391,7 @@ class TestAbuseIPDBIPReputation:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -425,7 +425,7 @@ class TestAbuseIPDBIPReputation:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -455,7 +455,7 @@ class TestAbuseIPDBIPReputation:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -485,7 +485,7 @@ class TestAbuseIPDBIPReputation:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -504,7 +504,7 @@ class TestAbuseIPDBIPReputation:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -551,7 +551,7 @@ class TestPhishTankURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -581,7 +581,7 @@ class TestPhishTankURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -608,7 +608,7 @@ class TestPhishTankURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -630,7 +630,7 @@ class TestPhishTankURLChecks:
         mock_post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         mock_session.post = mock_post
@@ -651,7 +651,7 @@ class TestPhishTankURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -693,7 +693,7 @@ class TestURLhausMalwareURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -724,7 +724,7 @@ class TestURLhausMalwareURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -752,7 +752,7 @@ class TestURLhausMalwareURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -776,7 +776,7 @@ class TestURLhausMalwareURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -803,7 +803,7 @@ class TestURLhausMalwareURLChecks:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -900,7 +900,7 @@ class TestBatchLookups:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1248,7 +1248,7 @@ class TestEventEmission:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1316,7 +1316,7 @@ class TestEventEmission:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1347,7 +1347,7 @@ class TestEventEmission:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1383,7 +1383,7 @@ class TestEmailPrioritization:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1439,7 +1439,7 @@ class TestEmailPrioritization:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1468,7 +1468,7 @@ class TestEmailPrioritization:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1537,7 +1537,7 @@ class TestEmailThreatScoreCalculation:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1567,7 +1567,7 @@ class TestEmailThreatScoreCalculation:
                             200, {"results": {"in_database": True, "verified": True}}
                         )
                     ),
-                    __aexit__=AsyncMock(),
+                    __aexit__=AsyncMock(return_value=False),
                 )
             else:
                 return AsyncMock(
@@ -1576,7 +1576,7 @@ class TestEmailThreatScoreCalculation:
                             200, {"results": {"in_database": False, "verified": False}}
                         )
                     ),
-                    __aexit__=AsyncMock(),
+                    __aexit__=AsyncMock(return_value=False),
                 )
 
         mock_session = AsyncMock()
@@ -1764,7 +1764,7 @@ class TestAggregateThreatAssessment:
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1785,13 +1785,13 @@ class TestAggregateThreatAssessment:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(side_effect=ConnectionError("API Error")),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         mock_session.post = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(side_effect=ConnectionError("API Error")),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1977,7 +1977,7 @@ class TestErrorHandling:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(side_effect=asyncio.TimeoutError()),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session
@@ -1998,7 +1998,7 @@ class TestErrorHandling:
         mock_session.get = MagicMock(
             return_value=AsyncMock(
                 __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(),
+                __aexit__=AsyncMock(return_value=False),
             )
         )
         service._http_session = mock_session

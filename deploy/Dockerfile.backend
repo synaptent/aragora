@@ -18,7 +18,9 @@ COPY aragora/ ./aragora/
 COPY scripts/ci_install_project.sh ./scripts/ci_install_project.sh
 
 # Install Python dependencies
-RUN bash scripts/ci_install_project.sh --install-mode standard --install-scope user
+RUN bash scripts/ci_install_project.sh --install-mode standard --install-scope user \
+    --extras postgres,redis,monitoring \
+    && python -m pip install --user "psycopg2-binary>=2.9,<3.0"
 
 # Production stage
 FROM python:3.11-slim
@@ -36,6 +38,7 @@ RUN groupadd -r aragora && useradd -r -g aragora -d /app -s /sbin/nologin aragor
 # Copy Python packages from builder
 COPY --from=builder /root/.local /home/aragora/.local
 ENV PATH=/home/aragora/.local/bin:$PATH
+ENV PYTHONUSERBASE=/home/aragora/.local
 
 # Copy application code
 COPY aragora/ ./aragora/

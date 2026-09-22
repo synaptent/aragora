@@ -249,7 +249,7 @@ class ServerBase:
         Access fields via attributes (event.loop_id) and nested data via event.data.
         """
         # Import here to avoid circular imports
-        from aragora.server.stream.events import StreamEventType
+        from aragora.events.types import StreamEventType
 
         # Handle both StreamEvent objects and dicts (for backwards compatibility)
         if isinstance(event, dict):

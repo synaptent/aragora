@@ -2,7 +2,7 @@
 Open Decision Receipt (ODR) exporter.
 
 Maps the native :class:`aragora.gauntlet.receipt_models.DecisionReceipt` onto
-the vendor-neutral Open Decision Receipt content profile (ODR v0.1) defined in
+ODR v0.1 or v0.2 (default v0.1 until aragora-verify 0.2.0 is published), defined in
 ``docs/specs/OPEN_DECISION_RECEIPT.md`` and machine-validated by
 ``aragora/gauntlet/odr_schema.json`` (JSON Schema draft 2020-12).
 
@@ -28,6 +28,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+from copy import deepcopy
+from functools import lru_cache
 from importlib import resources
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -36,12 +39,34 @@ from aragora.gauntlet.odr_jcs import jcs_canonicalize, odr_content_digest
 if TYPE_CHECKING:
     from aragora.gauntlet.receipt_models import DecisionReceipt
 
-ODR_VERSION = "0.1"
-ODR_PROFILE_URI = "https://aragora.ai/specs/open-decision-receipt/v0.1"
+ODR_DEFAULT_VERSION = "0.1"
+ODR_VERSIONS = ("0.1", "0.2")
+ODR_PROFILE_URIS = {
+    "0.1": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+    "0.2": "https://aragora.ai/specs/open-decision-receipt/v0.2",
+}
+ODR_VERSION = ODR_DEFAULT_VERSION
+ODR_PROFILE_URI = ODR_PROFILE_URIS[ODR_DEFAULT_VERSION]
 
 logger = logging.getLogger(__name__)
 
+
+def resolve_odr_version(explicit: str | None) -> str:
+    """Resolve an explicit profile, then the environment, then the library default."""
+    if explicit is not None:
+        if explicit not in ODR_VERSIONS:
+            raise ValueError(f"odr_version must be one of {ODR_VERSIONS}")
+        return explicit
+    configured = os.environ.get("ARAGORA_ODR_PROFILE_VERSION")
+    if configured and configured not in ODR_VERSIONS:
+        raise ValueError(f"ARAGORA_ODR_PROFILE_VERSION must be one of {ODR_VERSIONS}")
+    return configured or ODR_DEFAULT_VERSION
+
+
 __all__ = [
+    "ODR_DEFAULT_VERSION",
+    "ODR_VERSIONS",
+    "ODR_PROFILE_URIS",
     "ODR_VERSION",
     "ODR_PROFILE_URI",
     "absent",
@@ -267,14 +292,18 @@ def _map_attestation(attestation: dict[str, Any] | None) -> dict[str, Any]:
 def decision_receipt_to_odr(
     receipt: DecisionReceipt,
     *,
+    odr_version: str = ODR_DEFAULT_VERSION,
     crux_set: list[dict[str, Any]] | None = None,
     attestation: dict[str, Any] | None = None,
     calibration_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Map a :class:`DecisionReceipt` onto the ODR v0.1 content profile.
+    """Map a :class:`DecisionReceipt` onto ODR v0.1 or v0.2.
+
+    Default v0.1 until aragora-verify 0.2.0 is published.
 
     Args:
         receipt: The source receipt. Fields are copied, never invented.
+        odr_version: Requested profile version, ``"0.1"`` or ``"0.2"``.
         crux_set: Optional crux items (e.g. from a ``CruxReceipt``) to include;
             when omitted, the ``cruxes`` block carries an absent marker.
         attestation: Optional human-attestation block. When omitted, the
@@ -289,9 +318,11 @@ def decision_receipt_to_odr(
     Returns:
         A JSON-serializable dict conforming to ``aragora/gauntlet/odr_schema.json``.
     """
-    return {
-        "odr_version": ODR_VERSION,
-        "profile": ODR_PROFILE_URI,
+    if odr_version not in ODR_VERSIONS:
+        raise ValueError(f"odr_version must be one of {ODR_VERSIONS}")
+    doc: dict[str, Any] = {
+        "odr_version": odr_version,
+        "profile": ODR_PROFILE_URIS[odr_version],
         "receipt_id": receipt.receipt_id,
         "issued_at": receipt.timestamp or None,
         "subject": _map_subject(receipt),
@@ -311,6 +342,44 @@ def decision_receipt_to_odr(
             "artifact_hash": receipt.artifact_hash,
         },
     }
+    if odr_version == "0.2":
+        metadata = receipt.settlement_metadata or {}
+        for source, target in (
+            ("repo", "repository"),
+            ("pr", "pr_number"),
+            ("head_sha", "head_sha"),
+            ("base_sha", "base_sha"),
+        ):
+            if source not in metadata:
+                continue
+            value = metadata[source]
+            if source == "pr":
+                if isinstance(value, str) and value.isascii() and value.isdigit():
+                    value = int(value)
+                valid = isinstance(value, int) and not isinstance(value, bool)
+            else:
+                valid = isinstance(value, str) and bool(value)
+            if valid:
+                doc["subject"][target] = value
+            else:
+                logger.warning("Omitting invalid settlement_metadata key %s", source)
+        content = metadata.get("odr")
+        content = deepcopy(content) if isinstance(content, dict) else {}
+        if doc["quorum"].get("status") == "present":
+            for key in ("verdicts", "rule"):
+                if key in content:
+                    doc["quorum"][key] = content[key]
+            dissent = content.get("dissent", {})
+            for key in ("findings", "severity_max", "blocking"):
+                if key in dissent:
+                    doc["quorum"]["dissent"][key] = dissent[key]
+        if content.get("observations") and doc["reasoning"]["status"] == "present":
+            doc["reasoning"]["observations"] = content["observations"]
+        if "adjudication" in content:
+            doc["adjudication"] = content["adjudication"]
+        if "mechanism" in content and "mechanism" not in doc["attestation"]:
+            doc["attestation"]["mechanism"] = content["mechanism"]
+    return doc
 
 
 def sign_odr_if_configured(
@@ -327,6 +396,10 @@ def sign_odr_if_configured(
     instead — silently publishing an unsigned receipt from a deployment that
     was expected to sign would fail open. Once a key is loaded, signing errors
     always propagate.
+
+    A v0.2 document gets the signer-committed entry (spec §6) with ``issuer``
+    from ``ARAGORA_ODR_SIGNING_ISSUER`` (default ``aragora``) and role
+    ``emitter``; a v0.1 document keeps the three-member entry.
     """
     from aragora.gauntlet import odr_signing
 
@@ -336,11 +409,21 @@ def sign_odr_if_configured(
     except odr_signing.OdrSigningUnconfiguredError as exc:
         logger.warning("ODR signing key not configured; exporting unsigned ODR receipt: %s", exc)
         return odr
+    if odr.get("odr_version") == "0.2":
+        issuer = (
+            os.environ.get(odr_signing.SIGNING_ISSUER_ENV) or odr_signing.DEFAULT_SIGNING_ISSUER
+        )
+        return odr_signing.sign_odr_receipt(odr, private_key, issuer=issuer, role="emitter")
     return odr_signing.sign_odr_receipt(odr, private_key)
 
 
-def load_odr_schema() -> dict[str, Any]:
-    """Load the bundled ODR JSON Schema (draft 2020-12)."""
+@lru_cache(maxsize=1)
+def _load_odr_schema_cached() -> dict[str, Any]:
     text = resources.files("aragora.gauntlet").joinpath("odr_schema.json").read_text("utf-8")
     schema: dict[str, Any] = json.loads(text)
     return schema
+
+
+def load_odr_schema() -> dict[str, Any]:
+    """Load the bundled ODR JSON Schema (draft 2020-12) as a fresh deep copy."""
+    return deepcopy(_load_odr_schema_cached())

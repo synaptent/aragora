@@ -206,7 +206,7 @@ class TestDecisionIntegrityTool:
     @pytest.mark.asyncio
     async def test_build_decision_integrity_missing_db(self):
         """Returns error when debate DB is unavailable."""
-        with patch("aragora.server.storage.get_debates_db", return_value=None):
+        with patch("aragora.storage.debate_storage.get_debates_db", return_value=None):
             result = await build_decision_integrity_tool(debate_id="debate_1")
         assert "error" in result
 
@@ -215,7 +215,7 @@ class TestDecisionIntegrityTool:
         """Returns error when debate does not exist."""
         mock_db = MagicMock()
         mock_db.get.return_value = None
-        with patch("aragora.server.storage.get_debates_db", return_value=mock_db):
+        with patch("aragora.storage.debate_storage.get_debates_db", return_value=mock_db):
             result = await build_decision_integrity_tool(debate_id="missing")
         assert "error" in result
 
@@ -290,7 +290,7 @@ class TestDecisionReceiptVerificationTool:
         }
 
         with (
-            patch("aragora.server.storage.get_debates_db", return_value=mock_db),
+            patch("aragora.storage.debate_storage.get_debates_db", return_value=mock_db),
             patch(
                 "aragora.pipeline.decision_integrity.build_decision_integrity_package",
                 new=AsyncMock(return_value=mock_package),
@@ -508,7 +508,7 @@ class TestGetDecisionReceiptTool:
         mock_db.get.return_value = mock_debate
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_decision_receipt_tool(debate_id="debate-123")
@@ -535,7 +535,7 @@ class TestGetDecisionReceiptTool:
         mock_db.get.return_value = mock_debate
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_decision_receipt_tool(
@@ -562,7 +562,7 @@ class TestGetDecisionReceiptTool:
         mock_db.get.return_value = mock_debate
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_decision_receipt_tool(
@@ -577,7 +577,7 @@ class TestGetDecisionReceiptTool:
     async def test_get_receipt_storage_not_available(self):
         """Test receipt when storage not available."""
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=None,
         ):
             result = await get_decision_receipt_tool(debate_id="debate-123")
@@ -592,7 +592,7 @@ class TestGetDecisionReceiptTool:
         mock_db.get.return_value = None
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_decision_receipt_tool(debate_id="nonexistent")
@@ -615,7 +615,7 @@ class TestGetDecisionReceiptTool:
         mock_db.get.return_value = mock_debate
 
         with patch(
-            "aragora.server.storage.get_debates_db",
+            "aragora.storage.debate_storage.get_debates_db",
             return_value=mock_db,
         ):
             result = await get_decision_receipt_tool(debate_id="debate-123")

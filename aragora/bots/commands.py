@@ -407,7 +407,7 @@ async def _route_via_http_api(
     mode_label: str,
 ) -> CommandResult:
     """Route debate via HTTP API fallback."""
-    from aragora.server.http_client_pool import get_http_pool
+    from aragora.observability.http_client_pool import get_http_pool
 
     try:
         pool = get_http_pool()
@@ -532,7 +532,7 @@ def _register_builtin_commands(registry: CommandRegistry) -> None:
     )
     async def cmd_status(ctx: CommandContext) -> CommandResult:
         """Check system health status."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         try:
             api_base = _get_api_base(ctx)
@@ -599,7 +599,7 @@ def _register_builtin_commands(registry: CommandRegistry) -> None:
     )
     async def cmd_implement(ctx: CommandContext) -> CommandResult:
         """Start a debate and generate an implementation plan with context snapshot."""
-        from aragora.server.decision_integrity_utils import extract_execution_overrides
+        from aragora.pipeline.decision_integrity_utils import extract_execution_overrides
 
         cleaned_topic, overrides = extract_execution_overrides(ctx.raw_args)
         return await _run_debate(
@@ -630,7 +630,7 @@ def _register_builtin_commands(registry: CommandRegistry) -> None:
     )
     async def cmd_gauntlet(ctx: CommandContext) -> CommandResult:
         """Run gauntlet validation on a statement."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         statement = ctx.raw_args
         if not statement:

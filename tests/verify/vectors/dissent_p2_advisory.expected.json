@@ -1,0 +1,13 @@
+{
+  "verifier": {
+    "verified": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "aragora_verify": {
+    "ok": true,
+    "exit_code": 0,
+    "reasons": []
+  },
+  "description": "Advisory dissent: severity_max P2 and dissent.blocking false."
+}

@@ -159,7 +159,7 @@ class TestSetupWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, watch_response))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.dict("os.environ", {"GOOGLE_CLOUD_PROJECT": "my-project"}):
             with patch.object(watch_mixin, "_get_client", return_value=mock_client):
@@ -185,7 +185,7 @@ class TestSetupWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, watch_response))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         assert watch_mixin._gmail_state is None
 
@@ -214,7 +214,7 @@ class TestSetupWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, watch_response))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.dict("os.environ", {"GOOGLE_CLOUD_PROJECT": "my-project"}):
             with patch.object(watch_mixin, "_get_client", return_value=mock_client):
@@ -240,7 +240,7 @@ class TestSetupWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, watch_response))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.dict("os.environ", {}, clear=True):
             with patch.object(watch_mixin, "_get_client", return_value=mock_client):
@@ -259,7 +259,7 @@ class TestSetupWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, watch_response))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.dict("os.environ", {"GOOGLE_CLOUD_PROJECT": "my-project"}):
             with patch.object(watch_mixin, "_get_client", return_value=mock_client):
@@ -284,7 +284,7 @@ class TestSetupWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=error_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.dict("os.environ", {"GOOGLE_CLOUD_PROJECT": "my-project"}):
             with patch.object(watch_mixin, "_get_client", return_value=mock_client):
@@ -301,7 +301,7 @@ class TestSetupWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, watch_response))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.dict("os.environ", {"GOOGLE_CLOUD_PROJECT": "my-project"}):
             with patch.object(watch_mixin, "_get_client", return_value=mock_client):
@@ -327,7 +327,7 @@ class TestStopWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(watch_mixin, "_get_client", return_value=mock_client):
             result = await watch_mixin.stop_watch()
@@ -350,7 +350,7 @@ class TestStopWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(watch_mixin, "_get_client", return_value=mock_client):
             await watch_mixin.stop_watch()
@@ -375,7 +375,7 @@ class TestStopWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(watch_mixin, "_get_client", return_value=mock_client):
             await watch_mixin.stop_watch()
@@ -400,7 +400,7 @@ class TestStopWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=error_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(watch_mixin, "_get_client", return_value=mock_client):
             result = await watch_mixin.stop_watch()
@@ -417,7 +417,7 @@ class TestStopWatch:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         with patch.object(watch_mixin, "_get_client", return_value=mock_client):
             await watch_mixin.stop_watch()
@@ -570,10 +570,10 @@ class TestHandlePubSubNotification:
                 assert messages[0].id == "good_msg"
 
     @pytest.mark.asyncio
-    async def test_handle_notification_handles_message_fetch_error(
+    async def test_handle_notification_raises_on_message_fetch_error(
         self, watch_mixin, sample_pubsub_payload
     ):
-        """Test notification handles errors when fetching individual messages."""
+        """A failed per-message fetch fails the webhook closed: raise and record the error."""
         watch_mixin._gmail_state = GmailSyncState(
             user_id="me",
             email_address="test@example.com",
@@ -589,10 +589,11 @@ class TestHandlePubSubNotification:
             with patch.object(watch_mixin, "get_message") as mock_get:
                 mock_get.side_effect = RuntimeError("Failed to fetch")
 
-                # Should not raise, just log warning
-                messages = await watch_mixin.handle_pubsub_notification(sample_pubsub_payload)
+                with pytest.raises(RuntimeError, match="Failed to fetch message msg_1"):
+                    await watch_mixin.handle_pubsub_notification(sample_pubsub_payload)
 
-                assert messages == []
+        assert watch_mixin._gmail_state.sync_errors == 1
+        assert watch_mixin._gmail_state.last_error == "Webhook processing failed"
 
     @pytest.mark.asyncio
     async def test_handle_notification_with_pagination(self, watch_mixin, sample_pubsub_payload):
@@ -728,7 +729,7 @@ class TestWatchRenewal:
         mock_client = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_httpx_response(200, watch_response))
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
 
         watch_mixin._watch_running = True
 
@@ -764,32 +765,31 @@ class TestWatchRenewal:
             )
 
     @pytest.mark.asyncio
-    async def test_watch_renewal_loop_retries_on_failure(self, watch_mixin):
-        """Test renewal loop retries on setup failure."""
+    async def test_watch_renewal_loop_stops_and_raises_on_failure(self, watch_mixin):
+        """A failed renewal stops the loop and re-raises (fail closed, no silent retry)."""
         call_count = 0
 
         async def mock_setup_watch(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            if call_count == 1:
-                raise RuntimeError("Setup failed")
-            else:
-                watch_mixin._watch_running = False
-                return {"success": True}
+            raise RuntimeError("Setup failed")
 
         with patch.object(watch_mixin, "setup_watch", side_effect=mock_setup_watch):
             with patch("asyncio.sleep") as mock_sleep:
                 mock_sleep.return_value = None
 
                 watch_mixin._watch_running = True
-                await watch_mixin._watch_renewal_loop(
-                    topic_name="test-topic",
-                    renewal_hours=144,
-                    project_id="my-project",
-                )
+                with pytest.raises(RuntimeError, match="Setup failed"):
+                    await watch_mixin._watch_renewal_loop(
+                        topic_name="test-topic",
+                        renewal_hours=144,
+                        project_id="my-project",
+                    )
 
-                # Should have called sleep with 60 seconds for retry
-                assert any(call[0][0] == 60 for call in mock_sleep.call_args_list)
+        assert call_count == 1
+        assert watch_mixin._watch_running is False
+        # The loop stops rather than scheduling a retry back-off.
+        assert not any(call[0][0] == 60 for call in mock_sleep.call_args_list)
 
 
 # =============================================================================

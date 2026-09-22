@@ -16,6 +16,10 @@ claims:
       - path: docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/latest.json
       - workflow: Benchmark Truth Publication
     freshness_sla_hours: 24
+    truth_status:
+      state: live
+      last_verified_at: "2026-07-11T06:26:00Z"
+      note: "Rechecked by rendering the benchmark truth status from the current checkout."
     verification:
       kind: command
       command: "python3 scripts/render_benchmark_truth_status.py --output /tmp/aragora-b0-benchmark-truth-status.md"
@@ -38,6 +42,10 @@ claims:
       - path: docs/status/generated/rescue_productization/latest.json
       - workflow: Rescue Productization Publication
     freshness_sla_hours: 24
+    truth_status:
+      state: live
+      last_verified_at: "2026-07-11T06:26:00Z"
+      note: "Rechecked by rendering the rescue productization status from the current checkout."
     verification:
       kind: command
       command: "python3 scripts/render_rescue_productization_status.py --output /tmp/aragora-tw03-rescue-productization-status.md"
@@ -61,6 +69,10 @@ claims:
       - path: docs/plans/EPISTEMIC_CI_AND_CRUX_ENGINE.md
       - issue: 6023
     freshness_sla_hours: 168
+    truth_status:
+      state: live
+      last_verified_at: "2026-07-11T06:26:00Z"
+      note: "Rechecked with status-doc reconciliation; it passed with no critical findings."
     verification:
       kind: command
       command: "python3 scripts/reconcile_status_docs.py --json"
