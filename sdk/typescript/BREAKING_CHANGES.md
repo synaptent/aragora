@@ -6,9 +6,68 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-09-13)
+
+#### Breaking Changes
+
+Contract-drift batch 3 removes 24 operations on unserved routes absent from both
+OpenAPI documents. The deprecated debate methods are included.
+`PipelineTransitionsNamespace` and its barrel export are removed, as is the
+orphaned `DebateAgentStatistics` interface. Routes below use normalized parameters.
+
+`replays.getHtml(replayId)` is retained: the aiohttp server serves
+`GET /api/replays/{replay_id}/html` and its `/api/v1` alias.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `decisions.getOutcome` | `GET /api/v1/decisions/{id}/outcome` | `decisions.getPlanOutcome(planId)` for a completed plan |
+| `PipelineTransitionsNamespace.transition` | `POST /api/v2/pipelines/{id}/items/{id}/transition` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.getHistory` | `GET /api/v2/pipelines/{id}/items/{id}/transitions` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.validate` | `POST /api/v2/pipelines/{id}/items/{id}/transition/validate` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.available` | `GET /api/v2/pipelines/{id}/items/{id}/transitions/available` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `PipelineTransitionsNamespace.rollback` | `POST /api/v2/pipelines/{id}/items/{id}/transition/rollback` | Python `pipeline_transitions`, `/api/v1/pipeline/transitions/*` |
+| `leaderboard.getDomainRankings` | `GET /api/leaderboard/domain/{domain}` | `leaderboard.getDomains()`, `/api/leaderboard/domains` |
+| `leaderboard.getAgentPerformance` | `GET /api/leaderboard/agent/{agent}` | `leaderboard.getRankings()` for aggregate rankings |
+| `leaderboard.getEloHistory` | `GET /api/leaderboard/agent/{agent}/elo-history` | No replacement |
+| `rbac.getEffectivePermissions` | `GET /api/v1/rbac/users/{id}/permissions` | No replacement |
+| `rbac.removeUser` | `DELETE /api/users/{id}` | Use the `users` or `organizations` namespace for the intended operation |
+| `rbac.changeUserRole` | `PUT /api/users/{id}/role` | Use the `users` or `organizations` namespace for the intended operation |
+| `replays.listForks` | `GET /api/replays/{id}/forks` | No replacement |
+| `transcription.getJob` | `GET /api/v1/transcription/{id}` | No replacement; only `/status` is served |
+| `transcription.getSegments` | `GET /api/v1/transcription/{id}/segments` | No replacement; only `/status` is served |
+| `transcription.deleteJob` | `DELETE /api/v1/transcription/{id}` | No replacement; only `/status` is served |
+| `batch.getStatus` | `GET /api/v1/batch/{id}` | No replacement |
+| `genesis.getDebateTree` | `GET /api/v1/genesis/debates/{id}/tree` | No replacement |
+| `voice.synthesizeDebate` | `POST /api/v1/voice/debates/{id}/synthesize` | No replacement |
+| `unifiedInbox.reply` | `POST /inbox/messages/{id}/reply` | No replacement |
+| `learning.stopSession` | `POST /api/v1/learning/sessions/{id}/stop` | No replacement |
+| `learning.validatePattern` | `POST /api/v1/learning/patterns/{id}/validate` | No replacement |
+| `debates.getAgentStatistics` | `GET /api/v1/debates/statistics/agents` | `debates.getStatsAgents()` |
+| `debates.deletePermanently` | `DELETE /api/v1/debates/{id}/permanent` | `debates.delete(debateId)` |
+
 ### Unreleased (2026-09-03)
 
 #### Breaking Changes
+
+`streamDebate`, `streamDebateById`, and client stream wrappers now drain accepted
+events before ending. A socket close without a genuine terminal event throws
+`ConnectionError` after buffered delivery; it no longer manufactures `debate_end`.
+Wrap `for await` in `try/catch` (see the [streaming example](../../docs/guides/SDK_QUICKSTART_TYPESCRIPT.md#real-time-streaming)).
+Close errors expose `WS_CLOSE_<number>` via `error.code`/`error.errorCode` and the
+numeric value via `error.responseBody.code`, without the raw remote reason.
+A native transport error may precede close: the iterator retains close diagnostics
+for up to 1,000 ms after the first error; repeated errors do not restart the window.
+If no close arrives, it throws a sanitized, non-retryable `ConnectionError` without
+a close code. Parsing errors fail immediately and are also non-retryable. Here,
+non-retryable means explicit caller handling is required, not proof of permanence.
+Buffered events still drain; an accepted genuine terminal event before finalization
+takes precedence. Close arriving after finalization cannot revise the outcome.
+`isRetryableError` respects the new optional fifth `ConnectionError` constructor
+argument, `retryable` (default `true` for existing callers). Only close codes
+1001,1006,1011,1012,1013,4029 are retryable; all others, including premature1000,
+require explicit caller handling. This is eligibility, not automatic retry:
+the iterator does not resume, and a new connection guarantees neither replay nor
+gap-free delivery. Bound application retries with backoff; do not restart blindly.
 
 Batch 06 removes 11 matched phantom operations from `IndexAPI`, `ReplaysAPI`, and `DocumentsAPI`.
 For each removed index method, the named route is absent from both OpenAPI documents and is not accepted by the knowledge-base handler: `getIndexStats` (`GET /api/v1/index/{name}/stats`), `addDocuments` (`POST /api/v1/index/{name}/documents`), `updateDocument` (`PUT /api/v1/index/{name}/documents/{documentId}`), `deleteDocuments` (`DELETE /api/v1/index/{name}/documents`), `rebuildIndex` (`POST /api/v1/index/{name}/rebuild`), and `optimizeIndex` (`POST /api/v1/index/{name}/optimize`). The `IndexDocument` and `UpdateDocumentOptions` interfaces are deleted with `addDocuments` and `updateDocument` and are no longer re-exported by the `namespaces` barrel.

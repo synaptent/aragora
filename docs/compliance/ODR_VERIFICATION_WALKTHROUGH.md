@@ -184,7 +184,7 @@ process. For Aragora's overall EU AI Act programme (role determination, Annex
 IV technical documentation, retention policies, generated artifact bundles)
 see [`EU_AI_ACT_GUIDE.md`](EU_AI_ACT_GUIDE.md); for the Article 14 (human
 oversight) mapping see the profile spec
-[§7](../specs/OPEN_DECISION_RECEIPT.md#7-compliance-mapping--eu-ai-act-art-14--nist-ai-600-1).
+[§7](../specs/OPEN_DECISION_RECEIPT.md#7-compliance-crosswalk--eu-ai-act-art-14--nist-ai-600-1).
 
 | Receipt field | Art. 12 — Record-keeping | Art. 13 — Transparency to deployers |
 |---|---|---|

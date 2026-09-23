@@ -6,7 +6,7 @@ The modular structure is in place for future incremental migration of methods.
 """
 
 # Re-export OAuthHandler from the implementation module
-from .._oauth_impl import (
+from ._oauth_impl import (
     OAuthHandler,
     OAuthUserInfo,
     validate_oauth_config,

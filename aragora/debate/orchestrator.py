@@ -38,7 +38,7 @@ from aragora.logging_config import get_logger as get_structured_logger
 from aragora.observability.n1_detector import n1_detection_scope
 from aragora.observability.tracing import add_span_attributes, get_tracer
 from aragora.debate.performance_monitor import get_debate_monitor
-from aragora.server.metrics import ACTIVE_DEBATES
+from aragora.observability.server_metrics import ACTIVE_DEBATES
 from aragora.spectate.stream import SpectatorStream
 
 # Extracted sibling modules

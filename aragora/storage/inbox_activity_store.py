@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from aragora.config import resolve_db_path
+from aragora.storage.connection_factory import is_postgres_backend
 
 from aragora.storage.backends import (
     POSTGRESQL_AVAILABLE,
@@ -174,7 +175,9 @@ class InboxActivityStore:
 
         if backend is None:
             env_backend = os.environ.get("ARAGORA_DB_BACKEND", "sqlite").lower()
-            backend = "postgresql" if (actual_url and env_backend == "postgresql") else "sqlite"
+            backend = (
+                "postgresql" if (actual_url and is_postgres_backend(env_backend)) else "sqlite"
+            )
 
         self.backend_type = backend
         self._backend: DatabaseBackend | None = None

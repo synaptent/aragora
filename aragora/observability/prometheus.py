@@ -124,10 +124,10 @@ from aragora.observability.prometheus_decorators import (  # noqa: F401, E402
 # ============================================================================
 # Extracted domain-specific modules (import directly)
 # ============================================================================
-# Nomic metrics: from aragora.server.prometheus_nomic import ...
-# Control Plane metrics: from aragora.server.prometheus_control_plane import ...
-# RLM metrics: from aragora.server.prometheus_rlm import ...
-# Knowledge metrics: from aragora.server.prometheus_knowledge import ...
+# Nomic metrics: aragora/server/prometheus_nomic.py
+# Control Plane metrics: aragora/server/prometheus_control_plane.py
+# RLM metrics: aragora/server/prometheus_rlm.py
+# Knowledge metrics: aragora/server/prometheus_knowledge.py
 
 __all__ = [
     # Core

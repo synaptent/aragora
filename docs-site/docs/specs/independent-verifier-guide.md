@@ -161,9 +161,9 @@ The verifier's public API uses stable Ed25519 verification and PEM loading, but
 the packaged wheel still brings in `cryptography`'s OpenSSL-backed distribution;
 the raised floor keeps isolated installs off affected wheels even when Aragora's
 root lockfile is absent. If you are auditing the currently published `0.1.1`
-PyPI line before a `0.1.2` release exists, verify the installed wheel's
-metadata directly or run from this checkout so the raised floor is part of the
-package under test. The local metadata guard test covers the source tree; making
+PyPI line before the `0.2.0` release exists — `0.2.0` is the first published line
+that accepts ODR v0.2 documents — verify the installed wheel's metadata directly
+or run from this checkout so the raised floor is part of the package under test. The local metadata guard test covers the source tree; making
 that guard a required PR workflow is intentionally separate from this packaging
 repair and needs the normal workflow-change approval path.
 
