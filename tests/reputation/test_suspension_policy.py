@@ -115,6 +115,18 @@ def test_threshold_rejects_negative_suspension_days():
         SuspensionThreshold(suspension_days=-1.0)
 
 
+def test_threshold_rejects_nan_suspension_days():
+    with pytest.raises(ValueError, match="suspension_days must be > 0"):
+        SuspensionThreshold(suspension_days=float("nan"))
+
+
+def test_threshold_rejects_nan_score_floor():
+    # Every comparison with NaN is False, so a NaN floor would suspend any
+    # agent with enough samples regardless of score.
+    with pytest.raises(ValueError, match="score_floor must be a number"):
+        SuspensionThreshold(score_floor=float("nan"))
+
+
 # ---------------------------------------------------------------------------
 # Fingerprint determinism
 # ---------------------------------------------------------------------------

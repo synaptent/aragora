@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -94,9 +95,11 @@ class SuspensionThreshold:
     domains: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
+        if math.isnan(self.score_floor):
+            raise ValueError(f"score_floor must be a number; got {self.score_floor}")
         if self.min_samples < 1:
             raise ValueError(f"min_samples must be >= 1; got {self.min_samples}")
-        if self.suspension_days <= 0:
+        if not self.suspension_days > 0:
             raise ValueError(f"suspension_days must be > 0; got {self.suspension_days}")
 
     def fingerprint(self) -> str:
