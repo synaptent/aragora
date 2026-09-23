@@ -2013,11 +2013,20 @@ class TestParsedBodyContract:
     )
     async def test_missing_body_without_parser_error_fails_closed(self, handler_func):
         request = create_mock_request(headers={"X-ANET-Signature": "sha512=test"})
-        with patch(
-            "aragora.server.handlers.payments.stripe.parse_json_body",
-            new_callable=AsyncMock,
-            return_value=(None, None),
+        with (
+            patch(
+                "aragora.server.handlers.payments.stripe.parse_json_body",
+                new_callable=AsyncMock,
+                return_value=(None, None),
+            ),
+            patch(f"{PKG}.get_stripe_connector", new_callable=AsyncMock) as stripe_connector,
+            patch(f"{PKG}.get_authnet_connector", new_callable=AsyncMock) as authnet_connector,
         ):
             response = await handler_func(request)
 
+        # The webhook's generic error handler also answers 400, so the status alone
+        # cannot tell the absent-body guard apart from a later failure.
         assert _status(response) == 400
+        assert _body(response) == {"error": "Invalid request body"}
+        stripe_connector.assert_not_awaited()
+        authnet_connector.assert_not_awaited()
