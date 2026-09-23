@@ -172,6 +172,11 @@ export class ReceiptsAPI {
    *
    * Public endpoint (no auth required). The document is not persisted.
    *
+   * On a deployment that serves no signing key `verified` is always false and
+   * `key_id` is null, with the signature entry in `checks` reported as `skip`
+   * or `warn` rather than `fail`. A false verdict alone is not evidence of
+   * tampering: read `checks`.
+   *
    * @param document - An ODR document carrying `odr_version`
    * @returns Object with `verified`, `checks`, `warnings`, `dissent_trail`, `key_id`
    */
