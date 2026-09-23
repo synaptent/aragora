@@ -88,9 +88,27 @@ def _auth_enabled() -> bool:
     return bool(auth_config.enabled)
 
 
+def _public_odr_export_enabled() -> bool:
+    """True when ``format=odr`` is served to a caller carrying no AuthorizationContext.
+
+    Read per request, like :func:`_auth_enabled`, so a deployment can be flipped
+    without a restart.
+    """
+    from aragora.config.env_helpers import env_bool
+
+    return env_bool("ARAGORA_ENABLE_PUBLIC_ODR_EXPORT", False)
+
+
 def _auth_required_response() -> HandlerResult:
     """401 envelope matching the one the server's own auth layer emits."""
     return json_response({"error": "Authentication required", "code": "auth_required"}, status=401)
+
+
+def _permission_denied_response(exc: Exception) -> HandlerResult:
+    """403 envelope matching the flat shape the RBAC middleware emits."""
+    return json_response(
+        {"error": f"Permission denied: {exc}", "code": "permission_denied"}, status=403
+    )
 
 
 def _content_length(headers: dict[str, str] | None) -> int | None:
@@ -742,22 +760,35 @@ class ReceiptsHandler(BaseHandler):
 
                 receipt_id = parts[4]
 
-                # Export endpoint. The ODR format is a public trust surface and
-                # is served without an AuthorizationContext; every other format
-                # stays behind receipts:read and answers 401 or 403 rather than
-                # surfacing the decorator's denial as a 500.
+                # Export endpoint. This dispatch is the single choke point for
+                # export authorization: the exemption rules in rbac/middleware.py
+                # and auth_checks.py only admit the request here, and every
+                # branch below fails closed. ODR is reachable without an
+                # AuthorizationContext only where ARAGORA_ENABLE_PUBLIC_ODR_EXPORT
+                # opens it; every format stays behind receipts:read for a caller
+                # that has one, answering 401 or 403 rather than surfacing the
+                # decorator's denial as a 500.
                 if len(parts) > 5 and parts[5] == "export":
                     export_params = _last_query_values(query_params)
+                    auth_context = _request_auth_context(handler)
                     if (export_params.get("format") or "json").strip().lower() == "odr":
-                        # The ODR branch is unauthenticated, so it stays read-only
-                        # instead of falling through to the permission-gated path.
+                        # The ODR branch is read-only, so it never falls through
+                        # to the write-capable methods of the export path.
                         if method != "GET":
                             return error_response(
                                 "Method not allowed: GET /api/v2/receipts/{id}/export?format=odr",
                                 405,
                             )
-                        return await self._export_odr(receipt_id, export_params)
-                    auth_context = _request_auth_context(handler)
+                        if auth_context is None:
+                            if _auth_enabled() and not _public_odr_export_enabled():
+                                return _auth_required_response()
+                            return await self._export_odr(receipt_id, export_params)
+                        try:
+                            return await self._export_odr_for_context(
+                                receipt_id, export_params, context=auth_context
+                            )
+                        except PermissionDeniedError as exc:
+                            return _permission_denied_response(exc)
                     if auth_context is None:
                         if _auth_enabled():
                             return _auth_required_response()
@@ -767,10 +798,7 @@ class ReceiptsHandler(BaseHandler):
                             receipt_id, export_params, context=auth_context
                         )
                     except PermissionDeniedError as exc:
-                        return json_response(
-                            {"error": f"Permission denied: {exc}", "code": "permission_denied"},
-                            status=403,
-                        )
+                        return _permission_denied_response(exc)
 
                 # Combined verification (signature + integrity)
                 if len(parts) > 5 and parts[5] == "verify" and method == "GET":
@@ -1241,12 +1269,20 @@ class ReceiptsHandler(BaseHandler):
             logger.exception("Export failed: %s", e)
             return error_response(safe_error_message(e, "receipt export"), 500)
 
+    @require_permission("receipts:read")
+    async def _export_odr_for_context(
+        self, receipt_id: str, query_params: dict[str, str], context: Any
+    ) -> HandlerResult:
+        """Hold an authenticated caller to ``receipts.read`` before serving ODR."""
+        return await self._export_odr(receipt_id, query_params)
+
     async def _export_odr(self, receipt_id: str, query_params: dict[str, str]) -> HandlerResult:
         """Serve a receipt as a JCS-canonical Open Decision Receipt document.
 
         Public by design (architecture §2.10): an auditor holding only a
         receipt id must be able to fetch the document and verify it offline
-        against the published signing key.
+        against the published signing key, subject to the
+        ``ARAGORA_ENABLE_PUBLIC_ODR_EXPORT`` gate the dispatch applies.
         """
         from aragora.gauntlet.odr_export import resolve_odr_version
         from aragora.gauntlet.odr_jcs import jcs_canonicalize, odr_content_digest

@@ -492,6 +492,15 @@ def _receipts_handler(receipt_id: str = "r-odr-1") -> Any:
     return handler
 
 
+def _export_gate(*, public: bool, auth: bool = True) -> Any:
+    """Patch the two request-time predicates the export dispatch reads."""
+    return patch.multiple(
+        "aragora.server.handlers.decisions.receipts",
+        _auth_enabled=lambda: auth,
+        _public_odr_export_enabled=lambda: public,
+    )
+
+
 def _signing_material() -> tuple[Any, str, str]:
     """Generate a throwaway Ed25519 signing key with its PEM and key id."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -696,12 +705,66 @@ class TestPublicOdrExport:
     @pytest.mark.asyncio
     async def test_odr_format_stays_public_when_auth_is_enabled(self):
         handler = _receipts_handler()
-        with patch("aragora.server.handlers.decisions.receipts._auth_enabled", return_value=True):
+        with _export_gate(public=True):
             result = await handler.handle(
                 "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
             )
 
         assert result.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_odr_is_denied_to_an_anonymous_caller_when_the_gate_is_closed(self):
+        handler = _receipts_handler()
+        with _export_gate(public=False):
+            result = await handler.handle(
+                "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+            )
+
+        assert result.status_code == 401
+        assert json.loads(result.body) == {
+            "error": "Authentication required",
+            "code": "auth_required",
+        }
+
+    @pytest.mark.asyncio
+    async def test_odr_serves_a_receipts_read_context_when_the_gate_is_closed(self):
+        from aragora.rbac.models import AuthorizationContext
+
+        request = _make_mock_handler()
+        request._auth_context = AuthorizationContext(
+            user_id="auditor-1", permissions={"receipts:read"}
+        )
+        handler = _receipts_handler()
+
+        with _export_gate(public=False):
+            result = await handler.handle(
+                "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}, {}, request
+            )
+
+        assert result.status_code == 200
+        assert json.loads(result.body)["receipt_id"] == "r-odr-1"
+
+    @pytest.mark.no_auto_auth
+    @pytest.mark.asyncio
+    async def test_odr_denies_a_context_without_receipts_read(self):
+        """The conftest RBAC bypass is opted out of so the real checker decides."""
+        from aragora.rbac.models import AuthorizationContext
+
+        request = _make_mock_handler()
+        request._auth_context = AuthorizationContext(
+            user_id="u-member", roles={"member"}, permissions=set()
+        )
+        handler = _receipts_handler()
+
+        with patch("aragora.server.handlers.decisions.receipts._auth_enabled", return_value=True):
+            result = await handler.handle(
+                "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}, {}, request
+            )
+
+        assert result.status_code == 403
+        body = json.loads(result.body)
+        assert body["error"].startswith("Permission denied: ")
+        assert body["code"] == "permission_denied"
 
     @pytest.mark.asyncio
     async def test_legacy_format_succeeds_with_a_receipts_read_context(self):
