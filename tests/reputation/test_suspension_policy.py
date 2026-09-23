@@ -323,6 +323,64 @@ def test_domain_filter_insufficient_samples(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Reversed deltas (ReputationStore.reverse_delta)
+# ---------------------------------------------------------------------------
+
+
+def test_reversed_deltas_do_not_count_toward_min_samples(monkeypatch):
+    monkeypatch.setenv(_FLAG, "1")
+    checker = SuspensionChecker()  # default: floor -50, min_samples 10
+    store = ReputationStore()
+    for i in range(11):
+        d = _delta("agent-r", delta=10.0, idx=i)
+        store.record_delta(d)
+        store.reverse_delta(d.delta_id)
+    store.record_delta(_delta("agent-r", delta=-60.0, idx=99))
+    decision = checker.check("agent-r", store)
+    assert not decision.suspended
+    assert decision.reason == "insufficient_samples"
+    assert decision.sample_count == 1
+    assert decision.score == -60.0
+
+
+def test_domain_filter_excludes_reversed_deltas(monkeypatch, tmp_path):
+    monkeypatch.setenv(_FLAG, "1")
+    threshold = SuspensionThreshold(
+        score_floor=-50.0,
+        min_samples=3,
+        domains=frozenset({"prediction_market"}),
+    )
+    checker = SuspensionChecker(threshold=threshold)
+    path = tmp_path / "deltas.jsonl"
+    store = ReputationStore(path=path)
+    for i in range(12):
+        store.record_delta(_delta("agent-s", delta=-10.0, idx=i))
+    for i in range(8):
+        store.reverse_delta(f"rep_agent-s_prediction_market_{i:04d}")
+    assert store.get_score("agent-s") == -40.0
+    for s in (store, ReputationStore.load_from_file(path)):
+        decision = checker.check("agent-s", s)
+        assert not decision.suspended
+        assert decision.reason == "score_above_floor"
+        assert decision.score == -40.0
+        assert decision.sample_count == 4
+
+
+@pytest.mark.parametrize("domains", [None, frozenset({"prediction_market"})])
+def test_fully_reversed_history_is_no_data(monkeypatch, domains):
+    monkeypatch.setenv(_FLAG, "1")
+    checker = SuspensionChecker(threshold=SuspensionThreshold(domains=domains))
+    store = _store_with_deltas("agent-t", count=12, delta_value=-10.0)
+    for i in range(12):
+        store.reverse_delta(f"rep_agent-t_prediction_market_{i:04d}")
+    decision = checker.check("agent-t", store)
+    assert not decision.suspended
+    assert decision.reason == "no_data"
+    assert decision.score is None
+    assert decision.sample_count == 0
+
+
+# ---------------------------------------------------------------------------
 # threshold_fingerprint in decisions
 # ---------------------------------------------------------------------------
 

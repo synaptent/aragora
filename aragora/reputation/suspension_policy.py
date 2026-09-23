@@ -76,9 +76,9 @@ class SuspensionThreshold:
             suspension. Default ``-50.0``. Scores are unbounded; a floor
             of -50.0 means an agent must net-lose 50 stake-units before
             being suspended.
-        min_samples: Minimum number of deltas before suspension can fire.
-            Prevents excluding agents with insufficient evidence (default
-            ``10``).
+        min_samples: Minimum number of non-reversed deltas before
+            suspension can fire. Prevents excluding agents with
+            insufficient evidence (default ``10``).
         suspension_days: Advisory suspension duration stored in
             :class:`SuspensionDecision` for downstream ledgers. This
             module does not enforce a timeout (default ``7.0``).
@@ -123,7 +123,8 @@ class SuspensionDecision:
             ``"score_above_floor"``, ``"score_below_floor"``.
         score: Running reputation score used for the decision. ``None``
             when there is no data or the flag is disabled.
-        sample_count: Number of deltas evaluated (after domain filter).
+        sample_count: Number of non-reversed deltas evaluated (after
+            domain filter).
         threshold_fingerprint: SHA-256 fingerprint of the
             :class:`SuspensionThreshold` that produced this decision.
         decided_at: ISO-8601 UTC timestamp of the decision.
@@ -210,14 +211,16 @@ class SuspensionChecker:
         if not suspension_enabled():
             return _make(suspended=False, reason="flag_disabled", score=None, sample_count=0)
 
-        all_deltas = store.deltas_for(agent_id)
-        if not all_deltas:
+        # deltas_for() still returns reversed deltas; only get_score() drops them.
+        reversed_ids = {r.original_delta_id for r in store.reversals_for(agent_id)}
+        live_deltas = [d for d in store.deltas_for(agent_id) if d.delta_id not in reversed_ids]
+        if not live_deltas:
             return _make(suspended=False, reason="no_data", score=None, sample_count=0)
 
         if self._threshold.domains is not None:
-            relevant = [d for d in all_deltas if d.domain in self._threshold.domains]
+            relevant = [d for d in live_deltas if d.domain in self._threshold.domains]
         else:
-            relevant = all_deltas
+            relevant = live_deltas
 
         sample_count = len(relevant)
         if sample_count == 0:
