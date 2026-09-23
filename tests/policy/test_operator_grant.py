@@ -178,6 +178,8 @@ def test_context_bool_does_not_match_integer_and_signed_wrong_repo_rejects(state
         ("validation_commands", []),
         ("review_requirements", None),
         ("issued_at", "2026-02-30T00:00:00Z"),
+        ("issued_at", "\u0662\u0660\u0662\u0666-09-07T11:59:00Z"),
+        ("not_before", "\uff12\uff10\uff12\uff16-09-07T12:00:00Z"),
         ("not_before", "2026-09-07T12:00:00+00:00"),
         ("not_before", "2026-09-07T11:58:00Z"),
         ("expires_at", "2026-09-09T00:00:00Z"),

@@ -162,7 +162,11 @@ def _strings(value: Any, *, empty: bool = False) -> None:
 
 def _timestamp(value: Any) -> datetime:
     _text(value)
-    _require(re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", value) is not None)
+    # `\d` would admit non-ASCII decimal digits, which strptime then parses to the same
+    # instant under a different byte encoding; the closed schema allows exactly one form.
+    _require(
+        re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", value) is not None
+    )
     try:
         return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
     except ValueError as exc:
