@@ -690,6 +690,47 @@ class TestPublicOdrExport:
             assert loader.call_count == 2
 
     @pytest.mark.asyncio
+    async def test_served_public_key_and_signing_key_rotate_together(self, monkeypatch):
+        """A rotation can never leave the served key behind the key that signs."""
+        import time
+
+        from aragora.gauntlet import odr_signing
+        from aragora.gauntlet.odr_verify import load_public_key, verify_odr_document
+
+        first, _, _ = _signing_material()
+        second, _, _ = _signing_material()
+        keys = [first]
+        clock = [1000.0]
+        monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+        handler = _receipts_handler()
+
+        async def _export_verifies_against_the_served_key() -> bool:
+            served = await handler.handle("GET", "/.well-known/aragora-odr-signing-key", {}, {})
+            export = await handler.handle(
+                "GET", "/api/v2/receipts/r-odr-1/export", {}, {"format": "odr"}
+            )
+            outcome = verify_odr_document(
+                json.loads(export.body), public_key=load_public_key(served.body)
+            )
+            return outcome.ok and any(
+                c.name == "signature" and c.status == "pass" for c in outcome.checks
+            )
+
+        with patch.object(odr_signing, "load_signing_key_from_secrets", lambda: keys[0]):
+            # Warm the served key 150s before the export half, so two independent
+            # TTL timers would fall due 150s apart and straddle the rotation.
+            await handler.handle("GET", "/.well-known/aragora-odr-signing-key", {}, {})
+            clock[0] += 150.0
+            assert await _export_verifies_against_the_served_key()
+
+            keys[0] = second
+            clock[0] += handler.SIGNING_KEY_CACHE_TTL_SECONDS - 149.0
+            assert await _export_verifies_against_the_served_key()
+
+            clock[0] += handler.SIGNING_KEY_CACHE_TTL_SECONDS
+            assert await _export_verifies_against_the_served_key()
+
+    @pytest.mark.asyncio
     async def test_legacy_format_needs_a_context_when_auth_is_enabled(self):
         handler = _receipts_handler()
         with patch("aragora.server.handlers.decisions.receipts._auth_enabled", return_value=True):

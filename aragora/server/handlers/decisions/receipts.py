@@ -563,17 +563,13 @@ class ReceiptsHandler(BaseHandler):
         )
         self._store = None  # Set by tests or lazy init
         self._share_store = None  # Set by tests or lazy init
-        # Cached (monotonic_timestamp, (public_key_pem, key_id) | None) for the
-        # ODR signing-key endpoints; only PUBLIC key material is cached here.
-        # A cached None is a negative entry (resolution failed recently).
-        self._signing_key_cache: tuple[float, tuple[str, str] | None] | None = None
-        # Cached (monotonic_timestamp, private_key | OdrSigningError) for the
-        # public ODR export, which would otherwise reload the private key on
-        # every anonymous request. Same TTLs as the public-key cache; a cached
-        # error is re-raised so an export storm cannot amplify into Secrets
-        # Manager. The private key already lives in process memory for the
-        # duration of each signing call; this keeps it resident for the TTL.
-        self._export_signing_key_cache: tuple[float, Any] | None = None
+        # Cached (monotonic_timestamp, (private_key, public_key_pem, key_id)) or
+        # (monotonic_timestamp, OdrSigningError). ONE slot backs the signing-key
+        # endpoints, the ODR export signature and the verify endpoint, so the
+        # published key is always the public half of the key that signs, even
+        # across a rotation. A cached error is re-raised so an export storm
+        # cannot amplify into Secrets Manager.
+        self._signing_key_cache: tuple[float, Any] | None = None
 
     def _get_store(self):
         """Get receipt store (lazy initialization)."""
@@ -1547,11 +1543,11 @@ class ReceiptsHandler(BaseHandler):
         )
 
     @staticmethod
-    def _resolve_signing_public_key() -> tuple[str, str]:
-        """Load the configured ODR signing key and return (public_key_pem, key_id).
+    def _resolve_signing_key_material() -> tuple[Any, str, str]:
+        """Load the configured ODR signing key as (private_key, public_key_pem, key_id).
 
-        The private key never leaves this function: only the PEM of its public
-        half and the derived key id are returned. Raises
+        Returning all three from one load is what lets a single cache slot serve
+        both halves. Raises
         :class:`aragora.gauntlet.odr_signing.OdrSigningError` when no signing
         key is configured or it cannot be loaded — the endpoints fail closed
         (404) instead of ever generating a key on demand.
@@ -1563,53 +1559,21 @@ class ReceiptsHandler(BaseHandler):
         )
 
         private_key = load_signing_key_from_secrets()
-        return public_key_pem(private_key), compute_key_id(private_key.public_key())
+        return private_key, public_key_pem(private_key), compute_key_id(private_key.public_key())
 
-    async def _get_signing_public_key(self) -> tuple[str, str] | None:
-        """Return cached (public_key_pem, key_id), or None when unconfigured."""
+    def _signing_key_material(self) -> tuple[Any, str, str]:
+        """Return the cached (private_key, public_key_pem, key_id), reloading on TTL.
+
+        Runs in a worker thread from its async callers; a concurrent first call
+        may load the key twice, but the tuple swap is atomic, so both see a
+        usable entry.
+        """
         import time
 
         from aragora.gauntlet.odr_signing import OdrSigningError
 
         now = time.monotonic()
         cached = self._signing_key_cache
-        if cached is not None:
-            ttl = (
-                self.SIGNING_KEY_CACHE_TTL_SECONDS
-                if cached[1] is not None
-                else self.SIGNING_KEY_NEGATIVE_CACHE_TTL_SECONDS
-            )
-            if now - cached[0] < ttl:
-                return cached[1]
-
-        try:
-            resolved: tuple[str, str] | None = await asyncio.to_thread(
-                self._resolve_signing_public_key
-            )
-        except OdrSigningError as e:
-            # Fail closed: no key configured/loadable means 404, never a
-            # generated key. Static message to callers; detail in logs only.
-            # Negative-cached: these endpoints are public, and an uncached
-            # failure would forward every request to Secrets Manager.
-            logger.info("ODR signing key unavailable: %s", e)
-            resolved = None
-
-        self._signing_key_cache = (now, resolved)
-        return resolved
-
-    def _load_export_signing_key(self) -> Any:
-        """Return the private ODR signing key, reloaded once the TTL has lapsed.
-
-        Runs in a worker thread from :meth:`_export_odr`. A concurrent first
-        call may load the key twice; the tuple swap is atomic, so both see a
-        usable entry.
-        """
-        import time
-
-        from aragora.gauntlet.odr_signing import OdrSigningError, load_signing_key_from_secrets
-
-        now = time.monotonic()
-        cached = self._export_signing_key_cache
         if cached is not None:
             failed = isinstance(cached[1], OdrSigningError)
             ttl = (
@@ -1623,12 +1587,29 @@ class ReceiptsHandler(BaseHandler):
                 return cached[1]
 
         try:
-            loaded: Any = load_signing_key_from_secrets()
+            material = self._resolve_signing_key_material()
         except OdrSigningError as e:
-            self._export_signing_key_cache = (now, e)
+            self._signing_key_cache = (now, e)
             raise
-        self._export_signing_key_cache = (now, loaded)
-        return loaded
+        self._signing_key_cache = (now, material)
+        return material
+
+    async def _get_signing_public_key(self) -> tuple[str, str] | None:
+        """Return cached (public_key_pem, key_id), or None when unconfigured."""
+        from aragora.gauntlet.odr_signing import OdrSigningError
+
+        try:
+            material = await asyncio.to_thread(self._signing_key_material)
+        except OdrSigningError as e:
+            # Fail closed: no key configured/loadable means 404, never a
+            # generated key. Static message to callers; detail in logs only.
+            logger.info("ODR signing key unavailable: %s", e)
+            return None
+        return material[1], material[2]
+
+    def _load_export_signing_key(self) -> Any:
+        """Return the private half of the cached signing key for ODR export."""
+        return self._signing_key_material()[0]
 
     @api_endpoint(
         method="GET",
