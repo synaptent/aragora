@@ -32,7 +32,7 @@ from aragora.server.cors_config import ALLOWED_ORIGINS
 MAX_REQUEST_SIZE = 50 * 1024 * 1024
 
 from aragora.replay.storage import ReplayStorage
-from aragora.server.storage import DebateStorage
+from aragora.storage.debate_storage import DebateStorage
 from aragora.utils.paths import PathTraversalError, safe_path
 
 

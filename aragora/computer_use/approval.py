@@ -213,7 +213,7 @@ class WebhookNotifier(ApprovalNotifier):
     async def _send_webhook(self, payload: dict[str, Any]) -> None:
         """Send webhook notification."""
         try:
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             headers = {"Content-Type": "application/json"}
             if self._auth_token:
