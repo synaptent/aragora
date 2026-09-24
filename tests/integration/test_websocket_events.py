@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from aragora.server.stream.events import StreamEvent, StreamEventType, AudienceMessage
+from aragora.events.types import StreamEvent, StreamEventType, AudienceMessage
 from aragora.server.stream.emitter import SyncEventEmitter, TokenBucket, AudienceInbox
 
 

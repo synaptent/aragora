@@ -2,7 +2,7 @@
 
 import pytest
 
-from aragora.server.metrics.gateway import (
+from aragora.observability.server_metrics.gateway import (
     GATEWAY_OPERATION_LATENCY,
     GATEWAY_EXTERNAL_CALLS,
     CREDENTIAL_CACHE_HITS,
@@ -27,7 +27,7 @@ class TestGatewayMetrics:
 
     def test_operation_latency_is_histogram(self):
         """GATEWAY_OPERATION_LATENCY is a Histogram with correct labels."""
-        from aragora.server.metrics.types import Histogram
+        from aragora.observability.server_metrics.types import Histogram
 
         assert isinstance(GATEWAY_OPERATION_LATENCY, Histogram)
         assert "operation" in GATEWAY_OPERATION_LATENCY.label_names
@@ -36,7 +36,7 @@ class TestGatewayMetrics:
 
     def test_external_calls_is_counter(self):
         """GATEWAY_EXTERNAL_CALLS is a Counter with correct labels."""
-        from aragora.server.metrics.types import Counter
+        from aragora.observability.server_metrics.types import Counter
 
         assert isinstance(GATEWAY_EXTERNAL_CALLS, Counter)
         assert "agent_type" in GATEWAY_EXTERNAL_CALLS.label_names
@@ -45,19 +45,19 @@ class TestGatewayMetrics:
 
     def test_credential_cache_hits_is_counter(self):
         """CREDENTIAL_CACHE_HITS is a Counter."""
-        from aragora.server.metrics.types import Counter
+        from aragora.observability.server_metrics.types import Counter
 
         assert isinstance(CREDENTIAL_CACHE_HITS, Counter)
 
     def test_credential_cache_misses_is_counter(self):
         """CREDENTIAL_CACHE_MISSES is a Counter."""
-        from aragora.server.metrics.types import Counter
+        from aragora.observability.server_metrics.types import Counter
 
         assert isinstance(CREDENTIAL_CACHE_MISSES, Counter)
 
     def test_hybrid_verification_time_is_histogram(self):
         """HYBRID_VERIFICATION_TIME is a Histogram with phase label."""
-        from aragora.server.metrics.types import Histogram
+        from aragora.observability.server_metrics.types import Histogram
 
         assert isinstance(HYBRID_VERIFICATION_TIME, Histogram)
         assert "phase" in HYBRID_VERIFICATION_TIME.label_names
@@ -149,7 +149,7 @@ class TestModuleExports:
 
     def test_exports_from_gateway_module(self):
         """Gateway module exposes expected attributes."""
-        from aragora.server.metrics import gateway
+        from aragora.observability.server_metrics import gateway
 
         assert hasattr(gateway, "track_gateway_operation")
         assert hasattr(gateway, "track_credential_cache")
@@ -162,7 +162,7 @@ class TestModuleExports:
 
     def test_exports_from_metrics_package(self):
         """Gateway metrics are re-exported from the metrics package."""
-        from aragora.server.metrics import (
+        from aragora.observability.server_metrics import (
             GATEWAY_OPERATION_LATENCY as pkg_latency,
             GATEWAY_EXTERNAL_CALLS as pkg_calls,
             CREDENTIAL_CACHE_HITS as pkg_hits,

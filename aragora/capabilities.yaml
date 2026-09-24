@@ -113,7 +113,7 @@ capabilities:
       - aragora/verticals/base.py
       - aragora/verticals/registry.py
       - aragora/verticals/specialists/
-      - aragora/server/handlers/verticals.py
+      - aragora/server/handlers/agents/verticals.py
     feature_flags:
       - ARAGORA_ENABLE_VERTICALS
 

@@ -42,25 +42,29 @@ FormalVerificationHandler = _safe_import("aragora.server.handlers", "FormalVerif
 GauntletHandler = _safe_import("aragora.server.handlers", "GauntletHandler")
 
 # Gauntlet v1 sub-handlers
-GauntletSecureHandler = _safe_import("aragora.server.handlers.gauntlet_v1", "GauntletSecureHandler")
-GauntletSchemaHandler = _safe_import("aragora.server.handlers.gauntlet_v1", "GauntletSchemaHandler")
+GauntletSecureHandler = _safe_import(
+    "aragora.server.handlers.gauntlet.gauntlet_v1", "GauntletSecureHandler"
+)
+GauntletSchemaHandler = _safe_import(
+    "aragora.server.handlers.gauntlet.gauntlet_v1", "GauntletSchemaHandler"
+)
 GauntletTemplateHandler = _safe_import(
-    "aragora.server.handlers.gauntlet_v1", "GauntletTemplateHandler"
+    "aragora.server.handlers.gauntlet.gauntlet_v1", "GauntletTemplateHandler"
 )
 GauntletValidateReceiptHandler = _safe_import(
-    "aragora.server.handlers.gauntlet_v1", "GauntletValidateReceiptHandler"
+    "aragora.server.handlers.gauntlet.gauntlet_v1", "GauntletValidateReceiptHandler"
 )
 GauntletAllSchemasHandler = _safe_import(
-    "aragora.server.handlers.gauntlet_v1", "GauntletAllSchemasHandler"
+    "aragora.server.handlers.gauntlet.gauntlet_v1", "GauntletAllSchemasHandler"
 )
 GauntletTemplatesListHandler = _safe_import(
-    "aragora.server.handlers.gauntlet_v1", "GauntletTemplatesListHandler"
+    "aragora.server.handlers.gauntlet.gauntlet_v1", "GauntletTemplatesListHandler"
 )
 GauntletReceiptExportHandler = _safe_import(
-    "aragora.server.handlers.gauntlet_v1", "GauntletReceiptExportHandler"
+    "aragora.server.handlers.gauntlet.gauntlet_v1", "GauntletReceiptExportHandler"
 )
 GauntletHeatmapExportHandler = _safe_import(
-    "aragora.server.handlers.gauntlet_v1", "GauntletHeatmapExportHandler"
+    "aragora.server.handlers.gauntlet.gauntlet_v1", "GauntletHeatmapExportHandler"
 )
 
 # Review & evaluation handlers
@@ -112,8 +116,12 @@ DecisionPackageHandler = _safe_import(
 DebateDecisionBridgeHandler = _safe_import(
     "aragora.server.handlers.debates.bridge", "DebateDecisionBridgeHandler"
 )
-SettlementHandler = _safe_import("aragora.server.handlers.settlements", "SettlementHandler")
-SpectateStreamHandler = _safe_import("aragora.server.handlers.spectate_ws", "SpectateStreamHandler")
+SettlementHandler = _safe_import(
+    "aragora.server.handlers.governance.settlements", "SettlementHandler"
+)
+SpectateStreamHandler = _safe_import(
+    "aragora.server.handlers.streaming.spectate_ws", "SpectateStreamHandler"
+)
 ReceiptExportHandler = _safe_import(
     "aragora.server.handlers.decisions.receipt_export", "ReceiptExportHandler"
 )
