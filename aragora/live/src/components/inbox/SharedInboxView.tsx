@@ -56,11 +56,31 @@ interface SharedInboxViewProps {
 }
 
 const STATUS_CONFIG: Record<MessageStatus, { color: string; label: string; icon: string }> = {
-  open: { color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30', label: 'Open', icon: '⚪' },
-  assigned: { color: 'text-blue-400 bg-blue-500/10 border-blue-500/30', label: 'Assigned', icon: '👤' },
-  in_progress: { color: 'text-purple-400 bg-purple-500/10 border-purple-500/30', label: 'In Progress', icon: '🔄' },
-  waiting: { color: 'text-orange-400 bg-orange-500/10 border-orange-500/30', label: 'Waiting', icon: '⏳' },
-  resolved: { color: 'text-green-400 bg-green-500/10 border-green-500/30', label: 'Resolved', icon: '✓' },
+  open: {
+    color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
+    label: 'Open',
+    icon: '⚪',
+  },
+  assigned: {
+    color: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+    label: 'Assigned',
+    icon: '👤',
+  },
+  in_progress: {
+    color: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
+    label: 'In Progress',
+    icon: '🔄',
+  },
+  waiting: {
+    color: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+    label: 'Waiting',
+    icon: '⏳',
+  },
+  resolved: {
+    color: 'text-green-400 bg-green-500/10 border-green-500/30',
+    label: 'Resolved',
+    icon: '✓',
+  },
   closed: { color: 'text-gray-400 bg-gray-500/10 border-gray-500/30', label: 'Closed', icon: '✗' },
 };
 
@@ -70,7 +90,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   medium: 'text-yellow-400 bg-yellow-500/10',
   low: 'text-blue-400 bg-blue-500/10',
 };
-
 
 export function SharedInboxView({
   apiBase,
@@ -96,12 +115,9 @@ export function SharedInboxView({
     setError(null);
 
     try {
-      const response = await fetch(
-        `${apiBase}/api/v1/inbox/shared?workspace_id=${workspaceId}`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
-      );
+      const response = await fetch(`${apiBase}/api/v1/inbox/shared?workspace_id=${workspaceId}`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      });
 
       if (!response.ok) {
         setError(`Failed to load inboxes: ${response.status} ${response.statusText}`);
@@ -116,7 +132,9 @@ export function SharedInboxView({
         setSelectedInbox(fetchedInboxes[0]);
       }
     } catch (err) {
-      setError(`Failed to connect to inbox service: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(
+        `Failed to connect to inbox service: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      );
       setInboxes([]);
     } finally {
       setIsLoading(false);
@@ -137,9 +155,7 @@ export function SharedInboxView({
 
       const response = await fetch(
         `${apiBase}/api/v1/inbox/shared/${selectedInbox.id}/messages?${params}`,
-        {
-          headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-        }
+        { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
       );
 
       if (!response.ok) {
@@ -178,7 +194,7 @@ export function SharedInboxView({
             ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify({ assigned_to: userId }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -190,7 +206,9 @@ export function SharedInboxView({
       setAssignModalOpen(false);
     } catch (error) {
       console.error('Assign failed:', error);
-      setError(`Failed to assign message: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setError(
+        `Failed to assign message: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   };
 
@@ -205,7 +223,7 @@ export function SharedInboxView({
             ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify({ status }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -216,7 +234,9 @@ export function SharedInboxView({
       await fetchMessages();
     } catch (error) {
       console.error('Status change failed:', error);
-      setError(`Failed to update status: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setError(
+        `Failed to update status: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   };
 
@@ -236,20 +256,23 @@ export function SharedInboxView({
   };
 
   const getTeamMemberName = (userId: string): string => {
-    const member = teamMembers.find(m => m.id === userId);
+    const member = teamMembers.find((m) => m.id === userId);
     return member?.name || userId;
   };
 
-  const filteredMessages = messages.filter(m => {
+  const filteredMessages = messages.filter((m) => {
     if (statusFilter !== 'all' && m.status !== statusFilter) return false;
     if (assigneeFilter !== 'all' && m.assigned_to !== assigneeFilter) return false;
     return true;
   });
 
-  const statusCounts = messages.reduce((acc, m) => {
-    acc[m.status] = (acc[m.status] || 0) + 1;
-    return acc;
-  }, {} as Record<MessageStatus, number>);
+  const statusCounts = messages.reduce(
+    (acc, m) => {
+      acc[m.status] = (acc[m.status] || 0) + 1;
+      return acc;
+    },
+    {} as Record<MessageStatus, number>,
+  );
 
   if (isLoading) {
     return (
@@ -288,12 +311,12 @@ export function SharedInboxView({
             <select
               value={selectedInbox?.id || ''}
               onChange={(e) => {
-                const inbox = inboxes.find(i => i.id === e.target.value);
+                const inbox = inboxes.find((i) => i.id === e.target.value);
                 setSelectedInbox(inbox || null);
               }}
               className="px-3 py-2 text-sm bg-bg border border-[var(--accent)]/30 rounded font-theme-data focus:border-[var(--accent)] focus:outline-none"
             >
-              {inboxes.map(inbox => (
+              {inboxes.map((inbox) => (
                 <option key={inbox.id} value={inbox.id}>
                   {inbox.name} ({inbox.unread_count} unread)
                 </option>
@@ -341,7 +364,9 @@ export function SharedInboxView({
           >
             All ({messages.length})
           </button>
-          {(['open', 'assigned', 'in_progress', 'waiting', 'resolved', 'closed'] as MessageStatus[]).map(status => (
+          {(
+            ['open', 'assigned', 'in_progress', 'waiting', 'resolved', 'closed'] as MessageStatus[]
+          ).map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -367,8 +392,10 @@ export function SharedInboxView({
           >
             <option value="all">Anyone</option>
             <option value={currentUserId}>Me</option>
-            {teamMembers.map(member => (
-              <option key={member.id} value={member.id}>{member.name}</option>
+            {teamMembers.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
             ))}
           </select>
         </div>
@@ -377,14 +404,16 @@ export function SharedInboxView({
       {/* Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Message List */}
-        <div className={`${showRulesPanel ? 'w-1/2' : 'w-full'} overflow-y-auto border-r border-[var(--accent)]/30`}>
+        <div
+          className={`${showRulesPanel ? 'w-1/2' : 'w-full'} overflow-y-auto border-r border-[var(--accent)]/30`}
+        >
           {filteredMessages.length === 0 ? (
             <div className="text-center py-8 text-text-muted font-theme-data text-sm">
               No messages match your filters.
             </div>
           ) : (
             <div className="divide-y divide-acid-green/20">
-              {filteredMessages.map(message => {
+              {filteredMessages.map((message) => {
                 const statusConfig = STATUS_CONFIG[message.status];
                 const isSelected = selectedMessage?.id === message.id;
 
@@ -400,11 +429,15 @@ export function SharedInboxView({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           {message.priority && (
-                            <span className={`px-1.5 py-0.5 text-xs rounded ${PRIORITY_COLORS[message.priority] || ''}`}>
+                            <span
+                              className={`px-1.5 py-0.5 text-xs rounded ${PRIORITY_COLORS[message.priority] || ''}`}
+                            >
                               {message.priority}
                             </span>
                           )}
-                          <span className={`px-1.5 py-0.5 text-xs rounded border ${statusConfig.color}`}>
+                          <span
+                            className={`px-1.5 py-0.5 text-xs rounded border ${statusConfig.color}`}
+                          >
                             {statusConfig.icon} {statusConfig.label}
                           </span>
                         </div>
@@ -414,12 +447,10 @@ export function SharedInboxView({
                         <div className="text-xs text-text-muted mt-1">
                           From: {message.from_address}
                         </div>
-                        <p className="text-xs text-text-muted mt-1 truncate">
-                          {message.snippet}
-                        </p>
+                        <p className="text-xs text-text-muted mt-1 truncate">{message.snippet}</p>
                         {message.tags.length > 0 && (
                           <div className="flex gap-1 mt-2">
-                            {message.tags.map(tag => (
+                            {message.tags.map((tag) => (
                               <span
                                 key={tag}
                                 className="px-1.5 py-0.5 text-xs bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] rounded"
@@ -474,8 +505,19 @@ export function SharedInboxView({
                             onClick={(e) => e.stopPropagation()}
                             className="px-2 py-1 text-xs bg-bg border border-[var(--accent)]/30 rounded font-theme-data"
                           >
-                            {(['open', 'assigned', 'in_progress', 'waiting', 'resolved', 'closed'] as MessageStatus[]).map(s => (
-                              <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+                            {(
+                              [
+                                'open',
+                                'assigned',
+                                'in_progress',
+                                'waiting',
+                                'resolved',
+                                'closed',
+                              ] as MessageStatus[]
+                            ).map((s) => (
+                              <option key={s} value={s}>
+                                {STATUS_CONFIG[s].label}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -483,13 +525,16 @@ export function SharedInboxView({
                         {/* Notes */}
                         {message.notes.length > 0 && (
                           <div className="mb-4">
-                            <span className="text-xs text-text-muted font-theme-data block mb-2">Notes:</span>
+                            <span className="text-xs text-text-muted font-theme-data block mb-2">
+                              Notes:
+                            </span>
                             <div className="space-y-2">
                               {message.notes.map((note, idx) => (
                                 <div key={idx} className="p-2 bg-bg/50 rounded text-xs">
                                   <p className="text-text">{note.text}</p>
                                   <div className="text-text-muted mt-1">
-                                    {getTeamMemberName(note.author)} - {formatTimeAgo(note.created_at)}
+                                    {getTeamMemberName(note.author)} -{' '}
+                                    {formatTimeAgo(note.created_at)}
                                   </div>
                                 </div>
                               ))}
@@ -519,11 +564,7 @@ export function SharedInboxView({
         {/* Rules Panel */}
         {showRulesPanel && (
           <div className="w-1/2 overflow-y-auto p-4">
-            <TriageRulesPanel
-              apiBase={apiBase}
-              workspaceId={workspaceId}
-              authToken={authToken}
-            />
+            <TriageRulesPanel apiBase={apiBase} workspaceId={workspaceId} authToken={authToken} />
           </div>
         )}
       </div>
@@ -538,7 +579,7 @@ export function SharedInboxView({
           <div className="relative w-full max-w-sm mx-4 bg-bg border border-border rounded-lg shadow-xl p-4">
             <h3 className="text-[var(--accent)] font-theme-data text-sm mb-4">Assign Message</h3>
             <div className="space-y-2">
-              {teamMembers.map(member => (
+              {teamMembers.map((member) => (
                 <button
                   key={member.id}
                   onClick={() => handleAssign(selectedMessage.id, member.id)}
@@ -576,12 +617,17 @@ export function SharedInboxView({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
                   {selectedMessage.priority && (
-                    <span className={`px-1.5 py-0.5 text-xs rounded ${PRIORITY_COLORS[selectedMessage.priority] || ''}`}>
+                    <span
+                      className={`px-1.5 py-0.5 text-xs rounded ${PRIORITY_COLORS[selectedMessage.priority] || ''}`}
+                    >
                       {selectedMessage.priority}
                     </span>
                   )}
-                  <span className={`px-1.5 py-0.5 text-xs rounded border ${STATUS_CONFIG[selectedMessage.status].color}`}>
-                    {STATUS_CONFIG[selectedMessage.status].icon} {STATUS_CONFIG[selectedMessage.status].label}
+                  <span
+                    className={`px-1.5 py-0.5 text-xs rounded border ${STATUS_CONFIG[selectedMessage.status].color}`}
+                  >
+                    {STATUS_CONFIG[selectedMessage.status].icon}{' '}
+                    {STATUS_CONFIG[selectedMessage.status].label}
                   </span>
                 </div>
                 <h2 className="text-lg font-theme-data text-text">{selectedMessage.subject}</h2>
@@ -591,7 +637,12 @@ export function SharedInboxView({
                 className="ml-4 p-1 text-text-muted hover:text-text"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
                 </svg>
               </button>
             </div>
@@ -604,17 +655,21 @@ export function SharedInboxView({
                 <span className="text-text-muted">To:</span>
                 <span className="text-text">{selectedMessage.to_addresses.join(', ')}</span>
                 <span className="text-text-muted">Date:</span>
-                <span className="text-text">{new Date(selectedMessage.received_at).toLocaleString()}</span>
+                <span className="text-text">
+                  {new Date(selectedMessage.received_at).toLocaleString()}
+                </span>
                 {selectedMessage.assigned_to && (
                   <>
                     <span className="text-text-muted">Assigned:</span>
-                    <span className="text-[var(--accent)]">{getTeamMemberName(selectedMessage.assigned_to)}</span>
+                    <span className="text-[var(--accent)]">
+                      {getTeamMemberName(selectedMessage.assigned_to)}
+                    </span>
                   </>
                 )}
               </div>
               {selectedMessage.tags.length > 0 && (
                 <div className="flex gap-1 mt-3">
-                  {selectedMessage.tags.map(tag => (
+                  {selectedMessage.tags.map((tag) => (
                     <span
                       key={tag}
                       className="px-1.5 py-0.5 text-xs bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] rounded"

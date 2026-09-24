@@ -7,7 +7,12 @@ import { AsciiBannerCompact } from '@/components/AsciiBanner';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { useAuth } from '@/context/AuthContext';
-import { FederationStatus, RegionDialog, type FederatedRegion, type RegionFormData } from '@/components/control-plane/KnowledgeExplorer';
+import {
+  FederationStatus,
+  RegionDialog,
+  type FederatedRegion,
+  type RegionFormData,
+} from '@/components/control-plane/KnowledgeExplorer';
 import { useFederation } from '@/hooks/useFederation';
 import { useGlobalKnowledge } from '@/hooks/useGlobalKnowledge';
 
@@ -20,11 +25,21 @@ interface MoundStats {
   federated_regions_count: number;
 }
 
-function StatCard({ label, value, color = 'acid-green' }: { label: string; value: number | string; color?: string }) {
+function StatCard({
+  label,
+  value,
+  color = 'acid-green',
+}: {
+  label: string;
+  value: number | string;
+  color?: string;
+}) {
   return (
     <div className="p-4 bg-surface rounded border border-[var(--accent)]/20">
       <div className="font-theme-data text-xs text-text-muted mb-1">{label}</div>
-      <div className={`font-theme-data text-2xl text-${color}`}>{typeof value === 'number' ? value.toLocaleString() : value}</div>
+      <div className={`font-theme-data text-2xl text-${color}`}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </div>
     </div>
   );
 }
@@ -278,7 +293,11 @@ export default function KnowledgeAdminPage() {
                     : 'text-text-muted hover:text-text'
                 }`}
               >
-                {tab === 'overview' ? 'OVERVIEW' : tab === 'federation' ? 'FEDERATION' : 'GLOBAL FACTS'}
+                {tab === 'overview'
+                  ? 'OVERVIEW'
+                  : tab === 'federation'
+                    ? 'FEDERATION'
+                    : 'GLOBAL FACTS'}
               </button>
             ))}
           </div>
@@ -290,8 +309,16 @@ export default function KnowledgeAdminPage() {
               {stats && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <StatCard label="Total Nodes" value={stats.total_nodes} />
-                  <StatCard label="Relationships" value={stats.total_relationships} color="acid-cyan" />
-                  <StatCard label="Global Facts" value={stats.global_facts_count} color="acid-yellow" />
+                  <StatCard
+                    label="Relationships"
+                    value={stats.total_relationships}
+                    color="acid-cyan"
+                  />
+                  <StatCard
+                    label="Global Facts"
+                    value={stats.global_facts_count}
+                    color="acid-yellow"
+                  />
                   <StatCard label="Federated Regions" value={stats.federated_regions_count} />
                 </div>
               )}
@@ -299,12 +326,21 @@ export default function KnowledgeAdminPage() {
               {/* Visibility Breakdown */}
               {stats?.nodes_by_visibility && (
                 <div className="card p-6">
-                  <h2 className="font-theme-data text-[var(--accent)] mb-4">Visibility Distribution</h2>
+                  <h2 className="font-theme-data text-[var(--accent)] mb-4">
+                    Visibility Distribution
+                  </h2>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     {Object.entries(stats.nodes_by_visibility).map(([level, count]) => (
-                      <div key={level} className="p-3 bg-surface rounded border border-[var(--accent)]/10">
-                        <div className="font-theme-data text-xs text-text-muted capitalize">{level}</div>
-                        <div className="font-theme-data text-lg text-text">{count.toLocaleString()}</div>
+                      <div
+                        key={level}
+                        className="p-3 bg-surface rounded border border-[var(--accent)]/10"
+                      >
+                        <div className="font-theme-data text-xs text-text-muted capitalize">
+                          {level}
+                        </div>
+                        <div className="font-theme-data text-lg text-text">
+                          {count.toLocaleString()}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -319,29 +355,43 @@ export default function KnowledgeAdminPage() {
                     href="/control-plane"
                     className="p-4 bg-surface rounded border border-[var(--accent)]/20 hover:border-[var(--accent)]/50 transition-colors"
                   >
-                    <div className="font-theme-data text-sm text-[var(--accent)]">Knowledge Explorer</div>
-                    <div className="font-theme-data text-xs text-text-muted mt-1">Browse and query knowledge</div>
+                    <div className="font-theme-data text-sm text-[var(--accent)]">
+                      Knowledge Explorer
+                    </div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">
+                      Browse and query knowledge
+                    </div>
                   </Link>
                   <button
                     onClick={() => setActiveTab('federation')}
                     className="p-4 bg-surface rounded border border-[var(--accent)]/20 hover:border-[var(--accent)]/50 transition-colors text-left"
                   >
-                    <div className="font-theme-data text-sm text-[var(--acid-cyan)]">Manage Federation</div>
-                    <div className="font-theme-data text-xs text-text-muted mt-1">Configure multi-region sync</div>
+                    <div className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                      Manage Federation
+                    </div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">
+                      Configure multi-region sync
+                    </div>
                   </button>
                   <button
                     onClick={() => setActiveTab('global')}
                     className="p-4 bg-surface rounded border border-[var(--accent)]/20 hover:border-[var(--accent)]/50 transition-colors text-left"
                   >
-                    <div className="font-theme-data text-sm text-[var(--acid-yellow)]">Add Global Fact</div>
-                    <div className="font-theme-data text-xs text-text-muted mt-1">Store verified facts</div>
+                    <div className="font-theme-data text-sm text-[var(--acid-yellow)]">
+                      Add Global Fact
+                    </div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">
+                      Store verified facts
+                    </div>
                   </button>
                   <Link
                     href="/admin/audit"
                     className="p-4 bg-surface rounded border border-[var(--accent)]/20 hover:border-[var(--accent)]/50 transition-colors"
                   >
                     <div className="font-theme-data text-sm text-text">View Audit Logs</div>
-                    <div className="font-theme-data text-xs text-text-muted mt-1">Knowledge access history</div>
+                    <div className="font-theme-data text-xs text-text-muted mt-1">
+                      Knowledge access history
+                    </div>
                   </Link>
                 </div>
               </div>
@@ -381,7 +431,9 @@ export default function KnowledgeAdminPage() {
                   <h2 className="font-theme-data text-[var(--accent)] mb-4">Add Verified Fact</h2>
                   <div className="space-y-4">
                     <div>
-                      <label className="block font-theme-data text-xs text-text-muted mb-1">Content</label>
+                      <label className="block font-theme-data text-xs text-text-muted mb-1">
+                        Content
+                      </label>
                       <textarea
                         value={newFactContent}
                         onChange={(e) => setNewFactContent(e.target.value)}
@@ -392,7 +444,9 @@ export default function KnowledgeAdminPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block font-theme-data text-xs text-text-muted mb-1">Source</label>
+                        <label className="block font-theme-data text-xs text-text-muted mb-1">
+                          Source
+                        </label>
                         <input
                           type="text"
                           value={newFactSource}
@@ -446,12 +500,8 @@ export default function KnowledgeAdminPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // KNOWLEDGE ADMINISTRATION
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // KNOWLEDGE ADMINISTRATION</p>
         </footer>
       </main>
 

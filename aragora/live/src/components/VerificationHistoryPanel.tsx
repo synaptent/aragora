@@ -83,7 +83,7 @@ function VerificationHistoryPanelInner({
     setError(null);
     try {
       const response = await fetchWithRetry(
-        `${apiBase}/api/verify/history?limit=${limit}&offset=${offset}`
+        `${apiBase}/api/verify/history?limit=${limit}&offset=${offset}`,
       );
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -98,23 +98,24 @@ function VerificationHistoryPanelInner({
     }
   }, [apiBase, offset]);
 
-  const fetchProofTree = useCallback(async (entryId: string) => {
-    setProofTreeError(null);
-    try {
-      const response = await fetchWithRetry(
-        `${apiBase}/api/verify/history/${entryId}/tree`
-      );
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+  const fetchProofTree = useCallback(
+    async (entryId: string) => {
+      setProofTreeError(null);
+      try {
+        const response = await fetchWithRetry(`${apiBase}/api/verify/history/${entryId}/tree`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        setProofTree(data.nodes || []);
+      } catch (err) {
+        logger.error('Failed to load proof tree:', err);
+        setProofTree(null);
+        setProofTreeError('Unable to load proof tree. Click to retry.');
       }
-      const data = await response.json();
-      setProofTree(data.nodes || []);
-    } catch (err) {
-      logger.error('Failed to load proof tree:', err);
-      setProofTree(null);
-      setProofTreeError('Unable to load proof tree. Click to retry.');
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   useEffect(() => {
     fetchHistory();
@@ -160,9 +161,7 @@ function VerificationHistoryPanelInner({
 
       <div className="space-y-2">
         {entries.length === 0 && !loading && (
-          <div className="text-gray-500 text-center py-8">
-            No verification history found
-          </div>
+          <div className="text-gray-500 text-center py-8">No verification history found</div>
         )}
 
         {entries.map((entry) => (
@@ -258,7 +257,9 @@ function VerificationHistoryPanelInner({
                             </span>
                             <div>
                               <span className="text-gray-400">[{node.type}]</span>
-                              <span className="text-white/70 ml-1">{truncate(node.content, 50)}</span>
+                              <span className="text-white/70 ml-1">
+                                {truncate(node.content, 50)}
+                              </span>
                               {node.language && (
                                 <span className="text-cyan-400/60 ml-1">({node.language})</span>
                               )}
@@ -304,7 +305,7 @@ function VerificationHistoryPanelInner({
 
 export const VerificationHistoryPanel = withErrorBoundary(
   VerificationHistoryPanelInner,
-  'VerificationHistoryPanel'
+  'VerificationHistoryPanel',
 );
 
 export default VerificationHistoryPanel;

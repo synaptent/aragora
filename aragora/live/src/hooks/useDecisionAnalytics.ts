@@ -87,20 +87,14 @@ export type AnalyticsPeriod = '24h' | '7d' | '30d' | '90d' | '365d';
  */
 export function useDecisionOverview(
   period: AnalyticsPeriod = '30d',
-  options?: UseSWRFetchOptions<{ data: DecisionOverview }>
+  options?: UseSWRFetchOptions<{ data: DecisionOverview }>,
 ) {
   const result = useSWRFetch<{ data: DecisionOverview }>(
     `/api/v1/decision-analytics/overview?period=${period}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    overview: result.data?.data ?? null,
-  };
+  return { ...result, overview: result.data?.data ?? null };
 }
 
 /**
@@ -108,20 +102,17 @@ export function useDecisionOverview(
  */
 export function useDecisionTrends(
   period: AnalyticsPeriod = '90d',
-  options?: UseSWRFetchOptions<{ data: QualityTrend }>
+  options?: UseSWRFetchOptions<{ data: QualityTrend }>,
 ) {
   const result = useSWRFetch<{ data: QualityTrend }>(
     `/api/v1/decision-analytics/trends?period=${period}`,
     {
       refreshInterval: 120000, // Refresh every 2 minutes
       ...options,
-    }
+    },
   );
 
-  return {
-    ...result,
-    trends: result.data?.data ?? null,
-  };
+  return { ...result, trends: result.data?.data ?? null };
 }
 
 /**
@@ -131,20 +122,14 @@ export function useDecisionOutcomes(
   period: AnalyticsPeriod = '30d',
   limit: number = 50,
   offset: number = 0,
-  options?: UseSWRFetchOptions<{ data: OutcomesList }>
+  options?: UseSWRFetchOptions<{ data: OutcomesList }>,
 ) {
   const result = useSWRFetch<{ data: OutcomesList }>(
     `/api/v1/decision-analytics/outcomes?period=${period}&limit=${limit}&offset=${offset}`,
-    {
-      refreshInterval: 60000,
-      ...options,
-    }
+    { refreshInterval: 60000, ...options },
   );
 
-  return {
-    ...result,
-    outcomes: result.data?.data ?? null,
-  };
+  return { ...result, outcomes: result.data?.data ?? null };
 }
 
 /**
@@ -152,20 +137,14 @@ export function useDecisionOutcomes(
  */
 export function useAgentQuality(
   period: AnalyticsPeriod = '30d',
-  options?: UseSWRFetchOptions<{ data: AgentQualityData }>
+  options?: UseSWRFetchOptions<{ data: AgentQualityData }>,
 ) {
   const result = useSWRFetch<{ data: AgentQualityData }>(
     `/api/v1/decision-analytics/agents?period=${period}`,
-    {
-      refreshInterval: 120000,
-      ...options,
-    }
+    { refreshInterval: 120000, ...options },
   );
 
-  return {
-    ...result,
-    agentMetrics: result.data?.data ?? null,
-  };
+  return { ...result, agentMetrics: result.data?.data ?? null };
 }
 
 /**
@@ -173,20 +152,14 @@ export function useAgentQuality(
  */
 export function useDomainQuality(
   period: AnalyticsPeriod = '30d',
-  options?: UseSWRFetchOptions<{ data: DomainData }>
+  options?: UseSWRFetchOptions<{ data: DomainData }>,
 ) {
   const result = useSWRFetch<{ data: DomainData }>(
     `/api/v1/decision-analytics/domains?period=${period}`,
-    {
-      refreshInterval: 120000,
-      ...options,
-    }
+    { refreshInterval: 120000, ...options },
   );
 
-  return {
-    ...result,
-    domainMetrics: result.data?.data ?? null,
-  };
+  return { ...result, domainMetrics: result.data?.data ?? null };
 }
 
 // ============================================================================
@@ -203,11 +176,7 @@ export function useDecisionAnalytics(period: AnalyticsPeriod = '30d') {
     error: overviewError,
   } = useDecisionOverview(period);
 
-  const {
-    trends,
-    isLoading: trendsLoading,
-    error: trendsError,
-  } = useDecisionTrends(period);
+  const { trends, isLoading: trendsLoading, error: trendsError } = useDecisionTrends(period);
 
   const {
     outcomes,
@@ -215,11 +184,7 @@ export function useDecisionAnalytics(period: AnalyticsPeriod = '30d') {
     error: outcomesError,
   } = useDecisionOutcomes(period);
 
-  const {
-    agentMetrics,
-    isLoading: agentsLoading,
-    error: agentsError,
-  } = useAgentQuality(period);
+  const { agentMetrics, isLoading: agentsLoading, error: agentsError } = useAgentQuality(period);
 
   const {
     domainMetrics,
@@ -229,8 +194,7 @@ export function useDecisionAnalytics(period: AnalyticsPeriod = '30d') {
 
   const isLoading =
     overviewLoading || trendsLoading || outcomesLoading || agentsLoading || domainsLoading;
-  const error =
-    overviewError || trendsError || outcomesError || agentsError || domainsError;
+  const error = overviewError || trendsError || outcomesError || agentsError || domainsError;
 
   const refresh = () => {
     invalidateCache('/api/v1/decision-analytics/overview');

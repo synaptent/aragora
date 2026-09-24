@@ -44,14 +44,14 @@ export function ConditionBuilder({
         value: newType === 'number' ? 0 : '',
       });
     },
-    [condition, index, onChange]
+    [condition, index, onChange],
   );
 
   const handleOperatorChange = useCallback(
     (operator: ConditionOperator) => {
       onChange(index, { ...condition, operator });
     },
-    [condition, index, onChange]
+    [condition, index, onChange],
   );
 
   const handleValueChange = useCallback(
@@ -59,11 +59,10 @@ export function ConditionBuilder({
       const parsedValue = fieldType === 'number' ? parseFloat(value) || 0 : value;
       onChange(index, { ...condition, value: parsedValue });
     },
-    [condition, fieldType, index, onChange]
+    [condition, fieldType, index, onChange],
   );
 
-  const isValueRequired =
-    condition.operator !== 'exists' && condition.operator !== 'not_exists';
+  const isValueRequired = condition.operator !== 'exists' && condition.operator !== 'not_exists';
 
   return (
     <div className="flex items-center gap-2 p-3 bg-surface rounded group">
@@ -144,7 +143,7 @@ export function ConditionListBuilder({
       newConditions[index] = condition;
       onChange(newConditions);
     },
-    [conditions, onChange]
+    [conditions, onChange],
   );
 
   const handleConditionRemove = useCallback(
@@ -153,15 +152,11 @@ export function ConditionListBuilder({
       const newConditions = conditions.filter((_, i) => i !== index);
       onChange(newConditions);
     },
-    [conditions, onChange]
+    [conditions, onChange],
   );
 
   const handleAddCondition = useCallback(() => {
-    const newCondition: Condition = {
-      field: 'confidence',
-      operator: 'lt',
-      value: 0.7,
-    };
+    const newCondition: Condition = { field: 'confidence', operator: 'lt', value: 0.7 };
     onChange([...conditions, newCondition]);
   }, [conditions, onChange]);
 

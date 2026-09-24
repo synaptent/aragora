@@ -41,7 +41,9 @@ export function ExplainabilityPanel({ debateId }: ExplainabilityPanelProps) {
   const [explanation, setExplanation] = useState<Explanation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'narrative' | 'factors' | 'counterfactual' | 'provenance'>('narrative');
+  const [activeTab, setActiveTab] = useState<
+    'narrative' | 'factors' | 'counterfactual' | 'provenance'
+  >('narrative');
 
   const fetchExplanation = useCallback(async () => {
     if (!debateId) return;
@@ -148,11 +150,16 @@ export function ExplainabilityPanel({ debateId }: ExplainabilityPanelProps) {
           {explanation.factors.map((factor, idx) => (
             <div key={idx} className="border border-[var(--accent)]/20 p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-theme-data text-[var(--acid-cyan)] text-sm">{factor.name}</span>
-                <span className={`font-theme-data text-sm ${
-                  factor.contribution > 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {factor.contribution > 0 ? '+' : ''}{(factor.contribution * 100).toFixed(1)}%
+                <span className="font-theme-data text-[var(--acid-cyan)] text-sm">
+                  {factor.name}
+                </span>
+                <span
+                  className={`font-theme-data text-sm ${
+                    factor.contribution > 0 ? 'text-green-400' : 'text-red-400'
+                  }`}
+                >
+                  {factor.contribution > 0 ? '+' : ''}
+                  {(factor.contribution * 100).toFixed(1)}%
                 </span>
               </div>
               <p className="font-theme-data text-xs text-text-muted">{factor.description}</p>
@@ -208,7 +215,10 @@ export function ExplainabilityPanel({ debateId }: ExplainabilityPanelProps) {
             Decision chain showing how the conclusion was reached.
           </p>
           {explanation.provenance.map((entry, idx) => (
-            <div key={idx} className="flex items-start gap-4 border-l-2 border-[var(--accent)]/30 pl-4 py-2">
+            <div
+              key={idx}
+              className="flex items-start gap-4 border-l-2 border-[var(--accent)]/30 pl-4 py-2"
+            >
               <div className="w-6 h-6 flex items-center justify-center bg-[var(--accent)]/20 text-[var(--accent)] font-theme-data text-xs">
                 {entry.step}
               </div>
@@ -216,7 +226,9 @@ export function ExplainabilityPanel({ debateId }: ExplainabilityPanelProps) {
                 <p className="font-theme-data text-sm text-text">{entry.action}</p>
                 <div className="flex gap-4 mt-1">
                   {entry.agent && (
-                    <span className="font-theme-data text-xs text-[var(--acid-cyan)]">{entry.agent}</span>
+                    <span className="font-theme-data text-xs text-[var(--acid-cyan)]">
+                      {entry.agent}
+                    </span>
                   )}
                   {entry.confidence !== undefined && (
                     <span className="font-theme-data text-xs text-text-muted">

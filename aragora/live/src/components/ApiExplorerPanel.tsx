@@ -91,7 +91,10 @@ function SchemaViewer({
                 </span>
               </div>
               {prop.description && (
-                <p className="text-[10px] text-text-muted/70 font-theme-data" style={{ paddingLeft: 8 }}>
+                <p
+                  className="text-[10px] text-text-muted/70 font-theme-data"
+                  style={{ paddingLeft: 8 }}
+                >
                   {prop.description}
                 </p>
               )}
@@ -161,7 +164,9 @@ function ResponseSchemaSection({
         return (
           <div key={code} className="border border-[var(--accent)]/15 bg-black/20 p-3">
             <div className="flex items-center gap-2 mb-2">
-              <span className={`font-theme-data text-xs font-bold ${getStatusColor(parseInt(code, 10) || 0)}`}>
+              <span
+                className={`font-theme-data text-xs font-bold ${getStatusColor(parseInt(code, 10) || 0)}`}
+              >
                 {code}
               </span>
               <span className="text-xs font-theme-data text-text-muted">{resp.description}</span>
@@ -212,11 +217,16 @@ function RequestHistoryBar({
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center justify-between px-3 py-2 text-xs font-theme-data text-text-muted hover:text-text transition-colors"
       >
-        <span>[{expanded ? '-' : '+'}] REQUEST HISTORY ({history.length})</span>
+        <span>
+          [{expanded ? '-' : '+'}] REQUEST HISTORY ({history.length})
+        </span>
         {expanded && (
           <button
             type="button"
-            onClick={e => { e.stopPropagation(); onClear(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
             className="text-red-400/70 hover:text-red-400 text-[10px]"
           >
             CLEAR
@@ -225,7 +235,7 @@ function RequestHistoryBar({
       </button>
       {expanded && (
         <div className="px-3 pb-2 max-h-48 overflow-y-auto space-y-1">
-          {history.map(entry => (
+          {history.map((entry) => (
             <div key={entry.id} className="flex items-center gap-2 text-[10px] font-theme-data">
               <span className={`px-1 border ${METHOD_COLORS[entry.method]} shrink-0`}>
                 {entry.method}
@@ -287,9 +297,7 @@ export function ApiExplorerPanel() {
         <div className="text-yellow-400 font-theme-data text-sm">
           Could not load live OpenAPI spec
         </div>
-        <p className="text-xs text-text-muted font-theme-data">
-          {explorer.specError}
-        </p>
+        <p className="text-xs text-text-muted font-theme-data">{explorer.specError}</p>
         <button
           onClick={explorer.reloadSpec}
           className="px-4 py-2 border border-[var(--accent)]/50 text-[var(--accent)] font-theme-data text-xs hover:bg-[var(--accent)]/10 transition-colors"
@@ -335,7 +343,7 @@ export function ApiExplorerPanel() {
               <input
                 type="text"
                 value={explorer.searchQuery}
-                onChange={e => explorer.setSearchQuery(e.target.value)}
+                onChange={(e) => explorer.setSearchQuery(e.target.value)}
                 placeholder="Search endpoints..."
                 className="w-full bg-black/30 border border-[var(--accent)]/30 pl-6 pr-3 py-2 text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
               />
@@ -353,7 +361,7 @@ export function ApiExplorerPanel() {
               >
                 ALL
               </button>
-              {METHOD_LIST.map(m => (
+              {METHOD_LIST.map((m) => (
                 <button
                   key={m}
                   onClick={() => explorer.setMethodFilter(explorer.methodFilter === m ? null : m)}
@@ -371,12 +379,14 @@ export function ApiExplorerPanel() {
             {/* Tag filter dropdown */}
             <select
               value={explorer.tagFilter || ''}
-              onChange={e => explorer.setTagFilter(e.target.value || null)}
+              onChange={(e) => explorer.setTagFilter(e.target.value || null)}
               className="w-full bg-black/30 border border-[var(--accent)]/30 px-2 py-1.5 text-xs font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
             >
               <option value="">All tags ({explorer.allTags.length})</option>
-              {explorer.allTags.map(tag => (
-                <option key={tag} value={tag}>{tag}</option>
+              {explorer.allTags.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
               ))}
             </select>
 
@@ -384,26 +394,25 @@ export function ApiExplorerPanel() {
             <p className="text-xs font-theme-data text-text-muted">
               {explorer.searchQuery || explorer.methodFilter || explorer.tagFilter
                 ? `${explorer.filteredCount} of ${explorer.totalCount}`
-                : `${explorer.totalCount}`} endpoints
+                : `${explorer.totalCount}`}{' '}
+              endpoints
             </p>
           </div>
 
           {/* Endpoint tree */}
           <div className="border border-[var(--accent)]/30 bg-surface/30 p-3 space-y-1 max-h-[calc(100vh-24rem)] overflow-y-auto">
-            {explorer.filteredGroups.map(group => (
+            {explorer.filteredGroups.map((group) => (
               <CollapsibleSection
                 key={group.tag}
                 id={`api-cat-${group.tag.toLowerCase().replace(/\s+/g, '-')}`}
                 title={`${group.tag} (${group.endpoints.length})`}
                 defaultOpen={
-                  (ep && ep.tag === group.tag) ||
-                  !!(explorer.searchQuery || explorer.tagFilter)
+                  (ep && ep.tag === group.tag) || !!(explorer.searchQuery || explorer.tagFilter)
                 }
               >
                 <div className="space-y-0.5">
-                  {group.endpoints.map(endpoint => {
-                    const isSelected =
-                      ep?.path === endpoint.path && ep?.method === endpoint.method;
+                  {group.endpoints.map((endpoint) => {
+                    const isSelected = ep?.path === endpoint.path && ep?.method === endpoint.method;
                     const badgeStatus = getBadgeStatus(endpoint.stability, endpoint.deprecated);
                     return (
                       <button
@@ -418,7 +427,8 @@ export function ApiExplorerPanel() {
                         <div className="flex items-center gap-2">
                           <span
                             className={`text-[10px] font-theme-data font-bold px-1 py-0.5 border ${
-                              METHOD_COLORS[endpoint.method] || 'border-text-muted/30 text-text-muted'
+                              METHOD_COLORS[endpoint.method] ||
+                              'border-text-muted/30 text-text-muted'
                             } shrink-0 w-12 text-center`}
                           >
                             {endpoint.method}
@@ -445,7 +455,9 @@ export function ApiExplorerPanel() {
 
             {explorer.filteredGroups.length === 0 && (
               <div className="text-center py-8">
-                <p className="text-text-muted font-theme-data text-sm">No endpoints match your filters</p>
+                <p className="text-text-muted font-theme-data text-sm">
+                  No endpoints match your filters
+                </p>
               </div>
             )}
           </div>
@@ -533,7 +545,7 @@ export function ApiExplorerPanel() {
                     <input
                       type="text"
                       value={explorer.baseUrl}
-                      onChange={e => explorer.setBaseUrl(e.target.value)}
+                      onChange={(e) => explorer.setBaseUrl(e.target.value)}
                       className="w-full bg-black/30 border border-[var(--accent)]/30 px-3 py-2 text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
                     />
                   </div>
@@ -544,7 +556,7 @@ export function ApiExplorerPanel() {
                       <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">
                         Path Parameters
                       </h4>
-                      {ep.pathParams.map(param => (
+                      {ep.pathParams.map((param) => (
                         <div key={param.name} className="flex items-center gap-2">
                           <label className="text-sm font-theme-data w-32 text-[var(--acid-cyan)] shrink-0">
                             {param.name}
@@ -553,7 +565,7 @@ export function ApiExplorerPanel() {
                           <input
                             type="text"
                             value={explorer.pathValues[param.name] || ''}
-                            onChange={e => explorer.setPathValue(param.name, e.target.value)}
+                            onChange={(e) => explorer.setPathValue(param.name, e.target.value)}
                             placeholder={param.description || param.schema?.type || 'string'}
                             className="flex-1 bg-black/30 border border-[var(--accent)]/30 px-2 py-1.5 text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
                           />
@@ -568,7 +580,7 @@ export function ApiExplorerPanel() {
                       <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">
                         Query Parameters
                       </h4>
-                      {ep.queryParams.map(param => (
+                      {ep.queryParams.map((param) => (
                         <div key={param.name} className="flex items-center gap-2">
                           <label className="text-sm font-theme-data w-32 text-[var(--acid-cyan)] shrink-0">
                             {param.name}
@@ -577,7 +589,7 @@ export function ApiExplorerPanel() {
                           <input
                             type="text"
                             value={explorer.queryValues[param.name] || ''}
-                            onChange={e => explorer.setQueryValue(param.name, e.target.value)}
+                            onChange={(e) => explorer.setQueryValue(param.name, e.target.value)}
                             placeholder={param.description || param.schema?.type || 'string'}
                             className="flex-1 bg-black/30 border border-[var(--accent)]/30 px-2 py-1.5 text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
                           />
@@ -597,13 +609,11 @@ export function ApiExplorerPanel() {
                     <div className="space-y-2">
                       <h4 className="text-xs font-theme-data text-text-muted uppercase tracking-wider">
                         Request Body
-                        {ep.requestBody?.required && (
-                          <span className="text-red-400 ml-1">*</span>
-                        )}
+                        {ep.requestBody?.required && <span className="text-red-400 ml-1">*</span>}
                       </h4>
                       <textarea
                         value={explorer.bodyValue}
-                        onChange={e => explorer.setBodyValue(e.target.value)}
+                        onChange={(e) => explorer.setBodyValue(e.target.value)}
                         rows={10}
                         className="w-full bg-black/30 border border-[var(--accent)]/30 px-3 py-2 text-sm font-theme-data text-[var(--accent)] focus:border-[var(--accent)] focus:outline-none resize-y"
                         placeholder="JSON request body"
@@ -644,7 +654,9 @@ export function ApiExplorerPanel() {
                           <span className="text-xs font-theme-data w-28 text-[var(--accent)] shrink-0">
                             Content-Type:
                           </span>
-                          <span className="text-xs font-theme-data text-text">application/json</span>
+                          <span className="text-xs font-theme-data text-text">
+                            application/json
+                          </span>
                           <span className="text-xs font-theme-data text-[var(--accent)]/50 ml-auto">
                             (auto)
                           </span>
@@ -655,14 +667,14 @@ export function ApiExplorerPanel() {
                             <input
                               type="text"
                               value={h.key}
-                              onChange={e => explorer.updateHeader(idx, 'key', e.target.value)}
+                              onChange={(e) => explorer.updateHeader(idx, 'key', e.target.value)}
                               placeholder="Header name"
                               className="w-28 bg-black/30 border border-[var(--accent)]/30 px-2 py-1 text-xs font-theme-data text-text focus:border-[var(--accent)] focus:outline-none shrink-0"
                             />
                             <input
                               type="text"
                               value={h.value}
-                              onChange={e => explorer.updateHeader(idx, 'value', e.target.value)}
+                              onChange={(e) => explorer.updateHeader(idx, 'value', e.target.value)}
                               placeholder="Value"
                               className="flex-1 bg-black/30 border border-[var(--accent)]/30 px-2 py-1 text-xs font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"
                             />
@@ -720,9 +732,7 @@ export function ApiExplorerPanel() {
                       {/* Status line */}
                       <div className="flex items-center gap-4 font-theme-data text-sm">
                         <span className="text-text-muted">Status:</span>
-                        <span
-                          className={`font-bold ${getStatusColor(explorer.response.status)}`}
-                        >
+                        <span className={`font-bold ${getStatusColor(explorer.response.status)}`}>
                           {explorer.response.status} {explorer.response.statusText}
                         </span>
                         <span className="text-text-muted text-xs ml-auto">
@@ -789,7 +799,9 @@ export function ApiExplorerPanel() {
                   {/* Parameters summary */}
                   {(ep.pathParams.length > 0 || ep.queryParams.length > 0) && (
                     <div>
-                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">PARAMETERS</h3>
+                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">
+                        PARAMETERS
+                      </h3>
                       <div className="bg-black/20 border border-[var(--accent)]/15 overflow-hidden">
                         <table className="w-full text-xs font-theme-data">
                           <thead>
@@ -802,12 +814,14 @@ export function ApiExplorerPanel() {
                             </tr>
                           </thead>
                           <tbody>
-                            {[...ep.pathParams, ...ep.queryParams].map(param => (
+                            {[...ep.pathParams, ...ep.queryParams].map((param) => (
                               <tr
                                 key={`${param.in}-${param.name}`}
                                 className="border-b border-[var(--accent)]/10"
                               >
-                                <td className="px-3 py-1.5 text-[var(--acid-cyan)]">{param.name}</td>
+                                <td className="px-3 py-1.5 text-[var(--acid-cyan)]">
+                                  {param.name}
+                                </td>
                                 <td className="px-3 py-1.5 text-text-muted">{param.in}</td>
                                 <td className="px-3 py-1.5 text-text">
                                   {param.schema?.type || 'string'}
@@ -833,7 +847,9 @@ export function ApiExplorerPanel() {
                   {/* Response schemas */}
                   {Object.keys(ep.responses).length > 0 && (
                     <div>
-                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">RESPONSES</h3>
+                      <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">
+                        RESPONSES
+                      </h3>
                       <ResponseSchemaSection
                         responses={ep.responses}
                         resolveRef={explorer.resolveSchemaRef}
@@ -857,10 +873,7 @@ export function ApiExplorerPanel() {
               )}
 
               {/* Request history */}
-              <RequestHistoryBar
-                history={explorer.history}
-                onClear={explorer.clearHistory}
-              />
+              <RequestHistoryBar history={explorer.history} onClear={explorer.clearHistory} />
             </>
           ) : (
             <div className="border border-[var(--accent)]/30 bg-surface/30 flex items-center justify-center h-96">

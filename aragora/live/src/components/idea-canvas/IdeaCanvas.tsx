@@ -1,13 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import {
-  ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
-  type NodeTypes,
-} from '@xyflow/react';
+import { ReactFlow, Background, Controls, MiniMap, type NodeTypes } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { IdeaNode } from './IdeaNode';
@@ -18,9 +12,7 @@ import { useIdeaCanvas } from './useIdeaCanvas';
 import { type IdeaNodeType } from './types';
 import { apiPost } from '../../lib/api';
 
-const nodeTypes: NodeTypes = {
-  ideaNode: IdeaNode as unknown as NodeTypes[string],
-};
+const nodeTypes: NodeTypes = { ideaNode: IdeaNode as unknown as NodeTypes[string] };
 
 interface IdeaCanvasProps {
   canvasId: string;
@@ -59,7 +51,7 @@ export function IdeaCanvas({ canvasId, onGoalsGenerated }: IdeaCanvasProps) {
     (_: React.MouseEvent, node: { id: string }) => {
       setSelectedNodeId(node.id);
     },
-    [setSelectedNodeId]
+    [setSelectedNodeId],
   );
 
   const onPaneClick = useCallback(() => {
@@ -80,7 +72,7 @@ export function IdeaCanvas({ canvasId, onGoalsGenerated }: IdeaCanvasProps) {
       // For drop we use a simple offset calculation
       onDrop(e, bounds, (pos) => pos);
     },
-    [onDrop]
+    [onDrop],
   );
 
   const handlePromote = useCallback(async () => {
@@ -109,7 +101,10 @@ export function IdeaCanvas({ canvasId, onGoalsGenerated }: IdeaCanvasProps) {
         pipeline_id: string;
         result?: { ideas?: { nodes?: Array<Record<string, unknown>> } };
       }>('/api/v1/canvas/pipeline/from-ideas', {
-        ideas: ideasText.split('\n').map((s) => s.trim()).filter(Boolean),
+        ideas: ideasText
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean),
         auto_advance: false,
       });
       setIdeasText('');
@@ -144,11 +139,7 @@ export function IdeaCanvas({ canvasId, onGoalsGenerated }: IdeaCanvasProps) {
         ideas_canvas_id: canvasId,
         ideas_canvas_data: {
           nodes: ideaNodes,
-          edges: edges.map((e) => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-          })),
+          edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
         },
       });
 

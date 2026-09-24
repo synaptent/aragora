@@ -38,9 +38,7 @@ export default function OrganizationPage() {
     }
     try {
       const response = await fetch(`${API_BASE}/api/org/${orgId}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (!response.ok) {
@@ -75,10 +73,7 @@ export default function OrganizationPage() {
     try {
       const response = await fetch(`${API_BASE}/api/org/${orgId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ name: editName.trim() }),
       });
 
@@ -100,11 +95,16 @@ export default function OrganizationPage() {
 
   const getTierBadgeColor = (tier: string) => {
     switch (tier) {
-      case 'free': return 'text-text-muted border-text-muted/30';
-      case 'starter': return 'text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30';
-      case 'professional': return 'text-[var(--accent)] border-[var(--accent)]/30';
-      case 'enterprise': return 'text-warning border-warning/30';
-      default: return 'text-text-muted border-text-muted/30';
+      case 'free':
+        return 'text-text-muted border-text-muted/30';
+      case 'starter':
+        return 'text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30';
+      case 'professional':
+        return 'text-[var(--accent)] border-[var(--accent)]/30';
+      case 'enterprise':
+        return 'text-warning border-warning/30';
+      default:
+        return 'text-text-muted border-text-muted/30';
     }
   };
 
@@ -132,9 +132,7 @@ export default function OrganizationPage() {
         {/* Content */}
         <div className="max-w-4xl mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-theme-data text-[var(--accent)]">
-              ORGANIZATION SETTINGS
-            </h1>
+            <h1 className="text-2xl font-theme-data text-[var(--accent)]">ORGANIZATION SETTINGS</h1>
           </div>
 
           {/* Sub-navigation */}
@@ -172,7 +170,9 @@ export default function OrganizationPage() {
               <div className="border border-[var(--accent)]/30 bg-surface/30 p-6">
                 <div className="flex items-start justify-between mb-6">
                   <div>
-                    <div className="text-xs font-theme-data text-text-muted mb-1">ORGANIZATION NAME</div>
+                    <div className="text-xs font-theme-data text-text-muted mb-1">
+                      ORGANIZATION NAME
+                    </div>
                     {editMode ? (
                       <div className="flex gap-3">
                         <input
@@ -200,7 +200,9 @@ export default function OrganizationPage() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-4">
-                        <div className="text-2xl font-theme-data text-[var(--accent)]">{orgDetails.name}</div>
+                        <div className="text-2xl font-theme-data text-[var(--accent)]">
+                          {orgDetails.name}
+                        </div>
                         {isOwner && (
                           <button
                             onClick={() => setEditMode(true)}
@@ -212,7 +214,9 @@ export default function OrganizationPage() {
                       </div>
                     )}
                   </div>
-                  <div className={`px-3 py-1 border font-theme-data text-sm uppercase ${getTierBadgeColor(orgDetails.tier)}`}>
+                  <div
+                    className={`px-3 py-1 border font-theme-data text-sm uppercase ${getTierBadgeColor(orgDetails.tier)}`}
+                  >
                     {orgDetails.tier}
                   </div>
                 </div>
@@ -225,7 +229,8 @@ export default function OrganizationPage() {
                   <div>
                     <div className="text-xs font-theme-data text-text-muted mb-1">MEMBERS</div>
                     <div className="text-sm font-theme-data text-text">
-                      {orgDetails.member_count} / {orgDetails.member_limit === 999999 ? 'Unlimited' : orgDetails.member_limit}
+                      {orgDetails.member_count} /{' '}
+                      {orgDetails.member_limit === 999999 ? 'Unlimited' : orgDetails.member_limit}
                     </div>
                   </div>
                   <div>
@@ -245,13 +250,17 @@ export default function OrganizationPage() {
 
               {/* Quick Actions */}
               <div className="border border-[var(--accent)]/30 bg-surface/30 p-6">
-                <h2 className="text-lg font-theme-data text-[var(--acid-cyan)] mb-4">QUICK ACTIONS</h2>
+                <h2 className="text-lg font-theme-data text-[var(--acid-cyan)] mb-4">
+                  QUICK ACTIONS
+                </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Link
                     href="/organization/members"
                     className="block p-4 border border-[var(--accent)]/20 hover:border-[var(--accent)]/50 transition-colors"
                   >
-                    <div className="text-sm font-theme-data text-[var(--accent)] mb-1">Manage Members</div>
+                    <div className="text-sm font-theme-data text-[var(--accent)] mb-1">
+                      Manage Members
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">
                       Add, remove, or update member roles
                     </div>
@@ -260,7 +269,9 @@ export default function OrganizationPage() {
                     href="/billing"
                     className="block p-4 border border-[var(--accent)]/20 hover:border-[var(--accent)]/50 transition-colors"
                   >
-                    <div className="text-sm font-theme-data text-[var(--accent)] mb-1">Billing & Subscription</div>
+                    <div className="text-sm font-theme-data text-[var(--accent)] mb-1">
+                      Billing & Subscription
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">
                       Manage your subscription and usage
                     </div>

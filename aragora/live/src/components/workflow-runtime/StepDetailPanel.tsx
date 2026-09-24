@@ -58,12 +58,7 @@ function formatDuration(startedAt: string, completedAt?: string): string {
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
 }
 
-export function StepDetailPanel({
-  step,
-  onClose,
-  onApprove,
-  onReject,
-}: StepDetailPanelProps) {
+export function StepDetailPanel({ step, onClose, onApprove, onReject }: StepDetailPanelProps) {
   if (!step) return null;
 
   const icon = STEP_ICONS[step.type] || '📦';

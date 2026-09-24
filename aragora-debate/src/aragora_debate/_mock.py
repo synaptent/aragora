@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from aragora_debate.types import Agent, Critique, Message, Vote
 
 
@@ -20,7 +22,7 @@ class MockAgent(Agent):
         proposal: str = "This is my proposal based on careful analysis.",
         vote_for: str = "",
         critique_issues: list[str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         super().__init__(name=name, model="mock", **kwargs)
         self._proposal = proposal

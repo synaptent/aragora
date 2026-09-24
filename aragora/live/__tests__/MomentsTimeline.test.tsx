@@ -17,11 +17,7 @@ const mockSummaryData = {
     position_reversal: 3,
     streak_achievement: 3,
   },
-  by_agent: {
-    'claude-3-opus': 6,
-    'gpt-4o': 5,
-    'gemini-pro': 4,
-  },
+  by_agent: { 'claude-3-opus': 6, 'gpt-4o': 5, 'gemini-pro': 4 },
   most_significant: {
     id: 'moment-1',
     type: 'upset_victory',
@@ -107,10 +103,7 @@ describe('MomentsTimeline', () => {
   });
 
   it('renders highlight and recent moments', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockSummaryData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSummaryData) });
 
     render(<MomentsTimeline />);
 
@@ -131,10 +124,7 @@ describe('MomentsTimeline', () => {
   });
 
   it('filters moments by type and clears the filter', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockSummaryData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSummaryData) });
 
     render(<MomentsTimeline />);
 
@@ -142,7 +132,9 @@ describe('MomentsTimeline', () => {
       expect(screen.getByText('All')).toBeInTheDocument();
     });
 
-    const upsetButton = screen.getAllByRole('button').find((btn) => btn.textContent?.includes('🏆'));
+    const upsetButton = screen
+      .getAllByRole('button')
+      .find((btn) => btn.textContent?.includes('🏆'));
     if (upsetButton) {
       fireEvent.click(upsetButton);
 
@@ -159,10 +151,7 @@ describe('MomentsTimeline', () => {
   });
 
   it('shows agent distribution chips', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockSummaryData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSummaryData) });
 
     render(<MomentsTimeline />);
 
@@ -176,10 +165,7 @@ describe('MomentsTimeline', () => {
   });
 
   it('refetches data when refresh is clicked', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockSummaryData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockSummaryData) });
 
     render(<MomentsTimeline />);
 

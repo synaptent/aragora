@@ -20,12 +20,7 @@ export interface SpamCheckResult {
   check_duration_ms: number;
   content_hash: string;
   checked_at: string;
-  scores: {
-    content: number;
-    sender: number;
-    pattern: number;
-    url: number;
-  };
+  scores: { content: number; sender: number; pattern: number; url: number };
 }
 
 export interface ModerationConfig {
@@ -54,15 +49,14 @@ export interface QueuedItem {
   content_hash: string;
   result: SpamCheckResult;
   queued_at: string;
-  context?: {
-    sender?: string;
-    debate_id?: string;
-    user_id?: string;
-  };
+  context?: { sender?: string; debate_id?: string; user_id?: string };
 }
 
 // Verdict styling for UI
-export const VERDICT_STYLES: Record<SpamVerdict, { color: string; bgColor: string; label: string }> = {
+export const VERDICT_STYLES: Record<
+  SpamVerdict,
+  { color: string; bgColor: string; label: string }
+> = {
   clean: { color: 'text-green-400', bgColor: 'bg-green-500/10', label: 'CLEAN' },
   suspicious: { color: 'text-yellow-400', bgColor: 'bg-yellow-500/10', label: 'SUSPICIOUS' },
   spam: { color: 'text-red-400', bgColor: 'bg-red-500/10', label: 'SPAM' },
@@ -141,10 +135,7 @@ const API_URL = API_BASE_URL;
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
 
   if (!response.ok) {
@@ -243,9 +234,7 @@ export const useModerationStore = create<ModerationState & ModerationActions>()(
           // Refresh stats
           get().fetchStats();
         } catch (error) {
-          set({
-            queueError: error instanceof Error ? error.message : 'Failed to approve item',
-          });
+          set({ queueError: error instanceof Error ? error.message : 'Failed to approve item' });
         }
       },
 
@@ -260,9 +249,7 @@ export const useModerationStore = create<ModerationState & ModerationActions>()(
           // Refresh stats
           get().fetchStats();
         } catch (error) {
-          set({
-            queueError: error instanceof Error ? error.message : 'Failed to reject item',
-          });
+          set({ queueError: error instanceof Error ? error.message : 'Failed to reject item' });
         }
       },
 
@@ -284,6 +271,6 @@ export const useModerationStore = create<ModerationState & ModerationActions>()(
         set(initialState);
       },
     }),
-    { name: 'moderation-store' }
-  )
+    { name: 'moderation-store' },
+  ),
 );

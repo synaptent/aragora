@@ -6,11 +6,7 @@ interface KPICardProps {
   title: string;
   value: string | number;
   subtitle?: string;
-  change?: {
-    value: number;
-    direction: 'up' | 'down' | 'neutral';
-    period: string;
-  };
+  change?: { value: number; direction: 'up' | 'down' | 'neutral'; period: string };
   icon?: ReactNode;
   color?: 'green' | 'cyan' | 'yellow' | 'red' | 'purple';
   loading?: boolean;
@@ -68,9 +64,7 @@ export function KPICard({
         <span className="text-xs font-theme-data text-[var(--text-muted)] uppercase tracking-wider">
           {title}
         </span>
-        {icon && (
-          <span className={`text-lg ${colors.text}`}>{icon}</span>
-        )}
+        {icon && <span className={`text-lg ${colors.text}`}>{icon}</span>}
       </div>
 
       {loading ? (
@@ -80,14 +74,10 @@ export function KPICard({
         </div>
       ) : (
         <>
-          <div className={`text-2xl font-theme-data font-bold ${colors.text} mb-1`}>
-            {value}
-          </div>
+          <div className={`text-2xl font-theme-data font-bold ${colors.text} mb-1`}>{value}</div>
 
           {subtitle && (
-            <div className="text-xs font-theme-data text-[var(--text-muted)]">
-              {subtitle}
-            </div>
+            <div className="text-xs font-theme-data text-[var(--text-muted)]">{subtitle}</div>
           )}
 
           {change && (
@@ -97,15 +87,13 @@ export function KPICard({
                   change.direction === 'up'
                     ? 'text-green-400'
                     : change.direction === 'down'
-                    ? 'text-red-400'
-                    : 'text-[var(--text-muted)]'
+                      ? 'text-red-400'
+                      : 'text-[var(--text-muted)]'
                 }
               >
                 {change.direction === 'up' && ''}
                 {change.direction === 'down' && ''}
-                {change.direction === 'neutral' && ''}
-                {' '}
-                {Math.abs(change.value)}%
+                {change.direction === 'neutral' && ''} {Math.abs(change.value)}%
               </span>
               <span className="text-[var(--text-muted)]">vs {change.period}</span>
             </div>
@@ -129,11 +117,7 @@ export function KPIGrid({ children, columns = 4 }: KPIGridProps) {
     5: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-5',
   };
 
-  return (
-    <div className={`grid ${gridCols[columns]} gap-4`}>
-      {children}
-    </div>
-  );
+  return <div className={`grid ${gridCols[columns]} gap-4`}>{children}</div>;
 }
 
 export function KPIMiniCard({

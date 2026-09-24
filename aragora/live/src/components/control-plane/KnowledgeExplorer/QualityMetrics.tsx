@@ -74,7 +74,9 @@ export function QualityMetrics({
         </div>
         <div className="mt-3 text-xs text-text-muted">
           {overallScore >= 80 && 'Excellent knowledge quality - well maintained and accurate'}
-          {overallScore >= 60 && overallScore < 80 && 'Good quality - minor improvements recommended'}
+          {overallScore >= 60 &&
+            overallScore < 80 &&
+            'Good quality - minor improvements recommended'}
           {overallScore >= 40 && overallScore < 60 && 'Fair quality - several areas need attention'}
           {overallScore < 40 && 'Poor quality - immediate attention required'}
         </div>

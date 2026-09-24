@@ -11,15 +11,8 @@ interface DecisionPackage {
   consensus_reached: boolean;
   confidence: number;
   total_cost: number;
-  cost_breakdown: Array<{
-    agent: string;
-    tokens: number;
-    cost: number;
-  }>;
-  next_steps: Array<{
-    action: string;
-    priority: 'high' | 'medium' | 'low';
-  }>;
+  cost_breakdown: Array<{ agent: string; tokens: number; cost: number }>;
+  next_steps: Array<{ action: string; priority: 'high' | 'medium' | 'low' }>;
   provider_names: string[];
   provider_hints: string[];
   provider_routing: {
@@ -89,7 +82,9 @@ export function DecisionPackageView({ pkg }: DecisionPackageViewProps) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-[var(--surface)] border border-[var(--border)] p-4">
           <div className="text-xs font-theme-data text-[var(--text-muted)] mb-1">AGENTS</div>
-          <div className="text-lg font-theme-data text-[var(--acid-green)]">{pkg.agents.length}</div>
+          <div className="text-lg font-theme-data text-[var(--acid-green)]">
+            {pkg.agents.length}
+          </div>
           <div className="text-xs font-theme-data text-[var(--text-muted)] mt-1 truncate">
             {pkg.agents.slice(0, 3).join(', ')}
             {pkg.agents.length > 3 ? ` +${pkg.agents.length - 3}` : ''}
@@ -116,9 +111,7 @@ export function DecisionPackageView({ pkg }: DecisionPackageViewProps) {
           <div className="text-lg font-theme-data text-[var(--text)]">
             {pkg.duration_seconds ? `${Math.round(pkg.duration_seconds)}s` : '--'}
           </div>
-          <div className="text-xs font-theme-data text-[var(--text-muted)] mt-1">
-            wall clock
-          </div>
+          <div className="text-xs font-theme-data text-[var(--text-muted)] mt-1">wall clock</div>
         </div>
       </div>
 
@@ -202,15 +195,21 @@ export function DecisionPackageView({ pkg }: DecisionPackageViewProps) {
                     AGENT TO PROVIDER
                   </div>
                   <div className="space-y-2">
-                    {Object.entries(pkg.provider_routing.provider_matches).map(([agent, provider]) => (
-                      <div
-                        key={agent}
-                        className="flex flex-wrap items-center justify-between gap-2 bg-[var(--bg)] border border-[var(--border)] p-3"
-                      >
-                        <span className="text-sm font-theme-data text-[var(--text)]">{agent}</span>
-                        <span className="text-xs font-theme-data text-[var(--acid-cyan)]">{provider}</span>
-                      </div>
-                    ))}
+                    {Object.entries(pkg.provider_routing.provider_matches).map(
+                      ([agent, provider]) => (
+                        <div
+                          key={agent}
+                          className="flex flex-wrap items-center justify-between gap-2 bg-[var(--bg)] border border-[var(--border)] p-3"
+                        >
+                          <span className="text-sm font-theme-data text-[var(--text)]">
+                            {agent}
+                          </span>
+                          <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                            {provider}
+                          </span>
+                        </div>
+                      ),
+                    )}
                   </div>
                 </div>
               )}
@@ -221,17 +220,21 @@ export function DecisionPackageView({ pkg }: DecisionPackageViewProps) {
                     ROUTING SCORES
                   </div>
                   <div className="space-y-2">
-                    {Object.entries(pkg.provider_routing.provider_hint_scores).map(([provider, score]) => (
-                      <div
-                        key={provider}
-                        className="flex flex-wrap items-center justify-between gap-2 bg-[var(--bg)] border border-[var(--border)] p-3"
-                      >
-                        <span className="text-sm font-theme-data text-[var(--text)]">{provider}</span>
-                        <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
-                          {score.toFixed(2)}
-                        </span>
-                      </div>
-                    ))}
+                    {Object.entries(pkg.provider_routing.provider_hint_scores).map(
+                      ([provider, score]) => (
+                        <div
+                          key={provider}
+                          className="flex flex-wrap items-center justify-between gap-2 bg-[var(--bg)] border border-[var(--border)] p-3"
+                        >
+                          <span className="text-sm font-theme-data text-[var(--text)]">
+                            {provider}
+                          </span>
+                          <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                            {score.toFixed(2)}
+                          </span>
+                        </div>
+                      ),
+                    )}
                   </div>
                 </div>
               )}
@@ -270,13 +273,15 @@ export function DecisionPackageView({ pkg }: DecisionPackageViewProps) {
                 <span className="text-xs font-theme-data text-[var(--acid-cyan)] mt-0.5">
                   {String(i + 1).padStart(2, '0')}.
                 </span>
-                <span className={`text-[10px] font-theme-data mt-0.5 px-1 border ${
-                  step.priority === 'high'
-                    ? 'text-[var(--warning)] border-[var(--warning)]/40'
-                    : step.priority === 'low'
-                      ? 'text-[var(--text-muted)] border-[var(--border)]'
-                      : 'text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30'
-                }`}>
+                <span
+                  className={`text-[10px] font-theme-data mt-0.5 px-1 border ${
+                    step.priority === 'high'
+                      ? 'text-[var(--warning)] border-[var(--warning)]/40'
+                      : step.priority === 'low'
+                        ? 'text-[var(--text-muted)] border-[var(--border)]'
+                        : 'text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30'
+                  }`}
+                >
                   {step.priority.toUpperCase()}
                 </span>
                 <p className="text-sm font-theme-data text-[var(--text)]">{step.action}</p>

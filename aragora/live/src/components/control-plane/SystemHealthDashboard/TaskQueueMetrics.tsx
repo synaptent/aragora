@@ -87,7 +87,9 @@ export function TaskQueueMetrics({ metrics, loading = false }: TaskQueueMetricsP
           <div className="text-xs font-theme-data text-text-muted">COMPLETED</div>
         </div>
         <div className="bg-bg p-3 rounded text-center">
-          <div className={`text-2xl font-theme-data ${displayMetrics.failed_today > 0 ? 'text-[var(--crimson)]' : 'text-text-muted'}`}>
+          <div
+            className={`text-2xl font-theme-data ${displayMetrics.failed_today > 0 ? 'text-[var(--crimson)]' : 'text-text-muted'}`}
+          >
             {displayMetrics.failed_today}
           </div>
           <div className="text-xs font-theme-data text-text-muted">FAILED</div>
@@ -112,7 +114,11 @@ export function TaskQueueMetrics({ metrics, loading = false }: TaskQueueMetricsP
           <span className="text-xs font-theme-data text-text-muted">Failure Rate</span>
           <span
             className={`text-sm font-theme-data ${
-              failureRate > 10 ? 'text-[var(--crimson)]' : failureRate > 5 ? 'text-[var(--acid-yellow)]' : 'text-success'
+              failureRate > 10
+                ? 'text-[var(--crimson)]'
+                : failureRate > 5
+                  ? 'text-[var(--acid-yellow)]'
+                  : 'text-success'
             }`}
           >
             {failureRate.toFixed(1)}%

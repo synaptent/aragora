@@ -83,7 +83,8 @@ export interface PipelineOptions {
   useWebSocket?: boolean;
 }
 
-export type PipelineStage = 'idle' | 'decompose' | 'interrogate' | 'research' | 'specify' | 'complete' | 'error';
+export type PipelineStage =
+  'idle' | 'decompose' | 'interrogate' | 'research' | 'specify' | 'complete' | 'error';
 
 export interface UsePromptEngineReturn {
   isRunning: boolean;
@@ -172,7 +173,9 @@ export function usePromptEngine(): UsePromptEngineReturn {
 
   const decompose = useCallback(async (prompt: string): Promise<PromptIntent | null> => {
     try {
-      const res = await postApi<{ intent: PromptIntent }>('/api/prompt-engine/decompose', { prompt });
+      const res = await postApi<{ intent: PromptIntent }>('/api/prompt-engine/decompose', {
+        prompt,
+      });
       setIntent(res.intent);
       return res.intent;
     } catch (err) {
@@ -182,139 +185,148 @@ export function usePromptEngine(): UsePromptEngineReturn {
   }, []);
 
   const answerQuestions = useCallback((answers: Record<number, string>) => {
-    setQuestions(prev =>
-      prev.map((q, i) => (i in answers ? { ...q, answer: answers[i] } : q))
-    );
+    setQuestions((prev) => prev.map((q, i) => (i in answers ? { ...q, answer: answers[i] } : q)));
   }, []);
 
-  const runPipelineRest = useCallback(async (prompt: string, options?: PipelineOptions) => {
-    reset();
-    setIsRunning(true);
-    setCurrentStage('decompose');
+  const runPipelineRest = useCallback(
+    async (prompt: string, options?: PipelineOptions) => {
+      reset();
+      setIsRunning(true);
+      setCurrentStage('decompose');
 
-    try {
-      const res = await postApi<{
-        specification: Specification;
-        intent: PromptIntent;
-        questions: ClarifyingQuestion[];
-        research: ResearchReport | null;
-        auto_approved: boolean;
-        stages_completed: string[];
-        validation: ValidationResult;
-      }>('/api/prompt-engine/run', {
-        prompt,
-        profile: options?.profile ?? 'founder',
-        autonomy: options?.autonomy,
-        skip_research: options?.skipResearch ?? false,
-        skip_interrogation: options?.skipInterrogation ?? false,
-      });
-
-      setIntent(res.intent);
-      setCurrentStage('interrogate');
-      setQuestions(res.questions);
-      setCurrentStage('research');
-      setResearch(res.research);
-      setCurrentStage('specify');
-      setSpecification(res.specification);
-      setValidation(res.validation);
-      setStagesCompleted(res.stages_completed);
-      setCurrentStage('complete');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Pipeline failed');
-      setCurrentStage('error');
-    } finally {
-      setIsRunning(false);
-    }
-  }, [reset]);
-
-  const runPipelineWs = useCallback((prompt: string, options?: PipelineOptions) => {
-    reset();
-    setIsRunning(true);
-    setCurrentStage('decompose');
-
-    const ws = new WebSocket(PROMPT_ENGINE_WS_URL);
-    wsRef.current = ws;
-    const completed: string[] = [];
-
-    ws.onopen = () => {
-      ws.send(JSON.stringify({
-        action: 'run',
-        prompt,
-        profile: options?.profile ?? 'founder',
-        context: null,
-      }));
-    };
-
-    ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(event.data);
+        const res = await postApi<{
+          specification: Specification;
+          intent: PromptIntent;
+          questions: ClarifyingQuestion[];
+          research: ResearchReport | null;
+          auto_approved: boolean;
+          stages_completed: string[];
+          validation: ValidationResult;
+        }>('/api/prompt-engine/run', {
+          prompt,
+          profile: options?.profile ?? 'founder',
+          autonomy: options?.autonomy,
+          skip_research: options?.skipResearch ?? false,
+          skip_interrogation: options?.skipInterrogation ?? false,
+        });
 
-        switch (msg.type) {
-          case 'prompt_engine_stage':
-            setCurrentStage(msg.stage as PipelineStage);
-            if (!completed.includes(msg.stage)) {
-              completed.push(msg.stage);
-              setStagesCompleted([...completed]);
-            }
-            break;
-
-          case 'prompt_engine_intent':
-            setIntent(msg.intent as PromptIntent);
-            break;
-
-          case 'prompt_engine_questions':
-            setQuestions((msg.questions as ClarifyingQuestion[]) ?? []);
-            break;
-
-          case 'prompt_engine_research':
-            setResearch(msg.research as ResearchReport);
-            break;
-
-          case 'prompt_engine_spec':
-            setSpecification(msg.specification as Specification);
-            break;
-
-          case 'prompt_engine_validation':
-            setValidation(msg.validation as ValidationResult);
-            break;
-
-          case 'prompt_engine_complete':
-            setStagesCompleted(msg.stages_completed ?? completed);
-            setCurrentStage('complete');
-            setIsRunning(false);
-            ws.close();
-            break;
-
-          case 'prompt_engine_error':
-            setError(msg.error ?? 'Pipeline failed');
-            setCurrentStage('error');
-            setIsRunning(false);
-            ws.close();
-            break;
-        }
-      } catch {
-        // Ignore malformed messages
+        setIntent(res.intent);
+        setCurrentStage('interrogate');
+        setQuestions(res.questions);
+        setCurrentStage('research');
+        setResearch(res.research);
+        setCurrentStage('specify');
+        setSpecification(res.specification);
+        setValidation(res.validation);
+        setStagesCompleted(res.stages_completed);
+        setCurrentStage('complete');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Pipeline failed');
+        setCurrentStage('error');
+      } finally {
+        setIsRunning(false);
       }
-    };
+    },
+    [reset],
+  );
 
-    ws.onerror = () => {
-      setError('WebSocket connection failed');
-      setCurrentStage('error');
-      setIsRunning(false);
-    };
+  const runPipelineWs = useCallback(
+    (prompt: string, options?: PipelineOptions) => {
+      reset();
+      setIsRunning(true);
+      setCurrentStage('decompose');
 
-    ws.onclose = () => {
-      wsRef.current = null;
-    };
-  }, [reset]);
+      const ws = new WebSocket(PROMPT_ENGINE_WS_URL);
+      wsRef.current = ws;
+      const completed: string[] = [];
 
-  const runPipeline = useCallback(async (prompt: string, options?: PipelineOptions) => {
-    if (options?.useWebSocket) {
-      runPipelineWs(prompt, options);
-    } else {
-      await runPipelineRest(prompt, options);
-    }
-  }, [runPipelineRest, runPipelineWs]);
+      ws.onopen = () => {
+        ws.send(
+          JSON.stringify({
+            action: 'run',
+            prompt,
+            profile: options?.profile ?? 'founder',
+            context: null,
+          }),
+        );
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          switch (msg.type) {
+            case 'prompt_engine_stage':
+              setCurrentStage(msg.stage as PipelineStage);
+              if (!completed.includes(msg.stage)) {
+                completed.push(msg.stage);
+                setStagesCompleted([...completed]);
+              }
+              break;
+
+            case 'prompt_engine_intent':
+              setIntent(msg.intent as PromptIntent);
+              break;
+
+            case 'prompt_engine_questions':
+              setQuestions((msg.questions as ClarifyingQuestion[]) ?? []);
+              break;
+
+            case 'prompt_engine_research':
+              setResearch(msg.research as ResearchReport);
+              break;
+
+            case 'prompt_engine_spec':
+              setSpecification(msg.specification as Specification);
+              break;
+
+            case 'prompt_engine_validation':
+              setValidation(msg.validation as ValidationResult);
+              break;
+
+            case 'prompt_engine_complete':
+              setStagesCompleted(msg.stages_completed ?? completed);
+              setCurrentStage('complete');
+              setIsRunning(false);
+              ws.close();
+              break;
+
+            case 'prompt_engine_error':
+              setError(msg.error ?? 'Pipeline failed');
+              setCurrentStage('error');
+              setIsRunning(false);
+              ws.close();
+              break;
+          }
+        } catch {
+          // Ignore malformed messages
+        }
+      };
+
+      ws.onerror = () => {
+        setError('WebSocket connection failed');
+        setCurrentStage('error');
+        setIsRunning(false);
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+      };
+    },
+    [reset],
+  );
+
+  const runPipeline = useCallback(
+    async (prompt: string, options?: PipelineOptions) => {
+      if (options?.useWebSocket) {
+        runPipelineWs(prompt, options);
+      } else {
+        await runPipelineRest(prompt, options);
+      }
+    },
+    [runPipelineRest, runPipelineWs],
+  );
 
   // Clean up WebSocket on unmount
   useEffect(() => {

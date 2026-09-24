@@ -34,7 +34,9 @@ export function RoundTimeline({ roundData, expandedRound, onExpandRound }: Round
                 config={config}
                 onToggle={() => onExpandRound(isExpanded ? null : auditRound.round)}
               />
-              {isExpanded && data && data.messages.length > 0 && <RoundMessages messages={data.messages} />}
+              {isExpanded && data && data.messages.length > 0 && (
+                <RoundMessages messages={data.messages} />
+              )}
             </div>
           );
         })}
@@ -63,7 +65,9 @@ function RoundHeader({ auditRound, data, status, isExpanded, config, onToggle }:
               <span className={`text-sm font-medium ${config.text}`}>
                 Round {auditRound.round}: {auditRound.name}
               </span>
-              {status === 'active' && <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />}
+              {status === 'active' && (
+                <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+              )}
               {status === 'complete' && <span className="text-success text-xs">✓</span>}
             </div>
             <p className="text-xs text-text-muted">{auditRound.description}</p>
@@ -75,7 +79,9 @@ function RoundHeader({ auditRound, data, status, isExpanded, config, onToggle }:
               {data.messages.length} response{data.messages.length !== 1 ? 's' : ''}
             </span>
           )}
-          {status !== 'pending' && <span className="text-text-muted text-xs">{isExpanded ? '▼' : '▶'}</span>}
+          {status !== 'pending' && (
+            <span className="text-text-muted text-xs">{isExpanded ? '▼' : '▶'}</span>
+          )}
         </div>
       </div>
     </button>
@@ -110,7 +116,9 @@ function RoundMessages({ messages }: RoundMessagesProps) {
                   {Math.round(msg.confidence * 100)}%
                 </span>
               )}
-              {msg.citations !== undefined && msg.citations > 0 && <CitationBadge count={msg.citations} />}
+              {msg.citations !== undefined && msg.citations > 0 && (
+                <CitationBadge count={msg.citations} />
+              )}
             </div>
           </div>
           <p className="agent-output text-text-muted whitespace-pre-wrap break-words max-h-32 overflow-y-auto">

@@ -26,30 +26,23 @@ export function ActionBuilder({
   const handleTypeChange = useCallback(
     (type: ActionType) => {
       const newConfig = ACTION_CONFIGS[type];
-      onChange(index, {
-        type,
-        target: newConfig.requiresTarget ? '' : undefined,
-        params: {},
-      });
+      onChange(index, { type, target: newConfig.requiresTarget ? '' : undefined, params: {} });
     },
-    [index, onChange]
+    [index, onChange],
   );
 
   const handleTargetChange = useCallback(
     (target: string) => {
       onChange(index, { ...action, target });
     },
-    [action, index, onChange]
+    [action, index, onChange],
   );
 
   const handleParamChange = useCallback(
     (key: string, value: string | number) => {
-      onChange(index, {
-        ...action,
-        params: { ...action.params, [key]: value },
-      });
+      onChange(index, { ...action, params: { ...action.params, [key]: value } });
     },
-    [action, index, onChange]
+    [action, index, onChange],
   );
 
   return (
@@ -79,9 +72,7 @@ export function ActionBuilder({
           {/* Target field */}
           {config.requiresTarget && (
             <div>
-              <label className="block text-xs text-text-muted mb-1">
-                {config.targetLabel}
-              </label>
+              <label className="block text-xs text-text-muted mb-1">{config.targetLabel}</label>
               <input
                 type="text"
                 value={action.target || ''}
@@ -95,9 +86,7 @@ export function ActionBuilder({
           {/* Additional param fields */}
           {config.paramFields?.map((field) => (
             <div key={field.key}>
-              <label className="block text-xs text-text-muted mb-1">
-                {field.label}
-              </label>
+              <label className="block text-xs text-text-muted mb-1">{field.label}</label>
               {field.type === 'select' ? (
                 <select
                   value={(action.params?.[field.key] as string) || ''}
@@ -118,7 +107,7 @@ export function ActionBuilder({
                   onChange={(e) =>
                     handleParamChange(
                       field.key,
-                      field.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value
+                      field.type === 'number' ? parseFloat(e.target.value) || 0 : e.target.value,
                     )
                   }
                   className="w-full px-2 py-1.5 text-sm bg-bg border border-border rounded focus:border-[var(--accent)] focus:outline-none"
@@ -161,7 +150,7 @@ export function ActionListBuilder({ actions, onChange }: ActionListBuilderProps)
       newActions[index] = action;
       onChange(newActions);
     },
-    [actions, onChange]
+    [actions, onChange],
   );
 
   const handleActionRemove = useCallback(
@@ -170,14 +159,11 @@ export function ActionListBuilder({ actions, onChange }: ActionListBuilderProps)
       const newActions = actions.filter((_, i) => i !== index);
       onChange(newActions);
     },
-    [actions, onChange]
+    [actions, onChange],
   );
 
   const handleAddAction = useCallback(() => {
-    const newAction: Action = {
-      type: 'route_to_channel',
-      target: '',
-    };
+    const newAction: Action = { type: 'route_to_channel', target: '' };
     onChange([...actions, newAction]);
   }, [actions, onChange]);
 
@@ -198,9 +184,7 @@ export function ActionListBuilder({ actions, onChange }: ActionListBuilderProps)
       <div className="space-y-2">
         {actions.map((action, index) => (
           <div key={index}>
-            {index > 0 && (
-              <div className="text-xs text-text-muted text-center py-1">ALSO</div>
-            )}
+            {index > 0 && <div className="text-xs text-text-muted text-center py-1">ALSO</div>}
             <ActionBuilder
               action={action}
               index={index}

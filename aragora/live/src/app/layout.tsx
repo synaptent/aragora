@@ -21,15 +21,27 @@ import { ThemeProvider, themeInitScript } from '@/context/ThemeContext';
 export const metadata: Metadata = {
   metadataBase: new URL('https://aragora.ai'),
   title: 'ARAGORA // LIVE',
-  description: 'Multiple AI models debate your decisions. Ask any question and get a verdict with confidence scores, minority opinions, and a full audit trail.',
-  keywords: ['AI', 'multi-agent', 'AI debate', 'decision making', 'debate', 'consensus', 'LLM', 'aragora', 'Claude', 'GPT', 'Gemini', 'Slack', 'Teams', 'Discord'],
+  description:
+    'Multiple AI models debate your decisions. Ask any question and get a verdict with confidence scores, minority opinions, and a full audit trail.',
+  keywords: [
+    'AI',
+    'multi-agent',
+    'AI debate',
+    'decision making',
+    'debate',
+    'consensus',
+    'LLM',
+    'aragora',
+    'Claude',
+    'GPT',
+    'Gemini',
+    'Slack',
+    'Teams',
+    'Discord',
+  ],
   authors: [{ name: 'Aragora Team' }],
   manifest: '/manifest.json',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Aragora',
-  },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Aragora' },
   icons: {
     icon: [
       { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
@@ -40,15 +52,24 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'Aragora — AI Decision Intelligence',
-    description: 'Multiple AI models debate your decisions. Confidence scores, minority opinions, and full audit trails.',
+    description:
+      'Multiple AI models debate your decisions. Confidence scores, minority opinions, and full audit trails.',
     type: 'website',
     siteName: 'Aragora',
-    images: [{ url: '/screenshots/debate-desktop.png', width: 1920, height: 1080, alt: 'Aragora AI debate in action' }],
+    images: [
+      {
+        url: '/screenshots/debate-desktop.png',
+        width: 1920,
+        height: 1080,
+        alt: 'Aragora AI debate in action',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Aragora — AI Decision Intelligence',
-    description: 'Multiple AI models debate your decisions. Confidence scores, minority opinions, and full audit trails.',
+    description:
+      'Multiple AI models debate your decisions. Confidence scores, minority opinions, and full audit trails.',
     images: ['/screenshots/debate-desktop.png'],
   },
 };
@@ -64,11 +85,7 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

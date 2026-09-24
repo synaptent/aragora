@@ -12,7 +12,7 @@ export const DEFAULT_WS_URL = WS_URL;
 // Configurable via env var for deployments with faster/slower backends
 export const DEBATE_START_TIMEOUT_MS = parseInt(
   process.env.NEXT_PUBLIC_WS_DEBATE_TIMEOUT || '180000',
-  10
+  10,
 ); // 180 seconds (3 minutes)
 
 // Activity timeout - how long to wait without any events before considering connection dead
@@ -36,7 +36,7 @@ export const MAX_STREAM_EVENTS = 500;
 // Polling fallback interval (ms) when WebSocket is permanently unavailable
 export const POLLING_INTERVAL_MS = parseInt(
   process.env.NEXT_PUBLIC_WS_POLLING_INTERVAL || '3000',
-  10
+  10,
 ); // 3 seconds
 
 // Heartbeat monitoring - if no heartbeat/event in this window, trigger

@@ -34,15 +34,9 @@ export function MetricsCards({ nomicState, events }: MetricsCardsProps) {
 
   return (
     <div className="card p-4">
-      <h2 className="text-sm font-medium text-text-muted uppercase tracking-wider mb-3">
-        Metrics
-      </h2>
+      <h2 className="text-sm font-medium text-text-muted uppercase tracking-wider mb-3">Metrics</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <MetricCard
-          label="Cycle"
-          value={cycle > 0 ? `${cycle}/3` : '-'}
-          color="accent"
-        />
+        <MetricCard label="Cycle" value={cycle > 0 ? `${cycle}/3` : '-'} color="accent" />
         <MetricCard
           label="Phase"
           value={phase.charAt(0).toUpperCase() + phase.slice(1)}
@@ -91,12 +85,8 @@ function MetricCard({ label, value, color }: MetricCardProps) {
 
   return (
     <div className="text-center">
-      <div className="text-xs text-text-muted uppercase tracking-wide mb-1">
-        {label}
-      </div>
-      <div className={`text-xl font-semibold ${colorClasses[color] || 'text-text'}`}>
-        {value}
-      </div>
+      <div className="text-xs text-text-muted uppercase tracking-wide mb-1">{label}</div>
+      <div className={`text-xl font-semibold ${colorClasses[color] || 'text-text'}`}>{value}</div>
     </div>
   );
 }

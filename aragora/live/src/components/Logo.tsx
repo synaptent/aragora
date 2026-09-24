@@ -7,11 +7,7 @@ interface LogoProps {
   className?: string;
 }
 
-const sizes = {
-  sm: 16,
-  md: 24,
-  lg: 32,
-};
+const sizes = { sm: 16, md: 24, lg: 32 };
 
 export function Logo({ size = 'md', pixelSize, onClick, className = '' }: LogoProps) {
   const dimension = pixelSize ?? sizes[size];

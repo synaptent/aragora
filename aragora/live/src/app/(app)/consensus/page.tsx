@@ -110,21 +110,26 @@ export default function ConsensusPage() {
     }
   }, [backendConfig.api]);
 
-  const fetchDomainHistory = useCallback(async (domain: string) => {
-    if (!domain) return;
-    setDomainLoading(true);
-    try {
-      const res = await fetch(`${backendConfig.api}/api/consensus/domain/${encodeURIComponent(domain)}?limit=50`);
-      if (res.ok) {
-        const data = await res.json();
-        setDomainHistory(data.history || []);
+  const fetchDomainHistory = useCallback(
+    async (domain: string) => {
+      if (!domain) return;
+      setDomainLoading(true);
+      try {
+        const res = await fetch(
+          `${backendConfig.api}/api/consensus/domain/${encodeURIComponent(domain)}?limit=50`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setDomainHistory(data.history || []);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch domain history:', err);
+      } finally {
+        setDomainLoading(false);
       }
-    } catch (err) {
-      logger.error('Failed to fetch domain history:', err);
-    } finally {
-      setDomainLoading(false);
-    }
-  }, [backendConfig.api]);
+    },
+    [backendConfig.api],
+  );
 
   // Load stats on mount
   useEffect(() => {
@@ -157,7 +162,8 @@ export default function ConsensusPage() {
               {'>'} CONSENSUS MEMORY
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Institutional knowledge from debate outcomes. Settled topics, dissenting views, risk warnings, and domain history.
+              Institutional knowledge from debate outcomes. Settled topics, dissenting views, risk
+              warnings, and domain history.
             </p>
           </div>
 
@@ -165,15 +171,21 @@ export default function ConsensusPage() {
           {stats && (
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
               <div className="p-3 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
-                <div className="text-2xl font-theme-data text-[var(--accent)]">{stats.total_topics}</div>
+                <div className="text-2xl font-theme-data text-[var(--accent)]">
+                  {stats.total_topics}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Topics</div>
               </div>
               <div className="p-3 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
-                <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{stats.high_confidence_count}</div>
+                <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+                  {stats.high_confidence_count}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">High Confidence</div>
               </div>
               <div className="p-3 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
-                <div className="text-2xl font-theme-data text-text">{(stats.avg_confidence * 100).toFixed(0)}%</div>
+                <div className="text-2xl font-theme-data text-text">
+                  {(stats.avg_confidence * 100).toFixed(0)}%
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Avg Confidence</div>
               </div>
               <div className="p-3 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
@@ -181,23 +193,27 @@ export default function ConsensusPage() {
                 <div className="text-xs font-theme-data text-text-muted">Dissents</div>
               </div>
               <div className="p-3 border border-[var(--accent)]/30 rounded bg-surface/30 text-center">
-                <div className="text-2xl font-theme-data text-acid-purple">{stats.domains.length}</div>
+                <div className="text-2xl font-theme-data text-acid-purple">
+                  {stats.domains.length}
+                </div>
                 <div className="text-xs font-theme-data text-text-muted">Domains</div>
               </div>
             </div>
           )}
           {statsLoading && !stats && (
-            <div className="text-center py-4 text-[var(--accent)] font-theme-data animate-pulse mb-6">Loading stats...</div>
+            <div className="text-center py-4 text-[var(--accent)] font-theme-data animate-pulse mb-6">
+              Loading stats...
+            </div>
           )}
 
           {/* Tab Navigation */}
           <div className="flex gap-2 mb-6">
-            {([
+            {[
               { id: 'overview' as const, label: 'OVERVIEW' },
               { id: 'contrarian' as const, label: 'CONTRARIAN VIEWS' },
               { id: 'risks' as const, label: 'RISK WARNINGS' },
               { id: 'domains' as const, label: 'BY DOMAIN' },
-            ]).map((tab) => (
+            ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -226,20 +242,28 @@ export default function ConsensusPage() {
               {/* Strength Distribution */}
               {stats?.by_strength && Object.keys(stats.by_strength).length > 0 && (
                 <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
-                  <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">Consensus Strength Distribution</h3>
+                  <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
+                    Consensus Strength Distribution
+                  </h3>
                   <div className="space-y-2">
                     {Object.entries(stats.by_strength)
                       .sort(([, a], [, b]) => b - a)
                       .map(([strength, count]) => (
                         <div key={strength} className="flex items-center gap-3">
-                          <span className="text-xs font-theme-data text-text w-24 capitalize">{strength}</span>
+                          <span className="text-xs font-theme-data text-text w-24 capitalize">
+                            {strength}
+                          </span>
                           <div className="flex-1 h-4 bg-bg rounded overflow-hidden">
                             <div
                               className="h-full bg-[var(--accent)]/40 rounded"
-                              style={{ width: `${Math.min(100, (count / stats.total_topics) * 100)}%` }}
+                              style={{
+                                width: `${Math.min(100, (count / stats.total_topics) * 100)}%`,
+                              }}
                             />
                           </div>
-                          <span className="text-xs font-theme-data text-text-muted w-8 text-right">{count}</span>
+                          <span className="text-xs font-theme-data text-text-muted w-8 text-right">
+                            {count}
+                          </span>
                         </div>
                       ))}
                   </div>
@@ -249,18 +273,25 @@ export default function ConsensusPage() {
               {/* Domain Distribution */}
               {stats?.by_domain && Object.keys(stats.by_domain).length > 0 && (
                 <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
-                  <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">Domain Distribution</h3>
+                  <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
+                    Domain Distribution
+                  </h3>
                   <div className="grid grid-cols-2 gap-2">
                     {Object.entries(stats.by_domain)
                       .sort(([, a], [, b]) => b - a)
                       .map(([domain, count]) => (
                         <button
                           key={domain}
-                          onClick={() => { setSelectedDomain(domain); setActiveTab('domains'); }}
+                          onClick={() => {
+                            setSelectedDomain(domain);
+                            setActiveTab('domains');
+                          }}
                           className="flex items-center justify-between p-2 bg-bg/50 rounded hover:bg-[var(--accent)]/10 transition-colors"
                         >
                           <span className="text-xs font-theme-data text-text">{domain}</span>
-                          <span className="text-xs font-theme-data text-[var(--accent)]">{count}</span>
+                          <span className="text-xs font-theme-data text-[var(--accent)]">
+                            {count}
+                          </span>
                         </button>
                       ))}
                   </div>
@@ -276,7 +307,8 @@ export default function ConsensusPage() {
                 <div>
                   <h2 className="font-theme-data text-text">Contrarian Perspectives</h2>
                   <p className="text-text-muted font-theme-data text-xs mt-1">
-                    Dissenting views from agents who disagreed with the majority. These perspectives often reveal blind spots.
+                    Dissenting views from agents who disagreed with the majority. These perspectives
+                    often reveal blind spots.
                   </p>
                 </div>
                 <button
@@ -289,26 +321,44 @@ export default function ConsensusPage() {
               </div>
 
               {contrarianLoading ? (
-                <div className="text-center py-8 text-[var(--accent)] font-theme-data animate-pulse">Loading contrarian views...</div>
+                <div className="text-center py-8 text-[var(--accent)] font-theme-data animate-pulse">
+                  Loading contrarian views...
+                </div>
               ) : contrarianViews.length === 0 ? (
                 <div className="p-8 border border-[var(--accent)]/20 rounded text-center">
-                  <p className="font-theme-data text-text-muted">No contrarian views recorded yet.</p>
-                  <p className="font-theme-data text-text-muted/60 text-xs mt-2">Run some debates to build institutional dissent memory.</p>
+                  <p className="font-theme-data text-text-muted">
+                    No contrarian views recorded yet.
+                  </p>
+                  <p className="font-theme-data text-text-muted/60 text-xs mt-2">
+                    Run some debates to build institutional dissent memory.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {contrarianViews.map((view, idx) => (
-                    <div key={idx} className="p-4 border border-orange-500/20 rounded bg-orange-900/5 hover:border-orange-500/40 transition-colors">
+                    <div
+                      key={idx}
+                      className="p-4 border border-orange-500/20 rounded bg-orange-900/5 hover:border-orange-500/40 transition-colors"
+                    >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <p className="font-theme-data text-sm text-text">{view.position}</p>
                           {view.reasoning && (
-                            <p className="font-theme-data text-xs text-text-muted mt-2 italic">&quot;{view.reasoning}&quot;</p>
+                            <p className="font-theme-data text-xs text-text-muted mt-2 italic">
+                              &quot;{view.reasoning}&quot;
+                            </p>
                           )}
                           <div className="flex items-center gap-3 mt-2 text-xs font-theme-data text-text-muted">
-                            <span>Agent: <span className="text-orange-400">{view.agent}</span></span>
+                            <span>
+                              Agent: <span className="text-orange-400">{view.agent}</span>
+                            </span>
                             <span>|</span>
-                            <span>Confidence: <span className="text-[var(--acid-cyan)]">{(view.confidence * 100).toFixed(0)}%</span></span>
+                            <span>
+                              Confidence:{' '}
+                              <span className="text-[var(--acid-cyan)]">
+                                {(view.confidence * 100).toFixed(0)}%
+                              </span>
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -339,16 +389,23 @@ export default function ConsensusPage() {
               </div>
 
               {risksLoading ? (
-                <div className="text-center py-8 text-[var(--accent)] font-theme-data animate-pulse">Loading risk warnings...</div>
+                <div className="text-center py-8 text-[var(--accent)] font-theme-data animate-pulse">
+                  Loading risk warnings...
+                </div>
               ) : riskWarnings.length === 0 ? (
                 <div className="p-8 border border-[var(--accent)]/20 rounded text-center">
                   <p className="font-theme-data text-text-muted">No risk warnings recorded yet.</p>
-                  <p className="font-theme-data text-text-muted/60 text-xs mt-2">Agents flag risks during debates automatically.</p>
+                  <p className="font-theme-data text-text-muted/60 text-xs mt-2">
+                    Agents flag risks during debates automatically.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {riskWarnings.map((warning, idx) => (
-                    <div key={idx} className={`p-4 border rounded ${SEVERITY_COLORS[warning.severity] || SEVERITY_COLORS.low}`}>
+                    <div
+                      key={idx}
+                      className={`p-4 border rounded ${SEVERITY_COLORS[warning.severity] || SEVERITY_COLORS.low}`}
+                    >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">
@@ -365,8 +422,12 @@ export default function ConsensusPage() {
                           <p className="font-theme-data text-sm text-text">{warning.description}</p>
                           {warning.mitigation && (
                             <div className="mt-2 p-2 bg-surface/50 rounded">
-                              <span className="text-xs font-theme-data text-[var(--accent)]">Mitigation: </span>
-                              <span className="text-xs font-theme-data text-text-muted">{warning.mitigation}</span>
+                              <span className="text-xs font-theme-data text-[var(--accent)]">
+                                Mitigation:{' '}
+                              </span>
+                              <span className="text-xs font-theme-data text-text-muted">
+                                {warning.mitigation}
+                              </span>
                             </div>
                           )}
                           <div className="text-xs font-theme-data text-text-muted/50 mt-2">
@@ -412,14 +473,18 @@ export default function ConsensusPage() {
                     >
                       {domain}
                       {stats.by_domain[domain] && (
-                        <span className="ml-2 text-xs text-text-muted">({stats.by_domain[domain]})</span>
+                        <span className="ml-2 text-xs text-text-muted">
+                          ({stats.by_domain[domain]})
+                        </span>
                       )}
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className="p-8 border border-[var(--accent)]/20 rounded text-center">
-                  <p className="font-theme-data text-text-muted">No domains found. Run debates with domain tags to populate.</p>
+                  <p className="font-theme-data text-text-muted">
+                    No domains found. Run debates with domain tags to populate.
+                  </p>
                 </div>
               )}
 
@@ -432,12 +497,17 @@ export default function ConsensusPage() {
                     </div>
                   ) : domainHistory.length === 0 ? (
                     <div className="p-8 border border-[var(--accent)]/20 rounded text-center">
-                      <p className="font-theme-data text-text-muted">No consensus history for {selectedDomain}.</p>
+                      <p className="font-theme-data text-text-muted">
+                        No consensus history for {selectedDomain}.
+                      </p>
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {domainHistory.map((record, idx) => (
-                        <div key={idx} className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
+                        <div
+                          key={idx}
+                          className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30"
+                        >
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex-1 min-w-0">
                               <div className="font-theme-data text-sm text-[var(--acid-cyan)]">
@@ -448,18 +518,30 @@ export default function ConsensusPage() {
                               </p>
                               <div className="flex items-center gap-3 mt-2 text-xs font-theme-data text-text-muted">
                                 {(record as Record<string, number>).confidence !== undefined && (
-                                  <span>Confidence: {((record as Record<string, number>).confidence * 100).toFixed(0)}%</span>
+                                  <span>
+                                    Confidence:{' '}
+                                    {((record as Record<string, number>).confidence * 100).toFixed(
+                                      0,
+                                    )}
+                                    %
+                                  </span>
                                 )}
                                 {(record as Record<string, string>).strength && (
                                   <>
                                     <span>|</span>
-                                    <span>Strength: {(record as Record<string, string>).strength}</span>
+                                    <span>
+                                      Strength: {(record as Record<string, string>).strength}
+                                    </span>
                                   </>
                                 )}
                                 {(record as Record<string, string>).timestamp && (
                                   <>
                                     <span>|</span>
-                                    <span>{new Date((record as Record<string, string>).timestamp).toLocaleDateString()}</span>
+                                    <span>
+                                      {new Date(
+                                        (record as Record<string, string>).timestamp,
+                                      ).toLocaleDateString()}
+                                    </span>
                                   </>
                                 )}
                               </div>
@@ -477,12 +559,8 @@ export default function ConsensusPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // CONSENSUS MEMORY
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // CONSENSUS MEMORY</p>
         </footer>
       </main>
     </>

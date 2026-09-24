@@ -45,21 +45,19 @@ describe('ciGlyph', () => {
   });
 
   it('fail wins over pending and ok', () => {
-    expect(
-      ciGlyph({ success: 3, failure: 1, pending: 2, total: 6 }),
-    ).toMatchObject({ tone: 'fail' });
+    expect(ciGlyph({ success: 3, failure: 1, pending: 2, total: 6 })).toMatchObject({
+      tone: 'fail',
+    });
   });
 
   it('warn when only pending', () => {
-    expect(
-      ciGlyph({ success: 1, failure: 0, pending: 2, total: 3 }),
-    ).toMatchObject({ tone: 'warn' });
+    expect(ciGlyph({ success: 1, failure: 0, pending: 2, total: 3 })).toMatchObject({
+      tone: 'warn',
+    });
   });
 
   it('ok when all green', () => {
-    expect(
-      ciGlyph({ success: 4, failure: 0, pending: 0, total: 4 }),
-    ).toMatchObject({ tone: 'ok' });
+    expect(ciGlyph({ success: 4, failure: 0, pending: 0, total: 4 })).toMatchObject({ tone: 'ok' });
   });
 });
 

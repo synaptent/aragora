@@ -10,16 +10,9 @@ interface EmptyStateProps {
   /** Description text */
   description?: string;
   /** Primary action button */
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
+  action?: { label: string; onClick: () => void };
   /** Secondary action link */
-  secondaryAction?: {
-    label: string;
-    href?: string;
-    onClick?: () => void;
-  };
+  secondaryAction?: { label: string; href?: string; onClick?: () => void };
   /** Additional CSS classes */
   className?: string;
 }
@@ -48,15 +41,9 @@ export function EmptyState({
         </div>
       )}
 
-      <h3 className="text-lg font-theme-data text-text-muted mb-2">
-        {title}
-      </h3>
+      <h3 className="text-lg font-theme-data text-text-muted mb-2">{title}</h3>
 
-      {description && (
-        <p className="text-sm text-text-muted/70 max-w-md mb-6">
-          {description}
-        </p>
-      )}
+      {description && <p className="text-sm text-text-muted/70 max-w-md mb-6">{description}</p>}
 
       <div className="flex flex-col sm:flex-row items-center gap-3">
         {action && (
@@ -69,8 +56,8 @@ export function EmptyState({
           </button>
         )}
 
-        {secondaryAction && (
-          secondaryAction.href ? (
+        {secondaryAction &&
+          (secondaryAction.href ? (
             <a
               href={secondaryAction.href}
               className="text-sm text-[var(--acid-cyan)] hover:text-[var(--acid-cyan)]/80 font-theme-data underline"
@@ -84,8 +71,7 @@ export function EmptyState({
             >
               {secondaryAction.label}
             </button>
-          )
-        )}
+          ))}
       </div>
     </div>
   );

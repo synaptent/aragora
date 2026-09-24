@@ -11,17 +11,12 @@ module.exports = {
   ci: {
     collect: {
       // URLs to audit
-      url: [
-        'http://localhost:3000/',
-        'http://localhost:3000/debates',
-      ],
+      url: ['http://localhost:3000/', 'http://localhost:3000/debates'],
       numberOfRuns: 3, // Run multiple times for consistency
       settings: {
         preset: 'desktop', // Use desktop settings
         // Throttling for consistent results
-        throttling: {
-          cpuSlowdownMultiplier: 1,
-        },
+        throttling: { cpuSlowdownMultiplier: 1 },
         // Skip network throttling in CI
         disableNetworkThrottling: true,
         disableCpuThrottling: true,
@@ -44,8 +39,8 @@ module.exports = {
         'html-has-lang': 'error',
         'image-alt': 'error',
         'link-name': 'error',
-        'list': 'error',
-        'listitem': 'error',
+        list: 'error',
+        listitem: 'error',
         'meta-viewport': 'error',
 
         // Best practices (warnings)
@@ -56,7 +51,7 @@ module.exports = {
 
         // SEO (warnings)
         'categories:seo': ['warn', { minScore: 0.8 }],
-        'viewport': 'error',
+        viewport: 'error',
         'font-size': 'warn',
         'tap-targets': 'warn',
 

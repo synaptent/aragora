@@ -7,7 +7,10 @@ import { useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const ConsensusQualityDashboard = dynamic(
-  () => import('@/components/ConsensusQualityDashboard').then(m => ({ default: m.ConsensusQualityDashboard })),
+  () =>
+    import('@/components/ConsensusQualityDashboard').then((m) => ({
+      default: m.ConsensusQualityDashboard,
+    })),
   {
     ssr: false,
     loading: () => (
@@ -15,11 +18,11 @@ const ConsensusQualityDashboard = dynamic(
         <div className="h-[400px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 const EvaluationPanel = dynamic(
-  () => import('@/components/EvaluationPanel').then(m => ({ default: m.EvaluationPanel })),
+  () => import('@/components/EvaluationPanel').then((m) => ({ default: m.EvaluationPanel })),
   {
     ssr: false,
     loading: () => (
@@ -27,7 +30,7 @@ const EvaluationPanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 type ActiveSection = 'consensus' | 'evaluation';
@@ -80,7 +83,9 @@ export default function QualityPage() {
           {activeSection === 'consensus' && (
             <>
               <div className="mb-6 p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
-                <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">Quality Metrics</h3>
+                <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+                  Quality Metrics
+                </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-theme-data text-text-muted">
                   <div>
                     <span className="text-[var(--accent)]">Agreement Depth</span>
@@ -111,7 +116,9 @@ export default function QualityPage() {
           {activeSection === 'evaluation' && (
             <>
               <div className="mb-6 p-4 border border-purple-500/30 bg-purple-500/5 rounded">
-                <h3 className="text-sm font-theme-data text-purple-400 mb-2">LLM-as-Judge Evaluation</h3>
+                <h3 className="text-sm font-theme-data text-purple-400 mb-2">
+                  LLM-as-Judge Evaluation
+                </h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-theme-data text-text-muted">
                   <div>
                     <span className="text-[var(--accent)]">Response Evaluation</span>
@@ -141,12 +148,8 @@ export default function QualityPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // QUALITY & EVALUATION
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // QUALITY & EVALUATION</p>
         </footer>
       </main>
     </>

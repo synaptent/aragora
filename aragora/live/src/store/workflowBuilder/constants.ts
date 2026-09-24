@@ -2,7 +2,12 @@
  * Constants for Workflow Builder Store
  */
 
-import type { CanvasState, NodePaletteState, ConfigPanelState, ExecutionPreviewState } from './types';
+import type {
+  CanvasState,
+  NodePaletteState,
+  ConfigPanelState,
+  ExecutionPreviewState,
+} from './types';
 
 export const MAX_HISTORY = 50;
 

@@ -69,28 +69,27 @@ export function WebhookMonitor({ apiBase = '/api' }: WebhookMonitorProps) {
     }
   }, [apiBase]);
 
-  const fetchReceipts = useCallback(async (webhookId: string) => {
-    try {
-      const params = new URLSearchParams({ limit: '50' });
-      if (statusFilter !== 'all') {
-        params.set('status', statusFilter);
+  const fetchReceipts = useCallback(
+    async (webhookId: string) => {
+      try {
+        const params = new URLSearchParams({ limit: '50' });
+        if (statusFilter !== 'all') {
+          params.set('status', statusFilter);
+        }
+        const response = await fetch(`${apiBase}/webhooks/${webhookId}/receipts?${params}`);
+        if (!response.ok) throw new Error('Failed to fetch receipts');
+        const data = await response.json();
+        setReceipts(data.receipts || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
       }
-      const response = await fetch(
-        `${apiBase}/webhooks/${webhookId}/receipts?${params}`
-      );
-      if (!response.ok) throw new Error('Failed to fetch receipts');
-      const data = await response.json();
-      setReceipts(data.receipts || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    }
-  }, [apiBase, statusFilter]);
+    },
+    [apiBase, statusFilter],
+  );
 
   const testWebhook = async (webhookId: string) => {
     try {
-      const response = await fetch(`${apiBase}/webhooks/${webhookId}/test`, {
-        method: 'POST',
-      });
+      const response = await fetch(`${apiBase}/webhooks/${webhookId}/test`, { method: 'POST' });
       if (!response.ok) throw new Error('Test delivery failed');
       const result = await response.json();
       alert(`Test delivery: ${result.success ? 'Success' : 'Failed'}`);
@@ -148,7 +147,7 @@ export function WebhookMonitor({ apiBase = '/api' }: WebhookMonitorProps) {
         <h2 className="text-xl font-semibold text-white">Webhook Monitor</h2>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-400">
-            {webhooks.filter(w => w.enabled).length} active / {webhooks.length} total
+            {webhooks.filter((w) => w.enabled).length} active / {webhooks.length} total
           </span>
           <button
             onClick={() => fetchWebhooks()}
@@ -186,9 +185,7 @@ export function WebhookMonitor({ apiBase = '/api' }: WebhookMonitorProps) {
                     {webhook.url}
                   </div>
                   {webhook.description && (
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {webhook.description}
-                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">{webhook.description}</div>
                   )}
                 </td>
                 <td className="px-4 py-3">
@@ -294,9 +291,7 @@ export function WebhookMonitor({ apiBase = '/api' }: WebhookMonitorProps) {
 
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {receipts.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No delivery receipts found
-              </div>
+              <div className="text-center py-8 text-gray-500">No delivery receipts found</div>
             ) : (
               receipts.map((receipt) => (
                 <div
@@ -313,9 +308,7 @@ export function WebhookMonitor({ apiBase = '/api' }: WebhookMonitorProps) {
                     </span>
                     <span className="text-sm text-white">{receipt.event_type}</span>
                     {receipt.http_status && (
-                      <span className="text-xs text-gray-400">
-                        HTTP {receipt.http_status}
-                      </span>
+                      <span className="text-xs text-gray-400">HTTP {receipt.http_status}</span>
                     )}
                     {receipt.latency_ms && (
                       <span className="text-xs text-gray-400">

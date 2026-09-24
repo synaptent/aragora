@@ -18,6 +18,10 @@ FORCE_FULL_EXACT_PATHS = {
     ".github/workflows/lint.yml",
     "scripts/run_typecheck_gate.py",
     "scripts/test_tiers.sh",
+    "scripts/ci/mypy_with_baseline.py",
+    "scripts/ci/check_tool_baseline.py",
+    "scripts/ci/tool_baseline_parsers.py",
+    "scripts/baselines/root-mypy-full.json",
 }
 FORCE_FULL_PREFIXES = (".github/actions/pr-scope-classifier/",)
 

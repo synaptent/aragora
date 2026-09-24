@@ -87,30 +87,34 @@ export function OrganizationSwitcher({ compact = false, onSwitch }: Organization
   // Don't show if user only has one org or none
   if (organizations.length <= 1) {
     if (compact && organization) {
-      return (
-        <div className="text-xs font-theme-data text-text-muted">
-          {organization.name}
-        </div>
-      );
+      return <div className="text-xs font-theme-data text-text-muted">{organization.name}</div>;
     }
     return null;
   }
 
   const getTierColor = (tier: string) => {
     switch (tier) {
-      case 'free': return 'text-text-muted';
-      case 'starter': return 'text-[var(--acid-cyan)]';
-      case 'professional': return 'text-[var(--accent)]';
-      case 'enterprise': return 'text-warning';
-      default: return 'text-text-muted';
+      case 'free':
+        return 'text-text-muted';
+      case 'starter':
+        return 'text-[var(--acid-cyan)]';
+      case 'professional':
+        return 'text-[var(--accent)]';
+      case 'enterprise':
+        return 'text-warning';
+      default:
+        return 'text-text-muted';
     }
   };
 
   const getRoleBadge = (role: 'member' | 'admin' | 'owner') => {
     switch (role) {
-      case 'owner': return 'border-warning/30 text-warning';
-      case 'admin': return 'border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)]';
-      default: return 'border-text-muted/30 text-text-muted';
+      case 'owner':
+        return 'border-warning/30 text-warning';
+      case 'admin':
+        return 'border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)]';
+      default:
+        return 'border-text-muted/30 text-text-muted';
     }
   };
 
@@ -176,7 +180,9 @@ export function OrganizationSwitcher({ compact = false, onSwitch }: Organization
           {organization?.name?.[0]?.toUpperCase() || '?'}
         </span>
         <div className="flex flex-col items-start">
-          <span className="text-text truncate max-w-[150px]">{organization?.name || 'Select organization'}</span>
+          <span className="text-text truncate max-w-[150px]">
+            {organization?.name || 'Select organization'}
+          </span>
           {organization && (
             <span className={`text-[10px] uppercase ${getTierColor(organization.tier)}`}>
               {organization.tier}
@@ -236,17 +242,23 @@ export function OrganizationSwitcher({ compact = false, onSwitch }: Organization
                         {userOrg.organization.name}
                       </span>
                       {userOrg.is_default && (
-                        <span className="text-[10px] font-theme-data text-[var(--acid-cyan)]">(default)</span>
+                        <span className="text-[10px] font-theme-data text-[var(--acid-cyan)]">
+                          (default)
+                        </span>
                       )}
                       {userOrg.org_id === organization?.id && (
                         <span className="text-[var(--accent)]">*</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-[10px] font-theme-data uppercase ${getTierColor(userOrg.organization.tier)}`}>
+                      <span
+                        className={`text-[10px] font-theme-data uppercase ${getTierColor(userOrg.organization.tier)}`}
+                      >
                         {userOrg.organization.tier}
                       </span>
-                      <span className={`text-[10px] font-theme-data px-1 border rounded ${getRoleBadge(userOrg.role)}`}>
+                      <span
+                        className={`text-[10px] font-theme-data px-1 border rounded ${getRoleBadge(userOrg.role)}`}
+                      >
                         {userOrg.role}
                       </span>
                     </div>

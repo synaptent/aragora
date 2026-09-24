@@ -92,30 +92,19 @@ function reducer(state: FractalNavigationState, action: Action): FractalNavigati
 
       return {
         ...state,
-        stack: [
-          ...state.stack,
-          { stage: next, nodeId: action.nodeId, label: action.label },
-        ],
+        stack: [...state.stack, { stage: next, nodeId: action.nodeId, label: action.label }],
         selectedNodeId: null,
       };
     }
 
     case 'DRILL_UP': {
       if (state.stack.length <= 1) return state;
-      return {
-        ...state,
-        stack: state.stack.slice(0, -1),
-        selectedNodeId: null,
-      };
+      return { ...state, stack: state.stack.slice(0, -1), selectedNodeId: null };
     }
 
     case 'JUMP_TO': {
       if (action.index < 0 || action.index >= state.stack.length) return state;
-      return {
-        ...state,
-        stack: state.stack.slice(0, action.index + 1),
-        selectedNodeId: null,
-      };
+      return { ...state, stack: state.stack.slice(0, action.index + 1), selectedNodeId: null };
     }
 
     case 'SET_SELECTED': {
@@ -124,7 +113,13 @@ function reducer(state: FractalNavigationState, action: Action): FractalNavigati
 
     case 'RESET': {
       return {
-        stack: [{ stage: action.stage, nodeId: null, label: action.stage.charAt(0).toUpperCase() + action.stage.slice(1) }],
+        stack: [
+          {
+            stage: action.stage,
+            nodeId: null,
+            label: action.stage.charAt(0).toUpperCase() + action.stage.slice(1),
+          },
+        ],
         selectedNodeId: null,
       };
     }
@@ -143,11 +138,13 @@ export function useFractalNavigation(
   provenance: ProvenanceLink[] = [],
 ): FractalNavigationResult {
   const [state, dispatch] = useReducer(reducer, {
-    stack: [{
-      stage: initialStage,
-      nodeId: null,
-      label: initialStage.charAt(0).toUpperCase() + initialStage.slice(1),
-    }],
+    stack: [
+      {
+        stage: initialStage,
+        nodeId: null,
+        label: initialStage.charAt(0).toUpperCase() + initialStage.slice(1),
+      },
+    ],
     selectedNodeId: null,
   });
 
@@ -168,14 +165,21 @@ export function useFractalNavigation(
   );
 
   const drillDown = useCallback(
-    (nodeId: string, nodeLabel: string) => dispatch({ type: 'DRILL_DOWN', nodeId, label: nodeLabel }),
+    (nodeId: string, nodeLabel: string) =>
+      dispatch({ type: 'DRILL_DOWN', nodeId, label: nodeLabel }),
     [],
   );
 
   const drillUp = useCallback(() => dispatch({ type: 'DRILL_UP' }), []);
   const jumpTo = useCallback((index: number) => dispatch({ type: 'JUMP_TO', index }), []);
-  const setSelected = useCallback((nodeId: string | null) => dispatch({ type: 'SET_SELECTED', nodeId }), []);
-  const reset = useCallback((stage?: PipelineStageType) => dispatch({ type: 'RESET', stage: stage ?? initialStage }), [initialStage]);
+  const setSelected = useCallback(
+    (nodeId: string | null) => dispatch({ type: 'SET_SELECTED', nodeId }),
+    [],
+  );
+  const reset = useCallback(
+    (stage?: PipelineStageType) => dispatch({ type: 'RESET', stage: stage ?? initialStage }),
+    [initialStage],
+  );
 
   // Keyboard shortcuts: Enter to drill down, Escape to drill up
   useEffect(() => {

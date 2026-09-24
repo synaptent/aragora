@@ -75,7 +75,9 @@ export function ContraryViewsPanel({ apiBase }: ContraryViewsPanelProps) {
             CONTRARY_VIEWS
             {views.length > 0 && <span className="panel-badge">{views.length}</span>}
           </h3>
-          <span className="panel-toggle" aria-hidden="true">[EXPAND]</span>
+          <span className="panel-toggle" aria-hidden="true">
+            [EXPAND]
+          </span>
         </div>
       </div>
     );
@@ -103,9 +105,7 @@ export function ContraryViewsPanel({ apiBase }: ContraryViewsPanelProps) {
         </div>
       )}
 
-      {error && (
-        <div className="text-xs text-warning font-theme-data">{error}</div>
-      )}
+      {error && <div className="text-xs text-warning font-theme-data">{error}</div>}
 
       {!loading && !error && views.length === 0 && (
         <div className="text-xs text-text-muted font-theme-data">
@@ -115,25 +115,16 @@ export function ContraryViewsPanel({ apiBase }: ContraryViewsPanelProps) {
 
       <div className="space-y-3 max-h-64 overflow-y-auto">
         {views.map((view, idx) => (
-          <div
-            key={idx}
-            className="border border-warning/30 bg-warning/5 p-3 space-y-2"
-          >
+          <div key={idx} className="border border-warning/30 bg-warning/5 p-3 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-theme-data text-warning">
-                {view.agent}
-              </span>
+              <span className="text-xs font-theme-data text-warning">{view.agent}</span>
               <span className="text-xs font-theme-data text-text-muted">
                 {Math.round(view.confidence * 100)}% confident
               </span>
             </div>
-            <p className="text-xs text-text leading-relaxed">
-              {view.position}
-            </p>
+            <p className="text-xs text-text leading-relaxed">{view.position}</p>
             {view.reasoning && (
-              <p className="text-xs text-text-muted italic">
-                &quot;{view.reasoning}&quot;
-              </p>
+              <p className="text-xs text-text-muted italic">&quot;{view.reasoning}&quot;</p>
             )}
           </div>
         ))}

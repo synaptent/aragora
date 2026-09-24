@@ -77,9 +77,10 @@ export function CommandPaletteItem({
       aria-selected={isSelected}
       className={`
         flex items-center gap-3 px-4 py-2 cursor-pointer transition-colors
-        ${isSelected
-          ? 'bg-[var(--accent)]/10 border-l-2 border-[var(--accent)]'
-          : 'border-l-2 border-transparent hover:bg-surface-elevated'
+        ${
+          isSelected
+            ? 'bg-[var(--accent)]/10 border-l-2 border-[var(--accent)]'
+            : 'border-l-2 border-transparent hover:bg-surface-elevated'
         }
       `}
       onClick={onSelect}
@@ -105,11 +106,7 @@ export function CommandPaletteItem({
         >
           {title}
         </div>
-        {subtitle && (
-          <div className="text-text-muted text-xs truncate">
-            {subtitle}
-          </div>
-        )}
+        {subtitle && <div className="text-text-muted text-xs truncate">{subtitle}</div>}
       </div>
 
       {/* Type badge */}

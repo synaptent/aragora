@@ -103,9 +103,7 @@ export function WorkflowToolbar({
       <div className="flex items-center gap-2">
         {currentWorkflow && (
           <>
-            <span className="text-sm font-theme-data text-text">
-              {currentWorkflow.name}
-            </span>
+            <span className="text-sm font-theme-data text-text">{currentWorkflow.name}</span>
             {isDirty && (
               <span className="text-xs text-yellow-400" title="Unsaved changes">
                 ●

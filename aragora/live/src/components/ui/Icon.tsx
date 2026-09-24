@@ -169,7 +169,7 @@ export const Icon = forwardRef<HTMLSpanElement, IconProps>(
         {iconChar}
       </span>
     );
-  }
+  },
 );
 
 Icon.displayName = 'Icon';

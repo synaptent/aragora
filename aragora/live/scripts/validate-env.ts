@@ -62,11 +62,7 @@ const ENV_VARS: EnvVar[] = [
       return null;
     },
   },
-  {
-    name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-    required: false,
-    description: 'Supabase anonymous key',
-  },
+  { name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', required: false, description: 'Supabase anonymous key' },
   {
     name: 'NEXT_PUBLIC_CONTROL_PLANE_WS_URL',
     required: false,

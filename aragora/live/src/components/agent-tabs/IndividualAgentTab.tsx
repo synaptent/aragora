@@ -60,13 +60,17 @@ export function IndividualAgentTab({
           {currentAgent.confidence !== undefined && (
             <span className="text-sm">
               <span className="text-text-muted">Confidence:</span>{' '}
-              <span className={`font-theme-data font-medium ${getConfidenceColor(currentAgent.confidence)}`}>
+              <span
+                className={`font-theme-data font-medium ${getConfidenceColor(currentAgent.confidence)}`}
+              >
                 {Math.round(currentAgent.confidence * 100)}%
               </span>
             </span>
           )}
           {currentAgent.citations && currentAgent.citations.length > 0 && (
-            <span className="text-sm text-text-muted">Citations: {currentAgent.citations.length}</span>
+            <span className="text-sm text-text-muted">
+              Citations: {currentAgent.citations.length}
+            </span>
           )}
           <button
             onClick={onTogglePositions}
@@ -116,7 +120,11 @@ export function IndividualAgentTab({
         {showPositions ? (
           <PositionsView positions={positions} loading={positionsLoading} />
         ) : showMatchHistory ? (
-          <MatchHistoryView history={matchHistory} loading={matchHistoryLoading} agentName={currentAgent.name} />
+          <MatchHistoryView
+            history={matchHistory}
+            loading={matchHistoryLoading}
+            agentName={currentAgent.name}
+          />
         ) : showRelationships ? (
           <AgentRelationships agentName={currentAgent.name} apiBase={apiBase} />
         ) : showHistory ? (
@@ -137,7 +145,9 @@ function PositionsView({ positions, loading }: { positions: PositionEntry[]; loa
   }
 
   if (positions.length === 0) {
-    return <div className="text-center text-text-muted py-4">No recorded positions for this agent.</div>;
+    return (
+      <div className="text-center text-text-muted py-4">No recorded positions for this agent.</div>
+    );
   }
 
   return (
@@ -161,7 +171,9 @@ function PositionsView({ positions, loading }: { positions: PositionEntry[]; loa
               >
                 {Math.round(pos.confidence * 100)}% conf
               </span>
-              {pos.evidence_count > 0 && <span className="text-text-muted">{pos.evidence_count} evidence</span>}
+              {pos.evidence_count > 0 && (
+                <span className="text-text-muted">{pos.evidence_count} evidence</span>
+              )}
             </div>
           </div>
           <p className="text-sm text-text-muted">{pos.position}</p>
@@ -177,7 +189,7 @@ function PositionsView({ positions, loading }: { positions: PositionEntry[]; loa
 function HistoryView({ messages }: { messages: AgentData['allMessages'] }) {
   const sortedMessages = useMemo(
     () => [...messages].sort((a, b) => b.timestamp - a.timestamp),
-    [messages]
+    [messages],
   );
 
   return (
@@ -211,16 +223,15 @@ function MatchHistoryView({
 
   if (history.length === 0) {
     return (
-      <div className="text-center text-text-muted py-4">
-        No match history for this agent yet.
-      </div>
+      <div className="text-center text-text-muted py-4">No match history for this agent yet.</div>
     );
   }
 
   return (
     <div className="space-y-3">
       <div className="text-xs text-text-muted mb-4">
-        Showing {history.length} recent prediction{history.length !== 1 ? 's' : ''} made by {agentName}
+        Showing {history.length} recent prediction{history.length !== 1 ? 's' : ''} made by{' '}
+        {agentName}
       </div>
       {history.map((match, idx) => (
         <div

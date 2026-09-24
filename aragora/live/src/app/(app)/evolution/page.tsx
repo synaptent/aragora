@@ -11,10 +11,7 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 export default function EvolutionPage() {
   const { config } = useBackend();
 
-  const backendConfig = {
-    apiUrl: config.api,
-    wsUrl: config.ws,
-  };
+  const backendConfig = { apiUrl: config.api, wsUrl: config.ws };
 
   return (
     <>
@@ -77,12 +74,8 @@ export default function EvolutionPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // EVOLUTION DASHBOARD
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // EVOLUTION DASHBOARD</p>
         </footer>
       </main>
     </>

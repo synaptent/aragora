@@ -23,9 +23,7 @@ jest.mock('@/components/BackendSelector', () => ({
   getRuntimeBackendConfig: () => ({ backend: 'development', config: mockBackendConfig }),
 }));
 
-jest.mock('@/hooks/useSWRFetch', () => ({
-  useSWRFetch: jest.fn(),
-}));
+jest.mock('@/hooks/useSWRFetch', () => ({ useSWRFetch: jest.fn() }));
 
 const mockUseSWRFetch = useSWRFetch as jest.Mock;
 const mockFetch = jest.fn();
@@ -47,12 +45,7 @@ describe('BackupDRPage', () => {
               total_size_bytes: 1024,
               total_size_mb: 0.001,
               latest_backup: null,
-              retention_policy: {
-                keep_daily: 7,
-                keep_weekly: 4,
-                keep_monthly: 12,
-                min_backups: 3,
-              },
+              retention_policy: { keep_daily: 7, keep_weekly: 4, keep_monthly: 12, min_backups: 3 },
             },
             generated_at: '2026-03-31T10:40:00Z',
           },
@@ -74,11 +67,7 @@ describe('BackupDRPage', () => {
               latest_backup: null,
               hours_since_backup: 1,
             },
-            rpo_status: {
-              target_hours: 24,
-              compliant: true,
-              current_hours: 1,
-            },
+            rpo_status: { target_hours: 24, compliant: true, current_hours: 1 },
             issues: [],
             recommendations: [],
             checked_at: '2026-03-31T10:40:00Z',
@@ -92,22 +81,9 @@ describe('BackupDRPage', () => {
       if (endpoint === '/api/v2/dr/objectives') {
         return {
           data: {
-            rpo: {
-              target_hours: 24,
-              current_hours: 1,
-              compliant: true,
-              violations_last_7_days: 0,
-            },
-            rto: {
-              target_minutes: 30,
-              estimated_minutes: 12,
-              compliant: true,
-            },
-            backup_coverage: {
-              total_backups: 3,
-              backups_last_7_days: 3,
-              latest_backup: null,
-            },
+            rpo: { target_hours: 24, current_hours: 1, compliant: true, violations_last_7_days: 0 },
+            rto: { target_minutes: 30, estimated_minutes: 12, compliant: true },
+            backup_coverage: { total_backups: 3, backups_last_7_days: 3, latest_backup: null },
             generated_at: '2026-03-31T10:40:00Z',
           },
           error: null,
@@ -133,12 +109,7 @@ describe('BackupDRPage', () => {
                 metadata: {},
               },
             ],
-            pagination: {
-              limit: 20,
-              offset: 0,
-              total: 1,
-              has_more: false,
-            },
+            pagination: { limit: 20, offset: 0, total: 1, has_more: false },
           },
           error: null,
           isLoading: false,
@@ -146,12 +117,7 @@ describe('BackupDRPage', () => {
         };
       }
 
-      return {
-        data: null,
-        error: null,
-        isLoading: false,
-        mutate: jest.fn(),
-      };
+      return { data: null, error: null, isLoading: false, mutate: jest.fn() };
     });
   });
 

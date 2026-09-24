@@ -11,7 +11,12 @@ export interface AppearanceTabProps {
 
 export function AppearanceTab({ preferences, updateTheme, updateDisplay }: AppearanceTabProps) {
   return (
-    <div className="space-y-6" role="tabpanel" id="panel-appearance" aria-labelledby="tab-appearance">
+    <div
+      className="space-y-6"
+      role="tabpanel"
+      id="panel-appearance"
+      aria-labelledby="tab-appearance"
+    >
       <div className="card p-6">
         <h3 className="font-theme-data text-[var(--accent)] mb-4">Theme</h3>
         <div className="space-y-3">
@@ -32,11 +37,11 @@ export function AppearanceTab({ preferences, updateTheme, updateDisplay }: Appea
                 onChange={() => updateTheme(theme)}
                 className="sr-only"
               />
-              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                preferences.theme === theme
-                  ? 'border-[var(--accent)]'
-                  : 'border-text-muted'
-              }`}>
+              <div
+                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                  preferences.theme === theme ? 'border-[var(--accent)]' : 'border-text-muted'
+                }`}
+              >
                 {preferences.theme === theme && (
                   <div className="w-2 h-2 rounded-full bg-[var(--accent)]" />
                 )}
@@ -67,13 +72,17 @@ export function AppearanceTab({ preferences, updateTheme, updateDisplay }: Appea
             label="Show Agent Icons"
             description="Display model icons next to agent names"
             checked={preferences.display.show_agent_icons}
-            onChange={() => updateDisplay('show_agent_icons', !preferences.display.show_agent_icons)}
+            onChange={() =>
+              updateDisplay('show_agent_icons', !preferences.display.show_agent_icons)
+            }
           />
           <ToggleSwitch
             label="Auto-scroll Messages"
             description="Automatically scroll to new messages in debates"
             checked={preferences.display.auto_scroll_messages}
-            onChange={() => updateDisplay('auto_scroll_messages', !preferences.display.auto_scroll_messages)}
+            onChange={() =>
+              updateDisplay('auto_scroll_messages', !preferences.display.auto_scroll_messages)
+            }
           />
         </div>
       </div>

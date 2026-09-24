@@ -110,7 +110,9 @@ function readTask(data: Record<string, unknown>): string | null {
 function readAgents(data: Record<string, unknown>): string[] {
   const agents = data.agents;
   if (!Array.isArray(agents)) return [];
-  return agents.filter((agent): agent is string => typeof agent === 'string' && agent.trim().length > 0);
+  return agents.filter(
+    (agent): agent is string => typeof agent === 'string' && agent.trim().length > 0,
+  );
 }
 
 function describeLiveEvent(
@@ -187,7 +189,8 @@ function normalizeRecentEvent(event: PublicSpectateEvent): LivePreviewEvent {
 function normalizeSocketEvent(message: SpectateSocketMessage): LivePreviewEvent {
   const timestampMs =
     typeof message.timestamp === 'number' ? Math.round(message.timestamp * 1000) : Date.now();
-  const details = typeof message.details === 'string' && message.details.trim() ? message.details.trim() : null;
+  const details =
+    typeof message.details === 'string' && message.details.trim() ? message.details.trim() : null;
   const roundNumber = typeof message.round === 'number' ? message.round : null;
   const id = [
     message.type,
@@ -271,10 +274,7 @@ function summarizeLiveDebates(
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function LiveDebatePanel({
-  apiBase,
-  wsUrl,
-}: LiveDebatePanelProps) {
+export function LiveDebatePanel({ apiBase, wsUrl }: LiveDebatePanelProps) {
   const resolvedWsBase = (wsUrl || WS_URL).replace(/\/ws\/?$/, '');
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -377,8 +377,7 @@ export function LiveDebatePanel({
           if (Array.isArray(message.agents)) {
             setSocketAgents(
               message.agents.filter(
-                (agent): agent is string =>
-                  typeof agent === 'string' && agent.trim().length > 0,
+                (agent): agent is string => typeof agent === 'string' && agent.trim().length > 0,
               ),
             );
           }
@@ -397,9 +396,7 @@ export function LiveDebatePanel({
     };
 
     socket.onclose = () => {
-      setSocketStatus((currentStatus) =>
-        currentStatus === 'connected' ? 'idle' : currentStatus,
-      );
+      setSocketStatus((currentStatus) => (currentStatus === 'connected' ? 'idle' : currentStatus));
     };
 
     return () => {
@@ -426,17 +423,19 @@ export function LiveDebatePanel({
     setMergedEvents(mergePreviewEvents(recentDebateEvents, socketEvents));
   }, [recentDebateEvents, socketEvents]);
 
-  const bridgeTone = socketStatus === 'connected'
-    ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/30'
-    : bridgeReachable
-      ? 'bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30'
-      : 'bg-[var(--crimson)]/10 text-[var(--crimson)] border-[var(--crimson)]/30';
+  const bridgeTone =
+    socketStatus === 'connected'
+      ? 'bg-[var(--accent)]/10 text-[var(--accent)] border-[var(--accent)]/30'
+      : bridgeReachable
+        ? 'bg-[var(--acid-cyan)]/10 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30'
+        : 'bg-[var(--crimson)]/10 text-[var(--crimson)] border-[var(--crimson)]/30';
 
-  const bridgeLabel = socketStatus === 'connected'
-    ? 'STREAMING NOW'
-    : bridgeReachable
-      ? 'FOLLOWING LIVE BRIDGE'
-      : 'BRIDGE OFFLINE';
+  const bridgeLabel =
+    socketStatus === 'connected'
+      ? 'STREAMING NOW'
+      : bridgeReachable
+        ? 'FOLLOWING LIVE BRIDGE'
+        : 'BRIDGE OFFLINE';
 
   const bridgeSummary = !loaded
     ? 'Checking the public spectate bridge before claiming a live debate.'
@@ -446,9 +445,10 @@ export function LiveDebatePanel({
         ? 'The bridge is online. This panel will attach as soon as a public debate starts emitting events.'
         : 'The public spectate bridge is unreachable right now, so no live debate is shown.';
 
-  const activeTask = socketTask
-    ?? selectedDebate?.task
-    ?? 'Waiting for a public debate to surface in the live bridge.';
+  const activeTask =
+    socketTask ??
+    selectedDebate?.task ??
+    'Waiting for a public debate to surface in the live bridge.';
   const activeAgents = socketAgents.length > 0 ? socketAgents : (selectedDebate?.agents ?? []);
   const spectatorHref = safeSelectedDebateId
     ? `/spectate/${encodeURIComponent(safeSelectedDebateId)}`
@@ -463,7 +463,9 @@ export function LiveDebatePanel({
               <span className="px-2 py-1 text-[10px] font-theme-data border border-[var(--accent)]/30 bg-[var(--accent)]/10 text-[var(--accent)] tracking-[0.2em]">
                 LIVE DEBATE
               </span>
-              <span className={`px-2 py-1 text-[10px] font-theme-data border tracking-[0.16em] ${bridgeTone}`}>
+              <span
+                className={`px-2 py-1 text-[10px] font-theme-data border tracking-[0.16em] ${bridgeTone}`}
+              >
                 {bridgeLabel}
               </span>
             </div>
@@ -474,9 +476,7 @@ export function LiveDebatePanel({
             <p className="font-theme-data text-sm text-text-muted leading-relaxed mb-4">
               {bridgeSummary}
             </p>
-            <p className="font-theme-data text-sm text-text leading-relaxed mb-6">
-              {activeTask}
-            </p>
+            <p className="font-theme-data text-sm text-text leading-relaxed mb-6">{activeTask}</p>
 
             {liveDebates.length > 1 && (
               <div className="mb-6">
@@ -504,7 +504,8 @@ export function LiveDebatePanel({
 
             <div className="flex flex-wrap gap-3 mb-6">
               <span className="font-theme-data text-xs text-text-muted">
-                {(status?.recent_event_count ?? recentEvents.length).toString()} recent bridge events
+                {(status?.recent_event_count ?? recentEvents.length).toString()} recent bridge
+                events
               </span>
               {safeSelectedDebateId && (
                 <span className="font-theme-data text-xs text-text-muted">
@@ -551,15 +552,9 @@ export function LiveDebatePanel({
 
             <div className="flex-1 p-4">
               {mergedEvents.length > 0 ? (
-                <div
-                  aria-live="polite"
-                  className="space-y-3 max-h-[360px] overflow-y-auto pr-1"
-                >
+                <div aria-live="polite" className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
                   {mergedEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="border border-border bg-bg/60 p-3"
-                    >
+                    <div key={event.id} className="border border-border bg-bg/60 p-3">
                       <div className="flex flex-wrap items-center gap-2 mb-2">
                         <span
                           className={`px-2 py-1 text-[10px] font-theme-data border tracking-[0.14em] ${eventBadgeClasses(event.eventType)}`}
@@ -567,9 +562,7 @@ export function LiveDebatePanel({
                           {event.eventType.replace(/_/g, ' ').toUpperCase()}
                         </span>
                         {event.agent && (
-                          <span className="font-theme-data text-xs text-text">
-                            {event.agent}
-                          </span>
+                          <span className="font-theme-data text-xs text-text">{event.agent}</span>
                         )}
                         {event.roundNumber !== null && (
                           <span className="font-theme-data text-[10px] text-text-muted">

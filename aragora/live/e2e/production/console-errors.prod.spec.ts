@@ -22,7 +22,7 @@ test.describe('Console Error Analysis', () => {
       errorCounts[key] = (errorCounts[key] || 0) + 1;
 
       // Only store first occurrence
-      if (!consoleMessages.find(m => m.text.startsWith(text.slice(0, 100)))) {
+      if (!consoleMessages.find((m) => m.text.startsWith(text.slice(0, 100)))) {
         consoleMessages.push({ type, text, count: 1 });
       }
     });
@@ -69,19 +69,11 @@ test.describe('Console Error Analysis', () => {
     const consoleMessages: { type: string; text: string; url: string }[] = [];
 
     page.on('console', (msg) => {
-      consoleMessages.push({
-        type: msg.type(),
-        text: msg.text(),
-        url: page.url(),
-      });
+      consoleMessages.push({ type: msg.type(), text: msg.text(), url: page.url() });
     });
 
     page.on('pageerror', (error) => {
-      consoleMessages.push({
-        type: 'pageerror',
-        text: error.message,
-        url: page.url(),
-      });
+      consoleMessages.push({ type: 'pageerror', text: error.message, url: page.url() });
     });
 
     // Go to login page
@@ -89,13 +81,15 @@ test.describe('Console Error Analysis', () => {
     await page.waitForTimeout(2000);
 
     console.log('\n=== Login Page Console Messages ===');
-    const loginErrors = consoleMessages.filter(m => m.type === 'error');
+    const loginErrors = consoleMessages.filter((m) => m.type === 'error');
     for (const err of loginErrors) {
       console.log(`  [error] ${err.text.slice(0, 200)}`);
     }
 
     // Check for OAuth buttons
-    const oauthButtons = await page.locator('button:has-text("Google"), button:has-text("GitHub"), button:has-text("Microsoft")').count();
+    const oauthButtons = await page
+      .locator('button:has-text("Google"), button:has-text("GitHub"), button:has-text("Microsoft")')
+      .count();
     console.log(`\nOAuth buttons found: ${oauthButtons}`);
 
     // The test passes if login page loads
@@ -108,7 +102,11 @@ test.describe('Console Error Analysis', () => {
 
     page.on('console', (msg) => {
       const text = msg.text();
-      if (text.toLowerCase().includes('websocket') || text.toLowerCase().includes('ws://') || text.toLowerCase().includes('wss://')) {
+      if (
+        text.toLowerCase().includes('websocket') ||
+        text.toLowerCase().includes('ws://') ||
+        text.toLowerCase().includes('wss://')
+      ) {
         wsErrors.push(`[${msg.type()}] ${text}`);
       }
     });
@@ -156,11 +154,14 @@ test.describe('Console Error Analysis', () => {
 
     // Add fake tokens to localStorage to trigger auth flow
     await page.evaluate(() => {
-      localStorage.setItem('aragora_tokens', JSON.stringify({
-        access_token: 'test-token',
-        refresh_token: 'test-refresh',
-        expires_at: new Date(Date.now() + 3600000).toISOString(),
-      }));
+      localStorage.setItem(
+        'aragora_tokens',
+        JSON.stringify({
+          access_token: 'test-token',
+          refresh_token: 'test-refresh',
+          expires_at: new Date(Date.now() + 3600000).toISOString(),
+        }),
+      );
     });
 
     // Reload to trigger auth check
@@ -173,9 +174,10 @@ test.describe('Console Error Analysis', () => {
     }
 
     // Count auth-related failures
-    const authFailures = apiCalls.filter(c =>
-      (c.url.includes('/auth/') || c.url.includes('/me')) &&
-      (c.status === 401 || c.status === 405 || c.status === 404)
+    const authFailures = apiCalls.filter(
+      (c) =>
+        (c.url.includes('/auth/') || c.url.includes('/me')) &&
+        (c.status === 401 || c.status === 405 || c.status === 404),
     );
 
     console.log(`\nAuth-related failures: ${authFailures.length}`);

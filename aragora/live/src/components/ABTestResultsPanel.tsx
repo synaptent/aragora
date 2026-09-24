@@ -44,17 +44,13 @@ function StatCard({
   color?: string;
   isPercentage?: boolean;
 }) {
-  const formattedValue = isPercentage
-    ? `${((value as number) * 100).toFixed(1)}%`
-    : value;
+  const formattedValue = isPercentage ? `${((value as number) * 100).toFixed(1)}%` : value;
 
   return (
     <div className="p-4 bg-surface/50 border border-border rounded-lg">
       <div className="text-xs font-theme-data text-text-muted mb-1">{label}</div>
       <div className={`text-2xl font-theme-data text-${color}`}>{formattedValue}</div>
-      {subValue && (
-        <div className="text-xs font-theme-data text-text-muted mt-1">{subValue}</div>
-      )}
+      {subValue && <div className="text-xs font-theme-data text-text-muted mt-1">{subValue}</div>}
     </div>
   );
 }
@@ -118,18 +114,27 @@ function TestCard({
   onClick?: () => void;
   isSelected?: boolean;
 }) {
-  const winner = test.evolved_win_rate > test.baseline_win_rate ? 'evolved' :
-                 test.baseline_win_rate > test.evolved_win_rate ? 'baseline' : 'tie';
-  const winnerColor = winner === 'evolved' ? 'acid-green' : winner === 'baseline' ? 'acid-cyan' : 'acid-yellow';
+  const winner =
+    test.evolved_win_rate > test.baseline_win_rate
+      ? 'evolved'
+      : test.baseline_win_rate > test.evolved_win_rate
+        ? 'baseline'
+        : 'tie';
+  const winnerColor =
+    winner === 'evolved' ? 'acid-green' : winner === 'baseline' ? 'acid-cyan' : 'acid-yellow';
 
   return (
     <button
       onClick={onClick}
       className={`
         w-full text-left p-4 rounded-lg border-2 transition-all
-        ${test.status === 'active' ? 'border-[var(--accent)]/50 bg-[var(--accent)]/5' :
-          test.status === 'concluded' ? 'border-[var(--acid-cyan)]/30 bg-surface/30' :
-          'border-warning/30 bg-warning/5'}
+        ${
+          test.status === 'active'
+            ? 'border-[var(--accent)]/50 bg-[var(--accent)]/5'
+            : test.status === 'concluded'
+              ? 'border-[var(--acid-cyan)]/30 bg-surface/30'
+              : 'border-warning/30 bg-warning/5'
+        }
         ${isSelected ? 'ring-2 ring-offset-2 ring-acid-green ring-offset-bg' : ''}
         hover:brightness-110
       `}
@@ -141,18 +146,24 @@ function TestCard({
             v{test.baseline_prompt_version} vs v{test.evolved_prompt_version}
           </div>
         </div>
-        <span className={`px-2 py-0.5 rounded text-xs font-theme-data ${
-          test.status === 'active' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-          test.status === 'concluded' ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]' :
-          'bg-warning/20 text-warning'
-        }`}>
+        <span
+          className={`px-2 py-0.5 rounded text-xs font-theme-data ${
+            test.status === 'active'
+              ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+              : test.status === 'concluded'
+                ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]'
+                : 'bg-warning/20 text-warning'
+          }`}
+        >
           {test.status.toUpperCase()}
         </span>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-center">
         <div>
-          <div className="text-lg font-theme-data text-[var(--acid-cyan)]">{(test.baseline_win_rate * 100).toFixed(0)}%</div>
+          <div className="text-lg font-theme-data text-[var(--acid-cyan)]">
+            {(test.baseline_win_rate * 100).toFixed(0)}%
+          </div>
           <div className="text-xs font-theme-data text-text-muted">Baseline</div>
         </div>
         <div>
@@ -160,7 +171,9 @@ function TestCard({
           <div className="text-xs font-theme-data text-text-muted">Debates</div>
         </div>
         <div>
-          <div className="text-lg font-theme-data text-[var(--accent)]">{(test.evolved_win_rate * 100).toFixed(0)}%</div>
+          <div className="text-lg font-theme-data text-[var(--accent)]">
+            {(test.evolved_win_rate * 100).toFixed(0)}%
+          </div>
           <div className="text-xs font-theme-data text-text-muted">Evolved</div>
         </div>
       </div>
@@ -171,12 +184,8 @@ function TestCard({
             * {winner === 'tie' ? 'TIE' : winner.toUpperCase()} LEADING
           </span>
         )}
-        {!test.is_significant && (
-          <span className="text-text-muted">Not significant yet</span>
-        )}
-        <span className="text-text-muted">
-          {new Date(test.started_at).toLocaleDateString()}
-        </span>
+        {!test.is_significant && <span className="text-text-muted">Not significant yet</span>}
+        <span className="text-text-muted">{new Date(test.started_at).toLocaleDateString()}</span>
       </div>
     </button>
   );
@@ -216,23 +225,26 @@ export function ABTestResultsPanel({
     }
   }, [apiBase, authToken]);
 
-  const fetchTestById = useCallback(async (id: string) => {
-    try {
-      const headers: Record<string, string> = {};
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
+  const fetchTestById = useCallback(
+    async (id: string) => {
+      try {
+        const headers: Record<string, string> = {};
+        if (authToken) {
+          headers['Authorization'] = `Bearer ${authToken}`;
+        }
 
-      const response = await fetch(`${apiBase}/api/evolution/ab-tests/${id}`, { headers });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const response = await fetch(`${apiBase}/api/evolution/ab-tests/${id}`, { headers });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        setSelectedTest(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch test');
       }
-      const data = await response.json();
-      setSelectedTest(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch test');
-    }
-  }, [apiBase, authToken]);
+    },
+    [apiBase, authToken],
+  );
 
   useEffect(() => {
     if (testId) {
@@ -251,13 +263,15 @@ export function ABTestResultsPanel({
 
   // Summary stats
   const summary = useMemo(() => {
-    const active = tests.filter(t => t.status === 'active').length;
-    const concluded = tests.filter(t => t.status === 'concluded').length;
-    const significant = tests.filter(t => t.is_significant).length;
+    const active = tests.filter((t) => t.status === 'active').length;
+    const concluded = tests.filter((t) => t.status === 'concluded').length;
+    const significant = tests.filter((t) => t.is_significant).length;
     const avgImprovement = tests
-      .filter(t => t.status === 'concluded' && t.is_significant)
+      .filter((t) => t.status === 'concluded' && t.is_significant)
       .reduce((sum, t) => sum + (t.evolved_win_rate - t.baseline_win_rate), 0);
-    const significantConcluded = tests.filter(t => t.status === 'concluded' && t.is_significant).length;
+    const significantConcluded = tests.filter(
+      (t) => t.status === 'concluded' && t.is_significant,
+    ).length;
 
     return {
       active,
@@ -318,9 +332,7 @@ export function ABTestResultsPanel({
 
             {!loading && tests.length === 0 && (
               <div className="text-center py-8 border border-[var(--accent)]/20 rounded-lg bg-surface/50">
-                <div className="text-text-muted font-theme-data text-sm">
-                  No A/B tests found
-                </div>
+                <div className="text-text-muted font-theme-data text-sm">No A/B tests found</div>
               </div>
             )}
 
@@ -336,22 +348,30 @@ export function ABTestResultsPanel({
         )}
 
         {/* Selected test detail */}
-        <div className={`${showListView ? 'lg:col-span-2' : 'lg:col-span-3'} bg-surface border border-[var(--acid-cyan)]/30 rounded-lg p-6`}>
+        <div
+          className={`${showListView ? 'lg:col-span-2' : 'lg:col-span-3'} bg-surface border border-[var(--acid-cyan)]/30 rounded-lg p-6`}
+        >
           {selectedTest ? (
             <div className="space-y-6">
               {/* Test header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-xl font-theme-data text-[var(--accent)]">{selectedTest.agent}</h3>
+                  <h3 className="text-xl font-theme-data text-[var(--accent)]">
+                    {selectedTest.agent}
+                  </h3>
                   <div className="text-sm font-theme-data text-text-muted mt-1">
                     Test ID: {selectedTest.id.slice(0, 12)}...
                   </div>
                 </div>
-                <span className={`px-3 py-1 rounded text-sm font-theme-data ${
-                  selectedTest.status === 'active' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-                  selectedTest.status === 'concluded' ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]' :
-                  'bg-warning/20 text-warning'
-                }`}>
+                <span
+                  className={`px-3 py-1 rounded text-sm font-theme-data ${
+                    selectedTest.status === 'active'
+                      ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                      : selectedTest.status === 'concluded'
+                        ? 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)]'
+                        : 'bg-warning/20 text-warning'
+                  }`}
+                >
                   {selectedTest.status.toUpperCase()}
                 </span>
               </div>
@@ -392,17 +412,25 @@ export function ABTestResultsPanel({
 
               {/* Analysis */}
               <div className="p-4 bg-surface/50 border border-border rounded-lg">
-                <div className="text-xs font-theme-data text-[var(--acid-yellow)] mb-3">ANALYSIS</div>
+                <div className="text-xs font-theme-data text-[var(--acid-yellow)] mb-3">
+                  ANALYSIS
+                </div>
                 <div className="space-y-2 text-sm font-theme-data">
                   <div className="flex justify-between">
                     <span className="text-text-muted">Improvement:</span>
-                    <span className={
-                      selectedTest.evolved_win_rate > selectedTest.baseline_win_rate
-                        ? 'text-[var(--accent)]'
-                        : 'text-acid-red'
-                    }>
+                    <span
+                      className={
+                        selectedTest.evolved_win_rate > selectedTest.baseline_win_rate
+                          ? 'text-[var(--accent)]'
+                          : 'text-acid-red'
+                      }
+                    >
                       {selectedTest.evolved_win_rate > selectedTest.baseline_win_rate ? '+' : ''}
-                      {((selectedTest.evolved_win_rate - selectedTest.baseline_win_rate) * 100).toFixed(1)}%
+                      {(
+                        (selectedTest.evolved_win_rate - selectedTest.baseline_win_rate) *
+                        100
+                      ).toFixed(1)}
+                      %
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -411,18 +439,26 @@ export function ABTestResultsPanel({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-muted">Statistical Significance:</span>
-                    <span className={selectedTest.is_significant ? 'text-[var(--accent)]' : 'text-warning'}>
+                    <span
+                      className={
+                        selectedTest.is_significant ? 'text-[var(--accent)]' : 'text-warning'
+                      }
+                    >
                       {selectedTest.is_significant ? 'YES' : 'NOT YET'}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-text-muted">Started:</span>
-                    <span className="text-text">{new Date(selectedTest.started_at).toLocaleString()}</span>
+                    <span className="text-text">
+                      {new Date(selectedTest.started_at).toLocaleString()}
+                    </span>
                   </div>
                   {selectedTest.concluded_at && (
                     <div className="flex justify-between">
                       <span className="text-text-muted">Concluded:</span>
-                      <span className="text-text">{new Date(selectedTest.concluded_at).toLocaleString()}</span>
+                      <span className="text-text">
+                        {new Date(selectedTest.concluded_at).toLocaleString()}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -430,21 +466,24 @@ export function ABTestResultsPanel({
 
               {/* Recommendation */}
               {selectedTest.is_significant && selectedTest.status === 'concluded' && (
-                <div className={`p-4 rounded-lg ${
-                  selectedTest.evolved_win_rate > selectedTest.baseline_win_rate
-                    ? 'bg-[var(--accent)]/10 border border-[var(--accent)]/30'
-                    : 'bg-[var(--acid-cyan)]/10 border border-[var(--acid-cyan)]/30'
-                }`}>
-                  <div className="text-xs font-theme-data text-text-muted mb-2">RECOMMENDATION</div>
-                  <div className={`font-theme-data ${
+                <div
+                  className={`p-4 rounded-lg ${
                     selectedTest.evolved_win_rate > selectedTest.baseline_win_rate
-                      ? 'text-[var(--accent)]'
-                      : 'text-[var(--acid-cyan)]'
-                  }`}>
+                      ? 'bg-[var(--accent)]/10 border border-[var(--accent)]/30'
+                      : 'bg-[var(--acid-cyan)]/10 border border-[var(--acid-cyan)]/30'
+                  }`}
+                >
+                  <div className="text-xs font-theme-data text-text-muted mb-2">RECOMMENDATION</div>
+                  <div
+                    className={`font-theme-data ${
+                      selectedTest.evolved_win_rate > selectedTest.baseline_win_rate
+                        ? 'text-[var(--accent)]'
+                        : 'text-[var(--acid-cyan)]'
+                    }`}
+                  >
                     {selectedTest.evolved_win_rate > selectedTest.baseline_win_rate
                       ? `ADOPT evolved prompt v${selectedTest.evolved_prompt_version} - ${((selectedTest.evolved_win_rate - selectedTest.baseline_win_rate) * 100).toFixed(1)}% improvement`
-                      : `KEEP baseline prompt v${selectedTest.baseline_prompt_version} - evolved version underperformed`
-                    }
+                      : `KEEP baseline prompt v${selectedTest.baseline_prompt_version} - evolved version underperformed`}
                   </div>
                 </div>
               )}

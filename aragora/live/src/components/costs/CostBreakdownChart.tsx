@@ -13,7 +13,7 @@ interface CostBreakdownChartProps {
 }
 
 export function CostBreakdownChart({ title, data, colors }: CostBreakdownChartProps) {
-  const maxCost = Math.max(...data.map(d => d.cost));
+  const maxCost = Math.max(...data.map((d) => d.cost));
 
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
@@ -106,13 +106,7 @@ function DonutChart({ data, colors }: DonutChartProps) {
     const endAngle = (cumulativePercent + percent) * 3.6;
     cumulativePercent += percent;
 
-    return {
-      ...item,
-      color: colors[index % colors.length],
-      startAngle,
-      endAngle,
-      percent,
-    };
+    return { ...item, color: colors[index % colors.length], startAngle, endAngle, percent };
   });
 
   // Create conic gradient
@@ -133,7 +127,8 @@ function DonutChart({ data, colors }: DonutChartProps) {
       style={{
         background: `conic-gradient(${gradientStops})`,
         mask: 'radial-gradient(farthest-side, transparent calc(100% - 16px), black calc(100% - 15px))',
-        WebkitMask: 'radial-gradient(farthest-side, transparent calc(100% - 16px), black calc(100% - 15px))',
+        WebkitMask:
+          'radial-gradient(farthest-side, transparent calc(100% - 16px), black calc(100% - 15px))',
       }}
     />
   );

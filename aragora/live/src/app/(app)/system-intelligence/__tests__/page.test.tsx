@@ -13,10 +13,7 @@ jest.mock('next/link', () => ({
   ),
 }));
 
-jest.mock('@/components/MatrixRain', () => ({
-  Scanlines: () => null,
-  CRTVignette: () => null,
-}));
+jest.mock('@/components/MatrixRain', () => ({ Scanlines: () => null, CRTVignette: () => null }));
 
 jest.mock('@/components/AsciiBanner', () => ({
   AsciiBannerCompact: () => <div data-testid="ascii-banner" />,
@@ -193,11 +190,7 @@ describe('SystemIntelligencePage', () => {
 
       if (endpoint === '/api/v1/nomic/state') {
         return {
-          data: {
-            state: 'running',
-            cycle: 12,
-            phase: 'verify',
-          },
+          data: { state: 'running', cycle: 12, phase: 'verify' },
           error: null,
           isLoading: false,
         };
@@ -205,12 +198,7 @@ describe('SystemIntelligencePage', () => {
 
       if (endpoint === '/api/control-plane/queue/metrics') {
         return {
-          data: {
-            pending: 2,
-            running: 1,
-            completed_today: 5,
-            avg_execution_time_ms: 4500,
-          },
+          data: { pending: 2, running: 1, completed_today: 5, avg_execution_time_ms: 4500 },
           error: null,
           isLoading: false,
         };
@@ -233,7 +221,7 @@ describe('SystemIntelligencePage', () => {
         '/api/v1/knowledge/mound/dashboard/adapters',
         '/api/v1/nomic/state',
         '/api/control-plane/queue/metrics',
-      ])
+      ]),
     );
 
     expect(endpoints).not.toContain('/api/v1/system-intelligence/anomalies');

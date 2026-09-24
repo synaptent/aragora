@@ -38,8 +38,4 @@ export {
 } from './constants';
 
 // Re-export utilities
-export {
-  makeStreamingKey,
-  calculateReconnectDelay,
-  isRetryableError,
-} from './utils';
+export { makeStreamingKey, calculateReconnectDelay, isRetryableError } from './utils';

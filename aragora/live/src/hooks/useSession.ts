@@ -71,23 +71,16 @@ export function useSession(): UseSessionReturn {
     if (!tokens?.access_token) {
       return { 'Content-Type': 'application/json' };
     }
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${tokens.access_token}`,
-    };
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${tokens.access_token}` };
   }, [tokens?.access_token]);
 
   const fetchSessions = useCallback(async (): Promise<void> => {
     if (!isAuthenticated || !tokens?.access_token) {
-      setState(prev => ({
-        ...prev,
-        sessions: [],
-        error: 'Not authenticated',
-      }));
+      setState((prev) => ({ ...prev, sessions: [], error: 'Not authenticated' }));
       return;
     }
 
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/sessions`, {
@@ -102,7 +95,7 @@ export function useSession(): UseSessionReturn {
 
       const data = await response.json();
       const sessions: Session[] = data.sessions || [];
-      const currentSession = sessions.find(s => s.is_current);
+      const currentSession = sessions.find((s) => s.is_current);
 
       setState({
         sessions,
@@ -112,69 +105,64 @@ export function useSession(): UseSessionReturn {
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch sessions';
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: errorMessage,
-      }));
+      setState((prev) => ({ ...prev, loading: false, error: errorMessage }));
     }
   }, [isAuthenticated, tokens?.access_token, getAuthHeaders]);
 
-  const revokeSession = useCallback(async (sessionId: string): Promise<boolean> => {
-    if (!isAuthenticated || !tokens?.access_token) {
-      setState(prev => ({ ...prev, error: 'Not authenticated' }));
-      return false;
-    }
-
-    // Prevent revoking current session through this method
-    if (sessionId === state.currentSessionId) {
-      setState(prev => ({
-        ...prev,
-        error: 'Cannot revoke current session. Use logout instead.',
-      }));
-      return false;
-    }
-
-    setState(prev => ({ ...prev, loading: true, error: null }));
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/sessions/${sessionId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `Failed to revoke session: ${response.status}`);
+  const revokeSession = useCallback(
+    async (sessionId: string): Promise<boolean> => {
+      if (!isAuthenticated || !tokens?.access_token) {
+        setState((prev) => ({ ...prev, error: 'Not authenticated' }));
+        return false;
       }
 
-      // Remove the revoked session from local state
-      setState(prev => ({
-        ...prev,
-        sessions: prev.sessions.filter(s => s.id !== sessionId),
-        loading: false,
-        error: null,
-      }));
+      // Prevent revoking current session through this method
+      if (sessionId === state.currentSessionId) {
+        setState((prev) => ({
+          ...prev,
+          error: 'Cannot revoke current session. Use logout instead.',
+        }));
+        return false;
+      }
 
-      return true;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to revoke session';
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: errorMessage,
-      }));
-      return false;
-    }
-  }, [isAuthenticated, tokens?.access_token, state.currentSessionId, getAuthHeaders]);
+      setState((prev) => ({ ...prev, loading: true, error: null }));
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/sessions/${sessionId}`, {
+          method: 'DELETE',
+          headers: getAuthHeaders(),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to revoke session: ${response.status}`);
+        }
+
+        // Remove the revoked session from local state
+        setState((prev) => ({
+          ...prev,
+          sessions: prev.sessions.filter((s) => s.id !== sessionId),
+          loading: false,
+          error: null,
+        }));
+
+        return true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to revoke session';
+        setState((prev) => ({ ...prev, loading: false, error: errorMessage }));
+        return false;
+      }
+    },
+    [isAuthenticated, tokens?.access_token, state.currentSessionId, getAuthHeaders],
+  );
 
   const revokeAllOtherSessions = useCallback(async (): Promise<boolean> => {
     if (!isAuthenticated || !tokens?.access_token) {
-      setState(prev => ({ ...prev, error: 'Not authenticated' }));
+      setState((prev) => ({ ...prev, error: 'Not authenticated' }));
       return false;
     }
 
-    setState(prev => ({ ...prev, loading: true, error: null }));
+    setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
       // The endpoint revokes all sessions except the one making the request
@@ -189,9 +177,9 @@ export function useSession(): UseSessionReturn {
       }
 
       // Keep only the current session in local state
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
-        sessions: prev.sessions.filter(s => s.is_current),
+        sessions: prev.sessions.filter((s) => s.is_current),
         loading: false,
         error: null,
       }));
@@ -199,11 +187,7 @@ export function useSession(): UseSessionReturn {
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to revoke sessions';
-      setState(prev => ({
-        ...prev,
-        loading: false,
-        error: errorMessage,
-      }));
+      setState((prev) => ({ ...prev, loading: false, error: errorMessage }));
       return false;
     }
   }, [isAuthenticated, tokens?.access_token, getAuthHeaders]);
@@ -232,13 +216,19 @@ export function useSession(): UseSessionReturn {
     return 'Just now';
   }, []);
 
-  const getSessionAge = useCallback((session: Session): string => {
-    return formatTimeAgo(new Date(session.created_at));
-  }, [formatTimeAgo]);
+  const getSessionAge = useCallback(
+    (session: Session): string => {
+      return formatTimeAgo(new Date(session.created_at));
+    },
+    [formatTimeAgo],
+  );
 
-  const getLastActivityAge = useCallback((session: Session): string => {
-    return formatTimeAgo(new Date(session.last_activity));
-  }, [formatTimeAgo]);
+  const getLastActivityAge = useCallback(
+    (session: Session): string => {
+      return formatTimeAgo(new Date(session.last_activity));
+    },
+    [formatTimeAgo],
+  );
 
   // Fetch sessions when authenticated
   useEffect(() => {

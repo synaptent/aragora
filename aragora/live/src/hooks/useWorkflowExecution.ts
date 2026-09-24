@@ -17,13 +17,7 @@ import { logger } from '@/utils/logger';
 
 // Execution types
 export type ExecutionStatus =
-  | 'pending'
-  | 'running'
-  | 'paused'
-  | 'waiting_approval'
-  | 'completed'
-  | 'failed'
-  | 'terminated';
+  'pending' | 'running' | 'paused' | 'waiting_approval' | 'completed' | 'failed' | 'terminated';
 
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
@@ -173,22 +167,25 @@ export function useWorkflowExecution({
   // Derived state
   const activeExecutions = useMemo(
     () => executions.filter((e) => ['pending', 'running', 'waiting_approval'].includes(e.status)),
-    [executions]
+    [executions],
   );
 
   const recentExecutions = useMemo(
     () =>
       executions
         .filter((e) => ['completed', 'failed', 'terminated'].includes(e.status))
-        .sort((a, b) => new Date(b.completed_at || b.started_at).getTime() -
-          new Date(a.completed_at || a.started_at).getTime())
+        .sort(
+          (a, b) =>
+            new Date(b.completed_at || b.started_at).getTime() -
+            new Date(a.completed_at || a.started_at).getTime(),
+        )
         .slice(0, 20),
-    [executions]
+    [executions],
   );
 
   const selectedExecution = useMemo(
     () => executions.find((e) => e.id === selectedExecutionId) || null,
-    [executions, selectedExecutionId]
+    [executions, selectedExecutionId],
   );
 
   // Update execution in state
@@ -246,10 +243,7 @@ export function useWorkflowExecution({
         }
 
         case 'execution_terminated': {
-          updateExecution({
-            id: event.execution_id,
-            status: 'terminated',
-          } as WorkflowExecution);
+          updateExecution({ id: event.execution_id, status: 'terminated' } as WorkflowExecution);
           break;
         }
 
@@ -310,7 +304,7 @@ export function useWorkflowExecution({
           break;
       }
     },
-    [executions, updateExecution, onExecutionComplete, onExecutionFailed, onApprovalRequired]
+    [executions, updateExecution, onExecutionComplete, onExecutionFailed, onApprovalRequired],
   );
 
   // Connect to SSE stream
@@ -382,14 +376,13 @@ export function useWorkflowExecution({
   // Start a workflow execution
   const startExecution = useCallback(
     async (workflowId: string, inputs?: Record<string, unknown>): Promise<string> => {
-      const response = await api.post(
-        `/api/workflows/${workflowId}/execute`,
-        { inputs }
-      ) as { execution_id: string };
+      const response = (await api.post(`/api/workflows/${workflowId}/execute`, { inputs })) as {
+        execution_id: string;
+      };
 
       return response.execution_id;
     },
-    [api]
+    [api],
   );
 
   // Terminate an execution
@@ -397,19 +390,19 @@ export function useWorkflowExecution({
     async (executionId: string): Promise<void> => {
       await api.post(`/api/workflows/executions/${executionId}/terminate`);
     },
-    [api]
+    [api],
   );
 
   // Retry a failed execution
   const retryExecution = useCallback(
     async (executionId: string): Promise<string> => {
-      const response = await api.post(
-        `/api/workflows/executions/${executionId}/retry`
-      ) as { execution_id: string };
+      const response = (await api.post(`/api/workflows/executions/${executionId}/retry`)) as {
+        execution_id: string;
+      };
 
       return response.execution_id;
     },
-    [api]
+    [api],
   );
 
   // Resolve an approval request
@@ -423,35 +416,35 @@ export function useWorkflowExecution({
       // Remove from local queue
       setApprovalQueue((prev) => prev.filter((r) => r.id !== requestId));
     },
-    [api]
+    [api],
   );
 
   // Load executions (optionally filtered by workflow)
   const loadExecutions = useCallback(
     async (workflowId?: string): Promise<void> => {
       const params = workflowId ? `?workflow_id=${workflowId}` : '';
-      const response = await api.get(
-        `/api/workflows/executions${params}`
-      ) as { executions: WorkflowExecution[] };
+      const response = (await api.get(`/api/workflows/executions${params}`)) as {
+        executions: WorkflowExecution[];
+      };
 
       setExecutions(response.executions || []);
     },
-    [api]
+    [api],
   );
 
   // Load a specific execution
   const loadExecution = useCallback(
     async (executionId: string): Promise<WorkflowExecution> => {
-      const response = await api.get(
-        `/api/workflows/executions/${executionId}`
-      ) as WorkflowExecution;
+      const response = (await api.get(
+        `/api/workflows/executions/${executionId}`,
+      )) as WorkflowExecution;
 
       // Update in local state
       updateExecution(response);
 
       return response;
     },
-    [api, updateExecution]
+    [api, updateExecution],
   );
 
   // Select an execution

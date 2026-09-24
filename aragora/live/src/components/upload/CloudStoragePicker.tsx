@@ -86,27 +86,9 @@ export function CloudStoragePicker({
   className = '',
 }: CloudStoragePickerProps) {
   const [providers, setProviders] = useState<ProviderConfig[]>([
-    {
-      id: 'google_drive',
-      name: 'Google Drive',
-      icon: '📁',
-      color: '#4285f4',
-      connected: false,
-    },
-    {
-      id: 'onedrive',
-      name: 'OneDrive',
-      icon: '☁️',
-      color: '#0078d4',
-      connected: false,
-    },
-    {
-      id: 'dropbox',
-      name: 'Dropbox',
-      icon: '📦',
-      color: '#0061ff',
-      connected: false,
-    },
+    { id: 'google_drive', name: 'Google Drive', icon: '📁', color: '#4285f4', connected: false },
+    { id: 'onedrive', name: 'OneDrive', icon: '☁️', color: '#0078d4', connected: false },
+    { id: 'dropbox', name: 'Dropbox', icon: '📦', color: '#0061ff', connected: false },
   ]);
 
   const [activeProvider, setActiveProvider] = useState<CloudProvider | null>(null);
@@ -122,12 +104,12 @@ export function CloudStoragePicker({
       const response = await fetch(`${apiBase}/cloud/status`);
       if (response.ok) {
         const status = await response.json();
-        setProviders(prev =>
-          prev.map(p => ({
+        setProviders((prev) =>
+          prev.map((p) => ({
             ...p,
             connected: status[p.id]?.connected ?? false,
             accountName: status[p.id]?.account_name,
-          }))
+          })),
         );
       }
     } catch {
@@ -160,65 +142,65 @@ export function CloudStoragePicker({
     }
   };
 
-  const loadFiles = useCallback(async (provider: CloudProvider, path: string) => {
-    setLoading(true);
-    setError(null);
+  const loadFiles = useCallback(
+    async (provider: CloudProvider, path: string) => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const params = new URLSearchParams({ path });
-      const response = await fetch(`${apiBase}/cloud/${provider}/files?${params}`);
+      try {
+        const params = new URLSearchParams({ path });
+        const response = await fetch(`${apiBase}/cloud/${provider}/files?${params}`);
 
-      if (!response.ok) {
-        throw new Error('Failed to load files');
+        if (!response.ok) {
+          throw new Error('Failed to load files');
+        }
+
+        const data = await response.json();
+        const items: CloudFile[] = (data.files as ApiCloudFile[]).map((f) => ({
+          id: f.id,
+          name: f.name,
+          path: f.path || path + '/' + f.name,
+          size: f.size || 0,
+          mimeType: f.mime_type || 'application/octet-stream',
+          modifiedTime: f.modified_time,
+          isFolder: f.is_folder || f.mime_type === 'application/vnd.google-apps.folder',
+          provider,
+          webUrl: f.web_url,
+          thumbnailUrl: f.thumbnail_url,
+        }));
+
+        // Filter by accepted extensions if provided
+        const filtered = acceptExtensions
+          ? items.filter((f) => {
+              if (f.isFolder) return true;
+              const ext = '.' + f.name.split('.').pop()?.toLowerCase();
+              return acceptExtensions.includes(ext);
+            })
+          : items;
+
+        // Sort: folders first, then by name
+        filtered.sort((a, b) => {
+          if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        setFiles(filtered);
+        setCurrentPath(path);
+
+        // Update breadcrumbs
+        const parts = path.split('/').filter(Boolean);
+        setBreadcrumbs([
+          { name: 'Root', path: '/' },
+          ...parts.map((name, i) => ({ name, path: '/' + parts.slice(0, i + 1).join('/') })),
+        ]);
+      } catch {
+        setError('Failed to load files');
+      } finally {
+        setLoading(false);
       }
-
-      const data = await response.json();
-      const items: CloudFile[] = (data.files as ApiCloudFile[]).map((f) => ({
-        id: f.id,
-        name: f.name,
-        path: f.path || path + '/' + f.name,
-        size: f.size || 0,
-        mimeType: f.mime_type || 'application/octet-stream',
-        modifiedTime: f.modified_time,
-        isFolder: f.is_folder || f.mime_type === 'application/vnd.google-apps.folder',
-        provider,
-        webUrl: f.web_url,
-        thumbnailUrl: f.thumbnail_url,
-      }));
-
-      // Filter by accepted extensions if provided
-      const filtered = acceptExtensions
-        ? items.filter(f => {
-            if (f.isFolder) return true;
-            const ext = '.' + f.name.split('.').pop()?.toLowerCase();
-            return acceptExtensions.includes(ext);
-          })
-        : items;
-
-      // Sort: folders first, then by name
-      filtered.sort((a, b) => {
-        if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      setFiles(filtered);
-      setCurrentPath(path);
-
-      // Update breadcrumbs
-      const parts = path.split('/').filter(Boolean);
-      setBreadcrumbs([
-        { name: 'Root', path: '/' },
-        ...parts.map((name, i) => ({
-          name,
-          path: '/' + parts.slice(0, i + 1).join('/'),
-        })),
-      ]);
-    } catch {
-      setError('Failed to load files');
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase, acceptExtensions]);
+    },
+    [apiBase, acceptExtensions],
+  );
 
   const handleProviderClick = (provider: ProviderConfig) => {
     if (provider.connected) {
@@ -234,9 +216,9 @@ export function CloudStoragePicker({
       loadFiles(file.provider, file.path);
     } else {
       if (multiple) {
-        setSelectedFiles(prev => {
-          const exists = prev.some(f => f.id === file.id);
-          return exists ? prev.filter(f => f.id !== file.id) : [...prev, file];
+        setSelectedFiles((prev) => {
+          const exists = prev.some((f) => f.id === file.id);
+          return exists ? prev.filter((f) => f.id !== file.id) : [...prev, file];
         });
       } else {
         setSelectedFiles([file]);
@@ -269,7 +251,9 @@ export function CloudStoragePicker({
   };
 
   return (
-    <div className={`bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}>
+    <div
+      className={`bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center gap-2">
@@ -279,13 +263,18 @@ export function CloudStoragePicker({
               className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
             </button>
           )}
           <h3 className="font-semibold">
             {activeProvider
-              ? providers.find(p => p.id === activeProvider)?.name
+              ? providers.find((p) => p.id === activeProvider)?.name
               : 'Select Cloud Storage'}
           </h3>
         </div>
@@ -295,7 +284,12 @@ export function CloudStoragePicker({
             className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         )}
@@ -322,15 +316,11 @@ export function CloudStoragePicker({
 
       {/* Content */}
       <div className="p-4 min-h-[300px] max-h-[400px] overflow-y-auto">
-        {error && (
-          <div className="text-red-600 dark:text-red-400 text-center py-4">
-            {error}
-          </div>
-        )}
+        {error && <div className="text-red-600 dark:text-red-400 text-center py-4">{error}</div>}
 
         {!activeProvider && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {providers.map(provider => (
+            {providers.map((provider) => (
               <button
                 key={provider.id}
                 onClick={() => handleProviderClick(provider)}
@@ -357,27 +347,23 @@ export function CloudStoragePicker({
         )}
 
         {activeProvider && !loading && files.length === 0 && (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            No files found
-          </div>
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">No files found</div>
         )}
 
         {activeProvider && !loading && files.length > 0 && (
           <div className="space-y-1">
-            {files.map(file => (
+            {files.map((file) => (
               <div
                 key={file.id}
                 onClick={() => handleFileClick(file)}
                 className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
-                  selectedFiles.some(f => f.id === file.id)
+                  selectedFiles.some((f) => f.id === file.id)
                     ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
                 {/* Icon */}
-                <span className="text-xl">
-                  {file.isFolder ? '📁' : getFileIcon(file.mimeType)}
-                </span>
+                <span className="text-xl">{file.isFolder ? '📁' : getFileIcon(file.mimeType)}</span>
 
                 {/* Name and details */}
                 <div className="flex-1 min-w-0">
@@ -385,7 +371,8 @@ export function CloudStoragePicker({
                   {!file.isFolder && (
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       {formatSize(file.size)}
-                      {file.modifiedTime && ` • ${new Date(file.modifiedTime).toLocaleDateString()}`}
+                      {file.modifiedTime &&
+                        ` • ${new Date(file.modifiedTime).toLocaleDateString()}`}
                     </div>
                   )}
                 </div>
@@ -394,17 +381,27 @@ export function CloudStoragePicker({
                 {multiple && !file.isFolder && (
                   <input
                     type="checkbox"
-                    checked={selectedFiles.some(f => f.id === file.id)}
+                    checked={selectedFiles.some((f) => f.id === file.id)}
                     onChange={() => handleFileClick(file)}
                     className="h-4 w-4 text-blue-600 rounded border-gray-300"
-                    onClick={e => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
                   />
                 )}
 
                 {/* Arrow for folders */}
                 {file.isFolder && (
-                  <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <svg
+                    className="w-5 h-5 text-gray-400"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
                   </svg>
                 )}
               </div>
@@ -444,7 +441,8 @@ function getFileIcon(mimeType: string): string {
   if (mimeType.includes('document') || mimeType.includes('word')) return '📝';
   if (mimeType.includes('text')) return '📃';
   if (mimeType.includes('zip') || mimeType.includes('archive')) return '🗜️';
-  if (mimeType.includes('javascript') || mimeType.includes('python') || mimeType.includes('code')) return '💻';
+  if (mimeType.includes('javascript') || mimeType.includes('python') || mimeType.includes('code'))
+    return '💻';
   return '📎';
 }
 

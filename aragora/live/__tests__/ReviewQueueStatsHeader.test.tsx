@@ -55,9 +55,7 @@ describe('StatsHeader', () => {
   });
 
   it('hides deferred count when zero', () => {
-    render(
-      <StatsHeader visible={1} total={1} deferredCount={0} stats={stats()} />,
-    );
+    render(<StatsHeader visible={1} total={1} deferredCount={0} stats={stats()} />);
     expect(screen.queryByTestId('review-queue-deferred-count')).toBeNull();
   });
 

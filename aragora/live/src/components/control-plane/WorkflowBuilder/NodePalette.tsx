@@ -1,7 +1,11 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
-import { useWorkflowBuilderStore, type StepType, type NodeCategory } from '@/store/workflowBuilderStore';
+import {
+  useWorkflowBuilderStore,
+  type StepType,
+  type NodeCategory,
+} from '@/store/workflowBuilderStore';
 
 export interface NodePaletteProps {
   /** Callback when a node type is dragged/dropped */
@@ -110,16 +114,8 @@ const CATEGORY_INFO: Record<NodeCategory, { name: string; icon: string }> = {
 /**
  * Palette of node types for adding to the workflow.
  */
-export function NodePalette({
-  onDragStart,
-  onAddNode,
-  compact = false,
-}: NodePaletteProps) {
-  const {
-    nodePalette,
-    setSearchQuery,
-    toggleCategory,
-  } = useWorkflowBuilderStore();
+export function NodePalette({ onDragStart, onAddNode, compact = false }: NodePaletteProps) {
+  const { nodePalette, setSearchQuery, toggleCategory } = useWorkflowBuilderStore();
 
   const { searchQuery, expandedCategories } = nodePalette;
 
@@ -132,7 +128,7 @@ export function NodePalette({
       (node) =>
         node.name.toLowerCase().includes(query) ||
         node.description.toLowerCase().includes(query) ||
-        node.type.toLowerCase().includes(query)
+        node.type.toLowerCase().includes(query),
     );
   }, [searchQuery]);
 
@@ -159,7 +155,7 @@ export function NodePalette({
       e.dataTransfer.effectAllowed = 'copy';
       onDragStart?.(type);
     },
-    [onDragStart]
+    [onDragStart],
   );
 
   // Handle click to add
@@ -167,7 +163,7 @@ export function NodePalette({
     (type: StepType) => {
       onAddNode?.(type);
     },
-    [onAddNode]
+    [onAddNode],
   );
 
   if (compact) {
@@ -250,9 +246,7 @@ export function NodePalette({
                     <div className="text-xl">{node.icon}</div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-text">{node.name}</div>
-                      <div className="text-xs text-text-muted truncate">
-                        {node.description}
-                      </div>
+                      <div className="text-xs text-text-muted truncate">{node.description}</div>
                     </div>
                     <div className="text-text-muted text-xs">+</div>
                   </div>

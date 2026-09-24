@@ -38,11 +38,7 @@ export function BroadcastPanel({ debateId, debateTitle }: BroadcastPanelProps) {
 
   const handleGenerate = useCallback(async () => {
     try {
-      await runFullPipeline({
-        video: includeVideo,
-        rss: true,
-        title: debateTitle,
-      });
+      await runFullPipeline({ video: includeVideo, rss: true, title: debateTitle });
     } catch {
       // Error is already captured in state
     }
@@ -131,11 +127,7 @@ export function BroadcastPanel({ debateId, debateTitle }: BroadcastPanelProps) {
         {hasVideo && videoUrl && (
           <div className="space-y-2">
             <div className="text-xs font-theme-data text-accent">{'>'} VIDEO</div>
-            <video
-              src={videoUrl}
-              controls
-              className="w-full max-h-64 bg-black"
-            />
+            <video src={videoUrl} controls className="w-full max-h-64 bg-black" />
           </div>
         )}
       </div>

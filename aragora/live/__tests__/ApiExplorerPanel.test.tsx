@@ -13,8 +13,18 @@ const MOCK_OPENAPI_SPEC = {
         summary: 'List all debates',
         tags: ['Debates'],
         parameters: [
-          { name: 'limit', in: 'query', schema: { type: 'integer' }, description: 'Max results (1-100)' },
-          { name: 'offset', in: 'query', schema: { type: 'integer' }, description: 'Pagination offset' },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer' },
+            description: 'Max results (1-100)',
+          },
+          {
+            name: 'offset',
+            in: 'query',
+            schema: { type: 'integer' },
+            description: 'Pagination offset',
+          },
         ],
         responses: { '200': { description: 'Debate list' } },
         security: [{ BearerAuth: [] }],
@@ -48,7 +58,13 @@ const MOCK_OPENAPI_SPEC = {
         summary: 'Get debate by ID',
         tags: ['Debates'],
         parameters: [
-          { name: 'id', in: 'path', required: true, schema: { type: 'string' }, description: 'Debate UUID' },
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            schema: { type: 'string' },
+            description: 'Debate UUID',
+          },
         ],
         responses: { '200': { description: 'Debate details' } },
       },
@@ -57,9 +73,7 @@ const MOCK_OPENAPI_SPEC = {
       get: {
         summary: 'Get debate by slug',
         tags: ['Debates'],
-        parameters: [
-          { name: 'slug', in: 'path', required: true, schema: { type: 'string' } },
-        ],
+        parameters: [{ name: 'slug', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { '200': { description: 'Debate details' } },
       },
     },
@@ -94,7 +108,12 @@ const MOCK_OPENAPI_SPEC = {
         tags: ['Memory'],
         parameters: [
           { name: 'query', in: 'query', required: true, schema: { type: 'string' } },
-          { name: 'tier', in: 'query', schema: { type: 'string' }, description: 'fast, medium, slow, glacial' },
+          {
+            name: 'tier',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'fast, medium, slow, glacial',
+          },
         ],
         responses: { '200': { description: 'Memory results' } },
         security: [{ BearerAuth: [] }],
@@ -163,9 +182,15 @@ const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });

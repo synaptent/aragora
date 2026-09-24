@@ -40,7 +40,4 @@ export {
   connectorToHealthData,
 } from './ConnectorHealthGrid';
 
-export {
-  SyncTimeline,
-  type SyncTimelineProps,
-} from './SyncTimeline';
+export { SyncTimeline, type SyncTimelineProps } from './SyncTimeline';

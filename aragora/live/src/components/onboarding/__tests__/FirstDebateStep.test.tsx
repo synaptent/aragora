@@ -33,15 +33,10 @@ const mockStoreState = {
 
 global.fetch = mockFetch as typeof fetch;
 
-jest.mock('@/store', () => ({
-  useOnboardingStore: () => mockStoreState,
-}));
+jest.mock('@/store', () => ({ useOnboardingStore: () => mockStoreState }));
 
 jest.mock('@/hooks/debate-websocket/useDebateWebSocket', () => ({
-  useDebateWebSocket: () => ({
-    status: 'idle',
-    messages: [],
-  }),
+  useDebateWebSocket: () => ({ status: 'idle', messages: [] }),
 }));
 
 describe('FirstDebateStep', () => {
@@ -70,7 +65,7 @@ describe('FirstDebateStep', () => {
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-        })
+        }),
       );
     });
 
@@ -82,7 +77,7 @@ describe('FirstDebateStep', () => {
         rounds: 3,
         enable_receipt_generation: true,
         receipt_min_confidence: 0.5,
-      })
+      }),
     );
   });
 });

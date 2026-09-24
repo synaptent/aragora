@@ -69,28 +69,25 @@ describe('OrchNode', () => {
   });
 
   it('uses rounded-full for debate type', () => {
-    const { container } = render(
-      <OrchNode data={{ ...baseData, orchType: 'debate' }} />,
-      { wrapper: Wrapper },
-    );
+    const { container } = render(<OrchNode data={{ ...baseData, orchType: 'debate' }} />, {
+      wrapper: Wrapper,
+    });
     const root = container.firstChild as HTMLElement;
     expect(root.className).toContain('rounded-full');
   });
 
   it('uses border-dashed for human_gate type', () => {
-    const { container } = render(
-      <OrchNode data={{ ...baseData, orchType: 'human_gate' }} />,
-      { wrapper: Wrapper },
-    );
+    const { container } = render(<OrchNode data={{ ...baseData, orchType: 'human_gate' }} />, {
+      wrapper: Wrapper,
+    });
     const root = container.firstChild as HTMLElement;
     expect(root.className).toContain('border-dashed');
   });
 
   it('does not use rounded-full for merge type', () => {
-    const { container } = render(
-      <OrchNode data={{ ...baseData, orchType: 'merge' }} />,
-      { wrapper: Wrapper },
-    );
+    const { container } = render(<OrchNode data={{ ...baseData, orchType: 'merge' }} />, {
+      wrapper: Wrapper,
+    });
     const root = container.firstChild as HTMLElement;
     expect(root.className).not.toContain('rounded-full');
     expect(root.className).toContain('rounded-lg');

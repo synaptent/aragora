@@ -13,19 +13,12 @@ export interface StatsGridProps {
 }
 
 export function StatsGrid({ stats, columns = 3, className = '' }: StatsGridProps) {
-  const gridCols = {
-    2: 'grid-cols-2',
-    3: 'grid-cols-3',
-    4: 'grid-cols-4',
-  };
+  const gridCols = { 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' };
 
   return (
     <div className={`grid ${gridCols[columns]} gap-3 ${className}`}>
       {stats.map((stat, index) => (
-        <div
-          key={index}
-          className="p-3 bg-bg border border-border rounded-lg text-center"
-        >
+        <div key={index} className="p-3 bg-bg border border-border rounded-lg text-center">
           <div className={`text-2xl font-theme-data ${stat.color || 'text-accent'}`}>
             {stat.value}
           </div>

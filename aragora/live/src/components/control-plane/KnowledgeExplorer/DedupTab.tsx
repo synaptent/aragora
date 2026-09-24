@@ -60,11 +60,19 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
   const getRecommendationBadge = (action: string) => {
     switch (action) {
       case 'merge':
-        return <span className="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Merge</span>;
+        return (
+          <span className="px-2 py-0.5 text-xs rounded bg-success/20 text-success">Merge</span>
+        );
       case 'review':
-        return <span className="px-2 py-0.5 text-xs rounded bg-acid-yellow/20 text-[var(--acid-yellow)]">Review</span>;
+        return (
+          <span className="px-2 py-0.5 text-xs rounded bg-acid-yellow/20 text-[var(--acid-yellow)]">
+            Review
+          </span>
+        );
       case 'keep_separate':
-        return <span className="px-2 py-0.5 text-xs rounded bg-text-muted/20 text-text-muted">Keep</span>;
+        return (
+          <span className="px-2 py-0.5 text-xs rounded bg-text-muted/20 text-text-muted">Keep</span>
+        );
       default:
         return null;
     }
@@ -86,7 +94,9 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
               onChange={(e) => setSimilarityThreshold(parseFloat(e.target.value))}
               className="w-24"
             />
-            <span className="font-theme-data text-[var(--acid-cyan)]">{(similarityThreshold * 100).toFixed(0)}%</span>
+            <span className="font-theme-data text-[var(--acid-cyan)]">
+              {(similarityThreshold * 100).toFixed(0)}%
+            </span>
           </label>
         </div>
         <div className="flex items-center gap-2">
@@ -126,7 +136,10 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
         <div className="p-4 border border-panel-border rounded bg-panel-bg">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold">Deduplication Report</h3>
-            <button onClick={() => setShowReport(false)} className="text-text-muted hover:text-text-primary">
+            <button
+              onClick={() => setShowReport(false)}
+              className="text-text-muted hover:text-text-primary"
+            >
               ✕
             </button>
           </div>
@@ -137,15 +150,21 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
             </div>
             <div>
               <span className="text-text-muted">Clusters Found:</span>
-              <span className="ml-2 font-theme-data text-[var(--acid-yellow)]">{report.duplicate_clusters_found}</span>
+              <span className="ml-2 font-theme-data text-[var(--acid-yellow)]">
+                {report.duplicate_clusters_found}
+              </span>
             </div>
             <div>
               <span className="text-text-muted">Est. Reduction:</span>
-              <span className="ml-2 font-theme-data text-success">{report.estimated_reduction_percent.toFixed(1)}%</span>
+              <span className="ml-2 font-theme-data text-success">
+                {report.estimated_reduction_percent.toFixed(1)}%
+              </span>
             </div>
             <div>
               <span className="text-text-muted">Generated:</span>
-              <span className="ml-2 font-theme-data">{new Date(report.generated_at).toLocaleString()}</span>
+              <span className="ml-2 font-theme-data">
+                {new Date(report.generated_at).toLocaleString()}
+              </span>
             </div>
           </div>
         </div>
@@ -161,7 +180,8 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
 
         {clusters.length === 0 && !isLoading && (
           <div className="p-8 text-center text-text-muted">
-            No duplicate clusters found at {(similarityThreshold * 100).toFixed(0)}% similarity threshold.
+            No duplicate clusters found at {(similarityThreshold * 100).toFixed(0)}% similarity
+            threshold.
           </div>
         )}
 
@@ -179,7 +199,7 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
                 <button
                   onClick={() =>
                     setSelectedCluster(
-                      selectedCluster === cluster.cluster_id ? null : cluster.cluster_id
+                      selectedCluster === cluster.cluster_id ? null : cluster.cluster_id,
                     )
                   }
                   className="text-text-muted hover:text-text-primary"
@@ -192,7 +212,8 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
                     {getRecommendationBadge(cluster.recommended_action)}
                   </div>
                   <div className="text-xs text-text-muted">
-                    {cluster.duplicate_count} duplicates · {(cluster.avg_similarity * 100).toFixed(0)}% avg similarity
+                    {cluster.duplicate_count} duplicates ·{' '}
+                    {(cluster.avg_similarity * 100).toFixed(0)}% avg similarity
                   </div>
                 </div>
               </div>
@@ -228,7 +249,10 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
             {selectedCluster === cluster.cluster_id && (
               <div className="mt-3 pl-8 space-y-2">
                 <div className="text-xs text-text-muted mb-2">
-                  Primary: <span className="font-theme-data text-[var(--acid-cyan)]">{cluster.primary_node_id}</span>
+                  Primary:{' '}
+                  <span className="font-theme-data text-[var(--acid-cyan)]">
+                    {cluster.primary_node_id}
+                  </span>
                 </div>
                 {cluster.duplicates.map((dup) => (
                   <div
@@ -237,7 +261,9 @@ export function DedupTab({ workspaceId = 'default', onMergeComplete }: DedupTabP
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-theme-data">{dup.node_id}</span>
-                      <span className="text-[var(--acid-yellow)]">{(dup.similarity * 100).toFixed(0)}%</span>
+                      <span className="text-[var(--acid-yellow)]">
+                        {(dup.similarity * 100).toFixed(0)}%
+                      </span>
                     </div>
                     <div className="text-text-muted truncate">{dup.content_preview}</div>
                     <div className="flex items-center gap-2 mt-1 text-text-muted">

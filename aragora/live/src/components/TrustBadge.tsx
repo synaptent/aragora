@@ -46,7 +46,10 @@ export function TrustBadge({ calibration, size = 'md' }: TrustBadgeProps) {
 
   if (size === 'lg') {
     return (
-      <span className={`inline-flex items-center gap-1.5 font-theme-data text-xs ${tier.color}`} title={tooltip}>
+      <span
+        className={`inline-flex items-center gap-1.5 font-theme-data text-xs ${tier.color}`}
+        title={tooltip}
+      >
         {dot}
         <span>{tier.label}</span>
         <span className="text-text-muted">{calibration.brier_score.toFixed(2)}</span>
@@ -56,7 +59,10 @@ export function TrustBadge({ calibration, size = 'md' }: TrustBadgeProps) {
 
   // md (default)
   return (
-    <span className={`inline-flex items-center gap-1.5 font-theme-data text-xs ${tier.color}`} title={tooltip}>
+    <span
+      className={`inline-flex items-center gap-1.5 font-theme-data text-xs ${tier.color}`}
+      title={tooltip}
+    >
       {dot}
       <span>{tier.label}</span>
     </span>

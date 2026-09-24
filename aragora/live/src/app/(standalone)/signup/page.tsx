@@ -80,7 +80,10 @@ export default function SignupPage() {
       {/* Minimal nav */}
       <nav className="border-b border-border bg-surface/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Link href="/" className="font-theme-data text-[var(--accent)] font-bold text-sm tracking-wider">
+          <Link
+            href="/"
+            className="font-theme-data text-[var(--accent)] font-bold text-sm tracking-wider"
+          >
             ARAGORA
           </Link>
           <Link
@@ -130,7 +133,10 @@ export default function SignupPage() {
             {/* Email/password form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="signup-name" className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1.5">
+                <label
+                  htmlFor="signup-name"
+                  className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1.5"
+                >
                   YOUR NAME
                 </label>
                 <input
@@ -145,7 +151,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="signup-email" className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1.5">
+                <label
+                  htmlFor="signup-email"
+                  className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1.5"
+                >
                   EMAIL ADDRESS *
                 </label>
                 <input
@@ -161,7 +170,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="signup-password" className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1.5">
+                <label
+                  htmlFor="signup-password"
+                  className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1.5"
+                >
                   PASSWORD *
                 </label>
                 <input
@@ -177,7 +189,10 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="signup-confirm" className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1.5">
+                <label
+                  htmlFor="signup-confirm"
+                  className="block text-xs font-theme-data text-[var(--acid-cyan)] mb-1.5"
+                >
                   CONFIRM PASSWORD *
                 </label>
                 <input
@@ -208,7 +223,10 @@ export default function SignupPage() {
                 'Real AI models (Claude, GPT, Gemini, Mistral)',
                 'Audit-ready decision receipts',
               ].map((perk) => (
-                <div key={perk} className="flex items-center gap-2 text-xs font-theme-data text-text-muted">
+                <div
+                  key={perk}
+                  className="flex items-center gap-2 text-xs font-theme-data text-text-muted"
+                >
                   <span className="text-[var(--accent)]">+</span>
                   <span>{perk}</span>
                 </div>

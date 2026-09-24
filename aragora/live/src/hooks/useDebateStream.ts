@@ -129,12 +129,12 @@ const ROUND_TO_PHASE: Record<number, DebatePhase> = {
   0: 'initializing',
   1: 'proposal',
   2: 'critique',
-  3: 'proposal',   // lateral exploration = alternate proposal
-  4: 'critique',   // devil's advocacy = adversarial critique
+  3: 'proposal', // lateral exploration = alternate proposal
+  4: 'critique', // devil's advocacy = adversarial critique
   5: 'synthesis',
   6: 'cross_examination',
-  7: 'revision',   // final synthesis = revision
-  8: 'vote',       // final adjudication = vote
+  7: 'revision', // final synthesis = revision
+  8: 'vote', // final adjudication = vote
 };
 
 function roundToPhase(round: number): DebatePhase {
@@ -169,12 +169,7 @@ export function useDebateStream({
     streamEvents,
     reconnect,
     connectionQuality,
-  } = useDebateWebSocket({
-    debateId,
-    wsUrl,
-    enabled,
-    accessToken,
-  });
+  } = useDebateWebSocket({ debateId, wsUrl, enabled, accessToken });
 
   // -- Phase tracking --
   const [currentPhase, setCurrentPhase] = useState<DebatePhase>('idle');
@@ -225,7 +220,7 @@ export function useDebateStream({
 
     // Derive phase from stream events
     const phaseEvents = streamEvents.filter(
-      (e) => e.type === 'phase_progress' || e.type === 'round_start'
+      (e) => e.type === 'phase_progress' || e.type === 'round_start',
     );
     if (phaseEvents.length > 0) {
       const lastEvent = phaseEvents[phaseEvents.length - 1];
@@ -287,10 +282,7 @@ export function useDebateStream({
       // Track TTFT
       if (firstTokenTimeRef.current === null && streamStartRef.current !== null) {
         firstTokenTimeRef.current = now;
-        setMetrics((prev) => ({
-          ...prev,
-          ttftMs: Math.round(now - streamStartRef.current!),
-        }));
+        setMetrics((prev) => ({ ...prev, ttftMs: Math.round(now - streamStartRef.current!) }));
       }
 
       tokenTimestampsRef.current.push(now);
@@ -325,10 +317,7 @@ export function useDebateStream({
     }
     if (isStreaming) {
       stallTimerRef.current = setTimeout(() => {
-        setMetrics((prev) => ({
-          ...prev,
-          stallCount: prev.stallCount + 1,
-        }));
+        setMetrics((prev) => ({ ...prev, stallCount: prev.stallCount + 1 }));
       }, 15000); // 15s without new tokens = stall
     }
   }, [streamingMessages, isStreaming, connectionQuality?.avgLatencyMs]);
@@ -363,7 +352,7 @@ export function useDebateStream({
       lastTTSMessageCount.current = messages.length;
       processNextTTS();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, enableTTS, isStreaming]);
 
   const processNextTTS = useCallback(async () => {
@@ -474,7 +463,7 @@ export function useDebateStream({
     return () => {
       audio.stop();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ==========================================================================
@@ -499,10 +488,20 @@ export function useDebateStream({
       setVoice: ttsSetVoice,
     }),
     [
-      ttsState, ttsPlay, ttsPause, ttsStop, ttsSetSpeed, ttsSetVolume,
-      ttsToggleMute, ttsSpeed, ttsVolume, ttsMuted, speakingMessageIndex,
-      selectedVoice, ttsSetVoice,
-    ]
+      ttsState,
+      ttsPlay,
+      ttsPause,
+      ttsStop,
+      ttsSetSpeed,
+      ttsSetVolume,
+      ttsToggleMute,
+      ttsSpeed,
+      ttsVolume,
+      ttsMuted,
+      speakingMessageIndex,
+      selectedVoice,
+      ttsSetVoice,
+    ],
   );
 
   return {

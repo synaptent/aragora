@@ -102,7 +102,7 @@ export function useFederation(options: UseFederationOptions = {}): UseFederation
       setError(null);
       try {
         const response = (await api.get(
-          `/api/knowledge/mound/federation/regions/${regionId}`
+          `/api/knowledge/mound/federation/regions/${regionId}`,
         )) as FederatedRegion;
         return {
           ...response,
@@ -116,7 +116,7 @@ export function useFederation(options: UseFederationOptions = {}): UseFederation
         setIsLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
   const syncPush = useCallback(
@@ -140,7 +140,7 @@ export function useFederation(options: UseFederationOptions = {}): UseFederation
         setIsLoading(false);
       }
     },
-    [api, workspaceId, loadRegions]
+    [api, workspaceId, loadRegions],
   );
 
   const syncPull = useCallback(
@@ -164,7 +164,7 @@ export function useFederation(options: UseFederationOptions = {}): UseFederation
         setIsLoading(false);
       }
     },
-    [api, workspaceId, loadRegions]
+    [api, workspaceId, loadRegions],
   );
 
   const registerRegion = useCallback(
@@ -194,7 +194,7 @@ export function useFederation(options: UseFederationOptions = {}): UseFederation
         setIsLoading(false);
       }
     },
-    [api, loadRegions]
+    [api, loadRegions],
   );
 
   const updateRegion = useCallback(
@@ -204,7 +204,7 @@ export function useFederation(options: UseFederationOptions = {}): UseFederation
       try {
         const response = (await api.put(
           `/api/knowledge/mound/federation/regions/${regionId}`,
-          updates
+          updates,
         )) as FederatedRegion;
         // Refresh regions list
         await loadRegions();
@@ -220,7 +220,7 @@ export function useFederation(options: UseFederationOptions = {}): UseFederation
         setIsLoading(false);
       }
     },
-    [api, loadRegions]
+    [api, loadRegions],
   );
 
   const deleteRegion = useCallback(
@@ -239,14 +239,14 @@ export function useFederation(options: UseFederationOptions = {}): UseFederation
         setIsLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
   const toggleRegionEnabled = useCallback(
     async (regionId: string, enabled: boolean): Promise<void> => {
       await updateRegion(regionId, { enabled });
     },
-    [updateRegion]
+    [updateRegion],
   );
 
   return {

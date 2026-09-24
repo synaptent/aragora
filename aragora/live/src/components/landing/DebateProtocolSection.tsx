@@ -7,7 +7,8 @@ const STEPS = [
     id: '01',
     title: 'PROPOSE',
     accent: 'acid-green',
-    content: 'Agents generate diverse approaches and assumptions. Claude might suggest caution. GPT might go bold.',
+    content:
+      'Agents generate diverse approaches and assumptions. Claude might suggest caution. GPT might go bold.',
   },
   {
     id: '02',
@@ -20,13 +21,15 @@ const STEPS = [
     id: '03',
     title: 'ADAPT',
     accent: 'acid-green',
-    content: 'Agents update positions based on valid critiques. We track who changed their mind and why.',
+    content:
+      'Agents update positions based on valid critiques. We track who changed their mind and why.',
   },
   {
     id: '04',
     title: 'CONVERGE',
     accent: 'acid-cyan',
-    content: 'Semantic similarity detection finds natural consensus. Dissenting views preserved with full reasoning chains.',
+    content:
+      'Semantic similarity detection finds natural consensus. Dissenting views preserved with full reasoning chains.',
   },
   {
     id: '05',
@@ -49,7 +52,9 @@ export function DebateProtocolSection() {
               <h3 className={`text-${step.accent} font-theme-data text-sm mb-2`}>
                 [{step.id}] {step.title}
               </h3>
-              <p className="text-text-muted text-xs font-theme-data leading-relaxed">{step.content}</p>
+              <p className="text-text-muted text-xs font-theme-data leading-relaxed">
+                {step.content}
+              </p>
             </div>
           ))}
         </div>

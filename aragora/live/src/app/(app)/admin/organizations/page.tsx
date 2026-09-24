@@ -53,7 +53,9 @@ function TierBadge({ tier }: { tier: string }) {
   };
 
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[tier] || colors.free}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[tier] || colors.free}`}
+    >
       {tier.replace('_', ' ').toUpperCase()}
     </span>
   );
@@ -61,7 +63,8 @@ function TierBadge({ tier }: { tier: string }) {
 
 function UsageBar({ used, limit }: { used: number; limit: number }) {
   const percent = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
-  const color = percent >= 90 ? 'bg-acid-red' : percent >= 70 ? 'bg-acid-yellow' : 'bg-[var(--accent)]';
+  const color =
+    percent >= 90 ? 'bg-acid-red' : percent >= 70 ? 'bg-acid-yellow' : 'bg-[var(--accent)]';
 
   return (
     <div className="flex items-center gap-2">
@@ -186,7 +189,9 @@ function OrgDetailModal({
               <div className="grid grid-cols-2 gap-4">
                 <div className="card p-4">
                   <div className="font-theme-data text-xs text-text-muted">Organization ID</div>
-                  <div className="font-theme-data text-sm text-[var(--acid-cyan)] break-all">{organization.id}</div>
+                  <div className="font-theme-data text-sm text-[var(--acid-cyan)] break-all">
+                    {organization.id}
+                  </div>
                 </div>
                 <div className="card p-4">
                   <div className="font-theme-data text-xs text-text-muted">Created</div>
@@ -197,14 +202,21 @@ function OrgDetailModal({
               </div>
 
               <div className="card p-4">
-                <div className="font-theme-data text-xs text-text-muted mb-2">Debates Usage (This Month)</div>
-                <UsageBar used={organization.debates_used_this_month} limit={organization.debates_limit} />
+                <div className="font-theme-data text-xs text-text-muted mb-2">
+                  Debates Usage (This Month)
+                </div>
+                <UsageBar
+                  used={organization.debates_used_this_month}
+                  limit={organization.debates_limit}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="card p-4">
                   <div className="font-theme-data text-xs text-text-muted">Members</div>
-                  <div className="font-theme-data text-2xl text-[var(--accent)]">{organization.member_count}</div>
+                  <div className="font-theme-data text-2xl text-[var(--accent)]">
+                    {organization.member_count}
+                  </div>
                 </div>
                 <div className="card p-4">
                   <div className="font-theme-data text-xs text-text-muted">Billing</div>
@@ -221,7 +233,9 @@ function OrgDetailModal({
               {organization.owner_email && (
                 <div className="card p-4">
                   <div className="font-theme-data text-xs text-text-muted">Owner</div>
-                  <div className="font-theme-data text-sm text-[var(--acid-cyan)]">{organization.owner_email}</div>
+                  <div className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                    {organization.owner_email}
+                  </div>
                 </div>
               )}
 
@@ -245,12 +259,7 @@ function OrgDetailModal({
                   No members found
                 </div>
               ) : (
-                <MemberTable
-                  data={members}
-                  loading={loading}
-                  pageSize={10}
-                  actions={[]}
-                />
+                <MemberTable data={members} loading={loading} pageSize={10} actions={[]} />
               )}
             </div>
           )}
@@ -271,7 +280,9 @@ function OrgDetailModal({
                     <div key={key.id} className="card p-3 flex items-center justify-between">
                       <div>
                         <div className="font-theme-data text-sm text-text">{key.name}</div>
-                        <div className="font-theme-data text-xs text-[var(--acid-cyan)]">{key.key_prefix}...</div>
+                        <div className="font-theme-data text-xs text-[var(--acid-cyan)]">
+                          {key.key_prefix}...
+                        </div>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="font-theme-data text-xs text-text-muted">
@@ -279,11 +290,13 @@ function OrgDetailModal({
                             ? `Last used: ${new Date(key.last_used_at).toLocaleDateString()}`
                             : 'Never used'}
                         </div>
-                        <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${
-                          key.is_active
-                            ? 'bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/40'
-                            : 'bg-acid-red/20 text-acid-red border-acid-red/40'
-                        }`}>
+                        <span
+                          className={`px-2 py-0.5 text-xs font-theme-data rounded border ${
+                            key.is_active
+                              ? 'bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/40'
+                              : 'bg-acid-red/20 text-acid-red border-acid-red/40'
+                          }`}
+                        >
                           {key.is_active ? 'ACTIVE' : 'REVOKED'}
                         </span>
                       </div>
@@ -331,14 +344,9 @@ function OrganizationsAdminPageContent() {
       if (tierFilter) params.set('tier', tierFilter);
       if (searchQuery) params.set('search', searchQuery);
 
-      const res = await fetch(
-        `${backendConfig.api}/api/v1/admin/organizations?${params}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${backendConfig.api}/api/v1/admin/organizations?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!res.ok) {
         if (res.status === 403) throw new Error('Admin access required');
@@ -371,46 +379,42 @@ function OrganizationsAdminPageContent() {
   const loadOrgMembers = async (orgId: string): Promise<OrgMember[]> => {
     if (!token) return [];
 
-    const res = await fetch(
-      `${backendConfig.api}/api/v1/admin/organizations/${orgId}/members`,
-      {
-        headers: { 'Authorization': `Bearer ${token}` },
-      }
-    );
+    const res = await fetch(`${backendConfig.api}/api/v1/admin/organizations/${orgId}/members`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     if (!res.ok) return [];
 
     const data = await res.json();
-    return (data.members || []).map((m: {
-      id: string;
-      email: string;
-      name?: string;
-      role: string;
-      org_role: string;
-      is_active: boolean;
-      joined_at: string;
-      last_active?: string;
-    }) => ({
-      id: m.id,
-      name: m.name || m.email.split('@')[0],
-      email: m.email,
-      role: m.role,
-      org_role: m.org_role,
-      status: m.is_active ? 'active' : 'inactive',
-      joinedAt: m.joined_at,
-      lastActive: m.last_active,
-    }));
+    return (data.members || []).map(
+      (m: {
+        id: string;
+        email: string;
+        name?: string;
+        role: string;
+        org_role: string;
+        is_active: boolean;
+        joined_at: string;
+        last_active?: string;
+      }) => ({
+        id: m.id,
+        name: m.name || m.email.split('@')[0],
+        email: m.email,
+        role: m.role,
+        org_role: m.org_role,
+        status: m.is_active ? 'active' : 'inactive',
+        joinedAt: m.joined_at,
+        lastActive: m.last_active,
+      }),
+    );
   };
 
   const loadOrgAPIKeys = async (orgId: string): Promise<APIKey[]> => {
     if (!token) return [];
 
-    const res = await fetch(
-      `${backendConfig.api}/api/v1/admin/organizations/${orgId}/api-keys`,
-      {
-        headers: { 'Authorization': `Bearer ${token}` },
-      }
-    );
+    const res = await fetch(`${backendConfig.api}/api/v1/admin/organizations/${orgId}/api-keys`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     if (!res.ok) return [];
 
@@ -426,10 +430,13 @@ function OrganizationsAdminPageContent() {
   const _isAdmin = isAuthenticated && (user?.role === 'admin' || user?.role === 'owner');
 
   // Calculate tier stats
-  const tierStats = organizations.reduce((acc, org) => {
-    acc[org.tier] = (acc[org.tier] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const tierStats = organizations.reduce(
+    (acc, org) => {
+      acc[org.tier] = (acc[org.tier] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 
   return (
     <AdminLayout
@@ -494,15 +501,21 @@ function OrganizationsAdminPageContent() {
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted">Starter</div>
-          <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">{tierStats.starter || 0}</div>
+          <div className="font-theme-data text-2xl text-[var(--acid-cyan)]">
+            {tierStats.starter || 0}
+          </div>
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted">Pro</div>
-          <div className="font-theme-data text-2xl text-[var(--accent)]">{tierStats.professional || 0}</div>
+          <div className="font-theme-data text-2xl text-[var(--accent)]">
+            {tierStats.professional || 0}
+          </div>
         </div>
         <div className="card p-4">
           <div className="font-theme-data text-xs text-text-muted">Enterprise</div>
-          <div className="font-theme-data text-2xl text-[var(--acid-yellow)]">{tierStats.enterprise || 0}</div>
+          <div className="font-theme-data text-2xl text-[var(--acid-yellow)]">
+            {tierStats.enterprise || 0}
+          </div>
         </div>
       </div>
 
@@ -512,12 +525,24 @@ function OrganizationsAdminPageContent() {
           <table className="w-full">
             <thead className="bg-surface border-b border-[var(--accent)]/20">
               <tr>
-                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">ORGANIZATION</th>
-                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">TIER</th>
-                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">MEMBERS</th>
-                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">USAGE</th>
-                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">BILLING</th>
-                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">CREATED</th>
+                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                  ORGANIZATION
+                </th>
+                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                  TIER
+                </th>
+                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                  MEMBERS
+                </th>
+                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                  USAGE
+                </th>
+                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                  BILLING
+                </th>
+                <th className="text-left px-4 py-3 font-theme-data text-xs text-text-muted">
+                  CREATED
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -535,43 +560,46 @@ function OrganizationsAdminPageContent() {
                   </td>
                 </tr>
               )}
-              {!loading && organizations.map((org) => (
-                <tr
-                  key={org.id}
-                  className="border-b border-[var(--accent)]/10 hover:bg-surface/50 cursor-pointer"
-                  onClick={() => handleOrgClick(org)}
-                >
-                  <td className="px-4 py-3">
-                    <div className="font-theme-data text-sm text-text">{org.name}</div>
-                    <div className="font-theme-data text-xs text-[var(--acid-cyan)]">/{org.slug}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <TierBadge tier={org.tier} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-theme-data text-sm text-text">{org.member_count}</div>
-                  </td>
-                  <td className="px-4 py-3 min-w-[150px]">
-                    <UsageBar used={org.debates_used_this_month} limit={org.debates_limit} />
-                  </td>
-                  <td className="px-4 py-3">
-                    {org.stripe_customer_id ? (
-                      <span className="px-2 py-0.5 text-xs font-theme-data rounded border bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/40">
-                        CONNECTED
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs font-theme-data rounded border bg-text-muted/20 text-text-muted border-text-muted/40">
-                        NOT SET
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-theme-data text-xs text-text-muted">
-                      {new Date(org.created_at).toLocaleDateString()}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {!loading &&
+                organizations.map((org) => (
+                  <tr
+                    key={org.id}
+                    className="border-b border-[var(--accent)]/10 hover:bg-surface/50 cursor-pointer"
+                    onClick={() => handleOrgClick(org)}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-theme-data text-sm text-text">{org.name}</div>
+                      <div className="font-theme-data text-xs text-[var(--acid-cyan)]">
+                        /{org.slug}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <TierBadge tier={org.tier} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-theme-data text-sm text-text">{org.member_count}</div>
+                    </td>
+                    <td className="px-4 py-3 min-w-[150px]">
+                      <UsageBar used={org.debates_used_this_month} limit={org.debates_limit} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {org.stripe_customer_id ? (
+                        <span className="px-2 py-0.5 text-xs font-theme-data rounded border bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/40">
+                          CONNECTED
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 text-xs font-theme-data rounded border bg-text-muted/20 text-text-muted border-text-muted/40">
+                          NOT SET
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-theme-data text-xs text-text-muted">
+                        {new Date(org.created_at).toLocaleDateString()}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
         </div>
@@ -580,11 +608,11 @@ function OrganizationsAdminPageContent() {
         {Math.ceil(total / limit) > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--accent)]/20">
             <div className="font-theme-data text-xs text-text-muted">
-              Showing {((page - 1) * limit) + 1} to {Math.min(page * limit, total)} of {total}
+              Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total}
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
                 className="px-3 py-1 font-theme-data text-sm text-[var(--acid-cyan)] hover:text-[var(--accent)] disabled:text-text-muted disabled:cursor-not-allowed transition-colors"
               >
@@ -594,7 +622,7 @@ function OrganizationsAdminPageContent() {
                 Page {page} of {Math.ceil(total / limit)}
               </span>
               <button
-                onClick={() => setPage(p => Math.min(Math.ceil(total / limit), p + 1))}
+                onClick={() => setPage((p) => Math.min(Math.ceil(total / limit), p + 1))}
                 disabled={page >= Math.ceil(total / limit)}
                 className="px-3 py-1 font-theme-data text-sm text-[var(--acid-cyan)] hover:text-[var(--accent)] disabled:text-text-muted disabled:cursor-not-allowed transition-colors"
               >
@@ -622,7 +650,9 @@ function OrganizationsAdminPageContent() {
 
 export default function OrganizationsAdminPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center font-theme-data text-text-muted">Loading...</div>}>
+    <Suspense
+      fallback={<div className="p-8 text-center font-theme-data text-text-muted">Loading...</div>}
+    >
       <OrganizationsAdminPageContent />
     </Suspense>
   );

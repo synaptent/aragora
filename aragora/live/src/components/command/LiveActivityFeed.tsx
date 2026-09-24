@@ -53,9 +53,7 @@ export function LiveActivityFeed({ events, onEventClick }: LiveActivityFeedProps
   if (events.length === 0) {
     return (
       <div className="h-12 border-t border-border bg-surface/50 flex items-center justify-center">
-        <span className="text-xs font-theme-data text-text-muted">
-          Waiting for events...
-        </span>
+        <span className="text-xs font-theme-data text-text-muted">Waiting for events...</span>
       </div>
     );
   }
@@ -66,7 +64,7 @@ export function LiveActivityFeed({ events, onEventClick }: LiveActivityFeedProps
         ref={scrollRef}
         className="flex items-center gap-2 px-4 py-2 overflow-x-auto scrollbar-thin"
       >
-        {events.slice(-50).map(event => (
+        {events.slice(-50).map((event) => (
           <button
             key={event.id}
             onClick={() => onEventClick(event.id)}

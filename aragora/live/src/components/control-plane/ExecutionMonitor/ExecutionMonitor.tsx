@@ -70,7 +70,7 @@ export function ExecutionMonitor({
       selectExecution(execution.id);
       onSelectExecution?.(execution);
     },
-    [selectExecution, onSelectExecution]
+    [selectExecution, onSelectExecution],
   );
 
   // Handle terminate
@@ -80,7 +80,7 @@ export function ExecutionMonitor({
         await terminateExecution(executionId);
       }
     },
-    [terminateExecution]
+    [terminateExecution],
   );
 
   // Handle approval
@@ -97,13 +97,13 @@ export function ExecutionMonitor({
         setApprovalLoading((prev) => ({ ...prev, [requestId]: false }));
       }
     },
-    [resolveApproval, approvalQueue, onApprovalComplete]
+    [resolveApproval, approvalQueue, onApprovalComplete],
   );
 
   // Limited recent executions
   const limitedRecent = useMemo(
     () => recentExecutions.slice(0, maxRecent),
-    [recentExecutions, maxRecent]
+    [recentExecutions, maxRecent],
   );
 
   // Execution list item
@@ -117,9 +117,10 @@ export function ExecutionMonitor({
     }) => {
       const isSelected = selectedExecutionId === execution.id;
       const completedSteps = execution.steps.filter((s) => s.status === 'completed').length;
-      const progress = execution.steps.length > 0
-        ? Math.round((completedSteps / execution.steps.length) * 100)
-        : 0;
+      const progress =
+        execution.steps.length > 0
+          ? Math.round((completedSteps / execution.steps.length) * 100)
+          : 0;
 
       const statusColors: Record<string, { bg: string; text: string }> = {
         pending: { bg: 'bg-gray-900/20', text: 'text-gray-400' },
@@ -201,7 +202,7 @@ export function ExecutionMonitor({
         </div>
       );
     },
-    [selectedExecutionId, handleSelectExecution, handleTerminate]
+    [selectedExecutionId, handleSelectExecution, handleTerminate],
   );
 
   // Tab content
@@ -273,10 +274,7 @@ export function ExecutionMonitor({
       className={className}
       headerActions={
         !isConnected && (
-          <button
-            onClick={connect}
-            className="text-xs text-[var(--accent)] hover:underline"
-          >
+          <button onClick={connect} className="text-xs text-[var(--accent)] hover:underline">
             Connect
           </button>
         )
@@ -288,12 +286,7 @@ export function ExecutionMonitor({
           badge: activeExecutions.length,
           content: tabContent.active,
         },
-        {
-          id: 'recent',
-          label: 'Recent',
-          badge: limitedRecent.length,
-          content: tabContent.recent,
-        },
+        { id: 'recent', label: 'Recent', badge: limitedRecent.length, content: tabContent.recent },
         {
           id: 'approvals',
           label: 'Approvals',

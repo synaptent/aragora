@@ -21,7 +21,7 @@ const PaletteItem = memo(function PaletteItem({ type, onDragStart }: PaletteItem
       event.dataTransfer.effectAllowed = 'move';
       onDragStart(type);
     },
-    [type, onDragStart]
+    [type, onDragStart],
   );
 
   return (
@@ -45,16 +45,13 @@ const PaletteItem = memo(function PaletteItem({ type, onDragStart }: PaletteItem
 });
 
 export function NodePalette({ onDragStart }: NodePaletteProps) {
-
   return (
     <div className="h-full overflow-y-auto p-4 bg-surface border-r border-border">
       <div className="mb-4">
         <h3 className="text-sm font-theme-data font-bold text-text-muted uppercase tracking-wide mb-1">
           Node Palette
         </h3>
-        <p className="text-xs text-text-muted">
-          Drag nodes onto the canvas to build your workflow
-        </p>
+        <p className="text-xs text-text-muted">Drag nodes onto the canvas to build your workflow</p>
       </div>
 
       <div className="space-y-3">
@@ -105,9 +102,7 @@ export function NodePalette({ onDragStart }: NodePaletteProps) {
 
       {/* Help text */}
       <div className="mt-6 p-3 bg-bg border border-border rounded-lg">
-        <h4 className="text-xs font-theme-data font-bold text-[var(--accent)] mb-2">
-          Tips
-        </h4>
+        <h4 className="text-xs font-theme-data font-bold text-[var(--accent)] mb-2">Tips</h4>
         <ul className="text-xs text-text-muted space-y-1">
           <li>• Drag nodes from here to the canvas</li>
           <li>• Connect nodes by dragging from handles</li>

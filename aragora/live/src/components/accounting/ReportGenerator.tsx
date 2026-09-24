@@ -178,18 +178,42 @@ const MOCK_BALANCE_SHEET = {
 
 const MOCK_AR_AGING = {
   asOf: '2025-01-22',
-  total: 46270.50,
+  total: 46270.5,
   buckets: [
-    { label: 'Current', amount: 15420.50, customers: 3 },
-    { label: '1-30 Days', amount: 12100.00, customers: 2 },
-    { label: '31-60 Days', amount: 8750.00, customers: 1 },
-    { label: '61-90 Days', amount: 5000.00, customers: 1 },
-    { label: '90+ Days', amount: 5000.00, customers: 1 },
+    { label: 'Current', amount: 15420.5, customers: 3 },
+    { label: '1-30 Days', amount: 12100.0, customers: 2 },
+    { label: '31-60 Days', amount: 8750.0, customers: 1 },
+    { label: '61-90 Days', amount: 5000.0, customers: 1 },
+    { label: '90+ Days', amount: 5000.0, customers: 1 },
   ],
   customers: [
-    { name: 'Acme Corporation', current: 5420.50, '1-30': 5000, '31-60': 0, '61-90': 5000, '90+': 0, total: 15420.50 },
-    { name: 'TechStart Inc', current: 0, '1-30': 0, '31-60': 8750, '61-90': 0, '90+': 0, total: 8750.00 },
-    { name: 'Green Energy Solutions', current: 10000, '1-30': 7100, '31-60': 0, '61-90': 0, '90+': 5000, total: 22100.00 },
+    {
+      name: 'Acme Corporation',
+      current: 5420.5,
+      '1-30': 5000,
+      '31-60': 0,
+      '61-90': 5000,
+      '90+': 0,
+      total: 15420.5,
+    },
+    {
+      name: 'TechStart Inc',
+      current: 0,
+      '1-30': 0,
+      '31-60': 8750,
+      '61-90': 0,
+      '90+': 0,
+      total: 8750.0,
+    },
+    {
+      name: 'Green Energy Solutions',
+      current: 10000,
+      '1-30': 7100,
+      '31-60': 0,
+      '61-90': 0,
+      '90+': 5000,
+      total: 22100.0,
+    },
   ],
 };
 
@@ -209,7 +233,7 @@ export function ReportGenerator() {
     setReportData(null);
 
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Return mock data based on report type
     switch (selectedReport) {
@@ -233,7 +257,7 @@ export function ReportGenerator() {
     setGenerating(false);
   };
 
-  const config = selectedReport ? REPORT_TYPES.find(r => r.id === selectedReport) : null;
+  const config = selectedReport ? REPORT_TYPES.find((r) => r.id === selectedReport) : null;
 
   return (
     <div className="space-y-6">
@@ -243,7 +267,7 @@ export function ReportGenerator() {
           {'>'} SELECT REPORT
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          {REPORT_TYPES.map(report => (
+          {REPORT_TYPES.map((report) => (
             <button
               key={report.id}
               onClick={() => setSelectedReport(report.id)}
@@ -319,9 +343,7 @@ export function ReportGenerator() {
           {/* Report Header */}
           <div className="p-4 border-b border-[var(--border)] flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-theme-data text-[var(--acid-green)]">
-                {config?.name}
-              </h3>
+              <h3 className="text-lg font-theme-data text-[var(--acid-green)]">{config?.name}</h3>
               <p className="text-xs text-[var(--text-muted)]">
                 Generated on {new Date().toLocaleString()}
               </p>
@@ -335,163 +357,178 @@ export function ReportGenerator() {
           </div>
 
           {/* Profit & Loss Report */}
-          {reportData.type === 'profit_loss' && (() => {
-            const plData = reportData.data as ProfitLossData;
-            return (
-              <div className="p-4 space-y-6">
-                {/* Income Section */}
-                <div>
-                  <h4 className="text-sm font-theme-data text-[var(--acid-green)] mb-3">Income</h4>
-                  <div className="space-y-2">
-                    {plData.income.items.map((item: LineItem) => (
-                      <div key={item.name} className="flex justify-between text-sm">
-                        <span className="text-[var(--text-muted)]">{item.name}</span>
+          {reportData.type === 'profit_loss' &&
+            (() => {
+              const plData = reportData.data as ProfitLossData;
+              return (
+                <div className="p-4 space-y-6">
+                  {/* Income Section */}
+                  <div>
+                    <h4 className="text-sm font-theme-data text-[var(--acid-green)] mb-3">
+                      Income
+                    </h4>
+                    <div className="space-y-2">
+                      {plData.income.items.map((item: LineItem) => (
+                        <div key={item.name} className="flex justify-between text-sm">
+                          <span className="text-[var(--text-muted)]">{item.name}</span>
+                          <span className="font-theme-data text-[var(--acid-green)]">
+                            ${item.amount.toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-sm font-bold pt-2 border-t border-[var(--border)]">
+                        <span>Total Income</span>
                         <span className="font-theme-data text-[var(--acid-green)]">
-                          ${item.amount.toLocaleString()}
+                          ${plData.income.total.toLocaleString()}
                         </span>
                       </div>
-                    ))}
-                    <div className="flex justify-between text-sm font-bold pt-2 border-t border-[var(--border)]">
-                      <span>Total Income</span>
-                      <span className="font-theme-data text-[var(--acid-green)]">
-                        ${plData.income.total.toLocaleString()}
-                      </span>
                     </div>
                   </div>
-                </div>
 
-                {/* Expenses Section */}
-                <div>
-                  <h4 className="text-sm font-theme-data text-red-400 mb-3">Expenses</h4>
-                  <div className="space-y-2">
-                    {plData.expenses.items.map((item: LineItem) => (
-                      <div key={item.name} className="flex justify-between text-sm">
-                        <span className="text-[var(--text-muted)]">{item.name}</span>
+                  {/* Expenses Section */}
+                  <div>
+                    <h4 className="text-sm font-theme-data text-red-400 mb-3">Expenses</h4>
+                    <div className="space-y-2">
+                      {plData.expenses.items.map((item: LineItem) => (
+                        <div key={item.name} className="flex justify-between text-sm">
+                          <span className="text-[var(--text-muted)]">{item.name}</span>
+                          <span className="font-theme-data text-red-400">
+                            ${item.amount.toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-sm font-bold pt-2 border-t border-[var(--border)]">
+                        <span>Total Expenses</span>
                         <span className="font-theme-data text-red-400">
-                          ${item.amount.toLocaleString()}
+                          ${plData.expenses.total.toLocaleString()}
                         </span>
                       </div>
-                    ))}
-                    <div className="flex justify-between text-sm font-bold pt-2 border-t border-[var(--border)]">
-                      <span>Total Expenses</span>
-                      <span className="font-theme-data text-red-400">
-                        ${plData.expenses.total.toLocaleString()}
+                    </div>
+                  </div>
+
+                  {/* Net Income */}
+                  <div className="pt-4 border-t-2 border-[var(--acid-green)]">
+                    <div className="flex justify-between text-lg font-bold">
+                      <span>Net Income</span>
+                      <span
+                        className={`font-theme-data ${plData.netIncome >= 0 ? 'text-[var(--acid-green)]' : 'text-red-400'}`}
+                      >
+                        ${plData.netIncome.toLocaleString()}
                       </span>
                     </div>
                   </div>
                 </div>
+              );
+            })()}
 
-                {/* Net Income */}
-                <div className="pt-4 border-t-2 border-[var(--acid-green)]">
-                  <div className="flex justify-between text-lg font-bold">
-                    <span>Net Income</span>
-                    <span className={`font-theme-data ${plData.netIncome >= 0 ? 'text-[var(--acid-green)]' : 'text-red-400'}`}>
-                      ${plData.netIncome.toLocaleString()}
+          {/* Balance Sheet Report */}
+          {reportData.type === 'balance_sheet' &&
+            (() => {
+              const bsData = reportData.data as BalanceSheetData;
+              return (
+                <div className="p-4 grid grid-cols-2 gap-6">
+                  {/* Assets */}
+                  <div>
+                    <h4 className="text-sm font-theme-data text-[var(--acid-green)] mb-3">
+                      Assets
+                    </h4>
+                    <div className="space-y-4">
+                      <div>
+                        <h5 className="text-xs text-[var(--text-muted)] mb-2">Current Assets</h5>
+                        {bsData.assets.current.items.map((item: LineItem) => (
+                          <div key={item.name} className="flex justify-between text-sm py-1">
+                            <span className="text-[var(--text-muted)]">{item.name}</span>
+                            <span className="font-theme-data">${item.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <h5 className="text-xs text-[var(--text-muted)] mb-2">Fixed Assets</h5>
+                        {bsData.assets.fixed.items.map((item: LineItem) => (
+                          <div key={item.name} className="flex justify-between text-sm py-1">
+                            <span className="text-[var(--text-muted)]">{item.name}</span>
+                            <span className="font-theme-data">${item.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-sm font-bold pt-2 border-t border-[var(--border)]">
+                        <span>Total Assets</span>
+                        <span className="font-theme-data text-[var(--acid-green)]">
+                          ${bsData.assets.total.toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Liabilities & Equity */}
+                  <div>
+                    <h4 className="text-sm font-theme-data text-red-400 mb-3">
+                      Liabilities & Equity
+                    </h4>
+                    <div className="space-y-4">
+                      <div>
+                        <h5 className="text-xs text-[var(--text-muted)] mb-2">Liabilities</h5>
+                        {bsData.liabilities.items.map((item: LineItem) => (
+                          <div key={item.name} className="flex justify-between text-sm py-1">
+                            <span className="text-[var(--text-muted)]">{item.name}</span>
+                            <span className="font-theme-data">${item.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <h5 className="text-xs text-[var(--text-muted)] mb-2">Equity</h5>
+                        {bsData.equity.items.map((item: LineItem) => (
+                          <div key={item.name} className="flex justify-between text-sm py-1">
+                            <span className="text-[var(--text-muted)]">{item.name}</span>
+                            <span className="font-theme-data">${item.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex justify-between text-sm font-bold pt-2 border-t border-[var(--border)]">
+                        <span>Total L&E</span>
+                        <span className="font-theme-data">
+                          ${(bsData.liabilities.total + bsData.equity.total).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+          {/* AR/AP Aging Report */}
+          {(reportData.type === 'ar_aging' || reportData.type === 'ap_aging') &&
+            (() => {
+              const agingData = reportData.data as AgingData;
+              return (
+                <div className="p-4 space-y-4">
+                  {/* Summary Buckets */}
+                  <div className="grid grid-cols-5 gap-2">
+                    {agingData.buckets.map((bucket: AgingBucket) => (
+                      <div key={bucket.label} className="p-3 bg-[var(--bg)] rounded text-center">
+                        <div className="text-xs text-[var(--text-muted)]">{bucket.label}</div>
+                        <div className="text-lg font-theme-data text-[var(--text)]">
+                          ${bucket.amount.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)]">
+                          {bucket.customers} accts
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Total */}
+                  <div className="flex justify-between items-center p-3 bg-[var(--acid-green)]/10 rounded">
+                    <span className="font-theme-data">
+                      Total {reportData.type === 'ar_aging' ? 'Receivables' : 'Payables'}
+                    </span>
+                    <span className="text-xl font-theme-data text-[var(--acid-green)]">
+                      ${agingData.total.toLocaleString()}
                     </span>
                   </div>
                 </div>
-              </div>
-            );
-          })()}
-
-          {/* Balance Sheet Report */}
-          {reportData.type === 'balance_sheet' && (() => {
-            const bsData = reportData.data as BalanceSheetData;
-            return (
-              <div className="p-4 grid grid-cols-2 gap-6">
-                {/* Assets */}
-                <div>
-                  <h4 className="text-sm font-theme-data text-[var(--acid-green)] mb-3">Assets</h4>
-                  <div className="space-y-4">
-                    <div>
-                      <h5 className="text-xs text-[var(--text-muted)] mb-2">Current Assets</h5>
-                      {bsData.assets.current.items.map((item: LineItem) => (
-                        <div key={item.name} className="flex justify-between text-sm py-1">
-                          <span className="text-[var(--text-muted)]">{item.name}</span>
-                          <span className="font-theme-data">${item.amount.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div>
-                      <h5 className="text-xs text-[var(--text-muted)] mb-2">Fixed Assets</h5>
-                      {bsData.assets.fixed.items.map((item: LineItem) => (
-                        <div key={item.name} className="flex justify-between text-sm py-1">
-                          <span className="text-[var(--text-muted)]">{item.name}</span>
-                          <span className="font-theme-data">${item.amount.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-sm font-bold pt-2 border-t border-[var(--border)]">
-                      <span>Total Assets</span>
-                      <span className="font-theme-data text-[var(--acid-green)]">
-                        ${bsData.assets.total.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Liabilities & Equity */}
-                <div>
-                  <h4 className="text-sm font-theme-data text-red-400 mb-3">Liabilities & Equity</h4>
-                  <div className="space-y-4">
-                    <div>
-                      <h5 className="text-xs text-[var(--text-muted)] mb-2">Liabilities</h5>
-                      {bsData.liabilities.items.map((item: LineItem) => (
-                        <div key={item.name} className="flex justify-between text-sm py-1">
-                          <span className="text-[var(--text-muted)]">{item.name}</span>
-                          <span className="font-theme-data">${item.amount.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div>
-                      <h5 className="text-xs text-[var(--text-muted)] mb-2">Equity</h5>
-                      {bsData.equity.items.map((item: LineItem) => (
-                        <div key={item.name} className="flex justify-between text-sm py-1">
-                          <span className="text-[var(--text-muted)]">{item.name}</span>
-                          <span className="font-theme-data">${item.amount.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex justify-between text-sm font-bold pt-2 border-t border-[var(--border)]">
-                      <span>Total L&E</span>
-                      <span className="font-theme-data">
-                        ${(bsData.liabilities.total + bsData.equity.total).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* AR/AP Aging Report */}
-          {(reportData.type === 'ar_aging' || reportData.type === 'ap_aging') && (() => {
-            const agingData = reportData.data as AgingData;
-            return (
-              <div className="p-4 space-y-4">
-                {/* Summary Buckets */}
-                <div className="grid grid-cols-5 gap-2">
-                  {agingData.buckets.map((bucket: AgingBucket) => (
-                    <div key={bucket.label} className="p-3 bg-[var(--bg)] rounded text-center">
-                      <div className="text-xs text-[var(--text-muted)]">{bucket.label}</div>
-                      <div className="text-lg font-theme-data text-[var(--text)]">
-                        ${bucket.amount.toLocaleString()}
-                      </div>
-                      <div className="text-xs text-[var(--text-muted)]">{bucket.customers} accts</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Total */}
-                <div className="flex justify-between items-center p-3 bg-[var(--acid-green)]/10 rounded">
-                  <span className="font-theme-data">Total {reportData.type === 'ar_aging' ? 'Receivables' : 'Payables'}</span>
-                  <span className="text-xl font-theme-data text-[var(--acid-green)]">
-                    ${agingData.total.toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
+              );
+            })()}
         </div>
       )}
     </div>

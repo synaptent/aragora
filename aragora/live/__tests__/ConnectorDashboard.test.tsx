@@ -66,17 +66,11 @@ jest.mock('@/hooks/useApi', () => ({
 }));
 
 jest.mock('@/components/BackendSelector', () => ({
-  useBackend: () => ({
-    config: { api: 'http://localhost:8080' },
-  }),
+  useBackend: () => ({ config: { api: 'http://localhost:8080' } }),
 }));
 
 jest.mock('@/utils/logger', () => ({
-  logger: {
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
+  logger: { debug: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
 describe('ConnectorDashboard', () => {
@@ -213,8 +207,7 @@ describe('ConnectorDashboard', () => {
 
       // PanelTemplate shows "..." in refresh button and animate-pulse skeleton during loading
       expect(
-        container.querySelector('.animate-pulse') ||
-        screen.getByText('...')
+        container.querySelector('.animate-pulse') || screen.getByText('...'),
       ).toBeInTheDocument();
     });
   });
@@ -240,8 +233,8 @@ describe('ConnectorDashboard', () => {
 
       // Find and click a configure button (gear icon or Configure text)
       const configButtons = screen.getAllByRole('button');
-      const configButton = configButtons.find(btn =>
-        btn.querySelector('svg') && btn.getAttribute('aria-label')?.includes('Configure')
+      const configButton = configButtons.find(
+        (btn) => btn.querySelector('svg') && btn.getAttribute('aria-label')?.includes('Configure'),
       );
 
       if (configButton) {

@@ -104,16 +104,15 @@ export function BridgeEventStream({
   }
 
   if (events.length === 0) {
-    return <EmptyState title="No bridge events yet" description="Event records will appear here." />;
+    return (
+      <EmptyState title="No bridge events yet" description="Event records will appear here." />
+    );
   }
 
   return (
     <div className="max-h-[34rem] space-y-3 overflow-y-auto pr-1">
       {events.map((event) => (
-        <article
-          key={event.event_id}
-          className="rounded-xl border border-white/10 bg-white/5 p-4"
-        >
+        <article key={event.event_id} className="rounded-xl border border-white/10 bg-white/5 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge label={event.event_type} variant="neutral" />

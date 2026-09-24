@@ -5,6 +5,8 @@
 
 # aragora-debate
 
+## Overview
+
 **Pit LLMs against each other. Get decisions you can audit.**
 
 Single-model answers are unreliable. Models are [overconfident when wrong](https://arxiv.org/abs/2602.06176), agree with whatever you seem to want, and leave no audit trail. `aragora-debate` fixes this by running structured adversarial debates: multiple models propose, critique each other, vote, and produce a cryptographic decision receipt.
@@ -49,6 +51,19 @@ baselines ([Harrasse et al., 2024](https://arxiv.org/abs/2410.04663)) and
 
 ## Install
 
+For development, run from the repository's `aragora-debate/` directory in an
+activated Python 3.10+ virtual environment:
+
+```bash
+pip install -e '.[dev]'
+```
+
+The `dev` extra includes pytest, pytest-asyncio, pytest-cov, pytest-randomly,
+pytest-xdist, and pytest-timeout. With an unseeded uv environment, use
+`uv pip install -e '.[dev]'` instead (uv environments do not include pip by default).
+
+For the published package:
+
 ```bash
 pip install aragora-debate
 
@@ -56,6 +71,50 @@ pip install aragora-debate
 pip install aragora-debate[anthropic]    # Claude
 pip install aragora-debate[openai]       # GPT
 pip install aragora-debate[all]          # All providers
+```
+
+Check the installed version (read from `importlib.metadata`), or run the offline demo:
+
+```bash
+python -m aragora_debate --version
+python -m aragora_debate --help
+python -m aragora_debate --topic "Kafka vs RabbitMQ?" --rounds 2
+```
+
+## Build
+
+From `aragora-debate/`, build a wheel and source distribution with uv:
+
+```bash
+uv build
+```
+
+Alternatively, install the build frontend with `python -m pip install build`,
+then run `python -m build`.
+
+## Test
+
+From `aragora-debate/` after installing the `dev` extra:
+
+```bash
+pytest tests -q
+```
+
+To run deterministically with parallel workers, a timeout, and package coverage:
+
+```bash
+pytest tests -q -p no:randomly -n 4 --timeout=120 --cov=aragora_debate
+```
+
+## Lint & Typecheck
+
+Use the repository's development toolchain (root `dev` extra for ruff and mypy,
+with mypy pinned to the CI version). From `aragora-debate/`:
+
+```bash
+ruff check .
+ruff format --check .
+mypy --strict src
 ```
 
 ## Quick start with real models
@@ -262,6 +321,25 @@ with open("receipt.html", "w") as f:
 
 ## Configuration
 
+All package-specific `ARAGORA_*` environment variables are optional:
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `ARAGORA_LOG_FORMAT` | `text` | `json` selects JSON lines; any other value selects text |
+| `ARAGORA_LOG_LEVEL` | `WARNING` | Case-insensitive stdlib logging level; invalid names fall back to WARNING |
+| `ARAGORA_DEBATE_TIMEOUT_S` | `30` | Per-SDK-attempt timeout, in seconds |
+| `ARAGORA_DEBATE_RETRY_ATTEMPTS` | `3` | Maximum attempts, including the initial call |
+| `ARAGORA_DEBATE_BREAKER_FAIL_MAX` | `5` | Consecutive failed attempts that open an agent's circuit |
+
+Empty, malformed, nonpositive, or nonfinite resilience environment values fall
+back to defaults. Timeout and retry defaults are read per operation; the breaker
+threshold is read when constructing the agent. Logging settings take effect only
+when explicitly calling `configure_logging()` (see Logging).
+
+Real providers additionally use `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+`MISTRAL_API_KEY`, or `GEMINI_API_KEY`, absent by default. Mock agents and the
+CLI demo require none. Configure debate-level settings separately:
+
 ```python
 DebateConfig(
     rounds=3,                          # Number of debate rounds
@@ -274,6 +352,60 @@ DebateConfig(
     require_reasoning=True,            # Agents must explain votes
 )
 ```
+
+## Resilience
+
+All built-in Claude, OpenAI, Mistral, and Gemini `generate`, `critique`, and
+`vote` SDK calls use `agents._call_sdk`. The wrapping order, outermost first, is
+`retry` -> `CircuitBreaker.call` -> `with_timeout` -> SDK call:
+
+1. `with_timeout(seconds=None)` bounds each attempt to **30 seconds** by default
+   (`ARAGORA_DEBATE_TIMEOUT_S`). Sync SDK calls run via `asyncio.to_thread`, so
+   they do not block the event loop. Expiry raises built-in `TimeoutError`.
+2. `retry(max_attempts=None, backoff=0.1, exceptions=(Exception,))` makes at most
+   **3 attempts** (`ARAGORA_DEBATE_RETRY_ATTEMPTS`), including the initial call.
+   It waits **0.1 seconds**, then **0.2 seconds**, using exponential backoff
+   between failures. The last exception propagates when attempts are exhausted.
+   Cancellation and `CircuitOpenError` are never retried.
+3. `CircuitBreaker(fail_max=None, reset_timeout=30.0)` persists per agent and
+   opens after **5 consecutive failed attempts**
+   (`ARAGORA_DEBATE_BREAKER_FAIL_MAX`). It rejects calls with `CircuitOpenError`
+   without calling the SDK. After **30 seconds**, one half-open probe is allowed;
+   success closes the circuit and clears failures, failure reopens it.
+   Because the breaker counts each attempt, it can stop retries early.
+
+`backoff` and `reset_timeout` are Python parameters, not environment variables.
+Anthropic/OpenAI SDK-internal retries are disabled to avoid multiplying attempts.
+Explicit invalid resilience parameters raise `ValueError`.
+
+A timeout stops **waiting**, not the synchronous thread or remote operation.
+Configure SDK transport timeouts too. A retry can overlap a previously timed-out
+sync operation, so consider the provider's cost and idempotency semantics.
+
+## Logging
+
+Importing the package does not configure logging or import telemetry SDKs.
+Logging is local only, with no PostHog/Sentry client or network exporter.
+Opt in explicitly at application startup:
+
+```python
+from aragora_debate._logging import configure_logging
+
+configure_logging()
+```
+
+This replaces root handlers with one stderr handler, including on repeated
+calls. Defaults are plain `LEVEL logger: message` text at WARNING (INFO is
+suppressed). Set `ARAGORA_LOG_FORMAT=json` for one JSON object per line:
+`ts` (UTC ISO-8601 timestamp), `level`, `logger`, and `msg`; optional fields are
+`exception`, `stack`, and structured extras.
+
+Both formatters use `redact()` to mask values as `***` for keys matching
+`(?i)(api[_-]?key|token|secret|password|authorization)` in nested mappings and
+sequences, and `key=value` assignments in messages (including quoted and
+Bearer/Basic values). Interpolated messages and exceptions are redacted without
+mutating the original record. Unlabelled sensitive text is not automatically
+recognized; avoid logging credentials or user content.
 
 ## When to use adversarial debate
 

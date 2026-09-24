@@ -4,10 +4,7 @@ import { useOrchCanvas } from '../useOrchCanvas';
 jest.mock('@/components/BackendSelector', () => ({
   useBackend: () => ({
     backend: 'production',
-    config: {
-      api: 'https://backend.test',
-      ws: 'wss://backend.test/ws',
-    },
+    config: { api: 'https://backend.test', ws: 'wss://backend.test/ws' },
   }),
 }));
 
@@ -98,16 +95,10 @@ describe('useOrchCanvas', () => {
     expect(executionResult).toEqual({ pipelineId: 'pipe-123' });
     expect(mockFetch).toHaveBeenCalledWith(
       'https://backend.test/api/v1/canvas/pipeline/pipe-123/execute',
-      expect.objectContaining({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      expect.objectContaining({ method: 'POST', headers: { 'Content-Type': 'application/json' } }),
     );
     expect(MockWebSocket.instances[0]?.url).toBe('wss://backend.test/ws/canvas/canvas-1');
-    expect(mockFetch).not.toHaveBeenCalledWith(
-      '/api/v1/canvas/pipeline/run',
-      expect.anything(),
-    );
+    expect(mockFetch).not.toHaveBeenCalledWith('/api/v1/canvas/pipeline/run', expect.anything());
     expect(mockFetch).not.toHaveBeenCalledWith(
       expect.stringContaining('/api/v2/pipeline/runs/pipe-123/execute-workflow'),
       expect.anything(),

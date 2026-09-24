@@ -50,13 +50,24 @@ export function StreamMetricsBar({ metrics, compact = false }: StreamMetricsBarP
   if (compact) {
     return (
       <div className="flex items-center gap-3 text-[10px] font-theme-data text-text-muted">
-        <span>TTFT: <span className={latencyColor(metrics.ttftMs)}>{formatMs(metrics.ttftMs)}</span></span>
-        <span>Tokens: <span className="text-[var(--accent)]">{metrics.tokenCount}</span></span>
+        <span>
+          TTFT: <span className={latencyColor(metrics.ttftMs)}>{formatMs(metrics.ttftMs)}</span>
+        </span>
+        <span>
+          Tokens: <span className="text-[var(--accent)]">{metrics.tokenCount}</span>
+        </span>
         {metrics.stallCount > 0 && (
-          <span>Stalls: <span className="text-red-400">{metrics.stallCount}</span></span>
+          <span>
+            Stalls: <span className="text-red-400">{metrics.stallCount}</span>
+          </span>
         )}
         {metrics.connectionLatencyMs !== null && (
-          <span>Lat: <span className={latencyColor(metrics.connectionLatencyMs)}>{formatMs(metrics.connectionLatencyMs)}</span></span>
+          <span>
+            Lat:{' '}
+            <span className={latencyColor(metrics.connectionLatencyMs)}>
+              {formatMs(metrics.connectionLatencyMs)}
+            </span>
+          </span>
         )}
       </div>
     );
@@ -102,7 +113,9 @@ export function StreamMetricsBar({ metrics, compact = false }: StreamMetricsBarP
         {/* Avg Token Latency */}
         <div className="space-y-0.5">
           <div className="text-[9px] font-theme-data text-text-muted uppercase">Avg Latency</div>
-          <div className={`text-xs font-theme-data font-bold ${latencyColor(metrics.avgTokenLatencyMs)}`}>
+          <div
+            className={`text-xs font-theme-data font-bold ${latencyColor(metrics.avgTokenLatencyMs)}`}
+          >
             {formatMs(metrics.avgTokenLatencyMs)}
           </div>
         </div>
@@ -110,7 +123,9 @@ export function StreamMetricsBar({ metrics, compact = false }: StreamMetricsBarP
         {/* Connection Latency */}
         <div className="space-y-0.5">
           <div className="text-[9px] font-theme-data text-text-muted uppercase">Conn. Lat</div>
-          <div className={`text-xs font-theme-data font-bold ${latencyColor(metrics.connectionLatencyMs)}`}>
+          <div
+            className={`text-xs font-theme-data font-bold ${latencyColor(metrics.connectionLatencyMs)}`}
+          >
             {formatMs(metrics.connectionLatencyMs)}
           </div>
         </div>

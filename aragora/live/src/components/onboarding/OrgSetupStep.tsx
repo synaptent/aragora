@@ -14,7 +14,11 @@ const USE_CASES = [
   { value: 'project_planning', label: 'Project Planning', description: 'Feature prioritization' },
   { value: 'vendor_selection', label: 'Vendor Selection', description: 'Compare options' },
   { value: 'policy_review', label: 'Policy Review', description: 'Compliance checks' },
-  { value: 'technical_decisions', label: 'Technical Decisions', description: 'Architecture reviews' },
+  {
+    value: 'technical_decisions',
+    label: 'Technical Decisions',
+    description: 'Architecture reviews',
+  },
   { value: 'general', label: 'Just Exploring', description: 'See how it works' },
 ] as const;
 
@@ -43,19 +47,13 @@ export function OrgSetupStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">
-          Set Up Your Workspace
-        </h3>
-        <p className="text-sm text-text-muted">
-          Create a workspace for your team
-        </p>
+        <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">Set Up Your Workspace</h3>
+        <p className="text-sm text-text-muted">Create a workspace for your team</p>
       </div>
 
       {/* Organization Name */}
       <div>
-        <label className="block text-sm font-theme-data text-text mb-2">
-          Organization Name *
-        </label>
+        <label className="block text-sm font-theme-data text-text mb-2">Organization Name *</label>
         <input
           type="text"
           value={organizationName}
@@ -72,9 +70,7 @@ export function OrgSetupStep() {
 
       {/* Team Size */}
       <div>
-        <label className="block text-sm font-theme-data text-text mb-2">
-          Team Size *
-        </label>
+        <label className="block text-sm font-theme-data text-text mb-2">Team Size *</label>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {TEAM_SIZES.map((size) => (
             <button
@@ -94,9 +90,7 @@ export function OrgSetupStep() {
 
       {/* Use Case */}
       <div>
-        <label className="block text-sm font-theme-data text-text mb-2">
-          Primary Use Case
-        </label>
+        <label className="block text-sm font-theme-data text-text mb-2">Primary Use Case</label>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           {USE_CASES.map((uc) => (
             <button
@@ -108,7 +102,9 @@ export function OrgSetupStep() {
                   : 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50'
               }`}
             >
-              <div className={`text-sm font-theme-data ${useCase === uc.value ? 'text-[var(--accent)]' : 'text-text'}`}>
+              <div
+                className={`text-sm font-theme-data ${useCase === uc.value ? 'text-[var(--accent)]' : 'text-text'}`}
+              >
                 {uc.label}
               </div>
               <div className="text-xs text-text-muted">{uc.description}</div>

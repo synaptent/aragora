@@ -4,11 +4,7 @@ import { useDebateStore } from '@/store';
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
-  logger: {
-    debug: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-  },
+  logger: { debug: jest.fn(), error: jest.fn(), warn: jest.fn() },
 }));
 
 // Mock WebSocket
@@ -88,9 +84,7 @@ describe('useDebateWebSocketStore', () => {
 
   describe('initial state', () => {
     it('starts with connecting status when enabled', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       // Store should be set to connecting
       const state = useDebateStore.getState().current;
@@ -99,7 +93,7 @@ describe('useDebateWebSocketStore', () => {
 
     it('does not connect when disabled', () => {
       renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws', enabled: false })
+        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws', enabled: false }),
       );
 
       expect(MockWebSocket.instances).toHaveLength(0);
@@ -108,9 +102,7 @@ describe('useDebateWebSocketStore', () => {
 
   describe('connection lifecycle', () => {
     it('sends subscribe message on open', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       const ws = getLatestWs();
       act(() => {
@@ -118,16 +110,11 @@ describe('useDebateWebSocketStore', () => {
       });
 
       expect(ws.sentMessages).toHaveLength(1);
-      expect(JSON.parse(ws.sentMessages[0])).toEqual({
-        type: 'subscribe',
-        debate_id: debateId,
-      });
+      expect(JSON.parse(ws.sentMessages[0])).toEqual({ type: 'subscribe', debate_id: debateId });
     });
 
     it('does not create a second socket when status updates to streaming', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       expect(MockWebSocket.instances).toHaveLength(1);
 
@@ -142,9 +129,7 @@ describe('useDebateWebSocketStore', () => {
       // Note: The hook has connectionStatus in useEffect deps, which causes
       // the effect to re-run when status changes. This test verifies the
       // WebSocket opens and handlers are set up correctly.
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       const ws = getLatestWs();
       expect(ws).toBeDefined();
@@ -157,27 +142,18 @@ describe('useDebateWebSocketStore', () => {
 
       // Subscribe message proves onopen ran successfully
       expect(ws.sentMessages).toHaveLength(1);
-      expect(JSON.parse(ws.sentMessages[0])).toEqual({
-        type: 'subscribe',
-        debate_id: debateId,
-      });
+      expect(JSON.parse(ws.sentMessages[0])).toEqual({ type: 'subscribe', debate_id: debateId });
     });
 
     it('processes debate_end event', () => {
       // Note: The status handling is complex due to useEffect deps.
       // This test verifies the debate_end message is processed correctly.
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       const ws = getLatestWs();
       act(() => {
         ws.simulateOpen();
-        ws.simulateMessage({
-          type: 'debate_end',
-          data: {},
-          timestamp: Date.now() / 1000,
-        });
+        ws.simulateMessage({ type: 'debate_end', data: {}, timestamp: Date.now() / 1000 });
       });
 
       // Verify the message was processed - when complete, stream events should clear
@@ -189,18 +165,13 @@ describe('useDebateWebSocketStore', () => {
 
   describe('message handling', () => {
     it('handles debate_start event', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
         getLatestWs().simulateMessage({
           type: 'debate_start',
-          data: {
-            task: 'Should AI be regulated?',
-            agents: ['claude', 'gpt-4'],
-          },
+          data: { task: 'Should AI be regulated?', agents: ['claude', 'gpt-4'] },
           timestamp: Date.now() / 1000,
         });
       });
@@ -211,9 +182,7 @@ describe('useDebateWebSocketStore', () => {
     });
 
     it('handles agent_message event', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -237,9 +206,7 @@ describe('useDebateWebSocketStore', () => {
     });
 
     it('handles token_start event', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -256,9 +223,7 @@ describe('useDebateWebSocketStore', () => {
     });
 
     it('handles token_delta event', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -289,9 +254,7 @@ describe('useDebateWebSocketStore', () => {
     });
 
     it('handles token_end event', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
@@ -314,18 +277,13 @@ describe('useDebateWebSocketStore', () => {
     });
 
     it('handles consensus event', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
         getLatestWs().simulateMessage({
           type: 'consensus',
-          data: {
-            reached: true,
-            confidence: 0.85,
-          },
+          data: { reached: true, confidence: 0.85 },
           timestamp: Date.now() / 1000,
         });
       });
@@ -335,19 +293,14 @@ describe('useDebateWebSocketStore', () => {
     });
 
     it('ignores events for different debate', () => {
-      renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
-      );
+      renderHook(() => useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }));
 
       act(() => {
         getLatestWs().simulateOpen();
         getLatestWs().simulateMessage({
           type: 'debate_start',
           loop_id: 'different-debate',
-          data: {
-            task: 'Different task',
-            agents: ['other-agent'],
-          },
+          data: { task: 'Different task', agents: ['other-agent'] },
           timestamp: Date.now() / 1000,
         });
       });
@@ -361,7 +314,7 @@ describe('useDebateWebSocketStore', () => {
   describe('sendVote', () => {
     it('sends vote message when connected', () => {
       const { result } = renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
+        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       // Simulate open and immediately send vote to ensure WebSocket is still in OPEN state
@@ -372,9 +325,7 @@ describe('useDebateWebSocketStore', () => {
 
       // Check all WebSocket instances for the vote message
       const allMessages = MockWebSocket.instances.flatMap((ws) => ws.sentMessages);
-      const voteMessage = allMessages.find((m) =>
-        JSON.parse(m).type === 'user_vote'
-      );
+      const voteMessage = allMessages.find((m) => JSON.parse(m).type === 'user_vote');
       expect(voteMessage).toBeDefined();
       expect(JSON.parse(voteMessage!)).toEqual({
         type: 'user_vote',
@@ -385,7 +336,7 @@ describe('useDebateWebSocketStore', () => {
 
     it('uses default intensity when not provided', () => {
       const { result } = renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
+        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       act(() => {
@@ -394,9 +345,7 @@ describe('useDebateWebSocketStore', () => {
       });
 
       const allMessages = MockWebSocket.instances.flatMap((ws) => ws.sentMessages);
-      const voteMessage = allMessages.find((m) =>
-        JSON.parse(m).type === 'user_vote'
-      );
+      const voteMessage = allMessages.find((m) => JSON.parse(m).type === 'user_vote');
       expect(voteMessage).toBeDefined();
       expect(JSON.parse(voteMessage!).data.intensity).toBe(5);
     });
@@ -405,7 +354,7 @@ describe('useDebateWebSocketStore', () => {
   describe('sendSuggestion', () => {
     it('sends suggestion message when connected', () => {
       const { result } = renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
+        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       act(() => {
@@ -414,9 +363,7 @@ describe('useDebateWebSocketStore', () => {
       });
 
       const allMessages = MockWebSocket.instances.flatMap((ws) => ws.sentMessages);
-      const suggestionMessage = allMessages.find((m) =>
-        JSON.parse(m).type === 'user_suggestion'
-      );
+      const suggestionMessage = allMessages.find((m) => JSON.parse(m).type === 'user_suggestion');
       expect(suggestionMessage).toBeDefined();
       expect(JSON.parse(suggestionMessage!)).toEqual({
         type: 'user_suggestion',
@@ -430,7 +377,7 @@ describe('useDebateWebSocketStore', () => {
     it('calls ack callback on ack event', () => {
       const ackCallback = jest.fn();
       const { result } = renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
+        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       result.current.registerAckCallback(ackCallback);
@@ -450,7 +397,7 @@ describe('useDebateWebSocketStore', () => {
     it('calls error callback on error event', () => {
       const errorCallback = jest.fn();
       const { result } = renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
+        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       result.current.registerErrorCallback(errorCallback);
@@ -470,7 +417,7 @@ describe('useDebateWebSocketStore', () => {
     it('unregisters callback on cleanup', () => {
       const ackCallback = jest.fn();
       const { result } = renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
+        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       const unregister = result.current.registerAckCallback(ackCallback);
@@ -492,7 +439,7 @@ describe('useDebateWebSocketStore', () => {
   describe('reconnect', () => {
     it('resets attempt counter and clears error', () => {
       const { result } = renderHook(() =>
-        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' })
+        useDebateWebSocketStore({ debateId, wsUrl: 'wss://test.com/ws' }),
       );
 
       // Simulate error state

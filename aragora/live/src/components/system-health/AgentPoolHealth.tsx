@@ -76,7 +76,9 @@ export function AgentPoolHealth() {
                 className="flex items-center justify-between text-xs font-theme-data py-1 border-b border-border last:border-0"
               >
                 <div className="flex items-center gap-2">
-                  <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[a.status] || 'bg-text-muted'}`} />
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[a.status] || 'bg-text-muted'}`}
+                  />
                   <span className="text-text truncate max-w-[140px]">{a.agent_id}</span>
                   <span className="text-text-muted">{a.type}</span>
                 </div>

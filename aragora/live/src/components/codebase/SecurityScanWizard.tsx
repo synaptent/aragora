@@ -24,13 +24,7 @@ interface ScanResult {
   files_scanned: number;
   lines_scanned?: number;
   risk_score?: number;
-  summary: {
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-    info?: number;
-  };
+  summary: { critical: number; high: number; medium: number; low: number; info?: number };
   findings: Finding[];
   error?: string;
 }
@@ -89,9 +83,7 @@ export function SecurityScanWizard() {
     try {
       // Determine which endpoint to call
       let endpoint = '/api/v1/codebase/default/scan';
-      const body: Record<string, unknown> = {
-        repo_path: config.repoPath,
-      };
+      const body: Record<string, unknown> = { repo_path: config.repoPath };
 
       if (config.scanType === 'secrets') {
         endpoint = '/api/v1/codebase/default/scan/secrets';
@@ -129,7 +121,7 @@ export function SecurityScanWizard() {
       // Use mock data for demo
       await simulateScan();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- formatScanResult, pollForResult, and simulateScan are stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- formatScanResult, pollForResult, and simulateScan are stable
   }, [config]);
 
   const pollForResult = async (_scanId: string) => {
@@ -137,7 +129,7 @@ export function SecurityScanWizard() {
     let attempts = 0;
 
     while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       attempts++;
 
       try {
@@ -180,7 +172,7 @@ export function SecurityScanWizard() {
 
   const simulateScan = async () => {
     // Simulate scan progress
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     setScanResult({
       scan_id: `scan_${Date.now()}`,
@@ -189,13 +181,7 @@ export function SecurityScanWizard() {
       files_scanned: 127,
       lines_scanned: 15420,
       risk_score: 35,
-      summary: {
-        critical: 0,
-        high: 2,
-        medium: 5,
-        low: 8,
-        info: 3,
-      },
+      summary: { critical: 0, high: 2, medium: 5, low: 8, info: 3 },
       findings: [
         {
           id: 'SEC-001',
@@ -275,9 +261,7 @@ export function SecurityScanWizard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-theme-data text-[var(--acid-green)]">
-            {'>'} SECURITY SCAN
-          </h1>
+          <h1 className="text-xl font-theme-data text-[var(--acid-green)]">{'>'} SECURITY SCAN</h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">
             Scan your codebase for vulnerabilities, secrets, and security issues
           </p>
@@ -294,9 +278,19 @@ export function SecurityScanWizard() {
 
       {/* Progress Indicator */}
       <div className="flex items-center gap-2">
-        <StepIndicator step={1} active={step === 'configure'} completed={step !== 'configure'} label="Configure" />
+        <StepIndicator
+          step={1}
+          active={step === 'configure'}
+          completed={step !== 'configure'}
+          label="Configure"
+        />
         <div className="flex-1 h-px bg-[var(--border)]" />
-        <StepIndicator step={2} active={step === 'scanning'} completed={step === 'results'} label="Scanning" />
+        <StepIndicator
+          step={2}
+          active={step === 'scanning'}
+          completed={step === 'results'}
+          label="Scanning"
+        />
         <div className="flex-1 h-px bg-[var(--border)]" />
         <StepIndicator step={3} active={step === 'results'} completed={false} label="Results" />
       </div>
@@ -309,16 +303,10 @@ export function SecurityScanWizard() {
 
       {/* Step Content */}
       {step === 'configure' && (
-        <ConfigureStep
-          config={config}
-          onChange={setConfig}
-          onStart={startScan}
-        />
+        <ConfigureStep config={config} onChange={setConfig} onStart={startScan} />
       )}
 
-      {step === 'scanning' && (
-        <ScanProgressView scanType={config.scanType} />
-      )}
+      {step === 'scanning' && <ScanProgressView scanType={config.scanType} />}
 
       {step === 'results' && scanResult && (
         <div className="space-y-6">
@@ -345,13 +333,15 @@ function StepIndicator({ step, active, completed, label }: StepIndicatorProps) {
           active
             ? 'bg-[var(--acid-green)] text-[var(--bg)] border-[var(--acid-green)]'
             : completed
-            ? 'bg-[var(--acid-green)]/20 text-[var(--acid-green)] border-[var(--acid-green)]'
-            : 'bg-[var(--surface)] text-[var(--text-muted)] border-[var(--border)]'
+              ? 'bg-[var(--acid-green)]/20 text-[var(--acid-green)] border-[var(--acid-green)]'
+              : 'bg-[var(--surface)] text-[var(--text-muted)] border-[var(--border)]'
         }`}
       >
         {completed ? '✓' : step}
       </div>
-      <span className={`text-xs font-theme-data ${active ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}`}>
+      <span
+        className={`text-xs font-theme-data ${active ? 'text-[var(--acid-green)]' : 'text-[var(--text-muted)]'}`}
+      >
         {label}
       </span>
     </div>
@@ -422,15 +412,21 @@ function ConfigureStep({ config, onChange, onStart }: ConfigureStepProps) {
                 onChange={(e) => onChange({ ...config, includeHistory: e.target.checked })}
                 className="w-4 h-4 accent-[var(--acid-green)]"
               />
-              <span className="text-sm text-[var(--text)]">Scan git history for leaked secrets</span>
+              <span className="text-sm text-[var(--text)]">
+                Scan git history for leaked secrets
+              </span>
             </label>
             {config.includeHistory && (
               <div className="ml-7">
-                <label className="text-xs text-[var(--text-muted)] block mb-1">History depth (commits)</label>
+                <label className="text-xs text-[var(--text-muted)] block mb-1">
+                  History depth (commits)
+                </label>
                 <input
                   type="number"
                   value={config.historyDepth}
-                  onChange={(e) => onChange({ ...config, historyDepth: parseInt(e.target.value) || 100 })}
+                  onChange={(e) =>
+                    onChange({ ...config, historyDepth: parseInt(e.target.value) || 100 })
+                  }
                   min={10}
                   max={1000}
                   className="w-24 px-2 py-1 bg-[var(--bg)] border border-[var(--border)] rounded font-theme-data text-sm text-[var(--text)]"

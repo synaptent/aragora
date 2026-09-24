@@ -64,9 +64,7 @@ export function AudioDownloadSection({ debateId }: AudioDownloadSectionProps) {
 
   if (status === 'checking') {
     return (
-      <span className="px-3 py-2 text-xs font-theme-data text-text-muted">
-        Checking audio...
-      </span>
+      <span className="px-3 py-2 text-xs font-theme-data text-text-muted">Checking audio...</span>
     );
   }
 
@@ -93,7 +91,10 @@ export function AudioDownloadSection({ debateId }: AudioDownloadSectionProps) {
   if (status === 'error') {
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-theme-data text-red-400 truncate max-w-[200px]" title={error || ''}>
+        <span
+          className="text-xs font-theme-data text-red-400 truncate max-w-[200px]"
+          title={error || ''}
+        >
           {error}
         </span>
         <button

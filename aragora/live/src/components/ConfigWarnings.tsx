@@ -22,7 +22,7 @@ interface ConfigWarningsProps {
  */
 export function ConfigWarnings({
   showInProduction = false,
-  dismissable = true
+  dismissable = true,
 }: ConfigWarningsProps) {
   const [dismissed, setDismissed] = useState(false);
   const [warnings, setWarnings] = useState<EnvWarning[]>([]);
@@ -63,15 +63,11 @@ export function ConfigWarnings({
         </div>
         <div className="p-3 space-y-2">
           {warnings.map((warning) => (
-            <div
-              key={warning.key}
-              className="text-xs font-theme-data text-text-muted"
-            >
+            <div key={warning.key} className="text-xs font-theme-data text-text-muted">
               <span className={warning.severity === 'error' ? 'text-red-400' : 'text-yellow-500'}>
                 {warning.severity === 'error' ? '!' : '*'}
               </span>{' '}
-              <span className="text-text">{warning.key}:</span>{' '}
-              {warning.message}
+              <span className="text-text">{warning.key}:</span> {warning.message}
             </div>
           ))}
         </div>
@@ -100,7 +96,7 @@ export function useConfigWarnings() {
   return {
     warnings,
     hasWarnings: warnings.length > 0,
-    hasErrors: warnings.some(w => w.severity === 'error'),
+    hasErrors: warnings.some((w) => w.severity === 'error'),
     isDevMode: IS_DEV_MODE,
   };
 }

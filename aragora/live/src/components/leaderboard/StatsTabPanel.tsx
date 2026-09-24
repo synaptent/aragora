@@ -64,9 +64,7 @@ function StatsTabPanelComponent({ stats, loading }: StatsTabPanelProps) {
                       <div className="flex-1 h-2 bg-surface rounded">
                         <div
                           className="h-full bg-accent rounded"
-                          style={{
-                            width: `${Math.min((count / stats.total_agents) * 100, 100)}%`,
-                          }}
+                          style={{ width: `${Math.min((count / stats.total_agents) * 100, 100)}%` }}
                         />
                       </div>
                       <span className="text-xs text-text w-8 text-right">{count}</span>

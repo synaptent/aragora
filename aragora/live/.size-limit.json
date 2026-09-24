@@ -1,0 +1,8 @@
+[
+  {
+    "name": "All client JavaScript (Brotli)",
+    "path": ".next/static/**/*.js",
+    "limit": "2719658 B"
+  },
+  { "name": "All client CSS (Brotli)", "path": ".next/static/**/*.css", "limit": "34769 B" }
+]

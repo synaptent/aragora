@@ -2,7 +2,11 @@
 
 export default function TrainingLoading() {
   return (
-    <div className="min-h-screen bg-background p-4 sm:p-6" role="status" aria-label="Loading training dashboard">
+    <div
+      className="min-h-screen bg-background p-4 sm:p-6"
+      role="status"
+      aria-label="Loading training dashboard"
+    >
       {/* Header */}
       <div className="mb-6">
         <div className="h-8 w-56 bg-surface animate-pulse rounded mb-2" />
@@ -12,10 +16,7 @@ export default function TrainingLoading() {
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div
-            key={i}
-            className="border border-[var(--accent)]/20 rounded-lg p-4 bg-surface"
-          >
+          <div key={i} className="border border-[var(--accent)]/20 rounded-lg p-4 bg-surface">
             <div className="h-3 w-20 bg-[var(--accent)]/20 animate-pulse rounded mb-2" />
             <div className="h-8 w-16 bg-[var(--accent)]/30 animate-pulse rounded" />
           </div>

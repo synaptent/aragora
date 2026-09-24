@@ -26,16 +26,13 @@ const SAMPLE_RECEIPT = {
     supporting_agents: ['Analyst', 'Critic', 'Synthesizer', "Devil's Advocate"],
     dissenting_agents: [] as string[],
   },
-  artifact_hash:
-    'bcdfc27a428d4a72294cd4274c31e85f274756ddbc240f7df1e3953cba5f3218',
+  artifact_hash: 'bcdfc27a428d4a72294cd4274c31e85f274756ddbc240f7df1e3953cba5f3218',
   signature_algorithm: 'SHA-256-content-hash',
   elapsed_seconds: 0.0,
   mode: 'demo (offline)',
   proposals: {
-    Analyst:
-      'Start with a narrow pilot so you learn before taking on system-wide risk.',
-    Critic:
-      'Avoid a broad rollout until you can quantify operational cost and rollback criteria.',
+    Analyst: 'Start with a narrow pilot so you learn before taking on system-wide risk.',
+    Critic: 'Avoid a broad rollout until you can quantify operational cost and rollback criteria.',
     Synthesizer:
       'Combine a limited pilot with measurable guardrails and a written review checkpoint.',
     "Devil's Advocate":
@@ -162,13 +159,7 @@ export default function SampleReceiptPage() {
     >
       <Header />
 
-      <main
-        style={{
-          maxWidth: '900px',
-          margin: '0 auto',
-          padding: '56px 24px 80px',
-        }}
-      >
+      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '56px 24px 80px' }}>
         {/* Title */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <h1
@@ -190,9 +181,8 @@ export default function SampleReceiptPage() {
               margin: 0,
             }}
           >
-            What every Aragora debate produces — a portable, content-hashed
-            artifact that records who deliberated, what they said, how they
-            disagreed, and what was decided.
+            What every Aragora debate produces — a portable, content-hashed artifact that records
+            who deliberated, what they said, how they disagreed, and what was decided.
           </p>
         </div>
 
@@ -256,8 +246,7 @@ export default function SampleReceiptPage() {
             >
               /sample-receipt.json
             </a>{' '}
-            so you can pipe it through your own tooling without leaving your
-            terminal.
+            so you can pipe it through your own tooling without leaving your terminal.
           </p>
         </section>
 
@@ -346,9 +335,8 @@ export default function SampleReceiptPage() {
             Verify the hash yourself
           </h2>
           <p style={{ marginTop: 0, color: 'var(--text-muted)', fontSize: '14px' }}>
-            The whole point of a content-hashed receipt is that you don&apos;t
-            have to trust us. Fetch the JSON, hash it the same way, compare to
-            the value claimed inside.
+            The whole point of a content-hashed receipt is that you don&apos;t have to trust us.
+            Fetch the JSON, hash it the same way, compare to the value claimed inside.
           </p>
           <CodeBlock lang="bash" small>{`# Fetch the artifact and recompute the hash over its body
 curl -s https://aragora.ai/sample-receipt.json \\
@@ -357,10 +345,9 @@ curl -s https://aragora.ai/sample-receipt.json \\
       body = json.dumps(json.load(sys.stdin), sort_keys=True, separators=(',', ':')); \\
       print(hashlib.sha256(body.encode()).hexdigest())"`}</CodeBlock>
           <p style={{ marginTop: '12px', color: 'var(--text-muted)', fontSize: '13px' }}>
-            For production receipts, this is one half of the verification — the
-            other half is the HMAC, keyed by your workspace&apos;s signing key,
-            which lets you detect tampering by anyone who didn&apos;t have the
-            key.
+            For production receipts, this is one half of the verification — the other half is the
+            HMAC, keyed by your workspace&apos;s signing key, which lets you detect tampering by
+            anyone who didn&apos;t have the key.
           </p>
         </section>
 
@@ -396,24 +383,24 @@ curl -s https://aragora.ai/sample-receipt.json \\
           >
             <li>
               <strong style={{ color: 'var(--text)' }}>Dissent is recorded, not collapsed.</strong>{' '}
-              You can answer &quot;was there disagreement?&quot; from the receipt
-              itself, weeks or months later.
+              You can answer &quot;was there disagreement?&quot; from the receipt itself, weeks or
+              months later.
             </li>
             <li>
-              <strong style={{ color: 'var(--text)' }}>Portable.</strong> The
-              receipt is a single JSON blob. No proprietary format, no required
-              viewer, no signed-URL expiry.
+              <strong style={{ color: 'var(--text)' }}>Portable.</strong> The receipt is a single
+              JSON blob. No proprietary format, no required viewer, no signed-URL expiry.
             </li>
             <li>
-              <strong style={{ color: 'var(--text)' }}>Verifiable offline.</strong>{' '}
-              The artifact_hash means a recipient never has to trust the
-              provider — only the math.
+              <strong style={{ color: 'var(--text)' }}>Verifiable offline.</strong> The
+              artifact_hash means a recipient never has to trust the provider — only the math.
             </li>
             <li>
-              <strong style={{ color: 'var(--text)' }}>Decision-grounded, not just action-logged.</strong>{' '}
-              The receipt captures the deliberation that led to a decision, not
-              just the executed action. The execution gate that consumes it
-              denies anything without an admin-scoped approval artifact.
+              <strong style={{ color: 'var(--text)' }}>
+                Decision-grounded, not just action-logged.
+              </strong>{' '}
+              The receipt captures the deliberation that led to a decision, not just the executed
+              action. The execution gate that consumes it denies anything without an admin-scoped
+              approval artifact.
             </li>
           </ul>
         </section>

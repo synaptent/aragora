@@ -104,10 +104,16 @@ export default function CoordinationPage() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <div className="flex items-center gap-3">
-              <Link href="/self-improve" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/self-improve"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [SELF-IMPROVE]
               </Link>
-              <Link href="/autonomous" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/autonomous"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [AUTONOMOUS]
               </Link>
               <BackendSelector compact />
@@ -123,15 +129,18 @@ export default function CoordinationPage() {
                 {'>'} MULTI-AGENT COORDINATION
               </h1>
               <p className="text-text-muted font-theme-data text-sm">
-                Federated cross-workspace execution, worktree lifecycle, task dispatch, and consent management.
+                Federated cross-workspace execution, worktree lifecycle, task dispatch, and consent
+                management.
               </p>
             </div>
             {health && (
-              <div className={`px-3 py-1 rounded border text-xs font-theme-data ${
-                health.healthy
-                  ? 'border-[var(--accent)]/50 text-[var(--accent)] bg-[var(--accent)]/10'
-                  : 'border-red-400/50 text-red-400 bg-red-400/10'
-              }`}>
+              <div
+                className={`px-3 py-1 rounded border text-xs font-theme-data ${
+                  health.healthy
+                    ? 'border-[var(--accent)]/50 text-[var(--accent)] bg-[var(--accent)]/10'
+                    : 'border-red-400/50 text-red-400 bg-red-400/10'
+                }`}
+              >
                 {health.healthy ? 'HEALTHY' : 'DEGRADED'}
               </div>
             )}
@@ -139,11 +148,14 @@ export default function CoordinationPage() {
 
           <PanelErrorBoundary panelName="Coordination">
             {isLoading ? (
-              <div className="text-[var(--accent)] font-theme-data animate-pulse text-center py-12">Loading coordination data...</div>
+              <div className="text-[var(--accent)] font-theme-data animate-pulse text-center py-12">
+                Loading coordination data...
+              </div>
             ) : !stats ? (
               <div className="p-8 bg-surface border border-border rounded-lg text-center">
                 <p className="text-text-muted font-theme-data">
-                  Coordination module not available. The <code className="text-[var(--accent)]">aragora.coordination</code> package
+                  Coordination module not available. The{' '}
+                  <code className="text-[var(--accent)]">aragora.coordination</code> package
                   provides cross-workspace federation, worktree management, and task dispatch.
                 </p>
               </div>
@@ -152,19 +164,27 @@ export default function CoordinationPage() {
                 {/* Stats row */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                    <div className="text-3xl font-theme-data font-bold text-[var(--accent)]">{stats.total_workspaces}</div>
+                    <div className="text-3xl font-theme-data font-bold text-[var(--accent)]">
+                      {stats.total_workspaces}
+                    </div>
                     <div className="text-xs text-text-muted uppercase">Workspaces</div>
                   </div>
                   <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                    <div className="text-3xl font-theme-data font-bold text-blue-400">{stats.active_executions}</div>
+                    <div className="text-3xl font-theme-data font-bold text-blue-400">
+                      {stats.active_executions}
+                    </div>
                     <div className="text-xs text-text-muted uppercase">Active Executions</div>
                   </div>
                   <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                    <div className="text-3xl font-theme-data font-bold text-purple-400">{stats.total_consents}</div>
+                    <div className="text-3xl font-theme-data font-bold text-purple-400">
+                      {stats.total_consents}
+                    </div>
                     <div className="text-xs text-text-muted uppercase">Active Consents</div>
                   </div>
                   <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                    <div className="text-3xl font-theme-data font-bold text-gold">{stats.federation_policies}</div>
+                    <div className="text-3xl font-theme-data font-bold text-gold">
+                      {stats.federation_policies}
+                    </div>
                     <div className="text-xs text-text-muted uppercase">Federation Policies</div>
                   </div>
                 </div>
@@ -178,7 +198,10 @@ export default function CoordinationPage() {
                     {workspaces.length > 0 ? (
                       <div className="space-y-2 max-h-[350px] overflow-y-auto">
                         {workspaces.map((ws) => (
-                          <div key={ws.workspace_id} className="p-3 bg-bg rounded flex items-center justify-between">
+                          <div
+                            key={ws.workspace_id}
+                            className="p-3 bg-bg rounded flex items-center justify-between"
+                          >
                             <div>
                               <div className="text-sm text-text font-theme-data">{ws.name}</div>
                               <div className="text-xs text-text-muted">
@@ -209,13 +232,16 @@ export default function CoordinationPage() {
                               <span className="text-xs font-theme-data text-text-muted">
                                 {exec.execution_id.substring(0, 12)}...
                               </span>
-                              <span className={`text-xs font-theme-data ${statusColor(exec.status)}`}>
+                              <span
+                                className={`text-xs font-theme-data ${statusColor(exec.status)}`}
+                              >
                                 {exec.status.toUpperCase()}
                               </span>
                             </div>
                             <div className="text-sm text-text">{exec.operation}</div>
                             <div className="text-xs text-text-muted mt-1">
-                              {exec.source_workspace.substring(0, 8)} {'→'} {exec.target_workspace.substring(0, 8)}
+                              {exec.source_workspace.substring(0, 8)} {'→'}{' '}
+                              {exec.target_workspace.substring(0, 8)}
                             </div>
                           </div>
                         ))}
@@ -234,7 +260,10 @@ export default function CoordinationPage() {
                   {consents.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                       {consents.map((consent) => (
-                        <div key={consent.consent_id} className="p-3 bg-bg rounded flex items-center justify-between">
+                        <div
+                          key={consent.consent_id}
+                          className="p-3 bg-bg rounded flex items-center justify-between"
+                        >
                           <div>
                             <div className="text-xs font-theme-data text-text-muted">
                               {consent.workspace_id.substring(0, 12)}...

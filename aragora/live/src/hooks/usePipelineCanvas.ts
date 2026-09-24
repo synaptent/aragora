@@ -76,7 +76,10 @@ const DEFAULT_STAGE_STATUS: Record<PipelineStageType, string> = {
 // ---------------------------------------------------------------------------
 
 /** Convert API response stage data into React Flow nodes. */
-function parseStageNodes(stage: PipelineStageType, data: ReactFlowData | Record<string, unknown> | null): Node[] {
+function parseStageNodes(
+  stage: PipelineStageType,
+  data: ReactFlowData | Record<string, unknown> | null,
+): Node[] {
   if (!data) return [];
 
   // Goals stage may come as { goals: [...], provenance: [...] } rather than ReactFlowData
@@ -92,8 +95,12 @@ function parseStageNodes(stage: PipelineStageType, data: ReactFlowData | Record<
     type: (n.type as string) || nodeType,
     position: (n.position as { x: number; y: number }) || { x: 0, y: 0 },
     data: {
-      ...(n.data as Record<string, unknown> ?? {}),
-      label: (n.data as Record<string, unknown>)?.label ?? (n as Record<string, unknown>).label ?? (n as Record<string, unknown>).title ?? '',
+      ...((n.data as Record<string, unknown>) ?? {}),
+      label:
+        (n.data as Record<string, unknown>)?.label ??
+        (n as Record<string, unknown>).label ??
+        (n as Record<string, unknown>).title ??
+        '',
       stage,
     },
     style: (n.style as Record<string, string>) ?? {},
@@ -101,7 +108,10 @@ function parseStageNodes(stage: PipelineStageType, data: ReactFlowData | Record<
 }
 
 /** Convert API response stage data into React Flow edges. */
-function parseStageEdges(stage: PipelineStageType, data: ReactFlowData | Record<string, unknown> | null): Edge[] {
+function parseStageEdges(
+  stage: PipelineStageType,
+  data: ReactFlowData | Record<string, unknown> | null,
+): Edge[] {
   if (!data) return [];
 
   const rawEdges: Array<Record<string, unknown>> = (data as ReactFlowData).edges ?? [];
@@ -109,12 +119,12 @@ function parseStageEdges(stage: PipelineStageType, data: ReactFlowData | Record<
 
   return rawEdges.map((e) => ({
     id: (e.id as string) || `e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    source: ((e.source || e.source_id) as string),
-    target: ((e.target || e.target_id) as string),
+    source: (e.source || e.source_id) as string,
+    target: (e.target || e.target_id) as string,
     type: (e.type as string) || 'default',
     label: e.label as string | undefined,
     animated: e.animated !== undefined ? !!e.animated : true,
-    style: { stroke: stageColor, ...(e.style as Record<string, string> ?? {}) },
+    style: { stroke: stageColor, ...((e.style as Record<string, string>) ?? {}) },
   }));
 }
 
@@ -137,15 +147,21 @@ export function usePipelineCanvas(
 
   // -- Stage management ---------------------------------------------------
   const [activeStage, setActiveStageRaw] = useState<PipelineStageType>('ideas');
-  const [stageStatus, setStageStatus] = useState<Record<PipelineStageType, string>>({ ...DEFAULT_STAGE_STATUS });
+  const [stageStatus, setStageStatus] = useState<Record<PipelineStageType, string>>({
+    ...DEFAULT_STAGE_STATUS,
+  });
 
   // -- Per-stage caches ---------------------------------------------------
   const stageNodesRef = useRef<Record<PipelineStageType, Node[]>>({ ...EMPTY_STAGES });
   const stageEdgesRef = useRef<Record<PipelineStageType, Edge[]>>({ ...EMPTY_STAGE_EDGES });
 
   // Expose the caches as state so consumers can read them reactively
-  const [stageNodes, setStageNodes] = useState<Record<PipelineStageType, Node[]>>({ ...EMPTY_STAGES });
-  const [stageEdges, setStageEdges] = useState<Record<PipelineStageType, Edge[]>>({ ...EMPTY_STAGE_EDGES });
+  const [stageNodes, setStageNodes] = useState<Record<PipelineStageType, Node[]>>({
+    ...EMPTY_STAGES,
+  });
+  const [stageEdges, setStageEdges] = useState<Record<PipelineStageType, Edge[]>>({
+    ...EMPTY_STAGE_EDGES,
+  });
 
   // -- Loading state ------------------------------------------------------
   const [loading, setLoading] = useState(false);
@@ -195,9 +211,16 @@ export function usePipelineCanvas(
         setStageStatus(result.stage_status);
       }
 
-      const stages: PipelineStageType[] = ['ideas', 'principles', 'goals', 'actions', 'orchestration'];
+      const stages: PipelineStageType[] = [
+        'ideas',
+        'principles',
+        'goals',
+        'actions',
+        'orchestration',
+      ];
       for (const stage of stages) {
-        const stageData = (result as unknown as Record<string, unknown>)[stage] as ReactFlowData | Record<string, unknown> | null;
+        const stageData = (result as unknown as Record<string, unknown>)[stage] as
+          ReactFlowData | Record<string, unknown> | null;
         stageNodesRef.current[stage] = parseStageNodes(stage, stageData);
         stageEdgesRef.current[stage] = parseStageEdges(stage, stageData);
       }
@@ -370,9 +393,7 @@ export function usePipelineCanvas(
     (updates: Record<string, unknown>) => {
       if (!selectedNodeId) return;
       setNodes((nds) =>
-        nds.map((n) =>
-          n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n,
-        ),
+        nds.map((n) => (n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n)),
       );
     },
     [selectedNodeId, setNodes],
@@ -418,12 +439,7 @@ export function usePipelineCanvas(
       const stageColor = PIPELINE_STAGE_CONFIG[activeStage].primary;
       setEdges((eds) =>
         addEdge(
-          {
-            ...connection,
-            type: 'default',
-            animated: true,
-            style: { stroke: stageColor },
-          },
+          { ...connection, type: 'default', animated: true, style: { stroke: stageColor } },
           eds,
         ),
       );
@@ -451,10 +467,7 @@ export function usePipelineCanvas(
         return;
       }
 
-      const position = {
-        x: event.clientX - wrapperRect.left,
-        y: event.clientY - wrapperRect.top,
-      };
+      const position = { x: event.clientX - wrapperRect.left, y: event.clientY - wrapperRect.top };
 
       addNode(parsed.stage, parsed.subtype, position);
     },
@@ -476,7 +489,13 @@ export function usePipelineCanvas(
         stages: {} as Record<string, unknown>,
       };
 
-      const stages: PipelineStageType[] = ['ideas', 'principles', 'goals', 'actions', 'orchestration'];
+      const stages: PipelineStageType[] = [
+        'ideas',
+        'principles',
+        'goals',
+        'actions',
+        'orchestration',
+      ];
       const stagesPayload: Record<string, unknown> = {};
       for (const stage of stages) {
         stagesPayload[stage] = {
@@ -533,10 +552,7 @@ export function usePipelineCanvas(
           res = await fetch(buildApiUrl(`${PIPELINE_API_PATH}/advance`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              pipeline_id: pipelineId,
-              target_stage: stage,
-            }),
+            body: JSON.stringify({ pipeline_id: pipelineId, target_stage: stage }),
           });
         }
 
@@ -596,10 +612,7 @@ export function usePipelineCanvas(
         const res = await fetch(buildApiUrl(`${PIPELINE_API_PATH}/from-ideas`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ideas,
-            auto_advance: false,
-          }),
+          body: JSON.stringify({ ideas, auto_advance: false }),
         });
 
         if (!res.ok) {
@@ -635,9 +648,7 @@ export function usePipelineCanvas(
         const res = await fetch(buildApiUrl(`${PIPELINE_API_PATH}/run`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            input_text: inputText,
-          }),
+          body: JSON.stringify({ input_text: inputText }),
         });
 
         if (!res.ok) {
@@ -664,11 +675,14 @@ export function usePipelineCanvas(
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(buildApiUrl(`${PIPELINE_API_PATH}/${pipelineId}/approve-transition`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transition_id: transitionId, approved: true }),
-        });
+        const res = await fetch(
+          buildApiUrl(`${PIPELINE_API_PATH}/${pipelineId}/approve-transition`),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transition_id: transitionId, approved: true }),
+          },
+        );
         if (!res.ok) {
           setError(`Transition approval failed: ${res.status}`);
         }
@@ -688,11 +702,18 @@ export function usePipelineCanvas(
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(buildApiUrl(`${PIPELINE_API_PATH}/${pipelineId}/approve-transition`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ transition_id: transitionId, approved: false, reason: reason ?? '' }),
-        });
+        const res = await fetch(
+          buildApiUrl(`${PIPELINE_API_PATH}/${pipelineId}/approve-transition`),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transition_id: transitionId,
+              approved: false,
+              reason: reason ?? '',
+            }),
+          },
+        );
         if (!res.ok) {
           setError(`Transition rejection failed: ${res.status}`);
         }
@@ -756,7 +777,15 @@ export function usePipelineCanvas(
       // Also update the stage cache for orchestration nodes
       stageNodesRef.current.orchestration = stageNodesRef.current.orchestration.map((n) =>
         n.id === nodeId
-          ? { ...n, data: { ...n.data, executionStatus: status, ...(elapsedMs != null ? { elapsedMs } : {}), ...(outputPreview ? { outputPreview } : {}) } }
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                executionStatus: status,
+                ...(elapsedMs != null ? { elapsedMs } : {}),
+                ...(outputPreview ? { outputPreview } : {}),
+              },
+            }
           : n,
       );
     },

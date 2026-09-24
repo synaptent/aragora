@@ -1,7 +1,11 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useSystemHealth, useCircuitBreakers, type CircuitBreakerInfo } from '@/hooks/useSystemHealth';
+import {
+  useSystemHealth,
+  useCircuitBreakers,
+  type CircuitBreakerInfo,
+} from '@/hooks/useSystemHealth';
 
 // ============================================================================
 // State styling
@@ -156,9 +160,7 @@ export function ResilienceDashboard() {
 
     // Average success rate across all breakers
     const avgSuccessRate =
-      total > 0
-        ? breakers.reduce((sum, b) => sum + b.success_rate, 0) / total
-        : 1;
+      total > 0 ? breakers.reduce((sum, b) => sum + b.success_rate, 0) / total : 1;
 
     // Overall status
     let overallStatus: 'healthy' | 'degraded' | 'critical' = 'healthy';
@@ -234,7 +236,8 @@ export function ResilienceDashboard() {
             </h3>
             {health && (
               <p className="font-theme-data text-[10px] text-text-muted">
-                Last check: {health.last_check ? new Date(health.last_check).toLocaleTimeString() : 'N/A'}
+                Last check:{' '}
+                {health.last_check ? new Date(health.last_check).toLocaleTimeString() : 'N/A'}
               </p>
             )}
           </div>
@@ -246,14 +249,17 @@ export function ResilienceDashboard() {
 
       {/* Health Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <HealthSummaryCard
-          label="Active Breakers"
-          value={summary.total}
-        />
+        <HealthSummaryCard label="Active Breakers" value={summary.total} />
         <HealthSummaryCard
           label="Avg Success Rate"
           value={`${(summary.avgSuccessRate * 100).toFixed(1)}%`}
-          color={summary.avgSuccessRate > 0.95 ? 'text-[var(--accent)]' : summary.avgSuccessRate > 0.7 ? 'text-[var(--acid-yellow)]' : 'text-red-400'}
+          color={
+            summary.avgSuccessRate > 0.95
+              ? 'text-[var(--accent)]'
+              : summary.avgSuccessRate > 0.7
+                ? 'text-[var(--acid-yellow)]'
+                : 'text-red-400'
+          }
         />
         <HealthSummaryCard
           label="Open Circuits"
@@ -271,7 +277,9 @@ export function ResilienceDashboard() {
       {summary.total > 0 && (
         <div className="card p-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="font-theme-data text-xs text-text-muted">Circuit Health Distribution</span>
+            <span className="font-theme-data text-xs text-text-muted">
+              Circuit Health Distribution
+            </span>
             <span className="font-theme-data text-[10px] text-[var(--accent)]">
               {summary.closed}/{summary.total} closed
             </span>
@@ -304,9 +312,7 @@ export function ResilienceDashboard() {
             {summary.halfOpen > 0 && (
               <span className="text-[var(--acid-yellow)]">{summary.halfOpen} Half-Open</span>
             )}
-            {summary.open > 0 && (
-              <span className="text-red-400">{summary.open} Open</span>
-            )}
+            {summary.open > 0 && <span className="text-red-400">{summary.open} Open</span>}
           </div>
         </div>
       )}
@@ -321,12 +327,15 @@ export function ResilienceDashboard() {
       ) : sortedBreakers.length === 0 ? (
         <div className="card p-6">
           <p className="text-text-muted font-theme-data text-xs text-center">
-            No circuit breakers registered. Breakers are created automatically when services are called.
+            No circuit breakers registered. Breakers are created automatically when services are
+            called.
           </p>
         </div>
       ) : (
         <div>
-          <h4 className="font-theme-data text-xs text-[var(--accent)] mb-3">Circuit Breaker Status Grid</h4>
+          <h4 className="font-theme-data text-xs text-[var(--accent)] mb-3">
+            Circuit Breaker Status Grid
+          </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {sortedBreakers.map((breaker) => (
               <CircuitBreakerCard key={breaker.name} breaker={breaker} />

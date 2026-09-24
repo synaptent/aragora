@@ -18,11 +18,7 @@ import type { ReviewQueuePR } from '@/hooks/useReviewQueue';
 
 /** The 5 decision options the operator picks per PR. */
 export type PacketDecisionId =
-  | 'approve_tier'
-  | 'approve_downgrade'
-  | 'request_changes'
-  | 'reject'
-  | 'hold_operator';
+  'approve_tier' | 'approve_downgrade' | 'request_changes' | 'reject' | 'hold_operator';
 
 export interface PacketDecisionOption {
   id: PacketDecisionId;

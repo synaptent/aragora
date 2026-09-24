@@ -57,9 +57,7 @@ export function ChooseTemplateStep() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-theme-data text-[var(--acid-green)] mb-2">
-          Choose a Template
-        </h2>
+        <h2 className="text-lg font-theme-data text-[var(--acid-green)] mb-2">Choose a Template</h2>
         <p className="text-sm font-theme-data text-[var(--text-muted)]">
           Pick a debate template to see how Aragora handles real decisions.
         </p>

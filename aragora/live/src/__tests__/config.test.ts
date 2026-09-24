@@ -40,7 +40,7 @@ describe('config local dev API fallback', () => {
       ]),
     );
     expect(warnSpy).toHaveBeenCalledWith(
-      '[Aragora] NEXT_PUBLIC_API_URL not set, using same-origin /api proxy (local dev mode).'
+      '[Aragora] NEXT_PUBLIC_API_URL not set, using same-origin /api proxy (local dev mode).',
     );
   });
 
@@ -88,11 +88,7 @@ describe('config apiFetch runtime backend selection', () => {
 
   it('uses the saved runtime backend for helper requests', async () => {
     localStorage.setItem('aragora-backend', 'production');
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ jobs: [] }),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ jobs: [] }) });
 
     const config = await import('../config');
     await config.apiFetch('/api/scheduler/jobs');
@@ -100,27 +96,18 @@ describe('config apiFetch runtime backend selection', () => {
     expect(mockFetch).toHaveBeenCalledWith(
       'https://api.aragora.ai/api/scheduler/jobs',
       expect.objectContaining({
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-        }),
+        headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
       }),
     );
   });
 
   it('keeps absolute helper endpoints intact', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ ok: true }),
-    });
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ok: true }) });
 
     const config = await import('../config');
     await config.apiFetch('https://custom.example/api/health');
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://custom.example/api/health',
-      expect.any(Object),
-    );
+    expect(mockFetch).toHaveBeenCalledWith('https://custom.example/api/health', expect.any(Object));
   });
 });
 

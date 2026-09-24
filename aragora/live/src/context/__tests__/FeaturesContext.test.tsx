@@ -23,9 +23,7 @@ import {
 } from '../FeaturesContext';
 
 // Mock the useFeatures hook
-jest.mock('@/hooks/useFeatures', () => ({
-  useFeatures: jest.fn(),
-}));
+jest.mock('@/hooks/useFeatures', () => ({ useFeatures: jest.fn() }));
 
 import { useFeatures } from '@/hooks/useFeatures';
 const mockUseFeatures = useFeatures as jest.Mock;

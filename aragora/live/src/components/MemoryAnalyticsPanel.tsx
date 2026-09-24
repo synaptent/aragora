@@ -37,11 +37,7 @@ interface Recommendation {
 }
 
 interface MemoryAnalytics {
-  summary: {
-    total_memories: number;
-    active_memories: number;
-    tier_distribution: TierDistribution;
-  };
+  summary: { total_memories: number; active_memories: number; tier_distribution: TierDistribution };
   promotions: PromotionStats;
   learning_velocity: LearningVelocity;
   retrieval_stats: RetrievalStats;
@@ -177,10 +173,7 @@ export function MemoryAnalyticsPanel({ apiBase = DEFAULT_API_BASE }: MemoryAnaly
           {retrieval_stats.most_retrieved_topics.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
               {retrieval_stats.most_retrieved_topics.slice(0, 5).map((topic) => (
-                <span
-                  key={topic}
-                  className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded"
-                >
+                <span key={topic} className="text-xs bg-accent/10 text-accent px-2 py-0.5 rounded">
                   {topic}
                 </span>
               ))}

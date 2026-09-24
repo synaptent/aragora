@@ -18,16 +18,11 @@ import { FindingDetailDrawer } from '../src/components/FindingDetailDrawer';
 
 // Mock hooks
 jest.mock('../src/components/BackendSelector', () => ({
-  useBackend: () => ({
-    config: { api: 'http://localhost:8080' },
-  }),
+  useBackend: () => ({ config: { api: 'http://localhost:8080' } }),
 }));
 
 jest.mock('../src/context/AuthContext', () => ({
-  useAuth: () => ({
-    tokens: { access_token: 'test-token' },
-    user: { id: 'test-user-id' },
-  }),
+  useAuth: () => ({ tokens: { access_token: 'test-token' }, user: { id: 'test-user-id' } }),
 }));
 
 // Mock fetch
@@ -43,7 +38,7 @@ const mockFinding = {
   audit_type: 'security',
   category: 'injection',
   confidence: 0.95,
-  evidence_text: "query = `SELECT * FROM users WHERE id = ${userId}`",
+  evidence_text: 'query = `SELECT * FROM users WHERE id = ${userId}`',
   evidence_location: 'src/database/users.ts:42',
   recommendation: 'Use parameterized queries or prepared statements',
   found_by: 'claude-3-opus',
@@ -73,33 +68,18 @@ const mockWorkflow = {
 describe('FindingDetailDrawer', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockWorkflow),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockWorkflow) });
   });
 
   describe('Visibility', () => {
     it('should not render when isOpen is false', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={false}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={false} onClose={jest.fn()} />);
 
       expect(screen.queryByText('SQL Injection Vulnerability')).not.toBeInTheDocument();
     });
 
     it('should render when isOpen is true', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText('SQL Injection Vulnerability')).toBeInTheDocument();
     });
@@ -107,85 +87,43 @@ describe('FindingDetailDrawer', () => {
 
   describe('Finding Display', () => {
     it('should display severity badge', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText('CRITICAL')).toBeInTheDocument();
     });
 
     it('should display status badge', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText('OPEN')).toBeInTheDocument();
     });
 
     it('should display description', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText(/User input is not properly sanitized/)).toBeInTheDocument();
     });
 
     it('should display evidence text', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText(/SELECT \* FROM users/)).toBeInTheDocument();
     });
 
     it('should display evidence location', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText(/src\/database\/users.ts:42/)).toBeInTheDocument();
     });
 
     it('should display recommendation', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText(/Use parameterized queries/)).toBeInTheDocument();
     });
 
     it('should display metadata fields', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText('security')).toBeInTheDocument();
       expect(screen.getByText('injection')).toBeInTheDocument();
@@ -197,13 +135,7 @@ describe('FindingDetailDrawer', () => {
   describe('Close Functionality', () => {
     it('should call onClose when close button is clicked', () => {
       const onClose = jest.fn();
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={onClose}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={onClose} />);
 
       fireEvent.click(screen.getByText('✕'));
       expect(onClose).toHaveBeenCalledTimes(1);
@@ -212,11 +144,7 @@ describe('FindingDetailDrawer', () => {
     it('should call onClose when backdrop is clicked', () => {
       const onClose = jest.fn();
       const { container } = render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={onClose}
-        />
+        <FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={onClose} />,
       );
 
       const backdrop = container.querySelector('.fixed.inset-0');
@@ -229,13 +157,7 @@ describe('FindingDetailDrawer', () => {
 
   describe('Status Transitions', () => {
     it('should display valid status transition buttons', async () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       await waitFor(() => {
         // From 'open' state, valid transitions are: triaging, investigating, false_positive, duplicate
@@ -247,18 +169,9 @@ describe('FindingDetailDrawer', () => {
     });
 
     it('should call API when status transition button is clicked', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockWorkflow),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockWorkflow) });
 
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       await waitFor(() => {
         expect(screen.getByText('TRIAGING')).toBeInTheDocument();
@@ -272,7 +185,7 @@ describe('FindingDetailDrawer', () => {
           expect.objectContaining({
             method: 'PATCH',
             body: JSON.stringify({ status: 'triaging' }),
-          })
+          }),
         );
       });
     });
@@ -280,13 +193,7 @@ describe('FindingDetailDrawer', () => {
 
   describe('Priority Selection', () => {
     it('should display priority buttons', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText('Critical')).toBeInTheDocument();
       expect(screen.getByText('High')).toBeInTheDocument();
@@ -296,28 +203,16 @@ describe('FindingDetailDrawer', () => {
     });
 
     it('should call API when priority button is clicked', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockWorkflow),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockWorkflow) });
 
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       fireEvent.click(screen.getByText('High'));
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/audit/findings/finding-001/priority',
-          expect.objectContaining({
-            method: 'PATCH',
-            body: JSON.stringify({ priority: 2 }),
-          })
+          expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ priority: 2 }) }),
         );
       });
     });
@@ -325,38 +220,20 @@ describe('FindingDetailDrawer', () => {
 
   describe('Comment Form', () => {
     it('should display comment textarea', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByPlaceholderText('Add a comment...')).toBeInTheDocument();
     });
 
     it('should disable add comment button when textarea is empty', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       const button = screen.getByText('Add Comment');
       expect(button).toBeDisabled();
     });
 
     it('should enable add comment button when textarea has content', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       const textarea = screen.getByPlaceholderText('Add a comment...');
       fireEvent.change(textarea, { target: { value: 'Test comment' } });
@@ -366,18 +243,9 @@ describe('FindingDetailDrawer', () => {
     });
 
     it('should call API when comment is submitted', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockWorkflow),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockWorkflow) });
 
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       const textarea = screen.getByPlaceholderText('Add a comment...');
       fireEvent.change(textarea, { target: { value: 'Test comment' } });
@@ -389,7 +257,7 @@ describe('FindingDetailDrawer', () => {
           expect.objectContaining({
             method: 'POST',
             body: JSON.stringify({ comment: 'Test comment' }),
-          })
+          }),
         );
       });
     });
@@ -397,25 +265,13 @@ describe('FindingDetailDrawer', () => {
 
   describe('Assignment', () => {
     it('should show Assign button when finding is unassigned', () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       expect(screen.getByText(/Assign →/)).toBeInTheDocument();
     });
 
     it('should show assignment form when Assign button is clicked', async () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       fireEvent.click(screen.getByText(/Assign →/));
 
@@ -427,39 +283,22 @@ describe('FindingDetailDrawer', () => {
 
   describe('Workflow History', () => {
     it('should fetch workflow data on mount', async () => {
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/audit/findings/finding-001/history',
           expect.objectContaining({
-            headers: expect.objectContaining({
-              Authorization: 'Bearer test-token',
-            }),
-          })
+            headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+          }),
         );
       });
     });
 
     it('should display workflow history events', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockWorkflow),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockWorkflow) });
 
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       await waitFor(() => {
         expect(screen.getByText(/Changed status from/)).toBeInTheDocument();
@@ -474,13 +313,7 @@ describe('FindingDetailDrawer', () => {
         json: () => Promise.resolve({ ...mockWorkflow, history: [] }),
       });
 
-      render(
-        <FindingDetailDrawer
-          finding={mockFinding}
-          isOpen={true}
-          onClose={jest.fn()}
-        />
-      );
+      render(<FindingDetailDrawer finding={mockFinding} isOpen={true} onClose={jest.fn()} />);
 
       await waitFor(() => {
         expect(screen.getByText('No activity yet')).toBeInTheDocument();
@@ -498,7 +331,7 @@ describe('FindingDetailDrawer', () => {
             finding={{ ...mockFinding, severity }}
             isOpen={true}
             onClose={jest.fn()}
-          />
+          />,
         );
 
         expect(screen.getByText(severity.toUpperCase())).toBeInTheDocument();

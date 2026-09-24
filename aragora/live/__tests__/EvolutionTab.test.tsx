@@ -144,24 +144,14 @@ describe('EvolutionTab', () => {
 
   describe('Empty States', () => {
     it('shows empty state when no evolution data', () => {
-      render(
-        <EvolutionTab
-          evolution={null}
-          genesisEvents={[]}
-          genomes={[]}
-        />
-      );
+      render(<EvolutionTab evolution={null} genesisEvents={[]} genomes={[]} />);
 
       expect(screen.getByText(/no evolution data/i)).toBeInTheDocument();
     });
 
     it('shows empty events message when no events', () => {
       render(
-        <EvolutionTab
-          evolution={mockEvolutionData}
-          genesisEvents={[]}
-          genomes={mockGenomes}
-        />
+        <EvolutionTab evolution={mockEvolutionData} genesisEvents={[]} genomes={mockGenomes} />,
       );
 
       fireEvent.click(screen.getByRole('button', { name: /events/i }));
@@ -175,7 +165,7 @@ describe('EvolutionTab', () => {
           evolution={mockEvolutionData}
           genesisEvents={mockGenesisEvents}
           genomes={[]}
-        />
+        />,
       );
 
       fireEvent.click(screen.getByRole('button', { name: /genomes/i }));

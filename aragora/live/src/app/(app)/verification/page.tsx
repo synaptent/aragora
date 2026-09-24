@@ -11,10 +11,7 @@ import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 export default function VerificationPage() {
   const { config } = useBackend();
 
-  const backendConfig = {
-    apiUrl: config.api,
-    wsUrl: config.ws,
-  };
+  const backendConfig = { apiUrl: config.api, wsUrl: config.ws };
 
   return (
     <>
@@ -66,7 +63,8 @@ export default function VerificationPage() {
               {'>'} FORMAL_VERIFICATION
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Verify claims using Z3 SMT solver or Lean4 theorem prover. Translate natural language to formal proofs.
+              Verify claims using Z3 SMT solver or Lean4 theorem prover. Translate natural language
+              to formal proofs.
             </p>
           </div>
 
@@ -77,12 +75,8 @@ export default function VerificationPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // FORMAL VERIFICATION
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // FORMAL VERIFICATION</p>
         </footer>
       </main>
     </>

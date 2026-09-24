@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, memo } from 'react';
-import { useEvidence, type CitedClaim, type EvidenceCitation, type RelatedEvidence } from '@/hooks/useEvidence';
+import {
+  useEvidence,
+  type CitedClaim,
+  type EvidenceCitation,
+  type RelatedEvidence,
+} from '@/hooks/useEvidence';
 
 interface EvidencePanelProps {
   debateId: string;
@@ -39,9 +44,7 @@ function GroundingScoreBar({ score }: { score: number }) {
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <span className="text-xs font-theme-data text-text-muted w-10 text-right">
-        {percentage}%
-      </span>
+      <span className="text-xs font-theme-data text-text-muted w-10 text-right">{percentage}%</span>
     </div>
   );
 }
@@ -113,9 +116,7 @@ function ClaimCard({ claim }: { claim: CitedClaim }) {
             </span>
           </div>
         </div>
-        <span className="text-xs font-theme-data text-text-muted">
-          {expanded ? '[-]' : '[+]'}
-        </span>
+        <span className="text-xs font-theme-data text-text-muted">{expanded ? '[-]' : '[+]'}</span>
       </div>
       {expanded && claim.citations.length > 0 && (
         <div className="mt-3 space-y-2 pl-2 border-l-2 border-[var(--acid-cyan)]/30">
@@ -132,7 +133,9 @@ function RelatedEvidenceCard({ evidence }: { evidence: RelatedEvidence }) {
   return (
     <div className="p-2 bg-surface/50 rounded border border-[var(--accent)]/10">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-theme-data text-[var(--accent)] uppercase">{evidence.source}</span>
+        <span className="text-xs font-theme-data text-[var(--accent)] uppercase">
+          {evidence.source}
+        </span>
         <span className="text-xs font-theme-data text-text-muted">
           {Math.round(evidence.importance * 100)}% imp
         </span>
@@ -244,8 +247,12 @@ export function EvidencePanel({ debateId }: EvidencePanelProps) {
         <div className="text-xs font-theme-data text-text-muted mb-2">Grounding Score</div>
         <GroundingScoreBar score={groundingScore} />
         <div className="flex items-center gap-4 mt-2 text-xs font-theme-data text-text-muted">
-          <span>{claimsCount} claim{claimsCount !== 1 ? 's' : ''}</span>
-          <span>{citationsCount} citation{citationsCount !== 1 ? 's' : ''}</span>
+          <span>
+            {claimsCount} claim{claimsCount !== 1 ? 's' : ''}
+          </span>
+          <span>
+            {citationsCount} citation{citationsCount !== 1 ? 's' : ''}
+          </span>
           <span>{evidence?.evidence_count ?? 0} related</span>
         </div>
       </div>
@@ -272,9 +279,7 @@ export function EvidencePanel({ debateId }: EvidencePanelProps) {
         {activeTab === 'claims' && (
           <div className="space-y-3">
             {evidence?.claims && evidence.claims.length > 0 ? (
-              evidence.claims.map((claim, idx) => (
-                <ClaimCard key={idx} claim={claim} />
-              ))
+              evidence.claims.map((claim, idx) => <ClaimCard key={idx} claim={claim} />)
             ) : (
               <p className="text-xs font-theme-data text-text-muted text-center py-4">
                 No claims extracted from this debate.

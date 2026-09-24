@@ -6,7 +6,9 @@ export default function TryLayout({ children }: { children: React.ReactNode }) {
       {/* Minimal Header */}
       <header className="h-12 border-b border-[var(--acid-green)]/20 bg-[var(--surface)]/50 flex items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
-          <span className="text-sm font-theme-data font-bold text-[var(--acid-green)]">ARAGORA</span>
+          <span className="text-sm font-theme-data font-bold text-[var(--acid-green)]">
+            ARAGORA
+          </span>
           <span className="text-xs font-theme-data text-[var(--text-muted)]">{'// LIVE'}</span>
         </Link>
         <div className="flex items-center gap-2">

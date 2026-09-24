@@ -72,7 +72,10 @@ export function ExperimentalTag({ status }: { status: FeatureStatus }) {
   const config = STATUS_CONFIG[status];
 
   return (
-    <span className={`text-[10px] font-theme-data ${config.colors.split(' ')[1]} ml-1`} title={config.tooltip}>
+    <span
+      className={`text-[10px] font-theme-data ${config.colors.split(' ')[1]} ml-1`}
+      title={config.tooltip}
+    >
       [{config.label}]
     </span>
   );

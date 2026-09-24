@@ -14,9 +14,7 @@ export function ProgressBar({ current, total }: ProgressBarProps) {
         <span className="text-xs font-theme-data text-text-muted">
           Step {current} of {total}
         </span>
-        <span className="text-xs font-theme-data text-[var(--accent)]">
-          {percentage}%
-        </span>
+        <span className="text-xs font-theme-data text-[var(--accent)]">{percentage}%</span>
       </div>
       <div className="w-full h-1 bg-[var(--accent)]/20 rounded-full overflow-hidden">
         <div

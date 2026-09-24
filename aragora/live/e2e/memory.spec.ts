@@ -116,9 +116,18 @@ test.describe('Memory Page', () => {
     await page.waitForTimeout(2000);
 
     // Look for tabs or panel buttons
-    const overviewTab = page.locator('button, [role="tab"]').filter({ hasText: /overview/i }).first();
-    const searchTab = page.locator('button, [role="tab"]').filter({ hasText: /search/i }).first();
-    const explorerTab = page.locator('button, [role="tab"]').filter({ hasText: /explorer|analytics/i }).first();
+    const overviewTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /overview/i })
+      .first();
+    const searchTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /search/i })
+      .first();
+    const explorerTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /explorer|analytics/i })
+      .first();
 
     const hasOverview = await overviewTab.isVisible({ timeout: 5000 }).catch(() => false);
     const hasSearch = await searchTab.isVisible().catch(() => false);
@@ -129,7 +138,10 @@ test.describe('Memory Page', () => {
     const hasMemoryContent = await memoryContent.isVisible({ timeout: 2000 }).catch(() => false);
 
     // At least one tab, memory content, or main should be visible
-    const mainVisible = await page.locator('main').isVisible().catch(() => false);
+    const mainVisible = await page
+      .locator('main')
+      .isVisible()
+      .catch(() => false);
     expect(hasOverview || hasSearch || hasExplorer || hasMemoryContent || mainVisible).toBeTruthy();
   });
 
@@ -185,7 +197,10 @@ test.describe('Memory Explorer - Search Tab', () => {
 
   test('should allow searching memories', async ({ page }) => {
     // Click search tab if available
-    const searchTab = page.locator('button, [role="tab"]').filter({ hasText: /search/i }).first();
+    const searchTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /search/i })
+      .first();
     if (await searchTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await searchTab.click();
     }
@@ -205,7 +220,10 @@ test.describe('Memory Explorer - Search Tab', () => {
 
   test('should allow tier filtering', async ({ page }) => {
     // Click search tab if available
-    const searchTab = page.locator('button, [role="tab"]').filter({ hasText: /search/i }).first();
+    const searchTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /search/i })
+      .first();
     if (await searchTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await searchTab.click();
     }
@@ -235,7 +253,10 @@ test.describe('Memory Explorer - Search Tab', () => {
     await aragoraPage.dismissAllOverlays();
 
     // Click search tab if available
-    const searchTab = page.locator('button, [role="tab"]').filter({ hasText: /search/i }).first();
+    const searchTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /search/i })
+      .first();
     if (await searchTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await searchTab.click();
     }
@@ -267,7 +288,10 @@ test.describe('Memory Explorer - Critiques Tab', () => {
   });
 
   test('should display critiques tab', async ({ page }) => {
-    const critiquesTab = page.locator('button, [role="tab"]').filter({ hasText: /critiques/i }).first();
+    const critiquesTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /critiques/i })
+      .first();
     if (await critiquesTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await critiquesTab.click();
 
@@ -293,7 +317,10 @@ test.describe('Memory Explorer - Critiques Tab', () => {
     await page.reload();
     await aragoraPage.dismissAllOverlays();
 
-    const critiquesTab = page.locator('button, [role="tab"]').filter({ hasText: /critiques/i }).first();
+    const critiquesTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /critiques/i })
+      .first();
     if (await critiquesTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await critiquesTab.click();
       await page.waitForTimeout(500);
@@ -317,7 +344,10 @@ test.describe('Memory Explorer - Transitions Tab', () => {
   });
 
   test('should display transitions tab', async ({ page }) => {
-    const transitionsTab = page.locator('button, [role="tab"]').filter({ hasText: /transitions/i }).first();
+    const transitionsTab = page
+      .locator('button, [role="tab"]')
+      .filter({ hasText: /transitions/i })
+      .first();
     if (await transitionsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await transitionsTab.click();
 

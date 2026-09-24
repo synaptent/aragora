@@ -31,7 +31,7 @@ export function handleErrorEvent(data: ParsedEventData, ctx: EventHandlerContext
   if (errorType === 'queue_overflow') {
     logger.warn('[WebSocket] Server queue overflow:', eventData?.message);
     ctx.errorCallbackRef.current?.(
-      `Some updates may be missing (${eventData?.dropped_count} events dropped)`
+      `Some updates may be missing (${eventData?.dropped_count} events dropped)`,
     );
     return;
   }
@@ -113,7 +113,7 @@ export function handleHeartbeatEvent(data: ParsedEventData, ctx: EventHandlerCon
       const gap = serverLastSeq - clientLastSeq;
       if (gap > 10) {
         logger.warn(
-          `[WS] Heartbeat gap detected: server seq=${serverLastSeq}, client seq=${clientLastSeq} (${gap} events behind)`
+          `[WS] Heartbeat gap detected: server seq=${serverLastSeq}, client seq=${clientLastSeq} (${gap} events behind)`,
         );
       }
     }

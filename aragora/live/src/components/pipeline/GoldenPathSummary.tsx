@@ -19,9 +19,13 @@ export interface GoldenPathSummaryProps {
 
 function hexToRgba(hex: string, alpha: number): string {
   const normalized = hex.replace('#', '');
-  const full = normalized.length === 3
-    ? normalized.split('').map((char) => char + char).join('')
-    : normalized;
+  const full =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : normalized;
 
   if (full.length !== 6) {
     return `rgba(148, 163, 184, ${alpha})`;
@@ -81,10 +85,7 @@ export function GoldenPathSummary({
             <article
               key={`${card.stage}-${card.title}`}
               className="rounded-lg border p-4"
-              style={{
-                borderColor,
-                background: stageGlow,
-              }}
+              style={{ borderColor, background: stageGlow }}
             >
               <div className="flex items-center justify-between gap-3">
                 <span
@@ -102,7 +103,9 @@ export function GoldenPathSummary({
               </div>
 
               <h3 className="mt-3 text-sm font-theme-data font-bold text-text">{card.title}</h3>
-              <p className="mt-2 text-sm font-theme-data leading-6 text-text-muted">{card.detail}</p>
+              <p className="mt-2 text-sm font-theme-data leading-6 text-text-muted">
+                {card.detail}
+              </p>
 
               {card.meta && (
                 <p className="mt-3 text-[11px] font-theme-data uppercase tracking-wide text-text">

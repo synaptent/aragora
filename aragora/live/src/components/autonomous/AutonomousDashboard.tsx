@@ -47,11 +47,24 @@ export function AutonomousDashboard({ apiBase }: AutonomousDashboardProps) {
 
       // Fetch stats from multiple endpoints
       const [approvals, alerts, triggers, calibrations, anomalies] = await Promise.all([
-        apiFetch<{ pending: unknown[] }>(`${apiBase}/autonomous/approvals/pending`).catch(() => ({ data: { pending: [] }, error: null })),
-        apiFetch<{ alerts: unknown[] }>(`${apiBase}/autonomous/alerts/active`).catch(() => ({ data: { alerts: [] }, error: null })),
-        apiFetch<{ triggers: unknown[] }>(`${apiBase}/autonomous/triggers`).catch(() => ({ data: { triggers: [] }, error: null })),
-        apiFetch<{ calibrations: Record<string, unknown> }>(`${apiBase}/autonomous/learning/calibrations`).catch(() => ({ data: { calibrations: {} }, error: null })),
-        apiFetch<{ anomalies: unknown[] }>(`${apiBase}/autonomous/monitoring/anomalies?hours=24`).catch(() => ({ data: { anomalies: [] }, error: null })),
+        apiFetch<{ pending: unknown[] }>(`${apiBase}/autonomous/approvals/pending`).catch(() => ({
+          data: { pending: [] },
+          error: null,
+        })),
+        apiFetch<{ alerts: unknown[] }>(`${apiBase}/autonomous/alerts/active`).catch(() => ({
+          data: { alerts: [] },
+          error: null,
+        })),
+        apiFetch<{ triggers: unknown[] }>(`${apiBase}/autonomous/triggers`).catch(() => ({
+          data: { triggers: [] },
+          error: null,
+        })),
+        apiFetch<{ calibrations: Record<string, unknown> }>(
+          `${apiBase}/autonomous/learning/calibrations`,
+        ).catch(() => ({ data: { calibrations: {} }, error: null })),
+        apiFetch<{ anomalies: unknown[] }>(
+          `${apiBase}/autonomous/monitoring/anomalies?hours=24`,
+        ).catch(() => ({ data: { anomalies: [] }, error: null })),
       ]);
 
       setStats({
@@ -157,7 +170,9 @@ export function AutonomousDashboard({ apiBase }: AutonomousDashboardProps) {
 
       {/* Connection Status */}
       <div className="flex items-center gap-2 text-xs text-white/50">
-        <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-[var(--accent)]' : 'bg-red-500'}`} />
+        <span
+          className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-[var(--accent)]' : 'bg-red-500'}`}
+        />
         {wsConnected ? 'Real-time updates active' : 'Real-time updates disconnected'}
       </div>
     </div>
@@ -186,10 +201,7 @@ export function AutonomousDashboard({ apiBase }: AutonomousDashboardProps) {
     return (
       <div className="p-4 bg-red-500/10 border border-red-500/30 rounded text-red-400">
         {error}
-        <button
-          onClick={fetchOverview}
-          className="ml-4 text-sm underline hover:no-underline"
-        >
+        <button onClick={fetchOverview} className="ml-4 text-sm underline hover:no-underline">
           Retry
         </button>
       </div>
@@ -229,9 +241,7 @@ export function AutonomousDashboard({ apiBase }: AutonomousDashboardProps) {
       </div>
 
       {/* Content */}
-      <div className="min-h-[400px]">
-        {renderContent()}
-      </div>
+      <div className="min-h-[400px]">{renderContent()}</div>
     </div>
   );
 }

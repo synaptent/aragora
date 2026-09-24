@@ -18,17 +18,15 @@ interface ProtectedRouteProps {
  * Wrapper component that protects routes requiring authentication.
  * Redirects to login if not authenticated, shows loading during auth check.
  */
-export function ProtectedRoute({
-  children,
-  redirectTo,
-  requiredTier
-}: ProtectedRouteProps) {
+export function ProtectedRoute({ children, redirectTo, requiredTier }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, organization } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      const returnUrl = normalizeReturnUrl(redirectTo || (window.location.pathname + window.location.search));
+      const returnUrl = normalizeReturnUrl(
+        redirectTo || window.location.pathname + window.location.search,
+      );
       sessionStorage.setItem(RETURN_URL_STORAGE_KEY, returnUrl);
       router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
     }
@@ -45,9 +43,7 @@ export function ProtectedRoute({
             <div className="font-theme-data text-[var(--accent)] animate-pulse text-lg mb-2">
               AUTHENTICATING...
             </div>
-            <div className="font-theme-data text-text-muted text-xs">
-              Verifying credentials
-            </div>
+            <div className="font-theme-data text-text-muted text-xs">Verifying credentials</div>
           </div>
         </main>
       </>
@@ -62,12 +58,8 @@ export function ProtectedRoute({
         <CRTVignette />
         <main className="min-h-screen bg-bg text-text flex items-center justify-center">
           <div className="text-center">
-            <div className="font-theme-data text-warning text-lg mb-2">
-              AUTHENTICATION REQUIRED
-            </div>
-            <div className="font-theme-data text-text-muted text-xs">
-              Redirecting to login...
-            </div>
+            <div className="font-theme-data text-warning text-lg mb-2">AUTHENTICATION REQUIRED</div>
+            <div className="font-theme-data text-text-muted text-xs">Redirecting to login...</div>
           </div>
         </main>
       </>
@@ -87,9 +79,7 @@ export function ProtectedRoute({
           <CRTVignette />
           <main className="min-h-screen bg-bg text-text flex items-center justify-center">
             <div className="text-center max-w-md">
-              <div className="font-theme-data text-warning text-lg mb-2">
-                UPGRADE REQUIRED
-              </div>
+              <div className="font-theme-data text-warning text-lg mb-2">UPGRADE REQUIRED</div>
               <div className="font-theme-data text-text-muted text-sm mb-4">
                 This feature requires the {requiredTier.toUpperCase()} tier or higher.
               </div>

@@ -1,30 +1,29 @@
-const MENU_ID = "aragora-send-selection";
-const STATE_KEY = "aragoraPopupState";
+const MENU_ID = 'aragora-send-selection';
+const STATE_KEY = 'aragoraPopupState';
 const DEFAULT_SETTINGS = {
-  apiUrl: "https://api.aragora.ai",
-  apiKey: "",
-  agents: "",
+  apiUrl: 'https://api.aragora.ai',
+  apiKey: '',
+  agents: '',
   rounds: 3,
-  consensus: "majority",
+  consensus: 'majority',
 };
 const ADVERSARIAL_REVIEW_PROMPT =
-  "Provide an adversarial review of the selected webpage text. Surface the strongest objections, hidden assumptions, factual uncertainties, risks, and follow-up questions.";
+  'Provide an adversarial review of the selected webpage text. Surface the strongest objections, hidden assumptions, factual uncertainties, risks, and follow-up questions.';
 const QUESTION_LIMIT = 5000;
 const SELECTION_LIMIT = 9000;
 
 function registerContextMenu() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create(
-      {
-        id: MENU_ID,
-        title: "Send selection to Aragora",
-        contexts: ["selection"],
-      },
+      { id: MENU_ID, title: 'Send selection to Aragora', contexts: ['selection'] },
       () => {
         if (chrome.runtime.lastError) {
-          console.warn("Failed to register Aragora context menu:", chrome.runtime.lastError.message);
+          console.warn(
+            'Failed to register Aragora context menu:',
+            chrome.runtime.lastError.message,
+          );
         }
-      }
+      },
     );
   });
 }
@@ -35,21 +34,23 @@ async function ensureDefaultSettings() {
 }
 
 function normalizeApiUrl(apiUrl) {
-  return String(apiUrl || DEFAULT_SETTINGS.apiUrl).trim().replace(/\/+$/, "");
+  return String(apiUrl || DEFAULT_SETTINGS.apiUrl)
+    .trim()
+    .replace(/\/+$/, '');
 }
 
 function buildAuthorizationHeader(apiKey) {
-  const trimmed = String(apiKey || "").trim();
+  const trimmed = String(apiKey || '').trim();
   if (!trimmed) {
-    return "";
+    return '';
   }
 
   return /^Bearer\s+/i.test(trimmed) ? trimmed : `Bearer ${trimmed}`;
 }
 
 function sanitizeSelectionText(value) {
-  return String(value || "")
-    .replace(/\u0000/g, "")
+  return String(value || '')
+    .replace(/\u0000/g, '')
     .trim()
     .slice(0, SELECTION_LIMIT);
 }
@@ -66,21 +67,16 @@ function resolveDebateAnswer(result) {
     result?.consensus?.finalAnswer ||
     result?.consensus?.summary ||
     result?.consensus?.answer ||
-    ""
+    ''
   );
 }
 
 function resolveDebateConfidence(result) {
   const rawConfidence =
-    result?.confidence ??
-    result?.consensus?.confidence ??
-    result?.consensus?.agreement;
-  const confidence =
-    typeof rawConfidence === "string" ? Number(rawConfidence) : rawConfidence;
+    result?.confidence ?? result?.consensus?.confidence ?? result?.consensus?.agreement;
+  const confidence = typeof rawConfidence === 'string' ? Number(rawConfidence) : rawConfidence;
 
-  return typeof confidence === "number" && !Number.isNaN(confidence)
-    ? confidence
-    : null;
+  return typeof confidence === 'number' && !Number.isNaN(confidence) ? confidence : null;
 }
 
 function buildStoredResult(result) {
@@ -88,12 +84,12 @@ function buildStoredResult(result) {
 
   return {
     debateId: result?.debate_id || result?.id || null,
-    status: result?.status || "running",
+    status: result?.status || 'running',
     message: result?.message || finalAnswer || null,
     finalAnswer: finalAnswer || null,
     confidence: resolveDebateConfidence(result),
     consensus: result?.consensus || null,
-    task: result?.task || result?.environment?.task || "",
+    task: result?.task || result?.environment?.task || '',
   };
 }
 
@@ -118,14 +114,14 @@ async function writePopupState(nextState) {
 }
 
 async function getSelectionFromContentScript(tabId) {
-  if (typeof tabId !== "number") {
+  if (typeof tabId !== 'number') {
     return null;
   }
 
   try {
-    return await chrome.tabs.sendMessage(tabId, { type: "aragora:get-selection" });
+    return await chrome.tabs.sendMessage(tabId, { type: 'aragora:get-selection' });
   } catch (error) {
-    console.warn("Could not read selection from content script:", error);
+    console.warn('Could not read selection from content script:', error);
     return null;
   }
 }
@@ -135,24 +131,25 @@ async function getSettings() {
 }
 
 function buildRequestPayload(selectionText, source, settings) {
-  const titleLine = source.pageTitle ? `Source title: ${source.pageTitle}` : "";
-  const urlLine = source.pageUrl ? `Source URL: ${source.pageUrl}` : "";
-  const sourceContext = [titleLine, urlLine].filter(Boolean).join("\n");
-  const selectionContext = selectionText.length > QUESTION_LIMIT
-    ? `${selectionText.slice(0, QUESTION_LIMIT)}\n\n[truncated]`
-    : selectionText;
-  const context = [sourceContext, "Selected text:", selectionContext].filter(Boolean).join("\n\n");
+  const titleLine = source.pageTitle ? `Source title: ${source.pageTitle}` : '';
+  const urlLine = source.pageUrl ? `Source URL: ${source.pageUrl}` : '';
+  const sourceContext = [titleLine, urlLine].filter(Boolean).join('\n');
+  const selectionContext =
+    selectionText.length > QUESTION_LIMIT
+      ? `${selectionText.slice(0, QUESTION_LIMIT)}\n\n[truncated]`
+      : selectionText;
+  const context = [sourceContext, 'Selected text:', selectionContext].filter(Boolean).join('\n\n');
 
   const payload = {
     question: ADVERSARIAL_REVIEW_PROMPT,
     rounds: Number(settings.rounds) || DEFAULT_SETTINGS.rounds,
     consensus: settings.consensus || DEFAULT_SETTINGS.consensus,
-    auto_select: !String(settings.agents || "").trim(),
+    auto_select: !String(settings.agents || '').trim(),
     metadata: {
-      source: "browser_extension_context_menu",
-      review_type: "adversarial_selection",
-      source_title: source.pageTitle || "",
-      source_url: source.pageUrl || "",
+      source: 'browser_extension_context_menu',
+      review_type: 'adversarial_selection',
+      source_title: source.pageTitle || '',
+      source_url: source.pageUrl || '',
     },
   };
 
@@ -160,7 +157,7 @@ function buildRequestPayload(selectionText, source, settings) {
     payload.context = context.slice(0, 10000);
   }
 
-  const agents = String(settings.agents || "").trim();
+  const agents = String(settings.agents || '').trim();
   if (agents) {
     payload.agents = agents;
   }
@@ -187,9 +184,9 @@ async function readErrorMessage(response) {
 async function createDebate(selectionText, source, settings) {
   const apiUrl = normalizeApiUrl(settings.apiUrl);
   const response = await fetch(`${apiUrl}/api/v2/debates`, {
-    method: "POST",
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
       Authorization: buildAuthorizationHeader(settings.apiKey),
     },
     body: JSON.stringify(buildRequestPayload(selectionText, source, settings)),
@@ -204,10 +201,7 @@ async function createDebate(selectionText, source, settings) {
 
 async function handleContextMenuClick(info, tab) {
   let selectionText = sanitizeSelectionText(info.selectionText);
-  const source = {
-    pageTitle: tab?.title || "",
-    pageUrl: info.pageUrl || tab?.url || "",
-  };
+  const source = { pageTitle: tab?.title || '', pageUrl: info.pageUrl || tab?.url || '' };
 
   if (!selectionText) {
     const contentSelection = await getSelectionFromContentScript(tab?.id);
@@ -224,33 +218,33 @@ async function handleContextMenuClick(info, tab) {
 
   if (!selectionText) {
     await writePopupState({
-      status: "error",
-      error: "No selected text was available to send.",
+      status: 'error',
+      error: 'No selected text was available to send.',
       debateId: null,
       result: null,
-      selectionText: "",
+      selectionText: '',
       source,
     });
-    await setBadge("ERR", "#b42318");
+    await setBadge('ERR', '#b42318');
     return;
   }
 
   const settings = await getSettings();
-  if (!String(settings.apiKey || "").trim()) {
+  if (!String(settings.apiKey || '').trim()) {
     await writePopupState({
-      status: "error",
-      error: "Add an Aragora API key in the popup before sending text.",
+      status: 'error',
+      error: 'Add an Aragora API key in the popup before sending text.',
       debateId: null,
       result: null,
       selectionText,
       source,
     });
-    await setBadge("ERR", "#b42318");
+    await setBadge('ERR', '#b42318');
     return;
   }
 
   await writePopupState({
-    status: "submitting",
+    status: 'submitting',
     error: null,
     debateId: null,
     result: null,
@@ -258,42 +252,42 @@ async function handleContextMenuClick(info, tab) {
     source,
     submittedAt: new Date().toISOString(),
   });
-  await setBadge("...", "#0f766e");
+  await setBadge('...', '#0f766e');
 
   try {
     const createdDebate = await createDebate(selectionText, source, settings);
     const debateId = createdDebate.debate_id || createdDebate.id || null;
 
     if (!debateId) {
-      throw new Error("Aragora did not return a debate ID.");
+      throw new Error('Aragora did not return a debate ID.');
     }
 
     await writePopupState({
-      status: createdDebate.status || "running",
+      status: createdDebate.status || 'running',
       debateId,
       error: null,
       result: buildStoredResult(createdDebate),
       selectionText,
       source,
     });
-    await setBadge("RUN", "#1d4ed8");
+    await setBadge('RUN', '#1d4ed8');
   } catch (error) {
     await writePopupState({
-      status: "error",
+      status: 'error',
       debateId: null,
       result: null,
       error: error instanceof Error ? error.message : String(error),
       selectionText,
       source,
     });
-    await setBadge("ERR", "#b42318");
+    await setBadge('ERR', '#b42318');
   }
 }
 
 chrome.runtime.onInstalled.addListener(() => {
   registerContextMenu();
   void ensureDefaultSettings();
-  void setBadge("", null);
+  void setBadge('', null);
 });
 
 chrome.runtime.onStartup.addListener(() => {

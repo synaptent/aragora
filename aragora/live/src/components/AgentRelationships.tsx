@@ -72,11 +72,7 @@ export function AgentRelationships({
   }
 
   if (error) {
-    return (
-      <div className="text-xs text-red-400 font-theme-data">
-        {error}
-      </div>
-    );
+    return <div className="text-xs text-red-400 font-theme-data">{error}</div>;
   }
 
   const hasData = rivals.length > 0 || allies.length > 0;

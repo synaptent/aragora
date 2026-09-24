@@ -61,7 +61,7 @@ export function TemplateSelectStep() {
       try {
         const useCaseParam = useCase || 'general';
         const response = await fetch(
-          `/api/v1/templates/recommended?use_case=${useCaseParam}&limit=4`
+          `/api/v1/templates/recommended?use_case=${useCaseParam}&limit=4`,
         );
 
         if (!response.ok) {
@@ -74,9 +74,9 @@ export function TemplateSelectStep() {
             id: rec.id as string,
             name: rec.name as string,
             description: rec.description as string,
-            agentsCount: rec.agents_count as number || 2,
-            rounds: rec.rounds as number || 3,
-            estimatedDurationMinutes: rec.estimated_duration_minutes as number || 5,
+            agentsCount: (rec.agents_count as number) || 2,
+            rounds: (rec.rounds as number) || 3,
+            estimatedDurationMinutes: (rec.estimated_duration_minutes as number) || 5,
           }));
           setAvailableTemplates(templates);
         } else {
@@ -102,9 +102,7 @@ export function TemplateSelectStep() {
         <h3 className="text-lg font-theme-data text-[var(--accent)] mb-2">
           Choose a Debate Template
         </h3>
-        <p className="text-sm text-text-muted">
-          Select a template for your first debate
-        </p>
+        <p className="text-sm text-text-muted">Select a template for your first debate</p>
       </div>
 
       {error && (
@@ -131,14 +129,14 @@ export function TemplateSelectStep() {
                   : 'border-[var(--accent)]/20 hover:border-[var(--accent)]/50'
               }`}
             >
-              <div className={`font-theme-data text-sm mb-1 ${
-                selectedTemplate?.id === template.id ? 'text-[var(--accent)]' : 'text-text'
-              }`}>
+              <div
+                className={`font-theme-data text-sm mb-1 ${
+                  selectedTemplate?.id === template.id ? 'text-[var(--accent)]' : 'text-text'
+                }`}
+              >
                 {template.name}
               </div>
-              <div className="text-xs text-text-muted mb-3">
-                {template.description}
-              </div>
+              <div className="text-xs text-text-muted mb-3">{template.description}</div>
               <div className="flex items-center gap-4 text-xs text-text-muted">
                 <span>{template.agentsCount} agents</span>
                 <span>{template.rounds} rounds</span>

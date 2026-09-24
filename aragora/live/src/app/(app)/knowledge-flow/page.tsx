@@ -102,8 +102,8 @@ export default function KnowledgeFlowPage() {
               {'>'} KNOWLEDGE FLYWHEEL
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Visualize the Debate &rarr; Knowledge Mound &rarr; Debate learning loop.
-              Track confidence changes, adapter health, and knowledge flow across the system.
+              Visualize the Debate &rarr; Knowledge Mound &rarr; Debate learning loop. Track
+              confidence changes, adapter health, and knowledge flow across the system.
             </p>
           </div>
 
@@ -164,9 +164,11 @@ export default function KnowledgeFlowPage() {
                       </div>
                     </div>
                     <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                      <div className={`text-3xl font-theme-data font-bold ${
-                        stats.avg_confidence_change >= 0 ? 'text-[var(--accent)]' : 'text-red-400'
-                      }`}>
+                      <div
+                        className={`text-3xl font-theme-data font-bold ${
+                          stats.avg_confidence_change >= 0 ? 'text-[var(--accent)]' : 'text-red-400'
+                        }`}
+                      >
                         {stats.avg_confidence_change >= 0 ? '+' : ''}
                         {(stats.avg_confidence_change * 100).toFixed(1)}%
                       </div>
@@ -202,7 +204,9 @@ export default function KnowledgeFlowPage() {
                             </div>
 
                             {/* Arrow */}
-                            <span className="text-[var(--accent)] font-theme-data shrink-0">&rarr;</span>
+                            <span className="text-[var(--accent)] font-theme-data shrink-0">
+                              &rarr;
+                            </span>
 
                             {/* KM node */}
                             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -217,7 +221,9 @@ export default function KnowledgeFlowPage() {
                             {/* Target (if exists) */}
                             {flow.target_debate_id && (
                               <>
-                                <span className="text-[var(--accent)] font-theme-data shrink-0">&rarr;</span>
+                                <span className="text-[var(--accent)] font-theme-data shrink-0">
+                                  &rarr;
+                                </span>
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <span className="text-purple-400 font-theme-data text-xs shrink-0">
                                     [TARGET]
@@ -343,9 +349,7 @@ export default function KnowledgeFlowPage() {
                             <span className={`shrink-0 ${getConfidenceColor(point.value)}`}>
                               {(point.value * 100).toFixed(1)}%
                             </span>
-                            <span className="text-text-muted truncate flex-1">
-                              {point.reason}
-                            </span>
+                            <span className="text-text-muted truncate flex-1">{point.reason}</span>
                           </div>
                         ))}
                       </div>
@@ -396,12 +400,12 @@ export default function KnowledgeFlowPage() {
                       </div>
                     </div>
                     <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                      <div className={`text-3xl font-theme-data font-bold ${adapterStale > 0 ? 'text-yellow-400' : 'text-[var(--accent)]'}`}>
+                      <div
+                        className={`text-3xl font-theme-data font-bold ${adapterStale > 0 ? 'text-yellow-400' : 'text-[var(--accent)]'}`}
+                      >
                         {adapterStale}
                       </div>
-                      <div className="text-xs text-text-muted uppercase font-theme-data">
-                        Stale
-                      </div>
+                      <div className="text-xs text-text-muted uppercase font-theme-data">Stale</div>
                     </div>
                   </div>
 

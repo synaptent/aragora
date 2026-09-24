@@ -181,41 +181,59 @@ describe('color utilities', () => {
 
   describe('getInsightTypeColor', () => {
     it('returns correct styling for consensus', () => {
-      expect(getInsightTypeColor('consensus')).toBe('bg-green-500/20 text-green-400 border-green-500/30');
+      expect(getInsightTypeColor('consensus')).toBe(
+        'bg-green-500/20 text-green-400 border-green-500/30',
+      );
     });
 
     it('returns correct styling for pattern', () => {
-      expect(getInsightTypeColor('pattern')).toBe('bg-blue-500/20 text-blue-400 border-blue-500/30');
+      expect(getInsightTypeColor('pattern')).toBe(
+        'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      );
     });
 
     it('returns correct styling for agent_performance', () => {
-      expect(getInsightTypeColor('agent_performance')).toBe('bg-purple-500/20 text-purple-400 border-purple-500/30');
+      expect(getInsightTypeColor('agent_performance')).toBe(
+        'bg-purple-500/20 text-purple-400 border-purple-500/30',
+      );
     });
 
     it('returns correct styling for divergence', () => {
-      expect(getInsightTypeColor('divergence')).toBe('bg-yellow-500/20 text-yellow-400 border-yellow-500/30');
+      expect(getInsightTypeColor('divergence')).toBe(
+        'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      );
     });
 
     it('returns gray styling for unknown types', () => {
-      expect(getInsightTypeColor('unknown')).toBe('bg-gray-500/20 text-gray-400 border-gray-500/30');
+      expect(getInsightTypeColor('unknown')).toBe(
+        'bg-gray-500/20 text-gray-400 border-gray-500/30',
+      );
     });
   });
 
   describe('getFlipTypeColor', () => {
     it('returns correct styling for contradiction', () => {
-      expect(getFlipTypeColor('contradiction')).toBe('bg-red-500/20 text-red-400 border-red-500/30');
+      expect(getFlipTypeColor('contradiction')).toBe(
+        'bg-red-500/20 text-red-400 border-red-500/30',
+      );
     });
 
     it('returns correct styling for retraction', () => {
-      expect(getFlipTypeColor('retraction')).toBe('bg-orange-500/20 text-orange-400 border-orange-500/30');
+      expect(getFlipTypeColor('retraction')).toBe(
+        'bg-orange-500/20 text-orange-400 border-orange-500/30',
+      );
     });
 
     it('returns correct styling for qualification', () => {
-      expect(getFlipTypeColor('qualification')).toBe('bg-yellow-500/20 text-yellow-400 border-yellow-500/30');
+      expect(getFlipTypeColor('qualification')).toBe(
+        'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      );
     });
 
     it('returns correct styling for refinement', () => {
-      expect(getFlipTypeColor('refinement')).toBe('bg-green-500/20 text-green-400 border-green-500/30');
+      expect(getFlipTypeColor('refinement')).toBe(
+        'bg-green-500/20 text-green-400 border-green-500/30',
+      );
     });
 
     it('returns gray styling for unknown types', () => {
@@ -229,7 +247,9 @@ describe('color utilities', () => {
     });
 
     it('returns correct styling for ethics', () => {
-      expect(getDomainColor('ethics')).toBe('bg-purple-500/20 text-purple-400 border-purple-500/30');
+      expect(getDomainColor('ethics')).toBe(
+        'bg-purple-500/20 text-purple-400 border-purple-500/30',
+      );
     });
 
     it('returns correct styling for creative', () => {

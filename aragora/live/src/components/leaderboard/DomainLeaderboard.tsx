@@ -25,12 +25,9 @@ function DomainLeaderboardComponent() {
     return agents.map((agent, idx) => {
       // Derive trend from elo vs domain_elo delta, or default to stable
       const eloValue = selectedDomain && agent.domain_elo ? agent.domain_elo : agent.elo;
-      const totalGames =
-        (agent.wins || 0) + (agent.losses || 0) + (agent.draws || 0);
+      const totalGames = (agent.wins || 0) + (agent.losses || 0) + (agent.draws || 0);
       const winRate =
-        totalGames > 0
-          ? ((agent.wins || 0) / totalGames) * 100
-          : agent.win_rate ?? 0;
+        totalGames > 0 ? ((agent.wins || 0) / totalGames) * 100 : (agent.win_rate ?? 0);
 
       return {
         ...agent,
@@ -126,7 +123,9 @@ function DomainLeaderboardComponent() {
                       {agent.agent_name}
                     </Link>
                   </td>
-                  <td className={`py-1.5 px-1 text-right font-bold ${getEloColor(agent.displayElo)}`}>
+                  <td
+                    className={`py-1.5 px-1 text-right font-bold ${getEloColor(agent.displayElo)}`}
+                  >
                     {agent.displayElo}
                   </td>
                   <td className="py-1.5 px-1 text-right text-text-muted hidden sm:table-cell">
@@ -136,10 +135,8 @@ function DomainLeaderboardComponent() {
                     {agent.totalGames}
                   </td>
                   <td className="py-1.5 px-1 text-right text-text-muted">
-                    <span className="text-green-400">{agent.wins || 0}</span>
-                    /
-                    <span className="text-red-400">{agent.losses || 0}</span>
-                    /
+                    <span className="text-green-400">{agent.wins || 0}</span>/
+                    <span className="text-red-400">{agent.losses || 0}</span>/
                     <span className="text-yellow-400">{agent.draws || 0}</span>
                   </td>
                 </tr>

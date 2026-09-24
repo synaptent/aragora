@@ -194,7 +194,9 @@ export function useNomicLoopWebSocket({
   const [loopState, setLoopState] = useState<NomicLoopState>(DEFAULT_LOOP_STATE);
   const [proposals, setProposals] = useState<NomicProposal[]>([]);
   const [recentEvents, setRecentEvents] = useState<NomicLoopEvent[]>([]);
-  const [logMessages, setLogMessages] = useState<Array<{ level: string; message: string; timestamp: number }>>([]);
+  const [logMessages, setLogMessages] = useState<
+    Array<{ level: string; message: string; timestamp: number }>
+  >([]);
 
   // Build WebSocket URL - use custom URL, backend config, or default
   const wsUrl = useMemo(() => {
@@ -222,8 +224,8 @@ export function useNomicLoopWebSocket({
           break;
 
         case 'loop_started': {
-          const cycles = data.cycles as number || 1;
-          const autoApprove = data.auto_approve as boolean || false;
+          const cycles = (data.cycles as number) || 1;
+          const autoApprove = (data.auto_approve as boolean) || false;
           setLoopState((prev) => ({
             ...prev,
             running: true,
@@ -241,11 +243,7 @@ export function useNomicLoopWebSocket({
         case 'loop_paused': {
           const phase = data.current_phase as string;
           const cycle = data.current_cycle as number;
-          setLoopState((prev) => ({
-            ...prev,
-            paused: true,
-            pausedAt: new Date().toISOString(),
-          }));
+          setLoopState((prev) => ({ ...prev, paused: true, pausedAt: new Date().toISOString() }));
           onLoopPaused?.(phase, cycle);
           break;
         }
@@ -253,24 +251,15 @@ export function useNomicLoopWebSocket({
         case 'loop_resumed': {
           const phase = data.current_phase as string;
           const cycle = data.current_cycle as number;
-          setLoopState((prev) => ({
-            ...prev,
-            paused: false,
-            pausedAt: undefined,
-          }));
+          setLoopState((prev) => ({ ...prev, paused: false, pausedAt: undefined }));
           onLoopResumed?.(phase, cycle);
           break;
         }
 
         case 'loop_stopped': {
-          const forced = data.forced as boolean || false;
-          const reason = data.reason as string || '';
-          setLoopState((prev) => ({
-            ...prev,
-            running: false,
-            paused: false,
-            currentPhase: null,
-          }));
+          const forced = (data.forced as boolean) || false;
+          const reason = (data.reason as string) || '';
+          setLoopState((prev) => ({ ...prev, running: false, paused: false, currentPhase: null }));
           onLoopStopped?.(forced, reason);
           break;
         }
@@ -278,11 +267,7 @@ export function useNomicLoopWebSocket({
         case 'phase_started': {
           const phase = data.phase as NomicPhase;
           const cycle = data.cycle as number;
-          setLoopState((prev) => ({
-            ...prev,
-            currentPhase: phase,
-            currentCycle: cycle,
-          }));
+          setLoopState((prev) => ({ ...prev, currentPhase: phase, currentCycle: cycle }));
           onPhaseStarted?.(phase, cycle);
           break;
         }
@@ -290,7 +275,7 @@ export function useNomicLoopWebSocket({
         case 'phase_completed': {
           const phase = data.phase as string;
           const cycle = data.cycle as number;
-          const durationSec = data.duration_sec as number || 0;
+          const durationSec = (data.duration_sec as number) || 0;
           onPhaseCompleted?.(phase, cycle, durationSec);
           break;
         }
@@ -298,7 +283,7 @@ export function useNomicLoopWebSocket({
         case 'phase_skipped': {
           const phase = data.phase as string;
           const cycle = data.cycle as number;
-          const reason = data.reason as string || '';
+          const reason = (data.reason as string) || '';
           onPhaseSkipped?.(phase, cycle, reason);
           break;
         }
@@ -306,7 +291,7 @@ export function useNomicLoopWebSocket({
         case 'phase_failed': {
           const phase = data.phase as string;
           const cycle = data.cycle as number;
-          const error = data.error as string || 'Unknown error';
+          const error = (data.error as string) || 'Unknown error';
           onPhaseFailed?.(phase, cycle, error);
           break;
         }
@@ -314,11 +299,7 @@ export function useNomicLoopWebSocket({
         case 'cycle_started': {
           const cycle = data.cycle as number;
           const totalCycles = data.total_cycles as number;
-          setLoopState((prev) => ({
-            ...prev,
-            currentCycle: cycle,
-            totalCycles,
-          }));
+          setLoopState((prev) => ({ ...prev, currentCycle: cycle, totalCycles }));
           onCycleStarted?.(cycle, totalCycles);
           break;
         }
@@ -326,7 +307,7 @@ export function useNomicLoopWebSocket({
         case 'cycle_completed': {
           const cycle = data.cycle as number;
           const totalCycles = data.total_cycles as number;
-          const durationSec = data.duration_sec as number || 0;
+          const durationSec = (data.duration_sec as number) || 0;
           onCycleCompleted?.(cycle, totalCycles, durationSec);
           break;
         }
@@ -335,10 +316,10 @@ export function useNomicLoopWebSocket({
           const proposal: NomicProposal = {
             id: data.proposal_id as string,
             title: data.title as string,
-            description: data.description as string || '',
+            description: (data.description as string) || '',
             phase: data.phase as string,
             status: 'pending',
-            requiresApproval: data.requires_approval as boolean || true,
+            requiresApproval: (data.requires_approval as boolean) || true,
             generatedAt: event.timestamp,
           };
           setProposals((prev) => [proposal, ...prev]);
@@ -348,9 +329,9 @@ export function useNomicLoopWebSocket({
 
         case 'proposal_approved': {
           const proposalId = data.proposal_id as string;
-          const approvedBy = data.approved_by as string || 'user';
+          const approvedBy = (data.approved_by as string) || 'user';
           setProposals((prev) =>
-            prev.map((p) => (p.id === proposalId ? { ...p, status: 'approved' as const } : p))
+            prev.map((p) => (p.id === proposalId ? { ...p, status: 'approved' as const } : p)),
           );
           onProposalApproved?.(proposalId, approvedBy);
           break;
@@ -358,21 +339,21 @@ export function useNomicLoopWebSocket({
 
         case 'proposal_rejected': {
           const proposalId = data.proposal_id as string;
-          const rejectedBy = data.rejected_by as string || 'user';
-          const reason = data.reason as string || '';
+          const rejectedBy = (data.rejected_by as string) || 'user';
+          const reason = (data.reason as string) || '';
           setProposals((prev) =>
-            prev.map((p) => (p.id === proposalId ? { ...p, status: 'rejected' as const } : p))
+            prev.map((p) => (p.id === proposalId ? { ...p, status: 'rejected' as const } : p)),
           );
           onProposalRejected?.(proposalId, rejectedBy, reason);
           break;
         }
 
         case 'health_update': {
-          const stalled = data.stalled as boolean || false;
+          const stalled = (data.stalled as boolean) || false;
           setLoopState((prev) => ({
             ...prev,
-            running: data.running as boolean || prev.running,
-            paused: data.paused as boolean || prev.paused,
+            running: (data.running as boolean) || prev.running,
+            paused: (data.paused as boolean) || prev.paused,
             currentPhase: (data.current_phase as NomicPhase) || prev.currentPhase,
             currentCycle: (data.current_cycle as number) || prev.currentCycle,
             stalled,
@@ -382,35 +363,26 @@ export function useNomicLoopWebSocket({
 
         case 'stall_detected': {
           const phase = data.phase as string;
-          const durationSec = data.stall_duration_sec as number || 0;
-          setLoopState((prev) => ({
-            ...prev,
-            stalled: true,
-            stallDurationSec: durationSec,
-          }));
+          const durationSec = (data.stall_duration_sec as number) || 0;
+          setLoopState((prev) => ({ ...prev, stalled: true, stallDurationSec: durationSec }));
           onStallDetected?.(phase, durationSec);
           break;
         }
 
         case 'stall_resolved': {
           const phase = data.phase as string;
-          const resolution = data.resolution as string || '';
-          setLoopState((prev) => ({
-            ...prev,
-            stalled: false,
-            stallDurationSec: undefined,
-          }));
+          const resolution = (data.resolution as string) || '';
+          setLoopState((prev) => ({ ...prev, stalled: false, stallDurationSec: undefined }));
           onStallResolved?.(phase, resolution);
           break;
         }
 
         case 'log_message': {
-          const level = data.level as string || 'info';
-          const message = data.message as string || '';
-          setLogMessages((prev) => [
-            { level, message, timestamp: event.timestamp },
-            ...prev,
-          ].slice(0, 50));
+          const level = (data.level as string) || 'info';
+          const message = (data.message as string) || '';
+          setLogMessages((prev) =>
+            [{ level, message, timestamp: event.timestamp }, ...prev].slice(0, 50),
+          );
           break;
         }
 
@@ -443,7 +415,7 @@ export function useNomicLoopWebSocket({
       onProposalRejected,
       onStallDetected,
       onStallResolved,
-    ]
+    ],
   );
 
   // Use base WebSocket hook

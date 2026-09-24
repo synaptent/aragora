@@ -9,7 +9,7 @@ export class AragoraError extends Error {
     message: string,
     public status: number,
     public code?: string,
-    public details?: unknown
+    public details?: unknown,
   ) {
     super(message);
     this.name = 'AragoraError';
@@ -42,7 +42,7 @@ export class HttpClient {
   private buildHeaders(extra?: Record<string, string>): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
+      Accept: 'application/json',
       ...extra,
     };
     if (this.apiKey) {
@@ -55,7 +55,7 @@ export class HttpClient {
     method: string,
     path: string,
     body?: unknown,
-    extraHeaders?: Record<string, string>
+    extraHeaders?: Record<string, string>,
   ): Promise<T> {
     const url = path.startsWith('http') ? path : `${this.baseUrl}${path}`;
     const headers = this.buildHeaders(extraHeaders);
@@ -78,7 +78,8 @@ export class HttpClient {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-          let errorData: { message?: string; error?: string; code?: string; details?: unknown } = {};
+          let errorData: { message?: string; error?: string; code?: string; details?: unknown } =
+            {};
           try {
             errorData = await response.json();
           } catch {
@@ -105,13 +106,18 @@ export class HttpClient {
         lastError = error instanceof Error ? error : new Error(String(error));
 
         // Don't retry client errors (4xx) except rate limiting
-        if (error instanceof AragoraError && error.status >= 400 && error.status < 500 && error.status !== 429) {
+        if (
+          error instanceof AragoraError &&
+          error.status >= 400 &&
+          error.status < 500 &&
+          error.status !== 429
+        ) {
           throw error;
         }
 
         // Retry on network errors and server errors
         if (attempt < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
+          await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 100));
           continue;
         }
       }

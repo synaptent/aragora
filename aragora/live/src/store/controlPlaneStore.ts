@@ -8,7 +8,8 @@ import { devtools, subscribeWithSelector } from 'zustand/middleware';
 // ============================================================================
 
 export type AgentStatus = 'starting' | 'available' | 'busy' | 'draining' | 'offline' | 'failed';
-export type TaskStatus = 'pending' | 'assigned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout';
+export type TaskStatus =
+  'pending' | 'assigned' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout';
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface ControlPlaneAgent {
@@ -40,13 +41,16 @@ export interface ControlPlaneTask {
 
 export interface ControlPlaneHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
-  agents: Record<string, {
-    agent_id: string;
-    status: 'healthy' | 'degraded' | 'unhealthy';
-    last_heartbeat?: string;
-    latency_ms?: number;
-    error_rate?: number;
-  }>;
+  agents: Record<
+    string,
+    {
+      agent_id: string;
+      status: 'healthy' | 'degraded' | 'unhealthy';
+      last_heartbeat?: string;
+      latency_ms?: number;
+      error_rate?: number;
+    }
+  >;
   agents_available?: number;
   agents_total?: number;
   active_tasks?: number;
@@ -82,10 +86,7 @@ interface ControlPlaneState {
   tasks: ControlPlaneTask[];
   tasksLoading: boolean;
   tasksError: string | null;
-  taskFilters: {
-    status?: ControlPlaneTask['status'];
-    agentId?: string;
-  };
+  taskFilters: { status?: ControlPlaneTask['status']; agentId?: string };
 
   // System health
   health: ControlPlaneHealth | null;
@@ -186,9 +187,7 @@ export const useControlPlaneStore = create<ControlPlaneStore>()(
           return { agents: [...state.agents, agent] };
         }),
       removeAgent: (agentId) =>
-        set((state) => ({
-          agents: state.agents.filter((a) => a.agent_id !== agentId),
-        })),
+        set((state) => ({ agents: state.agents.filter((a) => a.agent_id !== agentId) })),
       setAgentsLoading: (agentsLoading) => set({ agentsLoading }),
       setAgentsError: (agentsError) => set({ agentsError, agentsLoading: false }),
 
@@ -205,15 +204,11 @@ export const useControlPlaneStore = create<ControlPlaneStore>()(
           return { tasks: [...state.tasks, task] };
         }),
       removeTask: (taskId) =>
-        set((state) => ({
-          tasks: state.tasks.filter((t) => t.id !== taskId),
-        })),
+        set((state) => ({ tasks: state.tasks.filter((t) => t.id !== taskId) })),
       setTasksLoading: (tasksLoading) => set({ tasksLoading }),
       setTasksError: (tasksError) => set({ tasksError, tasksLoading: false }),
       setTaskFilters: (filters) =>
-        set((state) => ({
-          taskFilters: { ...state.taskFilters, ...filters },
-        })),
+        set((state) => ({ taskFilters: { ...state.taskFilters, ...filters } })),
 
       // Health actions
       setHealth: (health) => set({ health, healthLoading: false }),
@@ -234,8 +229,8 @@ export const useControlPlaneStore = create<ControlPlaneStore>()(
       // Reset
       resetAll: () => set(initialState),
     })),
-    { name: 'control-plane-store' }
-  )
+    { name: 'control-plane-store' },
+  ),
 );
 
 // ============================================================================
@@ -270,11 +265,13 @@ export const selectAgentById = (agentId: string) => (state: ControlPlaneStore) =
 export const selectTaskById = (taskId: string) => (state: ControlPlaneStore) =>
   state.tasks.find((t) => t.id === taskId);
 
-export const selectAgentsByStatus = (status: ControlPlaneAgent['status']) => (state: ControlPlaneStore) =>
-  state.agents.filter((a) => a.status === status);
+export const selectAgentsByStatus =
+  (status: ControlPlaneAgent['status']) => (state: ControlPlaneStore) =>
+    state.agents.filter((a) => a.status === status);
 
-export const selectTasksByStatus = (status: ControlPlaneTask['status']) => (state: ControlPlaneStore) =>
-  state.tasks.filter((t) => t.status === status);
+export const selectTasksByStatus =
+  (status: ControlPlaneTask['status']) => (state: ControlPlaneStore) =>
+    state.tasks.filter((t) => t.status === status);
 
 export const selectFilteredTasks = (state: ControlPlaneStore) => {
   let filtered = state.tasks;
@@ -287,8 +284,7 @@ export const selectFilteredTasks = (state: ControlPlaneStore) => {
   return filtered;
 };
 
-export const selectIsHealthy = (state: ControlPlaneStore) =>
-  state.health?.status === 'healthy';
+export const selectIsHealthy = (state: ControlPlaneStore) => state.health?.status === 'healthy';
 
 export const selectAgentCount = (state: ControlPlaneStore) => ({
   total: state.agents.length,

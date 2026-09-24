@@ -13,9 +13,9 @@ interface MemoryTierVizProps {
 }
 
 const TIER_COLORS: Record<string, string> = {
-  fast: '#39ff14',    // acid-green
-  medium: '#00ffff',  // acid-cyan
-  slow: '#ffff00',    // acid-yellow
+  fast: '#39ff14', // acid-green
+  medium: '#00ffff', // acid-cyan
+  slow: '#ffff00', // acid-yellow
   glacial: '#6b7280', // text-muted gray
 };
 
@@ -104,22 +104,30 @@ export function MemoryTierViz({ tiers, loading = false }: MemoryTierVizProps) {
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: TIER_COLORS[tier.name] ?? '#6b7280' }}
               />
-              <span className={`font-theme-data text-xs uppercase ${TIER_TEXT_CLASSES[tier.name] ?? 'text-text-muted'}`}>
+              <span
+                className={`font-theme-data text-xs uppercase ${TIER_TEXT_CLASSES[tier.name] ?? 'text-text-muted'}`}
+              >
                 {tier.name}
               </span>
             </div>
             <div className="space-y-1">
               <div className="flex justify-between">
                 <span className="text-text-muted text-xs font-theme-data">Count</span>
-                <span className="text-text text-xs font-theme-data">{tier.count.toLocaleString()}</span>
+                <span className="text-text text-xs font-theme-data">
+                  {tier.count.toLocaleString()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted text-xs font-theme-data">Importance</span>
-                <span className="text-text text-xs font-theme-data">{tier.avg_importance.toFixed(2)}</span>
+                <span className="text-text text-xs font-theme-data">
+                  {tier.avg_importance.toFixed(2)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-muted text-xs font-theme-data">Size</span>
-                <span className="text-text text-xs font-theme-data">{formatBytes(tier.size_bytes)}</span>
+                <span className="text-text text-xs font-theme-data">
+                  {formatBytes(tier.size_bytes)}
+                </span>
               </div>
             </div>
           </div>

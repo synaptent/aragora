@@ -101,7 +101,10 @@ function AgentCards({ agents }: { agents: AgentRankingEntry[] }) {
         <p className="text-[var(--text-muted)]/60 font-theme-data text-xs max-w-sm mx-auto">
           Run debates to generate ELO ratings and see which agents perform best across topics.
         </p>
-        <Link href="/debate" className="inline-block mt-2 px-4 py-1.5 text-xs font-theme-data border border-[var(--acid-green)]/40 text-[var(--acid-green)] hover:bg-[var(--acid-green)]/10 transition-colors">
+        <Link
+          href="/debate"
+          className="inline-block mt-2 px-4 py-1.5 text-xs font-theme-data border border-[var(--acid-green)]/40 text-[var(--acid-green)] hover:bg-[var(--acid-green)]/10 transition-colors"
+        >
           Start a debate
         </Link>
       </div>
@@ -128,7 +131,9 @@ function AgentCards({ agents }: { agents: AgentRankingEntry[] }) {
                   {agent.agent_name}
                 </div>
               </div>
-              <span className={`px-2 py-0.5 text-[10px] font-theme-data border ${style.bg} ${style.text}`}>
+              <span
+                className={`px-2 py-0.5 text-[10px] font-theme-data border ${style.bg} ${style.text}`}
+              >
                 {style.label}
               </span>
             </div>
@@ -167,9 +172,7 @@ function AgentCards({ agents }: { agents: AgentRankingEntry[] }) {
                 <span className="text-yellow-400">{agent.draws}D</span>
               </span>
               {agent.response_time_ms !== undefined && (
-                <span className="text-[var(--text-muted)]">
-                  {agent.response_time_ms}ms avg
-                </span>
+                <span className="text-[var(--text-muted)]">{agent.response_time_ms}ms avg</span>
               )}
             </div>
           </div>
@@ -190,19 +193,15 @@ export default function AgentsPage() {
   const [selectedAgent, setSelectedAgent] = useState<AgentRankingEntry | null>(null);
 
   // Fetch agent rankings from backend API
-  const { data, error, isLoading } = useSWRFetch<AgentRankingsResponse>(
-    '/api/v1/agents/rankings',
-    { refreshInterval: 60000 },
-  );
+  const { data, error, isLoading } = useSWRFetch<AgentRankingsResponse>('/api/v1/agents/rankings', {
+    refreshInterval: 60000,
+  });
 
   const agents: AgentRankingEntry[] = useMemo(() => {
     if (!data) return [];
     const raw = data.rankings || data.agents || data.leaderboard || [];
     // Ensure rank is assigned if missing
-    return raw.map((a, i) => ({
-      ...a,
-      rank: a.rank || i + 1,
-    }));
+    return raw.map((a, i) => ({ ...a, rank: a.rank || i + 1 }));
   }, [data]);
 
   const handleTeamSelect = (selectedAgents: string[]) => {
@@ -225,7 +224,8 @@ export default function AgentsPage() {
                   {'>'} AGENT LEADERBOARD
                 </h1>
                 <p className="text-xs text-[var(--text-muted)] font-theme-data">
-                  Agent rankings by ELO rating, win rate, calibration scores, and debate participation
+                  Agent rankings by ELO rating, win rate, calibration scores, and debate
+                  participation
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -257,8 +257,12 @@ export default function AgentsPage() {
           {agents.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
-                <div className="text-2xl font-theme-data text-[var(--acid-green)]">{agents.length}</div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Total Agents</div>
+                <div className="text-2xl font-theme-data text-[var(--acid-green)]">
+                  {agents.length}
+                </div>
+                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  Total Agents
+                </div>
               </div>
               <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
                 <div className="text-2xl font-theme-data text-purple-400">
@@ -270,7 +274,9 @@ export default function AgentsPage() {
                 <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
                   {agents.reduce((sum, a) => sum + a.games_played, 0)}
                 </div>
-                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">Total Debates</div>
+                <div className="text-[10px] font-theme-data text-[var(--text-muted)]">
+                  Total Debates
+                </div>
               </div>
               <div className="p-4 bg-[var(--surface)] border border-[var(--border)] text-center">
                 <div className="text-2xl font-theme-data text-yellow-400">
@@ -350,7 +356,11 @@ export default function AgentsPage() {
                 </div>
                 <div>
                   <div className="text-[var(--text-muted)]">Win Rate</div>
-                  <div className={selectedAgent.win_rate >= 50 ? 'text-[var(--acid-green)]' : 'text-red-400'}>
+                  <div
+                    className={
+                      selectedAgent.win_rate >= 50 ? 'text-[var(--acid-green)]' : 'text-red-400'
+                    }
+                  >
                     {selectedAgent.win_rate.toFixed(1)}%
                   </div>
                 </div>
@@ -410,9 +420,7 @@ export default function AgentsPage() {
           <div className="text-[var(--acid-green)]/50 mb-2" aria-hidden="true">
             {'='.repeat(40)}
           </div>
-          <p className="text-[var(--text-muted)]">
-            {'>'} ARAGORA // AGENT LEADERBOARD
-          </p>
+          <p className="text-[var(--text-muted)]">{'>'} ARAGORA // AGENT LEADERBOARD</p>
         </footer>
       </main>
     </>

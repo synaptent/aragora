@@ -60,9 +60,7 @@ export function HealthOverview({ health, loading = false }: HealthOverviewProps)
   };
 
   const statusConfig = STATUS_CONFIG[displayHealth.status];
-  const healthyCount = displayHealth.components.filter(
-    (c) => c.status === 'healthy'
-  ).length;
+  const healthyCount = displayHealth.components.filter((c) => c.status === 'healthy').length;
 
   return (
     <div className="bg-surface border border-[var(--accent)]/30 p-4">
@@ -74,9 +72,7 @@ export function HealthOverview({ health, loading = false }: HealthOverviewProps)
             {statusConfig.label}
           </span>
         </div>
-        <span className="text-xs font-theme-data text-text-muted">
-          v{displayHealth.version}
-        </span>
+        <span className="text-xs font-theme-data text-text-muted">v{displayHealth.version}</span>
       </div>
 
       {/* Stats row */}
@@ -116,9 +112,7 @@ export function HealthOverview({ health, loading = false }: HealthOverviewProps)
               >
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${compStatus.color}`} />
-                  <span className="text-sm font-theme-data text-text">
-                    {component.name}
-                  </span>
+                  <span className="text-sm font-theme-data text-text">{component.name}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   {component.latency_ms !== undefined && (

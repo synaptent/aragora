@@ -24,13 +24,11 @@ const localStorageMock = {
     delete mockLocalStorage[key];
   }),
   clear: jest.fn(() => {
-    Object.keys(mockLocalStorage).forEach(key => delete mockLocalStorage[key]);
+    Object.keys(mockLocalStorage).forEach((key) => delete mockLocalStorage[key]);
   }),
 };
 
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-});
+Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 // Mock data
 const mockUser = {
@@ -132,7 +130,7 @@ describe('AuthContext - Additional Tests', () => {
 
       await act(async () => {
         await expect(result.current.setTokens('invalid-token', 'refresh-token')).rejects.toThrow(
-          'Authentication failed: Invalid tokens'
+          'Authentication failed: Invalid tokens',
         );
       });
 

@@ -1,4 +1,5 @@
-export type DeliberationStatus = 'initializing' | 'active' | 'consensus_forming' | 'complete' | 'failed';
+export type DeliberationStatus =
+  'initializing' | 'active' | 'consensus_forming' | 'complete' | 'failed';
 
 export interface Deliberation {
   id: string;
@@ -15,7 +16,8 @@ export interface Deliberation {
 }
 
 export interface DeliberationEvent {
-  type: 'agent_message' | 'vote' | 'consensus_progress' | 'round_complete' | 'deliberation_complete';
+  type:
+    'agent_message' | 'vote' | 'consensus_progress' | 'round_complete' | 'deliberation_complete';
   deliberation_id: string;
   timestamp: number;
   data: Record<string, unknown>;

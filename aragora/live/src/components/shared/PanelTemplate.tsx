@@ -94,9 +94,7 @@ export function PanelTemplate({
 
   // Default empty state
   const defaultEmptyState = (
-    <div className="text-center text-text-muted py-8">
-      No data available.
-    </div>
+    <div className="text-center text-text-muted py-8">No data available.</div>
   );
 
   return (
@@ -125,9 +123,7 @@ export function PanelTemplate({
 
           {/* Badge */}
           {badge !== undefined && (
-            <span className="text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded">
-              {badge}
-            </span>
+            <span className="text-xs bg-accent/20 text-accent px-1.5 py-0.5 rounded">{badge}</span>
           )}
         </div>
 
@@ -186,8 +182,8 @@ export function PanelTemplate({
                       activeTab === tab.id
                         ? 'bg-accent text-bg'
                         : tab.disabled
-                        ? 'text-text-muted/50 cursor-not-allowed'
-                        : 'text-text-muted hover:text-text hover:bg-surface'
+                          ? 'text-text-muted/50 cursor-not-allowed'
+                          : 'text-text-muted hover:text-text hover:bg-surface'
                     }`}
                   >
                     {tab.label}
@@ -216,11 +212,7 @@ export function PanelTemplate({
  */
 export function usePanelState<T>(
   fetchFn: () => Promise<T>,
-  options: {
-    initialData?: T;
-    autoFetch?: boolean;
-    refreshInterval?: number;
-  } = {}
+  options: { initialData?: T; autoFetch?: boolean; refreshInterval?: number } = {},
 ) {
   const { initialData, autoFetch = true, refreshInterval } = options;
   const [data, setData] = useState<T | undefined>(initialData);
@@ -251,14 +243,7 @@ export function usePanelState<T>(
     // This is a simplified version for demonstration
   }
 
-  return {
-    data,
-    setData,
-    loading,
-    error,
-    fetch,
-    refresh: fetch,
-  };
+  return { data, setData, loading, error, fetch, refresh: fetch };
 }
 
 export default PanelTemplate;

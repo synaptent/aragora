@@ -55,7 +55,7 @@ export function AudioRecorder({
       if (timerRef.current) clearInterval(timerRef.current);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
@@ -91,9 +91,7 @@ export function AudioRecorder({
 
       // Create media recorder
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/mp4',
+        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4',
       });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
@@ -105,14 +103,12 @@ export function AudioRecorder({
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, {
-          type: mediaRecorder.mimeType,
-        });
+        const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType });
         const recordingDuration = (Date.now() - startTimeRef.current) / 1000;
         onRecordingComplete(blob, recordingDuration);
 
         // Cleanup
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
         }
@@ -126,7 +122,7 @@ export function AudioRecorder({
 
       // Start duration timer
       timerRef.current = setInterval(() => {
-        setDuration(prev => {
+        setDuration((prev) => {
           const newDuration = prev + 1;
           if (newDuration >= maxDuration) {
             stopRecordingRef.current();
@@ -137,7 +133,6 @@ export function AudioRecorder({
 
       // Start audio level visualization
       updateAudioLevel();
-
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to access microphone';
       setHasPermission(false);
@@ -176,7 +171,7 @@ export function AudioRecorder({
       setIsPaused(false);
 
       timerRef.current = setInterval(() => {
-        setDuration(prev => {
+        setDuration((prev) => {
           const newDuration = prev + 1;
           if (newDuration >= maxDuration) {
             stopRecordingRef.current();
@@ -199,9 +194,7 @@ export function AudioRecorder({
   if (hasPermission === false) {
     return (
       <div className={`p-4 border border-warning/30 bg-warning/5 ${className}`}>
-        <p className="text-warning font-theme-data text-xs mb-2">
-          Microphone access denied
-        </p>
+        <p className="text-warning font-theme-data text-xs mb-2">Microphone access denied</p>
         <p className="text-text-muted font-theme-data text-[10px]">
           Please enable microphone permissions in your browser settings to record audio.
         </p>
@@ -227,7 +220,9 @@ export function AudioRecorder({
 
       {/* Duration display */}
       <div className="text-center mb-4">
-        <span className={`font-theme-data text-2xl ${isRecording ? 'text-[var(--accent)]' : 'text-text-muted'}`}>
+        <span
+          className={`font-theme-data text-2xl ${isRecording ? 'text-[var(--accent)]' : 'text-text-muted'}`}
+        >
           {formatTime(duration)}
         </span>
         {isRecording && (

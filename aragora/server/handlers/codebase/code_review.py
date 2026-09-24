@@ -80,7 +80,7 @@ _review_results: dict[str, Any] = {}
 _review_results_lock = threading.Lock()
 
 
-def get_code_reviewer():
+def get_code_reviewer() -> Any:
     """Get or create code reviewer (thread-safe singleton)."""
     global _code_reviewer
     if _code_reviewer is not None:

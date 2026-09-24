@@ -9,7 +9,7 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const SchedulerDashboard = dynamic(
-  () => import('@/components/SchedulerDashboard').then(m => ({ default: m.SchedulerDashboard })),
+  () => import('@/components/SchedulerDashboard').then((m) => ({ default: m.SchedulerDashboard })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +17,7 @@ const SchedulerDashboard = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function SchedulerPage() {
@@ -85,8 +85,8 @@ export default function SchedulerPage() {
               {'>'} AUDIT SCHEDULER
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Automate your audits with cron schedules, webhooks, and CI/CD integration.
-              Schedule recurring security scans, compliance checks, and quality audits.
+              Automate your audits with cron schedules, webhooks, and CI/CD integration. Schedule
+              recurring security scans, compliance checks, and quality audits.
             </p>
           </div>
 
@@ -123,12 +123,8 @@ export default function SchedulerPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // AUDIT SCHEDULER
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // AUDIT SCHEDULER</p>
         </footer>
       </main>
     </>

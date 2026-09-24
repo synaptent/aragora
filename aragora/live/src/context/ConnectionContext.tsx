@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useMemo, useEffect, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  type ReactNode,
+} from 'react';
 import type { WebSocketConnectionStatus } from '@/hooks/useWebSocketBase';
 
 /**
@@ -32,11 +40,11 @@ export interface ServiceConnection {
 }
 
 export type OverallConnectionStatus =
-  | 'connected'      // All enabled services connected
-  | 'partial'        // Some services connected
-  | 'connecting'     // At least one service connecting
-  | 'disconnected'   // All services disconnected
-  | 'error';         // At least one service has error
+  | 'connected' // All enabled services connected
+  | 'partial' // Some services connected
+  | 'connecting' // At least one service connecting
+  | 'disconnected' // All services disconnected
+  | 'error'; // At least one service has error
 
 export interface ConnectionContextValue {
   /** Overall connection status across all services */
@@ -56,7 +64,7 @@ export interface ConnectionContextValue {
   /** Update a service's connection status */
   updateServiceStatus: (
     name: ServiceName,
-    update: Partial<Omit<ServiceConnection, 'name'>>
+    update: Partial<Omit<ServiceConnection, 'name'>>,
   ) => void;
   /** Unregister a service */
   unregisterService: (name: ServiceName) => void;
@@ -77,7 +85,7 @@ export interface ConnectionProviderProps {
 export function ConnectionProvider({ children }: ConnectionProviderProps) {
   const [services, setServices] = useState<Map<ServiceName, ServiceConnection>>(new Map());
   const [reconnectCallbacks, setReconnectCallbacks] = useState<Map<ServiceName, Set<() => void>>>(
-    new Map()
+    new Map(),
   );
   const [lastAllConnected, setLastAllConnected] = useState<Date | null>(null);
 
@@ -99,13 +107,12 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
         next.set(name, {
           ...existing,
           ...update,
-          lastConnected:
-            update.status === 'connected' ? new Date() : existing.lastConnected,
+          lastConnected: update.status === 'connected' ? new Date() : existing.lastConnected,
         });
         return next;
       });
     },
-    []
+    [],
   );
 
   const unregisterService = useCallback((name: ServiceName) => {
@@ -128,7 +135,7 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
         callbacks.forEach((cb) => cb());
       }
     },
-    [reconnectCallbacks]
+    [reconnectCallbacks],
   );
 
   const reconnectAll = useCallback(() => {
@@ -170,7 +177,7 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
         });
       };
     },
-    []
+    [],
   );
 
   // Calculate derived state
@@ -188,7 +195,7 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
     }
 
     const connected = serviceArray.filter(
-      (s) => s.status === 'connected' || s.status === 'streaming'
+      (s) => s.status === 'connected' || s.status === 'streaming',
     ).length;
     const hasError = serviceArray.some((s) => s.status === 'error');
     const hasConnecting = serviceArray.some((s) => s.status === 'connecting');
@@ -207,12 +214,7 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
       overallStatus = 'disconnected';
     }
 
-    return {
-      overallStatus,
-      connectedCount: connected,
-      totalServices: total,
-      isReconnecting,
-    };
+    return { overallStatus, connectedCount: connected, totalServices: total, isReconnecting };
   }, [services]);
 
   // Track when all services become connected (moved from useMemo to avoid render-phase side effect)
@@ -250,7 +252,7 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
       requestReconnect,
       reconnectAll,
       onReconnectRequest,
-    ]
+    ],
   );
 
   return <ConnectionContext.Provider value={value}>{children}</ConnectionContext.Provider>;

@@ -80,14 +80,17 @@ const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'];
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     completed: 'bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/40',
-    running: 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/40 animate-pulse',
+    running:
+      'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/40 animate-pulse',
     pending: 'bg-acid-blue/20 text-acid-blue border-acid-blue/40',
     paused: 'bg-acid-purple/20 text-acid-purple border-acid-purple/40',
     failed: 'bg-acid-red/20 text-acid-red border-acid-red/40',
     cancelled: 'bg-muted/20 text-muted border-muted/40',
   };
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.pending}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${colors[status] || colors.pending}`}
+    >
       {status.toUpperCase()}
     </span>
   );
@@ -95,7 +98,9 @@ function StatusBadge({ status }: { status: string }) {
 
 function SeverityBadge({ severity }: { severity: string }) {
   return (
-    <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${SEVERITY_COLORS[severity] || SEVERITY_COLORS.info}`}>
+    <span
+      className={`px-2 py-0.5 text-xs font-theme-data rounded border ${SEVERITY_COLORS[severity] || SEVERITY_COLORS.info}`}
+    >
       {severity.toUpperCase()}
     </span>
   );
@@ -159,9 +164,10 @@ export default function AuditSessionDetail() {
   // Fetch findings
   const fetchFindings = useCallback(async () => {
     try {
-      const response = await fetch(`${backendConfig.api}/api/audit/sessions/${sessionId}/findings`, {
-        headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-      });
+      const response = await fetch(
+        `${backendConfig.api}/api/audit/sessions/${sessionId}/findings`,
+        { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
+      );
       if (response.ok) {
         const data = await response.json();
         setFindings(data.findings || []);
@@ -176,7 +182,7 @@ export default function AuditSessionDetail() {
     if (!session || session.status !== 'running') return;
 
     const eventSource = new EventSource(
-      `${backendConfig.api}/api/audit/sessions/${sessionId}/events`
+      `${backendConfig.api}/api/audit/sessions/${sessionId}/events`,
     );
     eventSourceRef.current = eventSource;
 
@@ -191,7 +197,7 @@ export default function AuditSessionDetail() {
           break;
         case 'progress':
           setSession((prev) =>
-            prev ? { ...prev, progress: data.progress, current_phase: data.phase } : prev
+            prev ? { ...prev, progress: data.progress, current_phase: data.phase } : prev,
           );
           break;
         case 'activity':
@@ -199,7 +205,7 @@ export default function AuditSessionDetail() {
           break;
         case 'complete':
           setSession((prev) =>
-            prev ? { ...prev, status: 'completed', completed_at: new Date().toISOString() } : prev
+            prev ? { ...prev, status: 'completed', completed_at: new Date().toISOString() } : prev,
           );
           eventSource.close();
           break;
@@ -265,9 +271,7 @@ export default function AuditSessionDetail() {
     try {
       const response = await fetch(
         `${backendConfig.api}/api/audit/sessions/${sessionId}/report?format=${exportFormat}`,
-        {
-          headers: { Authorization: `Bearer ${tokens?.access_token || ''}` },
-        }
+        { headers: { Authorization: `Bearer ${tokens?.access_token || ''}` } },
       );
       if (!response.ok) throw new Error('Export failed');
 
@@ -371,7 +375,9 @@ export default function AuditSessionDetail() {
           <div className="flex items-start justify-between mb-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-xl font-theme-data">{session?.name || sessionId?.slice(0, 8) || 'New Session'}</h1>
+                <h1 className="text-xl font-theme-data">
+                  {session?.name || sessionId?.slice(0, 8) || 'New Session'}
+                </h1>
                 {session && <StatusBadge status={session.status} />}
               </div>
               <div className="text-sm text-muted font-theme-data">
@@ -424,12 +430,14 @@ export default function AuditSessionDetail() {
             {severityDistribution.map(({ severity, count }) =>
               count > 0 ? (
                 <div key={severity} className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-xs font-theme-data ${SEVERITY_COLORS[severity]}`}>
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-theme-data ${SEVERITY_COLORS[severity]}`}
+                  >
                     {count}
                   </span>
                   <span className="text-xs text-muted capitalize">{severity}</span>
                 </div>
-              ) : null
+              ) : null,
             )}
             {session?.duration_seconds && (
               <div className="ml-auto text-xs font-theme-data text-muted">
@@ -577,7 +585,9 @@ export default function AuditSessionDetail() {
                 <tbody>
                   {session?.document_ids.map((docId) => {
                     const docFindings = findings.filter((f) => f.document_id === docId);
-                    const criticalCount = docFindings.filter((f) => f.severity === 'critical').length;
+                    const criticalCount = docFindings.filter(
+                      (f) => f.severity === 'critical',
+                    ).length;
                     const highCount = docFindings.filter((f) => f.severity === 'high').length;
 
                     return (
@@ -599,7 +609,9 @@ export default function AuditSessionDetail() {
                           </div>
                         </td>
                         <td className="p-3">
-                          <StatusBadge status={session?.status === 'completed' ? 'completed' : 'processing'} />
+                          <StatusBadge
+                            status={session?.status === 'completed' ? 'completed' : 'processing'}
+                          />
                         </td>
                       </tr>
                     );
@@ -619,7 +631,9 @@ export default function AuditSessionDetail() {
               ) : (
                 activities.map((activity, idx) => (
                   <div key={idx} className="card p-3 flex items-center gap-4">
-                    <span className="text-xs font-theme-data text-muted">{formatDate(activity.timestamp)}</span>
+                    <span className="text-xs font-theme-data text-muted">
+                      {formatDate(activity.timestamp)}
+                    </span>
                     <span className="text-sm font-theme-data text-accent">{activity.agent}</span>
                     <span className="text-sm">{activity.action}</span>
                   </div>
@@ -654,7 +668,9 @@ export default function AuditSessionDetail() {
                 </div>
 
                 <div className="mb-6 p-4 bg-surface rounded">
-                  <div className="text-sm font-theme-data text-muted mb-2">Report will include:</div>
+                  <div className="text-sm font-theme-data text-muted mb-2">
+                    Report will include:
+                  </div>
                   <ul className="text-sm space-y-1">
                     <li>Session metadata and configuration</li>
                     <li>{findings.length} findings with evidence</li>

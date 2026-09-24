@@ -7,8 +7,18 @@ import { render, screen } from '@testing-library/react';
 
 // Mock next/link
 jest.mock('next/link', () => {
-  return ({ children, href, ...props }: { children: React.ReactNode; href: string; [key: string]: unknown }) => (
-    <a href={href} {...props}>{children}</a>
+  return ({
+    children,
+    href,
+    ...props
+  }: {
+    children: React.ReactNode;
+    href: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
   );
 });
 
@@ -28,9 +38,7 @@ let mockSettlementResponse: {
   mutate: jest.Mock;
 };
 
-jest.mock('../src/hooks/useSettlements', () => ({
-  useSettlements: () => mockSettlementResponse,
-}));
+jest.mock('../src/hooks/useSettlements', () => ({ useSettlements: () => mockSettlementResponse }));
 
 import { SettlementPanel } from '../src/components/dashboard/SettlementPanel';
 
@@ -109,12 +117,7 @@ describe('SettlementPanel', () => {
   it('renders settlement summary with status counts', () => {
     mockSettlementResponse.summary = {
       total: 12,
-      by_status: {
-        settled: 5,
-        due_review: 3,
-        confirmed: 2,
-        invalidated: 2,
-      },
+      by_status: { settled: 5, due_review: 3, confirmed: 2, invalidated: 2 },
       due_for_review: 3,
       average_confidence: 0.82,
       recent: [],
@@ -127,8 +130,8 @@ describe('SettlementPanel', () => {
     expect(screen.getByText(/SETTLEMENT STATUS/)).toBeInTheDocument();
 
     // Status counts
-    expect(screen.getByText('5')).toBeInTheDocument();   // settled
-    expect(screen.getByText('3')).toBeInTheDocument();   // due_review (count)
+    expect(screen.getByText('5')).toBeInTheDocument(); // settled
+    expect(screen.getByText('3')).toBeInTheDocument(); // due_review (count)
     // confirmed=2, invalidated=2 -- both render "2"
     const twos = screen.getAllByText('2');
     expect(twos).toHaveLength(2);

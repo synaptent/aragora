@@ -168,7 +168,7 @@ class EvidencePoweredTrickster:
             return self.domain_configs[domain]
         return self.config
 
-    def check_and_intervene(
+    def check_and_intervene(  # noqa: C901 - Preserve intervention priority and cooldown ordering.
         self,
         responses: dict[str, str],
         convergence_similarity: float,

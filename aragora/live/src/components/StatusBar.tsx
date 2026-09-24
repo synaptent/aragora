@@ -75,9 +75,7 @@ export function StatusBar({ connected, events, cycle = 0, phase = 'idle' }: Stat
           {/* Phase */}
           <div className="flex items-center gap-1.5">
             <span className="text-text-muted">PHASE:</span>
-            <span className={phaseColors[phase] || 'text-text'}>
-              {phase.toUpperCase()}
-            </span>
+            <span className={phaseColors[phase] || 'text-text'}>{phase.toUpperCase()}</span>
           </div>
 
           {/* Separator */}

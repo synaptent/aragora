@@ -45,10 +45,8 @@ interface TouchButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
 // =============================================================================
 
 const variantClasses = {
-  primary:
-    'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
-  secondary:
-    'bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70',
+  primary: 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80',
+  secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70',
   ghost: 'hover:bg-muted active:bg-muted/80',
   danger:
     'bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/80',
@@ -96,7 +94,7 @@ export const TouchButton = forwardRef<HTMLButtonElement, TouchButtonProps>(
       onClick,
       ...props
     },
-    ref
+    ref,
   ) => {
     const prefersReducedMotion = usePrefersReducedMotion();
     const [ripples, setRipples] = useState<Array<{ x: number; y: number; id: number }>>([]);
@@ -115,7 +113,7 @@ export const TouchButton = forwardRef<HTMLButtonElement, TouchButtonProps>(
           ref.current = el;
         }
       },
-      [ref]
+      [ref],
     );
 
     // Handle ripple effect
@@ -146,7 +144,7 @@ export const TouchButton = forwardRef<HTMLButtonElement, TouchButtonProps>(
           setRipples((prev) => prev.filter((r) => r.id !== id));
         }, 600);
       },
-      [prefersReducedMotion, disabled, loading]
+      [prefersReducedMotion, disabled, loading],
     );
 
     // Handle long press start
@@ -162,7 +160,7 @@ export const TouchButton = forwardRef<HTMLButtonElement, TouchButtonProps>(
           onLongPress();
         }, longPressDelay);
       },
-      [disabled, loading, onLongPress, longPressDelay, addRipple, hapticFeedback]
+      [disabled, loading, onLongPress, longPressDelay, addRipple, hapticFeedback],
     );
 
     // Handle press end
@@ -183,7 +181,7 @@ export const TouchButton = forwardRef<HTMLButtonElement, TouchButtonProps>(
         addRipple(event);
         onClick?.(event);
       },
-      [disabled, loading, isLongPressing, hapticFeedback, addRipple, onClick]
+      [disabled, loading, isLongPressing, hapticFeedback, addRipple, onClick],
     );
 
     // Cleanup on unmount
@@ -215,7 +213,7 @@ export const TouchButton = forwardRef<HTMLButtonElement, TouchButtonProps>(
           // States
           (disabled || loading) && 'opacity-50 cursor-not-allowed',
           fullWidth && 'w-full',
-          className
+          className,
         )}
         disabled={disabled || loading}
         onClick={handleClick}
@@ -231,22 +229,14 @@ export const TouchButton = forwardRef<HTMLButtonElement, TouchButtonProps>(
           <span
             key={ripple.id}
             className="absolute bg-white/30 rounded-full pointer-events-none animate-ripple"
-            style={{
-              left: ripple.x,
-              top: ripple.y,
-              transform: 'translate(-50%, -50%)',
-            }}
+            style={{ left: ripple.x, top: ripple.y, transform: 'translate(-50%, -50%)' }}
           />
         ))}
 
         {/* Loading spinner */}
         {loading && (
           <span className="absolute inset-0 flex items-center justify-center bg-inherit">
-            <svg
-              className="animate-spin h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
+            <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
               <circle
                 className="opacity-25"
                 cx="12"
@@ -272,7 +262,7 @@ export const TouchButton = forwardRef<HTMLButtonElement, TouchButtonProps>(
         </span>
       </button>
     );
-  }
+  },
 );
 
 TouchButton.displayName = 'TouchButton';
@@ -306,7 +296,7 @@ export const TouchIconButton = forwardRef<HTMLButtonElement, TouchIconButtonProp
         {icon}
       </TouchButton>
     );
-  }
+  },
 );
 
 TouchIconButton.displayName = 'TouchIconButton';

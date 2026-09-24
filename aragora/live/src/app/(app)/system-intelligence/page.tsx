@@ -14,10 +14,7 @@ import {
   useImprovementQueue,
 } from '@/hooks/useSystemIntelligence';
 import type { SystemOverview as SystemOverviewData } from '@/hooks/useSystemIntelligence';
-import {
-  useSystemHealth,
-  useAgentPoolHealth,
-} from '@/hooks/useSystemHealth';
+import { useSystemHealth, useAgentPoolHealth } from '@/hooks/useSystemHealth';
 import { useSWRFetch } from '@/hooks/useSWRFetch';
 
 // ---------------------------------------------------------------------------
@@ -88,10 +85,7 @@ interface HistoryEventRecord {
   source?: string;
   agent?: string;
   timestamp?: string;
-  event_data?: {
-    message?: string;
-    summary?: string;
-  } | null;
+  event_data?: { message?: string; summary?: string } | null;
 }
 
 interface HistoryEventsResponse {
@@ -113,10 +107,7 @@ interface KMAdaptersPayload {
   total?: number;
   enabled?: number;
   last_sync?: string | null;
-  adapters?: Array<{
-    name?: string;
-    enabled?: boolean;
-  }>;
+  adapters?: Array<{ name?: string; enabled?: boolean }>;
 }
 
 interface NomicStatePayload {
@@ -163,31 +154,46 @@ function formatTimestamp(ts: string | null | undefined): string {
 
 function getSeverityStyle(severity: string) {
   switch (severity) {
-    case 'critical': return { badge: 'bg-red-500/20 text-red-400', dot: 'bg-red-400' };
-    case 'warning': return { badge: 'bg-yellow-500/20 text-yellow-400', dot: 'bg-yellow-400' };
-    case 'info': return { badge: 'bg-blue-400/20 text-blue-400', dot: 'bg-blue-400' };
-    default: return { badge: 'bg-surface text-text-muted', dot: 'bg-text-muted' };
+    case 'critical':
+      return { badge: 'bg-red-500/20 text-red-400', dot: 'bg-red-400' };
+    case 'warning':
+      return { badge: 'bg-yellow-500/20 text-yellow-400', dot: 'bg-yellow-400' };
+    case 'info':
+      return { badge: 'bg-blue-400/20 text-blue-400', dot: 'bg-blue-400' };
+    default:
+      return { badge: 'bg-surface text-text-muted', dot: 'bg-text-muted' };
   }
 }
 
 function getOverallStatusStyle(status: string) {
   switch (status) {
-    case 'healthy': return 'text-[var(--accent)] border-[var(--accent)]/30 bg-[var(--accent)]/10';
-    case 'degraded': return 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10';
-    case 'critical': return 'text-red-400 border-red-500/30 bg-red-500/10';
-    default: return 'text-text-muted border-border bg-surface';
+    case 'healthy':
+      return 'text-[var(--accent)] border-[var(--accent)]/30 bg-[var(--accent)]/10';
+    case 'degraded':
+      return 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10';
+    case 'critical':
+      return 'text-red-400 border-red-500/30 bg-red-500/10';
+    default:
+      return 'text-text-muted border-border bg-surface';
   }
 }
 
 function getPhaseLabel(phase: string) {
   switch (phase) {
-    case 'context': return 'Gathering Context';
-    case 'debate': return 'Agent Debate';
-    case 'design': return 'Architecture Design';
-    case 'implement': return 'Implementation';
-    case 'verify': return 'Verification';
-    case 'complete': return 'Cycle Complete';
-    default: return phase;
+    case 'context':
+      return 'Gathering Context';
+    case 'debate':
+      return 'Agent Debate';
+    case 'design':
+      return 'Architecture Design';
+    case 'implement':
+      return 'Implementation';
+    case 'verify':
+      return 'Verification';
+    case 'complete':
+      return 'Cycle Complete';
+    default:
+      return phase;
   }
 }
 
@@ -195,7 +201,9 @@ function normalizeAnomalies(data?: MonitoringAnomalyResponse | null): AnomalyAle
   return (data?.anomalies ?? []).map((anomaly, index) => ({
     id: anomaly.id ?? `anomaly-${index}`,
     severity:
-      anomaly.severity === 'critical' || anomaly.severity === 'warning' || anomaly.severity === 'info'
+      anomaly.severity === 'critical' ||
+      anomaly.severity === 'warning' ||
+      anomaly.severity === 'info'
         ? anomaly.severity
         : 'warning',
     message: anomaly.description ?? anomaly.message ?? 'Anomaly detected',
@@ -209,7 +217,8 @@ function normalizeSystemEvents(data?: HistoryEventsResponse | null): SystemEvent
   return (data?.events ?? []).map((event, index) => ({
     id: event.id ?? `event-${index}`,
     type: event.event_type ?? event.type ?? 'system_event',
-    message: event.message ?? event.event_data?.message ?? event.event_data?.summary ?? 'System event',
+    message:
+      event.message ?? event.event_data?.message ?? event.event_data?.summary ?? 'System event',
     timestamp: event.timestamp ?? '',
     source: event.agent ?? event.source ?? 'system',
   }));
@@ -217,7 +226,7 @@ function normalizeSystemEvents(data?: HistoryEventsResponse | null): SystemEvent
 
 function normalizeKMSyncStatus(
   healthEnvelope?: SuccessEnvelope<KMHealthPayload> | null,
-  adaptersEnvelope?: SuccessEnvelope<KMAdaptersPayload> | null
+  adaptersEnvelope?: SuccessEnvelope<KMAdaptersPayload> | null,
 ): KMSyncStatus | null {
   const health = healthEnvelope?.data;
   const adapters = adaptersEnvelope?.data;
@@ -225,9 +234,9 @@ function normalizeKMSyncStatus(
   if (!health && !adapters) return null;
 
   const adaptersTotal = adapters?.total ?? adapters?.adapters?.length ?? 0;
-  const derivedEnabledAdapters = adapters?.adapters?.filter((adapter) => adapter.enabled).length ?? 0;
-  const adaptersActive =
-    adapters?.enabled ?? derivedEnabledAdapters;
+  const derivedEnabledAdapters =
+    adapters?.adapters?.filter((adapter) => adapter.enabled).length ?? 0;
+  const adaptersActive = adapters?.enabled ?? derivedEnabledAdapters;
   const syncHealthy =
     typeof health?.checks?.adapters === 'boolean'
       ? health.checks.adapters
@@ -244,7 +253,7 @@ function normalizeKMSyncStatus(
 
 function normalizeNomicCycleStatus(
   state: NomicStatePayload | null | undefined,
-  overview: SystemOverviewData | null
+  overview: SystemOverviewData | null,
 ): NomicCycleStatus | null {
   if (!state && !overview) return null;
 
@@ -293,41 +302,44 @@ export default function SystemIntelligencePage() {
 
   // --- System health ---
   const { health, isLoading: healthLoading } = useSystemHealth();
-  const { agents: poolAgents, total: poolTotal, active: poolActive, available: poolAvailable } = useAgentPoolHealth();
+  const {
+    agents: poolAgents,
+    total: poolTotal,
+    active: poolActive,
+    available: poolAvailable,
+  } = useAgentPoolHealth();
 
   // --- Additional data from backend ---
   const { data: anomalyData } = useSWRFetch<MonitoringAnomalyResponse>(
     '/api/v1/autonomous/monitoring/anomalies?hours=24',
-    { refreshInterval: 15000 }
+    { refreshInterval: 15000 },
   );
   const anomalies = normalizeAnomalies(anomalyData);
-  const unresolvedAnomalies = anomalies.filter(a => !a.resolved);
+  const unresolvedAnomalies = anomalies.filter((a) => !a.resolved);
 
-  const { data: eventsData } = useSWRFetch<HistoryEventsResponse>(
-    '/api/history/events?limit=30',
-    { refreshInterval: 10000 }
-  );
+  const { data: eventsData } = useSWRFetch<HistoryEventsResponse>('/api/history/events?limit=30', {
+    refreshInterval: 10000,
+  });
   const systemEvents = normalizeSystemEvents(eventsData);
 
   const { data: kmHealthData } = useSWRFetch<SuccessEnvelope<KMHealthPayload>>(
     '/api/v1/knowledge/mound/dashboard/health',
-    { refreshInterval: 30000 }
+    { refreshInterval: 30000 },
   );
   const { data: kmAdaptersData } = useSWRFetch<SuccessEnvelope<KMAdaptersPayload>>(
     '/api/v1/knowledge/mound/dashboard/adapters',
-    { refreshInterval: 30000 }
+    { refreshInterval: 30000 },
   );
   const kmSync = normalizeKMSyncStatus(kmHealthData, kmAdaptersData);
 
-  const { data: nomicData } = useSWRFetch<NomicStatePayload>(
-    '/api/v1/nomic/state',
-    { refreshInterval: 15000 }
-  );
+  const { data: nomicData } = useSWRFetch<NomicStatePayload>('/api/v1/nomic/state', {
+    refreshInterval: 15000,
+  });
   const nomicStatus = normalizeNomicCycleStatus(nomicData, overview);
 
   const { data: debateQueueData } = useSWRFetch<QueueMetricsPayload>(
     '/api/control-plane/queue/metrics',
-    { refreshInterval: 10000 }
+    { refreshInterval: 10000 },
   );
   const debateQueue = normalizeDebateQueueInfo(debateQueueData);
 
@@ -367,13 +379,22 @@ export default function SystemIntelligencePage() {
               <AsciiBannerCompact connected={true} />
             </Link>
             <div className="flex items-center gap-3">
-              <Link href="/leaderboard" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/leaderboard"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [LEADERBOARD]
               </Link>
-              <Link href="/self-improve" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/self-improve"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [SELF-IMPROVE]
               </Link>
-              <Link href="/memory-gateway" className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors">
+              <Link
+                href="/memory-gateway"
+                className="text-xs font-theme-data text-text-muted hover:text-[var(--accent)] transition-colors"
+              >
                 [MEMORY]
               </Link>
               <BackendSelector compact />
@@ -389,7 +410,8 @@ export default function SystemIntelligencePage() {
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
               Aggregated view of system health, agent performance, institutional memory,
-              self-improvement cycles, and anomaly detection. The system&apos;s learning at a glance.
+              self-improvement cycles, and anomaly detection. The system&apos;s learning at a
+              glance.
             </p>
           </div>
 
@@ -398,14 +420,20 @@ export default function SystemIntelligencePage() {
           {/* ================================================================ */}
           <PanelErrorBoundary panelName="System Health">
             {!healthLoading && health && (
-              <div className={`mb-6 p-4 border rounded-lg ${getOverallStatusStyle(health.overall_status)}`}>
+              <div
+                className={`mb-6 p-4 border rounded-lg ${getOverallStatusStyle(health.overall_status)}`}
+              >
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
-                    <span className={`w-3 h-3 rounded-full ${
-                      health.overall_status === 'healthy' ? 'bg-[var(--accent)] animate-pulse' :
-                      health.overall_status === 'degraded' ? 'bg-yellow-400 animate-pulse' :
-                      'bg-red-400 animate-pulse'
-                    }`} />
+                    <span
+                      className={`w-3 h-3 rounded-full ${
+                        health.overall_status === 'healthy'
+                          ? 'bg-[var(--accent)] animate-pulse'
+                          : health.overall_status === 'degraded'
+                            ? 'bg-yellow-400 animate-pulse'
+                            : 'bg-red-400 animate-pulse'
+                      }`}
+                    />
                     <span className="font-theme-data text-sm font-bold uppercase">
                       System {health.overall_status}
                     </span>
@@ -418,19 +446,23 @@ export default function SystemIntelligencePage() {
                       <span>
                         Budget: {(health.budget.utilization * 100).toFixed(0)}% used
                         {health.budget.forecast && (
-                          <span className="ml-1 opacity-70">
-                            ({health.budget.forecast.trend})
-                          </span>
+                          <span className="ml-1 opacity-70">({health.budget.forecast.trend})</span>
                         )}
                       </span>
                     )}
                     {health.circuit_breakers?.available && (
                       <span>
-                        Breakers: {health.circuit_breakers.breakers.filter(b => b.state === 'open').length} open / {health.circuit_breakers.total}
+                        Breakers:{' '}
+                        {health.circuit_breakers.breakers.filter((b) => b.state === 'open').length}{' '}
+                        open / {health.circuit_breakers.total}
                       </span>
                     )}
                     {health.slos?.available && (
-                      <span className={health.slos.overall_healthy ? 'text-[var(--accent)]' : 'text-red-400'}>
+                      <span
+                        className={
+                          health.slos.overall_healthy ? 'text-[var(--accent)]' : 'text-red-400'
+                        }
+                      >
                         SLOs: {health.slos.overall_healthy ? 'compliant' : 'breach'}
                       </span>
                     )}
@@ -448,21 +480,25 @@ export default function SystemIntelligencePage() {
               {/* Nomic cycles */}
               <div className="p-3 bg-surface border border-border rounded-lg text-center">
                 <div className="text-2xl font-theme-data font-bold text-[var(--accent)]">
-                  {overviewLoading ? '-' : overview?.totalCycles ?? 0}
+                  {overviewLoading ? '-' : (overview?.totalCycles ?? 0)}
                 </div>
                 <div className="text-xs text-text-muted uppercase">Nomic Cycles</div>
               </div>
               {/* Success rate */}
               <div className="p-3 bg-surface border border-border rounded-lg text-center">
                 <div className="text-2xl font-theme-data font-bold text-blue-400">
-                  {overviewLoading ? '-' : overview ? `${(overview.successRate * 100).toFixed(0)}%` : '0%'}
+                  {overviewLoading
+                    ? '-'
+                    : overview
+                      ? `${(overview.successRate * 100).toFixed(0)}%`
+                      : '0%'}
                 </div>
                 <div className="text-xs text-text-muted uppercase">Success Rate</div>
               </div>
               {/* Active agents */}
               <div className="p-3 bg-surface border border-border rounded-lg text-center">
                 <div className="text-2xl font-theme-data font-bold text-purple-400">
-                  {poolAvailable ? `${poolActive}/${poolTotal}` : overview?.activeAgents ?? '-'}
+                  {poolAvailable ? `${poolActive}/${poolTotal}` : (overview?.activeAgents ?? '-')}
                 </div>
                 <div className="text-xs text-text-muted uppercase">Agents Active</div>
               </div>
@@ -483,7 +519,7 @@ export default function SystemIntelligencePage() {
               {/* Knowledge items */}
               <div className="p-3 bg-surface border border-border rounded-lg text-center">
                 <div className="text-2xl font-theme-data font-bold text-gold">
-                  {overviewLoading ? '-' : overview?.knowledgeItems ?? 0}
+                  {overviewLoading ? '-' : (overview?.knowledgeItems ?? 0)}
                 </div>
                 <div className="text-xs text-text-muted uppercase">Knowledge Items</div>
               </div>
@@ -523,7 +559,9 @@ export default function SystemIntelligencePage() {
                     {nomicStatus ? (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${nomicStatus.active ? 'bg-[var(--accent)] animate-pulse' : 'bg-text-muted'}`} />
+                          <span
+                            className={`w-2 h-2 rounded-full ${nomicStatus.active ? 'bg-[var(--accent)] animate-pulse' : 'bg-text-muted'}`}
+                          />
                           <span className="font-theme-data text-sm text-text">
                             {nomicStatus.active ? 'Running' : 'Idle'}
                           </span>
@@ -532,26 +570,36 @@ export default function SystemIntelligencePage() {
                           <div className="space-y-1">
                             <div className="flex justify-between text-xs">
                               <span className="text-text-muted">Cycle:</span>
-                              <span className="font-theme-data text-text">{nomicStatus.current_cycle}</span>
+                              <span className="font-theme-data text-text">
+                                {nomicStatus.current_cycle}
+                              </span>
                             </div>
                             <div className="flex justify-between text-xs">
                               <span className="text-text-muted">Phase:</span>
-                              <span className="font-theme-data text-[var(--accent)]">{getPhaseLabel(nomicStatus.current_phase)}</span>
+                              <span className="font-theme-data text-[var(--accent)]">
+                                {getPhaseLabel(nomicStatus.current_phase)}
+                              </span>
                             </div>
                           </div>
                         )}
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-text-muted">Total Cycles:</span>
-                            <span className="font-theme-data text-text">{nomicStatus.total_cycles}</span>
+                            <span className="font-theme-data text-text">
+                              {nomicStatus.total_cycles}
+                            </span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-text-muted">Success Rate:</span>
-                            <span className="font-theme-data text-text">{(nomicStatus.success_rate * 100).toFixed(0)}%</span>
+                            <span className="font-theme-data text-text">
+                              {(nomicStatus.success_rate * 100).toFixed(0)}%
+                            </span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-text-muted">Last Completed:</span>
-                            <span className="font-theme-data text-text">{formatTimestamp(nomicStatus.last_completed_at)}</span>
+                            <span className="font-theme-data text-text">
+                              {formatTimestamp(nomicStatus.last_completed_at)}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -570,7 +618,9 @@ export default function SystemIntelligencePage() {
                     {kmSync ? (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${kmSync.sync_healthy ? 'bg-[var(--accent)]' : 'bg-red-400'}`} />
+                          <span
+                            className={`w-2 h-2 rounded-full ${kmSync.sync_healthy ? 'bg-[var(--accent)]' : 'bg-red-400'}`}
+                          />
                           <span className="font-theme-data text-sm text-text">
                             {kmSync.sync_healthy ? 'Healthy' : 'Degraded'}
                           </span>
@@ -578,17 +628,23 @@ export default function SystemIntelligencePage() {
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-text-muted">Adapters:</span>
-                            <span className="font-theme-data text-text">{kmSync.adapters_active}/{kmSync.adapters_total}</span>
+                            <span className="font-theme-data text-text">
+                              {kmSync.adapters_active}/{kmSync.adapters_total}
+                            </span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-text-muted">Pending:</span>
-                            <span className={`font-theme-data ${kmSync.pending_items > 100 ? 'text-yellow-400' : 'text-text'}`}>
+                            <span
+                              className={`font-theme-data ${kmSync.pending_items > 100 ? 'text-yellow-400' : 'text-text'}`}
+                            >
                               {kmSync.pending_items}
                             </span>
                           </div>
                           <div className="flex justify-between text-xs">
                             <span className="text-text-muted">Last Sync:</span>
-                            <span className="font-theme-data text-text">{formatTimestamp(kmSync.last_sync)}</span>
+                            <span className="font-theme-data text-text">
+                              {formatTimestamp(kmSync.last_sync)}
+                            </span>
                           </div>
                         </div>
                         {/* Adapter health bar */}
@@ -597,13 +653,18 @@ export default function SystemIntelligencePage() {
                             <div className="flex items-center justify-between text-xs text-text-muted mb-1">
                               <span>Adapter Coverage</span>
                               <span className="font-theme-data">
-                                {((kmSync.adapters_active / kmSync.adapters_total) * 100).toFixed(0)}%
+                                {((kmSync.adapters_active / kmSync.adapters_total) * 100).toFixed(
+                                  0,
+                                )}
+                                %
                               </span>
                             </div>
                             <div className="w-full bg-bg rounded-full h-1.5">
                               <div
                                 className={`h-1.5 rounded-full ${kmSync.sync_healthy ? 'bg-[var(--accent)]' : 'bg-yellow-400'}`}
-                                style={{ width: `${(kmSync.adapters_active / kmSync.adapters_total) * 100}%` }}
+                                style={{
+                                  width: `${(kmSync.adapters_active / kmSync.adapters_total) * 100}%`,
+                                }}
                               />
                             </div>
                           </div>
@@ -625,15 +686,21 @@ export default function SystemIntelligencePage() {
                       <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2">
                           <div className="p-2 bg-bg rounded text-center">
-                            <div className="text-lg font-theme-data font-bold text-[var(--accent)]">{debateQueue.active_debates}</div>
+                            <div className="text-lg font-theme-data font-bold text-[var(--accent)]">
+                              {debateQueue.active_debates}
+                            </div>
                             <div className="text-xs text-text-muted">Active</div>
                           </div>
                           <div className="p-2 bg-bg rounded text-center">
-                            <div className="text-lg font-theme-data font-bold text-yellow-400">{debateQueue.queued_debates}</div>
+                            <div className="text-lg font-theme-data font-bold text-yellow-400">
+                              {debateQueue.queued_debates}
+                            </div>
                             <div className="text-xs text-text-muted">Queued</div>
                           </div>
                           <div className="p-2 bg-bg rounded text-center">
-                            <div className="text-lg font-theme-data font-bold text-blue-400">{debateQueue.completed_today}</div>
+                            <div className="text-lg font-theme-data font-bold text-blue-400">
+                              {debateQueue.completed_today}
+                            </div>
                             <div className="text-xs text-text-muted">Today</div>
                           </div>
                           <div className="p-2 bg-bg rounded text-center">
@@ -670,27 +737,44 @@ export default function SystemIntelligencePage() {
                     </div>
                     {anomalies.length === 0 ? (
                       <div className="text-center py-6">
-                        <span className="text-[var(--accent)] font-theme-data text-sm">No anomalies detected</span>
+                        <span className="text-[var(--accent)] font-theme-data text-sm">
+                          No anomalies detected
+                        </span>
                       </div>
                     ) : (
                       <div className="space-y-2 max-h-[300px] overflow-y-auto">
                         {anomalies.slice(0, 15).map((alert) => {
                           const style = getSeverityStyle(alert.severity);
                           return (
-                            <div key={alert.id} className={`flex items-start gap-2 p-2 bg-bg rounded ${alert.resolved ? 'opacity-50' : ''}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${style.dot}`} />
+                            <div
+                              key={alert.id}
+                              className={`flex items-start gap-2 p-2 bg-bg rounded ${alert.resolved ? 'opacity-50' : ''}`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${style.dot}`}
+                              />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className={`px-1.5 py-0.5 text-xs font-theme-data rounded ${style.badge}`}>
+                                  <span
+                                    className={`px-1.5 py-0.5 text-xs font-theme-data rounded ${style.badge}`}
+                                  >
                                     {alert.severity}
                                   </span>
-                                  <span className="text-xs text-text-muted font-theme-data">{alert.source}</span>
-                                  <span className="text-xs text-text-muted">{formatTimestamp(alert.timestamp)}</span>
+                                  <span className="text-xs text-text-muted font-theme-data">
+                                    {alert.source}
+                                  </span>
+                                  <span className="text-xs text-text-muted">
+                                    {formatTimestamp(alert.timestamp)}
+                                  </span>
                                   {alert.resolved && (
-                                    <span className="text-xs text-[var(--accent)] font-theme-data">RESOLVED</span>
+                                    <span className="text-xs text-[var(--accent)] font-theme-data">
+                                      RESOLVED
+                                    </span>
                                   )}
                                 </div>
-                                <p className="text-sm text-text mt-1 line-clamp-2">{alert.message}</p>
+                                <p className="text-sm text-text mt-1 line-clamp-2">
+                                  {alert.message}
+                                </p>
                               </div>
                             </div>
                           );
@@ -712,37 +796,54 @@ export default function SystemIntelligencePage() {
                         <div>
                           <div className="flex items-center justify-between text-xs text-text-muted mb-1">
                             <span>Utilization</span>
-                            <span className="font-theme-data">{poolTotal > 0 ? ((poolActive / poolTotal) * 100).toFixed(0) : 0}%</span>
+                            <span className="font-theme-data">
+                              {poolTotal > 0 ? ((poolActive / poolTotal) * 100).toFixed(0) : 0}%
+                            </span>
                           </div>
                           <div className="w-full bg-bg rounded-full h-2">
                             <div
                               className={`h-2 rounded-full transition-all ${
-                                poolTotal > 0 && (poolActive / poolTotal) > 0.9
+                                poolTotal > 0 && poolActive / poolTotal > 0.9
                                   ? 'bg-red-400'
-                                  : poolTotal > 0 && (poolActive / poolTotal) > 0.7
-                                  ? 'bg-yellow-400'
-                                  : 'bg-[var(--accent)]'
+                                  : poolTotal > 0 && poolActive / poolTotal > 0.7
+                                    ? 'bg-yellow-400'
+                                    : 'bg-[var(--accent)]'
                               }`}
-                              style={{ width: `${poolTotal > 0 ? (poolActive / poolTotal) * 100 : 0}%` }}
+                              style={{
+                                width: `${poolTotal > 0 ? (poolActive / poolTotal) * 100 : 0}%`,
+                              }}
                             />
                           </div>
                         </div>
                         {/* Agent list */}
                         <div className="space-y-1 max-h-[250px] overflow-y-auto">
                           {poolAgents.slice(0, 20).map((agent) => (
-                            <div key={agent.agent_id} className="flex items-center gap-2 p-2 bg-bg rounded text-xs">
-                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                agent.status === 'active' ? 'bg-[var(--accent)]' :
-                                agent.status === 'idle' ? 'bg-yellow-400' :
-                                'bg-red-400'
-                              }`} />
-                              <span className="font-theme-data text-text flex-1 truncate">{agent.agent_id}</span>
+                            <div
+                              key={agent.agent_id}
+                              className="flex items-center gap-2 p-2 bg-bg rounded text-xs"
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                  agent.status === 'active'
+                                    ? 'bg-[var(--accent)]'
+                                    : agent.status === 'idle'
+                                      ? 'bg-yellow-400'
+                                      : 'bg-red-400'
+                                }`}
+                              />
+                              <span className="font-theme-data text-text flex-1 truncate">
+                                {agent.agent_id}
+                              </span>
                               <span className="text-text-muted">{agent.type}</span>
-                              <span className={`px-1 py-0.5 rounded font-theme-data ${
-                                agent.status === 'active' ? 'text-[var(--accent)] bg-[var(--accent)]/10' :
-                                agent.status === 'idle' ? 'text-yellow-400 bg-yellow-500/10' :
-                                'text-red-400 bg-red-500/10'
-                              }`}>
+                              <span
+                                className={`px-1 py-0.5 rounded font-theme-data ${
+                                  agent.status === 'active'
+                                    ? 'text-[var(--accent)] bg-[var(--accent)]/10'
+                                    : agent.status === 'idle'
+                                      ? 'text-yellow-400 bg-yellow-500/10'
+                                      : 'text-red-400 bg-red-500/10'
+                                }`}
+                              >
                                 {agent.status}
                               </span>
                             </div>
@@ -774,18 +875,26 @@ export default function SystemIntelligencePage() {
                         {systemEvents.slice(0, 30).map((event, idx) => (
                           <div key={event.id || idx} className="relative pl-8 py-2">
                             {/* Timeline dot */}
-                            <div className={`absolute left-2 top-3 w-2.5 h-2.5 rounded-full border-2 border-surface ${
-                              event.type.includes('error') || event.type.includes('fail') ? 'bg-red-400' :
-                              event.type.includes('warn') ? 'bg-yellow-400' :
-                              event.type.includes('complete') || event.type.includes('success') ? 'bg-[var(--accent)]' :
-                              'bg-blue-400'
-                            }`} />
+                            <div
+                              className={`absolute left-2 top-3 w-2.5 h-2.5 rounded-full border-2 border-surface ${
+                                event.type.includes('error') || event.type.includes('fail')
+                                  ? 'bg-red-400'
+                                  : event.type.includes('warn')
+                                    ? 'bg-yellow-400'
+                                    : event.type.includes('complete') ||
+                                        event.type.includes('success')
+                                      ? 'bg-[var(--accent)]'
+                                      : 'bg-blue-400'
+                              }`}
+                            />
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="px-1.5 py-0.5 text-xs font-theme-data bg-surface border border-border rounded text-text-muted">
                                 {event.type}
                               </span>
                               <span className="text-xs text-text-muted">{event.source}</span>
-                              <span className="text-xs text-text-muted ml-auto">{formatTimestamp(event.timestamp)}</span>
+                              <span className="text-xs text-text-muted ml-auto">
+                                {formatTimestamp(event.timestamp)}
+                              </span>
                             </div>
                             <p className="text-sm text-text mt-1">{event.message}</p>
                           </div>
@@ -814,8 +923,12 @@ export default function SystemIntelligencePage() {
                       {overview.topAgents.slice(0, 8).map((agent, idx) => (
                         <div key={agent.id} className="p-3 bg-bg rounded-lg text-center">
                           <div className="text-xs text-text-muted mb-1">#{idx + 1}</div>
-                          <div className="font-theme-data text-sm text-text truncate">{agent.id}</div>
-                          <div className="text-lg font-theme-data font-bold text-[var(--accent)]">{agent.elo}</div>
+                          <div className="font-theme-data text-sm text-text truncate">
+                            {agent.id}
+                          </div>
+                          <div className="text-lg font-theme-data font-bold text-[var(--accent)]">
+                            {agent.elo}
+                          </div>
                           <div className="text-xs text-text-muted">{agent.wins} wins</div>
                         </div>
                       ))}
@@ -831,23 +944,32 @@ export default function SystemIntelligencePage() {
                     Agent Performance (ELO + Calibration)
                   </h2>
                   {agentLoading ? (
-                    <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">Loading...</div>
+                    <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">
+                      Loading...
+                    </div>
                   ) : agentPerfAgents && agentPerfAgents.length > 0 ? (
                     <div className="space-y-2 max-h-[500px] overflow-y-auto">
                       {agentPerfAgents.map((agent) => (
                         <div key={agent.id} className="p-3 bg-bg rounded flex items-center gap-3">
                           <div className="flex-1 min-w-0">
-                            <div className="font-theme-data text-sm text-text truncate">{agent.name}</div>
+                            <div className="font-theme-data text-sm text-text truncate">
+                              {agent.name}
+                            </div>
                             <div className="flex gap-1 mt-1 flex-wrap">
                               {agent.domains.slice(0, 4).map((d) => (
-                                <span key={d} className="px-1 py-0.5 text-xs bg-surface rounded text-text-muted">
+                                <span
+                                  key={d}
+                                  className="px-1 py-0.5 text-xs bg-surface rounded text-text-muted"
+                                >
                                   {d}
                                 </span>
                               ))}
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="font-theme-data text-sm text-[var(--accent)]">{agent.elo}</div>
+                            <div className="font-theme-data text-sm text-[var(--accent)]">
+                              {agent.elo}
+                            </div>
                             <div className="text-xs text-text-muted">ELO</div>
                           </div>
                           <div className="text-right">
@@ -865,8 +987,12 @@ export default function SystemIntelligencePage() {
                           {/* ELO sparkline placeholder */}
                           <div className="w-20 h-6 flex items-end gap-px">
                             {agent.eloHistory.slice(-10).map((point, i) => {
-                              const min = Math.min(...agent.eloHistory.slice(-10).map(p => p.elo));
-                              const max = Math.max(...agent.eloHistory.slice(-10).map(p => p.elo));
+                              const min = Math.min(
+                                ...agent.eloHistory.slice(-10).map((p) => p.elo),
+                              );
+                              const max = Math.max(
+                                ...agent.eloHistory.slice(-10).map((p) => p.elo),
+                              );
                               const range = max - min || 1;
                               const h = ((point.elo - min) / range) * 100;
                               return (
@@ -902,17 +1028,23 @@ export default function SystemIntelligencePage() {
                       Institutional Memory
                     </h2>
                     {memoryLoading ? (
-                      <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">Loading...</div>
+                      <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">
+                        Loading...
+                      </div>
                     ) : memory ? (
                       <div className="space-y-4">
                         {/* Stats */}
                         <div className="grid grid-cols-2 gap-3">
                           <div className="p-2 bg-bg rounded text-center">
-                            <div className="text-lg font-theme-data font-bold text-[var(--accent)]">{memory.totalInjections}</div>
+                            <div className="text-lg font-theme-data font-bold text-[var(--accent)]">
+                              {memory.totalInjections}
+                            </div>
                             <div className="text-xs text-text-muted">Injections</div>
                           </div>
                           <div className="p-2 bg-bg rounded text-center">
-                            <div className="text-lg font-theme-data font-bold text-blue-400">{memory.retrievalCount}</div>
+                            <div className="text-lg font-theme-data font-bold text-blue-400">
+                              {memory.retrievalCount}
+                            </div>
                             <div className="text-xs text-text-muted">Retrievals</div>
                           </div>
                         </div>
@@ -920,15 +1052,22 @@ export default function SystemIntelligencePage() {
                         {/* Learned Patterns */}
                         {memory.topPatterns && memory.topPatterns.length > 0 && (
                           <div>
-                            <h3 className="text-xs text-text-muted uppercase mb-2">Learned Patterns</h3>
+                            <h3 className="text-xs text-text-muted uppercase mb-2">
+                              Learned Patterns
+                            </h3>
                             <div className="space-y-1">
                               {memory.topPatterns.slice(0, 10).map((p, i) => (
-                                <div key={i} className="flex items-center gap-2 text-sm p-2 bg-bg rounded">
+                                <div
+                                  key={i}
+                                  className="flex items-center gap-2 text-sm p-2 bg-bg rounded"
+                                >
                                   <span className="text-text flex-1 line-clamp-1">{p.pattern}</span>
                                   <span className="text-xs font-theme-data text-[var(--accent)] whitespace-nowrap">
                                     {(p.confidence * 100).toFixed(0)}%
                                   </span>
-                                  <span className="text-xs text-text-muted whitespace-nowrap">{p.frequency}x</span>
+                                  <span className="text-xs text-text-muted whitespace-nowrap">
+                                    {p.frequency}x
+                                  </span>
                                 </div>
                               ))}
                             </div>
@@ -938,18 +1077,30 @@ export default function SystemIntelligencePage() {
                         {/* Confidence Changes */}
                         {memory.confidenceChanges && memory.confidenceChanges.length > 0 && (
                           <div>
-                            <h3 className="text-xs text-text-muted uppercase mb-2">Confidence Shifts</h3>
+                            <h3 className="text-xs text-text-muted uppercase mb-2">
+                              Confidence Shifts
+                            </h3>
                             <div className="space-y-1">
                               {memory.confidenceChanges.slice(0, 8).map((c, i) => {
                                 const delta = c.after - c.before;
                                 return (
-                                  <div key={i} className="flex items-center gap-2 text-sm p-2 bg-bg rounded">
+                                  <div
+                                    key={i}
+                                    className="flex items-center gap-2 text-sm p-2 bg-bg rounded"
+                                  >
                                     <span className="text-text flex-1 line-clamp-1">{c.topic}</span>
-                                    <span className="text-red-400 text-xs font-theme-data">{(c.before * 100).toFixed(0)}%</span>
+                                    <span className="text-red-400 text-xs font-theme-data">
+                                      {(c.before * 100).toFixed(0)}%
+                                    </span>
                                     <span className="text-text-muted">&rarr;</span>
-                                    <span className="text-[var(--accent)] text-xs font-theme-data">{(c.after * 100).toFixed(0)}%</span>
-                                    <span className={`text-xs font-theme-data ${delta > 0 ? 'text-[var(--accent)]' : 'text-red-400'}`}>
-                                      {delta > 0 ? '+' : ''}{(delta * 100).toFixed(0)}
+                                    <span className="text-[var(--accent)] text-xs font-theme-data">
+                                      {(c.after * 100).toFixed(0)}%
+                                    </span>
+                                    <span
+                                      className={`text-xs font-theme-data ${delta > 0 ? 'text-[var(--accent)]' : 'text-red-400'}`}
+                                    >
+                                      {delta > 0 ? '+' : ''}
+                                      {(delta * 100).toFixed(0)}
                                     </span>
                                   </div>
                                 );
@@ -959,7 +1110,9 @@ export default function SystemIntelligencePage() {
                         )}
                       </div>
                     ) : (
-                      <p className="text-text-muted text-sm">No institutional memory data available.</p>
+                      <p className="text-text-muted text-sm">
+                        No institutional memory data available.
+                      </p>
                     )}
                   </div>
                 </PanelErrorBoundary>
@@ -971,20 +1124,29 @@ export default function SystemIntelligencePage() {
                       Recent Improvements
                     </h2>
                     {overviewLoading ? (
-                      <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">Loading...</div>
+                      <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">
+                        Loading...
+                      </div>
                     ) : overview?.recentImprovements && overview.recentImprovements.length > 0 ? (
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {overview.recentImprovements.map((imp) => (
                           <div key={imp.id} className="flex items-center gap-3 p-3 bg-bg rounded">
-                            <span className={`px-2 py-0.5 text-xs font-theme-data rounded ${
-                              imp.status === 'completed' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-                              imp.status === 'in_progress' ? 'bg-blue-400/20 text-blue-400' :
-                              imp.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                              'bg-surface text-text-muted'
-                            }`}>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-theme-data rounded ${
+                                imp.status === 'completed'
+                                  ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                                  : imp.status === 'in_progress'
+                                    ? 'bg-blue-400/20 text-blue-400'
+                                    : imp.status === 'failed'
+                                      ? 'bg-red-500/20 text-red-400'
+                                      : 'bg-surface text-text-muted'
+                              }`}
+                            >
                               {imp.status}
                             </span>
-                            <span className="text-sm text-text flex-1 line-clamp-1">{imp.goal}</span>
+                            <span className="text-sm text-text flex-1 line-clamp-1">
+                              {imp.goal}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -1033,29 +1195,44 @@ export default function SystemIntelligencePage() {
                     Self-Improvement Queue
                   </h2>
                   {queueLoading ? (
-                    <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">Loading...</div>
+                    <div className="text-[var(--accent)] font-theme-data animate-pulse text-sm">
+                      Loading...
+                    </div>
                   ) : queueItems && queueItems.length > 0 ? (
                     <div className="space-y-2 max-h-[500px] overflow-y-auto">
                       {queueItems.map((item) => (
                         <div key={item.id} className="flex items-center gap-3 p-3 bg-bg rounded">
-                          <span className={`px-2 py-0.5 text-xs font-theme-data rounded whitespace-nowrap ${
-                            item.priority >= 75 ? 'bg-red-500/20 text-red-400' :
-                            item.priority >= 50 ? 'bg-yellow-500/20 text-yellow-400' :
-                            'bg-blue-400/20 text-blue-400'
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 text-xs font-theme-data rounded whitespace-nowrap ${
+                              item.priority >= 75
+                                ? 'bg-red-500/20 text-red-400'
+                                : item.priority >= 50
+                                  ? 'bg-yellow-500/20 text-yellow-400'
+                                  : 'bg-blue-400/20 text-blue-400'
+                            }`}
+                          >
                             P{item.priority}
                           </span>
-                          <span className={`px-1.5 py-0.5 text-xs font-theme-data rounded ${
-                            item.status === 'completed' ? 'bg-[var(--accent)]/20 text-[var(--accent)]' :
-                            item.status === 'in_progress' ? 'bg-blue-400/20 text-blue-400' :
-                            item.status === 'failed' ? 'bg-red-500/20 text-red-400' :
-                            'bg-surface text-text-muted'
-                          }`}>
+                          <span
+                            className={`px-1.5 py-0.5 text-xs font-theme-data rounded ${
+                              item.status === 'completed'
+                                ? 'bg-[var(--accent)]/20 text-[var(--accent)]'
+                                : item.status === 'in_progress'
+                                  ? 'bg-blue-400/20 text-blue-400'
+                                  : item.status === 'failed'
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : 'bg-surface text-text-muted'
+                            }`}
+                          >
                             {item.status}
                           </span>
                           <span className="text-sm text-text flex-1 line-clamp-1">{item.goal}</span>
-                          <span className="text-xs text-text-muted whitespace-nowrap">{item.source}</span>
-                          <span className="text-xs text-text-muted whitespace-nowrap">{formatTimestamp(item.createdAt)}</span>
+                          <span className="text-xs text-text-muted whitespace-nowrap">
+                            {item.source}
+                          </span>
+                          <span className="text-xs text-text-muted whitespace-nowrap">
+                            {formatTimestamp(item.createdAt)}
+                          </span>
                         </div>
                       ))}
                     </div>

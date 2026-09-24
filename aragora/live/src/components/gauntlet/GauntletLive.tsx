@@ -1,7 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useGauntletWebSocket, GauntletAgent, GauntletFinding, GauntletVerdict, GauntletConnectionStatus } from '@/hooks/useGauntletWebSocket';
+import {
+  useGauntletWebSocket,
+  GauntletAgent,
+  GauntletFinding,
+  GauntletVerdict,
+  GauntletConnectionStatus,
+} from '@/hooks/useGauntletWebSocket';
 
 interface GauntletLiveProps {
   gauntletId: string;
@@ -17,30 +23,77 @@ const STATUS_CONFIG: Record<GauntletConnectionStatus, { color: string; label: st
 };
 
 const SEVERITY_CONFIG = {
-  CRITICAL: { bg: 'bg-red-500/20', border: 'border-red-500/50', text: 'text-red-400', label: 'CRITICAL' },
-  HIGH: { bg: 'bg-orange-500/20', border: 'border-orange-500/50', text: 'text-orange-400', label: 'HIGH' },
-  MEDIUM: { bg: 'bg-yellow-500/20', border: 'border-yellow-500/50', text: 'text-yellow-400', label: 'MEDIUM' },
-  LOW: { bg: 'bg-[var(--acid-cyan)]/20', border: 'border-[var(--acid-cyan)]/50', text: 'text-[var(--acid-cyan)]', label: 'LOW' },
+  CRITICAL: {
+    bg: 'bg-red-500/20',
+    border: 'border-red-500/50',
+    text: 'text-red-400',
+    label: 'CRITICAL',
+  },
+  HIGH: {
+    bg: 'bg-orange-500/20',
+    border: 'border-orange-500/50',
+    text: 'text-orange-400',
+    label: 'HIGH',
+  },
+  MEDIUM: {
+    bg: 'bg-yellow-500/20',
+    border: 'border-yellow-500/50',
+    text: 'text-yellow-400',
+    label: 'MEDIUM',
+  },
+  LOW: {
+    bg: 'bg-[var(--acid-cyan)]/20',
+    border: 'border-[var(--acid-cyan)]/50',
+    text: 'text-[var(--acid-cyan)]',
+    label: 'LOW',
+  },
 };
 
 const VERDICT_CONFIG = {
-  APPROVED: { bg: 'bg-green-500/20', border: 'border-green-500', text: 'text-green-400', icon: '\u2713' },
-  APPROVED_WITH_CONDITIONS: { bg: 'bg-yellow-500/20', border: 'border-yellow-500', text: 'text-yellow-400', icon: '\u26A0' },
-  NEEDS_REVIEW: { bg: 'bg-orange-500/20', border: 'border-orange-500', text: 'text-orange-400', icon: '\u2691' },
+  APPROVED: {
+    bg: 'bg-green-500/20',
+    border: 'border-green-500',
+    text: 'text-green-400',
+    icon: '\u2713',
+  },
+  APPROVED_WITH_CONDITIONS: {
+    bg: 'bg-yellow-500/20',
+    border: 'border-yellow-500',
+    text: 'text-yellow-400',
+    icon: '\u26A0',
+  },
+  NEEDS_REVIEW: {
+    bg: 'bg-orange-500/20',
+    border: 'border-orange-500',
+    text: 'text-orange-400',
+    icon: '\u2691',
+  },
   REJECTED: { bg: 'bg-red-500/20', border: 'border-red-500', text: 'text-red-400', icon: '\u2717' },
 };
 
 const AGENT_STATUS_CONFIG = {
   idle: { bg: 'bg-surface', border: 'border-border', text: 'text-text-muted', pulse: false },
-  active: { bg: 'bg-[var(--accent)]/10', border: 'border-[var(--accent)]/50', text: 'text-[var(--accent)]', pulse: true },
-  complete: { bg: 'bg-[var(--acid-cyan)]/10', border: 'border-[var(--acid-cyan)]/50', text: 'text-[var(--acid-cyan)]', pulse: false },
+  active: {
+    bg: 'bg-[var(--accent)]/10',
+    border: 'border-[var(--accent)]/50',
+    text: 'text-[var(--accent)]',
+    pulse: true,
+  },
+  complete: {
+    bg: 'bg-[var(--acid-cyan)]/10',
+    border: 'border-[var(--acid-cyan)]/50',
+    text: 'text-[var(--acid-cyan)]',
+    pulse: false,
+  },
 };
 
 function AgentCard({ agent }: { agent: GauntletAgent }) {
   const config = AGENT_STATUS_CONFIG[agent.status];
 
   return (
-    <div className={`p-3 rounded border ${config.bg} ${config.border} ${config.pulse ? 'animate-pulse' : ''}`}>
+    <div
+      className={`p-3 rounded border ${config.bg} ${config.border} ${config.pulse ? 'animate-pulse' : ''}`}
+    >
       <div className="flex items-center justify-between mb-2">
         <span className={`font-theme-data text-sm ${config.text}`}>{agent.name}</span>
         <span className="text-xs font-theme-data text-text-muted uppercase">{agent.status}</span>
@@ -60,14 +113,18 @@ function FindingCard({ finding }: { finding: GauntletFinding }) {
   return (
     <div className={`p-3 rounded border-l-4 ${config.bg} ${config.border}`}>
       <div className="flex items-center gap-2 mb-1">
-        <span className={`text-xs font-theme-data uppercase px-2 py-0.5 rounded ${config.bg} ${config.text}`}>
+        <span
+          className={`text-xs font-theme-data uppercase px-2 py-0.5 rounded ${config.bg} ${config.text}`}
+        >
           {finding.severity}
         </span>
         <span className="text-xs font-theme-data text-text-muted">{finding.category}</span>
       </div>
       <h4 className={`font-theme-data text-sm ${config.text} mb-1`}>{finding.title}</h4>
       <p className="text-xs text-text-muted font-theme-data line-clamp-2">{finding.description}</p>
-      <div className="text-xs font-theme-data text-text-muted/60 mt-1">Source: {finding.source}</div>
+      <div className="text-xs font-theme-data text-text-muted/60 mt-1">
+        Source: {finding.source}
+      </div>
     </div>
   );
 }
@@ -81,7 +138,9 @@ function VerdictPanel({ verdict }: { verdict: GauntletVerdict }) {
         <div className="flex items-center gap-3">
           <span className={`text-4xl ${config.text}`}>{config.icon}</span>
           <div>
-            <h3 className={`text-xl font-theme-data ${config.text}`}>{verdict.verdict.replace('_', ' ')}</h3>
+            <h3 className={`text-xl font-theme-data ${config.text}`}>
+              {verdict.verdict.replace('_', ' ')}
+            </h3>
             <span className="text-sm font-theme-data text-text-muted">
               Confidence: {(verdict.confidence * 100).toFixed(0)}%
             </span>
@@ -92,11 +151,15 @@ function VerdictPanel({ verdict }: { verdict: GauntletVerdict }) {
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="p-3 bg-surface rounded">
           <div className="text-xs font-theme-data text-text-muted mb-1">Risk Score</div>
-          <div className="text-2xl font-theme-data text-[var(--accent)]">{(verdict.riskScore * 100).toFixed(0)}</div>
+          <div className="text-2xl font-theme-data text-[var(--accent)]">
+            {(verdict.riskScore * 100).toFixed(0)}
+          </div>
         </div>
         <div className="p-3 bg-surface rounded">
           <div className="text-xs font-theme-data text-text-muted mb-1">Robustness</div>
-          <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">{(verdict.robustnessScore * 100).toFixed(0)}</div>
+          <div className="text-2xl font-theme-data text-[var(--acid-cyan)]">
+            {(verdict.robustnessScore * 100).toFixed(0)}
+          </div>
         </div>
       </div>
 
@@ -182,10 +245,10 @@ export function GauntletLive({ gauntletId, wsUrl, onComplete }: GauntletLiveProp
 
   // Count findings by severity
   const findingCounts = {
-    critical: findings.filter(f => f.severity === 'CRITICAL').length,
-    high: findings.filter(f => f.severity === 'HIGH').length,
-    medium: findings.filter(f => f.severity === 'MEDIUM').length,
-    low: findings.filter(f => f.severity === 'LOW').length,
+    critical: findings.filter((f) => f.severity === 'CRITICAL').length,
+    high: findings.filter((f) => f.severity === 'HIGH').length,
+    medium: findings.filter((f) => f.severity === 'MEDIUM').length,
+    low: findings.filter((f) => f.severity === 'LOW').length,
   };
 
   return (
@@ -204,7 +267,9 @@ export function GauntletLive({ gauntletId, wsUrl, onComplete }: GauntletLiveProp
             {inputType && (
               <div className="mb-2">
                 <span className="text-xs font-theme-data text-text-muted">Input: </span>
-                <span className="text-xs font-theme-data text-[var(--accent)] uppercase">{inputType}</span>
+                <span className="text-xs font-theme-data text-[var(--accent)] uppercase">
+                  {inputType}
+                </span>
               </div>
             )}
 
@@ -301,9 +366,7 @@ export function GauntletLive({ gauntletId, wsUrl, onComplete }: GauntletLiveProp
                   <div className="animate-pulse">Waiting for agents...</div>
                 </div>
               ) : (
-                agentArray.map((agent) => (
-                  <AgentCard key={agent.name} agent={agent} />
-                ))
+                agentArray.map((agent) => <AgentCard key={agent.name} agent={agent} />)
               )}
             </div>
           )}

@@ -11,10 +11,7 @@ import { test, expect, mockApiResponse } from './fixtures';
 
 test.describe('Multi-Provider Account Linking', () => {
   test.describe('Account Settings Page', () => {
-    test('shows connected accounts section when authenticated', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('shows connected accounts section when authenticated', async ({ page, aragoraPage }) => {
       // Mock authenticated user
       await page.addInitScript(() => {
         localStorage.setItem('auth_token', 'test-token');
@@ -45,19 +42,13 @@ test.describe('Multi-Provider Account Linking', () => {
       expect(page.url()).toContain('settings');
     });
 
-    test('displays list of available OAuth providers', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('displays list of available OAuth providers', async ({ page, aragoraPage }) => {
       await page.addInitScript(() => {
         localStorage.setItem('auth_token', 'test-token');
       });
 
       await mockApiResponse(page, '**/api/auth/me', {
-        user: {
-          id: 'user-123',
-          email: 'test@example.com',
-        },
+        user: { id: 'user-123', email: 'test@example.com' },
       });
 
       // Mock available providers endpoint
@@ -82,29 +73,20 @@ test.describe('Multi-Provider Account Linking', () => {
   });
 
   test.describe('Link Additional Provider', () => {
-    test('shows link button for unconnected providers', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('shows link button for unconnected providers', async ({ page, aragoraPage }) => {
       await page.addInitScript(() => {
         localStorage.setItem('auth_token', 'test-token');
       });
 
       await mockApiResponse(page, '**/api/auth/me', {
-        user: {
-          id: 'user-123',
-          email: 'test@example.com',
-          connected_providers: ['google'],
-        },
+        user: { id: 'user-123', email: 'test@example.com', connected_providers: ['google'] },
       });
 
       await page.goto('/settings');
       await aragoraPage.dismissAllOverlays();
 
       // Look for link/connect buttons
-      const linkButtons = page.locator('button, a').filter({
-        hasText: /link|connect|add/i,
-      });
+      const linkButtons = page.locator('button, a').filter({ hasText: /link|connect|add/i });
 
       // May or may not have link buttons depending on page implementation
       const buttonCount = await linkButtons.count();
@@ -112,10 +94,7 @@ test.describe('Multi-Provider Account Linking', () => {
       expect(buttonCount).toBeGreaterThanOrEqual(0);
     });
 
-    test('initiates OAuth flow when clicking link button', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('initiates OAuth flow when clicking link button', async ({ page, aragoraPage }) => {
       let _oauthInitiated = false;
 
       await page.addInitScript(() => {
@@ -131,9 +110,7 @@ test.describe('Multi-Provider Account Linking', () => {
         _oauthInitiated = true;
         await route.fulfill({
           status: 302,
-          headers: {
-            Location: 'https://accounts.google.com/oauth',
-          },
+          headers: { Location: 'https://accounts.google.com/oauth' },
         });
       });
 
@@ -141,9 +118,9 @@ test.describe('Multi-Provider Account Linking', () => {
       await aragoraPage.dismissAllOverlays();
 
       // Find and click a "link" or "connect" button if present
-      const linkButton = page.locator('button').filter({
-        hasText: /link github|connect github|add github/i,
-      });
+      const linkButton = page
+        .locator('button')
+        .filter({ hasText: /link github|connect github|add github/i });
 
       if ((await linkButton.count()) > 0 && (await linkButton.first().isVisible())) {
         await linkButton.first().click();
@@ -161,11 +138,7 @@ test.describe('Multi-Provider Account Linking', () => {
 
       // Initial state - only Google connected
       await mockApiResponse(page, '**/api/auth/me', {
-        user: {
-          id: 'user-123',
-          email: 'test@example.com',
-          connected_providers: ['google'],
-        },
+        user: { id: 'user-123', email: 'test@example.com', connected_providers: ['google'] },
       });
 
       // Mock successful link callback
@@ -199,10 +172,7 @@ test.describe('Multi-Provider Account Linking', () => {
   });
 
   test.describe('Unlink Provider', () => {
-    test('shows unlink option for connected providers', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('shows unlink option for connected providers', async ({ page, aragoraPage }) => {
       await page.addInitScript(() => {
         localStorage.setItem('auth_token', 'test-token');
       });
@@ -219,9 +189,7 @@ test.describe('Multi-Provider Account Linking', () => {
       await aragoraPage.dismissAllOverlays();
 
       // Look for unlink/disconnect buttons
-      const unlinkButtons = page.locator('button').filter({
-        hasText: /unlink|disconnect|remove/i,
-      });
+      const unlinkButtons = page.locator('button').filter({ hasText: /unlink|disconnect|remove/i });
 
       // May or may not have unlink buttons
       const buttonCount = await unlinkButtons.count();
@@ -257,9 +225,7 @@ test.describe('Multi-Provider Account Linking', () => {
       await aragoraPage.dismissAllOverlays();
 
       // Try to unlink (if button exists)
-      const unlinkButton = page.locator('button').filter({
-        hasText: /unlink|disconnect/i,
-      });
+      const unlinkButton = page.locator('button').filter({ hasText: /unlink|disconnect/i });
 
       if ((await unlinkButton.count()) > 0 && (await unlinkButton.first().isVisible())) {
         await unlinkButton.first().click();
@@ -298,10 +264,7 @@ test.describe('Multi-Provider Account Linking', () => {
       await page.route('**/api/auth/unlink/github', async (route) => {
         await route.fulfill({
           status: 200,
-          body: JSON.stringify({
-            success: true,
-            message: 'GitHub account unlinked',
-          }),
+          body: JSON.stringify({ success: true, message: 'GitHub account unlinked' }),
         });
       });
 
@@ -318,20 +281,13 @@ test.describe('Multi-Provider Account Linking', () => {
   });
 
   test.describe('Provider Status Display', () => {
-    test('shows connected status for linked providers', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('shows connected status for linked providers', async ({ page, aragoraPage }) => {
       await page.addInitScript(() => {
         localStorage.setItem('auth_token', 'test-token');
       });
 
       await mockApiResponse(page, '**/api/auth/me', {
-        user: {
-          id: 'user-123',
-          email: 'test@example.com',
-          connected_providers: ['google'],
-        },
+        user: { id: 'user-123', email: 'test@example.com', connected_providers: ['google'] },
       });
 
       await page.goto('/settings');
@@ -342,10 +298,7 @@ test.describe('Multi-Provider Account Linking', () => {
       expect(pageContent).toBeTruthy();
     });
 
-    test('shows provider email/username when available', async ({
-      page,
-      aragoraPage,
-    }) => {
+    test('shows provider email/username when available', async ({ page, aragoraPage }) => {
       await page.addInitScript(() => {
         localStorage.setItem('auth_token', 'test-token');
       });

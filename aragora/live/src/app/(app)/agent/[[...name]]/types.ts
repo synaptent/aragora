@@ -11,13 +11,7 @@
 export interface AgentProfile {
   agent: string;
   ranking: {
-    rating: {
-      elo: number;
-      wins: number;
-      losses: number;
-      draws: number;
-      games_played: number;
-    };
+    rating: { elo: number; wins: number; losses: number; draws: number; games_played: number };
     recent_matches: number;
   } | null;
   persona: {
@@ -26,10 +20,7 @@ export interface AgentProfile {
     specializations: string[];
     debate_count: number;
   } | null;
-  consistency: {
-    score: number;
-    recent_flips: number;
-  } | null;
+  consistency: { score: number; recent_flips: number } | null;
   calibration: {
     brier_score: number;
     ece?: number;
@@ -85,11 +76,7 @@ export interface PerformanceData {
   critiques_accepted: number;
   critiques_total: number;
   critique_acceptance_rate: number;
-  calibration: {
-    accuracy: number;
-    brier_score: number;
-    prediction_count: number;
-  };
+  calibration: { accuracy: number; brier_score: number; prediction_count: number };
 }
 
 export interface HistoryEntry {
@@ -121,23 +108,35 @@ export function getConsistencyColor(score: number): string {
 
 export function getMomentIcon(type: string): string {
   switch (type.toLowerCase()) {
-    case 'breakthrough': return '⚡';
-    case 'upset_win': return '🏆';
-    case 'consensus_leader': return '🎯';
-    case 'streak': return '🔥';
-    case 'first_win': return '🌟';
-    case 'comeback': return '💪';
-    case 'dominant_performance': return '👑';
-    default: return '📌';
+    case 'breakthrough':
+      return '⚡';
+    case 'upset_win':
+      return '🏆';
+    case 'consensus_leader':
+      return '🎯';
+    case 'streak':
+      return '🔥';
+    case 'first_win':
+      return '🌟';
+    case 'comeback':
+      return '💪';
+    case 'dominant_performance':
+      return '👑';
+    default:
+      return '📌';
   }
 }
 
 export function getResultColor(result: 'win' | 'loss' | 'draw'): string {
   switch (result) {
-    case 'win': return 'text-green-400';
-    case 'loss': return 'text-red-400';
-    case 'draw': return 'text-yellow-400';
-    default: return 'text-text-muted';
+    case 'win':
+      return 'text-green-400';
+    case 'loss':
+      return 'text-red-400';
+    case 'draw':
+      return 'text-yellow-400';
+    default:
+      return 'text-text-muted';
   }
 }
 

@@ -60,10 +60,7 @@ function withAuthHeaders(url: string, init?: RequestInit): RequestInit {
 /**
  * Retry a function with exponential backoff
  */
-export async function retry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {}
-): Promise<T> {
+export async function retry<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const { maxRetries, baseDelayMs, maxDelayMs } = { ...DEFAULT_OPTIONS, ...options };
   let lastError: Error | null = null;
 
@@ -90,7 +87,7 @@ export async function retry<T>(
 export async function fetchWithRetry(
   url: string,
   init?: RequestInit,
-  options: RetryOptions = {}
+  options: RetryOptions = {},
 ): Promise<Response> {
   return retry(async () => {
     const response = await fetch(url, withAuthHeaders(url, init));

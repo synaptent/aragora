@@ -86,9 +86,7 @@ export function OrganizationStep({ onNext, onBack }: OrganizationStepProps) {
         </div>
 
         <div>
-          <label className="block font-theme-data text-sm text-text-muted mb-2">
-            Team size
-          </label>
+          <label className="block font-theme-data text-sm text-text-muted mb-2">Team size</label>
           <div className="grid grid-cols-4 gap-2">
             {(['1-5', '6-15', '16-50', '50+'] as const).map((option) => (
               <button
@@ -109,7 +107,8 @@ export function OrganizationStep({ onNext, onBack }: OrganizationStepProps) {
 
       <div className="p-3 bg-[var(--acid-cyan)]/5 border-l-2 border-[var(--acid-cyan)]">
         <p className="text-xs font-theme-data text-[var(--acid-cyan)]">
-          <span className="text-[var(--accent)]">TIP:</span> You can invite team members in the next step
+          <span className="text-[var(--accent)]">TIP:</span> You can invite team members in the next
+          step
         </p>
       </div>
 

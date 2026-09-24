@@ -69,9 +69,10 @@ const BreadcrumbItem = memo(function BreadcrumbItem({
         className={`
           inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-theme-data
           transition-colors whitespace-nowrap
-          ${isLast
-            ? `${stageColors.bg} ${stageColors.text} font-bold`
-            : `text-text-muted hover:${stageColors.text} hover:${stageColors.bg}`
+          ${
+            isLast
+              ? `${stageColors.bg} ${stageColors.text} font-bold`
+              : `text-text-muted hover:${stageColors.text} hover:${stageColors.bg}`
           }
         `}
       >
@@ -81,9 +82,7 @@ const BreadcrumbItem = memo(function BreadcrumbItem({
           <span>{stageConfig.label}</span>
         )}
       </button>
-      {!isLast && (
-        <span className="text-text-muted select-none">/</span>
-      )}
+      {!isLast && <span className="text-text-muted select-none">/</span>}
     </>
   );
 });

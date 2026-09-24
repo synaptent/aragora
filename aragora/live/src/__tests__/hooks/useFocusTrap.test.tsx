@@ -87,7 +87,7 @@ describe('useFocusTrap', () => {
         <div>
           <button data-testid="outside">Outside</button>
           <TestModal isActive={false} />
-        </div>
+        </div>,
       );
 
       const outsideButton = screen.getByTestId('outside');
@@ -111,9 +111,7 @@ describe('useFocusTrap', () => {
 
       // Dispatch Escape
       act(() => {
-        document.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-        );
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
 
       expect(onEscape).not.toHaveBeenCalled();
@@ -134,7 +132,7 @@ describe('useFocusTrap', () => {
       const activeElement = document.activeElement;
       expect(
         activeElement === screen.getByTestId('button-1') ||
-          activeElement === screen.getByTestId('modal')
+          activeElement === screen.getByTestId('modal'),
       ).toBe(true);
     });
 
@@ -159,9 +157,7 @@ describe('useFocusTrap', () => {
       });
 
       act(() => {
-        document.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-        );
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
 
       expect(onEscape).toHaveBeenCalledTimes(1);
@@ -177,9 +173,7 @@ describe('useFocusTrap', () => {
       // Should not throw
       expect(() => {
         act(() => {
-          document.dispatchEvent(
-            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-          );
+          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         });
       }).not.toThrow();
     });
@@ -290,9 +284,7 @@ describe('useFocusTrap', () => {
 
       // Press Enter
       act(() => {
-        document.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
-        );
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       });
 
       // onEscape should not be called for Enter key
@@ -365,9 +357,7 @@ describe('useFocusTrap', () => {
   describe('cleanup', () => {
     it('removes event listeners on unmount', () => {
       const onEscape = jest.fn();
-      const { unmount } = render(
-        <TestModal isActive={true} onEscape={onEscape} />
-      );
+      const { unmount } = render(<TestModal isActive={true} onEscape={onEscape} />);
 
       act(() => {
         jest.runAllTimers();
@@ -377,9 +367,7 @@ describe('useFocusTrap', () => {
 
       // Dispatch Escape after unmount
       act(() => {
-        document.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
-        );
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       });
 
       // Should not be called after unmount

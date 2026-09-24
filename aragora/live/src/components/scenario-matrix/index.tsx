@@ -5,12 +5,7 @@ import { getAgentColors } from '@/utils/agentColors';
 import type { StreamEvent } from '@/types/events';
 import { API_BASE_URL } from '@/config';
 
-import type {
-  MatrixDebateResult,
-  ScenarioInput,
-  FilterState,
-  ViewMode,
-} from './types';
+import type { MatrixDebateResult, ScenarioInput, FilterState, ViewMode } from './types';
 import { MetricCard } from './MetricCard';
 import { ScenarioCard } from './ScenarioCard';
 import { ScenarioBuilder } from './ScenarioBuilder';
@@ -41,9 +36,8 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
 
   // Listen for matrix debate events
   const latestMatrixEvent = useMemo(() => {
-    const relevant = events.filter(e =>
-      e.type === 'scenario_complete' ||
-      e.type === 'matrix_complete'
+    const relevant = events.filter(
+      (e) => e.type === 'scenario_complete' || e.type === 'matrix_complete',
     );
     return relevant[relevant.length - 1];
   }, [events]);
@@ -81,9 +75,7 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
       const refreshResult = async () => {
         try {
           const apiUrl = API_BASE_URL;
-          const response = await fetch(
-            `${apiUrl}/api/debates/matrix/${result.matrix_id}`
-          );
+          const response = await fetch(`${apiUrl}/api/debates/matrix/${result.matrix_id}`);
           if (response.ok) {
             const data = await response.json();
             setResult(data);
@@ -99,13 +91,15 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
   // Filter results
   const filteredResults = useMemo(() => {
     if (!result) return [];
-    return result.results.filter(r => {
+    return result.results.filter((r) => {
       if (filters.consensusOnly && !r.consensus_reached) return false;
       if (r.confidence < filters.minConfidence) return false;
       if (filters.searchTerm) {
         const term = filters.searchTerm.toLowerCase();
-        if (!r.scenario_name.toLowerCase().includes(term) &&
-            !r.final_answer.toLowerCase().includes(term)) {
+        if (
+          !r.scenario_name.toLowerCase().includes(term) &&
+          !r.final_answer.toLowerCase().includes(term)
+        ) {
           return false;
         }
       }
@@ -283,13 +277,15 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
           )}
 
           {/* Comparison view */}
-          {compareIndexes && result.results[compareIndexes[0]] && result.results[compareIndexes[1]] && (
-            <CompareView
-              left={result.results[compareIndexes[0]]}
-              right={result.results[compareIndexes[1]]}
-              onClose={() => setCompareIndexes(null)}
-            />
-          )}
+          {compareIndexes &&
+            result.results[compareIndexes[0]] &&
+            result.results[compareIndexes[1]] && (
+              <CompareView
+                left={result.results[compareIndexes[0]]}
+                right={result.results[compareIndexes[1]]}
+                onClose={() => setCompareIndexes(null)}
+              />
+            )}
 
           {/* Scenario results */}
           <div className="bg-surface border border-[var(--acid-cyan)]/30">
@@ -341,10 +337,14 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
                   min="0"
                   max="100"
                   value={filters.minConfidence * 100}
-                  onChange={(e) => setFilters({ ...filters, minConfidence: parseInt(e.target.value) / 100 })}
+                  onChange={(e) =>
+                    setFilters({ ...filters, minConfidence: parseInt(e.target.value) / 100 })
+                  }
                   className="w-20 h-1 accent-acid-cyan"
                 />
-                <span className="text-[var(--acid-cyan)]">{Math.round(filters.minConfidence * 100)}%</span>
+                <span className="text-[var(--acid-cyan)]">
+                  {Math.round(filters.minConfidence * 100)}%
+                </span>
               </label>
             </div>
 
@@ -443,7 +443,9 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
                     }`}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <span className={`text-sm font-theme-data ${r.is_baseline ? 'text-gold' : 'text-text'}`}>
+                      <span
+                        className={`text-sm font-theme-data ${r.is_baseline ? 'text-gold' : 'text-text'}`}
+                      >
                         {r.scenario_name}
                       </span>
                       {r.is_baseline && (
@@ -465,7 +467,9 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
                       </div>
                       <div className="flex justify-between items-center p-2 bg-bg/50 rounded">
                         <span className="text-text-muted">Confidence</span>
-                        <span className="text-[var(--acid-cyan)]">{(r.confidence * 100).toFixed(0)}%</span>
+                        <span className="text-[var(--acid-cyan)]">
+                          {(r.confidence * 100).toFixed(0)}%
+                        </span>
                       </div>
                       <div className="flex justify-between items-center p-2 bg-bg/50 rounded">
                         <span className="text-text-muted">Rounds</span>
@@ -523,9 +527,7 @@ export function ScenarioMatrixView({ events = [], initialMatrixId }: ScenarioMat
                         <td className="px-4 py-2 text-center text-[var(--acid-cyan)]">
                           {(r.confidence * 100).toFixed(0)}%
                         </td>
-                        <td className="px-4 py-2 text-center text-text-muted">
-                          {r.rounds_used}
-                        </td>
+                        <td className="px-4 py-2 text-center text-text-muted">{r.rounds_used}</td>
                         <td className="px-4 py-2 text-center">
                           {r.winner && winnerColors ? (
                             <span className={`px-2 py-0.5 ${winnerColors.bg} ${winnerColors.text}`}>

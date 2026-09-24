@@ -14,20 +14,10 @@ interface BlocklistPanelProps {
  * Panel for managing blocked email senders.
  * Blocked senders are filtered out during Tier 1 prioritization with priority=BLOCKED.
  */
-export function BlocklistPanel({
-  apiBase,
-  userId,
-  authToken,
-  onBlockSender,
-}: BlocklistPanelProps) {
-  const {
-    blockedSenders,
-    isLoading,
-    error,
-    blockSender,
-    unblockSender,
-    clearError,
-  } = useBlocklist({ apiBase, userId, authToken });
+export function BlocklistPanel({ apiBase, userId, authToken, onBlockSender }: BlocklistPanelProps) {
+  const { blockedSenders, isLoading, error, blockSender, unblockSender, clearError } = useBlocklist(
+    { apiBase, userId, authToken },
+  );
 
   const [newSender, setNewSender] = useState('');
   const [newReason, setNewReason] = useState('');
@@ -49,11 +39,14 @@ export function BlocklistPanel({
     setActionInProgress(null);
   }, [newSender, newReason, blockSender, onBlockSender]);
 
-  const handleUnblock = useCallback(async (sender: string) => {
-    setActionInProgress(sender);
-    await unblockSender(sender);
-    setActionInProgress(null);
-  }, [unblockSender]);
+  const handleUnblock = useCallback(
+    async (sender: string) => {
+      setActionInProgress(sender);
+      await unblockSender(sender);
+      setActionInProgress(null);
+    },
+    [unblockSender],
+  );
 
   const formatDate = (dateStr: string) => {
     try {
@@ -88,10 +81,7 @@ export function BlocklistPanel({
       {error && (
         <div className="mb-4 p-2 bg-red-500/10 border border-red-500/30 rounded flex items-center justify-between">
           <span className="text-red-400 text-xs font-theme-data">{error}</span>
-          <button
-            onClick={clearError}
-            className="text-red-400 hover:text-red-300 text-xs"
-          >
+          <button onClick={clearError} className="text-red-400 hover:text-red-300 text-xs">
             [X]
           </button>
         </div>
@@ -147,9 +137,7 @@ export function BlocklistPanel({
       {!isLoading && blockedSenders.length === 0 && (
         <div className="text-center py-6">
           <div className="text-4xl mb-2">🛡️</div>
-          <p className="text-text-muted font-theme-data text-sm">
-            No blocked senders yet.
-          </p>
+          <p className="text-text-muted font-theme-data text-sm">No blocked senders yet.</p>
           <p className="text-text-muted/60 font-theme-data text-xs mt-1">
             Block senders to filter them from your inbox.
           </p>

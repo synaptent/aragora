@@ -124,9 +124,7 @@ export default function QueuePage() {
 
   const handleCancelJob = async (jobId: string) => {
     try {
-      const res = await fetch(`${backendConfig.api}/api/queue/jobs/${jobId}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`${backendConfig.api}/api/queue/jobs/${jobId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchData();
       }
@@ -155,9 +153,8 @@ export default function QueuePage() {
     }
   };
 
-  const filteredJobs = statusFilter === 'all'
-    ? jobs
-    : jobs.filter(j => j.status === statusFilter);
+  const filteredJobs =
+    statusFilter === 'all' ? jobs : jobs.filter((j) => j.status === statusFilter);
 
   return (
     <>
@@ -206,9 +203,7 @@ export default function QueuePage() {
             </div>
           </div>
 
-          {error && (
-            <ErrorWithRetry error={error} onRetry={fetchData} className="mb-6" />
-          )}
+          {error && <ErrorWithRetry error={error} onRetry={fetchData} className="mb-6" />}
 
           <PanelErrorBoundary panelName="Queue Data">
             {loading ? (
@@ -222,19 +217,27 @@ export default function QueuePage() {
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                   <div className="card p-4 text-center">
-                    <div className="text-3xl font-theme-data text-[var(--acid-yellow)]">{stats?.pending || 0}</div>
+                    <div className="text-3xl font-theme-data text-[var(--acid-yellow)]">
+                      {stats?.pending || 0}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Pending</div>
                   </div>
                   <div className="card p-4 text-center">
-                    <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">{stats?.running || 0}</div>
+                    <div className="text-3xl font-theme-data text-[var(--acid-cyan)]">
+                      {stats?.running || 0}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Running</div>
                   </div>
                   <div className="card p-4 text-center">
-                    <div className="text-3xl font-theme-data text-[var(--accent)]">{stats?.completed || 0}</div>
+                    <div className="text-3xl font-theme-data text-[var(--accent)]">
+                      {stats?.completed || 0}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Completed</div>
                   </div>
                   <div className="card p-4 text-center">
-                    <div className="text-3xl font-theme-data text-[var(--crimson)]">{stats?.failed || 0}</div>
+                    <div className="text-3xl font-theme-data text-[var(--crimson)]">
+                      {stats?.failed || 0}
+                    </div>
                     <div className="text-xs font-theme-data text-text-muted">Failed</div>
                   </div>
                   <div className="card p-4 text-center">
@@ -245,7 +248,9 @@ export default function QueuePage() {
 
                 {/* Workers Section */}
                 <div className="card p-4 mb-8">
-                  <h2 className="text-lg font-theme-data font-bold text-[var(--accent)] mb-4">[WORKERS]</h2>
+                  <h2 className="text-lg font-theme-data font-bold text-[var(--accent)] mb-4">
+                    [WORKERS]
+                  </h2>
                   {workers.length === 0 ? (
                     <div className="text-text-muted font-theme-data text-sm">
                       No workers registered. Redis queue may not be configured.
@@ -256,7 +261,9 @@ export default function QueuePage() {
                         <div key={worker.id} className="bg-bg p-3 rounded border border-border">
                           <div className="flex items-center justify-between mb-2">
                             <span className="font-theme-data text-sm truncate">{worker.id}</span>
-                            <span className={`font-theme-data text-xs uppercase ${statusColors[worker.status]}`}>
+                            <span
+                              className={`font-theme-data text-xs uppercase ${statusColors[worker.status]}`}
+                            >
                               {worker.status}
                             </span>
                           </div>
@@ -277,7 +284,9 @@ export default function QueuePage() {
                 {/* Jobs Section */}
                 <div className="card p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-theme-data font-bold text-[var(--accent)]">[JOBS]</h2>
+                    <h2 className="text-lg font-theme-data font-bold text-[var(--accent)]">
+                      [JOBS]
+                    </h2>
                     <div className="flex gap-2">
                       {['all', 'pending', 'running', 'completed', 'failed'].map((status) => (
                         <button
@@ -314,7 +323,10 @@ export default function QueuePage() {
                         </thead>
                         <tbody>
                           {filteredJobs.map((job) => (
-                            <tr key={job.id} className="border-b border-border/50 hover:bg-surface/50">
+                            <tr
+                              key={job.id}
+                              className="border-b border-border/50 hover:bg-surface/50"
+                            >
                               <td className="py-2 px-2 truncate max-w-[120px]" title={job.id}>
                                 {job.id.slice(0, 8)}...
                               </td>
@@ -358,13 +370,17 @@ export default function QueuePage() {
                 {stats?.avg_wait_time_ms !== undefined && (
                   <div className="grid grid-cols-2 gap-4 mt-8">
                     <div className="card p-4">
-                      <div className="text-text-muted font-theme-data text-xs mb-1">Avg Wait Time</div>
+                      <div className="text-text-muted font-theme-data text-xs mb-1">
+                        Avg Wait Time
+                      </div>
                       <div className="text-xl font-theme-data text-[var(--accent)]">
                         {(stats.avg_wait_time_ms / 1000).toFixed(2)}s
                       </div>
                     </div>
                     <div className="card p-4">
-                      <div className="text-text-muted font-theme-data text-xs mb-1">Avg Processing Time</div>
+                      <div className="text-text-muted font-theme-data text-xs mb-1">
+                        Avg Processing Time
+                      </div>
                       <div className="text-xl font-theme-data text-[var(--acid-cyan)]">
                         {((stats.avg_processing_time_ms || 0) / 1000).toFixed(2)}s
                       </div>
@@ -382,8 +398,13 @@ export default function QueuePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm">
           <div className="w-full max-w-lg bg-surface border border-border rounded-lg shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h2 className="text-lg font-theme-data font-bold text-[var(--accent)]">[SUBMIT_JOB]</h2>
-              <button onClick={() => setShowSubmitModal(false)} className="text-text-muted hover:text-text text-xl">
+              <h2 className="text-lg font-theme-data font-bold text-[var(--accent)]">
+                [SUBMIT_JOB]
+              </h2>
+              <button
+                onClick={() => setShowSubmitModal(false)}
+                className="text-text-muted hover:text-text text-xl"
+              >
                 x
               </button>
             </div>
@@ -407,7 +428,9 @@ export default function QueuePage() {
                 <input
                   type="number"
                   value={submitPriority}
-                  onChange={(e) => setSubmitPriority(Math.max(1, Math.min(10, parseInt(e.target.value) || 5)))}
+                  onChange={(e) =>
+                    setSubmitPriority(Math.max(1, Math.min(10, parseInt(e.target.value) || 5)))
+                  }
                   min={1}
                   max={10}
                   className="w-full px-3 py-2 bg-bg border border-border rounded text-sm font-theme-data text-text focus:border-[var(--accent)] focus:outline-none"

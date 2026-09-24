@@ -9,12 +9,7 @@ export interface ScenarioBuilderProps {
   onUpdate: (index: number, scenario: ScenarioInput) => void;
 }
 
-export function ScenarioBuilder({
-  scenarios,
-  onAdd,
-  onRemove,
-  onUpdate,
-}: ScenarioBuilderProps) {
+export function ScenarioBuilder({ scenarios, onAdd, onRemove, onUpdate }: ScenarioBuilderProps) {
   return (
     <div className="space-y-3">
       {scenarios.map((scenario, idx) => (
@@ -23,9 +18,7 @@ export function ScenarioBuilder({
             <input
               type="text"
               value={scenario.name}
-              onChange={(e) =>
-                onUpdate(idx, { ...scenario, name: e.target.value })
-              }
+              onChange={(e) => onUpdate(idx, { ...scenario, name: e.target.value })}
               placeholder="Scenario name..."
               className="flex-1 px-2 py-1 bg-bg border border-[var(--accent)]/30 text-text font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
             />
@@ -33,9 +26,7 @@ export function ScenarioBuilder({
               <input
                 type="checkbox"
                 checked={scenario.is_baseline}
-                onChange={(e) =>
-                  onUpdate(idx, { ...scenario, is_baseline: e.target.checked })
-                }
+                onChange={(e) => onUpdate(idx, { ...scenario, is_baseline: e.target.checked })}
                 className="accent-gold"
               />
               Baseline
@@ -83,7 +74,10 @@ export function ScenarioBuilder({
               onChange={(e) =>
                 onUpdate(idx, {
                   ...scenario,
-                  constraints: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                  constraints: e.target.value
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean),
                 })
               }
               placeholder="e.g., must be scalable, no external deps"

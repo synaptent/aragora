@@ -101,16 +101,12 @@ export function mapSettlementEntryToReviewQueuePR(
       Math.max(0, Number(entry.failures ?? 0)) +
       Math.max(0, Number(entry.in_flight ?? 0)),
   };
-  const tierValue =
-    entry.tier === null || entry.tier === undefined ? null : String(entry.tier);
-  const url = options.repo
-    ? `https://github.com/${options.repo}/pull/${number}`
-    : `#pr-${number}`;
+  const tierValue = entry.tier === null || entry.tier === undefined ? null : String(entry.tier);
+  const url = options.repo ? `https://github.com/${options.repo}/pull/${number}` : `#pr-${number}`;
   const title = options.titles?.[number] ?? '(no title in receipt)';
   const author = options.authors?.[number] ?? '(unknown)';
   const labels = options.labels?.[number] ?? [];
-  const updatedAtIso =
-    options.updatedAtIso?.[number] ?? new Date(0).toISOString();
+  const updatedAtIso = options.updatedAtIso?.[number] ?? new Date(0).toISOString();
   let ageSeconds: number | null = null;
   if (options.updatedAtIso?.[number]) {
     const updatedAt = new Date(options.updatedAtIso[number]);
@@ -180,7 +176,9 @@ export function mapReceiptToReviewQueueList(
  * not treat `hmac_sha256` as verified because the signing key is not available
  * in the packet review UI.
  */
-export async function verifyReceiptSha256(receipt: SettlementReceipt): Promise<{
+export async function verifyReceiptSha256(
+  receipt: SettlementReceipt,
+): Promise<{
   claimed: string;
   recomputed: string;
   matches: boolean;

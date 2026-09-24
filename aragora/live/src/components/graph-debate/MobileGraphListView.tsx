@@ -20,7 +20,7 @@ export function MobileGraphListView({
 }: MobileGraphListViewProps) {
   // Sort nodes by timestamp
   const sortedNodes = Object.values(nodes).sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
   );
 
   return (
@@ -44,10 +44,14 @@ export function MobileGraphListView({
           >
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <span className={`px-1.5 py-0.5 text-xs font-theme-data ${colors.bg} ${colors.text}`}>
+                <span
+                  className={`px-1.5 py-0.5 text-xs font-theme-data ${colors.bg} ${colors.text}`}
+                >
                   {node.agent_id.slice(0, 8)}
                 </span>
-                <span className={`text-xs font-theme-data ${getBranchColor(node.branch_id || 'main')}`}>
+                <span
+                  className={`text-xs font-theme-data ${getBranchColor(node.branch_id || 'main')}`}
+                >
                   {node.node_type.replace('_', ' ')}
                 </span>
               </div>
@@ -56,7 +60,8 @@ export function MobileGraphListView({
               </span>
             </div>
             <div className="text-xs font-theme-data text-text-muted line-clamp-2">
-              {node.content.slice(0, 150)}{node.content.length > 150 ? '...' : ''}
+              {node.content.slice(0, 150)}
+              {node.content.length > 150 ? '...' : ''}
             </div>
             {isSelected && (
               <div className="mt-2 pt-2 border-t border-border text-xs font-theme-data text-text">

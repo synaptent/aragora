@@ -77,7 +77,7 @@ export const AccessGrantsList: React.FC<AccessGrantsListProps> = ({
         onRevoke(grantId);
       }
     },
-    [onRevoke]
+    [onRevoke],
   );
 
   if (error) {
@@ -114,9 +114,7 @@ export const AccessGrantsList: React.FC<AccessGrantsListProps> = ({
 
       {/* Grants list */}
       {grants.length === 0 ? (
-        <div className="p-4 text-center text-sm text-gray-500">
-          No explicit access grants
-        </div>
+        <div className="p-4 text-center text-sm text-gray-500">No explicit access grants</div>
       ) : (
         <ul className="divide-y divide-gray-100">
           {grants.map((grant) => {
@@ -124,10 +122,7 @@ export const AccessGrantsList: React.FC<AccessGrantsListProps> = ({
             const expiringSoon = isExpiringSoon(grant.expiresAt);
 
             return (
-              <li
-                key={grant.id}
-                className={`px-3 py-2 ${expired ? 'opacity-50 bg-gray-50' : ''}`}
-              >
+              <li key={grant.id} className={`px-3 py-2 ${expired ? 'opacity-50 bg-gray-50' : ''}`}>
                 <div className="flex items-center gap-2">
                   {/* Grantee icon */}
                   <span className="text-base">{granteeIcons[grant.granteeType]}</span>
@@ -152,9 +147,7 @@ export const AccessGrantsList: React.FC<AccessGrantsListProps> = ({
                     <div className="text-xs text-gray-500">
                       <span className="capitalize">{grant.granteeType}</span>
                       {grant.grantedBy && <span> • Granted by {grant.grantedBy}</span>}
-                      {grant.expiresAt && (
-                        <span> • Expires {formatDate(grant.expiresAt)}</span>
-                      )}
+                      {grant.expiresAt && <span> • Expires {formatDate(grant.expiresAt)}</span>}
                     </div>
                   </div>
 

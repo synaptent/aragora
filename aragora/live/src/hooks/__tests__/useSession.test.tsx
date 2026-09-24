@@ -18,13 +18,9 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSession, Session } from '../useSession';
 
 // Mock dependencies
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'https://api.example.com',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'https://api.example.com' }));
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: jest.fn(),
-}));
+jest.mock('@/context/AuthContext', () => ({ useAuth: jest.fn() }));
 
 import { useAuth } from '@/context/AuthContext';
 const mockUseAuth = useAuth as jest.Mock;
@@ -70,19 +66,13 @@ describe('useSession', () => {
     mockFetch.mockReset();
 
     // Default: authenticated user
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      tokens: { access_token: 'test-token' },
-    });
+    mockUseAuth.mockReturnValue({ isAuthenticated: true, tokens: { access_token: 'test-token' } });
   });
 
   describe('Initial State', () => {
     it('starts with empty sessions and not loading', async () => {
       // Prevent auto-fetch
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: [] }) });
 
       const { result } = renderHook(() => useSession());
 
@@ -95,10 +85,7 @@ describe('useSession', () => {
 
   describe('fetchSessions', () => {
     it('fetches sessions successfully', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: mockSessions }) });
 
       const { result } = renderHook(() => useSession());
 
@@ -142,10 +129,7 @@ describe('useSession', () => {
     });
 
     it('handles unauthenticated user', async () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        tokens: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, tokens: null });
 
       const { result } = renderHook(() => useSession());
 
@@ -163,10 +147,7 @@ describe('useSession', () => {
     });
 
     it('includes authorization header in request', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: [] }) });
 
       renderHook(() => useSession());
 
@@ -178,18 +159,13 @@ describe('useSession', () => {
         'https://api.example.com/api/auth/sessions',
         expect.objectContaining({
           method: 'GET',
-          headers: expect.objectContaining({
-            Authorization: 'Bearer test-token',
-          }),
-        })
+          headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+        }),
       );
     });
 
     it('sets currentSessionId from is_current session', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: mockSessions }) });
 
       const { result } = renderHook(() => useSession());
 
@@ -204,10 +180,7 @@ describe('useSession', () => {
   describe('revokeSession', () => {
     beforeEach(() => {
       // Setup with sessions already loaded
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: mockSessions }) });
     });
 
     it('revokes a session successfully', async () => {
@@ -218,10 +191,7 @@ describe('useSession', () => {
       });
 
       // Reset mock for revoke call
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
 
       let success: boolean;
       await act(async () => {
@@ -230,7 +200,7 @@ describe('useSession', () => {
 
       expect(success!).toBe(true);
       expect(result.current.sessions).toHaveLength(2);
-      expect(result.current.sessions.find(s => s.id === 'session-2')).toBeUndefined();
+      expect(result.current.sessions.find((s) => s.id === 'session-2')).toBeUndefined();
     });
 
     it('prevents revoking current session', async () => {
@@ -248,7 +218,7 @@ describe('useSession', () => {
       expect(success!).toBe(false);
       expect(result.current.error).toBe('Cannot revoke current session. Use logout instead.');
       // Session should still be there
-      expect(result.current.sessions.find(s => s.id === 'session-1')).toBeDefined();
+      expect(result.current.sessions.find((s) => s.id === 'session-1')).toBeDefined();
     });
 
     it('handles revoke error', async () => {
@@ -276,10 +246,7 @@ describe('useSession', () => {
     });
 
     it('handles unauthenticated revoke attempt', async () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        tokens: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, tokens: null });
 
       const { result } = renderHook(() => useSession());
 
@@ -299,10 +266,7 @@ describe('useSession', () => {
         expect(result.current.sessions).toHaveLength(3);
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
 
       await act(async () => {
         await result.current.revokeSession('session-2');
@@ -310,19 +274,14 @@ describe('useSession', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.example.com/api/auth/sessions/session-2',
-        expect.objectContaining({
-          method: 'DELETE',
-        })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });
 
   describe('revokeAllOtherSessions', () => {
     beforeEach(() => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: mockSessions }) });
     });
 
     it('revokes all other sessions successfully', async () => {
@@ -332,10 +291,7 @@ describe('useSession', () => {
         expect(result.current.sessions).toHaveLength(3);
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
 
       let success: boolean;
       await act(async () => {
@@ -372,10 +328,7 @@ describe('useSession', () => {
     });
 
     it('handles unauthenticated bulk revoke attempt', async () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        tokens: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, tokens: null });
 
       const { result } = renderHook(() => useSession());
 
@@ -395,10 +348,7 @@ describe('useSession', () => {
         expect(result.current.sessions).toHaveLength(3);
       });
 
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
 
       await act(async () => {
         await result.current.revokeAllOtherSessions();
@@ -406,19 +356,14 @@ describe('useSession', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://api.example.com/api/auth/sessions',
-        expect.objectContaining({
-          method: 'DELETE',
-        })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });
 
   describe('isSessionExpired', () => {
     it('returns true for expired session', () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: [] }) });
 
       const { result } = renderHook(() => useSession());
 
@@ -431,10 +376,7 @@ describe('useSession', () => {
     });
 
     it('returns false for valid session', () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: [] }) });
 
       const { result } = renderHook(() => useSession());
 
@@ -449,10 +391,7 @@ describe('useSession', () => {
 
   describe('getSessionAge', () => {
     beforeEach(() => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: [] }) });
       // Mock Date.now to a fixed time for consistent tests
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2024-01-15T16:00:00Z'));
@@ -542,10 +481,7 @@ describe('useSession', () => {
 
   describe('getLastActivityAge', () => {
     beforeEach(() => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: [] }) });
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2024-01-15T16:00:00Z'));
     });
@@ -568,26 +504,20 @@ describe('useSession', () => {
 
   describe('Auto-fetch on authentication', () => {
     it('fetches sessions when authenticated', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: mockSessions }) });
 
       renderHook(() => useSession());
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'https://api.example.com/api/auth/sessions',
-          expect.any(Object)
+          expect.any(Object),
         );
       });
     });
 
     it('does not fetch when not authenticated', () => {
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: false,
-        tokens: null,
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: false, tokens: null });
 
       renderHook(() => useSession());
 
@@ -595,10 +525,7 @@ describe('useSession', () => {
     });
 
     it('refetches when tokens change', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: mockSessions }) });
 
       const { rerender } = renderHook(() => useSession());
 
@@ -607,10 +534,7 @@ describe('useSession', () => {
       });
 
       // Update tokens
-      mockUseAuth.mockReturnValue({
-        isAuthenticated: true,
-        tokens: { access_token: 'new-token' },
-      });
+      mockUseAuth.mockReturnValue({ isAuthenticated: true, tokens: { access_token: 'new-token' } });
 
       rerender();
 
@@ -641,10 +565,7 @@ describe('useSession', () => {
 
     it('handles JSON parse error on revoke', async () => {
       // First, load sessions
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ sessions: mockSessions }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: async () => ({ sessions: mockSessions }) });
 
       const { result } = renderHook(() => useSession());
 

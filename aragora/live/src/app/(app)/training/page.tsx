@@ -5,7 +5,8 @@ import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const TrainingExportPanel = dynamic(
-  () => import('@/components/TrainingExportPanel').then(m => ({ default: m.TrainingExportPanel })),
+  () =>
+    import('@/components/TrainingExportPanel').then((m) => ({ default: m.TrainingExportPanel })),
   {
     ssr: false,
     loading: () => (
@@ -13,7 +14,7 @@ const TrainingExportPanel = dynamic(
         <div className="h-96 bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function TrainingPage() {
@@ -30,7 +31,8 @@ export default function TrainingPage() {
               Training Data Export
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Export debate outcomes as training data for ML fine-tuning. Supports SFT, DPO, and Gauntlet formats.
+              Export debate outcomes as training data for ML fine-tuning. Supports SFT, DPO, and
+              Gauntlet formats.
             </p>
           </div>
 
@@ -41,12 +43,8 @@ export default function TrainingPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // TRAINING DATA EXPORT
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // TRAINING DATA EXPORT</p>
         </footer>
       </main>
     </>
