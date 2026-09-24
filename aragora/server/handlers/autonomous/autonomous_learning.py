@@ -97,11 +97,11 @@ def _ensure_wrapped(func: Any) -> Any:
 _rbac_require_permission = require_permission
 
 
-def require_permission(*args: Any, **kwargs: Any):  # type: ignore[no-redef]
+def require_permission(*args: Any, **kwargs: Any) -> Any:  # type: ignore[no-redef]
     """Local wrapper to preserve __wrapped__ even if RBAC is bypassed in tests."""
     decorator = _rbac_require_permission(*args, **kwargs)
 
-    def _decorator(func: Any):
+    def _decorator(func: Any) -> Any:
         return _ensure_wrapped(decorator(func))
 
     return _decorator

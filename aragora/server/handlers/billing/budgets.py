@@ -367,7 +367,7 @@ class BudgetHandler(BaseHandler):
 
         return None
 
-    def _get_budget_manager(self):
+    def _get_budget_manager(self) -> Any:
         """Get budget manager instance with circuit breaker tracking."""
         try:
             from aragora.billing.budget_manager import get_budget_manager
