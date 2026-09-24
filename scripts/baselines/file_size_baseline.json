@@ -28,7 +28,7 @@
     "aragora/server/handlers/canvas/canvas_pipeline.py": 2600,
     "aragora/server/handlers/costs/handler.py": 2486,
     "aragora/server/handlers/decisions/receipts.py": 2041,
-    "aragora/server/handlers/playground.py": 4256,
+    "aragora/server/handlers/demo/playground.py": 4256,
     "aragora/server/handlers/social/slack_oauth.py": 2075,
     "aragora/swarm/boss_loop.py": 5289,
     "aragora/swarm/campaign.py": 2948,

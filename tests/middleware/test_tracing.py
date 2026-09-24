@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aragora.server.middleware.tracing import (
+from aragora.observability.middleware.tracing import (
     # Header constants
     TRACE_ID_HEADER,
     SPAN_ID_HEADER,
@@ -63,7 +63,7 @@ from aragora.server.middleware.tracing import (
 def reset_trace_context():
     """Reset trace context before and after each test."""
     # Reset context variables to default state
-    from aragora.server.middleware.tracing import (
+    from aragora.observability.middleware.tracing import (
         _trace_id,
         _span_id,
         _parent_span_id,
@@ -1043,14 +1043,14 @@ class TestModuleExports:
 
     def test_all_exports_importable(self):
         """All items in __all__ can be imported."""
-        from aragora.server.middleware import tracing
+        from aragora.observability.middleware import tracing
 
         for name in tracing.__all__:
             assert hasattr(tracing, name), f"Missing export: {name}"
 
     def test_exported_items(self):
         """Key items are exported in __all__."""
-        from aragora.server.middleware.tracing import __all__
+        from aragora.observability.middleware.tracing import __all__
 
         expected = [
             "TRACE_ID_HEADER",

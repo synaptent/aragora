@@ -164,7 +164,7 @@ def _emit_elo_events(
         return
 
     try:
-        from aragora.server.stream.events import StreamEvent, StreamEventType
+        from aragora.events.types import StreamEvent, StreamEventType
 
         for agent_name, elo_change in elo_changes.items():
             agent_rating = ratings.get(agent_name)

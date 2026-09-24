@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from aragora.server.http_client_pool import (
+from aragora.observability.http_client_pool import (
     HTTPClientPool,
     HTTPPoolConfig,
     HTTPPoolMetrics,

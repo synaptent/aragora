@@ -486,7 +486,7 @@ async def _shutdown_cmd_ask_resources() -> None:
         logger.debug("Ask postgres shutdown skipped: %s", exc)
 
     try:
-        from aragora.server.http_client_pool import close_http_pool
+        from aragora.observability.http_client_pool import close_http_pool
 
         await close_http_pool()
     except Exception as exc:  # noqa: BLE001 - shutdown must never hide CLI result

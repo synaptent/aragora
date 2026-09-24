@@ -54,11 +54,15 @@ SecurityHandler = _safe_import("aragora.server.handlers.admin", "SecurityHandler
 RotationStatusHandler = _safe_import(
     "aragora.server.handlers.admin.rotation_status", "RotationStatusHandler"
 )
-ModerationHandler = _safe_import("aragora.server.handlers.moderation", "ModerationHandler")
+ModerationHandler = _safe_import(
+    "aragora.server.handlers.governance.moderation", "ModerationHandler"
+)
 AudienceSuggestionsHandler = _safe_import(
     "aragora.server.handlers.debates.audience_suggestions", "AudienceSuggestionsHandler"
 )
-CoordinationHandler = _safe_import("aragora.server.handlers.coordination", "CoordinationHandler")
+CoordinationHandler = _safe_import(
+    "aragora.server.handlers.orchestration.coordination", "CoordinationHandler"
+)
 
 # =============================================================================
 # Auth Handler Imports
@@ -199,10 +203,10 @@ LeaderboardViewHandler = _safe_import("aragora.server.handlers", "LeaderboardVie
 GalleryHandler = _safe_import("aragora.server.handlers", "GalleryHandler")
 CanvasHandler = _safe_import("aragora.server.handlers.canvas", "CanvasHandler")
 SMEUsageDashboardHandler = _safe_import(
-    "aragora.server.handlers.sme_usage_dashboard", "SMEUsageDashboardHandler"
+    "aragora.server.handlers.sme.sme_usage_dashboard", "SMEUsageDashboardHandler"
 )
 SMESuccessDashboardHandler = _safe_import(
-    "aragora.server.handlers.sme_success_dashboard", "SMESuccessDashboardHandler"
+    "aragora.server.handlers.sme.sme_success_dashboard", "SMESuccessDashboardHandler"
 )
 AgentDashboardHandler = _safe_import(
     "aragora.server.handlers.features.control_plane", "AgentDashboardHandler"
@@ -245,7 +249,7 @@ EvolutionABTestingHandler = _safe_import("aragora.server.handlers", "EvolutionAB
 
 PluginsHandler = _safe_import("aragora.server.handlers", "PluginsHandler")
 FeaturesHandler = _safe_import("aragora.server.handlers", "FeaturesHandler")
-OnboardingHandler = _safe_import("aragora.server.handlers.onboarding", "OnboardingHandler")
+OnboardingHandler = _safe_import("aragora.server.handlers.sme.onboarding", "OnboardingHandler")
 
 # Device handler
 DeviceHandler = _safe_import("aragora.server.handlers", "DeviceHandler")
@@ -267,7 +271,7 @@ ComputerUseHandler = _safe_import(
 )
 RLMContextHandler = _safe_import("aragora.server.handlers", "RLMContextHandler")
 RLMHandler = _safe_import("aragora.server.handlers.features.rlm", "RLMHandler")
-MLHandler = _safe_import("aragora.server.handlers.ml", "MLHandler")
+MLHandler = _safe_import("aragora.server.handlers.knowledge.ml", "MLHandler")
 VerticalsHandler = _safe_import("aragora.server.handlers", "VerticalsHandler")
 
 # =============================================================================
@@ -329,14 +333,16 @@ AuditGitHubBridgeHandler = _safe_import(
 
 BindingsHandler = _safe_import("aragora.server.handlers.integrations.bindings", "BindingsHandler")
 DependencyAnalysisHandler = _safe_import(
-    "aragora.server.handlers.dependency_analysis", "DependencyAnalysisHandler"
+    "aragora.server.handlers.codebase.dependency_analysis", "DependencyAnalysisHandler"
 )
-RepositoryHandler = _safe_import("aragora.server.handlers.repository", "RepositoryHandler")
+RepositoryHandler = _safe_import("aragora.server.handlers.codebase.repository", "RepositoryHandler")
 SchedulerHandler = _safe_import("aragora.server.handlers.features.scheduler", "SchedulerHandler")
 ThreatIntelHandler = _safe_import(
     "aragora.server.handlers.security.threat_intel", "ThreatIntelHandler"
 )
-FeedbackRoutesHandler = _safe_import("aragora.server.handlers.feedback", "FeedbackRoutesHandler")
+FeedbackRoutesHandler = _safe_import(
+    "aragora.server.handlers.sme.feedback", "FeedbackRoutesHandler"
+)
 PaymentRoutesHandler = _safe_import(
     "aragora.server.handlers.payments.handler", "PaymentRoutesHandler"
 )
@@ -346,7 +352,9 @@ FindingWorkflowHandler = _safe_import(
 ReceiptDeliveryHandler = _safe_import(
     "aragora.server.handlers.sme.receipt_delivery", "ReceiptDeliveryHandler"
 )
-CodeReviewHandler = _safe_import("aragora.server.handlers.code_review", "CodeReviewHandler")
+CodeReviewHandler = _safe_import(
+    "aragora.server.handlers.codebase.code_review", "CodeReviewHandler"
+)
 QuickScanHandler = _safe_import("aragora.server.handlers.codebase.quick_scan", "QuickScanHandler")
 CloudStorageHandler = _safe_import(
     "aragora.server.handlers.features.cloud_storage", "CloudStorageHandler"
@@ -357,7 +365,7 @@ SmartUploadHandler = _safe_import(
 PartnerHandler = _safe_import("aragora.server.handlers.integrations.partner", "PartnerHandler")
 
 # Playground (public demo)
-PlaygroundHandler = _safe_import("aragora.server.handlers.playground", "PlaygroundHandler")
+PlaygroundHandler = _safe_import("aragora.server.handlers.demo.playground", "PlaygroundHandler")
 
 # Autonomous handlers
 AgentBridgeHandler = (
@@ -374,7 +382,7 @@ MonitoringHandler = _safe_import(
 
 # Approvals and RBAC handlers
 UnifiedApprovalsHandler = _safe_import(
-    "aragora.server.handlers.approvals_inbox", "UnifiedApprovalsHandler"
+    "aragora.server.handlers.governance.approvals_inbox", "UnifiedApprovalsHandler"
 )
 RBACHandler = _safe_import("aragora.server.handlers.auth.rbac", "RBACHandler")
 
@@ -384,9 +392,11 @@ FederationStatusHandler = _safe_import(
 )
 
 # Self-improvement
-SelfImproveHandler = _safe_import("aragora.server.handlers.self_improve", "SelfImproveHandler")
+SelfImproveHandler = _safe_import(
+    "aragora.server.handlers.autonomous.self_improve", "SelfImproveHandler"
+)
 SelfImproveDetailsHandler = _safe_import(
-    "aragora.server.handlers.self_improve_details", "SelfImproveDetailsHandler"
+    "aragora.server.handlers.autonomous.self_improve_details", "SelfImproveDetailsHandler"
 )
 AutonomousImproveHandler = _safe_import(
     "aragora.server.handlers.autonomous.improve", "AutonomousImproveHandler"
@@ -439,7 +449,7 @@ CostDashboardHandler = _safe_import(
 
 # Gas Town dashboard
 GasTownDashboardHandler = _safe_import(
-    "aragora.server.handlers.gastown_dashboard", "GasTownDashboardHandler"
+    "aragora.server.handlers.autonomous.gastown_dashboard", "GasTownDashboardHandler"
 )
 
 # Connector management
@@ -469,7 +479,7 @@ HandlerResult = _safe_import("aragora.server.handlers", "HandlerResult")
 # importable from aragora.server.handlers.admin.health for direct/standalone
 # use.
 ReadinessCheckHandler = _safe_import(
-    "aragora.server.handlers.readiness_check", "ReadinessCheckHandler"
+    "aragora.server.handlers.sme.readiness_check", "ReadinessCheckHandler"
 )
 
 # Compliance handlers
