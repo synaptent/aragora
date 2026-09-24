@@ -163,7 +163,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         # Debate sharing (public spectate endpoint; POST/DELETE use inline require_auth_or_error)
         "debates/share",
         # Spectate WebSocket/SSE (public read-only stream for live debate visualization)
-        "spectate_ws",
+        "streaming/spectate_ws",
         # Marketplace browse (public catalog browsing, read-only)
         "catalog/marketplace_browse",
         # Platform config now uses SecureHandler (RBAC-protected)
@@ -212,7 +212,6 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "social/slack/security",
         "social/telemetry",
         "social/tts_helper",
-        "slack",
         # Voice handlers (use platform-specific auth)
         "voice/__init__",
         "voice/handler",
@@ -400,7 +399,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         # Replay handler (middleware-protected)
         "replays",
         # Reviews handler (middleware-protected)
-        "reviews",
+        "codebase/reviews",
         # Infrastructure management (streaming subsystem)
         "streaming/__init__",
         "streaming/handler",
@@ -410,7 +409,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         # 501 stub (speech module removed)
         "features/speech",
         # Public demo endpoint (no auth by design)
-        "playground",
+        "demo/playground",
         "debates/public_viewer",
         "integrations/mcp_tools_handler",
         "openclaw/runtime",
@@ -433,7 +432,7 @@ ALLOWED_WITHOUT_RBAC = frozenset(
         "demo/__init__",
         "demo/adversarial_demo",
         # Readiness probe (public health endpoint, no auth by design)
-        "readiness_check",
+        "sme/readiness_check",
         # Debate diagnostics mixin (read-only debug info, mixed into RBAC-protected handler)
         "debates/diagnostics",
         # API documentation endpoints (public read-only, powers /api-docs page)

@@ -12,14 +12,14 @@ from collections.abc import Generator
 
 logger = logging.getLogger(__name__)
 
-from aragora.server.prometheus import (
+from aragora.observability.prometheus import (
     PROMETHEUS_AVAILABLE,
     _simple_metrics,
 )
 
 # Import metric definitions when prometheus is available
 if PROMETHEUS_AVAILABLE:
-    from aragora.server.prometheus import (
+    from aragora.observability.prometheus import (
         KNOWLEDGE_ACCESS_GRANTS,
         KNOWLEDGE_FEDERATION_LATENCY,
         KNOWLEDGE_FEDERATION_NODES,

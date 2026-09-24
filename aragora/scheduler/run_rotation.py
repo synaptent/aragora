@@ -249,7 +249,7 @@ async def send_notification(
         webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
         if webhook_url:
             try:
-                from aragora.server.http_client_pool import get_http_pool
+                from aragora.observability.http_client_pool import get_http_pool
 
                 payload = {
                     "channel": slack_config.get("channel", "#aragora-security"),

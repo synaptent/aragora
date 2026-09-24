@@ -621,7 +621,7 @@ jobs:
           python -m mypy \
             aragora/ranking/elo.py \
             aragora/server/stream/servers.py \
-            aragora/server/handlers/training.py \
+            aragora/server/handlers/evolution/training.py \
             aragora/cli/main.py \
             aragora/config/secrets.py \
             aragora/storage/repository.py \

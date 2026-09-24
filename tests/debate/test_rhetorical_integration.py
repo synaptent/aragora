@@ -147,7 +147,7 @@ class TestRhetoricalEvents:
 
     def test_stream_event_types_include_rhetorical(self):
         """StreamEventType should include rhetorical observation events."""
-        from aragora.server.stream.events import StreamEventType
+        from aragora.events.types import StreamEventType
 
         assert hasattr(StreamEventType, "RHETORICAL_OBSERVATION")
 
