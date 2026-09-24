@@ -154,7 +154,7 @@ class TaskStep(BaseStep):
 
     async def _execute_http(self, config: dict[str, Any], context: WorkflowContext) -> Any:
         """Execute an HTTP request."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         url = self._interpolate_text(config.get("url", ""), context)
         method = config.get("method", "GET").upper()

@@ -662,7 +662,7 @@ class TestGetExecutionTimeline:
             {
                 "aragora.nomic.branch_coordinator": coord_mod,
                 "aragora.nomic.cycle_store": cycle_mod,
-                "aragora.server.handlers.self_improve": si_mod,
+                "aragora.server.handlers.autonomous.self_improve": si_mod,
             },
         ):
             result = await handler.handle("/api/self-improve/execution/timeline", {}, http_handler)
@@ -708,7 +708,7 @@ class TestGetExecutionTimeline:
             {
                 "aragora.nomic.branch_coordinator": coord_mod,
                 "aragora.nomic.cycle_store": cycle_mod,
-                "aragora.server.handlers.self_improve": si_mod,
+                "aragora.server.handlers.autonomous.self_improve": si_mod,
             },
         ):
             result = await handler.handle("/api/self-improve/execution/timeline", {}, http_handler)
@@ -739,7 +739,7 @@ class TestGetExecutionTimeline:
             {
                 "aragora.nomic.branch_coordinator": coord_mod,
                 "aragora.nomic.cycle_store": cycle_mod,
-                "aragora.server.handlers.self_improve": si_mod,
+                "aragora.server.handlers.autonomous.self_improve": si_mod,
             },
         ):
             result = await handler.handle("/api/self-improve/execution/timeline", {}, http_handler)
@@ -778,7 +778,7 @@ class TestGetExecutionTimeline:
             {
                 "aragora.nomic.branch_coordinator": coord_mod,
                 "aragora.nomic.cycle_store": cycle_mod,
-                "aragora.server.handlers.self_improve": si_mod,
+                "aragora.server.handlers.autonomous.self_improve": si_mod,
             },
         ):
             result = await handler.handle("/api/self-improve/execution/timeline", {}, http_handler)

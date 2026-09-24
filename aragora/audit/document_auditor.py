@@ -831,7 +831,7 @@ class DocumentAuditor:
 
         # Load documents from the document store
         try:
-            from aragora.server.documents import DocumentStore
+            from aragora.documents.parsing import DocumentStore
 
             store = DocumentStore()
         except ImportError:

@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 # Trace context imports for distributed tracing
 try:
-    from aragora.server.middleware.tracing import (
+    from aragora.observability.middleware.tracing import (
         get_trace_id,
         get_span_id,
         TRACE_ID_HEADER as CUSTOM_TRACE_ID_HEADER,
