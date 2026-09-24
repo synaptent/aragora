@@ -287,7 +287,7 @@ class TestAuthentication:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 result = await client_mixin.authenticate(
@@ -320,7 +320,7 @@ class TestAuthentication:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 result = await client_mixin.authenticate(
@@ -373,7 +373,7 @@ class TestAuthentication:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 result = await client_mixin.authenticate(
@@ -406,7 +406,7 @@ class TestAuthentication:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 await client_mixin.authenticate(refresh_token="original_refresh_token")
@@ -453,7 +453,7 @@ class TestTokenManagement:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 token = await authenticated_mixin._get_access_token()
@@ -521,7 +521,7 @@ class TestTokenManagement:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 # Simulate concurrent token requests
@@ -554,7 +554,7 @@ class TestTokenManagement:
             },
         ):
             with patch(
-                "aragora.server.http_client_pool.get_http_pool",
+                "aragora.observability.http_client_pool.get_http_pool",
                 return_value=mock_pool,
             ):
                 token = await authenticated_mixin._refresh_access_token()
@@ -587,7 +587,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             result = await authenticated_mixin._api_request("/messages")
@@ -602,7 +602,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             await authenticated_mixin._api_request("/messages")
@@ -621,7 +621,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             await authenticated_mixin._api_request("/messages")
@@ -651,7 +651,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             with pytest.raises(Exception):
@@ -671,7 +671,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             with pytest.raises(Exception):
@@ -687,7 +687,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             await authenticated_mixin._api_request("/messages")
@@ -702,7 +702,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             await authenticated_mixin._api_request(
@@ -723,7 +723,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             await authenticated_mixin._api_request(
@@ -744,7 +744,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             with pytest.raises(TimeoutError):
@@ -760,7 +760,7 @@ class TestApiRequests:
         mock_pool = MockHttpPool(mock_client)
 
         with patch(
-            "aragora.server.http_client_pool.get_http_pool",
+            "aragora.observability.http_client_pool.get_http_pool",
             return_value=mock_pool,
         ):
             with pytest.raises(ConnectionError):

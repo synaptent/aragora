@@ -355,7 +355,7 @@ async def test_shutdown_triage_storage_closes_http_pool_and_resets_singletons():
             AsyncMock(),
         ) as close_postgres_pool,
         patch(
-            "aragora.server.http_client_pool.close_http_pool",
+            "aragora.observability.http_client_pool.close_http_pool",
             AsyncMock(),
         ) as close_http_pool,
         patch(

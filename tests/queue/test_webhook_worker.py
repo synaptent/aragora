@@ -555,7 +555,7 @@ class TestProcessDelivery:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_client = AsyncMock()
             mock_client.post.return_value = mock_response
             mock_pool.return_value.get_session.return_value.__aenter__.return_value = mock_client
@@ -582,7 +582,7 @@ class TestProcessDelivery:
         mock_response = MagicMock()
         mock_response.status_code = 500
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_client = AsyncMock()
             mock_client.post.return_value = mock_response
             mock_pool.return_value.get_session.return_value.__aenter__.return_value = mock_client
@@ -607,7 +607,7 @@ class TestProcessDelivery:
             attempts=0,
         )
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_client = AsyncMock()
             mock_client.post.side_effect = asyncio.TimeoutError()
             mock_pool.return_value.get_session.return_value.__aenter__.return_value = mock_client
@@ -631,7 +631,7 @@ class TestProcessDelivery:
             attempts=0,
         )
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_client = AsyncMock()
             mock_client.post.side_effect = ConnectionError("Connection refused")
             mock_pool.return_value.get_session.return_value.__aenter__.return_value = mock_client
@@ -686,7 +686,7 @@ class TestProcessDelivery:
         mock_response = MagicMock()
         mock_response.status_code = 500
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_client = AsyncMock()
             mock_client.post.return_value = mock_response
             mock_pool.return_value.get_session.return_value.__aenter__.return_value = mock_client
@@ -708,7 +708,7 @@ class TestDeliverWebhook:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_client = AsyncMock()
             mock_client.post.return_value = mock_response
             mock_pool.return_value.get_session.return_value.__aenter__.return_value = mock_client
@@ -735,7 +735,7 @@ class TestDeliverWebhook:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_client = AsyncMock()
             mock_client.post.return_value = mock_response
             mock_pool.return_value.get_session.return_value.__aenter__.return_value = mock_client
@@ -764,7 +764,7 @@ class TestDeliverWebhook:
         mock_response = MagicMock()
         mock_response.status_code = 200
 
-        with patch("aragora.server.http_client_pool.get_http_pool") as mock_pool:
+        with patch("aragora.observability.http_client_pool.get_http_pool") as mock_pool:
             mock_client = AsyncMock()
             mock_client.post.return_value = mock_response
             mock_pool.return_value.get_session.return_value.__aenter__.return_value = mock_client

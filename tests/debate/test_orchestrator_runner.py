@@ -827,7 +827,7 @@ class TestRecordDebateMetrics:
 
     def test_decrements_active_debates(self, mock_arena, execution_state, mock_span):
         """Test that ACTIVE_DEBATES counter is decremented."""
-        with patch("aragora.server.metrics.ACTIVE_DEBATES") as mock_counter:
+        with patch("aragora.observability.server_metrics.ACTIVE_DEBATES") as mock_counter:
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
             mock_counter.dec.assert_called_once()
@@ -837,9 +837,9 @@ class TestRecordDebateMetrics:
         execution_state.debate_start_time = time.perf_counter() - 10.0
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes") as mock_add_attrs,
-            patch("aragora.server.metrics.track_debate_outcome"),
+            patch("aragora.observability.server_metrics.track_debate_outcome"),
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
@@ -854,9 +854,9 @@ class TestRecordDebateMetrics:
         execution_state.ctx.result.messages = [MagicMock(), MagicMock(), MagicMock()]
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes") as mock_add_attrs,
-            patch("aragora.server.metrics.track_debate_outcome"),
+            patch("aragora.observability.server_metrics.track_debate_outcome"),
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
@@ -877,9 +877,9 @@ class TestRecordDebateMetrics:
         execution_state.ctx.result.confidence = 0.8
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes"),
-            patch("aragora.server.metrics.track_debate_outcome") as mock_track,
+            patch("aragora.observability.server_metrics.track_debate_outcome") as mock_track,
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
@@ -893,9 +893,9 @@ class TestRecordDebateMetrics:
     def test_tracks_circuit_breaker_metrics(self, mock_arena, execution_state, mock_span):
         """Test that circuit breaker metrics are tracked."""
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes"),
-            patch("aragora.server.metrics.track_debate_outcome"),
+            patch("aragora.observability.server_metrics.track_debate_outcome"),
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 
@@ -906,9 +906,9 @@ class TestRecordDebateMetrics:
         execution_state.ctx.result = None
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes") as mock_add_attrs,
-            patch("aragora.server.metrics.track_debate_outcome"),
+            patch("aragora.observability.server_metrics.track_debate_outcome"),
         ):
             # Should not raise
             record_debate_metrics(mock_arena, execution_state, mock_span)
@@ -1689,9 +1689,9 @@ class TestErrorHandlingAndRecovery:
         execution_state.ctx.result.confidence = 0.3
 
         with (
-            patch("aragora.server.metrics.ACTIVE_DEBATES"),
+            patch("aragora.observability.server_metrics.ACTIVE_DEBATES"),
             patch("aragora.debate.orchestrator_runner.add_span_attributes"),
-            patch("aragora.server.metrics.track_debate_outcome") as mock_track,
+            patch("aragora.observability.server_metrics.track_debate_outcome") as mock_track,
         ):
             record_debate_metrics(mock_arena, execution_state, mock_span)
 

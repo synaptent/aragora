@@ -226,7 +226,7 @@ if TYPE_CHECKING:
         MonitoringHandler,
         TriggerHandler,
     )
-    from .approvals_inbox import UnifiedApprovalsHandler
+    from .governance.approvals_inbox import UnifiedApprovalsHandler
     from .admin.backup_handler import BackupHandler
     from .debates.belief import BeliefHandler
     from .verification.benchmarking import BenchmarkingHandler
@@ -242,10 +242,10 @@ if TYPE_CHECKING:
     )
     from .debates.breakpoints import BreakpointsHandler
     from .debates.debate_intervention import DebateInterventionHandler
-    from .budgets import BudgetHandler
+    from .billing.budgets import BudgetHandler
     from .canvas import CanvasHandler
     from .memory.checkpoints import CheckpointHandler
-    from .code_review import CodeReviewHandler
+    from .codebase.code_review import CodeReviewHandler
     from .codebase import IntelligenceHandler
     from .compliance.compliance_reports import ComplianceReportHandler
     from .debates.composite import CompositeHandler
@@ -276,8 +276,8 @@ if TYPE_CHECKING:
     from .decisions.decision import DecisionHandler
     from .decisions import DecisionExplainHandler
     from .debates.deliberations import DeliberationsHandler
-    from .dependency_analysis import DependencyAnalysisHandler
-    from .devices import DeviceHandler
+    from .codebase.dependency_analysis import DependencyAnalysisHandler
+    from .notifications.devices import DeviceHandler
     from .admin.docs import DocsHandler
     from .admin.dr_handler import DRHandler
     from .email import EmailHandler
@@ -334,9 +334,9 @@ if TYPE_CHECKING:
     from .features.gmail_labels import GmailLabelsHandler
     from .features.gmail_threads import GmailThreadsHandler
     from .features.outlook import OutlookHandler
-    from .feedback import FeedbackRoutesHandler
+    from .sme.feedback import FeedbackRoutesHandler
     from .public.gallery import GalleryHandler
-    from .gastown_dashboard import GasTownDashboardHandler
+    from .autonomous.gastown_dashboard import GasTownDashboardHandler
     from .gateway.gateway_agents_handler import GatewayAgentsHandler
     from .gateway.gateway_config_handler import GatewayConfigHandler
     from .gateway.gateway_credentials_handler import GatewayCredentialsHandler
@@ -344,7 +344,7 @@ if TYPE_CHECKING:
     from .gateway.gateway_health_handler import GatewayHealthHandler
     from .gauntlet import GauntletHandler
     from .compliance.gdpr_deletion import GDPRDeletionHandler
-    from .gauntlet_v1 import (
+    from .gauntlet.gauntlet_v1 import (
         GAUNTLET_V1_HANDLERS,
         GauntletAllSchemasHandler,
         GauntletHeatmapExportHandler,
@@ -372,7 +372,7 @@ if TYPE_CHECKING:
     from .knowledge.checkpoints import KMCheckpointHandler
     from .knowledge.sharing_notifications import SharingNotificationsHandler
     from .knowledge_base import KnowledgeHandler, KnowledgeMoundHandler
-    from .knowledge_chat import KnowledgeChatHandler
+    from .knowledge.knowledge_chat import KnowledgeChatHandler
     from .agents.laboratory import LaboratoryHandler
     from .catalog.marketplace_browse import MarketplaceBrowseHandler
     from .catalog.marketplace_pilot import MarketplacePilotHandler
@@ -387,17 +387,17 @@ if TYPE_CHECKING:
     from .memory.unified_handler import UnifiedMemoryHandler
     from .metrics import MetricsHandler
     from .metrics.metrics_endpoint import UnifiedMetricsHandler
-    from .ml import MLHandler
-    from .moderation import ModerationHandler
+    from .knowledge.ml import MLHandler
+    from .governance.moderation import ModerationHandler
     from .analytics.moderation_analytics import ModerationAnalyticsHandler
     from .debates.moments import MomentsHandler
-    from .nomic import NomicHandler
+    from .autonomous.nomic import NomicHandler
     from .notifications.history import NotificationHistoryHandler
     from .notifications.preferences import NotificationPreferencesHandler
     from .notifications.templates import NotificationTemplatesHandler
     from .oauth import OAuthHandler
     from .oauth.oauth_wizard import OAuthWizardHandler
-    from .onboarding import (
+    from .sme.onboarding import (
         OnboardingHandler,
         get_onboarding_handlers,
         handle_analytics,
@@ -409,10 +409,10 @@ if TYPE_CHECKING:
         handle_update_step,
     )
     from .openclaw.openclaw_gateway import OpenClawGatewayHandler
-    from .readiness_check import ReadinessCheckHandler
+    from .sme.readiness_check import ReadinessCheckHandler
     from .orchestration import OrchestrationHandler
     from .canvas.orchestration_canvas import OrchestrationCanvasHandler
-    from .organizations import OrganizationsHandler
+    from .workspace.organizations import OrganizationsHandler
     from .integrations.partner import PartnerHandler
     from .payments.handler import PaymentRoutesHandler
     from .agents.persona import PersonaHandler
@@ -423,18 +423,18 @@ if TYPE_CHECKING:
     from .pipeline.universal_graph import UniversalGraphHandler
     from .decisions.plans import PlansHandler
     from .catalog.playbooks import PlaybookHandler
-    from .playground import PlaygroundHandler
-    from .policy import PolicyHandler
+    from .demo.playground import PlaygroundHandler
+    from .governance.policy import PolicyHandler
     from .compliance.privacy import PrivacyHandler
     from .public import StatusPageHandler
-    from .queue import QueueHandler
+    from .control_plane.queue import QueueHandler
     from .decisions.receipt_export import ReceiptExportHandler
     from .decisions.receipts import ReceiptsHandler
     from .evolution.replays import ReplaysHandler
-    from .repository import RepositoryHandler
-    from .review_queue import ReviewQueueHandler
-    from .reviews import ReviewsHandler
-    from .rlm import RLMContextHandler
+    from .codebase.repository import RepositoryHandler
+    from .governance.review_queue import ReviewQueueHandler
+    from .codebase.reviews import ReviewsHandler
+    from .knowledge.rlm import RLMContextHandler
     from .agents.routing import RoutingHandler
     from .tasks.sandbox import SandboxHandler
     from .auth.scim_handler import SCIMHandler
@@ -446,8 +446,8 @@ if TYPE_CHECKING:
     from .sme.receipt_delivery import ReceiptDeliveryHandler
     from .sme.slack_workspace import SlackWorkspaceHandler
     from .sme.teams_workspace import TeamsWorkspaceHandler
-    from .sme_success_dashboard import SMESuccessDashboardHandler
-    from .sme_usage_dashboard import SMEUsageDashboardHandler
+    from .sme.sme_success_dashboard import SMESuccessDashboardHandler
+    from .sme.sme_usage_dashboard import SMEUsageDashboardHandler
     from .social import (
         CollaborationHandlers,
         RelationshipHandler,
@@ -471,9 +471,9 @@ if TYPE_CHECKING:
     from .security.threat_intel import ThreatIntelHandler
     from .debates.tournaments import TournamentHandler
     from .evolution.training import TrainingHandler
-    from .transcription import TranscriptionHandler
+    from .voice.transcription import TranscriptionHandler
     from .debates.uncertainty import UncertaintyHandler
-    from .usage_metering import UsageMeteringHandler
+    from .billing.usage_metering import UsageMeteringHandler
     from .verification import FormalVerificationHandler, VerificationHandler
     from .agents.verticals import VerticalsHandler
     from .debates.visualization import VisualizationHandler

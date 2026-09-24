@@ -405,3 +405,29 @@ jobs:
             "$ATLAS_OUT/manifest.json" "$ATLAS_OUT/summary.md" \
             --target main --latest=false --title "Disagreement Atlas $today" \
             --notes "Weekly Atlas regeneration. Dataset SHA-256: $sha"
+
+  receipt-first-hour:
+    # The stranger's first hour, run weekly: install the PUBLISHED aragora and
+    # aragora-verify into a throwaway virtualenv, produce a Decision Receipt and
+    # verify it. Nothing is pinned, so the run tracks whatever PyPI actually
+    # serves and stays green across a publish instead of around it.
+    #
+    # Pull requests are excluded on purpose: this job installs from the package
+    # index, and index flakiness has no business in the draft lane
+    # (docs/CI_LANES.md).
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify a receipt from the published packages
+        run: bash scripts/receipt_first_hour.sh
