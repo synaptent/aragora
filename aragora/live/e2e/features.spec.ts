@@ -69,18 +69,24 @@ test.describe('Feature Availability', () => {
       // Look for debate input or creation form
       const debateInput = page.locator(
         'input[placeholder*="question"], textarea[placeholder*="question"], ' +
-        'input[name="topic"], textarea[name="topic"], ' +
-        '[data-testid="debate-topic-input"]'
+          'input[name="topic"], textarea[name="topic"], ' +
+          '[data-testid="debate-topic-input"]',
       );
 
       // May not be visible until user action
-      const inputVisible = await debateInput.first().isVisible().catch(() => false);
+      const inputVisible = await debateInput
+        .first()
+        .isVisible()
+        .catch(() => false);
 
       // If not directly visible, look for "Start Debate" button
       const startButton = page.locator(
-        'button:has-text("Start"), button:has-text("Debate"), button:has-text("Ask")'
+        'button:has-text("Start"), button:has-text("Debate"), button:has-text("Ask")',
       );
-      const buttonVisible = await startButton.first().isVisible().catch(() => false);
+      const buttonVisible = await startButton
+        .first()
+        .isVisible()
+        .catch(() => false);
 
       expect(inputVisible || buttonVisible).toBe(true);
     });
@@ -92,17 +98,25 @@ test.describe('Feature Availability', () => {
       // Look for agent selection UI
       const agentSelect = page.locator(
         '[data-testid*="agent"], ' +
-        'button:has-text("Select agents"), ' +
-        '[role="listbox"], ' +
-        '.agent-selector'
+          'button:has-text("Select agents"), ' +
+          '[role="listbox"], ' +
+          '.agent-selector',
       );
 
-      const agentsVisible = await agentSelect.first().isVisible({ timeout: 3000 }).catch(() => false);
+      const agentsVisible = await agentSelect
+        .first()
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
 
       // May need to interact to show agents
       if (!agentsVisible) {
         const showAgentsButton = page.locator('button:has-text("agent"), button:has-text("Agent")');
-        if (await showAgentsButton.first().isVisible().catch(() => false)) {
+        if (
+          await showAgentsButton
+            .first()
+            .isVisible()
+            .catch(() => false)
+        ) {
           await showAgentsButton.first().click();
         }
       }
@@ -177,10 +191,7 @@ test.describe('Feature Availability', () => {
     test('should handle API errors without crashing', async ({ page, aragoraPage }) => {
       // Simulate API failure for a specific endpoint
       await page.route('**/api/debates**', (route) => {
-        route.fulfill({
-          status: 500,
-          body: JSON.stringify({ error: 'Internal Server Error' }),
-        });
+        route.fulfill({ status: 500, body: JSON.stringify({ error: 'Internal Server Error' }) });
       });
 
       await page.goto('/debates');
@@ -200,13 +211,16 @@ test.describe('Feature Availability', () => {
       // Look for theme toggle
       const themeToggle = page.locator(
         '[data-testid="theme-toggle"], ' +
-        'button[aria-label*="theme"], ' +
-        'button[aria-label*="Theme"], ' +
-        'button[aria-label*="dark"], ' +
-        'button[aria-label*="light"]'
+          'button[aria-label*="theme"], ' +
+          'button[aria-label*="Theme"], ' +
+          'button[aria-label*="dark"], ' +
+          'button[aria-label*="light"]',
       );
 
-      const hasThemeToggle = await themeToggle.first().isVisible({ timeout: 3000 }).catch(() => false);
+      const hasThemeToggle = await themeToggle
+        .first()
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
 
       // Theme toggle is expected but not critical
       expect(typeof hasThemeToggle).toBe('boolean');
@@ -218,7 +232,10 @@ test.describe('Feature Availability', () => {
 
       // Check sidebar exists
       const sidebar = page.locator('aside, [data-testid="sidebar"], nav.sidebar');
-      const hasSidebar = await sidebar.first().isVisible({ timeout: 3000 }).catch(() => false);
+      const hasSidebar = await sidebar
+        .first()
+        .isVisible({ timeout: 3000 })
+        .catch(() => false);
 
       // If sidebar exists, test collapse on mobile
       if (hasSidebar) {

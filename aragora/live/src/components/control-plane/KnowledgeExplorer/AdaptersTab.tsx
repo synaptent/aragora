@@ -43,10 +43,7 @@ export function AdaptersTab() {
             Offline: <span className="font-theme-data">{total - active - stale}</span>
           </span>
         </div>
-        <button
-          onClick={() => refresh()}
-          className="text-xs text-[var(--accent)] hover:underline"
-        >
+        <button onClick={() => refresh()} className="text-xs text-[var(--accent)] hover:underline">
           Refresh
         </button>
       </div>
@@ -59,11 +56,13 @@ export function AdaptersTab() {
             className="p-3 bg-surface rounded-lg border border-border hover:border-[var(--accent)]/30 transition-colors"
           >
             <div className="flex items-center justify-between mb-2">
-              <span className="font-theme-data text-sm text-text truncate">
-                {adapter.name}
-              </span>
-              <span className={`flex items-center gap-1.5 text-xs ${statusColors[adapter.status] || 'text-text-muted'}`}>
-                <span className={`w-2 h-2 rounded-full ${healthDots[adapter.health] || 'bg-gray-500'}`} />
+              <span className="font-theme-data text-sm text-text truncate">{adapter.name}</span>
+              <span
+                className={`flex items-center gap-1.5 text-xs ${statusColors[adapter.status] || 'text-text-muted'}`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${healthDots[adapter.health] || 'bg-gray-500'}`}
+                />
                 {adapter.status}
               </span>
             </div>
@@ -80,9 +79,7 @@ export function AdaptersTab() {
       </div>
 
       {adapters.length === 0 && !loading && (
-        <div className="text-center text-text-muted text-sm py-8">
-          No adapters registered yet.
-        </div>
+        <div className="text-center text-text-muted text-sm py-8">No adapters registered yet.</div>
       )}
     </div>
   );

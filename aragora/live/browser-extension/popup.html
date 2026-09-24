@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Aragora</title>
-    <link rel="stylesheet" href="popup.css">
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="shell">
@@ -18,9 +18,14 @@
 
       <section class="panel">
         <h2>Selected text</h2>
-        <p class="panel-copy">Highlight text on any page, use the context menu, then return here for Aragora's adversarial review.</p>
+        <p class="panel-copy">
+          Highlight text on any page, use the context menu, then return here for Aragora's
+          adversarial review.
+        </p>
         <pre id="selection-preview" class="selection-preview">No text has been sent yet.</pre>
-        <a id="source-link" class="source-link hidden" href="#" target="_blank" rel="noreferrer">Open source page</a>
+        <a id="source-link" class="source-link hidden" href="#" target="_blank" rel="noreferrer"
+          >Open source page</a
+        >
       </section>
 
       <section class="panel">
@@ -31,22 +36,22 @@
 
         <label class="field">
           <span>API URL</span>
-          <input id="api-url" type="url" placeholder="https://api.aragora.ai">
+          <input id="api-url" type="url" placeholder="https://api.aragora.ai" />
         </label>
 
         <label class="field">
           <span>API key</span>
-          <input id="api-key" type="password" placeholder="API token">
+          <input id="api-key" type="password" placeholder="API token" />
         </label>
 
         <label class="field">
           <span>Agents</span>
-          <input id="agents" type="text" placeholder="claude,openai">
+          <input id="agents" type="text" placeholder="claude,openai" />
         </label>
 
         <label class="field">
           <span>Rounds</span>
-          <input id="rounds" type="number" min="1" max="20" step="1">
+          <input id="rounds" type="number" min="1" max="20" step="1" />
         </label>
 
         <div class="actions">

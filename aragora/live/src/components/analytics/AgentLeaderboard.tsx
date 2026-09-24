@@ -58,21 +58,23 @@ export function AgentLeaderboard({
     }
   };
 
-  const sortedAgents = [...agents].sort((a, b) => {
-    const multiplier = sortDirection === 'asc' ? 1 : -1;
-    switch (sortField) {
-      case 'rank':
-        return (a.rank - b.rank) * multiplier;
-      case 'elo':
-        return (a.elo - b.elo) * multiplier;
-      case 'win_rate':
-        return (a.win_rate - b.win_rate) * multiplier;
-      case 'games_played':
-        return (a.games_played - b.games_played) * multiplier;
-      default:
-        return 0;
-    }
-  }).slice(0, limit);
+  const sortedAgents = [...agents]
+    .sort((a, b) => {
+      const multiplier = sortDirection === 'asc' ? 1 : -1;
+      switch (sortField) {
+        case 'rank':
+          return (a.rank - b.rank) * multiplier;
+        case 'elo':
+          return (a.elo - b.elo) * multiplier;
+        case 'win_rate':
+          return (a.win_rate - b.win_rate) * multiplier;
+        case 'games_played':
+          return (a.games_played - b.games_played) * multiplier;
+        default:
+          return 0;
+      }
+    })
+    .slice(0, limit);
 
   const getRankStyle = (rank: number): string => {
     switch (rank) {
@@ -117,7 +119,9 @@ export function AgentLeaderboard({
   if (loading) {
     return (
       <div className={`card p-4 ${className}`}>
-        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">{'>'} {title}</h3>
+        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">
+          {'>'} {title}
+        </h3>
         <div className="animate-pulse space-y-3">
           {[...Array(5)].map((_, i) => (
             <div key={i} className="h-10 bg-surface rounded" />
@@ -130,7 +134,9 @@ export function AgentLeaderboard({
   if (agents.length === 0) {
     return (
       <div className={`card p-4 ${className}`}>
-        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">{'>'} {title}</h3>
+        <h3 className="font-theme-data text-sm text-[var(--accent)] mb-4">
+          {'>'} {title}
+        </h3>
         <div className="text-center text-text-muted font-theme-data text-sm py-8">
           No agent data available
         </div>
@@ -141,7 +147,9 @@ export function AgentLeaderboard({
   return (
     <div className={`card overflow-hidden ${className}`}>
       <div className="p-4 border-b border-[var(--accent)]/20">
-        <h3 className="font-theme-data text-sm text-[var(--accent)]">{'>'} {title}</h3>
+        <h3 className="font-theme-data text-sm text-[var(--accent)]">
+          {'>'} {title}
+        </h3>
       </div>
 
       <div className="overflow-x-auto">
@@ -155,7 +163,9 @@ export function AgentLeaderboard({
                 <span className="flex items-center gap-1">
                   Rank
                   {sortField === 'rank' && (
-                    <span className="text-[var(--accent)]">{sortDirection === 'asc' ? '^' : 'v'}</span>
+                    <span className="text-[var(--accent)]">
+                      {sortDirection === 'asc' ? '^' : 'v'}
+                    </span>
                   )}
                 </span>
               </th>
@@ -164,7 +174,7 @@ export function AgentLeaderboard({
               <SortHeader field="win_rate" label="Win Rate" />
               <th className="text-right p-3 text-text-muted font-theme-data">W/L/D</th>
               <SortHeader field="games_played" label="Games" />
-              {agents.some(a => a.calibration_score !== undefined) && (
+              {agents.some((a) => a.calibration_score !== undefined) && (
                 <th className="text-right p-3 text-text-muted font-theme-data">Calibration</th>
               )}
             </tr>
@@ -182,14 +192,18 @@ export function AgentLeaderboard({
                   {getRankIcon(agent.rank)}
                 </td>
                 <td className="p-3">
-                  <span className="font-theme-data text-[var(--acid-cyan)]">{agent.agent_name}</span>
+                  <span className="font-theme-data text-[var(--acid-cyan)]">
+                    {agent.agent_name}
+                  </span>
                   {agent.calibration && <TrustBadge calibration={agent.calibration} size="sm" />}
                 </td>
                 <td className="p-3 text-right">
                   <span className="font-theme-data text-purple-400">{Math.round(agent.elo)}</span>
                 </td>
                 <td className="p-3 text-right">
-                  <span className={`font-theme-data ${agent.win_rate >= 50 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}`}>
+                  <span
+                    className={`font-theme-data ${agent.win_rate >= 50 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}`}
+                  >
                     {agent.win_rate.toFixed(1)}%
                   </span>
                 </td>
@@ -200,10 +214,8 @@ export function AgentLeaderboard({
                   <span className="text-text-muted">/</span>
                   <span className="text-[var(--acid-yellow)]">{agent.draws}</span>
                 </td>
-                <td className="p-3 text-right font-theme-data text-text">
-                  {agent.games_played}
-                </td>
-                {agents.some(a => a.calibration_score !== undefined) && (
+                <td className="p-3 text-right font-theme-data text-text">{agent.games_played}</td>
+                {agents.some((a) => a.calibration_score !== undefined) && (
                   <td className="p-3 text-right">
                     {agent.calibration_score !== undefined ? (
                       <span className="font-theme-data text-[var(--acid-cyan)]">
@@ -223,12 +235,18 @@ export function AgentLeaderboard({
       {/* Summary */}
       <div className="p-4 border-t border-[var(--accent)]/20 bg-surface/50">
         <div className="flex justify-between text-xs font-theme-data text-text-muted">
-          <span>Total agents: <span className="text-[var(--accent)]">{agents.length}</span></span>
           <span>
-            Total games: <span className="text-[var(--acid-cyan)]">{agents.reduce((a, b) => a + b.games_played, 0)}</span>
+            Total agents: <span className="text-[var(--accent)]">{agents.length}</span>
           </span>
           <span>
-            Avg ELO: <span className="text-purple-400">
+            Total games:{' '}
+            <span className="text-[var(--acid-cyan)]">
+              {agents.reduce((a, b) => a + b.games_played, 0)}
+            </span>
+          </span>
+          <span>
+            Avg ELO:{' '}
+            <span className="text-purple-400">
               {Math.round(agents.reduce((a, b) => a + b.elo, 0) / agents.length)}
             </span>
           </span>

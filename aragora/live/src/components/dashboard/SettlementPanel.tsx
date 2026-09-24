@@ -83,12 +83,15 @@ interface SettlementPanelProps {
  */
 export function SettlementPanel({ refreshInterval }: SettlementPanelProps) {
   const { summary, dueCount, isLoading, error } = useSettlements(
-    refreshInterval ? { refreshInterval } : undefined
+    refreshInterval ? { refreshInterval } : undefined,
   );
 
   if (isLoading) {
     return (
-      <div className="bg-[var(--surface)] border border-[var(--border)]" data-testid="settlement-panel-loading">
+      <div
+        className="bg-[var(--surface)] border border-[var(--border)]"
+        data-testid="settlement-panel-loading"
+      >
         <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
             {'>'} SETTLEMENT STATUS
@@ -103,7 +106,10 @@ export function SettlementPanel({ refreshInterval }: SettlementPanelProps) {
 
   if (error || !summary) {
     return (
-      <div className="bg-[var(--surface)] border border-[var(--border)]" data-testid="settlement-panel">
+      <div
+        className="bg-[var(--surface)] border border-[var(--border)]"
+        data-testid="settlement-panel"
+      >
         <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
           <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
             {'>'} SETTLEMENT STATUS
@@ -120,7 +126,10 @@ export function SettlementPanel({ refreshInterval }: SettlementPanelProps) {
   const recent = summary.recent ?? [];
 
   return (
-    <div className="bg-[var(--surface)] border border-[var(--border)]" data-testid="settlement-panel">
+    <div
+      className="bg-[var(--surface)] border border-[var(--border)]"
+      data-testid="settlement-panel"
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
         <h3 className="text-sm font-theme-data text-[var(--acid-green)]">
@@ -152,9 +161,7 @@ export function SettlementPanel({ refreshInterval }: SettlementPanelProps) {
             const count = byStatus[status] ?? 0;
             return (
               <div key={status} className="text-center">
-                <div className={`text-lg font-theme-data font-bold ${config.text}`}>
-                  {count}
-                </div>
+                <div className={`text-lg font-theme-data font-bold ${config.text}`}>{count}</div>
                 <div className="text-[10px] font-theme-data text-[var(--text-muted)] uppercase">
                   {config.label}
                 </div>
@@ -179,10 +186,7 @@ export function SettlementPanel({ refreshInterval }: SettlementPanelProps) {
             </div>
             <div className="space-y-2">
               {recent.slice(0, 5).map((record) => (
-                <div
-                  key={record.debate_id}
-                  className="flex items-center justify-between gap-2"
-                >
+                <div key={record.debate_id} className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <StatusBadge status={record.status} />
                     <span className="text-xs font-theme-data text-[var(--text)] truncate">

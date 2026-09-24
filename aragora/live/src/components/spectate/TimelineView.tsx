@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  useSpectateStore,
-  EVENT_STYLES,
-  type SpectatorEvent,
-} from '@/store/spectateStore';
+import { useSpectateStore, EVENT_STYLES, type SpectatorEvent } from '@/store/spectateStore';
 
 /**
  * Round-based timeline view for spectating debates.
@@ -110,19 +106,14 @@ export function TimelineView() {
                     >
                       <span>{style.icon}</span>
                       <span className={style.color}>{style.label}</span>
-                      {ev.details && (
-                        <span className="text-text-muted truncate">{ev.details}</span>
-                      )}
+                      {ev.details && <span className="text-text-muted truncate">{ev.details}</span>}
                     </div>
                   );
                 })}
 
               {/* Per-agent lanes */}
               {[...agentActivity.entries()].map(([agent, agentEvents]) => (
-                <div
-                  key={agent}
-                  className="border-l-2 border-[var(--acid-cyan)]/30 pl-3 py-1"
-                >
+                <div key={agent} className="border-l-2 border-[var(--acid-cyan)]/30 pl-3 py-1">
                   <div className="text-xs font-theme-data text-[var(--acid-cyan)] font-bold mb-1">
                     {agent}
                   </div>

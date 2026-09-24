@@ -148,7 +148,7 @@ describe('TrainingConfig', () => {
           numEpochs: 3,
           batchSize: 4,
           quantization: '4bit',
-        })
+        }),
       );
     });
 
@@ -167,7 +167,7 @@ describe('TrainingConfig', () => {
           learningRate: 0.0002,
           maxSeqLength: 2048,
           gradientCheckpointing: true,
-        })
+        }),
       );
     });
   });
@@ -295,9 +295,7 @@ describe('TrainingConfig', () => {
       });
 
       expect(mockOnStartTraining).toHaveBeenCalledWith(
-        expect.objectContaining({
-          jobName: 'custom_job_name',
-        })
+        expect.objectContaining({ jobName: 'custom_job_name' }),
       );
     });
 
@@ -314,11 +312,7 @@ describe('TrainingConfig', () => {
         fireEvent.click(screen.getByText('START TRAINING'));
       });
 
-      expect(mockOnStartTraining).toHaveBeenCalledWith(
-        expect.objectContaining({
-          numEpochs: 5,
-        })
-      );
+      expect(mockOnStartTraining).toHaveBeenCalledWith(expect.objectContaining({ numEpochs: 5 }));
     });
   });
 });

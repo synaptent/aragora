@@ -171,7 +171,9 @@ export function GauntletPanel({ apiBase }: GauntletPanelProps) {
           <div className="p-8 text-center text-text-muted font-theme-data">
             <p className="text-2xl mb-2">∅</p>
             <p>No stress test results yet</p>
-            <p className="text-xs mt-2 text-text-muted/60">Run a security or compliance audit to see results here.</p>
+            <p className="text-xs mt-2 text-text-muted/60">
+              Run a security or compliance audit to see results here.
+            </p>
           </div>
         ) : (
           <div className="divide-y divide-border">

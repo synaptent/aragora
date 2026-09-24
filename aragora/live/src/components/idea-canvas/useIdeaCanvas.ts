@@ -124,30 +124,29 @@ export function useIdeaCanvas(canvasId: string | null) {
   }, [canvasId, loadCanvas]);
 
   // ── Cursor broadcasting ──────────────────────────────────────
-  const sendCursorMove = useCallback(
-    (position: { x: number; y: number }) => {
-      const now = Date.now();
-      if (now - cursorThrottleRef.current < 50) return;
-      cursorThrottleRef.current = now;
+  const sendCursorMove = useCallback((position: { x: number; y: number }) => {
+    const now = Date.now();
+    if (now - cursorThrottleRef.current < 50) return;
+    cursorThrottleRef.current = now;
 
-      wsRef.current?.send(
-        JSON.stringify({ type: 'ideas:cursor:move', position })
-      );
-    },
-    []
-  );
+    wsRef.current?.send(JSON.stringify({ type: 'ideas:cursor:move', position }));
+  }, []);
 
   // ── Connection handler ───────────────────────────────────────
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((eds) => addEdge({ ...connection, type: 'default' }, eds));
     },
-    [setEdges]
+    [setEdges],
   );
 
   // ── Drop handler ─────────────────────────────────────────────
   const onDrop = useCallback(
-    (event: React.DragEvent, reactFlowBounds: DOMRect, screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number }) => {
+    (
+      event: React.DragEvent,
+      reactFlowBounds: DOMRect,
+      screenToFlowPosition: (pos: { x: number; y: number }) => { x: number; y: number },
+    ) => {
       const ideaType = event.dataTransfer.getData('application/idea-node-type') as IdeaNodeType;
       if (!ideaType) return;
 
@@ -174,7 +173,7 @@ export function useIdeaCanvas(canvasId: string | null) {
 
       setNodes((nds) => [...nds, newNode]);
     },
-    [setNodes]
+    [setNodes],
   );
 
   // ── Node property updates ────────────────────────────────────
@@ -182,19 +181,17 @@ export function useIdeaCanvas(canvasId: string | null) {
     (updates: Partial<IdeaNodeData>) => {
       if (!selectedNodeId) return;
       setNodes((nds) =>
-        nds.map((n) =>
-          n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n
-        )
+        nds.map((n) => (n.id === selectedNodeId ? { ...n, data: { ...n.data, ...updates } } : n)),
       );
     },
-    [selectedNodeId, setNodes]
+    [selectedNodeId, setNodes],
   );
 
   const deleteSelectedNode = useCallback(() => {
     if (!selectedNodeId) return;
     setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
     setEdges((eds) =>
-      eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId)
+      eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId),
     );
     setSelectedNodeId(null);
   }, [selectedNodeId, setNodes, setEdges]);

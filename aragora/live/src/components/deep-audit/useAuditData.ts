@@ -11,11 +11,7 @@ export function useAuditData(events: StreamEvent[]) {
 
     // Initialize rounds
     AUDIT_ROUNDS.forEach((r) => {
-      rounds[r.round] = {
-        round: r.round,
-        messages: [],
-        status: 'pending',
-      };
+      rounds[r.round] = { round: r.round, messages: [], status: 'pending' };
     });
 
     // Process all event types
@@ -40,7 +36,11 @@ export function useAuditData(events: StreamEvent[]) {
 
           // Add messages from this round
           const messages =
-            (event.data?.messages as Array<{ agent: string; content: string; confidence?: number }>) || [];
+            (event.data?.messages as Array<{
+              agent: string;
+              content: string;
+              confidence?: number;
+            }>) || [];
           messages.forEach((msg) => {
             rounds[round].messages.push({
               agent: msg.agent,

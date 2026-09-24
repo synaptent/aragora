@@ -111,10 +111,7 @@ describe('InsightsPanel', () => {
     it('displays flips when available', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/flips/recent')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ flips: mockFlips }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ flips: mockFlips }) });
         }
         if (url.includes('/api/flips/summary')) {
           return Promise.resolve({
@@ -122,10 +119,7 @@ describe('InsightsPanel', () => {
             json: () => Promise.resolve({ summary: mockSummary }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ insights: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ insights: [] }) });
       });
 
       await act(async () => {
@@ -147,10 +141,7 @@ describe('InsightsPanel', () => {
     it('displays flip type badges with correct colors', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/flips/recent')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ flips: mockFlips }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ flips: mockFlips }) });
         }
         if (url.includes('/api/flips/summary')) {
           return Promise.resolve({
@@ -158,10 +149,7 @@ describe('InsightsPanel', () => {
             json: () => Promise.resolve({ summary: mockSummary }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ insights: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ insights: [] }) });
       });
 
       await act(async () => {
@@ -177,14 +165,15 @@ describe('InsightsPanel', () => {
         // Get all elements containing the type text - there may be multiple (badge + summary)
         const contradictionElements = screen.getAllByText(/contradiction/i);
         // Find the one that's in the flip type badge (has text-red-400 class)
-        const contradictionBadge = contradictionElements.find(el =>
-          el.closest('[class*="text-red-400"]') || el.classList.contains('text-red-400')
+        const contradictionBadge = contradictionElements.find(
+          (el) => el.closest('[class*="text-red-400"]') || el.classList.contains('text-red-400'),
         );
         expect(contradictionBadge).toBeTruthy();
 
         const refinementElements = screen.getAllByText(/refinement/i);
-        const refinementBadge = refinementElements.find(el =>
-          el.closest('[class*="text-green-400"]') || el.classList.contains('text-green-400')
+        const refinementBadge = refinementElements.find(
+          (el) =>
+            el.closest('[class*="text-green-400"]') || el.classList.contains('text-green-400'),
         );
         expect(refinementBadge).toBeTruthy();
       });
@@ -193,10 +182,7 @@ describe('InsightsPanel', () => {
     it('displays before/after claims', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/flips/recent')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ flips: mockFlips }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ flips: mockFlips }) });
         }
         if (url.includes('/api/flips/summary')) {
           return Promise.resolve({
@@ -204,10 +190,7 @@ describe('InsightsPanel', () => {
             json: () => Promise.resolve({ summary: mockSummary }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ insights: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ insights: [] }) });
       });
 
       await act(async () => {
@@ -227,10 +210,7 @@ describe('InsightsPanel', () => {
     it('displays flip summary when available', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/flips/recent')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ flips: mockFlips }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ flips: mockFlips }) });
         }
         if (url.includes('/api/flips/summary')) {
           return Promise.resolve({
@@ -238,10 +218,7 @@ describe('InsightsPanel', () => {
             json: () => Promise.resolve({ summary: mockSummary }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ insights: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ insights: [] }) });
       });
 
       await act(async () => {
@@ -264,21 +241,12 @@ describe('InsightsPanel', () => {
     it('shows empty state when no flips', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/flips/recent')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ flips: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ flips: [] }) });
         }
         if (url.includes('/api/flips/summary')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ summary: null }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ summary: null }) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ insights: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ insights: [] }) });
       });
 
       await act(async () => {
@@ -291,19 +259,14 @@ describe('InsightsPanel', () => {
       });
 
       await waitFor(() => {
-        expect(
-          screen.getByText(/No position flips detected yet/)
-        ).toBeInTheDocument();
+        expect(screen.getByText(/No position flips detected yet/)).toBeInTheDocument();
       });
     });
 
     it('displays domain tag when present', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/flips/recent')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ flips: mockFlips }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ flips: mockFlips }) });
         }
         if (url.includes('/api/flips/summary')) {
           return Promise.resolve({
@@ -311,10 +274,7 @@ describe('InsightsPanel', () => {
             json: () => Promise.resolve({ summary: mockSummary }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ insights: [] }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ insights: [] }) });
       });
 
       await act(async () => {
@@ -351,7 +311,7 @@ describe('InsightsPanel', () => {
 
       // Check that at least one call was to the custom API base
       const hasCustomApiCall = mockFetch.mock.calls.some(
-        (call) => call[0] && call[0].includes('https://custom-api.example.com')
+        (call) => call[0] && call[0].includes('https://custom-api.example.com'),
       );
       expect(hasCustomApiCall).toBe(true);
     });
@@ -373,10 +333,7 @@ describe('InsightsPanel', () => {
     });
 
     it('calls refresh when Refresh button is clicked', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ insights: [] }),
-      });
+      mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ insights: [] }) });
 
       await act(async () => {
         render(<InsightsPanel wsMessages={[]} />);
@@ -446,9 +403,7 @@ describe('InsightsPanel', () => {
         fireEvent.click(memoryTab);
       });
 
-      expect(
-        screen.getByText(/No memory recalls yet/)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/No memory recalls yet/)).toBeInTheDocument();
     });
   });
 });

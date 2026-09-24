@@ -75,10 +75,7 @@ export interface UseControlPlaneReturn {
   createTask: (data: { name: string; agent_id?: string }) => Promise<ControlPlaneTask>;
   cancelTask: (taskId: string) => Promise<void>;
 
-  setTaskFilters: (filters: {
-    status?: ControlPlaneTask['status'];
-    agentId?: string;
-  }) => void;
+  setTaskFilters: (filters: { status?: ControlPlaneTask['status']; agentId?: string }) => void;
 
   selectAgent: (agentId: string | null) => void;
   selectTask: (taskId: string | null) => void;
@@ -147,7 +144,11 @@ export function useControlPlane({
   const setSelectedTaskId = useControlPlaneStore((s) => s.setSelectedTaskId);
 
   // Real-time updates via WebSocket
-  const { isConnected: wsConnected, agents: wsAgentsMap, tasks: wsTasksMap } = useControlPlaneWebSocket({
+  const {
+    isConnected: wsConnected,
+    agents: wsAgentsMap,
+    tasks: wsTasksMap,
+  } = useControlPlaneWebSocket({
     enabled: enableRealtime,
     onAgentRegistered: (agentId, data) => {
       // Add new agent to store
@@ -296,7 +297,9 @@ export function useControlPlane({
       const response = await client.controlPlane.health();
       const health = response.health;
       const totalAgents = health.agents_total ?? Object.keys(health.agents).length;
-      const availableAgents = health.agents_available ?? Object.values(health.agents).filter(a => a.status === 'healthy').length;
+      const availableAgents =
+        health.agents_available ??
+        Object.values(health.agents).filter((a) => a.status === 'healthy').length;
       // Map health to stats format
       setStats({
         total_agents: totalAgents,
@@ -328,7 +331,7 @@ export function useControlPlane({
       updateTask(response.task);
       return response.task;
     },
-    [client, updateTask]
+    [client, updateTask],
   );
 
   // Cancel task
@@ -339,7 +342,7 @@ export function useControlPlane({
       // Refresh tasks after cancel
       loadTasks();
     },
-    [client, loadTasks]
+    [client, loadTasks],
   );
 
   // Set task filters
@@ -347,7 +350,7 @@ export function useControlPlane({
     (filters: { status?: ControlPlaneTask['status']; agentId?: string }) => {
       setTaskFiltersAction(filters);
     },
-    [setTaskFiltersAction]
+    [setTaskFiltersAction],
   );
 
   // Selection actions
@@ -355,14 +358,14 @@ export function useControlPlane({
     (agentId: string | null) => {
       setSelectedAgentId(agentId);
     },
-    [setSelectedAgentId]
+    [setSelectedAgentId],
   );
 
   const selectTask = useCallback(
     (taskId: string | null) => {
       setSelectedTaskId(taskId);
     },
-    [setSelectedTaskId]
+    [setSelectedTaskId],
   );
 
   // Load on mount

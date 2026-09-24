@@ -53,7 +53,8 @@ const STARTER_TEMPLATES: SelectedTemplate[] = [
 ];
 
 export function TemplateStep({ onNext, onBack }: TemplateStepProps) {
-  const { selectedTemplate, setSelectedTemplate, setAvailableTemplates, useCase } = useOnboardingStore();
+  const { selectedTemplate, setSelectedTemplate, setAvailableTemplates, useCase } =
+    useOnboardingStore();
   const [selected, setSelected] = useState<SelectedTemplate | null>(selectedTemplate);
 
   useEffect(() => {

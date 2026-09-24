@@ -26,57 +26,120 @@ interface ConfigField {
   envVar?: string;
 }
 
-const INTEGRATIONS: Omit<IntegrationStatus, 'configured' | 'enabled' | 'status' | 'lastMessage'>[] = [
-  {
-    id: 'slack',
-    name: 'Slack',
-    icon: '#',
-    description: 'Post debate updates to Slack channels via webhooks or bot',
-    configFields: [
-      { key: 'webhook_url', label: 'Webhook URL', type: 'password', required: true, placeholder: 'https://hooks.slack.com/services/...', envVar: 'SLACK_WEBHOOK_URL' },
-      { key: 'channel', label: 'Channel', type: 'text', required: false, placeholder: '#aragora-debates' },
-    ],
-  },
-  {
-    id: 'discord',
-    name: 'Discord',
-    icon: '@',
-    description: 'Send notifications to Discord servers via webhooks',
-    configFields: [
-      { key: 'webhook_url', label: 'Webhook URL', type: 'password', required: true, placeholder: 'https://discord.com/api/webhooks/...', envVar: 'DISCORD_WEBHOOK_URL' },
-    ],
-  },
-  {
-    id: 'teams',
-    name: 'Microsoft Teams',
-    icon: '{}',
-    description: 'Post Adaptive Cards to Teams channels',
-    configFields: [
-      { key: 'webhook_url', label: 'Incoming Webhook URL', type: 'password', required: true, placeholder: 'https://xxx.webhook.office.com/...', envVar: 'TEAMS_WEBHOOK_URL' },
-    ],
-  },
-  {
-    id: 'telegram',
-    name: 'Telegram',
-    icon: '>',
-    description: 'Send messages via Telegram bot',
-    configFields: [
-      { key: 'bot_token', label: 'Bot Token', type: 'password', required: true, placeholder: '123456:ABC-DEF1234...', envVar: 'TELEGRAM_BOT_TOKEN' },
-      { key: 'chat_id', label: 'Chat ID', type: 'text', required: true, placeholder: '-1001234567890', envVar: 'TELEGRAM_CHAT_ID' },
-    ],
-  },
-  {
-    id: 'matrix',
-    name: 'Matrix / Element',
-    icon: '[]',
-    description: 'Send messages to Matrix rooms (Element, etc.)',
-    configFields: [
-      { key: 'homeserver', label: 'Homeserver URL', type: 'text', required: true, placeholder: 'https://matrix.org', envVar: 'MATRIX_HOMESERVER_URL' },
-      { key: 'access_token', label: 'Access Token', type: 'password', required: true, placeholder: 'syt_xxxxx', envVar: 'MATRIX_ACCESS_TOKEN' },
-      { key: 'room_id', label: 'Room ID', type: 'text', required: true, placeholder: '!abc123:matrix.org', envVar: 'MATRIX_ROOM_ID' },
-    ],
-  },
-];
+const INTEGRATIONS: Omit<IntegrationStatus, 'configured' | 'enabled' | 'status' | 'lastMessage'>[] =
+  [
+    {
+      id: 'slack',
+      name: 'Slack',
+      icon: '#',
+      description: 'Post debate updates to Slack channels via webhooks or bot',
+      configFields: [
+        {
+          key: 'webhook_url',
+          label: 'Webhook URL',
+          type: 'password',
+          required: true,
+          placeholder: 'https://hooks.slack.com/services/...',
+          envVar: 'SLACK_WEBHOOK_URL',
+        },
+        {
+          key: 'channel',
+          label: 'Channel',
+          type: 'text',
+          required: false,
+          placeholder: '#aragora-debates',
+        },
+      ],
+    },
+    {
+      id: 'discord',
+      name: 'Discord',
+      icon: '@',
+      description: 'Send notifications to Discord servers via webhooks',
+      configFields: [
+        {
+          key: 'webhook_url',
+          label: 'Webhook URL',
+          type: 'password',
+          required: true,
+          placeholder: 'https://discord.com/api/webhooks/...',
+          envVar: 'DISCORD_WEBHOOK_URL',
+        },
+      ],
+    },
+    {
+      id: 'teams',
+      name: 'Microsoft Teams',
+      icon: '{}',
+      description: 'Post Adaptive Cards to Teams channels',
+      configFields: [
+        {
+          key: 'webhook_url',
+          label: 'Incoming Webhook URL',
+          type: 'password',
+          required: true,
+          placeholder: 'https://xxx.webhook.office.com/...',
+          envVar: 'TEAMS_WEBHOOK_URL',
+        },
+      ],
+    },
+    {
+      id: 'telegram',
+      name: 'Telegram',
+      icon: '>',
+      description: 'Send messages via Telegram bot',
+      configFields: [
+        {
+          key: 'bot_token',
+          label: 'Bot Token',
+          type: 'password',
+          required: true,
+          placeholder: '123456:ABC-DEF1234...',
+          envVar: 'TELEGRAM_BOT_TOKEN',
+        },
+        {
+          key: 'chat_id',
+          label: 'Chat ID',
+          type: 'text',
+          required: true,
+          placeholder: '-1001234567890',
+          envVar: 'TELEGRAM_CHAT_ID',
+        },
+      ],
+    },
+    {
+      id: 'matrix',
+      name: 'Matrix / Element',
+      icon: '[]',
+      description: 'Send messages to Matrix rooms (Element, etc.)',
+      configFields: [
+        {
+          key: 'homeserver',
+          label: 'Homeserver URL',
+          type: 'text',
+          required: true,
+          placeholder: 'https://matrix.org',
+          envVar: 'MATRIX_HOMESERVER_URL',
+        },
+        {
+          key: 'access_token',
+          label: 'Access Token',
+          type: 'password',
+          required: true,
+          placeholder: 'syt_xxxxx',
+          envVar: 'MATRIX_ACCESS_TOKEN',
+        },
+        {
+          key: 'room_id',
+          label: 'Room ID',
+          type: 'text',
+          required: true,
+          placeholder: '!abc123:matrix.org',
+          envVar: 'MATRIX_ROOM_ID',
+        },
+      ],
+    },
+  ];
 
 interface IntegrationCardProps {
   integration: IntegrationStatus;
@@ -119,7 +182,9 @@ function IntegrationCard({ integration, onTest, onToggle, isLoading }: Integrati
             </p>
           </div>
         </div>
-        <div className={`px-2 py-1 font-theme-data text-[10px] border ${statusColors[integration.status]}`}>
+        <div
+          className={`px-2 py-1 font-theme-data text-[10px] border ${statusColors[integration.status]}`}
+        >
           {statusLabels[integration.status]}
         </div>
       </div>
@@ -196,7 +261,11 @@ export default function ChatIntegrationsPage() {
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    id: string;
+    success: boolean;
+    message: string;
+  } | null>(null);
 
   // Fetch integration statuses
   const fetchStatuses = useCallback(async () => {
@@ -220,21 +289,25 @@ export default function ChatIntegrationsPage() {
         setIntegrations(merged);
       } else {
         // API not available, show unconfigured state
-        setIntegrations(INTEGRATIONS.map((i) => ({
+        setIntegrations(
+          INTEGRATIONS.map((i) => ({
+            ...i,
+            configured: false,
+            enabled: false,
+            status: 'unknown' as const,
+          })),
+        );
+      }
+    } catch {
+      // Network error, show unconfigured state
+      setIntegrations(
+        INTEGRATIONS.map((i) => ({
           ...i,
           configured: false,
           enabled: false,
           status: 'unknown' as const,
-        })));
-      }
-    } catch {
-      // Network error, show unconfigured state
-      setIntegrations(INTEGRATIONS.map((i) => ({
-        ...i,
-        configured: false,
-        enabled: false,
-        status: 'unknown' as const,
-      })));
+        })),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -297,11 +370,17 @@ export default function ChatIntegrationsPage() {
       <header className="border-b border-[var(--accent)]/30 bg-surface/80 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-[var(--accent)] font-theme-data text-sm hover:opacity-80">
+            <Link
+              href="/"
+              className="text-[var(--accent)] font-theme-data text-sm hover:opacity-80"
+            >
               [ARAGORA]
             </Link>
             <span className="text-[var(--accent)]/30">/</span>
-            <Link href="/integrations" className="text-[var(--acid-cyan)] font-theme-data text-sm hover:opacity-80">
+            <Link
+              href="/integrations"
+              className="text-[var(--acid-cyan)] font-theme-data text-sm hover:opacity-80"
+            >
               INTEGRATIONS
             </Link>
             <span className="text-[var(--accent)]/30">/</span>
@@ -408,8 +487,12 @@ export default function ChatIntegrationsPage() {
               { name: 'Errors', desc: 'When something goes wrong' },
             ].map((event) => (
               <div key={event.name} className="p-3 border border-[var(--accent)]/10 bg-surface/10">
-                <div className="text-[var(--acid-cyan)] font-theme-data text-[10px]">{event.name}</div>
-                <div className="text-text-muted/40 font-theme-data text-[9px] mt-1">{event.desc}</div>
+                <div className="text-[var(--acid-cyan)] font-theme-data text-[10px]">
+                  {event.name}
+                </div>
+                <div className="text-text-muted/40 font-theme-data text-[9px] mt-1">
+                  {event.desc}
+                </div>
               </div>
             ))}
           </div>

@@ -12,11 +12,7 @@ interface AgentMood {
   agent: string;
   currentMood: string;
   confidence: number;
-  history: Array<{
-    mood: string;
-    confidence: number;
-    timestamp: number;
-  }>;
+  history: Array<{ mood: string; confidence: number; timestamp: number }>;
   indicators: string[];
 }
 
@@ -105,7 +101,7 @@ export function MoodTrackerPanel({ events, agents = [] }: MoodTrackerPanelProps)
     if (agentMoods.length === 0) return 0.5;
     const totalEnergy = agentMoods.reduce(
       (sum, m) => sum + getMoodEnergy(m.currentMood) * m.confidence,
-      0
+      0,
     );
     return totalEnergy / agentMoods.length;
   }, [agentMoods]);
@@ -139,9 +135,7 @@ export function MoodTrackerPanel({ events, agents = [] }: MoodTrackerPanelProps)
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-text-primary">
-                    {agentMood.agent}
-                  </span>
+                  <span className="text-sm font-medium text-text-primary">{agentMood.agent}</span>
                   <span className="text-lg">{style.emoji}</span>
                 </div>
                 <div className="flex items-center gap-2">

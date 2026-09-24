@@ -29,13 +29,9 @@ interface AudioTranscriberProps {
 
 type TranscriberState = 'idle' | 'uploading' | 'transcribing' | 'completed' | 'error';
 
-const AUDIO_ACCEPT = [
-  '.mp3', '.wav', '.m4a', '.webm', '.ogg', '.flac', '.aac', '.wma'
-];
+const AUDIO_ACCEPT = ['.mp3', '.wav', '.m4a', '.webm', '.ogg', '.flac', '.aac', '.wma'];
 
-const VIDEO_ACCEPT = [
-  '.mp4', '.mov', '.webm', '.mkv', '.avi', '.wmv', '.flv'
-];
+const VIDEO_ACCEPT = ['.mp4', '.mov', '.webm', '.mkv', '.avi', '.wmv', '.flv'];
 
 const formatTime = (seconds: number): string => {
   const h = Math.floor(seconds / 3600);
@@ -70,49 +66,47 @@ export function AudioTranscriber({
   const [fileName, setFileName] = useState<string>('');
   const [showSegments, setShowSegments] = useState(true);
 
-  const handleUpload = useCallback(async (files: File[]) => {
-    const file = files[0];
-    if (!file) return;
+  const handleUpload = useCallback(
+    async (files: File[]) => {
+      const file = files[0];
+      if (!file) return;
 
-    setFileName(file.name);
-    setState('uploading');
-    setError(null);
-    setResult(null);
+      setFileName(file.name);
+      setState('uploading');
+      setError(null);
+      setResult(null);
 
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
 
-      // Determine endpoint based on file type
-      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-      const isVideo = VIDEO_ACCEPT.includes(ext);
-      const endpoint = isVideo
-        ? `${apiEndpoint}/video`
-        : `${apiEndpoint}/audio`;
+        // Determine endpoint based on file type
+        const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+        const isVideo = VIDEO_ACCEPT.includes(ext);
+        const endpoint = isVideo ? `${apiEndpoint}/video` : `${apiEndpoint}/audio`;
 
-      setState('transcribing');
+        setState('transcribing');
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        body: formData,
-      });
+        const response = await fetch(endpoint, { method: 'POST', body: formData });
 
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || 'Transcription failed');
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || 'Transcription failed');
+        }
+
+        const transcription = await response.json();
+        setResult(transcription);
+        setState('completed');
+        onTranscript?.(transcription);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Transcription failed';
+        setError(message);
+        setState('error');
+        onError?.(message);
       }
-
-      const transcription = await response.json();
-      setResult(transcription);
-      setState('completed');
-      onTranscript?.(transcription);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Transcription failed';
-      setError(message);
-      setState('error');
-      onError?.(message);
-    }
-  }, [apiEndpoint, onTranscript, onError]);
+    },
+    [apiEndpoint, onTranscript, onError],
+  );
 
   const reset = useCallback(() => {
     setState('idle');
@@ -121,52 +115,57 @@ export function AudioTranscriber({
     setFileName('');
   }, []);
 
-  const exportTranscript = useCallback((format: 'txt' | 'srt' | 'vtt') => {
-    if (!result) return;
+  const exportTranscript = useCallback(
+    (format: 'txt' | 'srt' | 'vtt') => {
+      if (!result) return;
 
-    let content = '';
-    let mimeType = 'text/plain';
-    const extension = format;
+      let content = '';
+      let mimeType = 'text/plain';
+      const extension = format;
 
-    switch (format) {
-      case 'txt':
-        content = result.text;
-        break;
+      switch (format) {
+        case 'txt':
+          content = result.text;
+          break;
 
-      case 'srt':
-        content = result.segments
-          .map((seg, i) => {
-            const start = formatSrtTime(seg.start);
-            const end = formatSrtTime(seg.end);
-            return `${i + 1}\n${start} --> ${end}\n${seg.text.trim()}\n`;
-          })
-          .join('\n');
-        mimeType = 'text/plain';
-        break;
+        case 'srt':
+          content = result.segments
+            .map((seg, i) => {
+              const start = formatSrtTime(seg.start);
+              const end = formatSrtTime(seg.end);
+              return `${i + 1}\n${start} --> ${end}\n${seg.text.trim()}\n`;
+            })
+            .join('\n');
+          mimeType = 'text/plain';
+          break;
 
-      case 'vtt':
-        content = 'WEBVTT\n\n' + result.segments
-          .map((seg) => {
-            const start = formatVttTime(seg.start);
-            const end = formatVttTime(seg.end);
-            return `${start} --> ${end}\n${seg.text.trim()}\n`;
-          })
-          .join('\n');
-        mimeType = 'text/vtt';
-        break;
-    }
+        case 'vtt':
+          content =
+            'WEBVTT\n\n' +
+            result.segments
+              .map((seg) => {
+                const start = formatVttTime(seg.start);
+                const end = formatVttTime(seg.end);
+                return `${start} --> ${end}\n${seg.text.trim()}\n`;
+              })
+              .join('\n');
+          mimeType = 'text/vtt';
+          break;
+      }
 
-    // Download file
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${fileName.replace(/\.[^/.]+$/, '')}.${extension}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [result, fileName]);
+      // Download file
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${fileName.replace(/\.[^/.]+$/, '')}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+    [result, fileName],
+  );
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -180,12 +179,8 @@ export function AudioTranscriber({
           multiple={false}
         >
           <div className="text-3xl mb-2 text-[var(--accent)]/70">~</div>
-          <div className="font-theme-data text-sm text-text">
-            UPLOAD AUDIO OR VIDEO FILE
-          </div>
-          <div className="text-xs text-text-muted mt-1">
-            Supports MP3, WAV, MP4, MOV, and more
-          </div>
+          <div className="font-theme-data text-sm text-text">UPLOAD AUDIO OR VIDEO FILE</div>
+          <div className="text-xs text-text-muted mt-1">Supports MP3, WAV, MP4, MOV, and more</div>
         </FileUploader>
       )}
 
@@ -196,11 +191,7 @@ export function AudioTranscriber({
           <div className="font-theme-data text-sm text-[var(--acid-cyan)]">
             {state === 'uploading' ? 'UPLOADING...' : 'TRANSCRIBING...'}
           </div>
-          {fileName && (
-            <div className="text-xs text-text-muted mt-1 truncate">
-              {fileName}
-            </div>
-          )}
+          {fileName && <div className="text-xs text-text-muted mt-1 truncate">{fileName}</div>}
         </div>
       )}
 
@@ -273,7 +264,11 @@ export function AudioTranscriber({
           {/* Transcript content */}
           <div className="bg-surface border border-[var(--accent)]/20 rounded-lg overflow-hidden">
             {/* Toggle between full text and segments */}
-            <div className="flex border-b border-[var(--accent)]/20" role="tablist" aria-label="Transcript view">
+            <div
+              className="flex border-b border-[var(--accent)]/20"
+              role="tablist"
+              aria-label="Transcript view"
+            >
               <button
                 onClick={() => setShowSegments(false)}
                 role="tab"
@@ -315,9 +310,7 @@ export function AudioTranscriber({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-text whitespace-pre-wrap">
-                  {result.text}
-                </p>
+                <p className="text-sm text-text whitespace-pre-wrap">{result.text}</p>
               )}
             </div>
           </div>

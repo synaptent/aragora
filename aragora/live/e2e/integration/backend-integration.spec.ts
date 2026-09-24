@@ -323,9 +323,9 @@ test.describe('Error Handling Integration', () => {
     const content = await page.content();
     expect(
       response?.status() === 404 ||
-      content.includes('404') ||
-      content.includes('not found') ||
-      content.includes('Not Found')
+        content.includes('404') ||
+        content.includes('not found') ||
+        content.includes('Not Found'),
     ).toBeTruthy();
   });
 
@@ -334,10 +334,7 @@ test.describe('Error Handling Integration', () => {
 
     // Intercept API call and force error
     await page.route('**/api/debates*', (route) => {
-      route.fulfill({
-        status: 500,
-        body: JSON.stringify({ error: 'Internal Server Error' }),
-      });
+      route.fulfill({ status: 500, body: JSON.stringify({ error: 'Internal Server Error' }) });
     });
 
     await page.goto('/debates');
@@ -387,7 +384,7 @@ test.describe('Performance Integration', () => {
       (error) =>
         !error.includes('favicon') &&
         !error.includes('third-party') &&
-        !error.includes('analytics')
+        !error.includes('analytics'),
     );
 
     expect(criticalErrors.length).toBe(0);
@@ -397,9 +394,7 @@ test.describe('Performance Integration', () => {
 test.describe('CORS Integration', () => {
   test('should allow CORS requests from frontend', async ({ request }) => {
     const response = await request.get(`${API_URL}/api/health`, {
-      headers: {
-        Origin: 'http://localhost:3000',
-      },
+      headers: { Origin: 'http://localhost:3000' },
     });
 
     expect(response.ok()).toBeTruthy();
@@ -409,7 +404,7 @@ test.describe('CORS Integration', () => {
     if (headers['access-control-allow-origin']) {
       expect(
         headers['access-control-allow-origin'] === '*' ||
-        headers['access-control-allow-origin'].includes('localhost')
+          headers['access-control-allow-origin'].includes('localhost'),
       ).toBeTruthy();
     }
   });
@@ -419,9 +414,7 @@ test.describe('Rate Limiting Integration', () => {
   test('should not rate limit normal usage', async ({ request }) => {
     // Make 10 requests in quick succession
     const responses = await Promise.all(
-      Array.from({ length: 10 }, () =>
-        request.get(`${API_URL}/api/health`)
-      )
+      Array.from({ length: 10 }, () => request.get(`${API_URL}/api/health`)),
     );
 
     // All should succeed

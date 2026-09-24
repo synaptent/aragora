@@ -94,14 +94,7 @@ function LoadingSpinner({ size }: { size: ButtonSize }) {
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path
         className="opacity-75"
         fill="currentColor"
@@ -129,7 +122,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       children,
       ...props
     },
-    ref
+    ref,
   ) => {
     const isDisabled = disabled || loading;
 
@@ -163,7 +156,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
       </button>
     );
-  }
+  },
 );
 
 Button.displayName = 'Button';
@@ -197,7 +190,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         {icon}
       </Button>
     );
-  }
+  },
 );
 
 IconButton.displayName = 'IconButton';
@@ -229,10 +222,7 @@ export function ButtonGroup({
     : 'gap-2';
 
   return (
-    <div
-      className={`inline-flex ${directionStyles} ${attachedStyles} ${className}`}
-      role="group"
-    >
+    <div className={`inline-flex ${directionStyles} ${attachedStyles} ${className}`} role="group">
       {children}
     </div>
   );

@@ -22,7 +22,8 @@ const PERSONAS: PersonaOption[] = [
     id: 'stress-test',
     label: 'Architecture Review',
     description: 'Stress-test technical decisions before launch',
-    examplePrompt: 'Should we use microservices or a monolith for a new e-commerce platform expecting 10M users?',
+    examplePrompt:
+      'Should we use microservices or a monolith for a new e-commerce platform expecting 10M users?',
   },
   {
     id: 'security',
@@ -34,7 +35,8 @@ const PERSONAS: PersonaOption[] = [
     id: 'compliance',
     label: 'Compliance Check',
     description: 'Pre-audit GDPR, HIPAA, or SOX requirements',
-    examplePrompt: 'Assess our user data handling for GDPR Article 17 (Right to Erasure) compliance.',
+    examplePrompt:
+      'Assess our user data handling for GDPR Article 17 (Right to Erasure) compliance.',
   },
 ];
 
@@ -54,7 +56,7 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
 
   const handleStartWithExample = useCallback(() => {
     if (!selectedPersona) return;
-    const persona = PERSONAS.find(p => p.id === selectedPersona);
+    const persona = PERSONAS.find((p) => p.id === selectedPersona);
     onComplete(selectedPersona, persona?.examplePrompt);
   }, [selectedPersona, onComplete]);
 
@@ -70,9 +72,7 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
         <div className="border-b border-[var(--accent)]/20 px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-theme-data text-[var(--accent)]">WELCOME TO ARAGORA</h2>
-            <p className="text-xs font-theme-data text-text-muted mt-1">
-              Step {step} of 2
-            </p>
+            <p className="text-xs font-theme-data text-text-muted mt-1">Step {step} of 2</p>
           </div>
           <button
             onClick={onSkip}
@@ -102,9 +102,7 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
                     <div className="font-theme-data text-sm text-[var(--accent)] group-hover:text-[var(--accent)]">
                       {persona.label}
                     </div>
-                    <div className="text-xs text-text-muted mt-1">
-                      {persona.description}
-                    </div>
+                    <div className="text-xs text-text-muted mt-1">{persona.description}</div>
                   </button>
                 ))}
               </div>
@@ -119,7 +117,7 @@ export function OnboardingWizard({ onComplete, onSkip }: OnboardingWizardProps) 
                 </p>
                 <div className="p-4 border border-[var(--acid-cyan)]/30 rounded-lg bg-[var(--acid-cyan)]/5">
                   <p className="text-sm font-theme-data text-[var(--acid-cyan)]">
-                    &quot;{PERSONAS.find(p => p.id === selectedPersona)?.examplePrompt}&quot;
+                    &quot;{PERSONAS.find((p) => p.id === selectedPersona)?.examplePrompt}&quot;
                   </p>
                 </div>
               </div>

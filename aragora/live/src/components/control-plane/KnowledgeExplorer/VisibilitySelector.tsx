@@ -48,12 +48,7 @@ const VISIBILITY_OPTIONS: VisibilityOption[] = [
     description: 'All members of the organization',
     icon: '🏢',
   },
-  {
-    value: 'public',
-    label: 'Public',
-    description: 'Anyone with the link',
-    icon: '🌐',
-  },
+  { value: 'public', label: 'Public', description: 'Anyone with the link', icon: '🌐' },
   {
     value: 'system',
     label: 'System',
@@ -82,7 +77,7 @@ export const VisibilitySelector: React.FC<VisibilitySelectorProps> = ({
       onChange(visibility);
       setIsOpen(false);
     },
-    [onChange]
+    [onChange],
   );
 
   return (
@@ -115,11 +110,7 @@ export const VisibilitySelector: React.FC<VisibilitySelectorProps> = ({
       {isOpen && (
         <>
           {/* Backdrop */}
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setIsOpen(false)}
-            aria-hidden="true"
-          />
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} aria-hidden="true" />
 
           {/* Dropdown */}
           <ul

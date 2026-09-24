@@ -3,12 +3,7 @@
 import { useMemo } from 'react';
 
 export type DeliberationStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'consensus_reached'
-  | 'no_consensus'
-  | 'failed'
-  | 'timeout';
+  'pending' | 'in_progress' | 'consensus_reached' | 'no_consensus' | 'failed' | 'timeout';
 
 export interface DeliberationAgent {
   id: string;
@@ -106,9 +101,7 @@ export function DeliberationCard({
   const elapsedTime = useMemo(() => {
     if (!deliberation.started_at) return null;
     const start = new Date(deliberation.started_at);
-    const end = deliberation.completed_at
-      ? new Date(deliberation.completed_at)
-      : new Date();
+    const end = deliberation.completed_at ? new Date(deliberation.completed_at) : new Date();
     const diffMs = end.getTime() - start.getTime();
     const diffSecs = Math.floor(diffMs / 1000);
 
@@ -139,9 +132,7 @@ export function DeliberationCard({
           </div>
         </div>
         {deliberation.sla_status && (
-          <span
-            className={`w-2 h-2 rounded-full ${slaColors[deliberation.sla_status]}`}
-          />
+          <span className={`w-2 h-2 rounded-full ${slaColors[deliberation.sla_status]}`} />
         )}
       </div>
     );
@@ -179,7 +170,9 @@ export function DeliberationCard({
       {isActive && (
         <div className="px-4 pt-3">
           <div className="flex items-center justify-between text-xs font-theme-data text-text-muted mb-1">
-            <span>Round {deliberation.current_round}/{deliberation.max_rounds}</span>
+            <span>
+              Round {deliberation.current_round}/{deliberation.max_rounds}
+            </span>
             {elapsedTime && <span>{elapsedTime}</span>}
           </div>
           <div className="h-1.5 bg-surface rounded-full overflow-hidden">
@@ -207,9 +200,7 @@ export function DeliberationCard({
               />
               <span className="font-theme-data text-text">{agent.name}</span>
               {agent.confidence !== undefined && (
-                <span className="text-text-muted">
-                  ({Math.round(agent.confidence * 100)}%)
-                </span>
+                <span className="text-text-muted">({Math.round(agent.confidence * 100)}%)</span>
               )}
             </div>
           ))}
@@ -232,16 +223,10 @@ export function DeliberationCard({
       {deliberation.sla_status && (
         <div className="px-4 pb-3">
           <div className="flex items-center gap-2 text-xs">
-            <span
-              className={`w-2 h-2 rounded-full ${slaColors[deliberation.sla_status]}`}
-            />
-            <span className="text-text-muted font-theme-data">
-              SLA: {deliberation.sla_status}
-            </span>
+            <span className={`w-2 h-2 rounded-full ${slaColors[deliberation.sla_status]}`} />
+            <span className="text-text-muted font-theme-data">SLA: {deliberation.sla_status}</span>
             {deliberation.timeout_seconds && (
-              <span className="text-text-muted">
-                (timeout: {deliberation.timeout_seconds}s)
-              </span>
+              <span className="text-text-muted">(timeout: {deliberation.timeout_seconds}s)</span>
             )}
           </div>
         </div>

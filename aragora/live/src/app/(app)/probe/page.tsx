@@ -9,7 +9,8 @@ import { BackendSelector, useBackend } from '@/components/BackendSelector';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
 
 const CapabilityProbePanel = dynamic(
-  () => import('@/components/CapabilityProbePanel').then(m => ({ default: m.CapabilityProbePanel })),
+  () =>
+    import('@/components/CapabilityProbePanel').then((m) => ({ default: m.CapabilityProbePanel })),
   {
     ssr: false,
     loading: () => (
@@ -17,7 +18,7 @@ const CapabilityProbePanel = dynamic(
         <div className="h-[500px] bg-surface rounded" />
       </div>
     ),
-  }
+  },
 );
 
 export default function ProbePage() {
@@ -73,13 +74,15 @@ export default function ProbePage() {
               {'>'} CAPABILITY PROBES
             </h1>
             <p className="text-text-muted font-theme-data text-sm">
-              Test agent capabilities: contradiction detection, hallucination resistance,
-              sycophancy testing, confidence calibration, and reasoning depth analysis.
+              Test agent capabilities: contradiction detection, hallucination resistance, sycophancy
+              testing, confidence calibration, and reasoning depth analysis.
             </p>
           </div>
 
           <div className="mb-6 p-4 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
-            <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">Available Probe Types</h3>
+            <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+              Available Probe Types
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs font-theme-data text-text-muted">
               <span>• Contradiction Detection</span>
               <span>• Hallucination Resistance</span>
@@ -100,12 +103,8 @@ export default function ProbePage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'='.repeat(40)}
-          </div>
-          <p className="text-text-muted">
-            {'>'} ARAGORA // CAPABILITY PROBES
-          </p>
+          <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
+          <p className="text-text-muted">{'>'} ARAGORA // CAPABILITY PROBES</p>
         </footer>
       </main>
     </>

@@ -68,12 +68,8 @@ export function PanelHeaderSimple({
     <div className={`panel-header ${className}`}>
       <div className="flex items-center gap-2">
         {icon && <span>{icon}</span>}
-        <h3 className={small ? 'panel-title-sm' : 'panel-title'}>
-          {title}
-        </h3>
-        {badge !== undefined && (
-          <span className="panel-badge">{badge}</span>
-        )}
+        <h3 className={small ? 'panel-title-sm' : 'panel-title'}>{title}</h3>
+        {badge !== undefined && <span className="panel-badge">{badge}</span>}
       </div>
       {actions && <div className="panel-actions">{actions}</div>}
     </div>
@@ -110,13 +106,9 @@ export function CollapsiblePanelHeader({
       <div className="flex items-center gap-2">
         <span className="text-[var(--accent)] text-xs">{'>'}</span>
         <span className="panel-title-sm">{title}</span>
-        {badge !== undefined && (
-          <span className="panel-badge">{badge}</span>
-        )}
+        {badge !== undefined && <span className="panel-badge">{badge}</span>}
       </div>
-      <span className="panel-toggle">
-        {isExpanded ? '[COLLAPSE]' : '[EXPAND]'}
-      </span>
+      <span className="panel-toggle">{isExpanded ? '[COLLAPSE]' : '[EXPAND]'}</span>
     </div>
   );
 }

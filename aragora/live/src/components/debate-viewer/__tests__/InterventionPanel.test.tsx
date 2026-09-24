@@ -19,23 +19,18 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { InterventionPanel } from '../InterventionPanel';
 
 // Mock logger
-jest.mock('@/utils/logger', () => ({
-  logger: {
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
+jest.mock('@/utils/logger', () => ({ logger: { error: jest.fn(), debug: jest.fn() } }));
 
 // Mock config
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'http://localhost:8080',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'http://localhost:8080' }));
 
 // Mock agentColors
 jest.mock('@/utils/agentColors', () => ({
   getAgentColors: (name: string) => {
-    if (name.startsWith('claude')) return { bg: 'bg-acid-cyan/10', text: 'text-acid-cyan', border: 'border-acid-cyan/40' };
-    if (name.startsWith('gpt')) return { bg: 'bg-gold/10', text: 'text-gold', border: 'border-gold/40' };
+    if (name.startsWith('claude'))
+      return { bg: 'bg-acid-cyan/10', text: 'text-acid-cyan', border: 'border-acid-cyan/40' };
+    if (name.startsWith('gpt'))
+      return { bg: 'bg-gold/10', text: 'text-gold', border: 'border-gold/40' };
     return { bg: 'bg-acid-green/10', text: 'text-acid-green', border: 'border-acid-green/40' };
   },
 }));
@@ -70,7 +65,7 @@ describe('InterventionPanel', () => {
       render(<InterventionPanel {...defaultProps} isActive={false} />);
 
       expect(
-        screen.getByText(/Intervention controls are only available during active debates/)
+        screen.getByText(/Intervention controls are only available during active debates/),
       ).toBeInTheDocument();
     });
 
@@ -126,7 +121,7 @@ describe('InterventionPanel', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/v1/debates/test-debate-123/pause',
-          expect.objectContaining({ method: 'POST' })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -214,7 +209,7 @@ describe('InterventionPanel', () => {
           expect.objectContaining({
             method: 'POST',
             body: expect.stringContaining('"evidence":"My argument"'),
-          })
+          }),
         );
       });
     });
@@ -298,7 +293,7 @@ describe('InterventionPanel', () => {
       fireEvent.click(screen.getByText('Nudge'));
 
       expect(
-        screen.getByPlaceholderText('e.g., Consider the economic implications...')
+        screen.getByPlaceholderText('e.g., Consider the economic implications...'),
       ).toBeInTheDocument();
     });
 
@@ -308,7 +303,7 @@ describe('InterventionPanel', () => {
       fireEvent.click(screen.getByText('Nudge'));
 
       expect(
-        screen.getByPlaceholderText('e.g., The claim that X is incorrect because...')
+        screen.getByPlaceholderText('e.g., The claim that X is incorrect because...'),
       ).toBeInTheDocument();
     });
 
@@ -327,7 +322,7 @@ describe('InterventionPanel', () => {
           'http://localhost:8080/api/v1/debates/test-debate-123/nudge',
           expect.objectContaining({
             body: expect.stringContaining('"message":"Focus on scalability"'),
-          })
+          }),
         );
       });
     });
@@ -338,7 +333,7 @@ describe('InterventionPanel', () => {
       fireEvent.click(screen.getByText('Nudge'));
 
       const textarea = screen.getByPlaceholderText(
-        'e.g., The claim that X is incorrect because...'
+        'e.g., The claim that X is incorrect because...',
       );
       fireEvent.change(textarea, { target: { value: 'That claim lacks evidence' } });
 
@@ -351,7 +346,7 @@ describe('InterventionPanel', () => {
           'http://localhost:8080/api/v1/debates/test-debate-123/challenge',
           expect.objectContaining({
             body: expect.stringContaining('"challenge":"That claim lacks evidence"'),
-          })
+          }),
         );
       });
     });
@@ -379,7 +374,7 @@ describe('InterventionPanel', () => {
       fireEvent.click(screen.getByText('Nudge'));
 
       const textarea = screen.getByPlaceholderText(
-        'e.g., The claim that X is incorrect because...'
+        'e.g., The claim that X is incorrect because...',
       );
       fireEvent.change(textarea, { target: { value: 'That is wrong' } });
 

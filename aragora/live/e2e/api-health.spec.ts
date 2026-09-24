@@ -61,7 +61,7 @@ test.describe('API Health', () => {
 
     // Should show loading indicator
     const loadingIndicator = page.locator(
-      '[data-testid="loading"], .loading, .spinner, [aria-busy="true"], .skeleton'
+      '[data-testid="loading"], .loading, .spinner, [aria-busy="true"], .skeleton',
     );
 
     // Loading should appear briefly
@@ -135,7 +135,9 @@ test.describe('Data Fetching', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for pagination or load more
-    const nextPage = page.locator('button:has-text("Next"), button:has-text("Load more"), [data-testid="next-page"]');
+    const nextPage = page.locator(
+      'button:has-text("Next"), button:has-text("Load more"), [data-testid="next-page"]',
+    );
 
     if (await nextPage.isVisible().catch(() => false)) {
       await nextPage.click();

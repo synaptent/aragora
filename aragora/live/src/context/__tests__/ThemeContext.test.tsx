@@ -26,19 +26,15 @@ const mockLocalStorage = {
     delete localStorageMock[key];
   }),
   clear: jest.fn(() => {
-    Object.keys(localStorageMock).forEach(key => delete localStorageMock[key]);
+    Object.keys(localStorageMock).forEach((key) => delete localStorageMock[key]);
   }),
 };
 
-Object.defineProperty(window, 'localStorage', {
-  value: mockLocalStorage,
-});
+Object.defineProperty(window, 'localStorage', { value: mockLocalStorage });
 
 // Mock matchMedia
 const mockMatchMedia = jest.fn();
-Object.defineProperty(window, 'matchMedia', {
-  value: mockMatchMedia,
-});
+Object.defineProperty(window, 'matchMedia', { value: mockMatchMedia });
 
 // Mock document methods (prefixed with _ as currently unused, kept for future test expansion)
 const _mockSetAttribute = jest.fn();

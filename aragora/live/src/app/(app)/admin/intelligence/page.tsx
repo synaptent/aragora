@@ -81,7 +81,11 @@ function LearningInsightsTab() {
   );
 }
 
-function EloSparkline({ points, width = 100, height = 24 }: {
+function EloSparkline({
+  points,
+  width = 100,
+  height = 24,
+}: {
   points: { date: string; elo: number }[];
   width?: number;
   height?: number;
@@ -251,11 +255,7 @@ function InstitutionalMemoryTab() {
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-gray-500">{(c.before * 100).toFixed(0)}%</span>
                   <span className="text-gray-600">&rarr;</span>
-                  <span
-                    className={
-                      c.after > c.before ? 'text-green-400' : 'text-red-400'
-                    }
-                  >
+                  <span className={c.after > c.before ? 'text-green-400' : 'text-red-400'}>
                     {(c.after * 100).toFixed(0)}%
                   </span>
                 </div>
@@ -269,8 +269,7 @@ function InstitutionalMemoryTab() {
 }
 
 function ImprovementQueueTab() {
-  const { items, queue, isLoading, addGoal, reorderItem, removeItem } =
-    useImprovementQueue();
+  const { items, queue, isLoading, addGoal, reorderItem, removeItem } = useImprovementQueue();
   const [newGoal, setNewGoal] = useState('');
   const [newPriority, setNewPriority] = useState(50);
 
@@ -319,10 +318,7 @@ function ImprovementQueueTab() {
       {queue && Object.keys(queue.sourceBreakdown).length > 0 && (
         <div className="flex gap-3 flex-wrap">
           {Object.entries(queue.sourceBreakdown).map(([source, count]) => (
-            <div
-              key={source}
-              className="px-3 py-1.5 bg-[var(--bg-tertiary)] rounded text-xs"
-            >
+            <div key={source} className="px-3 py-1.5 bg-[var(--bg-tertiary)] rounded text-xs">
               <span className="text-gray-400">{source}:</span>{' '}
               <span className="font-theme-data">{count}</span>
             </div>
@@ -422,17 +418,13 @@ function StatusBadge({ status }: { status: string }) {
 
 function LoadingPlaceholder() {
   return (
-    <div className="flex items-center justify-center h-48 text-sm text-gray-500">
-      Loading...
-    </div>
+    <div className="flex items-center justify-center h-48 text-sm text-gray-500">Loading...</div>
   );
 }
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex items-center justify-center h-48 text-sm text-gray-500">
-      {message}
-    </div>
+    <div className="flex items-center justify-center h-48 text-sm text-gray-500">{message}</div>
   );
 }
 

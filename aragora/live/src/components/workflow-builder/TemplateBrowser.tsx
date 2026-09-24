@@ -58,9 +58,7 @@ export function TemplateBrowser({ onSelect, onClose }: TemplateBrowserProps) {
 
   const handleSelectTemplate = async (templateId: string) => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/workflow-templates/${templateId}`
-      );
+      const response = await fetch(`${API_BASE_URL}/api/workflow-templates/${templateId}`);
       if (!response.ok) throw new Error('Failed to fetch template');
 
       const data = await response.json();
@@ -76,9 +74,7 @@ export function TemplateBrowser({ onSelect, onClose }: TemplateBrowserProps) {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
-            <h2 className="text-lg font-theme-data font-bold text-text">
-              Workflow Templates
-            </h2>
+            <h2 className="text-lg font-theme-data font-bold text-text">Workflow Templates</h2>
             <p className="text-sm text-text-muted">
               Choose a pre-built workflow to get started quickly
             </p>
@@ -134,9 +130,7 @@ export function TemplateBrowser({ onSelect, onClose }: TemplateBrowserProps) {
           )}
 
           {!loading && !error && templates.length === 0 && (
-            <div className="text-center py-8 text-text-muted">
-              No templates found
-            </div>
+            <div className="text-center py-8 text-text-muted">No templates found</div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -151,17 +145,11 @@ export function TemplateBrowser({ onSelect, onClose }: TemplateBrowserProps) {
                 `}
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">
-                    {categoryIcons[template.category] || '📁'}
-                  </span>
-                  <h3 className="font-theme-data font-bold text-text">
-                    {template.name}
-                  </h3>
+                  <span className="text-lg">{categoryIcons[template.category] || '📁'}</span>
+                  <h3 className="font-theme-data font-bold text-text">{template.name}</h3>
                 </div>
 
-                <p className="text-sm text-text-muted mb-3 line-clamp-2">
-                  {template.description}
-                </p>
+                <p className="text-sm text-text-muted mb-3 line-clamp-2">{template.description}</p>
 
                 <div className="flex flex-wrap gap-1">
                   {template.tags.slice(0, 4).map((tag) => (

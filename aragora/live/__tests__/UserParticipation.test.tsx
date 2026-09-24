@@ -17,15 +17,15 @@ const mockEvents: StreamEvent[] = [
     data: { role: 'proposer', content: 'Proposal A: Add feature X', agent: 'Agent1' },
     timestamp: Date.now(),
     round: 1,
-    agent: 'Agent1'
+    agent: 'Agent1',
   },
   {
     type: 'agent_message',
     data: { role: 'proposer', content: 'Proposal B: Add feature Y', agent: 'Agent2' },
     timestamp: Date.now(),
     round: 1,
-    agent: 'Agent2'
-  }
+    agent: 'Agent2',
+  },
 ];
 
 describe('UserParticipation', () => {
@@ -46,7 +46,7 @@ describe('UserParticipation', () => {
         onSuggest={mockOnSuggest}
         onAck={mockOnAck}
         onError={mockOnError}
-      />
+      />,
     );
 
     expect(screen.getByText('Vote on Proposals')).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe('UserParticipation', () => {
         onSuggest={mockOnSuggest}
         onAck={mockOnAck}
         onError={mockOnError}
-      />
+      />,
     );
 
     const radioButton = screen.getByDisplayValue('Agent1');
@@ -83,10 +83,12 @@ describe('UserParticipation', () => {
         onSuggest={mockOnSuggest}
         onAck={mockOnAck}
         onError={mockOnError}
-      />
+      />,
     );
 
-    const textarea = screen.getByPlaceholderText('Share your thoughts or suggest an improvement...');
+    const textarea = screen.getByPlaceholderText(
+      'Share your thoughts or suggest an improvement...',
+    );
     fireEvent.change(textarea, { target: { value: '  Great idea!  ' } });
 
     const submitButton = screen.getByText('Suggest');
@@ -111,7 +113,7 @@ describe('UserParticipation', () => {
           onSuggest={mockOnSuggest}
           onAck={mockOnAck}
           onError={mockOnError}
-        />
+        />,
       );
     });
 
@@ -151,12 +153,14 @@ describe('UserParticipation', () => {
           onSuggest={mockOnSuggest}
           onAck={mockOnAck}
           onError={mockOnError}
-        />
+        />,
       );
     });
 
     // Submit a suggestion
-    const textarea = screen.getByPlaceholderText('Share your thoughts or suggest an improvement...');
+    const textarea = screen.getByPlaceholderText(
+      'Share your thoughts or suggest an improvement...',
+    );
     await act(async () => {
       fireEvent.change(textarea, { target: { value: 'Test suggestion' } });
     });
@@ -183,7 +187,7 @@ describe('UserParticipation', () => {
         onSuggest={mockOnSuggest}
         onAck={mockOnAck}
         onError={mockOnError}
-      />
+      />,
     );
 
     const radioButton = screen.getByDisplayValue('Agent1');

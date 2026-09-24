@@ -85,11 +85,7 @@ export interface JobArtifacts {
   job_id: string;
   checkpoint_path?: string;
   data_directory?: string;
-  files: Array<{
-    name: string;
-    size_bytes: number;
-    type: string;
-  }>;
+  files: Array<{ name: string; size_bytes: number; type: string }>;
 }
 
 export interface TrainingStats {
@@ -105,11 +101,10 @@ export interface TrainingStats {
 }
 
 export interface TrainingFormats {
-  formats: Record<string, {
-    description: string;
-    schema: Record<string, unknown>;
-    use_case: string;
-  }>;
+  formats: Record<
+    string,
+    { description: string; schema: Record<string, unknown>; use_case: string }
+  >;
   output_formats: string[];
   endpoints: Record<string, string>;
 }
@@ -152,19 +147,17 @@ export interface UseFineTuningReturn extends UseFineTuningState {
 
   // Export endpoints
   exportSFT: (options?: { minConfidence?: number; limit?: number }) => Promise<unknown[] | null>;
-  exportDPO: (options?: { minConfidenceDiff?: number; limit?: number }) => Promise<unknown[] | null>;
+  exportDPO: (options?: {
+    minConfidenceDiff?: number;
+    limit?: number;
+  }) => Promise<unknown[] | null>;
 
   // Stats and formats
   getStats: () => Promise<TrainingStats | null>;
   getFormats: () => Promise<TrainingFormats | null>;
 
   // Computed stats
-  stats: {
-    running: number;
-    queued: number;
-    completed: number;
-    failed: number;
-  };
+  stats: { running: number; queued: number; completed: number; failed: number };
 }
 
 /**
@@ -196,54 +189,49 @@ export interface UseFineTuningReturn extends UseFineTuningState {
 export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuningReturn {
   const { autoLoad = true, vertical, status, pollInterval = 0 } = options;
 
-  const [state, setState] = useState<UseFineTuningState>({
-    jobs: [],
-    loading: true,
-    error: null,
-  });
+  const [state, setState] = useState<UseFineTuningState>({ jobs: [], loading: true, error: null });
 
   // =========================================================================
   // Load methods
   // =========================================================================
 
-  const loadJobs = useCallback(async (opts?: { vertical?: string; status?: string }) => {
-    setState((s) => ({ ...s, loading: true, error: null }));
+  const loadJobs = useCallback(
+    async (opts?: { vertical?: string; status?: string }) => {
+      setState((s) => ({ ...s, loading: true, error: null }));
 
-    try {
-      const params = new URLSearchParams();
-      const filterVertical = opts?.vertical || vertical;
-      const filterStatus = opts?.status || status;
+      try {
+        const params = new URLSearchParams();
+        const filterVertical = opts?.vertical || vertical;
+        const filterStatus = opts?.status || status;
 
-      if (filterVertical) params.set('vertical', filterVertical);
-      if (filterStatus) params.set('status', filterStatus);
+        if (filterVertical) params.set('vertical', filterVertical);
+        if (filterStatus) params.set('status', filterStatus);
 
-      const query = params.toString();
-      const url = `${API_BASE}/api/training/jobs${query ? `?${query}` : ''}`;
+        const query = params.toString();
+        const url = `${API_BASE}/api/training/jobs${query ? `?${query}` : ''}`;
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        if (response.status === 503) {
-          throw new Error('Training pipeline not available');
+        const response = await fetch(url);
+        if (!response.ok) {
+          if (response.status === 503) {
+            throw new Error('Training pipeline not available');
+          }
+          throw new Error(`HTTP ${response.status}`);
         }
-        throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const jobs = (data.jobs || []).map(mapBackendJob);
+
+        setState((s) => ({ ...s, jobs, loading: false }));
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          loading: false,
+          error: e instanceof Error ? e.message : 'Failed to load jobs',
+        }));
       }
-
-      const data = await response.json();
-      const jobs = (data.jobs || []).map(mapBackendJob);
-
-      setState((s) => ({
-        ...s,
-        jobs,
-        loading: false,
-      }));
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        loading: false,
-        error: e instanceof Error ? e.message : 'Failed to load jobs',
-      }));
-    }
-  }, [vertical, status]);
+    },
+    [vertical, status],
+  );
 
   const loadJob = useCallback(async (id: string): Promise<FineTuningJob | null> => {
     try {
@@ -256,10 +244,7 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
       const data = await response.json();
       return mapBackendJob(data);
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to load job',
-      }));
+      setState((s) => ({ ...s, error: e instanceof Error ? e.message : 'Failed to load job' }));
       return null;
     }
   }, []);
@@ -289,26 +274,18 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
       const job = mapBackendJob(result.job || result);
 
       // Update local state
-      setState((s) => ({
-        ...s,
-        jobs: [...s.jobs, job],
-      }));
+      setState((s) => ({ ...s, jobs: [...s.jobs, job] }));
 
       return job;
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to create job',
-      }));
+      setState((s) => ({ ...s, error: e instanceof Error ? e.message : 'Failed to create job' }));
       return null;
     }
   }, []);
 
   const startJob = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE}/api/training/jobs/${id}/start`, {
-        method: 'POST',
-      });
+      const response = await fetch(`${API_BASE}/api/training/jobs/${id}/start`, { method: 'POST' });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -319,25 +296,22 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
       setState((s) => ({
         ...s,
         jobs: s.jobs.map((j) =>
-          j.id === id ? { ...j, status: 'training' as const, startedAt: new Date().toISOString() } : j
+          j.id === id
+            ? { ...j, status: 'training' as const, startedAt: new Date().toISOString() }
+            : j,
         ),
       }));
 
       return true;
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to start job',
-      }));
+      setState((s) => ({ ...s, error: e instanceof Error ? e.message : 'Failed to start job' }));
       return false;
     }
   }, []);
 
   const cancelJob = useCallback(async (id: string): Promise<boolean> => {
     try {
-      const response = await fetch(`${API_BASE}/api/training/jobs/${id}`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(`${API_BASE}/api/training/jobs/${id}`, { method: 'DELETE' });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -347,17 +321,12 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
       // Update local state
       setState((s) => ({
         ...s,
-        jobs: s.jobs.map((j) =>
-          j.id === id ? { ...j, status: 'cancelled' as const } : j
-        ),
+        jobs: s.jobs.map((j) => (j.id === id ? { ...j, status: 'cancelled' as const } : j)),
       }));
 
       return true;
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to cancel job',
-      }));
+      setState((s) => ({ ...s, error: e instanceof Error ? e.message : 'Failed to cancel job' }));
       return false;
     }
   }, []);
@@ -375,10 +344,7 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
       }
       return await response.json();
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to get metrics',
-      }));
+      setState((s) => ({ ...s, error: e instanceof Error ? e.message : 'Failed to get metrics' }));
       return null;
     }
   }, []);
@@ -404,61 +370,62 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
   // Export endpoints
   // =========================================================================
 
-  const exportSFT = useCallback(async (opts?: {
-    minConfidence?: number;
-    limit?: number;
-  }): Promise<unknown[] | null> => {
-    try {
-      const params = new URLSearchParams();
-      if (opts?.minConfidence) params.set('min_confidence', String(opts.minConfidence));
-      if (opts?.limit) params.set('limit', String(opts.limit));
+  const exportSFT = useCallback(
+    async (opts?: { minConfidence?: number; limit?: number }): Promise<unknown[] | null> => {
+      try {
+        const params = new URLSearchParams();
+        if (opts?.minConfidence) params.set('min_confidence', String(opts.minConfidence));
+        if (opts?.limit) params.set('limit', String(opts.limit));
 
-      const query = params.toString();
-      const url = `${API_BASE}/api/training/export/sft${query ? `?${query}` : ''}`;
+        const query = params.toString();
+        const url = `${API_BASE}/api/training/export/sft${query ? `?${query}` : ''}`;
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.records || [];
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to export SFT data',
+        }));
+        return null;
       }
+    },
+    [],
+  );
 
-      const data = await response.json();
-      return data.records || [];
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to export SFT data',
-      }));
-      return null;
-    }
-  }, []);
+  const exportDPO = useCallback(
+    async (opts?: { minConfidenceDiff?: number; limit?: number }): Promise<unknown[] | null> => {
+      try {
+        const params = new URLSearchParams();
+        if (opts?.minConfidenceDiff)
+          params.set('min_confidence_diff', String(opts.minConfidenceDiff));
+        if (opts?.limit) params.set('limit', String(opts.limit));
 
-  const exportDPO = useCallback(async (opts?: {
-    minConfidenceDiff?: number;
-    limit?: number;
-  }): Promise<unknown[] | null> => {
-    try {
-      const params = new URLSearchParams();
-      if (opts?.minConfidenceDiff) params.set('min_confidence_diff', String(opts.minConfidenceDiff));
-      if (opts?.limit) params.set('limit', String(opts.limit));
+        const query = params.toString();
+        const url = `${API_BASE}/api/training/export/dpo${query ? `?${query}` : ''}`;
 
-      const query = params.toString();
-      const url = `${API_BASE}/api/training/export/dpo${query ? `?${query}` : ''}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
 
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        return data.records || [];
+      } catch (e) {
+        setState((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to export DPO data',
+        }));
+        return null;
       }
-
-      const data = await response.json();
-      return data.records || [];
-    } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to export DPO data',
-      }));
-      return null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   // =========================================================================
   // Stats and formats
@@ -472,10 +439,7 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
       }
       return await response.json();
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to get stats',
-      }));
+      setState((s) => ({ ...s, error: e instanceof Error ? e.message : 'Failed to get stats' }));
       return null;
     }
   }, []);
@@ -488,10 +452,7 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
       }
       return await response.json();
     } catch (e) {
-      setState((s) => ({
-        ...s,
-        error: e instanceof Error ? e.message : 'Failed to get formats',
-      }));
+      setState((s) => ({ ...s, error: e instanceof Error ? e.message : 'Failed to get formats' }));
       return null;
     }
   }, []);
@@ -500,12 +461,15 @@ export function useFineTuning(options: UseFineTuningOptions = {}): UseFineTuning
   // Computed stats
   // =========================================================================
 
-  const stats = useMemo(() => ({
-    running: state.jobs.filter((j) => j.status === 'training' || j.status === 'preparing').length,
-    queued: state.jobs.filter((j) => j.status === 'queued').length,
-    completed: state.jobs.filter((j) => j.status === 'completed').length,
-    failed: state.jobs.filter((j) => j.status === 'failed').length,
-  }), [state.jobs]);
+  const stats = useMemo(
+    () => ({
+      running: state.jobs.filter((j) => j.status === 'training' || j.status === 'preparing').length,
+      queued: state.jobs.filter((j) => j.status === 'queued').length,
+      completed: state.jobs.filter((j) => j.status === 'completed').length,
+      failed: state.jobs.filter((j) => j.status === 'failed').length,
+    }),
+    [state.jobs],
+  );
 
   // =========================================================================
   // Auto-load and polling

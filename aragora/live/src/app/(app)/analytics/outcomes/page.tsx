@@ -3,11 +3,7 @@
 import { useState, useMemo } from 'react';
 import { Scanlines, CRTVignette } from '@/components/MatrixRain';
 import { PanelErrorBoundary } from '@/components/PanelErrorBoundary';
-import {
-  MetricCard,
-  TrendChart,
-  type DataPoint,
-} from '@/components/analytics';
+import { MetricCard, TrendChart, type DataPoint } from '@/components/analytics';
 import {
   useOutcomeAnalytics,
   type OutcomePeriod,
@@ -87,14 +83,7 @@ function QualityGauge({ score, change }: { score: number; change: number | null 
     <div className="flex flex-col items-center">
       <svg viewBox="0 0 160 160" className="w-40 h-40">
         {/* Track */}
-        <circle
-          cx="80"
-          cy="80"
-          r="60"
-          fill="none"
-          stroke="#374151"
-          strokeWidth="12"
-        />
+        <circle cx="80" cy="80" r="60" fill="none" stroke="#374151" strokeWidth="12" />
         {/* Value arc */}
         <circle
           cx="80"
@@ -133,8 +122,11 @@ function QualityGauge({ score, change }: { score: number; change: number | null 
         </text>
       </svg>
       {change !== null && (
-        <div className={`font-theme-data text-xs mt-1 ${change >= 0 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}`}>
-          {change >= 0 ? '+' : ''}{change.toFixed(1)}% vs prev
+        <div
+          className={`font-theme-data text-xs mt-1 ${change >= 0 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}`}
+        >
+          {change >= 0 ? '+' : ''}
+          {change.toFixed(1)}% vs prev
         </div>
       )}
     </div>
@@ -196,8 +188,7 @@ function AgentPerformanceTable({
     }
   };
 
-  const sortIndicator = (key: SortKey) =>
-    sortKey === key ? (sortAsc ? ' ^' : ' v') : '';
+  const sortIndicator = (key: SortKey) => (sortKey === key ? (sortAsc ? ' ^' : ' v') : '');
 
   if (loading) {
     return (
@@ -221,7 +212,8 @@ function AgentPerformanceTable({
           {'>'} AGENT PERFORMANCE LEADERBOARD
         </h3>
         <p className="text-text-muted font-theme-data text-sm text-center py-8">
-          No agent performance data yet. Run debates to see ELO ratings, Brier scores, and calibration accuracy.
+          No agent performance data yet. Run debates to see ELO ratings, Brier scores, and
+          calibration accuracy.
         </p>
       </div>
     );
@@ -301,12 +293,17 @@ function AgentPerformanceTable({
                         agent.elo_change > 0 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'
                       }`}
                     >
-                      {agent.elo_change > 0 ? '+' : ''}{agent.elo_change.toFixed(0)}
+                      {agent.elo_change > 0 ? '+' : ''}
+                      {agent.elo_change.toFixed(0)}
                     </span>
                   )}
                 </td>
                 <td className="p-3 text-right">
-                  <span className={agent.win_rate >= 50 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'}>
+                  <span
+                    className={
+                      agent.win_rate >= 50 ? 'text-[var(--accent)]' : 'text-[var(--crimson)]'
+                    }
+                  >
                     {agent.win_rate.toFixed(1)}%
                   </span>
                 </td>
@@ -424,8 +421,7 @@ function DecisionHistoryTable({
     }
   };
 
-  const sortIndicator = (key: SortKey) =>
-    sortKey === key ? (sortAsc ? ' ^' : ' v') : '';
+  const sortIndicator = (key: SortKey) => (sortKey === key ? (sortAsc ? ' ^' : ' v') : '');
 
   if (loading) {
     return (
@@ -449,7 +445,8 @@ function DecisionHistoryTable({
           {'>'} DECISION HISTORY
         </h3>
         <p className="text-text-muted font-theme-data text-sm text-center py-8">
-          No decisions yet. Quality scores, rounds, and agent participation will appear here after debates.
+          No decisions yet. Quality scores, rounds, and agent participation will appear here after
+          debates.
         </p>
       </div>
     );
@@ -512,9 +509,7 @@ function DecisionHistoryTable({
                     {d.consensus_reached ? '[OK]' : '[--]'}
                   </span>
                 </td>
-                <td className="p-3 text-text truncate max-w-[200px]">
-                  {d.task || d.debate_id}
-                </td>
+                <td className="p-3 text-text truncate max-w-[200px]">{d.task || d.debate_id}</td>
                 <td className="p-3 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <span className={qualityColor(d.quality_score)}>
@@ -534,9 +529,7 @@ function DecisionHistoryTable({
                   {formatDuration(d.duration_seconds)}
                 </td>
                 <td className="p-3 text-right text-text-muted text-[10px]">
-                  {d.created_at
-                    ? new Date(d.created_at).toLocaleDateString()
-                    : ''}
+                  {d.created_at ? new Date(d.created_at).toLocaleDateString() : ''}
                 </td>
               </tr>
             ))}
@@ -581,7 +574,9 @@ function CalibrationCurve({
         <div className="flex items-center justify-center h-64">
           <div className="font-theme-data text-text-muted text-sm text-center space-y-2">
             <p>No calibration data yet</p>
-            <p className="text-xs text-text-muted/60">Complete debates with confidence predictions to see predicted vs actual accuracy.</p>
+            <p className="text-xs text-text-muted/60">
+              Complete debates with confidence predictions to see predicted vs actual accuracy.
+            </p>
           </div>
         </div>
       </div>
@@ -613,9 +608,7 @@ function CalibrationCurve({
 
   return (
     <div className="card p-4">
-      <h3 className="font-theme-data text-sm text-[var(--accent)] mb-2">
-        {'>'} CALIBRATION CURVE
-      </h3>
+      <h3 className="font-theme-data text-sm text-[var(--accent)] mb-2">{'>'} CALIBRATION CURVE</h3>
       <p className="text-text-muted text-[10px] font-theme-data mb-4">
         Predicted confidence vs actual outcome accuracy ({totalObs} observations)
       </p>
@@ -759,14 +752,7 @@ function CalibrationCurve({
 export default function OutcomeAnalyticsPage() {
   const [period, setPeriod] = useState<OutcomePeriod>('30d');
 
-  const {
-    quality,
-    agents,
-    history,
-    calibration,
-    isLoading,
-    error,
-  } = useOutcomeAnalytics(period);
+  const { quality, agents, history, calibration, isLoading, error } = useOutcomeAnalytics(period);
 
   // Transform quality trend into DataPoint[] for the TrendChart
   const qualityTrendData: DataPoint[] = useMemo(() => {
@@ -845,11 +831,7 @@ export default function OutcomeAnalyticsPage() {
                   />
                   <MetricCard
                     title="Consensus Rate"
-                    value={
-                      quality
-                        ? `${(quality.consensus_rate * 100).toFixed(1)}%`
-                        : '--'
-                    }
+                    value={quality ? `${(quality.consensus_rate * 100).toFixed(1)}%` : '--'}
                     subtitle={`${quality?.completed_decisions ?? 0} completed`}
                     color="cyan"
                     loading={isLoading}
@@ -865,11 +847,7 @@ export default function OutcomeAnalyticsPage() {
                   />
                   <MetricCard
                     title="Completion Rate"
-                    value={
-                      quality
-                        ? formatPct(quality.completion_rate)
-                        : '--'
-                    }
+                    value={quality ? formatPct(quality.completion_rate) : '--'}
                     subtitle="debates finished"
                     color="purple"
                     loading={isLoading}
@@ -923,10 +901,7 @@ export default function OutcomeAnalyticsPage() {
           {/* ---- Agent Performance Leaderboard ---- */}
           <PanelErrorBoundary panelName="Agent Leaderboard">
             <section className="mb-6">
-              <AgentPerformanceTable
-                agents={agents?.agents ?? []}
-                loading={isLoading}
-              />
+              <AgentPerformanceTable agents={agents?.agents ?? []} loading={isLoading} />
             </section>
           </PanelErrorBoundary>
 
@@ -944,9 +919,7 @@ export default function OutcomeAnalyticsPage() {
           {/* Footer */}
           <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
             <div className="text-[var(--accent)]/50 mb-2">{'='.repeat(40)}</div>
-            <p className="text-text-muted">
-              {'>'} ARAGORA // OUTCOME ANALYTICS DASHBOARD
-            </p>
+            <p className="text-text-muted">{'>'} ARAGORA // OUTCOME ANALYTICS DASHBOARD</p>
           </footer>
         </div>
       </main>

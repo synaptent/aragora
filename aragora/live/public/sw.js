@@ -3,14 +3,7 @@ const CACHE_NAME = 'aragora-v2';
 const _OFFLINE_URL = '/offline';
 
 // Assets to cache immediately on install
-const PRECACHE_ASSETS = [
-  '/',
-  '/voice',
-  '/arena',
-  '/manifest.json',
-  '/icon.png',
-  '/apple-icon.png',
-];
+const PRECACHE_ASSETS = ['/', '/voice', '/arena', '/manifest.json', '/icon.png', '/apple-icon.png'];
 
 // Install event - precache essential assets
 self.addEventListener('install', (event) => {
@@ -18,7 +11,7 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Precaching app shell');
       return cache.addAll(PRECACHE_ASSETS);
-    })
+    }),
   );
   // Activate immediately
   self.skipWaiting();
@@ -34,9 +27,9 @@ self.addEventListener('activate', (event) => {
           .map((name) => {
             console.log('[SW] Deleting old cache:', name);
             return caches.delete(name);
-          })
+          }),
       );
-    })
+    }),
   );
   // Take control of all pages immediately
   self.clients.claim();
@@ -77,7 +70,7 @@ self.addEventListener('fetch', (event) => {
             // Fallback to offline page for navigation
             return caches.match('/');
           });
-        })
+        }),
     );
     return;
   }
@@ -85,9 +78,7 @@ self.addEventListener('fetch', (event) => {
   // For static assets, use network-first with cache fallback.
   // Next.js uses content-hashed filenames so we always want to serve
   // the latest version from the network when available.
-  if (
-    url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf)$/)
-  ) {
+  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf)$/)) {
     event.respondWith(
       fetch(request)
         .then((response) => {
@@ -102,7 +93,7 @@ self.addEventListener('fetch', (event) => {
         .catch(() => {
           // Offline fallback — serve cached version if available
           return caches.match(request);
-        })
+        }),
     );
     return;
   }
@@ -119,7 +110,7 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(() => caches.match(request)),
   );
 });
 
@@ -133,18 +124,14 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-72x72.png',
     vibrate: [100, 50, 100],
-    data: {
-      url: data.url || '/',
-    },
+    data: { url: data.url || '/' },
     actions: [
       { action: 'open', title: 'Open' },
       { action: 'dismiss', title: 'Dismiss' },
     ],
   };
 
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'Aragora', options)
-  );
+  event.waitUntil(self.registration.showNotification(data.title || 'Aragora', options));
 });
 
 // Handle notification clicks
@@ -166,7 +153,7 @@ self.addEventListener('notificationclick', (event) => {
       if (clients.openWindow) {
         return clients.openWindow(url);
       }
-    })
+    }),
   );
 });
 

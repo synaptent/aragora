@@ -104,7 +104,15 @@ function ConfidenceBar({ value }: { value: number }) {
   const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled);
   return (
     <span className="font-theme-data text-xs">
-      <span className={value >= 0.8 ? 'text-[var(--accent)]' : value >= 0.5 ? 'text-amber-400' : 'text-[var(--crimson)]'}>
+      <span
+        className={
+          value >= 0.8
+            ? 'text-[var(--accent)]'
+            : value >= 0.5
+              ? 'text-amber-400'
+              : 'text-[var(--crimson)]'
+        }
+      >
         {bar}
       </span>{' '}
       {pct}%
@@ -136,18 +144,28 @@ function ValidationBadge({ validation }: { validation: ValidationResult }) {
   );
 }
 
-function SpecificationView({ spec, validation }: { spec: Specification; validation: ValidationResult | null }) {
+function SpecificationView({
+  spec,
+  validation,
+}: {
+  spec: Specification;
+  validation: ValidationResult | null;
+}) {
   return (
     <div className="border border-[var(--accent)]/20 rounded p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-[var(--acid-cyan)] font-theme-data text-sm uppercase tracking-wider">Specification</h3>
+        <h3 className="text-[var(--acid-cyan)] font-theme-data text-sm uppercase tracking-wider">
+          Specification
+        </h3>
         <ConfidenceBar value={spec.confidence} />
       </div>
 
       <div>
         <h4 className="text-[var(--accent)] font-theme-data text-lg">{spec.title}</h4>
         {spec.estimated_effort && (
-          <span className="text-[var(--accent)]/60 text-xs font-theme-data">Effort: {spec.estimated_effort}</span>
+          <span className="text-[var(--accent)]/60 text-xs font-theme-data">
+            Effort: {spec.estimated_effort}
+          </span>
         )}
       </div>
 
@@ -171,10 +189,14 @@ function SpecificationView({ spec, validation }: { spec: Specification; validati
           <div className="space-y-2">
             {spec.risk_register.map((r: RiskItem, i: number) => (
               <div key={i} className="text-xs font-theme-data border-l-2 border-amber-400/30 pl-3">
-                <span className="text-amber-400">{r.likelihood}/{r.impact}</span>{' '}
+                <span className="text-amber-400">
+                  {r.likelihood}/{r.impact}
+                </span>{' '}
                 <span className="text-[var(--accent)]/80">{r.description}</span>
                 {r.mitigation && (
-                  <p className="text-[var(--accent)]/60 mt-0.5">{'\u2192'} {r.mitigation}</p>
+                  <p className="text-[var(--accent)]/60 mt-0.5">
+                    {'\u2192'} {r.mitigation}
+                  </p>
                 )}
               </div>
             ))}
@@ -201,7 +223,11 @@ function SpecificationView({ spec, validation }: { spec: Specification; validati
 }
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
-  return <h4 className="text-[var(--acid-cyan)]/80 font-theme-data text-xs uppercase tracking-wider mb-1">{children}</h4>;
+  return (
+    <h4 className="text-[var(--acid-cyan)]/80 font-theme-data text-xs uppercase tracking-wider mb-1">
+      {children}
+    </h4>
+  );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -209,7 +235,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div>
       <SectionHeader>{title}</SectionHeader>
-      <p className="text-[var(--accent)]/80 text-sm font-theme-data whitespace-pre-wrap">{children}</p>
+      <p className="text-[var(--accent)]/80 text-sm font-theme-data whitespace-pre-wrap">
+        {children}
+      </p>
     </div>
   );
 }
@@ -255,7 +283,9 @@ function specToBrainDump(spec: Specification): string {
   if (spec.risk_register.length > 0) {
     lines.push(`## Risks`);
     spec.risk_register.forEach((r) => {
-      lines.push(`- [${r.likelihood}/${r.impact}] ${r.description}${r.mitigation ? ` → ${r.mitigation}` : ''}`);
+      lines.push(
+        `- [${r.likelihood}/${r.impact}] ${r.description}${r.mitigation ? ` → ${r.mitigation}` : ''}`,
+      );
     });
     lines.push('');
   }
@@ -303,7 +333,9 @@ export default function PromptEnginePage() {
         try {
           const token = (JSON.parse(stored) as { access_token?: string }).access_token;
           if (token) headers.Authorization = `Bearer ${token}`;
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       const res = await fetch(`${API_BASE_URL}/api/v1/canvas/pipeline/from-braindump`, {
         method: 'POST',
@@ -335,7 +367,9 @@ export default function PromptEnginePage() {
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-[var(--accent)] font-theme-data font-bold text-xl">[SPEC GENERATOR]</h1>
+          <h1 className="text-[var(--accent)] font-theme-data font-bold text-xl">
+            [SPEC GENERATOR]
+          </h1>
           {engine.currentStage !== 'idle' && (
             <button
               onClick={engine.reset}
@@ -400,7 +434,11 @@ export default function PromptEnginePage() {
         {engine.currentStage !== 'idle' && (
           <PipelineProgress
             current={executing ? 'execute' : engine.currentStage}
-            completed={engine.currentStage === 'complete' ? [...engine.stagesCompleted, 'specify'] : engine.stagesCompleted}
+            completed={
+              engine.currentStage === 'complete'
+                ? [...engine.stagesCompleted, 'specify']
+                : engine.stagesCompleted
+            }
           />
         )}
 
@@ -414,7 +452,9 @@ export default function PromptEnginePage() {
         {/* Intent summary */}
         {engine.intent && (
           <div className="border border-[var(--accent)]/20 rounded p-3 space-y-1">
-            <h3 className="text-[var(--acid-cyan)] font-theme-data text-xs uppercase tracking-wider">Intent</h3>
+            <h3 className="text-[var(--acid-cyan)] font-theme-data text-xs uppercase tracking-wider">
+              Intent
+            </h3>
             <p className="text-[var(--accent)]/80 text-sm font-theme-data">
               <span className="text-[var(--acid-cyan)]">{engine.intent.intent_type}</span>
               {engine.intent.summary && ` \u2014 ${engine.intent.summary}`}
@@ -433,7 +473,9 @@ export default function PromptEnginePage() {
         {/* Research summary */}
         {engine.research && (
           <div className="border border-[var(--accent)]/20 rounded p-3 space-y-1">
-            <h3 className="text-[var(--acid-cyan)] font-theme-data text-xs uppercase tracking-wider">Research</h3>
+            <h3 className="text-[var(--acid-cyan)] font-theme-data text-xs uppercase tracking-wider">
+              Research
+            </h3>
             <p className="text-[var(--accent)]/80 text-sm font-theme-data whitespace-pre-wrap">
               {engine.research.summary}
             </p>
@@ -465,7 +507,9 @@ export default function PromptEnginePage() {
               task decomposition, and automated execution.
             </p>
             {executeError && (
-              <p className="text-[var(--crimson)] font-theme-data text-sm">{'\u2717'} {executeError}</p>
+              <p className="text-[var(--crimson)] font-theme-data text-sm">
+                {'\u2717'} {executeError}
+              </p>
             )}
             <div className="flex items-center gap-3">
               <button

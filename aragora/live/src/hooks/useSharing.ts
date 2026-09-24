@@ -86,7 +86,7 @@ export function useSharing(options: UseSharingOptions = {}): UseSharingReturn {
         setIsLoading(false);
       }
     },
-    [api, workspaceId]
+    [api, workspaceId],
   );
 
   const loadSharedWithMe = useCallback(
@@ -95,7 +95,7 @@ export function useSharing(options: UseSharingOptions = {}): UseSharingReturn {
       setError(null);
       try {
         const response = (await api.get(
-          `/api/knowledge/mound/shared-with-me?workspace_id=${workspaceId}&limit=${limit}`
+          `/api/knowledge/mound/shared-with-me?workspace_id=${workspaceId}&limit=${limit}`,
         )) as { items: SharedItem[] };
         const items = response.items.map((item) => ({
           ...item,
@@ -112,7 +112,7 @@ export function useSharing(options: UseSharingOptions = {}): UseSharingReturn {
         setIsLoading(false);
       }
     },
-    [api, workspaceId]
+    [api, workspaceId],
   );
 
   const acceptSharedItem = useCallback(
@@ -133,7 +133,7 @@ export function useSharing(options: UseSharingOptions = {}): UseSharingReturn {
         setIsLoading(false);
       }
     },
-    [api, workspaceId, loadSharedWithMe]
+    [api, workspaceId, loadSharedWithMe],
   );
 
   const declineSharedItem = useCallback(
@@ -154,7 +154,7 @@ export function useSharing(options: UseSharingOptions = {}): UseSharingReturn {
         setIsLoading(false);
       }
     },
-    [api, workspaceId]
+    [api, workspaceId],
   );
 
   const revokeShare = useCallback(
@@ -171,7 +171,7 @@ export function useSharing(options: UseSharingOptions = {}): UseSharingReturn {
         setIsLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
   const getMyShares = useCallback(
@@ -179,9 +179,9 @@ export function useSharing(options: UseSharingOptions = {}): UseSharingReturn {
       setIsLoading(true);
       setError(null);
       try {
-        const response = (await api.get(
-          `/api/knowledge/mound/nodes/${itemId}/shares`
-        )) as { shares: ShareResponse[] };
+        const response = (await api.get(`/api/knowledge/mound/nodes/${itemId}/shares`)) as {
+          shares: ShareResponse[];
+        };
         return response.shares.map((share) => ({
           ...share,
           sharedAt: new Date(share.sharedAt),
@@ -195,7 +195,7 @@ export function useSharing(options: UseSharingOptions = {}): UseSharingReturn {
         setIsLoading(false);
       }
     },
-    [api]
+    [api],
   );
 
   return {

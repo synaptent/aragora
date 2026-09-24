@@ -17,10 +17,7 @@ interface TaskNodeProps {
   selected?: boolean;
 }
 
-export const TaskNode = memo(function TaskNode({
-  data,
-  selected,
-}: TaskNodeProps) {
+export const TaskNode = memo(function TaskNode({ data, selected }: TaskNodeProps) {
   return (
     <div
       className={`
@@ -43,14 +40,10 @@ export const TaskNode = memo(function TaskNode({
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {data.label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{data.label}</div>
 
       {data.description && (
-        <div className="text-xs text-text-muted mb-2 line-clamp-2">
-          {data.description}
-        </div>
+        <div className="text-xs text-text-muted mb-2 line-clamp-2">{data.description}</div>
       )}
 
       <div className="flex items-center gap-2">
@@ -66,7 +59,8 @@ export const TaskNode = memo(function TaskNode({
 
       {data.validationRules && data.validationRules.length > 0 && (
         <div className="mt-2 text-xs text-text-muted">
-          {data.validationRules.length} validation rule{data.validationRules.length !== 1 ? 's' : ''}
+          {data.validationRules.length} validation rule
+          {data.validationRules.length !== 1 ? 's' : ''}
         </div>
       )}
 

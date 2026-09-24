@@ -13,11 +13,7 @@ let mockPathname = '/receipts';
 let mockQuery = '';
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    replace: mockReplace,
-    push: jest.fn(),
-    prefetch: jest.fn(),
-  }),
+  useRouter: () => ({ replace: mockReplace, push: jest.fn(), prefetch: jest.fn() }),
   usePathname: () => mockPathname,
   useSearchParams: () => new URLSearchParams(mockQuery),
 }));
@@ -39,13 +35,9 @@ jest.mock('@/components/PanelErrorBoundary', () => ({
   PanelErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-jest.mock('@/components/receipts', () => ({
-  DeliveryModal: () => null,
-}));
+jest.mock('@/components/receipts', () => ({ DeliveryModal: () => null }));
 
-jest.mock('@/hooks/useSWRFetch', () => ({
-  useSWRFetch: jest.fn(),
-}));
+jest.mock('@/hooks/useSWRFetch', () => ({ useSWRFetch: jest.fn() }));
 
 jest.mock('@/hooks/useAuthenticatedFetch', () => ({
   useAuthFetch: () => ({
@@ -100,12 +92,7 @@ function configureListMocks({
     }
 
     if (endpoint === '/api/v2/receipts?limit=50') {
-      return {
-        data: { receipts: v2Receipts },
-        error: null,
-        isLoading: false,
-        mutate: jest.fn(),
-      };
+      return { data: { receipts: v2Receipts }, error: null, isLoading: false, mutate: jest.fn() };
     }
 
     if (endpoint === '/api/gauntlet/results?limit=50') {
@@ -117,12 +104,7 @@ function configureListMocks({
       };
     }
 
-    return {
-      data: null,
-      error: null,
-      isLoading: false,
-      mutate: jest.fn(),
-    };
+    return { data: null, error: null, isLoading: false, mutate: jest.fn() };
   });
 }
 
@@ -156,11 +138,7 @@ function configureDetailFetch(overrides: ReceiptRecord = {}) {
       } as Response;
     }
 
-    return {
-      ok: false,
-      status: 404,
-      json: async () => ({}),
-    } as Response;
+    return { ok: false, status: 404, json: async () => ({}) } as Response;
   });
 }
 
@@ -190,7 +168,7 @@ describe('ReceiptsPage', () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:8080/api/v2/receipts/receipt-123',
-        expect.objectContaining({ signal: expect.anything() })
+        expect.objectContaining({ signal: expect.anything() }),
       );
     });
 
@@ -247,11 +225,9 @@ describe('ReceiptsPage', () => {
 
     render(<ReceiptsPage />);
 
+    expect(await screen.findByRole('button', { name: /Receipt 123 summary/i })).toBeInTheDocument();
     expect(
-      await screen.findByRole('button', { name: /Receipt 123 summary/i })
-    ).toBeInTheDocument();
-    expect(
-      await screen.findByRole('button', { name: /Legacy receipt summary/i })
+      await screen.findByRole('button', { name: /Legacy receipt summary/i }),
     ).toBeInTheDocument();
   });
 
@@ -278,7 +254,7 @@ describe('ReceiptsPage', () => {
 
     await waitFor(() => {
       expect(mockFetch.mock.calls[0]?.[0]).toBe(
-        'http://localhost:8080/api/v2/receipts/receipt-123'
+        'http://localhost:8080/api/v2/receipts/receipt-123',
       );
     });
   });
@@ -328,9 +304,7 @@ describe('ReceiptsPage', () => {
   });
 
   it('renders a view result handoff when the receipt detail includes a debate id', async () => {
-    configureDetailFetch({
-      debate_id: 'debate-456',
-    });
+    configureDetailFetch({ debate_id: 'debate-456' });
 
     const user = userEvent.setup();
 
@@ -340,14 +314,12 @@ describe('ReceiptsPage', () => {
 
     expect(await screen.findByRole('link', { name: 'View result' })).toHaveAttribute(
       'href',
-      '/debates/debate-456'
+      '/debates/debate-456',
     );
   });
 
   it('does not render a view result handoff when the debate id is malformed', async () => {
-    configureDetailFetch({
-      debate_id: 'debate-456?tab=private',
-    });
+    configureDetailFetch({ debate_id: 'debate-456?tab=private' });
 
     const user = userEvent.setup();
 
@@ -378,8 +350,8 @@ describe('ReceiptsPage', () => {
 
     expect(
       await screen.findByText(
-        'gpt-4: Too risky; Too expensive Alternative: Ship a narrower pilot first.'
-      )
+        'gpt-4: Too risky; Too expensive Alternative: Ship a narrower pilot first.',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -405,11 +377,7 @@ describe('ReceiptsPage', () => {
         return detailImplementation(input, init) as Promise<Response>;
       }
 
-      return {
-        ok: false,
-        status: 404,
-        json: async () => ({}),
-      } as Response;
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
     });
 
     render(<ReceiptsPage />);
@@ -420,7 +388,7 @@ describe('ReceiptsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Share link' }));
 
     expect(mockConfirm).toHaveBeenCalledWith(
-      expect.stringContaining('Create a public share link for this receipt?')
+      expect.stringContaining('Create a public share link for this receipt?'),
     );
 
     await waitFor(() => {
@@ -428,18 +396,15 @@ describe('ReceiptsPage', () => {
         'http://localhost:8080/api/v2/receipts/receipt-123/share',
         {
           method: 'POST',
-          headers: {
-            Authorization: 'Bearer test-token',
-            'Content-Type': 'application/json',
-          },
+          headers: { Authorization: 'Bearer test-token', 'Content-Type': 'application/json' },
           body: JSON.stringify({ expires_in_hours: 24 }),
-        }
+        },
       );
     });
 
     await waitFor(() => {
       expect(mockClipboardWriteText).toHaveBeenCalledWith(
-        'http://localhost:8080/api/v2/receipts/share/share-token-123'
+        'http://localhost:8080/api/v2/receipts/share/share-token-123',
       );
     });
 
@@ -455,7 +420,7 @@ describe('ReceiptsPage', () => {
 
     expect(await screen.findByRole('link', { name: 'Canonical proof' })).toHaveAttribute(
       'href',
-      'http://localhost:8080/api/v2/receipts/receipt-123'
+      'http://localhost:8080/api/v2/receipts/receipt-123',
     );
   });
 
@@ -477,11 +442,7 @@ describe('ReceiptsPage', () => {
     mockFetch.mockImplementation(async (input: string | URL | Request) => {
       const url = String(input);
       if (url === 'http://localhost:8080/api/v2/receipts/receipt-123') {
-        return {
-          ok: false,
-          status: 404,
-          json: async () => ({}),
-        } as Response;
+        return { ok: false, status: 404, json: async () => ({}) } as Response;
       }
 
       if (url === 'http://localhost:8080/api/v1/gauntlet/run-123/receipt') {
@@ -510,11 +471,7 @@ describe('ReceiptsPage', () => {
         } as Response;
       }
 
-      return {
-        ok: false,
-        status: 404,
-        json: async () => ({}),
-      } as Response;
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
     });
 
     const user = userEvent.setup();
@@ -525,7 +482,7 @@ describe('ReceiptsPage', () => {
 
     expect(await screen.findByRole('link', { name: 'Canonical proof' })).toHaveAttribute(
       'href',
-      'http://localhost:8080/api/v1/gauntlet/run-123/receipt'
+      'http://localhost:8080/api/v1/gauntlet/run-123/receipt',
     );
   });
 
@@ -548,13 +505,12 @@ describe('ReceiptsPage', () => {
     expect(await screen.findByText('BLOCKED')).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Execution is blocked upstream\. Fix provider access or the execution gate, then rerun to publish a canonical receipt\./i
-      )
+        /Execution is blocked upstream\. Fix provider access or the execution gate, then rerun to publish a canonical receipt\./i,
+      ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open debate to inspect the blocker' })).toHaveAttribute(
-      'href',
-      '/debates/debate-blocked'
-    );
+    expect(
+      screen.getByRole('link', { name: 'Open debate to inspect the blocker' }),
+    ).toHaveAttribute('href', '/debates/debate-blocked');
     expect(screen.queryByText(/ready for audit review/i)).not.toBeInTheDocument();
   });
 
@@ -574,11 +530,13 @@ describe('ReceiptsPage', () => {
 
     render(<ReceiptsPage />);
 
-    expect(await screen.findByText(/Provider credentials expired during execution/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Provider credentials expired during execution/i),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
-        /Execution is blocked upstream\. Fix provider access or the execution gate, then rerun to publish a canonical receipt\./i
-      )
+        /Execution is blocked upstream\. Fix provider access or the execution gate, then rerun to publish a canonical receipt\./i,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -600,11 +558,13 @@ describe('ReceiptsPage', () => {
 
     expect(await screen.findByText('PARTIAL')).toBeInTheDocument();
     expect(
-      screen.getByText(/Partial result only\. Canonical receipt and proof have not been published yet\./i)
+      screen.getByText(
+        /Partial result only\. Canonical receipt and proof have not been published yet\./i,
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open debate' })).toHaveAttribute(
       'href',
-      '/debates/debate-partial'
+      '/debates/debate-partial',
     );
   });
 });

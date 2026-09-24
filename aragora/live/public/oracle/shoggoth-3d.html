@@ -1,806 +1,1137 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Shoggoth Oracle — 3D Embed</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: transparent; overflow: hidden; }
-  canvas { display: block; }
-</style>
-</head>
-<body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-// =============================================
-// SHOGGOTH ORACLE — 3D Embeddable Avatar v5
-// Reference-faithful: bright olive green, many eyes,
-// blobby body, thick tentacles, dynamic palantír
-// =============================================
-
-// === SCENE ===
-const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x050508, 0.08);
-
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(0, 0.3, 4.2);
-camera.lookAt(0, 0, 0);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
-renderer.setClearColor(0x000000, 0);
-document.body.appendChild(renderer.domElement);
-
-// === MOUSE / TOUCH ===
-const mouse = new THREE.Vector2(0, 0);
-const targetMouse = new THREE.Vector2(0, 0);
-// 3D world-space pointer position (projected from screen via raycaster plane)
-const mouseWorld = new THREE.Vector3(0, 0, 2);
-const raycaster = new THREE.Raycaster();
-const pointerPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -1.5); // z≈1.5 plane
-
-function updatePointerWorld() {
-  raycaster.setFromCamera(mouse, camera);
-  raycaster.ray.intersectPlane(pointerPlane, mouseWorld);
-}
-
-document.addEventListener('mousemove', (e) => {
-  targetMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  targetMouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-});
-document.addEventListener('touchstart', (e) => {
-  const touch = e.touches[0];
-  targetMouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
-  targetMouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
-}, { passive: true });
-document.addEventListener('touchmove', (e) => {
-  const touch = e.touches[0];
-  targetMouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
-  targetMouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
-}, { passive: true });
-document.addEventListener('touchend', () => {
-  // Smoothly return pointer to center when touch ends
-  targetMouse.x = 0;
-  targetMouse.y = 0;
-}, { passive: true });
-
-// === NOISE ===
-function noise3D(x,y,z){return Math.sin(x*1.27+y*3.43+z*2.17)*Math.sin(y*2.64+z*1.87+x*3.91)*Math.sin(z*1.53+x*2.79+y*1.34);}
-function fbm(x,y,z,o){let v=0,a=0.5,f=1;for(let i=0;i<o;i++){v+=a*noise3D(x*f,y*f,z*f);a*=0.5;f*=2.1;}return v;}
-
-// === LIGHTING ===
-scene.add(new THREE.AmbientLight(0x2a3a2a, 0.7));
-
-const palantirLight = new THREE.PointLight(0x7fdbca, 2.5, 8);
-palantirLight.position.set(0, -1.2, 1.8);
-scene.add(palantirLight);
-
-const goldLight = new THREE.PointLight(0xd4a853, 0.9, 6);
-goldLight.position.set(2, 1, 2);
-scene.add(goldLight);
-
-const greenLight = new THREE.PointLight(0x3a7a4a, 1.5, 8);
-greenLight.position.set(-2, 2, -3);
-scene.add(greenLight);
-
-const redLight = new THREE.PointLight(0x8b2d2d, 0.4, 5);
-redLight.position.set(-1.5, -0.5, 1);
-scene.add(redLight);
-
-const faceLight = new THREE.PointLight(0xeeddcc, 1.4, 6);
-faceLight.position.set(0, 0.8, 3.5);
-scene.add(faceLight);
-
-// ==========================================
-// PAINT CASSANDRA FACE ON CANVAS
-// ==========================================
-function paintCassandraFace(size) {
-  const c = document.createElement('canvas');
-  c.width = size; c.height = size;
-  const ctx = c.getContext('2d');
-  const cx = size/2, cy = size/2;
-  const s = size/512;
-
-  ctx.clearRect(0,0,size,size);
-
-  // Face oval
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 10*s, 170*s, 220*s, 0, 0, Math.PI*2);
-  const faceGrad = ctx.createRadialGradient(cx-30*s, cy-60*s, 20*s, cx, cy, 200*s);
-  faceGrad.addColorStop(0, '#f0e6d6');
-  faceGrad.addColorStop(0.4, '#e8dcc8');
-  faceGrad.addColorStop(0.7, '#d8ccb8');
-  faceGrad.addColorStop(1, '#c0b098');
-  ctx.fillStyle = faceGrad;
-  ctx.fill();
-
-  // Marble veining
-  ctx.globalAlpha = 0.04;
-  for(let i=0;i<8;i++){
-    ctx.beginPath();
-    ctx.moveTo(cx + (Math.random()-0.5)*200*s, cy-180*s);
-    ctx.bezierCurveTo(cx+(Math.random()-0.5)*300*s, cy-60*s, cx+(Math.random()-0.5)*300*s, cy+60*s, cx+(Math.random()-0.5)*200*s, cy+180*s);
-    ctx.strokeStyle = '#b0a090'; ctx.lineWidth = (1+Math.random()*2)*s; ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-  ctx.restore();
-
-  // Cheekbone highlights
-  ctx.save();
-  ctx.globalAlpha = 0.12;
-  ctx.beginPath(); ctx.ellipse(cx-80*s, cy+10*s, 50*s, 25*s, -0.3, 0, Math.PI*2);
-  ctx.fillStyle = '#fff8f0'; ctx.fill();
-  ctx.beginPath(); ctx.ellipse(cx+80*s, cy+10*s, 50*s, 25*s, 0.3, 0, Math.PI*2);
-  ctx.fill(); ctx.globalAlpha = 1; ctx.restore();
-
-  // Brow ridge shadow
-  ctx.save(); ctx.globalAlpha = 0.15;
-  ctx.beginPath(); ctx.ellipse(cx, cy-70*s, 130*s, 18*s, 0, 0, Math.PI*2);
-  ctx.fillStyle = '#8a7a6a'; ctx.fill(); ctx.globalAlpha = 1; ctx.restore();
-
-  // Eyebrows
-  function drawBrow(xOff, flip) {
-    ctx.save(); ctx.translate(cx + xOff*s, cy - 95*s);
-    if(flip) ctx.scale(-1,1);
-    ctx.beginPath(); ctx.moveTo(-55*s, 8*s);
-    ctx.bezierCurveTo(-40*s, -8*s, -5*s, -14*s, 40*s, 0);
-    ctx.bezierCurveTo(-5*s, -6*s, -40*s, 0, -55*s, 8*s);
-    ctx.fillStyle = '#6a5a4a'; ctx.fill(); ctx.restore();
-  }
-  drawBrow(-60, false); drawBrow(60, true);
-
-  // Eye sockets
-  function drawEyeSocket(xOff) {
-    ctx.save(); ctx.globalAlpha = 0.2;
-    ctx.beginPath(); ctx.ellipse(cx+xOff*s, cy-55*s, 48*s, 28*s, 0, 0, Math.PI*2);
-    ctx.fillStyle = '#5a4a3a'; ctx.fill(); ctx.globalAlpha = 1; ctx.restore();
-  }
-  drawEyeSocket(-62); drawEyeSocket(62);
-
-  // Eyes
-  function drawEye(xOff) {
-    const ex = cx + xOff*s, ey = cy - 55*s;
-    ctx.save();
-    ctx.beginPath(); ctx.moveTo(ex-40*s, ey);
-    ctx.bezierCurveTo(ex-25*s, ey-22*s, ex+25*s, ey-22*s, ex+40*s, ey);
-    ctx.bezierCurveTo(ex+25*s, ey+18*s, ex-25*s, ey+18*s, ex-40*s, ey);
-    ctx.closePath(); ctx.clip();
-    ctx.fillStyle = '#0d1520'; ctx.fillRect(ex-45*s, ey-25*s, 90*s, 50*s);
-    const irisGrad = ctx.createRadialGradient(ex, ey, 2*s, ex, ey, 22*s);
-    irisGrad.addColorStop(0, '#aaf0e4'); irisGrad.addColorStop(0.3, '#7fdbca');
-    irisGrad.addColorStop(0.7, '#4aaa98'); irisGrad.addColorStop(1, '#2a7a6a');
-    ctx.beginPath(); ctx.arc(ex, ey, 22*s, 0, Math.PI*2);
-    ctx.fillStyle = irisGrad; ctx.fill();
-    ctx.globalAlpha = 0.3;
-    ctx.beginPath(); ctx.arc(ex, ey, 28*s, 0, Math.PI*2);
-    ctx.fillStyle = '#7fdbca'; ctx.fill(); ctx.globalAlpha = 1;
-    ctx.beginPath(); ctx.arc(ex, ey, 8*s, 0, Math.PI*2);
-    ctx.fillStyle = '#050a10'; ctx.fill();
-    ctx.beginPath(); ctx.arc(ex+5*s, ey-5*s, 3*s, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
-    ctx.restore();
-    // Outline + lash
-    ctx.save();
-    ctx.beginPath(); ctx.moveTo(ex-40*s, ey);
-    ctx.bezierCurveTo(ex-25*s, ey-22*s, ex+25*s, ey-22*s, ex+40*s, ey);
-    ctx.bezierCurveTo(ex+25*s, ey+18*s, ex-25*s, ey+18*s, ex-40*s, ey);
-    ctx.closePath(); ctx.strokeStyle = '#4a3a2a'; ctx.lineWidth = 1.5*s; ctx.stroke();
-    ctx.restore();
-    ctx.save();
-    ctx.beginPath(); ctx.moveTo(ex-40*s, ey);
-    ctx.bezierCurveTo(ex-25*s, ey-23*s, ex+25*s, ey-23*s, ex+40*s, ey);
-    ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 2.5*s; ctx.stroke();
-    ctx.restore();
-  }
-  drawEye(-62); drawEye(62);
-
-  // Nose
-  ctx.save(); ctx.globalAlpha = 0.1;
-  ctx.beginPath(); ctx.moveTo(cx-8*s, cy-40*s); ctx.lineTo(cx-12*s, cy+20*s);
-  ctx.lineTo(cx+12*s, cy+20*s); ctx.lineTo(cx+8*s, cy-40*s);
-  ctx.fillStyle = '#7a6a5a'; ctx.fill(); ctx.globalAlpha = 1;
-  ctx.globalAlpha = 0.15;
-  ctx.beginPath(); ctx.moveTo(cx, cy-35*s); ctx.lineTo(cx-2*s, cy+15*s);
-  ctx.lineTo(cx+2*s, cy+15*s); ctx.fillStyle = '#fff8f0'; ctx.fill(); ctx.globalAlpha = 1;
-  ctx.beginPath(); ctx.ellipse(cx, cy+20*s, 14*s, 8*s, 0, 0, Math.PI*2);
-  const noseTipGrad = ctx.createRadialGradient(cx, cy+18*s, 2*s, cx, cy+20*s, 14*s);
-  noseTipGrad.addColorStop(0, '#e8dcc8'); noseTipGrad.addColorStop(1, '#c8b8a8');
-  ctx.fillStyle = noseTipGrad; ctx.fill();
-  ctx.globalAlpha = 0.2;
-  ctx.beginPath(); ctx.ellipse(cx-10*s, cy+24*s, 6*s, 4*s, -0.3, 0, Math.PI*2);
-  ctx.fillStyle = '#5a4a3a'; ctx.fill();
-  ctx.beginPath(); ctx.ellipse(cx+10*s, cy+24*s, 6*s, 4*s, 0.3, 0, Math.PI*2);
-  ctx.fill(); ctx.globalAlpha = 1; ctx.restore();
-
-  // Lips
-  ctx.save(); ctx.beginPath(); ctx.moveTo(cx-42*s, cy+62*s);
-  ctx.bezierCurveTo(cx-25*s, cy+55*s, cx-8*s, cy+52*s, cx, cy+56*s);
-  ctx.bezierCurveTo(cx+8*s, cy+52*s, cx+25*s, cy+55*s, cx+42*s, cy+62*s);
-  ctx.bezierCurveTo(cx+20*s, cy+66*s, cx-20*s, cy+66*s, cx-42*s, cy+62*s);
-  const upperLipGrad = ctx.createLinearGradient(cx, cy+52*s, cx, cy+66*s);
-  upperLipGrad.addColorStop(0, '#c49a88'); upperLipGrad.addColorStop(1, '#b08878');
-  ctx.fillStyle = upperLipGrad; ctx.fill(); ctx.restore();
-  ctx.save(); ctx.beginPath(); ctx.moveTo(cx-38*s, cy+64*s);
-  ctx.bezierCurveTo(cx-20*s, cy+64*s, cx-10*s, cy+64*s, cx, cy+64*s);
-  ctx.bezierCurveTo(cx+10*s, cy+64*s, cx+20*s, cy+64*s, cx+38*s, cy+64*s);
-  ctx.bezierCurveTo(cx+25*s, cy+82*s, cx-25*s, cy+82*s, cx-38*s, cy+64*s);
-  const lowerLipGrad = ctx.createLinearGradient(cx, cy+64*s, cx, cy+82*s);
-  lowerLipGrad.addColorStop(0, '#c09888'); lowerLipGrad.addColorStop(0.6, '#b88878');
-  lowerLipGrad.addColorStop(1, '#a07868');
-  ctx.fillStyle = lowerLipGrad; ctx.fill();
-  ctx.globalAlpha = 0.15;
-  ctx.beginPath(); ctx.ellipse(cx, cy+72*s, 18*s, 6*s, 0, 0, Math.PI*2);
-  ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.globalAlpha = 1; ctx.restore();
-  ctx.save(); ctx.beginPath(); ctx.moveTo(cx-36*s, cy+63*s);
-  ctx.bezierCurveTo(cx-15*s, cy+65*s, cx+15*s, cy+65*s, cx+36*s, cy+63*s);
-  ctx.strokeStyle = '#6a4a3a'; ctx.lineWidth = 1.5*s; ctx.stroke(); ctx.restore();
-
-  // Gold tear tracks
-  function drawTear(xOff) {
-    ctx.save(); ctx.globalAlpha = 0.25; ctx.beginPath();
-    ctx.moveTo(cx+xOff*s, cy-35*s);
-    ctx.bezierCurveTo(cx+xOff*s-3*s, cy, cx+xOff*s+2*s, cy+40*s, cx+xOff*s-1*s, cy+90*s);
-    ctx.strokeStyle = '#d4a853'; ctx.lineWidth = 3*s; ctx.lineCap = 'round'; ctx.stroke();
-    ctx.globalAlpha = 0.1; ctx.lineWidth = 6*s; ctx.stroke();
-    ctx.globalAlpha = 1; ctx.restore();
-  }
-  drawTear(-58); drawTear(58);
-
-  // Laurel crown hints
-  ctx.save(); ctx.globalAlpha = 0.2;
-  function drawLeaf(x, y, angle, sz) {
-    ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
-    ctx.beginPath(); ctx.ellipse(0, 0, sz*0.4, sz, 0, 0, Math.PI*2);
-    ctx.fillStyle = '#4a7a3a'; ctx.fill(); ctx.restore();
-  }
-  for(let i=0; i<8; i++) {
-    const a = -0.8 + (i/7)*1.6;
-    drawLeaf(cx+Math.sin(a)*130*s, cy-180*s+Math.cos(a)*40*s, a+Math.PI/2, 12*s);
-  }
-  ctx.globalAlpha = 1; ctx.restore();
-
-  // Edge fade
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-in';
-  const fadeMask = ctx.createRadialGradient(cx, cy+10*s, 100*s, cx, cy+10*s, 220*s);
-  fadeMask.addColorStop(0, 'rgba(255,255,255,1)');
-  fadeMask.addColorStop(0.7, 'rgba(255,255,255,1)');
-  fadeMask.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = fadeMask; ctx.fillRect(0,0,size,size);
-  ctx.restore();
-
-  return c;
-}
-
-const faceCanvas = paintCassandraFace(512);
-const faceTexture = new THREE.CanvasTexture(faceCanvas);
-faceTexture.needsUpdate = true;
-
-// ==========================================
-// SHOGGOTH BODY — brighter olive green, more blobby
-// ==========================================
-const bodyGeo = new THREE.SphereGeometry(1.3, 96, 96);
-const bodyMat = new THREE.MeshStandardMaterial({
-  color: 0x3a6a4a, roughness: 0.6, metalness: 0.25, transparent: true, opacity: 0.93,
-});
-const body = new THREE.Mesh(bodyGeo, bodyMat);
-body.position.set(0, 0.2, 0);
-scene.add(body);
-const bodyOrigPos = Float32Array.from(bodyGeo.attributes.position.array);
-
-// ==========================================
-// CASSANDRA FACE
-// ==========================================
-const faceGeo = new THREE.SphereGeometry(1.35, 48, 48,
-  Math.PI/2 - 0.55, 1.1, Math.PI/2 - 0.65, 1.3
-);
-const faceMat = new THREE.MeshStandardMaterial({
-  map: faceTexture, transparent: true, alphaTest: 0.01,
-  roughness: 0.8, metalness: 0.05, side: THREE.FrontSide, depthWrite: true,
-});
-const faceMesh = new THREE.Mesh(faceGeo, faceMat);
-faceMesh.position.set(0, 0.2, 0.08);
-scene.add(faceMesh);
-
-// ==========================================
-// TAPERED TENTACLES — thick, fleshy, biased lower
-// ==========================================
-const tentacles = [];
-const tentacleEyes = [];
-const tentacleCount = 16;
-
-function buildTaperedTube(curve, tubSegs, radSegs, baseR, tipR) {
-  const frames = curve.computeFrenetFrames(tubSegs, false);
-  const verts=[], inds=[], norms=[], uvs=[];
-  for(let i=0;i<=tubSegs;i++){
-    const t=i/tubSegs;
-    const taper = 1 - t*t;
-    const r = tipR + (baseR-tipR)*taper;
-    const P=curve.getPointAt(t);
-    const N=frames.normals[i], B=frames.binormals[i];
-    for(let j=0;j<=radSegs;j++){
-      const v=(j/radSegs)*Math.PI*2;
-      const sn=Math.sin(v), cs=-Math.cos(v);
-      const nx=cs*N.x+sn*B.x, ny=cs*N.y+sn*B.y, nz=cs*N.z+sn*B.z;
-      norms.push(nx,ny,nz);
-      verts.push(P.x+r*nx, P.y+r*ny, P.z+r*nz);
-      uvs.push(t, j/radSegs);
-    }
-  }
-  for(let i=0;i<tubSegs;i++){
-    for(let j=0;j<radSegs;j++){
-      const a=i*(radSegs+1)+j, b=(i+1)*(radSegs+1)+j;
-      inds.push(a,b,a+1,b,b+1,a+1);
-    }
-  }
-  const g=new THREE.BufferGeometry();
-  g.setIndex(inds);
-  g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
-  g.setAttribute('normal',new THREE.Float32BufferAttribute(norms,3));
-  g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
-  return g;
-}
-
-function createTentacle(baseAngle, length, yStart, baseThick) {
-  const segs = 24;
-  const pts = [];
-  for(let i=0;i<=segs;i++){
-    const t=i/segs;
-    const a = baseAngle + Math.sin(t*Math.PI)*0.6;
-    const r = 1.3+t*length;
-    pts.push(new THREE.Vector3(
-      Math.cos(a)*r*(0.7+t*0.5),
-      yStart - t*1.2 + Math.sin(t*Math.PI*0.5)*0.2,
-      Math.sin(a)*r*(0.7+t*0.5)
-    ));
-  }
-  const curve = new THREE.CatmullRomCurve3(pts);
-  const geo = buildTaperedTube(curve, 32, 8, baseThick, baseThick*0.06);
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0x3a7a4f, roughness: 0.5, metalness: 0.2, transparent: true, opacity: 0.9,
-  });
-  return {
-    mesh: new THREE.Mesh(geo, mat), curve, baseAngle, length, yStart, baseThick,
-    segs, phase: Math.random()*Math.PI*2, speed: 0.2+Math.random()*0.35,
-    amplitude: 0.2+Math.random()*0.35,
-  };
-}
-
-// Lower-biased tentacle placement
-for(let i=0;i<tentacleCount;i++){
-  const angle = (i/tentacleCount)*Math.PI*2;
-  const length = 1.0+Math.random()*1.5;
-  let yOff;
-  if(i < tentacleCount*0.7) {
-    yOff = -0.5 - Math.random()*0.6;
-  } else {
-    yOff = -0.1 - Math.random()*0.4;
-  }
-  const thick = 0.14+Math.random()*0.12; // 2x thick bases
-  const t = createTentacle(angle, length, yOff, thick);
-  t.mesh.position.set(0, 0.2, 0);
-  scene.add(t.mesh);
-  tentacles.push(t);
-}
-
-// === TENTACLE EYES — many, mostly open, distinct pupils ===
-const tentEyeGeo = new THREE.SphereGeometry(0.055, 12, 12);
-tentacles.forEach((tent,tIdx) => {
-  // More positions, higher placement probability
-  [0.12, 0.25, 0.38, 0.5, 0.63, 0.76, 0.88].forEach(tPos => {
-    if(Math.random()>0.35) return; // 65% chance of eye at each position
-
-    const scleraMat = new THREE.MeshBasicMaterial({
-      color: 0xe8fff0, transparent: true, opacity: 0,
-    });
-    const sclera = new THREE.Mesh(tentEyeGeo, scleraMat);
-
-    const iris = new THREE.Mesh(
-      new THREE.SphereGeometry(0.042, 10, 10),
-      new THREE.MeshBasicMaterial({ color: 0x7fdbca, transparent: true, opacity: 1 })
-    );
-    iris.position.set(0, 0, 0.018);
-    sclera.add(iris);
-
-    // Big prominent pupil — clearly visible dark center
-    const pupil = new THREE.Mesh(
-      new THREE.SphereGeometry(0.032, 10, 10),
-      new THREE.MeshBasicMaterial({ color: 0x020308 })
-    );
-    pupil.position.set(0, 0, 0.03);
-    sclera.add(pupil);
-    // Bright specular highlight
-    const highlight = new THREE.Mesh(
-      new THREE.SphereGeometry(0.01, 6, 6),
-      new THREE.MeshBasicMaterial({ color: 0xffffff })
-    );
-    highlight.position.set(0.01, 0.008, 0.05);
-    sclera.add(highlight);
-
-    scene.add(sclera);
-    tentacleEyes.push({
-      mesh: sclera, tentacleIdx: tIdx, tPos,
-      blinkPhase: Math.random()*Math.PI*2, blinkSpeed: 0.08+Math.random()*0.1,
-    });
-  });
-});
-
-// === BODY EYES — well-spaced, avoid face, large distinct pupils ===
-const bodyEyes = [];
-const MIN_EYE_DIST = 0.35; // minimum distance between any two body eyes
-const placedPositions = [];
-for(let attempts=0; attempts<200 && bodyEyes.length<30; attempts++){
-  const theta=Math.random()*Math.PI*2;
-  const phi=Math.acos(2*Math.random()-1);
-  const r=1.33;
-  const x=r*Math.sin(phi)*Math.cos(theta);
-  const y=r*Math.sin(phi)*Math.sin(theta)+0.2;
-  const z=r*Math.cos(phi);
-  // Only front and side hemispheres
-  if(z<-0.1) continue;
-  // Wide face avoidance zone — no eyes near Cassandra
-  if(Math.abs(x)<0.6 && y>-0.3 && y<1.0 && z>0.5) continue;
-  // Minimum spacing between eyes
-  let tooClose = false;
-  for(const p of placedPositions){
-    const dd = (x-p.x)**2 + (y-p.y)**2 + (z-p.z)**2;
-    if(dd < MIN_EYE_DIST*MIN_EYE_DIST) { tooClose = true; break; }
-  }
-  if(tooClose) continue;
-
-  placedPositions.push({x,y,z});
-  const scleraMat = new THREE.MeshBasicMaterial({color:0xe8fff0, transparent:true, opacity:0});
-  const eyeSize = 0.05 + Math.random()*0.03;
-  const eyeMesh = new THREE.Mesh(new THREE.SphereGeometry(eyeSize,12,12), scleraMat);
-  eyeMesh.position.set(x,y,z);
-
-  const iris = new THREE.Mesh(
-    new THREE.SphereGeometry(eyeSize*0.7,10,10),
-    new THREE.MeshBasicMaterial({color:0x7fdbca})
-  );
-  iris.position.set(0,0,eyeSize*0.45);
-  eyeMesh.add(iris);
-
-  // Large prominent pupil
-  const pupil = new THREE.Mesh(
-    new THREE.SphereGeometry(eyeSize*0.55,10,10),
-    new THREE.MeshBasicMaterial({color:0x020308})
-  );
-  pupil.position.set(0,0,eyeSize*0.65);
-  eyeMesh.add(pupil);
-  // Specular highlight dot
-  const hl = new THREE.Mesh(
-    new THREE.SphereGeometry(eyeSize*0.18,6,6),
-    new THREE.MeshBasicMaterial({color:0xffffff})
-  );
-  hl.position.set(eyeSize*0.18,eyeSize*0.14,eyeSize*0.9);
-  eyeMesh.add(hl);
-
-  scene.add(eyeMesh);
-  bodyEyes.push({
-    mesh:eyeMesh, basePos:new THREE.Vector3(x,y,z),
-    theta, phi,
-    blinkPhase:Math.random()*Math.PI*2, blinkSpeed:0.06+Math.random()*0.12,
-  });
-}
-
-// ==========================================
-// PALANTÍR — offset left, less transparent, swirling red/blue
-// ==========================================
-const PALANTIR_POS = new THREE.Vector3(-0.8, -0.9, 1.8);
-const palantir = new THREE.Mesh(
-  new THREE.SphereGeometry(0.38, 64, 64),
-  new THREE.MeshStandardMaterial({
-    color:0x2a3a4a, roughness:0.02, metalness:0.5,
-    transparent:true, opacity:0.82, emissive:0x0a1520, emissiveIntensity:0.4,
-  })
-);
-palantir.position.copy(PALANTIR_POS);
-scene.add(palantir);
-
-// Inner swirl orbs — red and blue motes that orbit inside
-const swirlGroup = new THREE.Group();
-swirlGroup.position.copy(PALANTIR_POS);
-scene.add(swirlGroup);
-const swirlOrbs = [];
-for(let i=0;i<8;i++){
-  const isRed = i%2===0;
-  const orb = new THREE.Mesh(
-    new THREE.SphereGeometry(0.04+Math.random()*0.03,12,12),
-    new THREE.MeshBasicMaterial({
-      color: isRed ? 0xff3344 : 0x3366ff,
-      transparent:true, opacity:0.7,
-    })
-  );
-  const orbAngle = (i/8)*Math.PI*2;
-  const orbRadius = 0.08+Math.random()*0.12;
-  const orbSpeed = 0.5+Math.random()*1.5;
-  const orbTilt = (Math.random()-0.5)*Math.PI*0.8;
-  swirlOrbs.push({mesh:orb, angle:orbAngle, radius:orbRadius, speed:orbSpeed, tilt:orbTilt});
-  swirlGroup.add(orb);
-}
-
-const core = new THREE.Mesh(
-  new THREE.SphereGeometry(0.15,32,32),
-  new THREE.MeshBasicMaterial({color:0x7744aa,transparent:true,opacity:0.5})
-);
-core.position.copy(PALANTIR_POS);
-scene.add(core);
-
-// Dynamic flicker lights
-const blueFlicker = new THREE.PointLight(0x3366ff, 0, 3);
-blueFlicker.position.copy(PALANTIR_POS);
-blueFlicker.position.x += 0.15;
-scene.add(blueFlicker);
-
-const redFlicker = new THREE.PointLight(0xff3333, 0, 3);
-redFlicker.position.copy(PALANTIR_POS);
-redFlicker.position.x -= 0.15;
-scene.add(redFlicker);
-
-const whiteGlint = new THREE.PointLight(0xffffff, 0, 2);
-whiteGlint.position.copy(PALANTIR_POS);
-whiteGlint.position.z += 0.2;
-scene.add(whiteGlint);
-
-// Glow sprite
-const gc=document.createElement('canvas'); gc.width=128; gc.height=128;
-const gx=gc.getContext('2d');
-const gg=gx.createRadialGradient(64,64,0,64,64,64);
-gg.addColorStop(0,'rgba(100,60,180,0.6)');
-gg.addColorStop(0.4,'rgba(100,60,180,0.15)');
-gg.addColorStop(1,'rgba(100,60,180,0)');
-gx.fillStyle=gg;gx.fillRect(0,0,128,128);
-const gsMat=new THREE.SpriteMaterial({map:new THREE.CanvasTexture(gc),transparent:true,blending:THREE.AdditiveBlending});
-const gs=new THREE.Sprite(gsMat);
-gs.position.copy(PALANTIR_POS);
-gs.scale.set(3,3,1);
-scene.add(gs);
-
-// === SUMMONING STATE (activated via postMessage) ===
-let summoningActive = false;
-let summoningStart = 0;
-const SUMMON_DURATION = 4.0; // seconds
-window.addEventListener('message', (e) => {
-  if(e.data && e.data.type === 'oracle-summon') {
-    summoningActive = true;
-    summoningStart = clock.getElapsedTime();
-  }
-});
-
-// ==========================================
-// PARTICLES
-// ==========================================
-const partCount=60;
-const pg=new THREE.BufferGeometry();
-const pp=new Float32Array(partCount*3);
-const ps=[];
-for(let i=0;i<partCount;i++){
-  pp[i*3]=(Math.random()-0.5)*6;pp[i*3+1]=(Math.random()-0.5)*5;pp[i*3+2]=(Math.random()-0.5)*5;
-  ps.push({vx:(Math.random()-0.5)*0.003,vy:(Math.random()-0.5)*0.003+0.002,vz:(Math.random()-0.5)*0.003});
-}
-pg.setAttribute('position',new THREE.BufferAttribute(pp,3));
-const parts=new THREE.Points(pg,new THREE.PointsMaterial({color:0x7fdbca,size:0.025,transparent:true,opacity:0.35,blending:THREE.AdditiveBlending}));
-scene.add(parts);
-
-// ==========================================
-// ANIMATION
-// ==========================================
-const clock=new THREE.Clock();
-
-function animate(){
-  requestAnimationFrame(animate);
-  const t=clock.getElapsedTime();
-
-  mouse.x+=(targetMouse.x-mouse.x)*0.05;
-  mouse.y+=(targetMouse.y-mouse.y)*0.05;
-
-  // --- BODY (reduced ripple — 40% less than original) ---
-  const bpos=bodyGeo.attributes.position.array;
-  for(let i=0;i<bpos.length;i+=3){
-    const ox=bodyOrigPos[i],oy=bodyOrigPos[i+1],oz=bodyOrigPos[i+2];
-    const n=fbm(ox*1.5+t*0.3,oy*1.5+t*0.25,oz*1.5+t*0.2,3);
-    const m=(mouse.x*ox+mouse.y*oy)*0.07;
-    const d=1.0+n*0.17+m;
-    bpos[i]=ox*d;bpos[i+1]=oy*d;bpos[i+2]=oz*d;
-  }
-  bodyGeo.attributes.position.needsUpdate=true;
-  bodyGeo.computeVertexNormals();
-
-  body.rotation.y=t*0.06+mouse.x*0.25;
-  body.rotation.x=Math.sin(t*0.12)*0.04+mouse.y*0.1;
-
-  // Face always front-facing
-  faceMesh.rotation.y = mouse.x * 0.15;
-  faceMesh.rotation.x = mouse.y * 0.08;
-
-  // --- SUMMONING decay ---
-  let summonT = 0;
-  if(summoningActive) {
-    summonT = (t - summoningStart) / SUMMON_DURATION;
-    if(summonT > 1.0) { summoningActive = false; summonT = 0; }
-  }
-  const summonIntensity = summoningActive ? Math.sin(summonT * Math.PI) : 0; // 0→1→0
-
-  // Project mouse/touch into 3D world space for tentacle interaction
-  updatePointerWorld();
-
-  // --- TENTACLES (surface ripple, mouse stir + avoidance, palantir avoidance, summoning) ---
-  tentacles.forEach(tent=>{
-    const {mesh,baseAngle,length,yStart,baseThick,segs,phase,speed,amplitude}=tent;
-    const pts=[];
-    for(let i=0;i<=segs;i++){
-      const s=i/segs;
-      const wave=Math.sin(t*speed+phase+s*Math.PI*2)*amplitude*s;
-      const mw=(mouse.x*Math.cos(baseAngle)+mouse.y*Math.sin(baseAngle))*0.3*s;
-      const a=baseAngle+wave+mw;
-      const r=1.3+s*length;
-      let px = Math.cos(a)*r*(0.7+s*0.5);
-      let py = yStart-s*1.2+Math.sin(s*Math.PI*0.5+t*speed*0.5)*0.2+wave*0.25;
-      let pz = Math.sin(a)*r*(0.7+s*0.5);
-
-      // Surface ripple on tentacle (half of body's reduced strength → 0.085)
-      const tn = fbm(px*1.2+t*0.35, py*1.2+t*0.3, pz*1.2+t*0.25, 2);
-      const rippleStr = 0.085 * s; // stronger toward tips
-      px += px * tn * rippleStr;
-      py += py * tn * rippleStr * 0.5;
-      pz += pz * tn * rippleStr;
-
-      // Mouse/touch avoidance — tentacles shy away from pointer
-      const mdx = px - mouseWorld.x;
-      const mdy = py - mouseWorld.y;
-      const mdz = pz - mouseWorld.z;
-      const mDist = Math.sqrt(mdx*mdx+mdy*mdy+mdz*mdz);
-      const mouseAvoidR = 1.2;
-      if(mDist < mouseAvoidR && mDist > 0.01) {
-        const push = (mouseAvoidR - mDist) / mouseAvoidR;
-        const stir = push * push * s * 0.5; // quadratic falloff, stronger at tips
-        px += (mdx/mDist) * stir;
-        py += (mdy/mDist) * stir;
-        pz += (mdz/mDist) * stir;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shoggoth Oracle — 3D Embed</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: transparent;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+      // =============================================
+      // SHOGGOTH ORACLE — 3D Embeddable Avatar v5
+      // Reference-faithful: bright olive green, many eyes,
+      // blobby body, thick tentacles, dynamic palantír
+      // =============================================
+
+      // === SCENE ===
+      const scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x050508, 0.08);
+
+      const camera = new THREE.PerspectiveCamera(
+        50,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        100,
+      );
+      camera.position.set(0, 0.3, 4.2);
+      camera.lookAt(0, 0, 0);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+      renderer.setClearColor(0x000000, 0);
+      document.body.appendChild(renderer.domElement);
+
+      // === MOUSE / TOUCH ===
+      const mouse = new THREE.Vector2(0, 0);
+      const targetMouse = new THREE.Vector2(0, 0);
+      // 3D world-space pointer position (projected from screen via raycaster plane)
+      const mouseWorld = new THREE.Vector3(0, 0, 2);
+      const raycaster = new THREE.Raycaster();
+      const pointerPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -1.5); // z≈1.5 plane
+
+      function updatePointerWorld() {
+        raycaster.setFromCamera(mouse, camera);
+        raycaster.ray.intersectPlane(pointerPlane, mouseWorld);
       }
 
-      // Palantir avoidance — push tentacle points away from palantir center
-      const dx = px - PALANTIR_POS.x;
-      const dy = py - PALANTIR_POS.y;
-      const dz = pz - PALANTIR_POS.z;
-      const dist = Math.sqrt(dx*dx+dy*dy+dz*dz);
-      const avoidR = 0.6;
-      if(dist < avoidR && dist > 0.01) {
-        const push = (avoidR - dist) / avoidR;
-        px += (dx/dist) * push * 0.3;
-        py += (dy/dist) * push * 0.2 + push * 0.25;
-        pz += (dz/dist) * push * 0.3;
+      document.addEventListener('mousemove', (e) => {
+        targetMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+        targetMouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      });
+      document.addEventListener(
+        'touchstart',
+        (e) => {
+          const touch = e.touches[0];
+          targetMouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+          targetMouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        },
+        { passive: true },
+      );
+      document.addEventListener(
+        'touchmove',
+        (e) => {
+          const touch = e.touches[0];
+          targetMouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+          targetMouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        },
+        { passive: true },
+      );
+      document.addEventListener(
+        'touchend',
+        () => {
+          // Smoothly return pointer to center when touch ends
+          targetMouse.x = 0;
+          targetMouse.y = 0;
+        },
+        { passive: true },
+      );
+
+      // === NOISE ===
+      function noise3D(x, y, z) {
+        return (
+          Math.sin(x * 1.27 + y * 3.43 + z * 2.17) *
+          Math.sin(y * 2.64 + z * 1.87 + x * 3.91) *
+          Math.sin(z * 1.53 + x * 2.79 + y * 1.34)
+        );
+      }
+      function fbm(x, y, z, o) {
+        let v = 0,
+          a = 0.5,
+          f = 1;
+        for (let i = 0; i < o; i++) {
+          v += a * noise3D(x * f, y * f, z * f);
+          a *= 0.5;
+          f *= 2.1;
+        }
+        return v;
       }
 
-      // Summoning: tips reach toward palantir
-      if(summonIntensity > 0 && s > 0.5) {
-        const reach = summonIntensity * (s - 0.5) * 2;
-        px += (PALANTIR_POS.x - px) * reach * 0.4;
-        py += (PALANTIR_POS.y - py) * reach * 0.3 + reach * 0.15;
-        pz += (PALANTIR_POS.z - pz) * reach * 0.4;
+      // === LIGHTING ===
+      scene.add(new THREE.AmbientLight(0x2a3a2a, 0.7));
+
+      const palantirLight = new THREE.PointLight(0x7fdbca, 2.5, 8);
+      palantirLight.position.set(0, -1.2, 1.8);
+      scene.add(palantirLight);
+
+      const goldLight = new THREE.PointLight(0xd4a853, 0.9, 6);
+      goldLight.position.set(2, 1, 2);
+      scene.add(goldLight);
+
+      const greenLight = new THREE.PointLight(0x3a7a4a, 1.5, 8);
+      greenLight.position.set(-2, 2, -3);
+      scene.add(greenLight);
+
+      const redLight = new THREE.PointLight(0x8b2d2d, 0.4, 5);
+      redLight.position.set(-1.5, -0.5, 1);
+      scene.add(redLight);
+
+      const faceLight = new THREE.PointLight(0xeeddcc, 1.4, 6);
+      faceLight.position.set(0, 0.8, 3.5);
+      scene.add(faceLight);
+
+      // ==========================================
+      // PAINT CASSANDRA FACE ON CANVAS
+      // ==========================================
+      function paintCassandraFace(size) {
+        const c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        const ctx = c.getContext('2d');
+        const cx = size / 2,
+          cy = size / 2;
+        const s = size / 512;
+
+        ctx.clearRect(0, 0, size, size);
+
+        // Face oval
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 10 * s, 170 * s, 220 * s, 0, 0, Math.PI * 2);
+        const faceGrad = ctx.createRadialGradient(
+          cx - 30 * s,
+          cy - 60 * s,
+          20 * s,
+          cx,
+          cy,
+          200 * s,
+        );
+        faceGrad.addColorStop(0, '#f0e6d6');
+        faceGrad.addColorStop(0.4, '#e8dcc8');
+        faceGrad.addColorStop(0.7, '#d8ccb8');
+        faceGrad.addColorStop(1, '#c0b098');
+        ctx.fillStyle = faceGrad;
+        ctx.fill();
+
+        // Marble veining
+        ctx.globalAlpha = 0.04;
+        for (let i = 0; i < 8; i++) {
+          ctx.beginPath();
+          ctx.moveTo(cx + (Math.random() - 0.5) * 200 * s, cy - 180 * s);
+          ctx.bezierCurveTo(
+            cx + (Math.random() - 0.5) * 300 * s,
+            cy - 60 * s,
+            cx + (Math.random() - 0.5) * 300 * s,
+            cy + 60 * s,
+            cx + (Math.random() - 0.5) * 200 * s,
+            cy + 180 * s,
+          );
+          ctx.strokeStyle = '#b0a090';
+          ctx.lineWidth = (1 + Math.random() * 2) * s;
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // Cheekbone highlights
+        ctx.save();
+        ctx.globalAlpha = 0.12;
+        ctx.beginPath();
+        ctx.ellipse(cx - 80 * s, cy + 10 * s, 50 * s, 25 * s, -0.3, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff8f0';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(cx + 80 * s, cy + 10 * s, 50 * s, 25 * s, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // Brow ridge shadow
+        ctx.save();
+        ctx.globalAlpha = 0.15;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - 70 * s, 130 * s, 18 * s, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#8a7a6a';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // Eyebrows
+        function drawBrow(xOff, flip) {
+          ctx.save();
+          ctx.translate(cx + xOff * s, cy - 95 * s);
+          if (flip) ctx.scale(-1, 1);
+          ctx.beginPath();
+          ctx.moveTo(-55 * s, 8 * s);
+          ctx.bezierCurveTo(-40 * s, -8 * s, -5 * s, -14 * s, 40 * s, 0);
+          ctx.bezierCurveTo(-5 * s, -6 * s, -40 * s, 0, -55 * s, 8 * s);
+          ctx.fillStyle = '#6a5a4a';
+          ctx.fill();
+          ctx.restore();
+        }
+        drawBrow(-60, false);
+        drawBrow(60, true);
+
+        // Eye sockets
+        function drawEyeSocket(xOff) {
+          ctx.save();
+          ctx.globalAlpha = 0.2;
+          ctx.beginPath();
+          ctx.ellipse(cx + xOff * s, cy - 55 * s, 48 * s, 28 * s, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#5a4a3a';
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
+        drawEyeSocket(-62);
+        drawEyeSocket(62);
+
+        // Eyes
+        function drawEye(xOff) {
+          const ex = cx + xOff * s,
+            ey = cy - 55 * s;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(ex - 40 * s, ey);
+          ctx.bezierCurveTo(ex - 25 * s, ey - 22 * s, ex + 25 * s, ey - 22 * s, ex + 40 * s, ey);
+          ctx.bezierCurveTo(ex + 25 * s, ey + 18 * s, ex - 25 * s, ey + 18 * s, ex - 40 * s, ey);
+          ctx.closePath();
+          ctx.clip();
+          ctx.fillStyle = '#0d1520';
+          ctx.fillRect(ex - 45 * s, ey - 25 * s, 90 * s, 50 * s);
+          const irisGrad = ctx.createRadialGradient(ex, ey, 2 * s, ex, ey, 22 * s);
+          irisGrad.addColorStop(0, '#aaf0e4');
+          irisGrad.addColorStop(0.3, '#7fdbca');
+          irisGrad.addColorStop(0.7, '#4aaa98');
+          irisGrad.addColorStop(1, '#2a7a6a');
+          ctx.beginPath();
+          ctx.arc(ex, ey, 22 * s, 0, Math.PI * 2);
+          ctx.fillStyle = irisGrad;
+          ctx.fill();
+          ctx.globalAlpha = 0.3;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 28 * s, 0, Math.PI * 2);
+          ctx.fillStyle = '#7fdbca';
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          ctx.arc(ex, ey, 8 * s, 0, Math.PI * 2);
+          ctx.fillStyle = '#050a10';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(ex + 5 * s, ey - 5 * s, 3 * s, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.fill();
+          ctx.restore();
+          // Outline + lash
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(ex - 40 * s, ey);
+          ctx.bezierCurveTo(ex - 25 * s, ey - 22 * s, ex + 25 * s, ey - 22 * s, ex + 40 * s, ey);
+          ctx.bezierCurveTo(ex + 25 * s, ey + 18 * s, ex - 25 * s, ey + 18 * s, ex - 40 * s, ey);
+          ctx.closePath();
+          ctx.strokeStyle = '#4a3a2a';
+          ctx.lineWidth = 1.5 * s;
+          ctx.stroke();
+          ctx.restore();
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(ex - 40 * s, ey);
+          ctx.bezierCurveTo(ex - 25 * s, ey - 23 * s, ex + 25 * s, ey - 23 * s, ex + 40 * s, ey);
+          ctx.strokeStyle = '#3a2a1a';
+          ctx.lineWidth = 2.5 * s;
+          ctx.stroke();
+          ctx.restore();
+        }
+        drawEye(-62);
+        drawEye(62);
+
+        // Nose
+        ctx.save();
+        ctx.globalAlpha = 0.1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 8 * s, cy - 40 * s);
+        ctx.lineTo(cx - 12 * s, cy + 20 * s);
+        ctx.lineTo(cx + 12 * s, cy + 20 * s);
+        ctx.lineTo(cx + 8 * s, cy - 40 * s);
+        ctx.fillStyle = '#7a6a5a';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.globalAlpha = 0.15;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 35 * s);
+        ctx.lineTo(cx - 2 * s, cy + 15 * s);
+        ctx.lineTo(cx + 2 * s, cy + 15 * s);
+        ctx.fillStyle = '#fff8f0';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 20 * s, 14 * s, 8 * s, 0, 0, Math.PI * 2);
+        const noseTipGrad = ctx.createRadialGradient(
+          cx,
+          cy + 18 * s,
+          2 * s,
+          cx,
+          cy + 20 * s,
+          14 * s,
+        );
+        noseTipGrad.addColorStop(0, '#e8dcc8');
+        noseTipGrad.addColorStop(1, '#c8b8a8');
+        ctx.fillStyle = noseTipGrad;
+        ctx.fill();
+        ctx.globalAlpha = 0.2;
+        ctx.beginPath();
+        ctx.ellipse(cx - 10 * s, cy + 24 * s, 6 * s, 4 * s, -0.3, 0, Math.PI * 2);
+        ctx.fillStyle = '#5a4a3a';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(cx + 10 * s, cy + 24 * s, 6 * s, 4 * s, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // Lips
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(cx - 42 * s, cy + 62 * s);
+        ctx.bezierCurveTo(cx - 25 * s, cy + 55 * s, cx - 8 * s, cy + 52 * s, cx, cy + 56 * s);
+        ctx.bezierCurveTo(
+          cx + 8 * s,
+          cy + 52 * s,
+          cx + 25 * s,
+          cy + 55 * s,
+          cx + 42 * s,
+          cy + 62 * s,
+        );
+        ctx.bezierCurveTo(
+          cx + 20 * s,
+          cy + 66 * s,
+          cx - 20 * s,
+          cy + 66 * s,
+          cx - 42 * s,
+          cy + 62 * s,
+        );
+        const upperLipGrad = ctx.createLinearGradient(cx, cy + 52 * s, cx, cy + 66 * s);
+        upperLipGrad.addColorStop(0, '#c49a88');
+        upperLipGrad.addColorStop(1, '#b08878');
+        ctx.fillStyle = upperLipGrad;
+        ctx.fill();
+        ctx.restore();
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(cx - 38 * s, cy + 64 * s);
+        ctx.bezierCurveTo(cx - 20 * s, cy + 64 * s, cx - 10 * s, cy + 64 * s, cx, cy + 64 * s);
+        ctx.bezierCurveTo(
+          cx + 10 * s,
+          cy + 64 * s,
+          cx + 20 * s,
+          cy + 64 * s,
+          cx + 38 * s,
+          cy + 64 * s,
+        );
+        ctx.bezierCurveTo(
+          cx + 25 * s,
+          cy + 82 * s,
+          cx - 25 * s,
+          cy + 82 * s,
+          cx - 38 * s,
+          cy + 64 * s,
+        );
+        const lowerLipGrad = ctx.createLinearGradient(cx, cy + 64 * s, cx, cy + 82 * s);
+        lowerLipGrad.addColorStop(0, '#c09888');
+        lowerLipGrad.addColorStop(0.6, '#b88878');
+        lowerLipGrad.addColorStop(1, '#a07868');
+        ctx.fillStyle = lowerLipGrad;
+        ctx.fill();
+        ctx.globalAlpha = 0.15;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 72 * s, 18 * s, 6 * s, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(cx - 36 * s, cy + 63 * s);
+        ctx.bezierCurveTo(
+          cx - 15 * s,
+          cy + 65 * s,
+          cx + 15 * s,
+          cy + 65 * s,
+          cx + 36 * s,
+          cy + 63 * s,
+        );
+        ctx.strokeStyle = '#6a4a3a';
+        ctx.lineWidth = 1.5 * s;
+        ctx.stroke();
+        ctx.restore();
+
+        // Gold tear tracks
+        function drawTear(xOff) {
+          ctx.save();
+          ctx.globalAlpha = 0.25;
+          ctx.beginPath();
+          ctx.moveTo(cx + xOff * s, cy - 35 * s);
+          ctx.bezierCurveTo(
+            cx + xOff * s - 3 * s,
+            cy,
+            cx + xOff * s + 2 * s,
+            cy + 40 * s,
+            cx + xOff * s - 1 * s,
+            cy + 90 * s,
+          );
+          ctx.strokeStyle = '#d4a853';
+          ctx.lineWidth = 3 * s;
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          ctx.globalAlpha = 0.1;
+          ctx.lineWidth = 6 * s;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
+        drawTear(-58);
+        drawTear(58);
+
+        // Laurel crown hints
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        function drawLeaf(x, y, angle, sz) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(angle);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, sz * 0.4, sz, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#4a7a3a';
+          ctx.fill();
+          ctx.restore();
+        }
+        for (let i = 0; i < 8; i++) {
+          const a = -0.8 + (i / 7) * 1.6;
+          drawLeaf(
+            cx + Math.sin(a) * 130 * s,
+            cy - 180 * s + Math.cos(a) * 40 * s,
+            a + Math.PI / 2,
+            12 * s,
+          );
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        // Edge fade
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-in';
+        const fadeMask = ctx.createRadialGradient(
+          cx,
+          cy + 10 * s,
+          100 * s,
+          cx,
+          cy + 10 * s,
+          220 * s,
+        );
+        fadeMask.addColorStop(0, 'rgba(255,255,255,1)');
+        fadeMask.addColorStop(0.7, 'rgba(255,255,255,1)');
+        fadeMask.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = fadeMask;
+        ctx.fillRect(0, 0, size, size);
+        ctx.restore();
+
+        return c;
       }
 
-      pts.push(new THREE.Vector3(px, py, pz));
-    }
-    const curve=new THREE.CatmullRomCurve3(pts);
-    tent.curve=curve;
-    const pulse=1+Math.sin(t+phase)*0.06 + summonIntensity*0.15;
-    const ng=buildTaperedTube(curve,32,8,baseThick*pulse,baseThick*0.06);
-    mesh.geometry.dispose();
-    mesh.geometry=ng;
-  });
+      const faceCanvas = paintCassandraFace(512);
+      const faceTexture = new THREE.CanvasTexture(faceCanvas);
+      faceTexture.needsUpdate = true;
 
-  // --- TENTACLE EYES (mostly open — low blink threshold) ---
-  tentacleEyes.forEach(te=>{
-    const tent=tentacles[te.tentacleIdx];
-    if(!tent.curve)return;
-    const pt=tent.curve.getPointAt(Math.min(te.tPos,0.99));
-    const tan=tent.curve.getTangentAt(Math.min(te.tPos,0.99));
-    const up=new THREE.Vector3(0,1,0);
-    const side=new THREE.Vector3().crossVectors(tan,up).normalize();
-    const localR=tent.baseThick*(1-te.tPos*te.tPos)+tent.baseThick*0.06;
-    te.mesh.position.set(
-      pt.x+side.x*localR*1.2,
-      pt.y+side.y*localR*1.2+0.2,
-      pt.z+side.z*localR*1.2
-    );
-    te.mesh.lookAt(
-      te.mesh.position.x+side.x*2+mouse.x,
-      te.mesh.position.y+mouse.y*0.5,
-      te.mesh.position.z+side.z*2+1
-    );
-    // Eyes mostly open — blink is brief
-    const bc=Math.sin(t*te.blinkSpeed+te.blinkPhase);
-    const open = bc > -0.7 ? Math.min(1, (bc + 0.7) / 0.3) : 0;
-    te.mesh.material.opacity=open*0.95;
-  });
+      // ==========================================
+      // SHOGGOTH BODY — brighter olive green, more blobby
+      // ==========================================
+      const bodyGeo = new THREE.SphereGeometry(1.3, 96, 96);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x3a6a4a,
+        roughness: 0.6,
+        metalness: 0.25,
+        transparent: true,
+        opacity: 0.93,
+      });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.position.set(0, 0.2, 0);
+      scene.add(body);
+      const bodyOrigPos = Float32Array.from(bodyGeo.attributes.position.array);
 
-  // --- BODY EYES (surface-breathing but NOT rotating with sphere) ---
-  bodyEyes.forEach(eye=>{
-    // Apply fbm deformation for organic breathing, but no body rotation
-    const ox = eye.basePos.x, oy = eye.basePos.y - 0.2, oz = eye.basePos.z;
-    const n = fbm(ox*1.5+t*0.3, oy*1.5+t*0.25, oz*1.5+t*0.2, 3);
-    const breathe = 1.0 + n*0.08; // subtle surface breathing only
-    eye.mesh.position.set(
-      eye.basePos.x * breathe,
-      eye.basePos.y + (breathe-1)*oy*0.5,
-      eye.basePos.z * breathe
-    );
+      // ==========================================
+      // CASSANDRA FACE
+      // ==========================================
+      const faceGeo = new THREE.SphereGeometry(
+        1.35,
+        48,
+        48,
+        Math.PI / 2 - 0.55,
+        1.1,
+        Math.PI / 2 - 0.65,
+        1.3,
+      );
+      const faceMat = new THREE.MeshStandardMaterial({
+        map: faceTexture,
+        transparent: true,
+        alphaTest: 0.01,
+        roughness: 0.8,
+        metalness: 0.05,
+        side: THREE.FrontSide,
+        depthWrite: true,
+      });
+      const faceMesh = new THREE.Mesh(faceGeo, faceMat);
+      faceMesh.position.set(0, 0.2, 0.08);
+      scene.add(faceMesh);
 
-    const bc=Math.sin(t*eye.blinkSpeed+eye.blinkPhase);
-    const open = bc > -0.7 ? Math.min(1, (bc + 0.7) / 0.3) : 0;
-    eye.mesh.material.opacity=open*0.95;
-    eye.mesh.lookAt(eye.mesh.position.x+mouse.x*2,eye.mesh.position.y+mouse.y*2,eye.mesh.position.z+3);
-  });
+      // ==========================================
+      // TAPERED TENTACLES — thick, fleshy, biased lower
+      // ==========================================
+      const tentacles = [];
+      const tentacleEyes = [];
+      const tentacleCount = 16;
 
-  // --- FACE breathing ---
-  faceMesh.position.z = 0.08 + Math.sin(t*0.4)*0.01;
+      function buildTaperedTube(curve, tubSegs, radSegs, baseR, tipR) {
+        const frames = curve.computeFrenetFrames(tubSegs, false);
+        const verts = [],
+          inds = [],
+          norms = [],
+          uvs = [];
+        for (let i = 0; i <= tubSegs; i++) {
+          const t = i / tubSegs;
+          const taper = 1 - t * t;
+          const r = tipR + (baseR - tipR) * taper;
+          const P = curve.getPointAt(t);
+          const N = frames.normals[i],
+            B = frames.binormals[i];
+          for (let j = 0; j <= radSegs; j++) {
+            const v = (j / radSegs) * Math.PI * 2;
+            const sn = Math.sin(v),
+              cs = -Math.cos(v);
+            const nx = cs * N.x + sn * B.x,
+              ny = cs * N.y + sn * B.y,
+              nz = cs * N.z + sn * B.z;
+            norms.push(nx, ny, nz);
+            verts.push(P.x + r * nx, P.y + r * ny, P.z + r * nz);
+            uvs.push(t, j / radSegs);
+          }
+        }
+        for (let i = 0; i < tubSegs; i++) {
+          for (let j = 0; j < radSegs; j++) {
+            const a = i * (radSegs + 1) + j,
+              b = (i + 1) * (radSegs + 1) + j;
+            inds.push(a, b, a + 1, b, b + 1, a + 1);
+          }
+        }
+        const g = new THREE.BufferGeometry();
+        g.setIndex(inds);
+        g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+        g.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        return g;
+      }
 
-  // --- PALANTÍR (swirling red/blue, dynamic) ---
-  const pBase = 0.5 + Math.sin(t*1.5)*0.2;
-  const flick = Math.sin(t*7.3)*Math.sin(t*11.1)*Math.sin(t*5.7);
-  core.material.opacity = pBase + flick*0.15 + summonIntensity*0.3;
-  // Swirl between red and blue
-  const colorPhase = t * 0.8;
-  const cR = 0.45 + Math.sin(colorPhase)*0.35 + summonIntensity*0.2;
-  const cG = 0.15 + Math.sin(colorPhase*1.3)*0.1;
-  const cB = 0.55 + Math.cos(colorPhase)*0.35 + summonIntensity*0.15;
-  core.material.color.setRGB(cR, cG, cB);
-  // Swirl orbs orbit inside
-  swirlOrbs.forEach(o=>{
-    o.angle += o.speed * 0.016;
-    o.mesh.position.set(
-      Math.cos(o.angle)*o.radius,
-      Math.sin(o.angle)*o.radius*Math.cos(o.tilt),
-      Math.sin(o.angle)*o.radius*Math.sin(o.tilt)
-    );
-    o.mesh.material.opacity = 0.5 + Math.sin(t*2+o.angle)*0.3 + summonIntensity*0.3;
-  });
-  gs.scale.setScalar(2.2 + Math.sin(t*1.5)*0.6 + flick*0.3 + summonIntensity*1.5);
-  gsMat.opacity = 0.3 + Math.sin(t*1.5)*0.15 + Math.abs(flick)*0.1 + summonIntensity*0.3;
-  palantirLight.intensity = 2.0 + Math.sin(t*1.5)*0.8 + flick*0.5 + summonIntensity*3.0;
-  palantirLight.position.copy(PALANTIR_POS).y -= 0.3;
-  const blueBurst = Math.max(0, Math.sin(t*4.3)*Math.sin(t*9.7) - 0.6) * 5.0 + summonIntensity*2.0;
-  blueFlicker.intensity = blueBurst;
-  blueFlicker.position.x = PALANTIR_POS.x + Math.sin(t*3.1)*0.15;
-  blueFlicker.position.y = PALANTIR_POS.y + Math.cos(t*2.7)*0.1;
-  const redBurst = Math.max(0, Math.sin(t*2.1)*Math.sin(t*6.3) - 0.5) * 3.0 + summonIntensity*2.0;
-  redFlicker.intensity = redBurst;
-  redFlicker.position.x = PALANTIR_POS.x + Math.cos(t*2.3)*0.15;
-  redFlicker.position.y = PALANTIR_POS.y + Math.sin(t*3.9)*0.1;
-  const spark = Math.max(0, Math.sin(t*13.7)*Math.sin(t*17.3) - 0.85) * 12.0 + summonIntensity*4.0;
-  whiteGlint.intensity = spark;
-  palantir.rotation.y = t*0.2;
-  palantir.rotation.x = Math.sin(t*0.3)*0.05;
+      function createTentacle(baseAngle, length, yStart, baseThick) {
+        const segs = 24;
+        const pts = [];
+        for (let i = 0; i <= segs; i++) {
+          const t = i / segs;
+          const a = baseAngle + Math.sin(t * Math.PI) * 0.6;
+          const r = 1.3 + t * length;
+          pts.push(
+            new THREE.Vector3(
+              Math.cos(a) * r * (0.7 + t * 0.5),
+              yStart - t * 1.2 + Math.sin(t * Math.PI * 0.5) * 0.2,
+              Math.sin(a) * r * (0.7 + t * 0.5),
+            ),
+          );
+        }
+        const curve = new THREE.CatmullRomCurve3(pts);
+        const geo = buildTaperedTube(curve, 32, 8, baseThick, baseThick * 0.06);
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x3a7a4f,
+          roughness: 0.5,
+          metalness: 0.2,
+          transparent: true,
+          opacity: 0.9,
+        });
+        return {
+          mesh: new THREE.Mesh(geo, mat),
+          curve,
+          baseAngle,
+          length,
+          yStart,
+          baseThick,
+          segs,
+          phase: Math.random() * Math.PI * 2,
+          speed: 0.2 + Math.random() * 0.35,
+          amplitude: 0.2 + Math.random() * 0.35,
+        };
+      }
 
-  // --- PARTICLES ---
-  const pa=parts.geometry.attributes.position.array;
-  for(let i=0;i<partCount;i++){
-    pa[i*3]+=ps[i].vx;pa[i*3+1]+=ps[i].vy;pa[i*3+2]+=ps[i].vz;
-    if(Math.abs(pa[i*3+1])>3){pa[i*3]=(Math.random()-0.5)*5;pa[i*3+1]=-3;pa[i*3+2]=(Math.random()-0.5)*4;}
-  }
-  parts.geometry.attributes.position.needsUpdate=true;
+      // Lower-biased tentacle placement
+      for (let i = 0; i < tentacleCount; i++) {
+        const angle = (i / tentacleCount) * Math.PI * 2;
+        const length = 1.0 + Math.random() * 1.5;
+        let yOff;
+        if (i < tentacleCount * 0.7) {
+          yOff = -0.5 - Math.random() * 0.6;
+        } else {
+          yOff = -0.1 - Math.random() * 0.4;
+        }
+        const thick = 0.14 + Math.random() * 0.12; // 2x thick bases
+        const t = createTentacle(angle, length, yOff, thick);
+        t.mesh.position.set(0, 0.2, 0);
+        scene.add(t.mesh);
+        tentacles.push(t);
+      }
 
-  // --- CAMERA ---
-  camera.position.x=mouse.x*0.4;
-  camera.position.y=0.3+mouse.y*0.25;
-  camera.lookAt(0,0.1,0);
+      // === TENTACLE EYES — many, mostly open, distinct pupils ===
+      const tentEyeGeo = new THREE.SphereGeometry(0.055, 12, 12);
+      tentacles.forEach((tent, tIdx) => {
+        // More positions, higher placement probability
+        [0.12, 0.25, 0.38, 0.5, 0.63, 0.76, 0.88].forEach((tPos) => {
+          if (Math.random() > 0.35) return; // 65% chance of eye at each position
 
-  renderer.render(scene,camera);
-}
-animate();
+          const scleraMat = new THREE.MeshBasicMaterial({
+            color: 0xe8fff0,
+            transparent: true,
+            opacity: 0,
+          });
+          const sclera = new THREE.Mesh(tentEyeGeo, scleraMat);
 
-window.addEventListener('resize',()=>{
-  camera.aspect=window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth,window.innerHeight);
-});
-</script>
-</body>
+          const iris = new THREE.Mesh(
+            new THREE.SphereGeometry(0.042, 10, 10),
+            new THREE.MeshBasicMaterial({ color: 0x7fdbca, transparent: true, opacity: 1 }),
+          );
+          iris.position.set(0, 0, 0.018);
+          sclera.add(iris);
+
+          // Big prominent pupil — clearly visible dark center
+          const pupil = new THREE.Mesh(
+            new THREE.SphereGeometry(0.032, 10, 10),
+            new THREE.MeshBasicMaterial({ color: 0x020308 }),
+          );
+          pupil.position.set(0, 0, 0.03);
+          sclera.add(pupil);
+          // Bright specular highlight
+          const highlight = new THREE.Mesh(
+            new THREE.SphereGeometry(0.01, 6, 6),
+            new THREE.MeshBasicMaterial({ color: 0xffffff }),
+          );
+          highlight.position.set(0.01, 0.008, 0.05);
+          sclera.add(highlight);
+
+          scene.add(sclera);
+          tentacleEyes.push({
+            mesh: sclera,
+            tentacleIdx: tIdx,
+            tPos,
+            blinkPhase: Math.random() * Math.PI * 2,
+            blinkSpeed: 0.08 + Math.random() * 0.1,
+          });
+        });
+      });
+
+      // === BODY EYES — well-spaced, avoid face, large distinct pupils ===
+      const bodyEyes = [];
+      const MIN_EYE_DIST = 0.35; // minimum distance between any two body eyes
+      const placedPositions = [];
+      for (let attempts = 0; attempts < 200 && bodyEyes.length < 30; attempts++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = 1.33;
+        const x = r * Math.sin(phi) * Math.cos(theta);
+        const y = r * Math.sin(phi) * Math.sin(theta) + 0.2;
+        const z = r * Math.cos(phi);
+        // Only front and side hemispheres
+        if (z < -0.1) continue;
+        // Wide face avoidance zone — no eyes near Cassandra
+        if (Math.abs(x) < 0.6 && y > -0.3 && y < 1.0 && z > 0.5) continue;
+        // Minimum spacing between eyes
+        let tooClose = false;
+        for (const p of placedPositions) {
+          const dd = (x - p.x) ** 2 + (y - p.y) ** 2 + (z - p.z) ** 2;
+          if (dd < MIN_EYE_DIST * MIN_EYE_DIST) {
+            tooClose = true;
+            break;
+          }
+        }
+        if (tooClose) continue;
+
+        placedPositions.push({ x, y, z });
+        const scleraMat = new THREE.MeshBasicMaterial({
+          color: 0xe8fff0,
+          transparent: true,
+          opacity: 0,
+        });
+        const eyeSize = 0.05 + Math.random() * 0.03;
+        const eyeMesh = new THREE.Mesh(new THREE.SphereGeometry(eyeSize, 12, 12), scleraMat);
+        eyeMesh.position.set(x, y, z);
+
+        const iris = new THREE.Mesh(
+          new THREE.SphereGeometry(eyeSize * 0.7, 10, 10),
+          new THREE.MeshBasicMaterial({ color: 0x7fdbca }),
+        );
+        iris.position.set(0, 0, eyeSize * 0.45);
+        eyeMesh.add(iris);
+
+        // Large prominent pupil
+        const pupil = new THREE.Mesh(
+          new THREE.SphereGeometry(eyeSize * 0.55, 10, 10),
+          new THREE.MeshBasicMaterial({ color: 0x020308 }),
+        );
+        pupil.position.set(0, 0, eyeSize * 0.65);
+        eyeMesh.add(pupil);
+        // Specular highlight dot
+        const hl = new THREE.Mesh(
+          new THREE.SphereGeometry(eyeSize * 0.18, 6, 6),
+          new THREE.MeshBasicMaterial({ color: 0xffffff }),
+        );
+        hl.position.set(eyeSize * 0.18, eyeSize * 0.14, eyeSize * 0.9);
+        eyeMesh.add(hl);
+
+        scene.add(eyeMesh);
+        bodyEyes.push({
+          mesh: eyeMesh,
+          basePos: new THREE.Vector3(x, y, z),
+          theta,
+          phi,
+          blinkPhase: Math.random() * Math.PI * 2,
+          blinkSpeed: 0.06 + Math.random() * 0.12,
+        });
+      }
+
+      // ==========================================
+      // PALANTÍR — offset left, less transparent, swirling red/blue
+      // ==========================================
+      const PALANTIR_POS = new THREE.Vector3(-0.8, -0.9, 1.8);
+      const palantir = new THREE.Mesh(
+        new THREE.SphereGeometry(0.38, 64, 64),
+        new THREE.MeshStandardMaterial({
+          color: 0x2a3a4a,
+          roughness: 0.02,
+          metalness: 0.5,
+          transparent: true,
+          opacity: 0.82,
+          emissive: 0x0a1520,
+          emissiveIntensity: 0.4,
+        }),
+      );
+      palantir.position.copy(PALANTIR_POS);
+      scene.add(palantir);
+
+      // Inner swirl orbs — red and blue motes that orbit inside
+      const swirlGroup = new THREE.Group();
+      swirlGroup.position.copy(PALANTIR_POS);
+      scene.add(swirlGroup);
+      const swirlOrbs = [];
+      for (let i = 0; i < 8; i++) {
+        const isRed = i % 2 === 0;
+        const orb = new THREE.Mesh(
+          new THREE.SphereGeometry(0.04 + Math.random() * 0.03, 12, 12),
+          new THREE.MeshBasicMaterial({
+            color: isRed ? 0xff3344 : 0x3366ff,
+            transparent: true,
+            opacity: 0.7,
+          }),
+        );
+        const orbAngle = (i / 8) * Math.PI * 2;
+        const orbRadius = 0.08 + Math.random() * 0.12;
+        const orbSpeed = 0.5 + Math.random() * 1.5;
+        const orbTilt = (Math.random() - 0.5) * Math.PI * 0.8;
+        swirlOrbs.push({
+          mesh: orb,
+          angle: orbAngle,
+          radius: orbRadius,
+          speed: orbSpeed,
+          tilt: orbTilt,
+        });
+        swirlGroup.add(orb);
+      }
+
+      const core = new THREE.Mesh(
+        new THREE.SphereGeometry(0.15, 32, 32),
+        new THREE.MeshBasicMaterial({ color: 0x7744aa, transparent: true, opacity: 0.5 }),
+      );
+      core.position.copy(PALANTIR_POS);
+      scene.add(core);
+
+      // Dynamic flicker lights
+      const blueFlicker = new THREE.PointLight(0x3366ff, 0, 3);
+      blueFlicker.position.copy(PALANTIR_POS);
+      blueFlicker.position.x += 0.15;
+      scene.add(blueFlicker);
+
+      const redFlicker = new THREE.PointLight(0xff3333, 0, 3);
+      redFlicker.position.copy(PALANTIR_POS);
+      redFlicker.position.x -= 0.15;
+      scene.add(redFlicker);
+
+      const whiteGlint = new THREE.PointLight(0xffffff, 0, 2);
+      whiteGlint.position.copy(PALANTIR_POS);
+      whiteGlint.position.z += 0.2;
+      scene.add(whiteGlint);
+
+      // Glow sprite
+      const gc = document.createElement('canvas');
+      gc.width = 128;
+      gc.height = 128;
+      const gx = gc.getContext('2d');
+      const gg = gx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gg.addColorStop(0, 'rgba(100,60,180,0.6)');
+      gg.addColorStop(0.4, 'rgba(100,60,180,0.15)');
+      gg.addColorStop(1, 'rgba(100,60,180,0)');
+      gx.fillStyle = gg;
+      gx.fillRect(0, 0, 128, 128);
+      const gsMat = new THREE.SpriteMaterial({
+        map: new THREE.CanvasTexture(gc),
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+      });
+      const gs = new THREE.Sprite(gsMat);
+      gs.position.copy(PALANTIR_POS);
+      gs.scale.set(3, 3, 1);
+      scene.add(gs);
+
+      // === SUMMONING STATE (activated via postMessage) ===
+      let summoningActive = false;
+      let summoningStart = 0;
+      const SUMMON_DURATION = 4.0; // seconds
+      window.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'oracle-summon') {
+          summoningActive = true;
+          summoningStart = clock.getElapsedTime();
+        }
+      });
+
+      // ==========================================
+      // PARTICLES
+      // ==========================================
+      const partCount = 60;
+      const pg = new THREE.BufferGeometry();
+      const pp = new Float32Array(partCount * 3);
+      const ps = [];
+      for (let i = 0; i < partCount; i++) {
+        pp[i * 3] = (Math.random() - 0.5) * 6;
+        pp[i * 3 + 1] = (Math.random() - 0.5) * 5;
+        pp[i * 3 + 2] = (Math.random() - 0.5) * 5;
+        ps.push({
+          vx: (Math.random() - 0.5) * 0.003,
+          vy: (Math.random() - 0.5) * 0.003 + 0.002,
+          vz: (Math.random() - 0.5) * 0.003,
+        });
+      }
+      pg.setAttribute('position', new THREE.BufferAttribute(pp, 3));
+      const parts = new THREE.Points(
+        pg,
+        new THREE.PointsMaterial({
+          color: 0x7fdbca,
+          size: 0.025,
+          transparent: true,
+          opacity: 0.35,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      scene.add(parts);
+
+      // ==========================================
+      // ANIMATION
+      // ==========================================
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const t = clock.getElapsedTime();
+
+        mouse.x += (targetMouse.x - mouse.x) * 0.05;
+        mouse.y += (targetMouse.y - mouse.y) * 0.05;
+
+        // --- BODY (reduced ripple — 40% less than original) ---
+        const bpos = bodyGeo.attributes.position.array;
+        for (let i = 0; i < bpos.length; i += 3) {
+          const ox = bodyOrigPos[i],
+            oy = bodyOrigPos[i + 1],
+            oz = bodyOrigPos[i + 2];
+          const n = fbm(ox * 1.5 + t * 0.3, oy * 1.5 + t * 0.25, oz * 1.5 + t * 0.2, 3);
+          const m = (mouse.x * ox + mouse.y * oy) * 0.07;
+          const d = 1.0 + n * 0.17 + m;
+          bpos[i] = ox * d;
+          bpos[i + 1] = oy * d;
+          bpos[i + 2] = oz * d;
+        }
+        bodyGeo.attributes.position.needsUpdate = true;
+        bodyGeo.computeVertexNormals();
+
+        body.rotation.y = t * 0.06 + mouse.x * 0.25;
+        body.rotation.x = Math.sin(t * 0.12) * 0.04 + mouse.y * 0.1;
+
+        // Face always front-facing
+        faceMesh.rotation.y = mouse.x * 0.15;
+        faceMesh.rotation.x = mouse.y * 0.08;
+
+        // --- SUMMONING decay ---
+        let summonT = 0;
+        if (summoningActive) {
+          summonT = (t - summoningStart) / SUMMON_DURATION;
+          if (summonT > 1.0) {
+            summoningActive = false;
+            summonT = 0;
+          }
+        }
+        const summonIntensity = summoningActive ? Math.sin(summonT * Math.PI) : 0; // 0→1→0
+
+        // Project mouse/touch into 3D world space for tentacle interaction
+        updatePointerWorld();
+
+        // --- TENTACLES (surface ripple, mouse stir + avoidance, palantir avoidance, summoning) ---
+        tentacles.forEach((tent) => {
+          const { mesh, baseAngle, length, yStart, baseThick, segs, phase, speed, amplitude } =
+            tent;
+          const pts = [];
+          for (let i = 0; i <= segs; i++) {
+            const s = i / segs;
+            const wave = Math.sin(t * speed + phase + s * Math.PI * 2) * amplitude * s;
+            const mw = (mouse.x * Math.cos(baseAngle) + mouse.y * Math.sin(baseAngle)) * 0.3 * s;
+            const a = baseAngle + wave + mw;
+            const r = 1.3 + s * length;
+            let px = Math.cos(a) * r * (0.7 + s * 0.5);
+            let py =
+              yStart - s * 1.2 + Math.sin(s * Math.PI * 0.5 + t * speed * 0.5) * 0.2 + wave * 0.25;
+            let pz = Math.sin(a) * r * (0.7 + s * 0.5);
+
+            // Surface ripple on tentacle (half of body's reduced strength → 0.085)
+            const tn = fbm(px * 1.2 + t * 0.35, py * 1.2 + t * 0.3, pz * 1.2 + t * 0.25, 2);
+            const rippleStr = 0.085 * s; // stronger toward tips
+            px += px * tn * rippleStr;
+            py += py * tn * rippleStr * 0.5;
+            pz += pz * tn * rippleStr;
+
+            // Mouse/touch avoidance — tentacles shy away from pointer
+            const mdx = px - mouseWorld.x;
+            const mdy = py - mouseWorld.y;
+            const mdz = pz - mouseWorld.z;
+            const mDist = Math.sqrt(mdx * mdx + mdy * mdy + mdz * mdz);
+            const mouseAvoidR = 1.2;
+            if (mDist < mouseAvoidR && mDist > 0.01) {
+              const push = (mouseAvoidR - mDist) / mouseAvoidR;
+              const stir = push * push * s * 0.5; // quadratic falloff, stronger at tips
+              px += (mdx / mDist) * stir;
+              py += (mdy / mDist) * stir;
+              pz += (mdz / mDist) * stir;
+            }
+
+            // Palantir avoidance — push tentacle points away from palantir center
+            const dx = px - PALANTIR_POS.x;
+            const dy = py - PALANTIR_POS.y;
+            const dz = pz - PALANTIR_POS.z;
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const avoidR = 0.6;
+            if (dist < avoidR && dist > 0.01) {
+              const push = (avoidR - dist) / avoidR;
+              px += (dx / dist) * push * 0.3;
+              py += (dy / dist) * push * 0.2 + push * 0.25;
+              pz += (dz / dist) * push * 0.3;
+            }
+
+            // Summoning: tips reach toward palantir
+            if (summonIntensity > 0 && s > 0.5) {
+              const reach = summonIntensity * (s - 0.5) * 2;
+              px += (PALANTIR_POS.x - px) * reach * 0.4;
+              py += (PALANTIR_POS.y - py) * reach * 0.3 + reach * 0.15;
+              pz += (PALANTIR_POS.z - pz) * reach * 0.4;
+            }
+
+            pts.push(new THREE.Vector3(px, py, pz));
+          }
+          const curve = new THREE.CatmullRomCurve3(pts);
+          tent.curve = curve;
+          const pulse = 1 + Math.sin(t + phase) * 0.06 + summonIntensity * 0.15;
+          const ng = buildTaperedTube(curve, 32, 8, baseThick * pulse, baseThick * 0.06);
+          mesh.geometry.dispose();
+          mesh.geometry = ng;
+        });
+
+        // --- TENTACLE EYES (mostly open — low blink threshold) ---
+        tentacleEyes.forEach((te) => {
+          const tent = tentacles[te.tentacleIdx];
+          if (!tent.curve) return;
+          const pt = tent.curve.getPointAt(Math.min(te.tPos, 0.99));
+          const tan = tent.curve.getTangentAt(Math.min(te.tPos, 0.99));
+          const up = new THREE.Vector3(0, 1, 0);
+          const side = new THREE.Vector3().crossVectors(tan, up).normalize();
+          const localR = tent.baseThick * (1 - te.tPos * te.tPos) + tent.baseThick * 0.06;
+          te.mesh.position.set(
+            pt.x + side.x * localR * 1.2,
+            pt.y + side.y * localR * 1.2 + 0.2,
+            pt.z + side.z * localR * 1.2,
+          );
+          te.mesh.lookAt(
+            te.mesh.position.x + side.x * 2 + mouse.x,
+            te.mesh.position.y + mouse.y * 0.5,
+            te.mesh.position.z + side.z * 2 + 1,
+          );
+          // Eyes mostly open — blink is brief
+          const bc = Math.sin(t * te.blinkSpeed + te.blinkPhase);
+          const open = bc > -0.7 ? Math.min(1, (bc + 0.7) / 0.3) : 0;
+          te.mesh.material.opacity = open * 0.95;
+        });
+
+        // --- BODY EYES (surface-breathing but NOT rotating with sphere) ---
+        bodyEyes.forEach((eye) => {
+          // Apply fbm deformation for organic breathing, but no body rotation
+          const ox = eye.basePos.x,
+            oy = eye.basePos.y - 0.2,
+            oz = eye.basePos.z;
+          const n = fbm(ox * 1.5 + t * 0.3, oy * 1.5 + t * 0.25, oz * 1.5 + t * 0.2, 3);
+          const breathe = 1.0 + n * 0.08; // subtle surface breathing only
+          eye.mesh.position.set(
+            eye.basePos.x * breathe,
+            eye.basePos.y + (breathe - 1) * oy * 0.5,
+            eye.basePos.z * breathe,
+          );
+
+          const bc = Math.sin(t * eye.blinkSpeed + eye.blinkPhase);
+          const open = bc > -0.7 ? Math.min(1, (bc + 0.7) / 0.3) : 0;
+          eye.mesh.material.opacity = open * 0.95;
+          eye.mesh.lookAt(
+            eye.mesh.position.x + mouse.x * 2,
+            eye.mesh.position.y + mouse.y * 2,
+            eye.mesh.position.z + 3,
+          );
+        });
+
+        // --- FACE breathing ---
+        faceMesh.position.z = 0.08 + Math.sin(t * 0.4) * 0.01;
+
+        // --- PALANTÍR (swirling red/blue, dynamic) ---
+        const pBase = 0.5 + Math.sin(t * 1.5) * 0.2;
+        const flick = Math.sin(t * 7.3) * Math.sin(t * 11.1) * Math.sin(t * 5.7);
+        core.material.opacity = pBase + flick * 0.15 + summonIntensity * 0.3;
+        // Swirl between red and blue
+        const colorPhase = t * 0.8;
+        const cR = 0.45 + Math.sin(colorPhase) * 0.35 + summonIntensity * 0.2;
+        const cG = 0.15 + Math.sin(colorPhase * 1.3) * 0.1;
+        const cB = 0.55 + Math.cos(colorPhase) * 0.35 + summonIntensity * 0.15;
+        core.material.color.setRGB(cR, cG, cB);
+        // Swirl orbs orbit inside
+        swirlOrbs.forEach((o) => {
+          o.angle += o.speed * 0.016;
+          o.mesh.position.set(
+            Math.cos(o.angle) * o.radius,
+            Math.sin(o.angle) * o.radius * Math.cos(o.tilt),
+            Math.sin(o.angle) * o.radius * Math.sin(o.tilt),
+          );
+          o.mesh.material.opacity = 0.5 + Math.sin(t * 2 + o.angle) * 0.3 + summonIntensity * 0.3;
+        });
+        gs.scale.setScalar(2.2 + Math.sin(t * 1.5) * 0.6 + flick * 0.3 + summonIntensity * 1.5);
+        gsMat.opacity =
+          0.3 + Math.sin(t * 1.5) * 0.15 + Math.abs(flick) * 0.1 + summonIntensity * 0.3;
+        palantirLight.intensity =
+          2.0 + Math.sin(t * 1.5) * 0.8 + flick * 0.5 + summonIntensity * 3.0;
+        palantirLight.position.copy(PALANTIR_POS).y -= 0.3;
+        const blueBurst =
+          Math.max(0, Math.sin(t * 4.3) * Math.sin(t * 9.7) - 0.6) * 5.0 + summonIntensity * 2.0;
+        blueFlicker.intensity = blueBurst;
+        blueFlicker.position.x = PALANTIR_POS.x + Math.sin(t * 3.1) * 0.15;
+        blueFlicker.position.y = PALANTIR_POS.y + Math.cos(t * 2.7) * 0.1;
+        const redBurst =
+          Math.max(0, Math.sin(t * 2.1) * Math.sin(t * 6.3) - 0.5) * 3.0 + summonIntensity * 2.0;
+        redFlicker.intensity = redBurst;
+        redFlicker.position.x = PALANTIR_POS.x + Math.cos(t * 2.3) * 0.15;
+        redFlicker.position.y = PALANTIR_POS.y + Math.sin(t * 3.9) * 0.1;
+        const spark =
+          Math.max(0, Math.sin(t * 13.7) * Math.sin(t * 17.3) - 0.85) * 12.0 +
+          summonIntensity * 4.0;
+        whiteGlint.intensity = spark;
+        palantir.rotation.y = t * 0.2;
+        palantir.rotation.x = Math.sin(t * 0.3) * 0.05;
+
+        // --- PARTICLES ---
+        const pa = parts.geometry.attributes.position.array;
+        for (let i = 0; i < partCount; i++) {
+          pa[i * 3] += ps[i].vx;
+          pa[i * 3 + 1] += ps[i].vy;
+          pa[i * 3 + 2] += ps[i].vz;
+          if (Math.abs(pa[i * 3 + 1]) > 3) {
+            pa[i * 3] = (Math.random() - 0.5) * 5;
+            pa[i * 3 + 1] = -3;
+            pa[i * 3 + 2] = (Math.random() - 0.5) * 4;
+          }
+        }
+        parts.geometry.attributes.position.needsUpdate = true;
+
+        // --- CAMERA ---
+        camera.position.x = mouse.x * 0.4;
+        camera.position.y = 0.3 + mouse.y * 0.25;
+        camera.lookAt(0, 0.1, 0);
+
+        renderer.render(scene, camera);
+      }
+      animate();
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
 </html>

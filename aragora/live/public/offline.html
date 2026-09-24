@@ -1,69 +1,118 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0a0a0a">
-  <title>Aragora - Offline</title>
-  <style>
-    :root {
-      --bg: #0a0a0a;
-      --surface: #0d0d0d;
-      --text: #e0e0e0;
-      --text-muted: #9a9a9a;
-      --accent: #39ff14;
-      --border: #1a1a1a;
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'JetBrains Mono', monospace;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-    .container { max-width: 400px; text-align: center; }
-    .icon { font-size: 64px; margin-bottom: 24px; animation: pulse 2s ease-in-out infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
-    h1 { font-size: 24px; color: var(--accent); margin-bottom: 12px; }
-    p { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 32px; }
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
-    .item { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; }
-    .item:not(:last-child) { border-bottom: 1px solid var(--border); }
-    .label { color: var(--text-muted); }
-    .saved { color: var(--accent); }
-    button {
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      padding: 14px 32px;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      width: 100%;
-      max-width: 240px;
-    }
-    button:hover { box-shadow: 0 0 20px rgba(57, 255, 20, 0.3); }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="icon">📡</div>
-    <h1>You're Offline</h1>
-    <p>Don't worry - your work is safe.<br>We'll sync when you're back online.</p>
-    <div class="card">
-      <div class="item"><span class="label">Connection</span><span>Offline</span></div>
-      <div class="item"><span class="label">Local Data</span><span class="saved">Saved</span></div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>Aragora - Offline</title>
+    <style>
+      :root {
+        --bg: #0a0a0a;
+        --surface: #0d0d0d;
+        --text: #e0e0e0;
+        --text-muted: #9a9a9a;
+        --accent: #39ff14;
+        --border: #1a1a1a;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: 'JetBrains Mono', monospace;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .container {
+        max-width: 400px;
+        text-align: center;
+      }
+      .icon {
+        font-size: 64px;
+        margin-bottom: 24px;
+        animation: pulse 2s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
+      h1 {
+        font-size: 24px;
+        color: var(--accent);
+        margin-bottom: 12px;
+      }
+      p {
+        font-size: 14px;
+        color: var(--text-muted);
+        line-height: 1.6;
+        margin-bottom: 32px;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 24px;
+      }
+      .item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        font-size: 13px;
+      }
+      .item:not(:last-child) {
+        border-bottom: 1px solid var(--border);
+      }
+      .label {
+        color: var(--text-muted);
+      }
+      .saved {
+        color: var(--accent);
+      }
+      button {
+        background: var(--accent);
+        color: var(--bg);
+        border: none;
+        padding: 14px 32px;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+        max-width: 240px;
+      }
+      button:hover {
+        box-shadow: 0 0 20px rgba(57, 255, 20, 0.3);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon">📡</div>
+      <h1>You're Offline</h1>
+      <p>Don't worry - your work is safe.<br />We'll sync when you're back online.</p>
+      <div class="card">
+        <div class="item"><span class="label">Connection</span><span>Offline</span></div>
+        <div class="item">
+          <span class="label">Local Data</span><span class="saved">Saved</span>
+        </div>
+      </div>
+      <button onclick="location.reload()">Retry Connection</button>
     </div>
-    <button onclick="location.reload()">Retry Connection</button>
-  </div>
-  <script>
-    window.addEventListener('online', () => location.reload());
-  </script>
-</body>
+    <script>
+      window.addEventListener('online', () => location.reload());
+    </script>
+  </body>
 </html>

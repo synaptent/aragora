@@ -29,11 +29,13 @@ export function ConfigHealthBanner() {
     const host = window.location.hostname;
     const isPagesMirror = host.endsWith('.pages.dev');
     const domainWarning: EnvWarning[] = isPagesMirror
-      ? [{
-          key: 'HOST',
-          message: `Preview mirror detected (${host}); use https://${CANONICAL_DOMAIN} for canonical production`,
-          severity: 'warning',
-        }]
+      ? [
+          {
+            key: 'HOST',
+            message: `Preview mirror detected (${host}); use https://${CANONICAL_DOMAIN} for canonical production`,
+            severity: 'warning',
+          },
+        ]
       : [];
     const allWarnings = [...envWarnings, ...domainWarning];
     setWarnings(allWarnings);

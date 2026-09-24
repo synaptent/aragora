@@ -66,10 +66,10 @@ export class PanelErrorBoundary extends Component<Props, State> {
           aria-live="assertive"
         >
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-red-400 text-lg" aria-hidden="true">!</span>
-            <h3 className="text-sm font-medium text-red-400">
-              {this.props.panelName} Error
-            </h3>
+            <span className="text-red-400 text-lg" aria-hidden="true">
+              !
+            </span>
+            <h3 className="text-sm font-medium text-red-400">{this.props.panelName} Error</h3>
           </div>
           <p className="text-xs text-text-muted mb-3">
             This panel encountered an error and couldn&apos;t render.
@@ -104,7 +104,7 @@ export class PanelErrorBoundary extends Component<Props, State> {
  */
 export function withErrorBoundary<P extends object>(
   WrappedComponent: React.ComponentType<P>,
-  panelName: string
+  panelName: string,
 ) {
   return function WithErrorBoundary(props: P) {
     return (

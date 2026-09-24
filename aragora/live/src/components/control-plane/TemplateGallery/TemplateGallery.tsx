@@ -28,21 +28,65 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
   {
     id: 'template_legal_contract_review',
     name: 'Contract Review',
-    description: 'Multi-agent review of contract documents with legal analysis, risk assessment, and compliance verification',
+    description:
+      'Multi-agent review of contract documents with legal analysis, risk assessment, and compliance verification',
     version: '1.0.0',
     category: 'legal',
     tags: ['legal', 'contracts', 'review', 'compliance', 'risk-assessment'],
     steps: [
-      { id: 'extract_terms', name: 'Extract Key Terms', step_type: 'agent', description: 'Extract important terms, clauses, and obligations' },
-      { id: 'legal_debate', name: 'Legal Analysis Debate', step_type: 'debate', description: 'Multi-agent debate on legal implications' },
-      { id: 'risk_assessment', name: 'Risk Assessment', step_type: 'decision', description: 'Evaluate risk level and route accordingly' },
-      { id: 'human_review', name: 'Human Legal Review', step_type: 'human_checkpoint', description: 'Senior legal counsel review for high-risk contracts' },
-      { id: 'senior_review', name: 'Senior Review', step_type: 'human_checkpoint', description: 'Senior review for medium-risk contracts' },
-      { id: 'auto_approve', name: 'Auto-Approve', step_type: 'task', description: 'Automatically approve low-risk contracts' },
-      { id: 'store_result', name: 'Store Analysis', step_type: 'memory_write', description: 'Store contract analysis in Knowledge Mound' },
+      {
+        id: 'extract_terms',
+        name: 'Extract Key Terms',
+        step_type: 'agent',
+        description: 'Extract important terms, clauses, and obligations',
+      },
+      {
+        id: 'legal_debate',
+        name: 'Legal Analysis Debate',
+        step_type: 'debate',
+        description: 'Multi-agent debate on legal implications',
+      },
+      {
+        id: 'risk_assessment',
+        name: 'Risk Assessment',
+        step_type: 'decision',
+        description: 'Evaluate risk level and route accordingly',
+      },
+      {
+        id: 'human_review',
+        name: 'Human Legal Review',
+        step_type: 'human_checkpoint',
+        description: 'Senior legal counsel review for high-risk contracts',
+      },
+      {
+        id: 'senior_review',
+        name: 'Senior Review',
+        step_type: 'human_checkpoint',
+        description: 'Senior review for medium-risk contracts',
+      },
+      {
+        id: 'auto_approve',
+        name: 'Auto-Approve',
+        step_type: 'task',
+        description: 'Automatically approve low-risk contracts',
+      },
+      {
+        id: 'store_result',
+        name: 'Store Analysis',
+        step_type: 'memory_write',
+        description: 'Store contract analysis in Knowledge Mound',
+      },
     ],
-    inputs: { document: 'Contract document to review', jurisdiction: 'Applicable jurisdiction (optional)', contract_type: 'Type of contract (optional)' },
-    outputs: { analysis: 'Complete contract analysis', risk_score: 'Risk assessment score', recommendations: 'List of recommendations' },
+    inputs: {
+      document: 'Contract document to review',
+      jurisdiction: 'Applicable jurisdiction (optional)',
+      contract_type: 'Type of contract (optional)',
+    },
+    outputs: {
+      analysis: 'Complete contract analysis',
+      risk_score: 'Risk assessment score',
+      recommendations: 'List of recommendations',
+    },
     complexity: 'complex',
   },
   {
@@ -53,14 +97,46 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'legal',
     tags: ['legal', 'due-diligence', 'm&a', 'investment', 'risk'],
     steps: [
-      { id: 'document_collection', name: 'Document Collection', step_type: 'task', description: 'Gather all relevant documents' },
-      { id: 'financial_analysis', name: 'Financial Analysis', step_type: 'agent', description: 'Analyze financial statements' },
-      { id: 'legal_review', name: 'Legal Review', step_type: 'debate', description: 'Multi-agent legal review' },
-      { id: 'risk_assessment', name: 'Risk Assessment', step_type: 'decision', description: 'Evaluate overall risk' },
-      { id: 'report_generation', name: 'Generate Report', step_type: 'task', description: 'Generate final report' },
+      {
+        id: 'document_collection',
+        name: 'Document Collection',
+        step_type: 'task',
+        description: 'Gather all relevant documents',
+      },
+      {
+        id: 'financial_analysis',
+        name: 'Financial Analysis',
+        step_type: 'agent',
+        description: 'Analyze financial statements',
+      },
+      {
+        id: 'legal_review',
+        name: 'Legal Review',
+        step_type: 'debate',
+        description: 'Multi-agent legal review',
+      },
+      {
+        id: 'risk_assessment',
+        name: 'Risk Assessment',
+        step_type: 'decision',
+        description: 'Evaluate overall risk',
+      },
+      {
+        id: 'report_generation',
+        name: 'Generate Report',
+        step_type: 'task',
+        description: 'Generate final report',
+      },
     ],
-    inputs: { target_company: 'Company being evaluated', deal_type: 'Type of deal (M&A, investment, etc.)' },
-    outputs: { report: 'Due diligence report', risk_rating: 'Overall risk rating', recommendations: 'Investment recommendations' },
+    inputs: {
+      target_company: 'Company being evaluated',
+      deal_type: 'Type of deal (M&A, investment, etc.)',
+    },
+    outputs: {
+      report: 'Due diligence report',
+      risk_rating: 'Overall risk rating',
+      recommendations: 'Investment recommendations',
+    },
     complexity: 'complex',
   },
   {
@@ -71,14 +147,43 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'healthcare',
     tags: ['healthcare', 'hipaa', 'compliance', 'privacy', 'phi'],
     steps: [
-      { id: 'data_scan', name: 'PHI Data Scan', step_type: 'agent', description: 'Scan for protected health information' },
-      { id: 'compliance_check', name: 'Compliance Analysis', step_type: 'debate', description: 'Multi-agent HIPAA compliance analysis' },
-      { id: 'violation_detection', name: 'Violation Detection', step_type: 'decision', description: 'Identify potential violations' },
-      { id: 'remediation', name: 'Remediation Steps', step_type: 'human_checkpoint', description: 'Human review of remediation steps' },
-      { id: 'audit_log', name: 'Audit Logging', step_type: 'memory_write', description: 'Log compliance audit results' },
+      {
+        id: 'data_scan',
+        name: 'PHI Data Scan',
+        step_type: 'agent',
+        description: 'Scan for protected health information',
+      },
+      {
+        id: 'compliance_check',
+        name: 'Compliance Analysis',
+        step_type: 'debate',
+        description: 'Multi-agent HIPAA compliance analysis',
+      },
+      {
+        id: 'violation_detection',
+        name: 'Violation Detection',
+        step_type: 'decision',
+        description: 'Identify potential violations',
+      },
+      {
+        id: 'remediation',
+        name: 'Remediation Steps',
+        step_type: 'human_checkpoint',
+        description: 'Human review of remediation steps',
+      },
+      {
+        id: 'audit_log',
+        name: 'Audit Logging',
+        step_type: 'memory_write',
+        description: 'Log compliance audit results',
+      },
     ],
     inputs: { data_source: 'Data source to audit', audit_scope: 'Scope of compliance check' },
-    outputs: { compliance_score: 'HIPAA compliance score', violations: 'List of violations', remediation_plan: 'Remediation plan' },
+    outputs: {
+      compliance_score: 'HIPAA compliance score',
+      violations: 'List of violations',
+      remediation_plan: 'Remediation plan',
+    },
     complexity: 'moderate',
   },
   {
@@ -89,13 +194,37 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'healthcare',
     tags: ['healthcare', 'clinical', 'guidelines', 'evidence', 'treatment'],
     steps: [
-      { id: 'evidence_gathering', name: 'Evidence Gathering', step_type: 'memory_read', description: 'Gather relevant clinical evidence' },
-      { id: 'guideline_analysis', name: 'Guideline Analysis', step_type: 'agent', description: 'Analyze current guidelines' },
-      { id: 'expert_debate', name: 'Expert Debate', step_type: 'debate', description: 'Multi-agent clinical debate' },
-      { id: 'recommendation', name: 'Generate Recommendations', step_type: 'task', description: 'Generate treatment recommendations' },
+      {
+        id: 'evidence_gathering',
+        name: 'Evidence Gathering',
+        step_type: 'memory_read',
+        description: 'Gather relevant clinical evidence',
+      },
+      {
+        id: 'guideline_analysis',
+        name: 'Guideline Analysis',
+        step_type: 'agent',
+        description: 'Analyze current guidelines',
+      },
+      {
+        id: 'expert_debate',
+        name: 'Expert Debate',
+        step_type: 'debate',
+        description: 'Multi-agent clinical debate',
+      },
+      {
+        id: 'recommendation',
+        name: 'Generate Recommendations',
+        step_type: 'task',
+        description: 'Generate treatment recommendations',
+      },
     ],
     inputs: { condition: 'Medical condition', current_guidelines: 'Current treatment guidelines' },
-    outputs: { analysis: 'Clinical analysis', recommendations: 'Updated recommendations', evidence_summary: 'Evidence summary' },
+    outputs: {
+      analysis: 'Clinical analysis',
+      recommendations: 'Updated recommendations',
+      evidence_summary: 'Evidence summary',
+    },
     complexity: 'moderate',
   },
   {
@@ -106,11 +235,36 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'finance',
     tags: ['finance', 'audit', 'accounting', 'compliance', 'statements'],
     steps: [
-      { id: 'data_extraction', name: 'Data Extraction', step_type: 'task', description: 'Extract financial data' },
-      { id: 'anomaly_detection', name: 'Anomaly Detection', step_type: 'agent', description: 'Detect financial anomalies' },
-      { id: 'audit_debate', name: 'Audit Analysis', step_type: 'debate', description: 'Multi-agent audit analysis' },
-      { id: 'materiality_check', name: 'Materiality Assessment', step_type: 'decision', description: 'Assess materiality of findings' },
-      { id: 'report', name: 'Audit Report', step_type: 'task', description: 'Generate audit report' },
+      {
+        id: 'data_extraction',
+        name: 'Data Extraction',
+        step_type: 'task',
+        description: 'Extract financial data',
+      },
+      {
+        id: 'anomaly_detection',
+        name: 'Anomaly Detection',
+        step_type: 'agent',
+        description: 'Detect financial anomalies',
+      },
+      {
+        id: 'audit_debate',
+        name: 'Audit Analysis',
+        step_type: 'debate',
+        description: 'Multi-agent audit analysis',
+      },
+      {
+        id: 'materiality_check',
+        name: 'Materiality Assessment',
+        step_type: 'decision',
+        description: 'Assess materiality of findings',
+      },
+      {
+        id: 'report',
+        name: 'Audit Report',
+        step_type: 'task',
+        description: 'Generate audit report',
+      },
     ],
     inputs: { financial_statements: 'Financial statements to audit', period: 'Audit period' },
     outputs: { audit_report: 'Audit report', findings: 'Audit findings', opinion: 'Audit opinion' },
@@ -124,13 +278,37 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'code',
     tags: ['code', 'review', 'quality', 'security', 'best-practices'],
     steps: [
-      { id: 'static_analysis', name: 'Static Analysis', step_type: 'agent', description: 'Run static code analysis' },
-      { id: 'security_scan', name: 'Security Scan', step_type: 'agent', description: 'Check for security vulnerabilities' },
-      { id: 'review_debate', name: 'Review Discussion', step_type: 'debate', description: 'Multi-agent code review discussion' },
-      { id: 'feedback', name: 'Generate Feedback', step_type: 'task', description: 'Generate review feedback' },
+      {
+        id: 'static_analysis',
+        name: 'Static Analysis',
+        step_type: 'agent',
+        description: 'Run static code analysis',
+      },
+      {
+        id: 'security_scan',
+        name: 'Security Scan',
+        step_type: 'agent',
+        description: 'Check for security vulnerabilities',
+      },
+      {
+        id: 'review_debate',
+        name: 'Review Discussion',
+        step_type: 'debate',
+        description: 'Multi-agent code review discussion',
+      },
+      {
+        id: 'feedback',
+        name: 'Generate Feedback',
+        step_type: 'task',
+        description: 'Generate review feedback',
+      },
     ],
     inputs: { code: 'Code to review', language: 'Programming language', context: 'Code context' },
-    outputs: { issues: 'Identified issues', suggestions: 'Improvement suggestions', quality_score: 'Code quality score' },
+    outputs: {
+      issues: 'Identified issues',
+      suggestions: 'Improvement suggestions',
+      quality_score: 'Code quality score',
+    },
     complexity: 'moderate',
   },
   {
@@ -141,14 +319,43 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'code',
     tags: ['security', 'audit', 'vulnerabilities', 'owasp', 'penetration'],
     steps: [
-      { id: 'vulnerability_scan', name: 'Vulnerability Scan', step_type: 'agent', description: 'Automated vulnerability scanning' },
-      { id: 'threat_modeling', name: 'Threat Modeling', step_type: 'debate', description: 'Multi-agent threat analysis' },
-      { id: 'risk_rating', name: 'Risk Rating', step_type: 'decision', description: 'Rate security risks' },
-      { id: 'human_review', name: 'Security Review', step_type: 'human_checkpoint', description: 'Human security expert review' },
-      { id: 'report', name: 'Security Report', step_type: 'task', description: 'Generate security report' },
+      {
+        id: 'vulnerability_scan',
+        name: 'Vulnerability Scan',
+        step_type: 'agent',
+        description: 'Automated vulnerability scanning',
+      },
+      {
+        id: 'threat_modeling',
+        name: 'Threat Modeling',
+        step_type: 'debate',
+        description: 'Multi-agent threat analysis',
+      },
+      {
+        id: 'risk_rating',
+        name: 'Risk Rating',
+        step_type: 'decision',
+        description: 'Rate security risks',
+      },
+      {
+        id: 'human_review',
+        name: 'Security Review',
+        step_type: 'human_checkpoint',
+        description: 'Human security expert review',
+      },
+      {
+        id: 'report',
+        name: 'Security Report',
+        step_type: 'task',
+        description: 'Generate security report',
+      },
     ],
     inputs: { target: 'Target system or application', scope: 'Audit scope' },
-    outputs: { vulnerabilities: 'Identified vulnerabilities', risk_rating: 'Overall risk rating', remediation: 'Remediation steps' },
+    outputs: {
+      vulnerabilities: 'Identified vulnerabilities',
+      risk_rating: 'Overall risk rating',
+      remediation: 'Remediation steps',
+    },
     complexity: 'complex',
   },
   {
@@ -159,13 +366,37 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'compliance',
     tags: ['compliance', 'regulatory', 'assessment', 'soc2', 'gdpr'],
     steps: [
-      { id: 'framework_selection', name: 'Framework Selection', step_type: 'task', description: 'Select compliance frameworks' },
-      { id: 'gap_analysis', name: 'Gap Analysis', step_type: 'agent', description: 'Identify compliance gaps' },
-      { id: 'compliance_debate', name: 'Compliance Analysis', step_type: 'debate', description: 'Multi-agent compliance discussion' },
-      { id: 'action_plan', name: 'Action Plan', step_type: 'task', description: 'Generate remediation plan' },
+      {
+        id: 'framework_selection',
+        name: 'Framework Selection',
+        step_type: 'task',
+        description: 'Select compliance frameworks',
+      },
+      {
+        id: 'gap_analysis',
+        name: 'Gap Analysis',
+        step_type: 'agent',
+        description: 'Identify compliance gaps',
+      },
+      {
+        id: 'compliance_debate',
+        name: 'Compliance Analysis',
+        step_type: 'debate',
+        description: 'Multi-agent compliance discussion',
+      },
+      {
+        id: 'action_plan',
+        name: 'Action Plan',
+        step_type: 'task',
+        description: 'Generate remediation plan',
+      },
     ],
     inputs: { organization: 'Organization details', frameworks: 'Target compliance frameworks' },
-    outputs: { gaps: 'Identified gaps', compliance_score: 'Compliance score', action_plan: 'Remediation action plan' },
+    outputs: {
+      gaps: 'Identified gaps',
+      compliance_score: 'Compliance score',
+      action_plan: 'Remediation action plan',
+    },
     complexity: 'moderate',
   },
   {
@@ -176,13 +407,37 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'academic',
     tags: ['academic', 'citations', 'verification', 'research', 'references'],
     steps: [
-      { id: 'extract_citations', name: 'Extract Citations', step_type: 'agent', description: 'Extract all citations from document' },
-      { id: 'verify_sources', name: 'Verify Sources', step_type: 'agent', description: 'Verify citation sources' },
-      { id: 'accuracy_check', name: 'Accuracy Check', step_type: 'debate', description: 'Multi-agent accuracy verification' },
-      { id: 'report', name: 'Verification Report', step_type: 'task', description: 'Generate verification report' },
+      {
+        id: 'extract_citations',
+        name: 'Extract Citations',
+        step_type: 'agent',
+        description: 'Extract all citations from document',
+      },
+      {
+        id: 'verify_sources',
+        name: 'Verify Sources',
+        step_type: 'agent',
+        description: 'Verify citation sources',
+      },
+      {
+        id: 'accuracy_check',
+        name: 'Accuracy Check',
+        step_type: 'debate',
+        description: 'Multi-agent accuracy verification',
+      },
+      {
+        id: 'report',
+        name: 'Verification Report',
+        step_type: 'task',
+        description: 'Generate verification report',
+      },
     ],
     inputs: { document: 'Academic document', citation_style: 'Citation style (APA, MLA, etc.)' },
-    outputs: { verified_citations: 'Verified citations', issues: 'Citation issues', report: 'Verification report' },
+    outputs: {
+      verified_citations: 'Verified citations',
+      issues: 'Citation issues',
+      report: 'Verification report',
+    },
     complexity: 'simple',
   },
   {
@@ -193,14 +448,38 @@ const MOCK_TEMPLATES: WorkflowTemplate[] = [
     category: 'general',
     tags: ['research', 'analysis', 'general', 'investigation'],
     steps: [
-      { id: 'gather_info', name: 'Information Gathering', step_type: 'memory_read', description: 'Gather relevant information' },
-      { id: 'analysis', name: 'Analysis', step_type: 'agent', description: 'Analyze gathered information' },
-      { id: 'debate', name: 'Research Debate', step_type: 'debate', description: 'Multi-agent research discussion' },
+      {
+        id: 'gather_info',
+        name: 'Information Gathering',
+        step_type: 'memory_read',
+        description: 'Gather relevant information',
+      },
+      {
+        id: 'analysis',
+        name: 'Analysis',
+        step_type: 'agent',
+        description: 'Analyze gathered information',
+      },
+      {
+        id: 'debate',
+        name: 'Research Debate',
+        step_type: 'debate',
+        description: 'Multi-agent research discussion',
+      },
       { id: 'synthesis', name: 'Synthesis', step_type: 'task', description: 'Synthesize findings' },
-      { id: 'store', name: 'Store Results', step_type: 'memory_write', description: 'Store research results' },
+      {
+        id: 'store',
+        name: 'Store Results',
+        step_type: 'memory_write',
+        description: 'Store research results',
+      },
     ],
     inputs: { topic: 'Research topic', scope: 'Research scope' },
-    outputs: { findings: 'Research findings', analysis: 'Analysis summary', recommendations: 'Recommendations' },
+    outputs: {
+      findings: 'Research findings',
+      analysis: 'Analysis summary',
+      recommendations: 'Recommendations',
+    },
     complexity: 'simple',
   },
 ];
@@ -245,7 +524,9 @@ export function TemplateGallery({
     setError(null);
 
     try {
-      const response = await api.get('/api/workflow-templates') as { templates: WorkflowTemplate[] };
+      const response = (await api.get('/api/workflow-templates')) as {
+        templates: WorkflowTemplate[];
+      };
       if (response.templates && response.templates.length > 0) {
         setTemplates(response.templates);
       }
@@ -277,7 +558,7 @@ export function TemplateGallery({
         (t) =>
           t.name.toLowerCase().includes(query) ||
           t.description.toLowerCase().includes(query) ||
-          t.tags.some((tag) => tag.toLowerCase().includes(query))
+          t.tags.some((tag) => tag.toLowerCase().includes(query)),
       );
     }
 
@@ -308,7 +589,7 @@ export function TemplateGallery({
       setSelectedTemplate(template);
       onSelectTemplate?.(template);
     },
-    [onSelectTemplate]
+    [onSelectTemplate],
   );
 
   // Handle instantiate
@@ -321,7 +602,7 @@ export function TemplateGallery({
         router.push(`/workflows/builder?template=${template.id}`);
       }
     },
-    [onInstantiate, router]
+    [onInstantiate, router],
   );
 
   // Count by category
@@ -388,7 +669,7 @@ export function TemplateGallery({
       {/* Template grid */}
       {filteredTemplates.length === 0 ? (
         <div className="text-center py-8">
-          <div className="text-4xl mb-2">  </div>
+          <div className="text-4xl mb-2"> </div>
           <p className="text-text-muted">No templates found</p>
           {searchQuery && (
             <button

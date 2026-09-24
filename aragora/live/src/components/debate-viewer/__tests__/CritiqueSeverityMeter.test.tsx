@@ -11,14 +11,16 @@ jest.mock('@/utils/agentColors', () => ({
   }),
 }));
 
-const createCritiqueEvent = (overrides: Partial<{
-  agent: string;
-  target: string;
-  severity: number;
-  issues: string[];
-  round: number;
-  timestamp: number;
-}> = {}): StreamEvent => ({
+const createCritiqueEvent = (
+  overrides: Partial<{
+    agent: string;
+    target: string;
+    severity: number;
+    issues: string[];
+    round: number;
+    timestamp: number;
+  }> = {},
+): StreamEvent => ({
   type: 'critique',
   round: overrides.round ?? 1,
   timestamp: overrides.timestamp ?? Date.now(),
@@ -60,9 +62,7 @@ describe('CritiqueSeverityMeter', () => {
     });
 
     it('displays singular critique count', () => {
-      const events = [
-        createCritiqueEvent({ agent: 'claude', target: 'gpt4', severity: 5 }),
-      ];
+      const events = [createCritiqueEvent({ agent: 'claude', target: 'gpt4', severity: 5 })];
 
       render(<CritiqueSeverityMeter events={events} agents={mockAgents} />);
 
@@ -70,10 +70,7 @@ describe('CritiqueSeverityMeter', () => {
     });
 
     it('calculates and displays average severity', () => {
-      const events = [
-        createCritiqueEvent({ severity: 4 }),
-        createCritiqueEvent({ severity: 6 }),
-      ];
+      const events = [createCritiqueEvent({ severity: 4 }), createCritiqueEvent({ severity: 6 })];
 
       render(<CritiqueSeverityMeter events={events} agents={mockAgents} />);
 
@@ -142,9 +139,7 @@ describe('CritiqueSeverityMeter', () => {
 
   describe('recent issues', () => {
     it('displays recent issues section', () => {
-      const events = [
-        createCritiqueEvent({ issues: ['First issue'] }),
-      ];
+      const events = [createCritiqueEvent({ issues: ['First issue'] })];
 
       render(<CritiqueSeverityMeter events={events} agents={mockAgents} />);
 
@@ -152,9 +147,7 @@ describe('CritiqueSeverityMeter', () => {
     });
 
     it('shows first issue from critique', () => {
-      const events = [
-        createCritiqueEvent({ issues: ['Argument lacks evidence', 'Second issue'] }),
-      ];
+      const events = [createCritiqueEvent({ issues: ['Argument lacks evidence', 'Second issue'] })];
 
       render(<CritiqueSeverityMeter events={events} agents={mockAgents} />);
 
@@ -179,9 +172,7 @@ describe('CritiqueSeverityMeter', () => {
     });
 
     it('displays agent arrow notation', () => {
-      const events = [
-        createCritiqueEvent({ agent: 'claude', target: 'gpt4' }),
-      ];
+      const events = [createCritiqueEvent({ agent: 'claude', target: 'gpt4' })];
 
       render(<CritiqueSeverityMeter events={events} agents={mockAgents} />);
 
@@ -205,17 +196,19 @@ describe('CritiqueSeverityMeter', () => {
 
   describe('default severity', () => {
     it('uses default severity of 5 when not provided', () => {
-      const events: StreamEvent[] = [{
-        type: 'critique',
-        round: 1,
-        timestamp: Date.now(),
-        data: {
-          agent: 'claude',
-          target: 'gpt4',
-          // severity not provided
-          issues: [],
+      const events: StreamEvent[] = [
+        {
+          type: 'critique',
+          round: 1,
+          timestamp: Date.now(),
+          data: {
+            agent: 'claude',
+            target: 'gpt4',
+            // severity not provided
+            issues: [],
+          },
         },
-      }];
+      ];
 
       render(<CritiqueSeverityMeter events={events} agents={mockAgents} />);
 

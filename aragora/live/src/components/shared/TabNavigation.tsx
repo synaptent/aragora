@@ -25,17 +25,11 @@ export function TabNavigation({
   className = '',
   ariaLabel = 'Tab navigation',
 }: TabNavigationProps) {
-  const buttonClass = variant === 'compact'
-    ? 'px-2 py-0.5 text-xs'
-    : 'px-3 py-1 text-sm';
+  const buttonClass = variant === 'compact' ? 'px-2 py-0.5 text-xs' : 'px-3 py-1 text-sm';
 
   return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className={`flex gap-1 mb-4 ${className}`}
-    >
-      {tabs.map(tab => (
+    <div role="tablist" aria-label={ariaLabel} className={`flex gap-1 mb-4 ${className}`}>
+      {tabs.map((tab) => (
         <button
           key={tab.id}
           role="tab"

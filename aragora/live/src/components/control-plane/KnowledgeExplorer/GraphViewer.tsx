@@ -5,7 +5,12 @@ import * as d3Force from 'd3-force';
 import * as d3Selection from 'd3-selection';
 import * as d3Zoom from 'd3-zoom';
 import * as d3Drag from 'd3-drag';
-import type { GraphNode, GraphEdge, NodeType, RelationshipType } from '@/store/knowledgeExplorerStore';
+import type {
+  GraphNode,
+  GraphEdge,
+  NodeType,
+  RelationshipType,
+} from '@/store/knowledgeExplorerStore';
 
 export interface GraphViewerProps {
   /** Graph nodes */
@@ -34,12 +39,12 @@ export interface GraphViewerProps {
 
 // Color schemes
 const nodeTypeColors: Record<NodeType, string> = {
-  fact: '#39ff14',      // acid-green
-  claim: '#60a5fa',     // blue
-  memory: '#a855f7',    // purple
-  evidence: '#fbbf24',  // yellow
+  fact: '#39ff14', // acid-green
+  claim: '#60a5fa', // blue
+  memory: '#a855f7', // purple
+  evidence: '#fbbf24', // yellow
   consensus: '#00ffff', // acid-cyan
-  entity: '#f97316',    // orange
+  entity: '#f97316', // orange
 };
 
 const edgeTypeColors: Record<RelationshipType, string> = {
@@ -83,11 +88,7 @@ export function GraphViewer({
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
     return edges
       .filter((e) => nodeMap.has(e.source) && nodeMap.has(e.target))
-      .map((e) => ({
-        ...e,
-        source: e.source,
-        target: e.target,
-      }));
+      .map((e) => ({ ...e, source: e.source, target: e.target }));
   }, [nodes, edges]);
 
   // Initialize and update D3 visualization
@@ -138,7 +139,7 @@ export function GraphViewer({
         d3Force
           .forceLink<GraphNode, GraphEdge>(linkData)
           .id((d) => d.id)
-          .distance(100)
+          .distance(100),
       )
       .force('charge', d3Force.forceManyBody().strength(-300))
       .force('center', d3Force.forceCenter(width / 2, height / 2))
@@ -177,13 +178,11 @@ export function GraphViewer({
         d.id === selectedNodeId
           ? '#fff'
           : d.id === hoveredNodeId
-          ? 'rgba(255,255,255,0.5)'
-          : 'none'
+            ? 'rgba(255,255,255,0.5)'
+            : 'none',
       )
       .attr('stroke-width', 2)
-      .attr('opacity', (d) =>
-        d.id === selectedNodeId || d.id === hoveredNodeId ? 1 : 0.8
-      );
+      .attr('opacity', (d) => (d.id === selectedNodeId || d.id === hoveredNodeId ? 1 : 0.8));
 
     // Add labels if enabled
     if (showLabels) {
@@ -191,9 +190,7 @@ export function GraphViewer({
         .append('text')
         .text((d) => {
           const maxLen = 20;
-          return d.content.length > maxLen
-            ? d.content.slice(0, maxLen) + '...'
-            : d.content;
+          return d.content.length > maxLen ? d.content.slice(0, maxLen) + '...' : d.content;
         })
         .attr('x', 15)
         .attr('y', 4)
@@ -242,7 +239,9 @@ export function GraphViewer({
         onNodePositionChange?.(d.id, event.x, event.y);
       });
 
-    (nodeGroups as unknown as d3Selection.Selection<SVGGElement, GraphNode, SVGGElement, unknown>).call(drag);
+    (
+      nodeGroups as unknown as d3Selection.Selection<SVGGElement, GraphNode, SVGGElement, unknown>
+    ).call(drag);
 
     // Click handler
     nodeGroups.on('click', (event, d) => {
@@ -274,7 +273,18 @@ export function GraphViewer({
     return () => {
       simulation.stop();
     };
-  }, [nodes, linkData, width, height, selectedNodeId, hoveredNodeId, showLabels, onNodeClick, onNodeHover, onNodePositionChange]);
+  }, [
+    nodes,
+    linkData,
+    width,
+    height,
+    selectedNodeId,
+    hoveredNodeId,
+    showLabels,
+    onNodeClick,
+    onNodeHover,
+    onNodePositionChange,
+  ]);
 
   // Update visual states when selection changes
   useEffect(() => {
@@ -282,17 +292,16 @@ export function GraphViewer({
 
     const svg = d3Selection.select(svgRef.current);
 
-    svg.selectAll<SVGCircleElement, GraphNode>('.node-group circle')
+    svg
+      .selectAll<SVGCircleElement, GraphNode>('.node-group circle')
       .attr('stroke', (d) =>
         d.id === selectedNodeId
           ? '#fff'
           : d.id === hoveredNodeId
-          ? 'rgba(255,255,255,0.5)'
-          : 'none'
+            ? 'rgba(255,255,255,0.5)'
+            : 'none',
       )
-      .attr('opacity', (d) =>
-        d.id === selectedNodeId || d.id === hoveredNodeId ? 1 : 0.8
-      );
+      .attr('opacity', (d) => (d.id === selectedNodeId || d.id === hoveredNodeId ? 1 : 0.8));
   }, [selectedNodeId, hoveredNodeId]);
 
   if (loading) {
@@ -339,10 +348,7 @@ export function GraphViewer({
         <div className="flex flex-wrap gap-2">
           {Object.entries(nodeTypeColors).map(([type, color]) => (
             <div key={type} className="flex items-center gap-1">
-              <div
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: color }}
-              />
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
               <span className="text-text-muted capitalize">{type}</span>
             </div>
           ))}

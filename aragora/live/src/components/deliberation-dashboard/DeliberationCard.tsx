@@ -11,8 +11,16 @@ interface DeliberationCardProps {
 
 const STATUS_CONFIG = {
   initializing: { color: 'bg-yellow-400', label: 'INIT', textColor: 'text-yellow-400' },
-  active: { color: 'bg-[var(--accent)] animate-pulse', label: 'LIVE', textColor: 'text-[var(--accent)]' },
-  consensus_forming: { color: 'bg-[var(--acid-cyan)] animate-pulse', label: 'CONSENSUS', textColor: 'text-[var(--acid-cyan)]' },
+  active: {
+    color: 'bg-[var(--accent)] animate-pulse',
+    label: 'LIVE',
+    textColor: 'text-[var(--accent)]',
+  },
+  consensus_forming: {
+    color: 'bg-[var(--acid-cyan)] animate-pulse',
+    label: 'CONSENSUS',
+    textColor: 'text-[var(--acid-cyan)]',
+  },
   complete: { color: 'bg-blue-400', label: 'DONE', textColor: 'text-blue-400' },
   failed: { color: 'bg-[var(--crimson)]', label: 'FAILED', textColor: 'text-[var(--crimson)]' },
 } as const;
@@ -48,7 +56,9 @@ export function DeliberationCard({ deliberation }: DeliberationCardProps) {
       <div className="h-1 bg-bg rounded-full overflow-hidden mb-3">
         <div
           className={`h-full transition-all ${
-            deliberation.status === 'consensus_forming' ? 'bg-[var(--acid-cyan)]' : 'bg-[var(--accent)]'
+            deliberation.status === 'consensus_forming'
+              ? 'bg-[var(--acid-cyan)]'
+              : 'bg-[var(--accent)]'
           }`}
           style={{ width: `${progress}%` }}
         />
@@ -57,11 +67,15 @@ export function DeliberationCard({ deliberation }: DeliberationCardProps) {
       {/* Consensus score */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-theme-data text-text-muted">Consensus</span>
-        <span className={`text-sm font-theme-data ${
-          deliberation.consensus_score >= 0.8 ? 'text-success' :
-          deliberation.consensus_score >= 0.5 ? 'text-[var(--acid-yellow)]' :
-          'text-text-muted'
-        }`}>
+        <span
+          className={`text-sm font-theme-data ${
+            deliberation.consensus_score >= 0.8
+              ? 'text-success'
+              : deliberation.consensus_score >= 0.5
+                ? 'text-[var(--acid-yellow)]'
+                : 'text-text-muted'
+          }`}
+        >
           {Math.round(deliberation.consensus_score * 100)}%
         </span>
       </div>

@@ -23,13 +23,13 @@ interface AgentData {
 }
 
 export function CompareView({ events, onClose }: CompareViewProps) {
-  const [selectedAgents, setSelectedAgents] = useState<[string | null, string | null]>([null, null]);
+  const [selectedAgents, setSelectedAgents] = useState<[string | null, string | null]>([
+    null,
+    null,
+  ]);
   const [selectedRound, setSelectedRound] = useState<number | 'latest'>('latest');
 
-  const focusTrapRef = useFocusTrap<HTMLDivElement>({
-    isActive: true,
-    onEscape: onClose,
-  });
+  const focusTrapRef = useFocusTrap<HTMLDivElement>({ isActive: true, onEscape: onClose });
 
   // Extract all agents and their messages
   const { agents, rounds } = useMemo(() => {
@@ -109,21 +109,29 @@ export function CompareView({ events, onClose }: CompareViewProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div className="flex items-center gap-4">
-          <h2 id="compare-view-title" className="text-lg font-semibold">Compare Agents</h2>
+          <h2 id="compare-view-title" className="text-lg font-semibold">
+            Compare Agents
+          </h2>
 
           {/* Round Selector */}
           <div className="flex items-center gap-2">
-            <label htmlFor="round-selector" className="text-sm text-text-muted">Round:</label>
+            <label htmlFor="round-selector" className="text-sm text-text-muted">
+              Round:
+            </label>
             <select
               id="round-selector"
               value={selectedRound}
-              onChange={(e) => setSelectedRound(e.target.value === 'latest' ? 'latest' : parseInt(e.target.value))}
+              onChange={(e) =>
+                setSelectedRound(e.target.value === 'latest' ? 'latest' : parseInt(e.target.value))
+              }
               className="bg-surface border border-border rounded px-2 py-1 text-sm"
               aria-label="Select round to compare"
             >
               <option value="latest">Latest</option>
               {rounds.map((r) => (
-                <option key={r} value={r}>Round {r}</option>
+                <option key={r} value={r}>
+                  Round {r}
+                </option>
               ))}
             </select>
           </div>
@@ -173,15 +181,27 @@ interface ComparisonPaneProps {
   position: 'left' | 'right';
 }
 
-function ComparisonPane({ agents, selectedAgent, onSelectAgent, agentData, position }: ComparisonPaneProps) {
+function ComparisonPane({
+  agents,
+  selectedAgent,
+  onSelectAgent,
+  agentData,
+  position,
+}: ComparisonPaneProps) {
   const colors = selectedAgent ? getAgentColors(selectedAgent) : AGENT_COLORS.default;
   const selectId = `agent-selector-${position}`;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden" role="region" aria-label={`${position} comparison panel`}>
+    <div
+      className="flex-1 flex flex-col overflow-hidden"
+      role="region"
+      aria-label={`${position} comparison panel`}
+    >
       {/* Agent Selector */}
       <div className="p-4 border-b border-border">
-        <label htmlFor={selectId} className="sr-only">Select {position} agent</label>
+        <label htmlFor={selectId} className="sr-only">
+          Select {position} agent
+        </label>
         <select
           id={selectId}
           value={selectedAgent || ''}
@@ -189,9 +209,13 @@ function ComparisonPane({ agents, selectedAgent, onSelectAgent, agentData, posit
           aria-label={`Select ${position} agent for comparison`}
           className={`w-full bg-surface border rounded px-3 py-2 text-sm font-medium ${colors.border} ${colors.text}`}
         >
-          <option value="" disabled>Select Agent</option>
+          <option value="" disabled>
+            Select Agent
+          </option>
           {agents.map((name) => (
-            <option key={name} value={name}>{name}</option>
+            <option key={name} value={name}>
+              {name}
+            </option>
           ))}
         </select>
       </div>
@@ -209,10 +233,15 @@ function ComparisonPane({ agents, selectedAgent, onSelectAgent, agentData, posit
                 </span>
               )}
               {agentData.confidence !== undefined && (
-                <span className={`text-xs font-theme-data ${
-                  agentData.confidence >= 0.8 ? 'text-green-400' :
-                  agentData.confidence >= 0.6 ? 'text-yellow-400' : 'text-red-400'
-                }`}>
+                <span
+                  className={`text-xs font-theme-data ${
+                    agentData.confidence >= 0.8
+                      ? 'text-green-400'
+                      : agentData.confidence >= 0.6
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
+                  }`}
+                >
                   {Math.round(agentData.confidence * 100)}%
                 </span>
               )}

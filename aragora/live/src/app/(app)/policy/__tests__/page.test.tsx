@@ -36,7 +36,9 @@ jest.mock('@/components/ErrorWithRetry', () => ({
   ErrorWithRetry: ({ error, onRetry }: { error: string; onRetry: () => void }) => (
     <div data-testid="error-display">
       <span>{error}</span>
-      <button onClick={onRetry} data-testid="retry-button">Retry</button>
+      <button onClick={onRetry} data-testid="retry-button">
+        Retry
+      </button>
     </div>
   ),
 }));
@@ -75,7 +77,12 @@ describe('PolicyPage', () => {
       level: 'mandatory',
       enabled: true,
       rules: [
-        { id: 'rule-1', pattern: '\\b(badword)\\b', action: 'block', message: 'Profanity detected' },
+        {
+          id: 'rule-1',
+          pattern: '\\b(badword)\\b',
+          action: 'block',
+          message: 'Profanity detected',
+        },
       ],
       framework_id: 'default',
       vertical_id: 'general',
@@ -94,7 +101,12 @@ describe('PolicyPage', () => {
       level: 'recommended',
       enabled: true,
       rules: [
-        { id: 'rule-2', pattern: '\\d{3}-\\d{2}-\\d{4}', action: 'redact', message: 'SSN detected' },
+        {
+          id: 'rule-2',
+          pattern: '\\d{3}-\\d{2}-\\d{4}',
+          action: 'redact',
+          message: 'SSN detected',
+        },
       ],
       framework_id: 'hipaa',
       vertical_id: 'healthcare',
@@ -142,21 +154,8 @@ describe('PolicyPage', () => {
   ];
 
   const mockStats = {
-    policies: {
-      total: 2,
-      enabled: 2,
-      disabled: 0,
-    },
-    violations: {
-      total: 17,
-      open: 5,
-      by_severity: {
-        critical: 2,
-        high: 3,
-        medium: 8,
-        low: 4,
-      },
-    },
+    policies: { total: 2, enabled: 2, disabled: 0 },
+    violations: { total: 17, open: 5, by_severity: { critical: 2, high: 3, medium: 8, low: 4 } },
     risk_score: 25,
   };
 
@@ -175,15 +174,9 @@ describe('PolicyPage', () => {
         });
       }
       if (url.includes('/api/compliance/stats')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockStats),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
       }
-      return Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
   };
 
@@ -213,7 +206,9 @@ describe('PolicyPage', () => {
       renderWithProviders(<PolicyPage />);
 
       expect(screen.getByText('[POLICY_ADMIN]')).toBeInTheDocument();
-      expect(screen.getByText('Compliance policies, conflict detection, and violation tracking')).toBeInTheDocument();
+      expect(
+        screen.getByText('Compliance policies, conflict detection, and violation tracking'),
+      ).toBeInTheDocument();
     });
 
     it('shows loading state initially', () => {
@@ -278,37 +273,35 @@ describe('PolicyPage', () => {
     it('shows empty state when no policies', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/api/policies')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ policies: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ policies: [] }) });
         }
         if (url.includes('/api/compliance/violations')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ violations: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ violations: [] }) });
         }
         if (url.includes('/api/compliance/stats')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              policies: { total: 0, enabled: 0, disabled: 0 },
-              violations: { total: 0, open: 0, by_severity: { critical: 0, high: 0, medium: 0, low: 0 } },
-              risk_score: 0,
-            }),
+            json: () =>
+              Promise.resolve({
+                policies: { total: 0, enabled: 0, disabled: 0 },
+                violations: {
+                  total: 0,
+                  open: 0,
+                  by_severity: { critical: 0, high: 0, medium: 0, low: 0 },
+                },
+                risk_score: 0,
+              }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('No policies defined. Create your first compliance policy.')).toBeInTheDocument();
+        expect(
+          screen.getByText('No policies defined. Create your first compliance policy.'),
+        ).toBeInTheDocument();
       });
     });
 
@@ -640,21 +633,12 @@ describe('PolicyPage', () => {
           });
         }
         if (url.includes('/api/compliance/violations')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ violations: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ violations: [] }) });
         }
         if (url.includes('/api/compliance/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
@@ -667,7 +651,9 @@ describe('PolicyPage', () => {
         await user.click(screen.getByRole('button', { name: /VIOLATIONS/i }));
       });
 
-      expect(screen.getByText('No violations recorded. Your content is compliant.')).toBeInTheDocument();
+      expect(
+        screen.getByText('No violations recorded. Your content is compliant.'),
+      ).toBeInTheDocument();
     });
   });
 
@@ -745,7 +731,9 @@ describe('PolicyPage', () => {
         await user.click(screen.getByRole('button', { name: '[+ NEW POLICY]' }));
       });
 
-      expect(screen.getByText('No rules defined. Add rules to define policy behavior.')).toBeInTheDocument();
+      expect(
+        screen.getByText('No rules defined. Add rules to define policy behavior.'),
+      ).toBeInTheDocument();
 
       await act(async () => {
         await user.click(screen.getByText('[+ ADD RULE]'));
@@ -760,22 +748,23 @@ describe('PolicyPage', () => {
         if (url.includes('/api/policies') && options?.method === 'POST') {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              policy: {
-                id: 'new-policy',
-                name: 'Test Policy',
-                description: '',
-                framework_id: 'default',
-                workspace_id: 'workspace-1',
-                vertical_id: 'general',
-                level: 'optional',
-                enabled: true,
-                rules: [],
-                rules_count: 0,
-                created_at: '2024-01-20T10:00:00Z',
-                updated_at: '2024-01-20T10:00:00Z',
-              },
-            }),
+            json: () =>
+              Promise.resolve({
+                policy: {
+                  id: 'new-policy',
+                  name: 'Test Policy',
+                  description: '',
+                  framework_id: 'default',
+                  workspace_id: 'workspace-1',
+                  vertical_id: 'general',
+                  level: 'optional',
+                  enabled: true,
+                  rules: [],
+                  rules_count: 0,
+                  created_at: '2024-01-20T10:00:00Z',
+                  updated_at: '2024-01-20T10:00:00Z',
+                },
+              }),
           });
         }
         if (url.includes('/api/policies')) {
@@ -791,15 +780,9 @@ describe('PolicyPage', () => {
           });
         }
         if (url.includes('/api/compliance/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
@@ -962,7 +945,9 @@ describe('PolicyPage', () => {
         await user.click(screen.getByRole('button', { name: '[CHECK CONTENT]' }));
       });
 
-      expect(screen.getByPlaceholderText('Enter content to check against compliance policies...')).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText('Enter content to check against compliance policies...'),
+      ).toBeInTheDocument();
     });
 
     it('disables check button when no content', async () => {
@@ -988,11 +973,7 @@ describe('PolicyPage', () => {
         if (url.includes('/api/compliance/check') && options?.method === 'POST') {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              compliant: true,
-              score: 95,
-              issue_count: 0,
-            }),
+            json: () => Promise.resolve({ compliant: true, score: 95, issue_count: 0 }),
           });
         }
         if (url.includes('/api/policies')) {
@@ -1008,15 +989,9 @@ describe('PolicyPage', () => {
           });
         }
         if (url.includes('/api/compliance/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
@@ -1032,7 +1007,7 @@ describe('PolicyPage', () => {
       await act(async () => {
         await user.type(
           screen.getByPlaceholderText('Enter content to check against compliance policies...'),
-          'This is safe content'
+          'This is safe content',
         );
       });
 
@@ -1052,11 +1027,7 @@ describe('PolicyPage', () => {
         if (url.includes('/api/compliance/check') && options?.method === 'POST') {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              compliant: false,
-              score: 45,
-              issue_count: 3,
-            }),
+            json: () => Promise.resolve({ compliant: false, score: 45, issue_count: 3 }),
           });
         }
         if (url.includes('/api/policies')) {
@@ -1072,15 +1043,9 @@ describe('PolicyPage', () => {
           });
         }
         if (url.includes('/api/compliance/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
@@ -1096,7 +1061,7 @@ describe('PolicyPage', () => {
       await act(async () => {
         await user.type(
           screen.getByPlaceholderText('Enter content to check against compliance policies...'),
-          'This is bad content with violations'
+          'This is bad content with violations',
         );
       });
 
@@ -1117,10 +1082,7 @@ describe('PolicyPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string, options?: RequestInit) => {
         if (url.includes('/toggle') && options?.method === 'POST') {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({}),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
         }
         if (url.includes('/api/policies')) {
           return Promise.resolve({
@@ -1135,15 +1097,9 @@ describe('PolicyPage', () => {
           });
         }
         if (url.includes('/api/compliance/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
@@ -1160,7 +1116,7 @@ describe('PolicyPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           'http://localhost:8080/api/policies/policy-1/toggle',
-          expect.objectContaining({ method: 'POST' })
+          expect.objectContaining({ method: 'POST' }),
         );
       });
     });
@@ -1169,10 +1125,7 @@ describe('PolicyPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string, options?: RequestInit) => {
         if (url.includes('/api/policies/policy-1') && options?.method === 'DELETE') {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({}),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
         }
         if (url.includes('/api/policies')) {
           return Promise.resolve({
@@ -1187,15 +1140,9 @@ describe('PolicyPage', () => {
           });
         }
         if (url.includes('/api/compliance/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
@@ -1235,7 +1182,7 @@ describe('PolicyPage', () => {
       // Should not call delete endpoint
       expect(mockFetch).not.toHaveBeenCalledWith(
         expect.stringContaining('/api/policies/policy-1'),
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
   });
@@ -1251,31 +1198,27 @@ describe('PolicyPage', () => {
         }
         // Return proper data for each endpoint
         if (url.includes('/api/policies')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ policies: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ policies: [] }) });
         }
         if (url.includes('/api/compliance/violations')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({ violations: [] }),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ violations: [] }) });
         }
         if (url.includes('/api/compliance/stats')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              policies: { total: 0, enabled: 0, disabled: 0 },
-              violations: { total: 0, open: 0, by_severity: { critical: 0, high: 0, medium: 0, low: 0 } },
-              risk_score: 0,
-            }),
+            json: () =>
+              Promise.resolve({
+                policies: { total: 0, enabled: 0, disabled: 0 },
+                violations: {
+                  total: 0,
+                  open: 0,
+                  by_severity: { critical: 0, high: 0, medium: 0, low: 0 },
+                },
+                risk_score: 0,
+              }),
           });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
@@ -1299,10 +1242,7 @@ describe('PolicyPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string, options?: RequestInit) => {
         if (url.includes('/api/policies') && options?.method === 'POST') {
-          return Promise.resolve({
-            ok: false,
-            status: 500,
-          });
+          return Promise.resolve({ ok: false, status: 500 });
         }
         if (url.includes('/api/policies')) {
           return Promise.resolve({
@@ -1317,15 +1257,9 @@ describe('PolicyPage', () => {
           });
         }
         if (url.includes('/api/compliance/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);
@@ -1355,10 +1289,7 @@ describe('PolicyPage', () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string, options?: RequestInit) => {
         if (url.includes('/api/policies/policy-1') && options?.method === 'DELETE') {
-          return Promise.resolve({
-            ok: false,
-            status: 500,
-          });
+          return Promise.resolve({ ok: false, status: 500 });
         }
         if (url.includes('/api/policies')) {
           return Promise.resolve({
@@ -1373,15 +1304,9 @@ describe('PolicyPage', () => {
           });
         }
         if (url.includes('/api/compliance/stats')) {
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve(mockStats),
-          });
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockStats) });
         }
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
       });
 
       renderWithProviders(<PolicyPage />);

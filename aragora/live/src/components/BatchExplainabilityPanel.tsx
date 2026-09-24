@@ -31,25 +31,13 @@ interface BatchResults {
   batch_id: string;
   status: string;
   results: BatchDebateResult[];
-  pagination: {
-    offset: number;
-    limit: number;
-    total: number;
-    has_more: boolean;
-  };
+  pagination: { offset: number; limit: number; total: number; has_more: boolean };
 }
 
 interface ComparisonResult {
   debates: string[];
-  common_factors: Array<{
-    name: string;
-    avg_contribution: number;
-    variance: number;
-  }>;
-  divergent_factors: Array<{
-    name: string;
-    contributions: Record<string, number>;
-  }>;
+  common_factors: Array<{ name: string; avg_contribution: number; variance: number }>;
+  divergent_factors: Array<{ name: string; contributions: Record<string, number> }>;
   overall_similarity: number;
 }
 
@@ -65,7 +53,9 @@ interface BatchExplainabilityPanelProps {
   apiBase?: string;
 }
 
-export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplainabilityPanelProps) {
+export function BatchExplainabilityPanel({
+  apiBase = API_BASE_URL,
+}: BatchExplainabilityPanelProps) {
   const [debates, setDebates] = useState<DebateSummary[]>([]);
   const [selectedDebates, setSelectedDebates] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -86,7 +76,9 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
 
   // Active tab
-  const [activeTab, setActiveTab] = useState<'select' | 'progress' | 'results' | 'compare'>('select');
+  const [activeTab, setActiveTab] = useState<'select' | 'progress' | 'results' | 'compare'>(
+    'select',
+  );
 
   // Fetch available debates
   const fetchDebates = useCallback(async () => {
@@ -100,9 +92,27 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
       setError(err instanceof Error ? err.message : 'Failed to fetch debates');
       // Demo data
       setDebates([
-        { id: 'debate-1', question: 'Should we use TypeScript?', status: 'completed', verdict: 'pass', created_at: new Date().toISOString() },
-        { id: 'debate-2', question: 'Is serverless better than containers?', status: 'completed', verdict: 'warn', created_at: new Date().toISOString() },
-        { id: 'debate-3', question: 'REST vs GraphQL for APIs', status: 'completed', verdict: 'pass', created_at: new Date().toISOString() },
+        {
+          id: 'debate-1',
+          question: 'Should we use TypeScript?',
+          status: 'completed',
+          verdict: 'pass',
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: 'debate-2',
+          question: 'Is serverless better than containers?',
+          status: 'completed',
+          verdict: 'warn',
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: 'debate-3',
+          question: 'REST vs GraphQL for APIs',
+          status: 'completed',
+          verdict: 'pass',
+          created_at: new Date().toISOString(),
+        },
       ]);
     } finally {
       setDebatesLoading(false);
@@ -246,9 +256,7 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          debate_ids: Array.from(selectedDebates),
-        }),
+        body: JSON.stringify({ debate_ids: Array.from(selectedDebates) }),
       });
 
       if (!response.ok) throw new Error('Failed to compare explanations');
@@ -267,9 +275,7 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
     <div className="card p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h3 className="font-theme-data text-[var(--accent)] text-lg">
-          {'>'} BATCH EXPLAINABILITY
-        </h3>
+        <h3 className="font-theme-data text-[var(--accent)] text-lg">{'>'} BATCH EXPLAINABILITY</h3>
         <div className="text-xs font-theme-data text-text-muted">
           {selectedDebates.size} selected
         </div>
@@ -281,7 +287,11 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            disabled={(tab === 'progress' && !activeBatch) || (tab === 'results' && !batchResults) || (tab === 'compare' && !comparison)}
+            disabled={
+              (tab === 'progress' && !activeBatch) ||
+              (tab === 'results' && !batchResults) ||
+              (tab === 'compare' && !comparison)
+            }
             className={`px-3 py-1 text-xs font-theme-data transition-colors ${
               activeTab === tab
                 ? 'border border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent)]'
@@ -297,7 +307,9 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
       {error && (
         <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded text-red-400 text-sm font-theme-data">
           {error}
-          <button onClick={() => setError(null)} className="ml-4 underline">[DISMISS]</button>
+          <button onClick={() => setError(null)} className="ml-4 underline">
+            [DISMISS]
+          </button>
         </div>
       )}
 
@@ -381,10 +393,15 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
                     <div className="flex gap-3 mt-1">
                       <span className="font-theme-data text-xs text-text-muted">{debate.id}</span>
                       {debate.verdict && (
-                        <span className={`font-theme-data text-xs ${
-                          debate.verdict === 'pass' ? 'text-green-400' :
-                          debate.verdict === 'fail' ? 'text-red-400' : 'text-yellow-400'
-                        }`}>
+                        <span
+                          className={`font-theme-data text-xs ${
+                            debate.verdict === 'pass'
+                              ? 'text-green-400'
+                              : debate.verdict === 'fail'
+                                ? 'text-red-400'
+                                : 'text-yellow-400'
+                          }`}
+                        >
                           {debate.verdict.toUpperCase()}
                         </span>
                       )}
@@ -431,8 +448,11 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
           <div className="h-4 bg-surface rounded overflow-hidden">
             <div
               className={`h-full transition-all duration-300 ${
-                activeBatch.status === 'failed' ? 'bg-red-500' :
-                activeBatch.status === 'completed' ? 'bg-[var(--accent)]' : 'bg-[var(--acid-cyan)]'
+                activeBatch.status === 'failed'
+                  ? 'bg-red-500'
+                  : activeBatch.status === 'completed'
+                    ? 'bg-[var(--accent)]'
+                    : 'bg-[var(--acid-cyan)]'
               }`}
               style={{ width: `${activeBatch.progress_pct}%` }}
             />
@@ -441,7 +461,9 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 p-4 bg-bg border border-[var(--accent)]/20">
             <div className="text-center">
-              <div className="text-xl font-theme-data text-green-400">{activeBatch.success_count}</div>
+              <div className="text-xl font-theme-data text-green-400">
+                {activeBatch.success_count}
+              </div>
               <div className="text-xs font-theme-data text-text-muted">Success</div>
             </div>
             <div className="text-center">
@@ -449,11 +471,17 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
               <div className="text-xs font-theme-data text-text-muted">Errors</div>
             </div>
             <div className="text-center">
-              <div className={`text-xl font-theme-data ${
-                activeBatch.status === 'processing' ? 'text-[var(--acid-cyan)] animate-pulse' :
-                activeBatch.status === 'completed' ? 'text-green-400' :
-                activeBatch.status === 'failed' ? 'text-red-400' : 'text-text-muted'
-              }`}>
+              <div
+                className={`text-xl font-theme-data ${
+                  activeBatch.status === 'processing'
+                    ? 'text-[var(--acid-cyan)] animate-pulse'
+                    : activeBatch.status === 'completed'
+                      ? 'text-green-400'
+                      : activeBatch.status === 'failed'
+                        ? 'text-red-400'
+                        : 'text-text-muted'
+                }`}
+              >
                 {activeBatch.status.toUpperCase()}
               </div>
               <div className="text-xs font-theme-data text-text-muted">Status</div>
@@ -487,10 +515,14 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-theme-data text-sm text-[var(--acid-cyan)]">{result.debate_id}</span>
-                  <span className={`font-theme-data text-xs ${
-                    result.status === 'success' ? 'text-green-400' : 'text-red-400'
-                  }`}>
+                  <span className="font-theme-data text-sm text-[var(--acid-cyan)]">
+                    {result.debate_id}
+                  </span>
+                  <span
+                    className={`font-theme-data text-xs ${
+                      result.status === 'success' ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
                     {result.status.toUpperCase()}
                   </span>
                 </div>
@@ -545,7 +577,10 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
             <h4 className="font-theme-data text-sm text-[var(--accent)] mb-3">Common Factors</h4>
             <div className="space-y-2">
               {comparison.common_factors.map((factor, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 bg-surface border border-[var(--accent)]/20">
+                <div
+                  key={idx}
+                  className="flex items-center justify-between p-2 bg-surface border border-[var(--accent)]/20"
+                >
                   <span className="font-theme-data text-xs text-text">{factor.name}</span>
                   <div className="flex items-center gap-3">
                     <span className="font-theme-data text-xs text-[var(--acid-cyan)]">
@@ -563,7 +598,9 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
           {/* Divergent Factors */}
           {comparison.divergent_factors.length > 0 && (
             <div>
-              <h4 className="font-theme-data text-sm text-[var(--acid-yellow)] mb-3">Divergent Factors</h4>
+              <h4 className="font-theme-data text-sm text-[var(--acid-yellow)] mb-3">
+                Divergent Factors
+              </h4>
               <div className="space-y-2">
                 {comparison.divergent_factors.map((factor, idx) => (
                   <div key={idx} className="p-2 bg-surface border border-acid-yellow/20">
@@ -574,9 +611,11 @@ export function BatchExplainabilityPanel({ apiBase = API_BASE_URL }: BatchExplai
                           <span className="font-theme-data text-[10px] text-text-muted truncate">
                             {debateId}
                           </span>
-                          <span className={`font-theme-data text-[10px] ${
-                            contribution > 0 ? 'text-green-400' : 'text-red-400'
-                          }`}>
+                          <span
+                            className={`font-theme-data text-[10px] ${
+                              contribution > 0 ? 'text-green-400' : 'text-red-400'
+                            }`}
+                          >
                             {(contribution * 100).toFixed(0)}%
                           </span>
                         </div>

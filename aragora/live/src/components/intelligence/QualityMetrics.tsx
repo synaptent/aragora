@@ -13,11 +13,7 @@ interface QualityData {
   };
   confidence_metrics: {
     avg_confidence_score: number;
-    confidence_distribution: {
-      high: number;
-      medium: number;
-      low: number;
-    };
+    confidence_distribution: { high: number; medium: number; low: number };
     confidence_trend: string;
   };
   stability_metrics: {
@@ -99,12 +95,16 @@ export function QualityMetrics({ backendUrl }: QualityMetricsProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Consensus Distribution */}
         <div className="bg-surface/50 rounded-lg p-4 border border-[var(--accent)]/20">
-          <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">Consensus Distribution</h3>
+          <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">
+            Consensus Distribution
+          </h3>
           <div className="space-y-2">
             <div>
               <div className="flex justify-between text-xs font-theme-data mb-1">
                 <span className="text-text-muted">Strong (&gt;80%)</span>
-                <span className="text-green-400">{data.consensus_metrics.strong_consensus_percent}%</span>
+                <span className="text-green-400">
+                  {data.consensus_metrics.strong_consensus_percent}%
+                </span>
               </div>
               <div className="h-2 bg-bg rounded-full overflow-hidden">
                 <div
@@ -116,7 +116,9 @@ export function QualityMetrics({ backendUrl }: QualityMetricsProps) {
             <div>
               <div className="flex justify-between text-xs font-theme-data mb-1">
                 <span className="text-text-muted">Weak (60-80%)</span>
-                <span className="text-yellow-400">{data.consensus_metrics.weak_consensus_percent}%</span>
+                <span className="text-yellow-400">
+                  {data.consensus_metrics.weak_consensus_percent}%
+                </span>
               </div>
               <div className="h-2 bg-bg rounded-full overflow-hidden">
                 <div
@@ -142,7 +144,9 @@ export function QualityMetrics({ backendUrl }: QualityMetricsProps) {
 
         {/* Confidence Distribution */}
         <div className="bg-surface/50 rounded-lg p-4 border border-[var(--accent)]/20">
-          <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">Confidence Distribution</h3>
+          <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">
+            Confidence Distribution
+          </h3>
           <div className="text-center mb-3">
             <p className="text-2xl font-theme-data text-[var(--accent)]">
               {(data.confidence_metrics.avg_confidence_score * 100).toFixed(0)}%
@@ -154,21 +158,36 @@ export function QualityMetrics({ backendUrl }: QualityMetricsProps) {
               <div className="w-3 h-3 rounded bg-green-400"></div>
               <span>High: {data.confidence_metrics.confidence_distribution.high}</span>
               <span className="text-text-muted">
-                ({((data.confidence_metrics.confidence_distribution.high / totalConfidence) * 100).toFixed(0)}%)
+                (
+                {(
+                  (data.confidence_metrics.confidence_distribution.high / totalConfidence) *
+                  100
+                ).toFixed(0)}
+                %)
               </span>
             </div>
             <div className="flex items-center gap-2 text-xs font-theme-data">
               <div className="w-3 h-3 rounded bg-yellow-400"></div>
               <span>Medium: {data.confidence_metrics.confidence_distribution.medium}</span>
               <span className="text-text-muted">
-                ({((data.confidence_metrics.confidence_distribution.medium / totalConfidence) * 100).toFixed(0)}%)
+                (
+                {(
+                  (data.confidence_metrics.confidence_distribution.medium / totalConfidence) *
+                  100
+                ).toFixed(0)}
+                %)
               </span>
             </div>
             <div className="flex items-center gap-2 text-xs font-theme-data">
               <div className="w-3 h-3 rounded bg-red-400"></div>
               <span>Low: {data.confidence_metrics.confidence_distribution.low}</span>
               <span className="text-text-muted">
-                ({((data.confidence_metrics.confidence_distribution.low / totalConfidence) * 100).toFixed(0)}%)
+                (
+                {(
+                  (data.confidence_metrics.confidence_distribution.low / totalConfidence) *
+                  100
+                ).toFixed(0)}
+                %)
               </span>
             </div>
           </div>
@@ -181,18 +200,28 @@ export function QualityMetrics({ backendUrl }: QualityMetricsProps) {
             <div>
               <p className="text-text-muted text-xs font-theme-data">Reversal Rate</p>
               <p className="text-xl font-theme-data">
-                <span className={data.stability_metrics.decision_reversal_rate_percent < 5 ? 'text-green-400' : 'text-yellow-400'}>
+                <span
+                  className={
+                    data.stability_metrics.decision_reversal_rate_percent < 5
+                      ? 'text-green-400'
+                      : 'text-yellow-400'
+                  }
+                >
                   {data.stability_metrics.decision_reversal_rate_percent}%
                 </span>
               </p>
             </div>
             <div>
               <p className="text-text-muted text-xs font-theme-data">Avg Revisions/Debate</p>
-              <p className="text-xl font-theme-data">{data.stability_metrics.avg_revisions_per_debate}</p>
+              <p className="text-xl font-theme-data">
+                {data.stability_metrics.avg_revisions_per_debate}
+              </p>
             </div>
             <div>
               <p className="text-text-muted text-xs font-theme-data">Position Changes</p>
-              <p className="text-xl font-theme-data">{data.stability_metrics.final_position_changes}</p>
+              <p className="text-xl font-theme-data">
+                {data.stability_metrics.final_position_changes}
+              </p>
             </div>
           </div>
         </div>
@@ -217,12 +246,28 @@ export function QualityMetrics({ backendUrl }: QualityMetricsProps) {
                   <td className="py-2">{topic.topic}</td>
                   <td className="text-right py-2">{topic.debates}</td>
                   <td className="text-right py-2">
-                    <span className={topic.consensus_rate >= 90 ? 'text-green-400' : topic.consensus_rate >= 80 ? 'text-yellow-400' : 'text-red-400'}>
+                    <span
+                      className={
+                        topic.consensus_rate >= 90
+                          ? 'text-green-400'
+                          : topic.consensus_rate >= 80
+                            ? 'text-yellow-400'
+                            : 'text-red-400'
+                      }
+                    >
                       {topic.consensus_rate}%
                     </span>
                   </td>
                   <td className="text-right py-2">
-                    <span className={topic.avg_confidence >= 0.85 ? 'text-green-400' : topic.avg_confidence >= 0.75 ? 'text-yellow-400' : 'text-red-400'}>
+                    <span
+                      className={
+                        topic.avg_confidence >= 0.85
+                          ? 'text-green-400'
+                          : topic.avg_confidence >= 0.75
+                            ? 'text-yellow-400'
+                            : 'text-red-400'
+                      }
+                    >
                       {(topic.avg_confidence * 100).toFixed(0)}%
                     </span>
                   </td>

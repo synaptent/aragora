@@ -63,10 +63,7 @@ export function StatsHeader({
       className="flex flex-col"
       style={{ marginBottom: '2.5rem', gap: '0.75rem' }}
     >
-      <div
-        className="grid grid-cols-2 sm:grid-cols-5"
-        style={{ gap: '0.75rem' }}
-      >
+      <div className="grid grid-cols-2 sm:grid-cols-5" style={{ gap: '0.75rem' }}>
         <div className="rounded-xl border" style={tileStyle}>
           <div style={labelStyle}>In queue</div>
           <div
@@ -143,9 +140,7 @@ export function StatsHeader({
           >
             ?
           </kbd>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            shortcuts
-          </span>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>shortcuts</span>
         </div>
       </div>
 

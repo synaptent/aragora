@@ -15,23 +15,17 @@ import { renderWithProviders, screen, waitFor } from '@/test-utils';
 import { useRouter } from 'next/navigation';
 
 // Mock Next.js router
-jest.mock('next/navigation', () => ({
-  useRouter: jest.fn(),
-}));
+jest.mock('next/navigation', () => ({ useRouter: jest.fn() }));
 
 // Mock hooks
 jest.mock('../src/components/BackendSelector', () => ({
   BackendSelector: () => null,
-  useBackend: () => ({
-    config: { api: 'http://localhost:8080' },
-  }),
+  useBackend: () => ({ config: { api: 'http://localhost:8080' } }),
 }));
 
 jest.mock('../src/context/AuthContext', () => ({
   ...jest.requireActual('../src/context/AuthContext'),
-  useAuth: () => ({
-    tokens: { access_token: 'test-token' },
-  }),
+  useAuth: () => ({ tokens: { access_token: 'test-token' } }),
 }));
 
 // Mock UI components
@@ -44,9 +38,7 @@ jest.mock('../src/components/AsciiBanner', () => ({
   AsciiBannerCompact: () => <div data-testid="ascii-banner">ARAGORA</div>,
 }));
 
-jest.mock('../src/components/ThemeToggle', () => ({
-  ThemeToggle: () => null,
-}));
+jest.mock('../src/components/ThemeToggle', () => ({ ThemeToggle: () => null }));
 
 // Mock fetch
 const mockFetch = jest.fn();
@@ -105,10 +97,7 @@ const mockAuditTypes = [
 let AuditTemplatesPage: React.ComponentType;
 
 describe('AuditTemplatesPage', () => {
-  const mockRouter = {
-    push: jest.fn(),
-    back: jest.fn(),
-  };
+  const mockRouter = { push: jest.fn(), back: jest.fn() };
 
   beforeAll(async () => {
     // Dynamic import after mocks are set up
@@ -125,10 +114,7 @@ describe('AuditTemplatesPage', () => {
   function setupSuccessfulFetch() {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/api/audit/presets')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ presets: mockPresets }),
-        });
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ presets: mockPresets }) });
       }
       if (url.includes('/api/audit/types')) {
         return Promise.resolve({
@@ -136,10 +122,7 @@ describe('AuditTemplatesPage', () => {
           json: () => Promise.resolve({ audit_types: mockAuditTypes }),
         });
       }
-      return Promise.resolve({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Not found' }),
-      });
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({ error: 'Not found' }) });
     });
   }
 
@@ -163,7 +146,7 @@ describe('AuditTemplatesPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/audit/presets'),
-          expect.any(Object)
+          expect.any(Object),
         );
       });
     });
@@ -239,7 +222,7 @@ describe('AuditTemplatesPage', () => {
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/audit/types'),
-          expect.any(Object)
+          expect.any(Object),
         );
       });
     });
@@ -274,9 +257,12 @@ describe('AuditTemplatesPage', () => {
       const { container } = renderWithProviders(<AuditTemplatesPage />);
 
       // Should not crash and should eventually stop loading
-      await waitFor(() => {
-        expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
-      }, { timeout: 3000 });
+      await waitFor(
+        () => {
+          expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
     });
 
     it('should handle API error response', async () => {
@@ -288,9 +274,12 @@ describe('AuditTemplatesPage', () => {
       const { container } = renderWithProviders(<AuditTemplatesPage />);
 
       // Should not crash
-      await waitFor(() => {
-        expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
-      }, { timeout: 3000 });
+      await waitFor(
+        () => {
+          expect(container.querySelector('.animate-pulse')).not.toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
     });
   });
 

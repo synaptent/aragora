@@ -41,11 +41,7 @@ describe('lifecycleEvents handlers', () => {
         task: 'Should we ship this?',
         agents: ['claude', 'gpt-5'],
         mode: 'epistemic_hygiene',
-        settlement: {
-          status: 'needs_definition',
-          resolver_type: 'human',
-          sla_state: 'pending',
-        },
+        settlement: { status: 'needs_definition', resolver_type: 'human', sla_state: 'pending' },
       },
     };
 
@@ -55,10 +51,7 @@ describe('lifecycleEvents handlers', () => {
     expect(ctx.setAgents).toHaveBeenCalledWith(['claude', 'gpt-5']);
     expect(ctx.setDebateMode).toHaveBeenCalledWith('epistemic_hygiene');
     expect(ctx.setSettlementMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'needs_definition',
-        resolver_type: 'human',
-      })
+      expect.objectContaining({ status: 'needs_definition', resolver_type: 'human' }),
     );
   });
 
@@ -70,10 +63,7 @@ describe('lifecycleEvents handlers', () => {
         task: 'Sync task',
         agents: ['claude'],
         mode: 'epistemic_hygiene',
-        settlement: {
-          status: 'pending_human_adjudication',
-          sla_state: 'pending',
-        },
+        settlement: { status: 'pending_human_adjudication', sla_state: 'pending' },
         messages: [],
       },
     };
@@ -82,9 +72,7 @@ describe('lifecycleEvents handlers', () => {
 
     expect(ctx.setDebateMode).toHaveBeenCalledWith('epistemic_hygiene');
     expect(ctx.setSettlementMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'pending_human_adjudication',
-      })
+      expect.objectContaining({ status: 'pending_human_adjudication' }),
     );
   });
 
@@ -96,10 +84,7 @@ describe('lifecycleEvents handlers', () => {
         summary: {
           task: 'Done',
           mode: 'epistemic_hygiene',
-          settlement: {
-            status: 'settled_true',
-            sla_state: 'settled',
-          },
+          settlement: { status: 'settled_true', sla_state: 'settled' },
         },
       },
     };
@@ -108,10 +93,7 @@ describe('lifecycleEvents handlers', () => {
 
     expect(ctx.setDebateMode).toHaveBeenCalledWith('epistemic_hygiene');
     expect(ctx.setSettlementMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'settled_true',
-        sla_state: 'settled',
-      })
+      expect.objectContaining({ status: 'settled_true', sla_state: 'settled' }),
     );
   });
 

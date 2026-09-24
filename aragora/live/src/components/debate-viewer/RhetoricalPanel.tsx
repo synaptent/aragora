@@ -142,9 +142,7 @@ export function RhetoricalPanel({ debateId }: RhetoricalPanelProps) {
               .map(([pattern, count]) => (
                 <button
                   key={pattern}
-                  onClick={() =>
-                    setSelectedPattern(selectedPattern === pattern ? null : pattern)
-                  }
+                  onClick={() => setSelectedPattern(selectedPattern === pattern ? null : pattern)}
                   className={`px-2 py-1 text-xs font-theme-data border rounded transition-all ${
                     selectedPattern === pattern
                       ? PATTERN_COLORS[pattern] + ' ring-1 ring-current'
@@ -195,8 +193,8 @@ export function RhetoricalPanel({ debateId }: RhetoricalPanelProps) {
                     </span>
                   </div>
                   <div className="text-xs font-theme-data text-text-muted">
-                    {obs.agent} | Round {obs.round_num} |{' '}
-                    {Math.round(obs.confidence * 100)}% confidence
+                    {obs.agent} | Round {obs.round_num} | {Math.round(obs.confidence * 100)}%
+                    confidence
                   </div>
                 </div>
                 <div className="text-xs font-theme-data text-text mb-2 italic">

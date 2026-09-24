@@ -54,11 +54,7 @@ export interface DebateTemplate {
   metadata: TemplateMetadata;
   task_template: string;
   agent_roles: Array<{ role: string; [key: string]: unknown }>;
-  protocol: {
-    rounds: number;
-    consensus_mode: string;
-    [key: string]: unknown;
-  };
+  protocol: { rounds: number; consensus_mode: string; [key: string]: unknown };
   evaluation_criteria: string[];
   success_metrics: Record<string, number>;
   content_hash: string;
@@ -85,7 +81,10 @@ export interface TemplateRating {
 }
 
 // Category styling
-export const CATEGORY_STYLES: Record<TemplateCategory, { color: string; bgColor: string; icon: string }> = {
+export const CATEGORY_STYLES: Record<
+  TemplateCategory,
+  { color: string; bgColor: string; icon: string }
+> = {
   analysis: { color: 'text-blue-400', bgColor: 'bg-blue-500/10', icon: '📊' },
   coding: { color: 'text-green-400', bgColor: 'bg-green-500/10', icon: '💻' },
   creative: { color: 'text-purple-400', bgColor: 'bg-purple-500/10', icon: '🎨' },
@@ -129,12 +128,7 @@ export interface CatalogListing {
 }
 
 export interface CatalogListingsResponse {
-  data: {
-    items: CatalogListing[];
-    total: number;
-    limit: number;
-    offset: number;
-  };
+  data: { items: CatalogListing[]; total: number; limit: number; offset: number };
 }
 
 export const LISTING_TYPE_LABELS: Record<ListingType, string> = {
@@ -192,7 +186,11 @@ interface MarketplaceActions {
   fetchTemplateById: (id: string) => Promise<Template | null>;
 
   // Catalog listing actions (pilot)
-  fetchCatalogListings: (params?: { type?: string; search?: string; tag?: string }) => Promise<void>;
+  fetchCatalogListings: (params?: {
+    type?: string;
+    search?: string;
+    tag?: string;
+  }) => Promise<void>;
   fetchFeaturedListings: () => Promise<void>;
   installListing: (listingId: string) => Promise<void>;
   rateListing: (listingId: string, score: number, review?: string) => Promise<void>;
@@ -258,10 +256,7 @@ const initialState: MarketplaceState = {
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
 
   if (!response.ok) {
@@ -288,7 +283,9 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
           // Try v1 browse endpoint first, then fall back to legacy
           let templates: Template[];
           try {
-            const data = await fetchApi<{ templates?: Template[] } | Template[]>('/api/v1/marketplace/browse');
+            const data = await fetchApi<{ templates?: Template[] } | Template[]>(
+              '/api/v1/marketplace/browse',
+            );
             templates = Array.isArray(data) ? data : (data.templates ?? []);
           } catch {
             templates = await fetchApi<Template[]>('/api/marketplace/templates');
@@ -306,7 +303,9 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
         try {
           let featured: Template[];
           try {
-            const data = await fetchApi<{ templates?: Template[] } | Template[]>('/api/v1/marketplace/featured');
+            const data = await fetchApi<{ templates?: Template[] } | Template[]>(
+              '/api/v1/marketplace/featured',
+            );
             featured = Array.isArray(data) ? data : (data.templates ?? []);
           } catch {
             featured = await fetchApi<Template[]>('/api/marketplace/templates/featured');
@@ -339,7 +338,9 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
 
       fetchFeaturedListings: async () => {
         try {
-          const resp = await fetchApi<CatalogListingsResponse>('/api/v1/marketplace/listings/featured');
+          const resp = await fetchApi<CatalogListingsResponse>(
+            '/api/v1/marketplace/listings/featured',
+          );
           const items = resp?.data?.items ?? [];
           set({ featuredListings: items });
         } catch {
@@ -355,13 +356,11 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
           set((state) => ({
             installedListings: [...state.installedListings, listingId],
             catalogListings: state.catalogListings.map((l) =>
-              l.id === listingId ? { ...l, downloads: l.downloads + 1 } : l
+              l.id === listingId ? { ...l, downloads: l.downloads + 1 } : l,
             ),
           }));
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to install listing',
-          });
+          set({ error: error instanceof Error ? error.message : 'Failed to install listing' });
         }
       },
 
@@ -376,9 +375,7 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
           // Refresh listings to get updated ratings
           get().fetchCatalogListings();
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to rate listing',
-          });
+          set({ error: error instanceof Error ? error.message : 'Failed to rate listing' });
         }
       },
 
@@ -408,7 +405,7 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
             (l) =>
               l.name.toLowerCase().includes(query) ||
               l.description.toLowerCase().includes(query) ||
-              l.tags.some((tag) => tag.toLowerCase().includes(query))
+              l.tags.some((tag) => tag.toLowerCase().includes(query)),
           );
         }
 
@@ -466,51 +463,37 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
       // Template actions
       installTemplate: async (templateId: string) => {
         try {
-          await fetchApi(`/api/marketplace/templates/${templateId}/install`, {
-            method: 'POST',
-          });
-          set((state) => ({
-            installedTemplates: [...state.installedTemplates, templateId],
-          }));
+          await fetchApi(`/api/marketplace/templates/${templateId}/install`, { method: 'POST' });
+          set((state) => ({ installedTemplates: [...state.installedTemplates, templateId] }));
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to install template',
-          });
+          set({ error: error instanceof Error ? error.message : 'Failed to install template' });
         }
       },
 
       uninstallTemplate: async (templateId: string) => {
         try {
-          await fetchApi(`/api/marketplace/templates/${templateId}/uninstall`, {
-            method: 'POST',
-          });
+          await fetchApi(`/api/marketplace/templates/${templateId}/uninstall`, { method: 'POST' });
           set((state) => ({
             installedTemplates: state.installedTemplates.filter((id) => id !== templateId),
           }));
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to uninstall template',
-          });
+          set({ error: error instanceof Error ? error.message : 'Failed to uninstall template' });
         }
       },
 
       starTemplate: async (templateId: string) => {
         try {
-          await fetchApi(`/api/marketplace/templates/${templateId}/star`, {
-            method: 'POST',
-          });
+          await fetchApi(`/api/marketplace/templates/${templateId}/star`, { method: 'POST' });
           // Optimistically update the star count
           set((state) => ({
             templates: state.templates.map((t) =>
               t.metadata.id === templateId
                 ? { ...t, metadata: { ...t.metadata, stars: t.metadata.stars + 1 } }
-                : t
+                : t,
             ),
           }));
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to star template',
-          });
+          set({ error: error instanceof Error ? error.message : 'Failed to star template' });
         }
       },
 
@@ -546,25 +529,19 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
             myTemplates: state.myTemplates.map((t) => (t.metadata.id === id ? updated : t)),
           }));
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to update template',
-          });
+          set({ error: error instanceof Error ? error.message : 'Failed to update template' });
         }
       },
 
       deleteTemplate: async (id: string) => {
         try {
-          await fetchApi(`/api/marketplace/templates/${id}`, {
-            method: 'DELETE',
-          });
+          await fetchApi(`/api/marketplace/templates/${id}`, { method: 'DELETE' });
           set((state) => ({
             templates: state.templates.filter((t) => t.metadata.id !== id),
             myTemplates: state.myTemplates.filter((t) => t.metadata.id !== id),
           }));
         } catch (error) {
-          set({
-            error: error instanceof Error ? error.message : 'Failed to delete template',
-          });
+          set({ error: error instanceof Error ? error.message : 'Failed to delete template' });
         }
       },
 
@@ -601,7 +578,7 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
             (t) =>
               t.metadata.name.toLowerCase().includes(query) ||
               t.metadata.description.toLowerCase().includes(query) ||
-              t.metadata.tags.some((tag) => tag.toLowerCase().includes(query))
+              t.metadata.tags.some((tag) => tag.toLowerCase().includes(query)),
           );
         }
 
@@ -613,7 +590,10 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
             case 'stars':
               return b.metadata.stars - a.metadata.stars;
             case 'recent':
-              return new Date(b.metadata.updated_at).getTime() - new Date(a.metadata.updated_at).getTime();
+              return (
+                new Date(b.metadata.updated_at).getTime() -
+                new Date(a.metadata.updated_at).getTime()
+              );
             default:
               return 0;
           }
@@ -627,6 +607,6 @@ export const useMarketplaceStore = create<MarketplaceState & MarketplaceActions>
         set(initialState);
       },
     }),
-    { name: 'marketplace-store' }
-  )
+    { name: 'marketplace-store' },
+  ),
 );

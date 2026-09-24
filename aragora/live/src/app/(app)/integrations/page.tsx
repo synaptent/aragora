@@ -99,7 +99,15 @@ const SYSTEM_INTEGRATION_CONFIGS: SystemIntegrationConfig[] = [
 ];
 
 // Chat platform integrations
-const chatPlatforms: IntegrationType[] = ['slack', 'discord', 'telegram', 'email', 'teams', 'whatsapp', 'matrix'];
+const chatPlatforms: IntegrationType[] = [
+  'slack',
+  'discord',
+  'telegram',
+  'email',
+  'teams',
+  'whatsapp',
+  'matrix',
+];
 
 // Bot integrations configuration
 const BOT_CONFIGS: Omit<BotStatus, 'status' | 'lastPing' | 'errorMessage'>[] = [
@@ -135,9 +143,19 @@ const BOT_CONFIGS: Omit<BotStatus, 'status' | 'lastPing' | 'errorMessage'>[] = [
 
 function SystemStatusBadge({ status }: { status: SystemIntegrationStatus['status'] }) {
   const styles: Record<SystemIntegrationStatus['status'], { classes: string; label: string }> = {
-    available: { classes: 'bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/30', label: 'AVAILABLE' },
-    unavailable: { classes: 'bg-text-muted/20 text-text-muted border-text-muted/30', label: 'UNAVAILABLE' },
-    checking: { classes: 'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30 animate-pulse', label: 'CHECKING' },
+    available: {
+      classes: 'bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/30',
+      label: 'AVAILABLE',
+    },
+    unavailable: {
+      classes: 'bg-text-muted/20 text-text-muted border-text-muted/30',
+      label: 'UNAVAILABLE',
+    },
+    checking: {
+      classes:
+        'bg-[var(--acid-cyan)]/20 text-[var(--acid-cyan)] border-[var(--acid-cyan)]/30 animate-pulse',
+      label: 'CHECKING',
+    },
   };
   const style = styles[status];
   return (
@@ -186,15 +204,17 @@ function BotStatusBadge({ status }: { status: BotStatus['status'] }) {
 export default function IntegrationsPage() {
   const { config: backendConfig } = useBackend();
   const { tokens } = useAuth();
-  const [activeTab, setActiveTab] = useState<'notifications' | 'bots' | 'system' | 'docs'>('notifications');
+  const [activeTab, setActiveTab] = useState<'notifications' | 'bots' | 'system' | 'docs'>(
+    'notifications',
+  );
   const [wizardOpen, setWizardOpen] = useState<IntegrationType | null>(null);
   const [editingConfig, setEditingConfig] = useState<Record<string, unknown> | undefined>();
   const [botStatuses, setBotStatuses] = useState<BotStatus[]>(
-    BOT_CONFIGS.map(cfg => ({ ...cfg, status: 'loading' as const }))
+    BOT_CONFIGS.map((cfg) => ({ ...cfg, status: 'loading' as const })),
   );
   const [botsLoading, setBotsLoading] = useState(false);
   const [systemStatuses, setSystemStatuses] = useState<SystemIntegrationStatus[]>(
-    SYSTEM_INTEGRATION_CONFIGS.map(cfg => ({ ...cfg, status: 'checking' as const }))
+    SYSTEM_INTEGRATION_CONFIGS.map((cfg) => ({ ...cfg, status: 'checking' as const })),
   );
   const [systemLoading, setSystemLoading] = useState(false);
   const [connectorHealth, setConnectorHealth] = useState<ConnectorHealth[]>([]);
@@ -216,11 +236,16 @@ export default function IntegrationsPage() {
           clearTimeout(timeoutId);
           // 2xx or 401/403 means the endpoint exists (auth required = still available)
           const isAvailable = res.ok || res.status === 401 || res.status === 403;
-          return { ...cfg, status: (isAvailable ? 'available' : 'unavailable') as SystemIntegrationStatus['status'] };
+          return {
+            ...cfg,
+            status: (isAvailable
+              ? 'available'
+              : 'unavailable') as SystemIntegrationStatus['status'],
+          };
         } catch {
           return { ...cfg, status: 'unavailable' as const };
         }
-      })
+      }),
     );
     setSystemStatuses(results);
     setSystemLoading(false);
@@ -273,8 +298,11 @@ export default function IntegrationsPage() {
             const data = await res.json();
             return {
               ...cfg,
-              status: (data.online || data.status === 'online' || data.configured) ? 'online' : 'offline',
-              lastPing: data.last_activity ? new Date(data.last_activity * 1000).toLocaleString() : undefined,
+              status:
+                data.online || data.status === 'online' || data.configured ? 'online' : 'offline',
+              lastPing: data.last_activity
+                ? new Date(data.last_activity * 1000).toLocaleString()
+                : undefined,
             } as BotStatus;
           }
           return { ...cfg, status: 'offline' as const };
@@ -285,7 +313,7 @@ export default function IntegrationsPage() {
             errorMessage: err instanceof Error ? err.message : 'Failed to connect',
           } as BotStatus;
         }
-      })
+      }),
     );
     setBotStatuses(newStatuses);
     setBotsLoading(false);
@@ -308,16 +336,19 @@ export default function IntegrationsPage() {
     setWizardOpen(type);
   }, []);
 
-  const buildAuthHeaders = useCallback((includeJson = false): HeadersInit => {
-    if (!tokens?.access_token) {
-      throw new Error('Sign in to manage integrations.');
-    }
+  const buildAuthHeaders = useCallback(
+    (includeJson = false): HeadersInit => {
+      if (!tokens?.access_token) {
+        throw new Error('Sign in to manage integrations.');
+      }
 
-    return {
-      ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
-      Authorization: `Bearer ${tokens.access_token}`,
-    };
-  }, [tokens?.access_token]);
+      return {
+        ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+        Authorization: `Bearer ${tokens.access_token}`,
+      };
+    },
+    [tokens?.access_token],
+  );
 
   const handleSaveIntegration = async (config: Record<string, unknown>) => {
     const res = await fetch(`${backendConfig.api}/api/integrations/${config.type}`, {
@@ -334,7 +365,7 @@ export default function IntegrationsPage() {
 
   const handleTestIntegration = async (
     type: IntegrationType,
-    config: Record<string, unknown>
+    config: Record<string, unknown>,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await fetch(`${backendConfig.api}/api/integrations/${type}/test`, {
@@ -351,7 +382,10 @@ export default function IntegrationsPage() {
         return { success: false, error: data.error || `Test failed with status ${res.status}` };
       }
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : 'Connection test failed' };
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Connection test failed',
+      };
     }
   };
 
@@ -368,14 +402,16 @@ export default function IntegrationsPage() {
               {'>'} INTEGRATIONS
             </h1>
             <p className="text-text-muted font-theme-data text-sm max-w-2xl">
-              Connect Aragora to chat platforms for notifications, export data for ML training,
-              and extend functionality with plugins and webhooks.
+              Connect Aragora to chat platforms for notifications, export data for ML training, and
+              extend functionality with plugins and webhooks.
             </p>
           </div>
 
           {/* SDK Installation */}
           <div className="mb-6 p-4 border border-[var(--acid-cyan)]/30 bg-surface/30 rounded">
-            <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">SDK Installation</h3>
+            <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
+              SDK Installation
+            </h3>
             <div className="flex items-center gap-4">
               <code className="flex-1 bg-bg px-3 py-2 font-theme-data text-sm text-text border border-[var(--accent)]/20 rounded">
                 npm install @aragora/sdk
@@ -446,7 +482,7 @@ export default function IntegrationsPage() {
               <div className="flex items-center justify-between">
                 <h2 className="font-theme-data text-text">Chat & Notification Platforms</h2>
                 <div className="flex gap-2">
-                  {chatPlatforms.slice(0, 3).map(type => (
+                  {chatPlatforms.slice(0, 3).map((type) => (
                     <button
                       key={type}
                       onClick={() => handleConfigure(type)}
@@ -458,10 +494,7 @@ export default function IntegrationsPage() {
                 </div>
               </div>
 
-              <IntegrationStatusDashboard
-                onConfigure={handleConfigure}
-                onEdit={handleEdit}
-              />
+              <IntegrationStatusDashboard onConfigure={handleConfigure} onEdit={handleEdit} />
             </div>
           )}
 
@@ -479,7 +512,8 @@ export default function IntegrationsPage() {
               </div>
 
               <p className="text-text-muted font-theme-data text-sm">
-                Bots allow Aragora to interact directly with chat platforms, handling commands and events in real-time.
+                Bots allow Aragora to interact directly with chat platforms, handling commands and
+                events in real-time.
               </p>
 
               {/* Bot Status Cards */}
@@ -488,9 +522,11 @@ export default function IntegrationsPage() {
                   <div
                     key={bot.platform}
                     className={`p-4 border rounded bg-surface/30 ${
-                      bot.status === 'online' ? 'border-[var(--accent)]/40' :
-                      bot.status === 'error' ? 'border-warning/40' :
-                      'border-[var(--accent)]/20'
+                      bot.status === 'online'
+                        ? 'border-[var(--accent)]/40'
+                        : bot.status === 'error'
+                          ? 'border-warning/40'
+                          : 'border-[var(--accent)]/20'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-3">
@@ -500,7 +536,9 @@ export default function IntegrationsPage() {
                         </span>
                         <div>
                           <h3 className="font-theme-data text-text">{bot.label}</h3>
-                          <div className="text-xs font-theme-data text-text-muted">{bot.endpoint}</div>
+                          <div className="text-xs font-theme-data text-text-muted">
+                            {bot.endpoint}
+                          </div>
                         </div>
                       </div>
                       <BotStatusBadge status={bot.status} />
@@ -551,23 +589,34 @@ export default function IntegrationsPage() {
 
               {/* Bot Setup Guide */}
               <div className="p-4 border border-[var(--acid-cyan)]/30 rounded bg-surface/20">
-                <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">Bot Setup Guide</h3>
+                <h3 className="font-theme-data text-[var(--acid-cyan)] text-sm mb-3">
+                  Bot Setup Guide
+                </h3>
                 <div className="space-y-2 text-xs font-theme-data text-text-muted">
-                  <p>1. Configure your platform credentials in the Notifications tab or environment variables</p>
+                  <p>
+                    1. Configure your platform credentials in the Notifications tab or environment
+                    variables
+                  </p>
                   <p>2. Set up webhook URLs to point to your Aragora server endpoints</p>
                   <p>3. The bot will automatically handle incoming events and commands</p>
                 </div>
                 <div className="mt-3 p-3 bg-bg/50 rounded border border-[var(--accent)]/20">
-                  <div className="text-xs font-theme-data text-text-muted mb-1">Example Slack command:</div>
-                  <code className="text-xs font-theme-data text-[var(--acid-cyan)]">/aragora debate &quot;Should we use microservices?&quot;</code>
+                  <div className="text-xs font-theme-data text-text-muted mb-1">
+                    Example Slack command:
+                  </div>
+                  <code className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                    /aragora debate &quot;Should we use microservices?&quot;
+                  </code>
                 </div>
               </div>
 
               {/* Environment Variables */}
               <div className="p-4 border border-[var(--accent)]/20 rounded bg-bg/50">
-                <h3 className="font-theme-data text-text text-sm mb-3">Required Environment Variables</h3>
+                <h3 className="font-theme-data text-text text-sm mb-3">
+                  Required Environment Variables
+                </h3>
                 <pre className="font-theme-data text-xs text-text-muted whitespace-pre overflow-x-auto">
-{`# Slack Bot
+                  {`# Slack Bot
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_SIGNING_SECRET=...
 
@@ -593,7 +642,10 @@ ZOOM_WEBHOOK_SECRET=...`}
               <div className="flex items-center justify-between">
                 <h2 className="font-theme-data text-text">System Integrations</h2>
                 <button
-                  onClick={() => { fetchSystemStatuses(); fetchConnectorHealth(); }}
+                  onClick={() => {
+                    fetchSystemStatuses();
+                    fetchConnectorHealth();
+                  }}
                   disabled={systemLoading || healthLoading}
                   className="px-3 py-1 text-xs font-theme-data border border-[var(--accent)]/30 text-text-muted hover:text-[var(--accent)] transition-colors disabled:opacity-50"
                 >
@@ -603,7 +655,9 @@ ZOOM_WEBHOOK_SECRET=...`}
 
               {/* Connector Health from /api/v1/integrations/health */}
               <div>
-                <h3 className="font-theme-data text-text text-sm mb-3">Connector Health (Environment)</h3>
+                <h3 className="font-theme-data text-text text-sm mb-3">
+                  Connector Health (Environment)
+                </h3>
                 {healthError && (
                   <div className="mb-3 p-3 border border-warning/30 bg-warning/10 rounded">
                     <p className="text-warning font-theme-data text-sm">{healthError}</p>
@@ -611,7 +665,9 @@ ZOOM_WEBHOOK_SECRET=...`}
                 )}
                 {healthLoading && connectorHealth.length === 0 && !healthError && (
                   <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/30">
-                    <p className="font-theme-data text-text-muted text-center text-sm">Checking connector health...</p>
+                    <p className="font-theme-data text-text-muted text-center text-sm">
+                      Checking connector health...
+                    </p>
                   </div>
                 )}
                 {connectorHealth.length > 0 && (
@@ -620,17 +676,35 @@ ZOOM_WEBHOOK_SECRET=...`}
                       <div
                         key={connector.name}
                         className={`p-3 border rounded bg-surface/30 ${
-                          connector.configured && connector.healthy ? 'border-[var(--accent)]/40' :
-                          connector.configured && !connector.healthy ? 'border-warning/40' :
-                          'border-[var(--accent)]/15'
+                          connector.configured && connector.healthy
+                            ? 'border-[var(--accent)]/40'
+                            : connector.configured && !connector.healthy
+                              ? 'border-warning/40'
+                              : 'border-[var(--accent)]/15'
                         }`}
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-theme-data text-text text-sm capitalize">{connector.name}</h4>
-                          <HealthBadge configured={connector.configured} healthy={connector.healthy} />
+                          <h4 className="font-theme-data text-text text-sm capitalize">
+                            {connector.name}
+                          </h4>
+                          <HealthBadge
+                            configured={connector.configured}
+                            healthy={connector.healthy}
+                          />
                         </div>
                         <div className="space-y-1 text-xs font-theme-data text-text-muted">
-                          <div>Module: <span className={connector.module_available ? 'text-[var(--accent)]' : 'text-text-muted'}>{connector.module_available ? 'loaded' : 'not loaded'}</span></div>
+                          <div>
+                            Module:{' '}
+                            <span
+                              className={
+                                connector.module_available
+                                  ? 'text-[var(--accent)]'
+                                  : 'text-text-muted'
+                              }
+                            >
+                              {connector.module_available ? 'loaded' : 'not loaded'}
+                            </span>
+                          </div>
                           {connector.last_check && (
                             <div>Last check: {new Date(connector.last_check).toLocaleString()}</div>
                           )}
@@ -640,9 +714,11 @@ ZOOM_WEBHOOK_SECRET=...`}
                                 <span
                                   key={cb.name}
                                   className={`px-1.5 py-0.5 rounded ${
-                                    cb.state === 'closed' ? 'bg-[var(--accent)]/10 text-[var(--accent)]' :
-                                    cb.state === 'half-open' ? 'bg-warning/10 text-warning' :
-                                    'bg-[var(--crimson)]/10 text-[var(--crimson)]'
+                                    cb.state === 'closed'
+                                      ? 'bg-[var(--accent)]/10 text-[var(--accent)]'
+                                      : cb.state === 'half-open'
+                                        ? 'bg-warning/10 text-warning'
+                                        : 'bg-[var(--crimson)]/10 text-[var(--crimson)]'
                                   }`}
                                 >
                                   {cb.name}: {cb.state}
@@ -657,7 +733,9 @@ ZOOM_WEBHOOK_SECRET=...`}
                 )}
                 {!healthLoading && connectorHealth.length === 0 && !healthError && (
                   <div className="p-4 border border-[var(--accent)]/20 rounded bg-surface/20 text-center">
-                    <p className="font-theme-data text-sm text-text-muted">No connector health data available.</p>
+                    <p className="font-theme-data text-sm text-text-muted">
+                      No connector health data available.
+                    </p>
                   </div>
                 )}
               </div>
@@ -671,14 +749,18 @@ ZOOM_WEBHOOK_SECRET=...`}
                       key={integration.href}
                       href={integration.href}
                       className={`group p-4 border rounded bg-surface/30 hover:bg-surface/50 transition-all ${
-                        integration.status === 'available' ? 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50' :
-                        integration.status === 'checking' ? 'border-[var(--acid-cyan)]/20' :
-                        'border-[var(--accent)]/10 hover:border-[var(--accent)]/30'
+                        integration.status === 'available'
+                          ? 'border-[var(--accent)]/30 hover:border-[var(--accent)]/50'
+                          : integration.status === 'checking'
+                            ? 'border-[var(--acid-cyan)]/20'
+                            : 'border-[var(--accent)]/10 hover:border-[var(--accent)]/30'
                       }`}
                     >
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <span className="font-theme-data text-[var(--acid-cyan)] text-lg">{integration.icon}</span>
+                          <span className="font-theme-data text-[var(--acid-cyan)] text-lg">
+                            {integration.icon}
+                          </span>
                           <h3 className="font-theme-data text-text group-hover:text-[var(--accent)] transition-colors">
                             {integration.title}
                           </h3>
@@ -689,7 +771,10 @@ ZOOM_WEBHOOK_SECRET=...`}
                         {integration.description}
                       </p>
                       <div className="text-xs font-theme-data text-text-muted mb-3">
-                        Endpoint: <code className="text-[var(--acid-cyan)]/70">{integration.probeEndpoint}</code>
+                        Endpoint:{' '}
+                        <code className="text-[var(--acid-cyan)]/70">
+                          {integration.probeEndpoint}
+                        </code>
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {integration.features.map((feature) => (
@@ -763,7 +848,9 @@ ZOOM_WEBHOOK_SECRET=...`}
                       key={event}
                       className="p-2 border border-[var(--accent)]/10 rounded bg-surface/20 flex items-center justify-between"
                     >
-                      <code className="font-theme-data text-xs text-[var(--acid-cyan)]">{event}</code>
+                      <code className="font-theme-data text-xs text-[var(--acid-cyan)]">
+                        {event}
+                      </code>
                       <span className="font-theme-data text-xs text-text-muted">{desc}</span>
                     </div>
                   ))}
@@ -775,7 +862,7 @@ ZOOM_WEBHOOK_SECRET=...`}
                 <h3 className="font-theme-data text-text mb-4 text-sm">Environment Variables</h3>
                 <div className="p-4 border border-[var(--accent)]/20 rounded bg-bg/50 overflow-x-auto">
                   <pre className="font-theme-data text-xs text-text-muted whitespace-pre">
-{`# Slack
+                    {`# Slack
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 SLACK_BOT_TOKEN=xoxb-...
 
@@ -811,7 +898,7 @@ MATRIX_ROOM_ID=!abc123:matrix.org`}
                 <h3 className="font-theme-data text-text mb-4 text-sm">SDK Example</h3>
                 <div className="p-4 border border-[var(--accent)]/20 rounded bg-bg/50 overflow-x-auto">
                   <pre className="font-theme-data text-xs text-[var(--acid-cyan)] whitespace-pre">
-{`import { Aragora } from '@aragora/sdk';
+                    {`import { Aragora } from '@aragora/sdk';
 
 const client = new Aragora({ apiKey: 'your-api-key' });
 

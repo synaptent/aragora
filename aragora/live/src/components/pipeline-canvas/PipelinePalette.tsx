@@ -36,14 +36,11 @@ const PaletteItem = memo(function PaletteItem({
 }: PaletteItemProps) {
   const handleDragStart = useCallback(
     (event: React.DragEvent) => {
-      event.dataTransfer.setData(
-        'application/pipeline-node',
-        JSON.stringify({ stage, subtype })
-      );
+      event.dataTransfer.setData('application/pipeline-node', JSON.stringify({ stage, subtype }));
       event.dataTransfer.effectAllowed = 'move';
       onDragStart?.();
     },
-    [stage, subtype, onDragStart]
+    [stage, subtype, onDragStart],
   );
 
   return (
@@ -102,7 +99,13 @@ export function PipelinePalette({ stage, onDragStart }: PipelinePaletteProps) {
 
           if (!hasGroups) {
             return entries.map(([subtype, config]) => (
-              <PaletteItem key={subtype} stage={stage} subtype={subtype} config={config} onDragStart={onDragStart} />
+              <PaletteItem
+                key={subtype}
+                stage={stage}
+                subtype={subtype}
+                config={config}
+                onDragStart={onDragStart}
+              />
             ));
           }
 
@@ -114,7 +117,13 @@ export function PipelinePalette({ stage, onDragStart }: PipelinePaletteProps) {
                 </h4>
               )}
               {items.map(([subtype, config]) => (
-                <PaletteItem key={subtype} stage={stage} subtype={subtype} config={config} onDragStart={onDragStart} />
+                <PaletteItem
+                  key={subtype}
+                  stage={stage}
+                  subtype={subtype}
+                  config={config}
+                  onDragStart={onDragStart}
+                />
               ))}
             </div>
           ));
@@ -123,9 +132,7 @@ export function PipelinePalette({ stage, onDragStart }: PipelinePaletteProps) {
 
       {/* Help tip */}
       <div className="mt-6 p-3 bg-bg border border-border rounded-lg">
-        <h4 className="text-xs font-theme-data font-bold text-[var(--accent)] mb-2">
-          Tips
-        </h4>
+        <h4 className="text-xs font-theme-data font-bold text-[var(--accent)] mb-2">Tips</h4>
         <ul className="text-xs text-text-muted space-y-1">
           <li>• Drag nodes from here to the canvas</li>
           <li>• Connect nodes by dragging from handles</li>

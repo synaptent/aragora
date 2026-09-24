@@ -4,10 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { GoalCanvasMeta } from '@/components/goal-canvas/types';
 
-const GoalCanvas = dynamic(
-  () => import('@/components/goal-canvas/GoalCanvas'),
-  { ssr: false }
-);
+const GoalCanvas = dynamic(() => import('@/components/goal-canvas/GoalCanvas'), { ssr: false });
 
 const API_BASE = '/api/v1/goals';
 
@@ -96,9 +93,7 @@ export default function GoalsPage() {
         </button>
       </div>
 
-      {loading && (
-        <p className="text-xs text-[var(--text-muted)]">Loading...</p>
-      )}
+      {loading && <p className="text-xs text-[var(--text-muted)]">Loading...</p>}
 
       {!loading && canvases.length === 0 && (
         <div className="text-center py-12">
@@ -122,9 +117,7 @@ export default function GoalsPage() {
             onClick={() => setSelectedId(canvas.id)}
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-bold text-[var(--text)] truncate">
-                {canvas.name}
-              </h3>
+              <h3 className="text-sm font-bold text-[var(--text)] truncate">{canvas.name}</h3>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -141,9 +134,7 @@ export default function GoalsPage() {
               </p>
             )}
             {canvas.source_canvas_id && (
-              <div className="text-[9px] text-emerald-400 mb-1">
-                From ideas canvas
-              </div>
+              <div className="text-[9px] text-emerald-400 mb-1">From ideas canvas</div>
             )}
             <div className="text-[9px] text-[var(--text-muted)]">
               {new Date(canvas.updated_at).toLocaleDateString()}

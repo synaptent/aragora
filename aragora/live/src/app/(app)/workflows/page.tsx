@@ -40,14 +40,54 @@ interface WorkflowSummary {
 
 // Category configuration
 const CATEGORIES = {
-  all: { label: 'All Templates', icon: '📋', color: 'acid-green', description: 'Browse all workflow templates' },
-  legal: { label: 'Legal', icon: '⚖️', color: 'purple-500', description: 'Contract review, due diligence, compliance' },
-  healthcare: { label: 'Healthcare', icon: '🏥', color: 'green-500', description: 'Clinical docs, HIPAA compliance, audits' },
-  code: { label: 'Software', icon: '💻', color: 'blue-500', description: 'Code review, security audits, CI/CD' },
-  accounting: { label: 'Finance', icon: '📊', color: 'yellow-500', description: 'Financial audits, SOX compliance' },
-  academic: { label: 'Academic', icon: '📚', color: 'indigo-500', description: 'Citation verification, research' },
-  compliance: { label: 'Compliance', icon: '🛡️', color: 'red-500', description: 'GDPR, PCI-DSS, regulatory' },
-  general: { label: 'General', icon: '🔬', color: 'cyan-500', description: 'Research, analysis, custom workflows' },
+  all: {
+    label: 'All Templates',
+    icon: '📋',
+    color: 'acid-green',
+    description: 'Browse all workflow templates',
+  },
+  legal: {
+    label: 'Legal',
+    icon: '⚖️',
+    color: 'purple-500',
+    description: 'Contract review, due diligence, compliance',
+  },
+  healthcare: {
+    label: 'Healthcare',
+    icon: '🏥',
+    color: 'green-500',
+    description: 'Clinical docs, HIPAA compliance, audits',
+  },
+  code: {
+    label: 'Software',
+    icon: '💻',
+    color: 'blue-500',
+    description: 'Code review, security audits, CI/CD',
+  },
+  accounting: {
+    label: 'Finance',
+    icon: '📊',
+    color: 'yellow-500',
+    description: 'Financial audits, SOX compliance',
+  },
+  academic: {
+    label: 'Academic',
+    icon: '📚',
+    color: 'indigo-500',
+    description: 'Citation verification, research',
+  },
+  compliance: {
+    label: 'Compliance',
+    icon: '🛡️',
+    color: 'red-500',
+    description: 'GDPR, PCI-DSS, regulatory',
+  },
+  general: {
+    label: 'General',
+    icon: '🔬',
+    color: 'cyan-500',
+    description: 'Research, analysis, custom workflows',
+  },
 } as const;
 
 type CategoryKey = keyof typeof CATEGORIES;
@@ -65,7 +105,10 @@ const stepTypeIcons: Record<string, string> = {
 };
 
 // Use case descriptions for each template
-const useCaseDescriptions: Record<string, { problem: string; solution: string; benefits: string[] }> = {
+const useCaseDescriptions: Record<
+  string,
+  { problem: string; solution: string; benefits: string[] }
+> = {
   template_legal_contract_review: {
     problem: 'Manual contract review is slow and error-prone, missing critical risk clauses',
     solution: 'Multi-agent analysis extracts terms, debates risks, and routes by severity',
@@ -156,10 +199,14 @@ export default function WorkflowsPage() {
               version: '1.0.0',
               tags: t.tags || [],
               stepCount: t.steps?.length || 0,
-              steps: (t.steps || []).map((s) => ({ id: s.id, name: s.name, type: s.step_type || 'task' })),
+              steps: (t.steps || []).map((s) => ({
+                id: s.id,
+                name: s.name,
+                type: s.step_type || 'task',
+              })),
               createdAt: '',
               updatedAt: '',
-            }))
+            })),
           );
           setTemplateError(null);
         } else if (!cancelled) {
@@ -179,7 +226,7 @@ export default function WorkflowsPage() {
                 steps: t.steps || [],
                 createdAt: '',
                 updatedAt: '',
-              })
+              }),
             );
             setTemplates(templateList);
           } else {
@@ -196,7 +243,9 @@ export default function WorkflowsPage() {
       }
     };
     loadTemplates();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [fetchWorkflowTemplates]);
 
   const loading = templateLoading || workflowsLoading;
@@ -206,10 +255,11 @@ export default function WorkflowsPage() {
   const filteredTemplates = useMemo(() => {
     return templates.filter((t) => {
       const matchesCategory = activeCategory === 'all' || t.category === activeCategory;
-      const matchesSearch = !searchQuery ||
+      const matchesSearch =
+        !searchQuery ||
         t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+        t.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchesCategory && matchesSearch;
     });
   }, [templates, activeCategory, searchQuery]);
@@ -244,8 +294,8 @@ export default function WorkflowsPage() {
                 Workflow Templates
               </h1>
               <p className="text-lg text-text-muted mb-6">
-                Production-ready multi-agent workflows for enterprise use cases.
-                Each template orchestrates AI agents through debates, reviews, and decisions.
+                Production-ready multi-agent workflows for enterprise use cases. Each template
+                orchestrates AI agents through debates, reviews, and decisions.
               </p>
               <div className="flex gap-3">
                 <Link
@@ -270,11 +320,15 @@ export default function WorkflowsPage() {
             {/* Quick Stats */}
             <div className="hidden lg:grid grid-cols-2 gap-4">
               <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                <div className="text-3xl font-theme-data font-bold text-[var(--accent)]">{templates.length}</div>
+                <div className="text-3xl font-theme-data font-bold text-[var(--accent)]">
+                  {templates.length}
+                </div>
                 <div className="text-xs text-text-muted font-theme-data">Templates</div>
               </div>
               <div className="p-4 bg-surface border border-border rounded-lg text-center">
-                <div className="text-3xl font-theme-data font-bold text-[var(--acid-cyan)]">{Object.keys(categoryStats).length - 1}</div>
+                <div className="text-3xl font-theme-data font-bold text-[var(--acid-cyan)]">
+                  {Object.keys(categoryStats).length - 1}
+                </div>
                 <div className="text-xs text-text-muted font-theme-data">Verticals</div>
               </div>
             </div>
@@ -330,25 +384,23 @@ export default function WorkflowsPage() {
                   Categories
                 </h3>
                 <div className="space-y-1">
-                  {(Object.entries(CATEGORIES) as [CategoryKey, typeof CATEGORIES[CategoryKey]][]).map(
-                    ([key, cat]) => (
-                      <button
-                        key={key}
-                        onClick={() => setActiveCategory(key)}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                          activeCategory === key
-                            ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30'
-                            : 'text-text-muted hover:text-text hover:bg-surface'
-                        }`}
-                      >
-                        <span>{cat.icon}</span>
-                        <span className="flex-1 text-sm font-theme-data">{cat.label}</span>
-                        <span className="text-xs opacity-60">
-                          {categoryStats[key] || 0}
-                        </span>
-                      </button>
-                    )
-                  )}
+                  {(
+                    Object.entries(CATEGORIES) as [CategoryKey, (typeof CATEGORIES)[CategoryKey]][]
+                  ).map(([key, cat]) => (
+                    <button
+                      key={key}
+                      onClick={() => setActiveCategory(key)}
+                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                        activeCategory === key
+                          ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30'
+                          : 'text-text-muted hover:text-text hover:bg-surface'
+                      }`}
+                    >
+                      <span>{cat.icon}</span>
+                      <span className="flex-1 text-sm font-theme-data">{cat.label}</span>
+                      <span className="text-xs opacity-60">{categoryStats[key] || 0}</span>
+                    </button>
+                  ))}
                 </div>
 
                 {/* Search */}
@@ -371,12 +423,14 @@ export default function WorkflowsPage() {
                     Step Types
                   </h3>
                   <div className="space-y-2 text-xs">
-                    {Object.entries(stepTypeIcons).slice(0, 6).map(([type, icon]) => (
-                      <div key={type} className="flex items-center gap-2 text-text-muted">
-                        <span>{icon}</span>
-                        <span className="capitalize">{type.replace('_', ' ')}</span>
-                      </div>
-                    ))}
+                    {Object.entries(stepTypeIcons)
+                      .slice(0, 6)
+                      .map(([type, icon]) => (
+                        <div key={type} className="flex items-center gap-2 text-text-muted">
+                          <span>{icon}</span>
+                          <span className="capitalize">{type.replace('_', ' ')}</span>
+                        </div>
+                      ))}
                   </div>
                 </div>
               </div>
@@ -391,13 +445,13 @@ export default function WorkflowsPage() {
                   onChange={(e) => setActiveCategory(e.target.value as CategoryKey)}
                   className="w-full px-3 py-2 bg-surface border border-border rounded text-sm font-theme-data text-text"
                 >
-                  {(Object.entries(CATEGORIES) as [CategoryKey, typeof CATEGORIES[CategoryKey]][]).map(
-                    ([key, cat]) => (
-                      <option key={key} value={key}>
-                        {cat.icon} {cat.label} ({categoryStats[key] || 0})
-                      </option>
-                    )
-                  )}
+                  {(
+                    Object.entries(CATEGORIES) as [CategoryKey, (typeof CATEGORIES)[CategoryKey]][]
+                  ).map(([key, cat]) => (
+                    <option key={key} value={key}>
+                      {cat.icon} {cat.label} ({categoryStats[key] || 0})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -443,7 +497,10 @@ export default function WorkflowsPage() {
                     Try adjusting your search or category filter
                   </p>
                   <button
-                    onClick={() => { setActiveCategory('all'); setSearchQuery(''); }}
+                    onClick={() => {
+                      setActiveCategory('all');
+                      setSearchQuery('');
+                    }}
                     className="text-[var(--accent)] font-theme-data text-sm hover:underline"
                   >
                     Clear filters
@@ -496,9 +553,7 @@ export default function WorkflowsPage() {
               <h3 className="text-lg font-theme-data font-bold text-text mb-2">
                 No custom workflows yet
               </h3>
-              <p className="text-text-muted mb-4">
-                Start from a template or create from scratch
-              </p>
+              <p className="text-text-muted mb-4">Start from a template or create from scratch</p>
               <Link
                 href="/workflows/builder"
                 className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--accent)] text-bg font-theme-data font-bold hover:bg-[var(--accent)]/80 transition-colors rounded"
@@ -517,7 +572,11 @@ export default function WorkflowsPage() {
                   version: String(wf.version || '1.0.0'),
                   tags: wf.tags || [],
                   stepCount: wf.steps?.length || 0,
-                  steps: (wf.steps || []).map((s) => ({ id: s.id, name: s.name, type: s.step_type || 'task' })),
+                  steps: (wf.steps || []).map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    type: s.step_type || 'task',
+                  })),
                   createdAt: wf.created_at || '',
                   updatedAt: wf.updated_at || '',
                 };
@@ -594,9 +653,7 @@ export default function WorkflowsPage() {
                 <span className="text-xl">3</span>
               </div>
               <h4 className="font-theme-data font-bold text-text mb-2">Execute Workflow</h4>
-              <p className="text-sm text-text-muted">
-                Run with your inputs and monitor progress
-              </p>
+              <p className="text-sm text-text-muted">Run with your inputs and monitor progress</p>
             </div>
             <div className="text-center">
               <div className="w-12 h-12 rounded-full bg-[var(--accent)]/10 border border-[var(--accent)]/30 flex items-center justify-center mx-auto mb-4">
@@ -615,13 +672,7 @@ export default function WorkflowsPage() {
 }
 
 // Template Card Component
-function TemplateCard({
-  template,
-  onSelect,
-}: {
-  template: WorkflowSummary;
-  onSelect: () => void;
-}) {
+function TemplateCard({ template, onSelect }: { template: WorkflowSummary; onSelect: () => void }) {
   const category = CATEGORIES[template.category as CategoryKey] || CATEGORIES.general;
   const useCase = useCaseDescriptions[template.id];
 
@@ -653,18 +704,12 @@ function TemplateCard({
         </Link>
       </div>
 
-      <p className="text-sm text-text-muted mb-4 line-clamp-2">
-        {template.description}
-      </p>
+      <p className="text-sm text-text-muted mb-4 line-clamp-2">{template.description}</p>
 
       {/* Step Preview */}
       <div className="flex items-center gap-1 mb-3 overflow-x-auto pb-1">
         {template.steps.slice(0, 5).map((step, i) => (
-          <div
-            key={step.id}
-            className="flex items-center"
-            title={step.name}
-          >
+          <div key={step.id} className="flex items-center" title={step.name}>
             <span className="text-sm">{stepTypeIcons[step.type] || '⚙️'}</span>
             {i < Math.min(template.steps.length - 1, 4) && (
               <span className="text-text-muted/30 mx-0.5">→</span>
@@ -743,10 +788,7 @@ function TemplateDetailModal({
                 </div>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="text-text-muted hover:text-text text-xl"
-            >
+            <button onClick={onClose} className="text-text-muted hover:text-text text-xl">
               ✕
             </button>
           </div>
@@ -789,10 +831,7 @@ function TemplateDetailModal({
             <h3 className="text-sm font-theme-data font-bold text-text mb-3">Workflow Steps</h3>
             <div className="space-y-2">
               {template.steps.map((step, i) => (
-                <div
-                  key={step.id}
-                  className="flex items-center gap-3 p-2 bg-bg rounded text-sm"
-                >
+                <div key={step.id} className="flex items-center gap-3 p-2 bg-bg rounded text-sm">
                   <span className="w-6 h-6 flex items-center justify-center bg-surface rounded text-xs font-theme-data text-text-muted">
                     {i + 1}
                   </span>
@@ -868,7 +907,8 @@ function getDemoTemplates(): WorkflowSummary[] {
     {
       id: 'template_software_code_review',
       name: 'Code Review',
-      description: 'Multi-dimensional code review with security, performance, and maintainability analysis',
+      description:
+        'Multi-dimensional code review with security, performance, and maintainability analysis',
       category: 'code',
       version: '1.0.0',
       tags: ['code', 'security', 'performance', 'review'],
@@ -886,7 +926,8 @@ function getDemoTemplates(): WorkflowSummary[] {
     {
       id: 'template_healthcare_hipaa_compliance',
       name: 'HIPAA Compliance',
-      description: 'Comprehensive HIPAA regulatory assessment across Privacy, Security, and Breach rules',
+      description:
+        'Comprehensive HIPAA regulatory assessment across Privacy, Security, and Breach rules',
       category: 'healthcare',
       version: '1.0.0',
       tags: ['healthcare', 'hipaa', 'compliance', 'audit'],

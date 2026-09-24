@@ -8,11 +8,7 @@ interface RetryButtonProps {
   children?: React.ReactNode;
 }
 
-export function RetryButton({
-  onRetry,
-  className = '',
-  children = 'Retry',
-}: RetryButtonProps) {
+export function RetryButton({ onRetry, className = '', children = 'Retry' }: RetryButtonProps) {
   const [isRetrying, setIsRetrying] = useState(false);
 
   const handleRetry = async () => {
@@ -43,7 +39,9 @@ interface ErrorWithRetryProps {
 
 export function ErrorWithRetry({ error, onRetry, className = '' }: ErrorWithRetryProps) {
   return (
-    <div className={`flex items-center justify-between gap-3 p-3 bg-red-900/20 border border-red-800/50 rounded ${className}`}>
+    <div
+      className={`flex items-center justify-between gap-3 p-3 bg-red-900/20 border border-red-800/50 rounded ${className}`}
+    >
       <span className="text-red-400 text-sm">{error}</span>
       <RetryButton onRetry={onRetry} />
     </div>

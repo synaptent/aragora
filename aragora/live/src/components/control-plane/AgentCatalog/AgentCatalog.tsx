@@ -92,7 +92,7 @@ export function AgentCatalog({
           a.name.toLowerCase().includes(query) ||
           a.model.toLowerCase().includes(query) ||
           a.description?.toLowerCase().includes(query) ||
-          a.expertise?.some((e) => e.toLowerCase().includes(query))
+          a.expertise?.some((e) => e.toLowerCase().includes(query)),
       );
     }
 
@@ -149,9 +149,15 @@ export function AgentCatalog({
     try {
       // Load from multiple endpoints and merge
       const [agentsResponse, leaderboardResponse, calibrationResponse] = await Promise.all([
-        api.get('/api/control-plane/agents').catch(() => ({ agents: [] })) as Promise<{ agents: AgentInfo[] }>,
-        api.get('/api/leaderboard').catch(() => ({ leaderboard: [] })) as Promise<{ leaderboard: Array<{ name: string; elo: number; win_rate: number }> }>,
-        api.get('/api/calibration/leaderboard?limit=50').catch(() => ({ agents: [] })) as Promise<{ agents: Array<{ name: string; calibration_score: number; brier_score: number }> }>,
+        api.get('/api/control-plane/agents').catch(() => ({ agents: [] })) as Promise<{
+          agents: AgentInfo[];
+        }>,
+        api.get('/api/leaderboard').catch(() => ({ leaderboard: [] })) as Promise<{
+          leaderboard: Array<{ name: string; elo: number; win_rate: number }>;
+        }>,
+        api.get('/api/calibration/leaderboard?limit=50').catch(() => ({ agents: [] })) as Promise<{
+          agents: Array<{ name: string; calibration_score: number; brier_score: number }>;
+        }>,
       ]);
 
       // Merge leaderboard and calibration data
@@ -160,12 +166,8 @@ export function AgentCatalog({
       const calibration = calibrationResponse.agents || [];
 
       const enrichedAgents = agentList.map((agent) => {
-        const stats = leaderboard.find(
-          (l) => l.name.toLowerCase() === agent.name.toLowerCase()
-        );
-        const calStats = calibration.find(
-          (c) => c.name.toLowerCase() === agent.name.toLowerCase()
-        );
+        const stats = leaderboard.find((l) => l.name.toLowerCase() === agent.name.toLowerCase());
+        const calStats = calibration.find((c) => c.name.toLowerCase() === agent.name.toLowerCase());
         return {
           ...agent,
           elo: stats?.elo ?? agent.elo,
@@ -177,9 +179,11 @@ export function AgentCatalog({
 
       // If no agents from control plane, try personas
       if (enrichedAgents.length === 0) {
-        const personasResponse = await (api
+        const personasResponse = (await api
           .get('/api/personas')
-          .catch(() => ({ personas: [] }))) as { personas: Array<{ name: string; description: string; model?: string }> };
+          .catch(() => ({ personas: [] }))) as {
+          personas: Array<{ name: string; description: string; model?: string }>;
+        };
 
         const personas = personasResponse.personas || [];
         const personaAgents: AgentInfo[] = personas.map((p) => ({
@@ -212,7 +216,7 @@ export function AgentCatalog({
       setSelectedAgentId(agent.id);
       onSelectAgent?.(agent);
     },
-    [onSelectAgent]
+    [onSelectAgent],
   );
 
   // Handle view calibration
@@ -221,17 +225,12 @@ export function AgentCatalog({
       // Navigate to calibration page with agent pre-selected
       router.push(`/calibration?agent=${encodeURIComponent(agent.name)}`);
     },
-    [router]
+    [router],
   );
 
   // Count by status
   const statusCounts = useMemo(() => {
-    const counts = {
-      all: mergedAgents.length,
-      available: 0,
-      working: 0,
-      error: 0,
-    };
+    const counts = { all: mergedAgents.length, available: 0, working: 0, error: 0 };
 
     mergedAgents.forEach((agent) => {
       if (agent.status === 'idle') counts.available++;

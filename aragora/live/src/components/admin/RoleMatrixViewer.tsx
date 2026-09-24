@@ -62,7 +62,7 @@ export function RoleMatrixViewer({
 
   // Get unique resources
   const resources = useMemo(() => {
-    const resourceSet = new Set(permissions.map(p => p.resource));
+    const resourceSet = new Set(permissions.map((p) => p.resource));
     return Array.from(resourceSet).sort();
   }, [permissions]);
 
@@ -71,17 +71,17 @@ export function RoleMatrixViewer({
     let filtered = permissions;
 
     if (selectedResource) {
-      filtered = filtered.filter(p => p.resource === selectedResource);
+      filtered = filtered.filter((p) => p.resource === selectedResource);
     }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
-        p =>
+        (p) =>
           p.id.toLowerCase().includes(query) ||
           p.resource.toLowerCase().includes(query) ||
           p.action.toLowerCase().includes(query) ||
-          p.description?.toLowerCase().includes(query)
+          p.description?.toLowerCase().includes(query),
       );
     }
 
@@ -93,7 +93,7 @@ export function RoleMatrixViewer({
     if (!groupByResource) return { '': filteredPermissions };
 
     const groups: Record<string, Permission[]> = {};
-    filteredPermissions.forEach(p => {
+    filteredPermissions.forEach((p) => {
       if (!groups[p.resource]) groups[p.resource] = [];
       groups[p.resource].push(p);
     });
@@ -106,7 +106,7 @@ export function RoleMatrixViewer({
 
   const getInheritedPermission = (role: Role, permissionId: string): Role | null => {
     if (!role.parentRole) return null;
-    const parent = roles.find(r => r.id === role.parentRole);
+    const parent = roles.find((r) => r.id === role.parentRole);
     if (!parent) return null;
     if (parent.permissions.includes(permissionId)) return parent;
     return getInheritedPermission(parent, permissionId);
@@ -116,7 +116,9 @@ export function RoleMatrixViewer({
     return (
       <div className={`card p-8 ${className}`}>
         <div className="flex items-center justify-center">
-          <div className="font-theme-data text-text-muted animate-pulse">Loading permission matrix...</div>
+          <div className="font-theme-data text-text-muted animate-pulse">
+            Loading permission matrix...
+          </div>
         </div>
       </div>
     );
@@ -169,7 +171,9 @@ export function RoleMatrixViewer({
               </button>
             ))}
             {resources.length > 6 && (
-              <span className="font-theme-data text-xs text-text-muted">+{resources.length - 6}</span>
+              <span className="font-theme-data text-xs text-text-muted">
+                +{resources.length - 6}
+              </span>
             )}
           </div>
         </div>
@@ -224,7 +228,9 @@ export function RoleMatrixViewer({
                       title={permission.description}
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full bg-${getResourceColor(permission.resource)}`} />
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full bg-${getResourceColor(permission.resource)}`}
+                        />
                         <span className="text-text">{permission.resource}:</span>
                         <span className="text-[var(--acid-cyan)]">{permission.action}</span>
                       </div>
@@ -239,7 +245,9 @@ export function RoleMatrixViewer({
                         <td
                           key={role.id}
                           className="px-3 py-2 text-center"
-                          onMouseEnter={() => setHoveredCell({ role: role.id, permission: permission.id })}
+                          onMouseEnter={() =>
+                            setHoveredCell({ role: role.id, permission: permission.id })
+                          }
                           onMouseLeave={() => setHoveredCell(null)}
                         >
                           {has ? (

@@ -63,10 +63,16 @@ export function KnowledgeFlowWidget({
 
     try {
       const [connectorsRes, statsRes, ageRes, schedulesRes] = await Promise.all([
-        api.get('/api/knowledge/ingestion-status').catch(() => ({ connectors: [] })) as Promise<{ connectors: ConnectorIngestionStatus[] }>,
+        api.get('/api/knowledge/ingestion-status').catch(() => ({ connectors: [] })) as Promise<{
+          connectors: ConnectorIngestionStatus[];
+        }>,
         api.get('/api/knowledge/stats').catch(() => ({})) as Promise<KnowledgeFlowStats>,
-        api.get('/api/knowledge/age-distribution').catch(() => ({ distribution: [] })) as Promise<{ distribution: AgeDistribution[] }>,
-        api.get('/api/knowledge/refresh-schedules').catch(() => ({ schedules: [] })) as Promise<{ schedules: RefreshSchedule[] }>,
+        api.get('/api/knowledge/age-distribution').catch(() => ({ distribution: [] })) as Promise<{
+          distribution: AgeDistribution[];
+        }>,
+        api.get('/api/knowledge/refresh-schedules').catch(() => ({ schedules: [] })) as Promise<{
+          schedules: RefreshSchedule[];
+        }>,
       ]);
 
       setConnectors(connectorsRes.connectors || []);
@@ -193,7 +199,7 @@ export function KnowledgeFlowWidget({
         logger.error('Failed to retry ingestion:', err);
       }
     },
-    [api, loadData]
+    [api, loadData],
   );
 
   // Handle force refresh
@@ -268,9 +274,7 @@ export function KnowledgeFlowWidget({
           <span className="text-xs text-text-muted">
             Auto-refresh {autoRefresh ? 'enabled' : 'disabled'}
           </span>
-          <span className="text-xs text-text-muted">
-            Last: {lastRefresh.toLocaleTimeString()}
-          </span>
+          <span className="text-xs text-text-muted">Last: {lastRefresh.toLocaleTimeString()}</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -295,11 +299,7 @@ export function KnowledgeFlowWidget({
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left: Ingestion Status */}
-        <IngestionStatusCard
-          connectors={connectors}
-          loading={loading}
-          onRetry={handleRetry}
-        />
+        <IngestionStatusCard connectors={connectors} loading={loading} onRetry={handleRetry} />
 
         {/* Right: Age Distribution */}
         <KnowledgeAgeHistogram

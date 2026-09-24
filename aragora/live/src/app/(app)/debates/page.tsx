@@ -52,7 +52,9 @@ interface BackendDebatesResponse {
 }
 
 // Normalize backend debate data to DebateArtifact shape
-function normalizeBackendDebate(d: NonNullable<BackendDebatesResponse['debates']>[number]): DebateArtifact {
+function normalizeBackendDebate(
+  d: NonNullable<BackendDebatesResponse['debates']>[number],
+): DebateArtifact {
   return {
     id: d.debate_id || d.id,
     loop_id: d.loop_id || '',
@@ -87,11 +89,15 @@ export default function DebatesPage() {
 
   // Set up right sidebar content
   useEffect(() => {
-    const consensusCount = debates.filter(d => d.consensus_reached).length;
-    const consensusRate = debates.length > 0 ? Math.round((consensusCount / debates.length) * 100) : 0;
-    const avgConfidence = debates.length > 0
-      ? Math.round(debates.reduce((sum, d) => sum + (d.confidence || 0), 0) / debates.length * 100)
-      : 0;
+    const consensusCount = debates.filter((d) => d.consensus_reached).length;
+    const consensusRate =
+      debates.length > 0 ? Math.round((consensusCount / debates.length) * 100) : 0;
+    const avgConfidence =
+      debates.length > 0
+        ? Math.round(
+            (debates.reduce((sum, d) => sum + (d.confidence || 0), 0) / debates.length) * 100,
+          )
+        : 0;
 
     setContext({
       title: 'Debate Archive',
@@ -100,15 +106,21 @@ export default function DebatesPage() {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Total</span>
-            <span className="text-sm font-theme-data text-[var(--acid-green)]">{debates.length}</span>
+            <span className="text-sm font-theme-data text-[var(--acid-green)]">
+              {debates.length}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Consensus Rate</span>
-            <span className="text-sm font-theme-data text-[var(--acid-green)]">{consensusRate}%</span>
+            <span className="text-sm font-theme-data text-[var(--acid-green)]">
+              {consensusRate}%
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-xs text-[var(--text-muted)]">Avg Confidence</span>
-            <span className="text-sm font-theme-data text-[var(--acid-cyan)]">{avgConfidence}%</span>
+            <span className="text-sm font-theme-data text-[var(--acid-cyan)]">
+              {avgConfidence}%
+            </span>
           </div>
         </div>
       ),
@@ -152,31 +164,43 @@ export default function DebatesPage() {
   }, [debates, setContext, clearContext]);
 
   // Fetch debates from backend API, falling back to Supabase
-  const fetchDebatesFromBackend = useCallback(async (limit: number, offset: number): Promise<{ debates: DebateArtifact[]; hasMore: boolean; source: 'backend' | 'supabase' } | null> => {
-    try {
-      const response = await fetch(
-        `${backendConfig.api}/api/v1/debates?limit=${limit}&offset=${offset}&sort=created_at:desc`,
-        {
-          headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(10000),
-        }
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data: BackendDebatesResponse = await response.json();
-      const debateList = data.debates || data.results || [];
-      const normalized = debateList.map(normalizeBackendDebate);
-      const moreAvailable = data.has_more ?? normalized.length === limit;
-      return { debates: normalized, hasMore: moreAvailable, source: 'backend' };
-    } catch (err) {
-      logger.warn('Backend debates fetch failed, trying Supabase:', err);
-      return null;
-    }
-  }, [backendConfig.api]);
+  const fetchDebatesFromBackend = useCallback(
+    async (
+      limit: number,
+      offset: number,
+    ): Promise<{
+      debates: DebateArtifact[];
+      hasMore: boolean;
+      source: 'backend' | 'supabase';
+    } | null> => {
+      try {
+        const response = await fetch(
+          `${backendConfig.api}/api/v1/debates?limit=${limit}&offset=${offset}&sort=created_at:desc`,
+          { headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(10000) },
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data: BackendDebatesResponse = await response.json();
+        const debateList = data.debates || data.results || [];
+        const normalized = debateList.map(normalizeBackendDebate);
+        const moreAvailable = data.has_more ?? normalized.length === limit;
+        return { debates: normalized, hasMore: moreAvailable, source: 'backend' };
+      } catch (err) {
+        logger.warn('Backend debates fetch failed, trying Supabase:', err);
+        return null;
+      }
+    },
+    [backendConfig.api],
+  );
 
-  const fetchDebatesFromSupabase = useCallback(async (limit: number): Promise<{ debates: DebateArtifact[]; hasMore: boolean; source: 'supabase' }> => {
-    const data = await fetchRecentDebates(limit);
-    return { debates: data, hasMore: data.length === limit, source: 'supabase' };
-  }, []);
+  const fetchDebatesFromSupabase = useCallback(
+    async (
+      limit: number,
+    ): Promise<{ debates: DebateArtifact[]; hasMore: boolean; source: 'supabase' }> => {
+      const data = await fetchRecentDebates(limit);
+      return { debates: data, hasMore: data.length === limit, source: 'supabase' };
+    },
+    [],
+  );
 
   useEffect(() => {
     async function loadDebates() {
@@ -222,7 +246,7 @@ export default function DebatesPage() {
           if (result.debates.length < PAGE_SIZE) {
             setHasMore(false);
           }
-          setDebates(prev => [...prev, ...result.debates]);
+          setDebates((prev) => [...prev, ...result.debates]);
           setPage(nextPage);
           return;
         }
@@ -236,7 +260,7 @@ export default function DebatesPage() {
         setHasMore(false);
       }
 
-      setDebates(prev => [...prev, ...newDebates]);
+      setDebates((prev) => [...prev, ...newDebates]);
       setPage(nextPage);
     } catch (e) {
       logger.error('Failed to load more debates:', e);
@@ -246,7 +270,7 @@ export default function DebatesPage() {
   };
 
   // Filter debates
-  const filteredDebates = debates.filter(debate => {
+  const filteredDebates = debates.filter((debate) => {
     if (filter === 'consensus') return debate.consensus_reached;
     if (filter === 'no-consensus') return !debate.consensus_reached;
     return true;
@@ -290,12 +314,15 @@ export default function DebatesPage() {
   };
 
   // Group filtered debates by date
-  const groupedDebates = filteredDebates.reduce((acc, debate) => {
-    const date = new Date(debate.created_at).toLocaleDateString();
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(debate);
-    return acc;
-  }, {} as Record<string, DebateArtifact[]>);
+  const groupedDebates = filteredDebates.reduce(
+    (acc, debate) => {
+      const date = new Date(debate.created_at).toLocaleDateString();
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(debate);
+      return acc;
+    },
+    {} as Record<string, DebateArtifact[]>,
+  );
 
   return (
     <>
@@ -333,9 +360,14 @@ export default function DebatesPage() {
               </div>
             </div>
             <div className="mt-2 text-xs text-[var(--text-muted)] font-theme-data flex items-center gap-2">
-              <span>Showing {filteredDebates.length} of {debates.length} debates</span>
+              <span>
+                Showing {filteredDebates.length} of {debates.length} debates
+              </span>
               {dataSource !== 'none' && (
-                <span className="text-[10px] text-[var(--text-muted)]" title={dataSource === 'backend' ? 'Fetched from API' : 'Fetched from Supabase'}>
+                <span
+                  className="text-[10px] text-[var(--text-muted)]"
+                  title={dataSource === 'backend' ? 'Fetched from API' : 'Fetched from Supabase'}
+                >
                   [{dataSource === 'backend' ? 'API' : 'DB'}]
                 </span>
               )}
@@ -463,7 +495,11 @@ export default function DebatesPage() {
                                       : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
                                 }`}
                               >
-                                {debate.winning_proposal ? 'COMPLETED' : debate.consensus_reached ? 'CONSENSUS' : 'NO CONSENSUS'}
+                                {debate.winning_proposal
+                                  ? 'COMPLETED'
+                                  : debate.consensus_reached
+                                    ? 'CONSENSUS'
+                                    : 'NO CONSENSUS'}
                               </span>
 
                               {/* Confidence */}
@@ -473,7 +509,10 @@ export default function DebatesPage() {
 
                               {/* Receipt indicator */}
                               {debate.vote_tally && (
-                                <span className="text-[10px] font-theme-data text-[var(--accent)]" title="Has receipt">
+                                <span
+                                  className="text-[10px] font-theme-data text-[var(--accent)]"
+                                  title="Has receipt"
+                                >
                                   [RCV]
                                 </span>
                               )}
@@ -559,7 +598,8 @@ export default function DebatesPage() {
                     {'>'} LIVE DEBATE CREATOR
                   </h2>
                   <p className="mt-1 text-xs font-theme-data text-[var(--text-muted)]">
-                    Start a real backend debate with auto-selected agents, a light protocol, and a default $5 budget cap.
+                    Start a real backend debate with auto-selected agents, a light protocol, and a
+                    default $5 budget cap.
                   </p>
                 </div>
                 <button
@@ -590,23 +630,16 @@ export default function DebatesPage() {
 
         {/* Footer */}
         <footer className="text-center text-xs font-theme-data py-8 border-t border-[var(--accent)]/20 mt-8">
-          <div className="text-[var(--accent)]/50 mb-2">
-            {'═'.repeat(40)}
-          </div>
+          <div className="text-[var(--accent)]/50 mb-2">{'═'.repeat(40)}</div>
           <p className="text-text-muted">
             {'>'} AGORA DEBATE ARCHIVE // {debates.length} DEBATES
           </p>
           <p className="text-[var(--acid-cyan)] mt-2">
-            <Link
-              href="/"
-              className="hover:text-[var(--accent)] transition-colors"
-            >
+            <Link href="/" className="hover:text-[var(--accent)] transition-colors">
               [ RETURN TO LIVE ]
             </Link>
           </p>
-          <div className="text-[var(--accent)]/50 mt-4">
-            {'═'.repeat(40)}
-          </div>
+          <div className="text-[var(--accent)]/50 mt-4">{'═'.repeat(40)}</div>
         </footer>
       </main>
     </>

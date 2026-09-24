@@ -257,15 +257,17 @@ export function GauntletHeatmap({
               <div key={sev}>
                 <div
                   className={`text-lg font-theme-data font-bold ${
-                    count > 0 ? severityColors[sev].text.replace('text-white', 'text-text').replace('text-black', 'text-text') : 'text-text-muted'
+                    count > 0
+                      ? severityColors[sev].text
+                          .replace('text-white', 'text-text')
+                          .replace('text-black', 'text-text')
+                      : 'text-text-muted'
                   }`}
                   style={{ color: count > 0 ? undefined : undefined }}
                 >
                   {count}
                 </div>
-                <div className="text-xs text-text-muted font-theme-data uppercase">
-                  {sev}
-                </div>
+                <div className="text-xs text-text-muted font-theme-data uppercase">{sev}</div>
               </div>
             );
           })}

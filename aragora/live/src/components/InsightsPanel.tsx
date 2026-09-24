@@ -51,23 +51,26 @@ interface InsightsPanelProps {
 
 const DEFAULT_API_BASE = API_BASE_URL;
 
-function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }: InsightsPanelProps) {
+function InsightsPanelComponent({
+  wsMessages = [],
+  apiBase = DEFAULT_API_BASE,
+}: InsightsPanelProps) {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [memoryRecalls, setMemoryRecalls] = useState<MemoryRecall[]>([]);
   const [flips, setFlips] = useState<FlipEvent[]>([]);
   const [flipSummary, setFlipSummary] = useState<FlipSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'insights' | 'memory' | 'flips' | 'learning'>('insights');
+  const [activeTab, setActiveTab] = useState<'insights' | 'memory' | 'flips' | 'learning'>(
+    'insights',
+  );
 
   const fetchInsights = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetchWithRetry(
-        `${apiBase}/api/insights/recent?limit=10`,
-        undefined,
-        { maxRetries: 2 }
-      );
+      const response = await fetchWithRetry(`${apiBase}/api/insights/recent?limit=10`, undefined, {
+        maxRetries: 2,
+      });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -114,7 +117,9 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
           query: (data.query as string) || '',
           hits: (data.hits as Array<{ topic: string; similarity: number }>) || [],
           count: (data.count as number) || 0,
-          timestamp: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString(),
+          timestamp: msg.timestamp
+            ? new Date(msg.timestamp).toISOString()
+            : new Date().toISOString(),
         };
       });
 
@@ -129,10 +134,10 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
   // Listen for flip_detected WebSocket events for real-time flip updates
   useEffect(() => {
     const typeEmojis: Record<string, string> = {
-      'contradiction': '🔄',
-      'retraction': '↩️',
-      'qualification': '⚖️',
-      'refinement': '✨',
+      contradiction: '🔄',
+      retraction: '↩️',
+      qualification: '⚖️',
+      refinement: '✨',
     };
 
     const flipMessages: FlipEvent[] = wsMessages
@@ -153,13 +158,19 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
           type_emoji: typeEmojis[flipType] || '❓',
           before: {
             claim: String(data.original_claim || beforeData?.claim || ''),
-            confidence: origConf ? `${(origConf * 100).toFixed(0)}%` : String(beforeData?.confidence || 'N/A'),
+            confidence: origConf
+              ? `${(origConf * 100).toFixed(0)}%`
+              : String(beforeData?.confidence || 'N/A'),
           },
           after: {
             claim: String(data.new_claim || afterData?.claim || ''),
-            confidence: newConf ? `${(newConf * 100).toFixed(0)}%` : String(afterData?.confidence || 'N/A'),
+            confidence: newConf
+              ? `${(newConf * 100).toFixed(0)}%`
+              : String(afterData?.confidence || 'N/A'),
           },
-          similarity: simScore ? `${(simScore * 100).toFixed(0)}%` : String(data.similarity || 'N/A'),
+          similarity: simScore
+            ? `${(simScore * 100).toFixed(0)}%`
+            : String(data.similarity || 'N/A'),
           domain: data.domain ? String(data.domain) : null,
           timestamp: msg.timestamp
             ? new Date(msg.timestamp).toISOString()
@@ -292,12 +303,17 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
       {/* Key Disagreements (crux detection) */}
       {wsMessages.filter((e): e is GenericStreamEvent => e.type === 'crux_detected').length > 0 && (
         <div className="mb-4">
-          <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">KEY DISAGREEMENTS</h3>
+          <h3 className="text-sm font-theme-data text-[var(--acid-cyan)] mb-2">
+            KEY DISAGREEMENTS
+          </h3>
           <div className="space-y-2">
             {wsMessages
               .filter((e): e is GenericStreamEvent => e.type === 'crux_detected')
               .map((e, i) => (
-                <div key={i} className="p-2 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded">
+                <div
+                  key={i}
+                  className="p-2 border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 rounded"
+                >
                   <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
                     {typeof e.data === 'object' && e.data !== null && 'description' in e.data
                       ? String(e.data.description)
@@ -311,14 +327,15 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
 
       {/* Insights Tab */}
       {activeTab === 'insights' && (
-        <div id="insights-panel" role="tabpanel" aria-labelledby="insights-tab" className="space-y-3 max-h-96 overflow-y-auto">
-          {loading && (
-            <div className="text-center text-text-muted py-4">Loading insights...</div>
-          )}
+        <div
+          id="insights-panel"
+          role="tabpanel"
+          aria-labelledby="insights-tab"
+          className="space-y-3 max-h-96 overflow-y-auto"
+        >
+          {loading && <div className="text-center text-text-muted py-4">Loading insights...</div>}
 
-          {error && (
-            <ErrorWithRetry error={error} onRetry={fetchInsights} />
-          )}
+          {error && <ErrorWithRetry error={error} onRetry={fetchInsights} />}
 
           {!loading && !error && insights.length === 0 && (
             <div className="text-center text-text-muted py-4">
@@ -346,9 +363,7 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
 
               <h4 className="text-sm font-medium text-text mt-2">{insight.title}</h4>
 
-              <p className="text-xs text-text-muted mt-1">
-                {insight.description}
-              </p>
+              <p className="text-xs text-text-muted mt-1">{insight.description}</p>
 
               {insight.agents_involved?.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
@@ -369,7 +384,12 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
 
       {/* Memory Recalls Tab */}
       {activeTab === 'memory' && (
-        <div id="memory-panel" role="tabpanel" aria-labelledby="memory-tab" className="space-y-3 max-h-96 overflow-y-auto">
+        <div
+          id="memory-panel"
+          role="tabpanel"
+          aria-labelledby="memory-tab"
+          className="space-y-3 max-h-96 overflow-y-auto"
+        >
           {memoryRecalls.length === 0 && (
             <div className="text-center text-text-muted py-4">
               No memory recalls yet. Historical context will appear here during debates.
@@ -390,9 +410,7 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
                 </span>
               </div>
 
-              <p className="text-sm text-text-muted mb-2">
-                Query: {recall.query}
-              </p>
+              <p className="text-sm text-text-muted mb-2">Query: {recall.query}</p>
 
               <div className="space-y-1">
                 {recall.hits?.map((hit, i) => (
@@ -406,9 +424,7 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
               </div>
 
               {recall.count > 3 && (
-                <div className="text-xs text-text-muted mt-1">
-                  +{recall.count - 3} more matches
-                </div>
+                <div className="text-xs text-text-muted mt-1">+{recall.count - 3} more matches</div>
               )}
             </div>
           ))}
@@ -417,15 +433,18 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
 
       {/* Flips Tab */}
       {activeTab === 'flips' && (
-        <div id="flips-panel" role="tabpanel" aria-labelledby="flips-tab" className="space-y-3 max-h-96 overflow-y-auto">
+        <div
+          id="flips-panel"
+          role="tabpanel"
+          aria-labelledby="flips-tab"
+          className="space-y-3 max-h-96 overflow-y-auto"
+        >
           {/* Summary Header */}
           {flipSummary && flipSummary.total_flips > 0 && (
             <div className="p-3 bg-bg border border-border rounded-lg mb-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium text-text">Position Reversals</span>
-                <span className="text-xs text-text-muted">
-                  {flipSummary.recent_24h} in 24h
-                </span>
+                <span className="text-xs text-text-muted">{flipSummary.recent_24h} in 24h</span>
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
                 {flipSummary.by_type.contradiction > 0 && (
@@ -470,13 +489,9 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
                   >
                     {flip.type_emoji} {flip.type}
                   </span>
-                  <span className="text-xs text-text-muted font-theme-data">
-                    {flip.agent}
-                  </span>
+                  <span className="text-xs text-text-muted font-theme-data">{flip.agent}</span>
                 </div>
-                <span className="text-xs text-text-muted">
-                  {flip.similarity} similar
-                </span>
+                <span className="text-xs text-text-muted">{flip.similarity} similar</span>
               </div>
 
               <div className="space-y-2 text-xs">
@@ -511,7 +526,12 @@ function InsightsPanelComponent({ wsMessages = [], apiBase = DEFAULT_API_BASE }:
 
       {/* Learning Tab */}
       {activeTab === 'learning' && (
-        <div id="learning-panel" role="tabpanel" aria-labelledby="learning-tab" className="max-h-[500px] overflow-y-auto">
+        <div
+          id="learning-panel"
+          role="tabpanel"
+          aria-labelledby="learning-tab"
+          className="max-h-[500px] overflow-y-auto"
+        >
           <LearningEvolution />
         </div>
       )}

@@ -13,9 +13,24 @@ const mockQualityData = {
   stats: {
     total_debates: 50,
     confidence_history: [
-      { debate_id: 'd1', confidence: 0.85, consensus_reached: true, timestamp: '2026-01-10T10:00:00Z' },
-      { debate_id: 'd2', confidence: 0.72, consensus_reached: true, timestamp: '2026-01-10T09:00:00Z' },
-      { debate_id: 'd3', confidence: 0.45, consensus_reached: false, timestamp: '2026-01-10T08:00:00Z' },
+      {
+        debate_id: 'd1',
+        confidence: 0.85,
+        consensus_reached: true,
+        timestamp: '2026-01-10T10:00:00Z',
+      },
+      {
+        debate_id: 'd2',
+        confidence: 0.72,
+        consensus_reached: true,
+        timestamp: '2026-01-10T09:00:00Z',
+      },
+      {
+        debate_id: 'd3',
+        confidence: 0.45,
+        consensus_reached: false,
+        timestamp: '2026-01-10T08:00:00Z',
+      },
     ],
     trend: 'improving',
     average_confidence: 0.78,
@@ -29,10 +44,7 @@ const mockQualityData = {
 const mockQualityDataWithAlert = {
   ...mockQualityData,
   quality_score: 35,
-  alert: {
-    level: 'warning',
-    message: 'Consensus rate declining over the past week',
-  },
+  alert: { level: 'warning', message: 'Consensus rate declining over the past week' },
 };
 
 describe('ConsensusQualityDashboard', () => {
@@ -63,18 +75,19 @@ describe('ConsensusQualityDashboard', () => {
   it('shows empty state when no debates exist', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        stats: {
-          total_debates: 0,
-          confidence_history: [],
-          trend: 'insufficient_data',
-          average_confidence: 0,
-          consensus_rate: 0,
-          consensus_reached_count: 0,
-        },
-        quality_score: 0,
-        alert: null,
-      }),
+      json: () =>
+        Promise.resolve({
+          stats: {
+            total_debates: 0,
+            confidence_history: [],
+            trend: 'insufficient_data',
+            average_confidence: 0,
+            consensus_rate: 0,
+            consensus_reached_count: 0,
+          },
+          quality_score: 0,
+          alert: null,
+        }),
     });
 
     render(<ConsensusQualityDashboard />);
@@ -85,10 +98,7 @@ describe('ConsensusQualityDashboard', () => {
   });
 
   it('renders quality score and key metrics', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockQualityData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockQualityData) });
 
     render(<ConsensusQualityDashboard />);
 
@@ -110,10 +120,7 @@ describe('ConsensusQualityDashboard', () => {
   });
 
   it('applies green color for high quality scores', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockQualityData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockQualityData) });
 
     render(<ConsensusQualityDashboard />);
 
@@ -138,10 +145,7 @@ describe('ConsensusQualityDashboard', () => {
   });
 
   it('refetches data when refresh is clicked', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockQualityData),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(mockQualityData) });
 
     render(<ConsensusQualityDashboard />);
 

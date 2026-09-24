@@ -42,7 +42,7 @@ export function SyncStatusWidget({
     // Calculate last 24h sync count
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recentSyncs = syncHistory.filter(
-      (h) => new Date(h.started_at) >= oneDayAgo && h.status === 'completed'
+      (h) => new Date(h.started_at) >= oneDayAgo && h.status === 'completed',
     ).length;
 
     return { connected, syncing, errors, totalItems, recentSyncs };
@@ -171,8 +171,8 @@ export function SyncStatusWidget({
                       sync.status === 'completed'
                         ? 'bg-success'
                         : sync.status === 'failed'
-                        ? 'bg-[var(--crimson)]'
-                        : 'bg-text-muted'
+                          ? 'bg-[var(--crimson)]'
+                          : 'bg-text-muted'
                     }`}
                   />
                   <div>
@@ -185,7 +185,9 @@ export function SyncStatusWidget({
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className="text-sm font-theme-data">{formatItemCount(sync.items_processed)}</div>
+                    <div className="text-sm font-theme-data">
+                      {formatItemCount(sync.items_processed)}
+                    </div>
                     <div className="text-xs text-text-muted">items</div>
                   </div>
                   {sync.status === 'failed' && onRetrySync && (

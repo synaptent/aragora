@@ -92,10 +92,16 @@ test.describe('Matrix Debate Mode Selection', () => {
 test.describe('Matrix Debate Creation', () => {
   test.beforeEach(async () => {
     const baseUrl = process.env.PLAYWRIGHT_BASE_URL || '';
-    test.skip(baseUrl.includes('live.aragora.ai'), 'Debate creation only available on landing page');
+    test.skip(
+      baseUrl.includes('live.aragora.ai'),
+      'Debate creation only available on landing page',
+    );
   });
 
-  test('should create a matrix debate and navigate to visualization', async ({ page, aragoraPage }) => {
+  test('should create a matrix debate and navigate to visualization', async ({
+    page,
+    aragoraPage,
+  }) => {
     await page.goto('/');
     await aragoraPage.dismissAllOverlays();
     await page.waitForLoadState('domcontentloaded');
@@ -160,13 +166,18 @@ test.describe('Matrix Debate Visualization Page', () => {
 
     // Either matrices exist, empty state, or just main content
     const matrixList = page.locator('[data-testid="matrix-list"], .matrix-list, ul, ol');
-    const emptyState = page.locator(':text("no matrix"), :text("no scenarios"), [data-testid="empty-state"]');
+    const emptyState = page.locator(
+      ':text("no matrix"), :text("no scenarios"), [data-testid="empty-state"]',
+    );
     const mainContent = page.locator('main').first();
 
     const hasMatrices = await matrixList.isVisible().catch(() => false);
     const hasEmpty = await emptyState.isVisible().catch(() => false);
     const hasMain = await mainContent.isVisible().catch(() => false);
-    const hasLoading = await page.locator(':text("loading")').isVisible().catch(() => false);
+    const hasLoading = await page
+      .locator(':text("loading")')
+      .isVisible()
+      .catch(() => false);
 
     expect(hasMatrices || hasEmpty || hasMain || hasLoading).toBeTruthy();
   });
@@ -179,7 +190,9 @@ test.describe('Matrix Grid Display', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for grid elements
-    const grid = page.locator('[data-testid="scenario-grid"], .scenario-grid, table, [role="grid"]');
+    const grid = page.locator(
+      '[data-testid="scenario-grid"], .scenario-grid, table, [role="grid"]',
+    );
     const _hasGrid = await grid.isVisible().catch(() => false);
 
     // Grid may only be visible when a matrix is selected
@@ -208,7 +221,7 @@ test.describe('Matrix Grid Display', () => {
 
     // Look for percentage indicators
     const percentages = page.locator(':text("%")');
-    const _hasPercentages = await percentages.count() > 0;
+    const _hasPercentages = (await percentages.count()) > 0;
 
     // Percentages should be present when matrix has results
     expect(true).toBeTruthy(); // Page loads
@@ -228,7 +241,9 @@ test.describe('Matrix Scenario Details', () => {
       await cells.click();
 
       // Should show details panel
-      const detailsPanel = page.locator('[data-testid="scenario-details"], .scenario-details, [role="dialog"]');
+      const detailsPanel = page.locator(
+        '[data-testid="scenario-details"], .scenario-details, [role="dialog"]',
+      );
       const _hasDetails = await detailsPanel.isVisible().catch(() => false);
 
       // Details may appear
@@ -257,7 +272,9 @@ test.describe('Matrix Filtering', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Look for consensus filter
-    const consensusFilter = page.locator('input[type="checkbox"], [role="checkbox"]').filter({ hasText: /consensus/i });
+    const consensusFilter = page
+      .locator('input[type="checkbox"], [role="checkbox"]')
+      .filter({ hasText: /consensus/i });
     const _hasFilter = await consensusFilter.isVisible().catch(() => false);
 
     expect(true).toBeTruthy();
@@ -277,7 +294,10 @@ test.describe('Matrix Filtering', () => {
 });
 
 test.describe('Matrix Comparison Mode', () => {
-  test('should show compare button when multiple scenarios selected', async ({ page, aragoraPage }) => {
+  test('should show compare button when multiple scenarios selected', async ({
+    page,
+    aragoraPage,
+  }) => {
     await page.goto('/debates/matrix');
     await aragoraPage.dismissAllOverlays();
     await page.waitForLoadState('domcontentloaded');
@@ -285,7 +305,7 @@ test.describe('Matrix Comparison Mode', () => {
     // Try to select multiple scenarios
     const cells = page.locator('[data-testid="scenario-cell"], .scenario-cell');
 
-    if (await cells.count() >= 2) {
+    if ((await cells.count()) >= 2) {
       // Ctrl+click to select multiple
       await cells.first().click({ modifiers: ['Control'] });
       await cells.nth(1).click({ modifiers: ['Control'] });

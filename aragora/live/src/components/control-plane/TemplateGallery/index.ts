@@ -20,7 +20,4 @@ export {
   type WorkflowCategory,
 } from './TemplateCard';
 
-export {
-  TemplatePreview,
-  type TemplatePreviewProps,
-} from './TemplatePreview';
+export { TemplatePreview, type TemplatePreviewProps } from './TemplatePreview';

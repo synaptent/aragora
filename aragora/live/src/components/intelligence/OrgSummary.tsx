@@ -59,7 +59,7 @@ export function OrgSummary({ backendUrl }: OrgSummaryProps) {
       setError(null);
       try {
         const response = await fetch(
-          `${backendUrl}/api/v1/intelligence/org-summary?period=${period}`
+          `${backendUrl}/api/v1/intelligence/org-summary?period=${period}`,
         );
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -122,9 +122,15 @@ export function OrgSummary({ backendUrl }: OrgSummaryProps) {
         {/* Cost KPI */}
         <div className="bg-surface/50 rounded-lg p-4 border border-[var(--accent)]/20">
           <p className="text-text-muted text-xs font-theme-data mb-1">Total Cost</p>
-          <p className="text-2xl font-theme-data text-[var(--accent)]">${data.cost_summary.total_cost_usd}</p>
+          <p className="text-2xl font-theme-data text-[var(--accent)]">
+            ${data.cost_summary.total_cost_usd}
+          </p>
           <p className="text-xs font-theme-data mt-1">
-            <span className={data.cost_summary.cost_trend_percent > 0 ? 'text-red-400' : 'text-green-400'}>
+            <span
+              className={
+                data.cost_summary.cost_trend_percent > 0 ? 'text-red-400' : 'text-green-400'
+              }
+            >
               {data.cost_summary.cost_trend_percent > 0 ? '+' : ''}
               {data.cost_summary.cost_trend_percent}%
             </span>
@@ -137,14 +143,17 @@ export function OrgSummary({ backendUrl }: OrgSummaryProps) {
             ></div>
           </div>
           <p className="text-xs text-text-muted mt-1">
-            {data.cost_summary.budget_percentage_used}% of ${data.cost_summary.budget_limit_usd} budget
+            {data.cost_summary.budget_percentage_used}% of ${data.cost_summary.budget_limit_usd}{' '}
+            budget
           </p>
         </div>
 
         {/* Debates KPI */}
         <div className="bg-surface/50 rounded-lg p-4 border border-[var(--accent)]/20">
           <p className="text-text-muted text-xs font-theme-data mb-1">Debates Completed</p>
-          <p className="text-2xl font-theme-data text-[var(--accent)]">{data.debate_summary.debates_completed}</p>
+          <p className="text-2xl font-theme-data text-[var(--accent)]">
+            {data.debate_summary.debates_completed}
+          </p>
           <p className="text-xs font-theme-data mt-1">
             <span className="text-yellow-400">{data.debate_summary.debates_in_progress}</span>
             <span className="text-text-muted"> in progress</span>
@@ -154,7 +163,9 @@ export function OrgSummary({ backendUrl }: OrgSummaryProps) {
         {/* Consensus KPI */}
         <div className="bg-surface/50 rounded-lg p-4 border border-[var(--accent)]/20">
           <p className="text-text-muted text-xs font-theme-data mb-1">Consensus Rate</p>
-          <p className="text-2xl font-theme-data text-[var(--accent)]">{data.debate_summary.consensus_rate_percent}%</p>
+          <p className="text-2xl font-theme-data text-[var(--accent)]">
+            {data.debate_summary.consensus_rate_percent}%
+          </p>
           <p className="text-xs font-theme-data mt-1">
             <span className="text-text-muted">{data.debate_summary.consensus_reached} reached</span>
           </p>
@@ -166,7 +177,9 @@ export function OrgSummary({ backendUrl }: OrgSummaryProps) {
         {/* Users KPI */}
         <div className="bg-surface/50 rounded-lg p-4 border border-[var(--accent)]/20">
           <p className="text-text-muted text-xs font-theme-data mb-1">Active Users</p>
-          <p className="text-2xl font-theme-data text-[var(--accent)]">{data.user_summary.active_users}</p>
+          <p className="text-2xl font-theme-data text-[var(--accent)]">
+            {data.user_summary.active_users}
+          </p>
           <p className="text-xs font-theme-data mt-1">
             <span className="text-green-400">+{data.user_summary.new_users_this_period}</span>
             <span className="text-text-muted"> new</span>
@@ -179,7 +192,9 @@ export function OrgSummary({ backendUrl }: OrgSummaryProps) {
 
       {/* Top Agents */}
       <div className="bg-surface/30 rounded-lg p-4 border border-[var(--accent)]/10">
-        <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">Top Agents by Efficiency</h3>
+        <h3 className="text-sm font-theme-data text-[var(--accent)] mb-3">
+          Top Agents by Efficiency
+        </h3>
         <div className="space-y-2">
           {data.agent_summary.top_agents.map((agent, index) => (
             <div key={agent.name} className="flex items-center justify-between">

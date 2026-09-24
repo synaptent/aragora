@@ -47,10 +47,7 @@ export function MermaidRenderer({ diagram, className = '' }: MermaidRendererProp
             secondaryColor: '#1a1a1a',
             tertiaryColor: '#2a2a2a',
           },
-          flowchart: {
-            htmlLabels: true,
-            curve: 'basis',
-          },
+          flowchart: { htmlLabels: true, curve: 'basis' },
           securityLevel: 'loose',
         });
 
@@ -97,7 +94,9 @@ export function MermaidRenderer({ diagram, className = '' }: MermaidRendererProp
 
   if (!diagram) {
     return (
-      <div className={`flex items-center justify-center p-8 border border-[var(--accent)]/20 bg-surface/30 ${className}`}>
+      <div
+        className={`flex items-center justify-center p-8 border border-[var(--accent)]/20 bg-surface/30 ${className}`}
+      >
         <p className="text-text-muted text-sm font-theme-data">No diagram to display</p>
       </div>
     );

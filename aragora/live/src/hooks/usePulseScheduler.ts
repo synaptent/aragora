@@ -132,10 +132,7 @@ export function usePulseScheduler() {
     if (authLoading || !isAuthenticated || !tokens?.access_token) {
       return null;
     }
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${tokens.access_token}`,
-    };
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${tokens.access_token}` };
   }, [authLoading, isAuthenticated, tokens?.access_token]);
 
   // Cleanup polling on unmount
@@ -152,36 +149,30 @@ export function usePulseScheduler() {
   // ---------------------------------------------------------------------------
 
   const fetchStatus = useCallback(async (): Promise<SchedulerStatus | null> => {
-    setState(s => ({ ...s, statusLoading: true, statusError: null }));
+    setState((s) => ({ ...s, statusLoading: true, statusError: null }));
 
     try {
       const headers = getAuthHeaders();
       if (!headers) {
-        setState(s => ({ ...s, statusLoading: false, statusError: 'Authentication required' }));
+        setState((s) => ({ ...s, statusLoading: false, statusError: 'Authentication required' }));
         return null;
       }
       const response = await fetch(`${API_BASE}/api/pulse/scheduler/status`, { headers });
 
       if (!response.ok) {
         if (response.status === 503) {
-          setState(s => ({ ...s, statusLoading: false, statusError: 'Scheduler unavailable' }));
+          setState((s) => ({ ...s, statusLoading: false, statusError: 'Scheduler unavailable' }));
           return null;
         }
         throw new Error(`HTTP ${response.status}`);
       }
 
       const data: SchedulerStatus = await response.json();
-      setState(s => ({
-        ...s,
-        statusLoading: false,
-        statusError: null,
-        status: data,
-      }));
+      setState((s) => ({ ...s, statusLoading: false, statusError: null, status: data }));
       return data;
-
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Failed to fetch status';
-      setState(s => ({ ...s, statusLoading: false, statusError: errorMsg }));
+      setState((s) => ({ ...s, statusLoading: false, statusError: errorMsg }));
       return null;
     }
   }, [getAuthHeaders]);
@@ -190,17 +181,20 @@ export function usePulseScheduler() {
   // Poll Status
   // ---------------------------------------------------------------------------
 
-  const startPolling = useCallback((intervalMs: number = 30000) => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-    }
+  const startPolling = useCallback(
+    (intervalMs: number = 30000) => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
 
-    fetchStatus();
-
-    pollingRef.current = setInterval(() => {
       fetchStatus();
-    }, intervalMs);
-  }, [fetchStatus]);
+
+      pollingRef.current = setInterval(() => {
+        fetchStatus();
+      }, intervalMs);
+    },
+    [fetchStatus],
+  );
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -214,12 +208,12 @@ export function usePulseScheduler() {
   // ---------------------------------------------------------------------------
 
   const start = useCallback(async (): Promise<boolean> => {
-    setState(s => ({ ...s, actionLoading: true, actionError: null }));
+    setState((s) => ({ ...s, actionLoading: true, actionError: null }));
 
     try {
       const headers = getAuthHeaders();
       if (!headers) {
-        setState(s => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
+        setState((s) => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
         return false;
       }
       const response = await fetch(`${API_BASE}/api/pulse/scheduler/start`, {
@@ -233,54 +227,55 @@ export function usePulseScheduler() {
       }
 
       await fetchStatus();
-      setState(s => ({ ...s, actionLoading: false }));
+      setState((s) => ({ ...s, actionLoading: false }));
       return true;
-
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Failed to start scheduler';
-      setState(s => ({ ...s, actionLoading: false, actionError: errorMsg }));
+      setState((s) => ({ ...s, actionLoading: false, actionError: errorMsg }));
       return false;
     }
   }, [fetchStatus, getAuthHeaders]);
 
-  const stop = useCallback(async (graceful: boolean = true): Promise<boolean> => {
-    setState(s => ({ ...s, actionLoading: true, actionError: null }));
+  const stop = useCallback(
+    async (graceful: boolean = true): Promise<boolean> => {
+      setState((s) => ({ ...s, actionLoading: true, actionError: null }));
 
-    try {
-      const headers = getAuthHeaders();
-      if (!headers) {
-        setState(s => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
+      try {
+        const headers = getAuthHeaders();
+        if (!headers) {
+          setState((s) => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
+          return false;
+        }
+        const response = await fetch(`${API_BASE}/api/pulse/scheduler/stop`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ graceful }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        await fetchStatus();
+        setState((s) => ({ ...s, actionLoading: false }));
+        return true;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to stop scheduler';
+        setState((s) => ({ ...s, actionLoading: false, actionError: errorMsg }));
         return false;
       }
-      const response = await fetch(`${API_BASE}/api/pulse/scheduler/stop`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ graceful }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      await fetchStatus();
-      setState(s => ({ ...s, actionLoading: false }));
-      return true;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to stop scheduler';
-      setState(s => ({ ...s, actionLoading: false, actionError: errorMsg }));
-      return false;
-    }
-  }, [fetchStatus, getAuthHeaders]);
+    },
+    [fetchStatus, getAuthHeaders],
+  );
 
   const pause = useCallback(async (): Promise<boolean> => {
-    setState(s => ({ ...s, actionLoading: true, actionError: null }));
+    setState((s) => ({ ...s, actionLoading: true, actionError: null }));
 
     try {
       const headers = getAuthHeaders();
       if (!headers) {
-        setState(s => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
+        setState((s) => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
         return false;
       }
       const response = await fetch(`${API_BASE}/api/pulse/scheduler/pause`, {
@@ -294,23 +289,22 @@ export function usePulseScheduler() {
       }
 
       await fetchStatus();
-      setState(s => ({ ...s, actionLoading: false }));
+      setState((s) => ({ ...s, actionLoading: false }));
       return true;
-
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Failed to pause scheduler';
-      setState(s => ({ ...s, actionLoading: false, actionError: errorMsg }));
+      setState((s) => ({ ...s, actionLoading: false, actionError: errorMsg }));
       return false;
     }
   }, [fetchStatus, getAuthHeaders]);
 
   const resume = useCallback(async (): Promise<boolean> => {
-    setState(s => ({ ...s, actionLoading: true, actionError: null }));
+    setState((s) => ({ ...s, actionLoading: true, actionError: null }));
 
     try {
       const headers = getAuthHeaders();
       if (!headers) {
-        setState(s => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
+        setState((s) => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
         return false;
       }
       const response = await fetch(`${API_BASE}/api/pulse/scheduler/resume`, {
@@ -324,12 +318,11 @@ export function usePulseScheduler() {
       }
 
       await fetchStatus();
-      setState(s => ({ ...s, actionLoading: false }));
+      setState((s) => ({ ...s, actionLoading: false }));
       return true;
-
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : 'Failed to resume scheduler';
-      setState(s => ({ ...s, actionLoading: false, actionError: errorMsg }));
+      setState((s) => ({ ...s, actionLoading: false, actionError: errorMsg }));
       return false;
     }
   }, [fetchStatus, getAuthHeaders]);
@@ -338,96 +331,98 @@ export function usePulseScheduler() {
   // Update Config
   // ---------------------------------------------------------------------------
 
-  const updateConfig = useCallback(async (updates: Partial<SchedulerConfig>): Promise<boolean> => {
-    setState(s => ({ ...s, actionLoading: true, actionError: null }));
+  const updateConfig = useCallback(
+    async (updates: Partial<SchedulerConfig>): Promise<boolean> => {
+      setState((s) => ({ ...s, actionLoading: true, actionError: null }));
 
-    try {
-      const headers = getAuthHeaders();
-      if (!headers) {
-        setState(s => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
+      try {
+        const headers = getAuthHeaders();
+        if (!headers) {
+          setState((s) => ({ ...s, actionLoading: false, actionError: 'Authentication required' }));
+          return false;
+        }
+        const response = await fetch(`${API_BASE}/api/pulse/scheduler/config`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify(updates),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        await fetchStatus();
+        setState((s) => ({ ...s, actionLoading: false }));
+        return true;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to update config';
+        setState((s) => ({ ...s, actionLoading: false, actionError: errorMsg }));
         return false;
       }
-      const response = await fetch(`${API_BASE}/api/pulse/scheduler/config`, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify(updates),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      await fetchStatus();
-      setState(s => ({ ...s, actionLoading: false }));
-      return true;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to update config';
-      setState(s => ({ ...s, actionLoading: false, actionError: errorMsg }));
-      return false;
-    }
-  }, [fetchStatus, getAuthHeaders]);
+    },
+    [fetchStatus, getAuthHeaders],
+  );
 
   // ---------------------------------------------------------------------------
   // Fetch History
   // ---------------------------------------------------------------------------
 
-  const fetchHistory = useCallback(async (
-    limit: number = 50,
-    offset: number = 0,
-    platform?: string
-  ): Promise<ScheduledDebate[]> => {
-    setState(s => ({ ...s, historyLoading: true, historyError: null }));
+  const fetchHistory = useCallback(
+    async (
+      limit: number = 50,
+      offset: number = 0,
+      platform?: string,
+    ): Promise<ScheduledDebate[]> => {
+      setState((s) => ({ ...s, historyLoading: true, historyError: null }));
 
-    try {
-      const headers = getAuthHeaders();
-      if (!headers) {
-        setState(s => ({ ...s, historyLoading: false, historyError: 'Authentication required' }));
+      try {
+        const headers = getAuthHeaders();
+        if (!headers) {
+          setState((s) => ({
+            ...s,
+            historyLoading: false,
+            historyError: 'Authentication required',
+          }));
+          return [];
+        }
+        const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+        if (platform) {
+          params.set('platform', platform);
+        }
+
+        const response = await fetch(`${API_BASE}/api/pulse/scheduler/history?${params}`, {
+          headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data: SchedulerHistory = await response.json();
+        setState((s) => ({
+          ...s,
+          historyLoading: false,
+          historyError: null,
+          history: data.debates,
+          historyTotal: data.total,
+        }));
+        return data.debates;
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : 'Failed to fetch history';
+        setState((s) => ({ ...s, historyLoading: false, historyError: errorMsg }));
         return [];
       }
-      const params = new URLSearchParams({
-        limit: String(limit),
-        offset: String(offset),
-      });
-      if (platform) {
-        params.set('platform', platform);
-      }
-
-      const response = await fetch(`${API_BASE}/api/pulse/scheduler/history?${params}`, { headers });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data: SchedulerHistory = await response.json();
-      setState(s => ({
-        ...s,
-        historyLoading: false,
-        historyError: null,
-        history: data.debates,
-        historyTotal: data.total,
-      }));
-      return data.debates;
-
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : 'Failed to fetch history';
-      setState(s => ({ ...s, historyLoading: false, historyError: errorMsg }));
-      return [];
-    }
-  }, [getAuthHeaders]);
+    },
+    [getAuthHeaders],
+  );
 
   // ---------------------------------------------------------------------------
   // Clear Errors
   // ---------------------------------------------------------------------------
 
   const clearErrors = useCallback(() => {
-    setState(s => ({
-      ...s,
-      statusError: null,
-      historyError: null,
-      actionError: null,
-    }));
+    setState((s) => ({ ...s, statusError: null, historyError: null, actionError: null }));
   }, []);
 
   // ---------------------------------------------------------------------------

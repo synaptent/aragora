@@ -23,9 +23,7 @@ function jsonResponse(data: unknown): Response {
   return {
     ok: true,
     status: 200,
-    headers: {
-      get: () => 'application/json',
-    },
+    headers: { get: () => 'application/json' },
     json: async () => data,
   } as Response;
 }
@@ -47,20 +45,12 @@ describe('PlaygroundDebate backend selection', () => {
         id: 'debate-playground-1',
         topic: 'Should standalone playground debates honor the selected backend?',
         participants: ['claude', 'gpt', 'gemini'],
-        proposals: {
-          claude: 'Yes',
-          gpt: 'Yes',
-          gemini: 'Yes',
-        },
+        proposals: { claude: 'Yes', gpt: 'Yes', gemini: 'Yes' },
         critiques: [],
         votes: [],
         receipt: {
           receipt_id: 'receipt-playground-1',
-          consensus: {
-            reached: true,
-            method: 'weighted_majority',
-            confidence: 0.9,
-          },
+          consensus: { reached: true, method: 'weighted_majority', confidence: 0.9 },
           rounds_used: 2,
           timestamp: '2026-03-31T09:45:00Z',
           signature: 'sig-playground-1',
@@ -74,9 +64,7 @@ describe('PlaygroundDebate backend selection', () => {
     render(<PlaygroundDebate />);
 
     fireEvent.change(screen.getByPlaceholderText('Or type your own question...'), {
-      target: {
-        value: 'Should standalone playground debates honor the selected backend?',
-      },
+      target: { value: 'Should standalone playground debates honor the selected backend?' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'RUN DEBATE' }));
 

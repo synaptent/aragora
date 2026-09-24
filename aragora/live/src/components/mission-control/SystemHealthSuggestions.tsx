@@ -50,8 +50,12 @@ export const SystemHealthSuggestions = memo(function SystemHealthSuggestions({
     <div className="space-y-2" data-testid="system-health-suggestions">
       <div className="flex items-center gap-1.5">
         <span className="text-sm">💡</span>
-        <span className="text-xs font-theme-data font-bold text-[var(--text)]">System Suggestions</span>
-        {isLoading && <span className="text-xs text-[var(--text-muted)] animate-pulse">analyzing...</span>}
+        <span className="text-xs font-theme-data font-bold text-[var(--text)]">
+          System Suggestions
+        </span>
+        {isLoading && (
+          <span className="text-xs text-[var(--text-muted)] animate-pulse">analyzing...</span>
+        )}
       </div>
 
       {suggestions.map((suggestion) => {
@@ -66,8 +70,12 @@ export const SystemHealthSuggestions = memo(function SystemHealthSuggestions({
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-theme-data font-bold text-[var(--text)]">{suggestion.title}</span>
-                  <span className={`px-1.5 py-0.5 text-[10px] font-theme-data rounded ${impact.bg} ${impact.text}`}>
+                  <span className="text-xs font-theme-data font-bold text-[var(--text)]">
+                    {suggestion.title}
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.5 text-[10px] font-theme-data rounded ${impact.bg} ${impact.text}`}
+                  >
                     {impact.label}
                   </span>
                 </div>

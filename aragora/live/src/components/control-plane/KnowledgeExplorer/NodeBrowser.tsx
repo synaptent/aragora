@@ -58,7 +58,7 @@ export function NodeBrowser({
     (node: KnowledgeNode) => {
       onSelectNode?.(node);
     },
-    [onSelectNode]
+    [onSelectNode],
   );
 
   const handleViewInGraph = useCallback(
@@ -66,7 +66,7 @@ export function NodeBrowser({
       e.stopPropagation();
       onViewInGraph?.(node);
     },
-    [onViewInGraph]
+    [onViewInGraph],
   );
 
   if (loading) {
@@ -114,7 +114,9 @@ export function NodeBrowser({
               </span>
 
               {/* Node type label */}
-              <span className={`text-xs font-theme-data uppercase ${nodeTypeColors[node.node_type]}`}>
+              <span
+                className={`text-xs font-theme-data uppercase ${nodeTypeColors[node.node_type]}`}
+              >
                 {node.node_type}
               </span>
 
@@ -153,8 +155,8 @@ export function NodeBrowser({
                     node.confidence >= 0.8
                       ? 'text-green-400'
                       : node.confidence >= 0.5
-                      ? 'text-yellow-400'
-                      : 'text-red-400'
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
                   }`}
                 >
                   {Math.round(node.confidence * 100)}%

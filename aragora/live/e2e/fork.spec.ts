@@ -70,7 +70,9 @@ test.describe('Fork Visualizer', () => {
   test('should show fork metadata', async ({ page }) => {
     await page.getByRole('button', { name: /Test debate topic/i }).click();
     await expect(page.getByText(/messages inherited/i).first()).toBeVisible();
-    await expect(page.getByText(/What if pricing pressure forced a different constraint set/i)).toBeVisible();
+    await expect(
+      page.getByText(/What if pricing pressure forced a different constraint set/i),
+    ).toBeVisible();
   });
 });
 

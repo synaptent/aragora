@@ -16,12 +16,7 @@ interface ApiErrorProps {
  *
  * Matches the Aragora CRT/terminal aesthetic with warning colors.
  */
-export function ApiError({
-  error,
-  onRetry,
-  compact = false,
-  className = '',
-}: ApiErrorProps) {
+export function ApiError({ error, onRetry, compact = false, className = '' }: ApiErrorProps) {
   if (!error) return null;
 
   const errorMessage = typeof error === 'string' ? error : error.message;
@@ -33,7 +28,9 @@ export function ApiError({
         role="alert"
         aria-live="assertive"
       >
-        <span className="font-bold" aria-hidden="true">{'>'}</span>
+        <span className="font-bold" aria-hidden="true">
+          {'>'}
+        </span>
         <span className="font-bold"> ERROR:</span> {errorMessage}
         {onRetry && (
           <button
@@ -55,7 +52,9 @@ export function ApiError({
       aria-live="assertive"
     >
       <div className="flex items-start gap-2 mb-3">
-        <div className="text-warning text-xl" aria-hidden="true">{'>'}</div>
+        <div className="text-warning text-xl" aria-hidden="true">
+          {'>'}
+        </div>
         <div>
           <div className="text-warning font-bold mb-1">ERROR</div>
           <div className="text-text text-sm">{errorMessage}</div>

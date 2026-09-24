@@ -45,14 +45,49 @@ export interface VerdictConfig {
 }
 
 export const VERDICT_CONFIG: Record<string, VerdictConfig> = {
-  PASS: { bg: 'bg-acid-green/20', border: 'border-acid-green', text: 'text-acid-green', icon: '\u2713' },
-  APPROVED: { bg: 'bg-acid-green/20', border: 'border-acid-green', text: 'text-acid-green', icon: '\u2713' },
-  CONDITIONAL: { bg: 'bg-acid-yellow/20', border: 'border-acid-yellow', text: 'text-acid-yellow', icon: '\u26A0' },
-  APPROVED_WITH_CONDITIONS: { bg: 'bg-acid-yellow/20', border: 'border-acid-yellow', text: 'text-acid-yellow', icon: '\u26A0' },
-  NEEDS_REVIEW: { bg: 'bg-warning/20', border: 'border-warning', text: 'text-warning', icon: '\u2691' },
+  PASS: {
+    bg: 'bg-acid-green/20',
+    border: 'border-acid-green',
+    text: 'text-acid-green',
+    icon: '\u2713',
+  },
+  APPROVED: {
+    bg: 'bg-acid-green/20',
+    border: 'border-acid-green',
+    text: 'text-acid-green',
+    icon: '\u2713',
+  },
+  CONDITIONAL: {
+    bg: 'bg-acid-yellow/20',
+    border: 'border-acid-yellow',
+    text: 'text-acid-yellow',
+    icon: '\u26A0',
+  },
+  APPROVED_WITH_CONDITIONS: {
+    bg: 'bg-acid-yellow/20',
+    border: 'border-acid-yellow',
+    text: 'text-acid-yellow',
+    icon: '\u26A0',
+  },
+  NEEDS_REVIEW: {
+    bg: 'bg-warning/20',
+    border: 'border-warning',
+    text: 'text-warning',
+    icon: '\u2691',
+  },
   FAIL: { bg: 'bg-acid-red/20', border: 'border-acid-red', text: 'text-acid-red', icon: '\u2717' },
-  REJECTED: { bg: 'bg-acid-red/20', border: 'border-acid-red', text: 'text-acid-red', icon: '\u2717' },
-  UNKNOWN: { bg: 'bg-text-muted/20', border: 'border-text-muted', text: 'text-text-muted', icon: '?' },
+  REJECTED: {
+    bg: 'bg-acid-red/20',
+    border: 'border-acid-red',
+    text: 'text-acid-red',
+    icon: '\u2717',
+  },
+  UNKNOWN: {
+    bg: 'bg-text-muted/20',
+    border: 'border-text-muted',
+    text: 'text-text-muted',
+    icon: '?',
+  },
 };
 
 export const SEVERITY_COLORS: Record<string, string> = {

@@ -127,7 +127,9 @@ export function ExecutionSidebar({
             />
           </div>
           <div className="flex items-center justify-between text-[10px] font-theme-data text-text-muted">
-            <span>{succeededNodes}/{totalNodes} nodes complete</span>
+            <span>
+              {succeededNodes}/{totalNodes} nodes complete
+            </span>
             <span>{readyNodes} ready</span>
           </div>
         </div>
@@ -143,8 +145,12 @@ export function ExecutionSidebar({
             return (
               <div key={s.stage} className="space-y-1">
                 <div className="flex items-center justify-between text-xs font-theme-data">
-                  <span style={{ color }} className="capitalize font-bold">{s.stage}</span>
-                  <span className="text-text-muted">{s.succeeded}/{s.total}</span>
+                  <span style={{ color }} className="capitalize font-bold">
+                    {s.stage}
+                  </span>
+                  <span className="text-text-muted">
+                    {s.succeeded}/{s.total}
+                  </span>
                 </div>
                 <div className="h-1.5 bg-gray-700/50 rounded-full overflow-hidden">
                   <div
@@ -219,7 +225,8 @@ export function ExecutionSidebar({
             {executing ? 'Advancing...' : 'Auto-Advance All Stages'}
           </button>
           <p className="text-[10px] font-theme-data text-text-muted">
-            Auto-advance decomposes ideas, sets goals, creates actions, assigns agents, and executes the full pipeline.
+            Auto-advance decomposes ideas, sets goals, creates actions, assigns agents, and executes
+            the full pipeline.
           </p>
         </div>
 

@@ -29,13 +29,7 @@ export type ConnectorType =
   | 'gusto';
 
 export type IntegrationType =
-  | 'slack'
-  | 'discord'
-  | 'telegram'
-  | 'email'
-  | 'teams'
-  | 'whatsapp'
-  | 'matrix';
+  'slack' | 'discord' | 'telegram' | 'email' | 'teams' | 'whatsapp' | 'matrix';
 
 export interface Connector {
   id: string;
@@ -185,9 +179,7 @@ export class ConnectorsAPI extends BaseAPI {
    * Start a sync operation for a connector
    */
   async startSync(connectorId: string, fullSync?: boolean): Promise<SyncOperation> {
-    return this.http.post(`/api/v1/connectors/${connectorId}/sync`, {
-      full_sync: fullSync,
-    });
+    return this.http.post(`/api/v1/connectors/${connectorId}/sync`, { full_sync: fullSync });
   }
 
   /**
@@ -218,7 +210,10 @@ export class ConnectorsAPI extends BaseAPI {
   /**
    * Test a connector configuration without saving
    */
-  async testConnection(type: ConnectorType, config: Record<string, unknown>): Promise<TestConnectionResult> {
+  async testConnection(
+    type: ConnectorType,
+    config: Record<string, unknown>,
+  ): Promise<TestConnectionResult> {
     return this.http.post('/api/v1/connectors/test', { type, config });
   }
 
@@ -264,7 +259,10 @@ export class ConnectorsAPI extends BaseAPI {
   /**
    * Configure a chat platform integration
    */
-  async configureIntegration(type: IntegrationType, config: Record<string, unknown>): Promise<Integration> {
+  async configureIntegration(
+    type: IntegrationType,
+    config: Record<string, unknown>,
+  ): Promise<Integration> {
     return this.http.put(`/api/v1/integrations/${type}`, config);
   }
 

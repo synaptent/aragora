@@ -110,11 +110,7 @@ export function ROIMetrics({ roi, loading = false }: ROIMetricsProps) {
             <span>#</span> INDUSTRY BENCHMARK
           </h4>
           <div className="space-y-1">
-            <KPIMiniCard
-              label="Industry"
-              value={roi?.benchmark.industry ?? '-'}
-              color="cyan"
-            />
+            <KPIMiniCard label="Industry" value={roi?.benchmark.industry ?? '-'} color="cyan" />
             <KPIMiniCard
               label="Avg Industry ROI"
               value={roi ? `${roi.benchmark.avg_roi.toFixed(0)}%` : '-'}
@@ -123,7 +119,13 @@ export function ROIMetrics({ roi, loading = false }: ROIMetricsProps) {
             <KPIMiniCard
               label="Your Percentile"
               value={roi ? `${roi.benchmark.percentile}th` : '-'}
-              color={roi && roi.benchmark.percentile >= 75 ? 'green' : roi && roi.benchmark.percentile >= 50 ? 'yellow' : 'red'}
+              color={
+                roi && roi.benchmark.percentile >= 75
+                  ? 'green'
+                  : roi && roi.benchmark.percentile >= 50
+                    ? 'yellow'
+                    : 'red'
+              }
             />
           </div>
         </div>

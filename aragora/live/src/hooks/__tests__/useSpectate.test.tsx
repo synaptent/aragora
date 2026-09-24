@@ -1,9 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useSpectate } from '../useSpectate';
 
-jest.mock('@/config', () => ({
-  API_BASE_URL: 'https://api.example.com',
-}));
+jest.mock('@/config', () => ({ API_BASE_URL: 'https://api.example.com' }));
 
 type Listener = (event: { data: string }) => void;
 
@@ -71,10 +69,7 @@ function createStatusPayload() {
 }
 
 function createJsonResponse(payload: unknown, ok = true) {
-  return Promise.resolve({
-    ok,
-    json: () => Promise.resolve(payload),
-  });
+  return Promise.resolve({ ok, json: () => Promise.resolve(payload) });
 }
 
 describe('useSpectate', () => {
@@ -82,7 +77,8 @@ describe('useSpectate', () => {
   const originalFetch = global.fetch;
 
   beforeAll(() => {
-    (global as typeof global & { EventSource: typeof MockEventSource }).EventSource = MockEventSource;
+    (global as typeof global & { EventSource: typeof MockEventSource }).EventSource =
+      MockEventSource;
   });
 
   afterAll(() => {
@@ -284,10 +280,7 @@ describe('useSpectate', () => {
 
     act(() => {
       stream.simulateOpen();
-      stream.emit('resync_required', {
-        reason: 'queue_overflow',
-        dropped_events: 3,
-      });
+      stream.emit('resync_required', { reason: 'queue_overflow', dropped_events: 3 });
     });
 
     await waitFor(() => {

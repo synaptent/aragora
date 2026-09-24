@@ -40,7 +40,7 @@ function formatTime(timestamp: number): string {
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
   });
 }
 
@@ -53,7 +53,11 @@ function EventRow({
   compact?: boolean;
   onFindingClick?: (finding: GauntletFinding) => void;
 }) {
-  const config = EVENT_CONFIG[event.type] || { icon: '\u2022', color: 'text-text-muted', label: 'EVENT' };
+  const config = EVENT_CONFIG[event.type] || {
+    icon: '\u2022',
+    color: 'text-text-muted',
+    label: 'EVENT',
+  };
   const data = event.data as Record<string, unknown>;
 
   // Skip progress events in compact mode
@@ -73,7 +77,10 @@ function EventRow({
       case 'gauntlet_phase':
         return (
           <span className="text-text">
-            Phase: <span className="text-[var(--acid-cyan)] uppercase">{String(data.phase).replace(/_/g, ' ')}</span>
+            Phase:{' '}
+            <span className="text-[var(--acid-cyan)] uppercase">
+              {String(data.phase).replace(/_/g, ' ')}
+            </span>
           </span>
         );
 
@@ -81,25 +88,29 @@ function EventRow({
         return (
           <span className="text-text">
             Agent <span className="text-[var(--accent)]">{String(data.agent)}</span> activated
-            {typeof data.role === 'string' && <span className="text-text-muted"> ({data.role})</span>}
+            {typeof data.role === 'string' && (
+              <span className="text-text-muted"> ({data.role})</span>
+            )}
           </span>
         );
 
       case 'gauntlet_attack':
         return (
           <span className="text-text">
-            <span className="text-acid-red">{String(data.agent)}</span>
-            {' '}launched attack
-            {typeof data.attack_type === 'string' && <span className="text-text-muted"> ({data.attack_type})</span>}
+            <span className="text-acid-red">{String(data.agent)}</span> launched attack
+            {typeof data.attack_type === 'string' && (
+              <span className="text-text-muted"> ({data.attack_type})</span>
+            )}
           </span>
         );
 
       case 'gauntlet_probe':
         return (
           <span className="text-text">
-            <span className="text-[var(--acid-yellow)]">{String(data.agent)}</span>
-            {' '}probing
-            {typeof data.target === 'string' && <span className="text-text-muted"> {data.target}</span>}
+            <span className="text-[var(--acid-yellow)]">{String(data.agent)}</span> probing
+            {typeof data.target === 'string' && (
+              <span className="text-text-muted"> {data.target}</span>
+            )}
           </span>
         );
 
@@ -133,7 +144,16 @@ function EventRow({
         const confidence = typeof data.confidence === 'number' ? data.confidence : 0;
         return (
           <span className="text-text">
-            Verdict: <span className={verdict === 'APPROVED' ? 'text-[var(--accent)]' : verdict === 'REJECTED' ? 'text-acid-red' : 'text-[var(--acid-yellow)]'}>
+            Verdict:{' '}
+            <span
+              className={
+                verdict === 'APPROVED'
+                  ? 'text-[var(--accent)]'
+                  : verdict === 'REJECTED'
+                    ? 'text-acid-red'
+                    : 'text-[var(--acid-yellow)]'
+              }
+            >
               {verdict}
             </span>
             <span className="text-text-muted"> ({(confidence * 100).toFixed(0)}% confidence)</span>
@@ -144,7 +164,8 @@ function EventRow({
       case 'gauntlet_complete':
         return (
           <span className="text-[var(--accent)]">
-            Gauntlet complete - {Number(data.findings_count) || 0} findings in {Number(data.duration_seconds) || 0}s
+            Gauntlet complete - {Number(data.findings_count) || 0} findings in{' '}
+            {Number(data.duration_seconds) || 0}s
           </span>
         );
 
@@ -165,7 +186,9 @@ function EventRow({
   };
 
   return (
-    <div className={`flex items-start gap-2 ${compact ? 'py-1' : 'py-2'} border-b border-border/30 last:border-0`}>
+    <div
+      className={`flex items-start gap-2 ${compact ? 'py-1' : 'py-2'} border-b border-border/30 last:border-0`}
+    >
       <span className={`${config.color} ${compact ? 'text-sm' : 'text-base'}`}>{config.icon}</span>
       <div className="flex-1 min-w-0">
         <div className={`font-theme-data ${compact ? 'text-xs' : 'text-sm'}`}>
@@ -179,27 +202,37 @@ function EventRow({
   );
 }
 
-function AgentStats({ agents }: { agents: Map<string, { name: string; status: string; attackCount: number; probeCount: number }> }) {
+function AgentStats({
+  agents,
+}: {
+  agents: Map<string, { name: string; status: string; attackCount: number; probeCount: number }>;
+}) {
   const agentArray = Array.from(agents.values());
 
   if (agentArray.length === 0) return null;
 
   return (
     <div className="flex flex-wrap gap-2 p-2 bg-bg/50 border-b border-border">
-      {agentArray.map(agent => (
+      {agentArray.map((agent) => (
         <div
           key={agent.name}
           className={`px-2 py-1 rounded text-xs font-theme-data flex items-center gap-2 ${
             agent.status === 'active'
               ? 'bg-[var(--accent)]/10 border border-[var(--accent)]/30 text-[var(--accent)] animate-pulse'
               : agent.status === 'complete'
-              ? 'bg-[var(--acid-cyan)]/10 border border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)]'
-              : 'bg-surface border border-border text-text-muted'
+                ? 'bg-[var(--acid-cyan)]/10 border border-[var(--acid-cyan)]/30 text-[var(--acid-cyan)]'
+                : 'bg-surface border border-border text-text-muted'
           }`}
         >
           <span>{agent.name}</span>
-          <span className="text-acid-red">{agent.attackCount}{'\u26A1'}</span>
-          <span className="text-[var(--acid-yellow)]">{agent.probeCount}{'\uD83D\uDD0D'}</span>
+          <span className="text-acid-red">
+            {agent.attackCount}
+            {'\u26A1'}
+          </span>
+          <span className="text-[var(--acid-yellow)]">
+            {agent.probeCount}
+            {'\uD83D\uDD0D'}
+          </span>
         </div>
       ))}
     </div>
@@ -259,8 +292,8 @@ export function AttackFeed({
       attacks: totalAttacks,
       probes: totalProbes,
       findings: findings.length,
-      critical: findings.filter(f => f.severity === 'CRITICAL').length,
-      high: findings.filter(f => f.severity === 'HIGH').length,
+      critical: findings.filter((f) => f.severity === 'CRITICAL').length,
+      high: findings.filter((f) => f.severity === 'HIGH').length,
     };
   }, [agents, findings]);
 
@@ -278,17 +311,26 @@ export function AttackFeed({
           <span className="text-xs font-theme-data text-[var(--accent)] uppercase tracking-wider">
             {'>'} LIVE ATTACK FEED
           </span>
-          <span className={`w-2 h-2 rounded-full ${
-            status === 'streaming' ? 'bg-[var(--accent)] animate-pulse' :
-            status === 'connecting' ? 'bg-acid-yellow animate-pulse' :
-            status === 'complete' ? 'bg-[var(--acid-cyan)]' :
-            'bg-acid-red'
-          }`} />
+          <span
+            className={`w-2 h-2 rounded-full ${
+              status === 'streaming'
+                ? 'bg-[var(--accent)] animate-pulse'
+                : status === 'connecting'
+                  ? 'bg-acid-yellow animate-pulse'
+                  : status === 'complete'
+                    ? 'bg-[var(--acid-cyan)]'
+                    : 'bg-acid-red'
+            }`}
+          />
           <span className="text-xs font-theme-data text-text-muted uppercase">{status}</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs font-theme-data text-[var(--acid-cyan)]">{formatElapsed(elapsedSeconds)}</span>
-          <span className="text-xs font-theme-data text-text-muted">{(progress * 100).toFixed(0)}%</span>
+          <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+            {formatElapsed(elapsedSeconds)}
+          </span>
+          <span className="text-xs font-theme-data text-text-muted">
+            {(progress * 100).toFixed(0)}%
+          </span>
           {status === 'error' && (
             <button
               onClick={reconnect}
@@ -304,7 +346,8 @@ export function AttackFeed({
       {status === 'streaming' && (
         <div className="px-4 py-2 bg-surface/50 border-b border-border flex items-center justify-between">
           <span className="text-xs font-theme-data text-text-muted">
-            PHASE: <span className="text-[var(--acid-cyan)] uppercase">{phase.replace(/_/g, ' ')}</span>
+            PHASE:{' '}
+            <span className="text-[var(--acid-cyan)] uppercase">{phase.replace(/_/g, ' ')}</span>
           </span>
           <div className="flex gap-4 text-xs font-theme-data">
             <span className="text-acid-red">{stats.attacks} attacks</span>
@@ -333,7 +376,9 @@ export function AttackFeed({
       >
         {displayEvents.length === 0 && status === 'connecting' && (
           <div className="py-8 text-center">
-            <div className="text-[var(--accent)] font-theme-data animate-pulse">Connecting to stress test...</div>
+            <div className="text-[var(--accent)] font-theme-data animate-pulse">
+              Connecting to stress test...
+            </div>
           </div>
         )}
         {displayEvents.length === 0 && status === 'streaming' && (
@@ -353,23 +398,34 @@ export function AttackFeed({
 
       {/* Verdict (when complete) */}
       {verdict && (
-        <div className={`p-4 border-t border-border ${
-          verdict.verdict === 'APPROVED' ? 'bg-[var(--accent)]/10' :
-          verdict.verdict === 'REJECTED' ? 'bg-acid-red/10' :
-          'bg-acid-yellow/10'
-        }`}>
+        <div
+          className={`p-4 border-t border-border ${
+            verdict.verdict === 'APPROVED'
+              ? 'bg-[var(--accent)]/10'
+              : verdict.verdict === 'REJECTED'
+                ? 'bg-acid-red/10'
+                : 'bg-acid-yellow/10'
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">
-                {verdict.verdict === 'APPROVED' ? '\u2713' :
-                 verdict.verdict === 'REJECTED' ? '\u2717' : '\u26A0'}
+                {verdict.verdict === 'APPROVED'
+                  ? '\u2713'
+                  : verdict.verdict === 'REJECTED'
+                    ? '\u2717'
+                    : '\u26A0'}
               </span>
               <div>
-                <div className={`font-theme-data text-lg ${
-                  verdict.verdict === 'APPROVED' ? 'text-[var(--accent)]' :
-                  verdict.verdict === 'REJECTED' ? 'text-acid-red' :
-                  'text-[var(--acid-yellow)]'
-                }`}>
+                <div
+                  className={`font-theme-data text-lg ${
+                    verdict.verdict === 'APPROVED'
+                      ? 'text-[var(--accent)]'
+                      : verdict.verdict === 'REJECTED'
+                        ? 'text-acid-red'
+                        : 'text-[var(--acid-yellow)]'
+                  }`}
+                >
                   {verdict.verdict.replace(/_/g, ' ')}
                 </div>
                 <div className="text-xs font-theme-data text-text-muted">

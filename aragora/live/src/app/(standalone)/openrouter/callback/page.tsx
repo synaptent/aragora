@@ -55,15 +55,18 @@ function CallbackContent() {
     }
 
     exchange();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [searchParams, router]);
 
   const statusIcon = status === 'processing' ? '...' : status === 'success' ? '\u2713' : '\u2717';
-  const statusColor = status === 'processing'
-    ? 'var(--accent)'
-    : status === 'success'
-    ? 'var(--accent)'
-    : 'var(--crimson, #ff0040)';
+  const statusColor =
+    status === 'processing'
+      ? 'var(--accent)'
+      : status === 'success'
+        ? 'var(--accent)'
+        : 'var(--crimson, #ff0040)';
 
   return (
     <div
@@ -71,10 +74,7 @@ function CallbackContent() {
       style={{ backgroundColor: 'var(--bg)', color: 'var(--text)' }}
     >
       <div className="text-center max-w-md w-full">
-        <div
-          className="text-5xl font-theme-data mb-6"
-          style={{ color: statusColor }}
-        >
+        <div className="text-5xl font-theme-data mb-6" style={{ color: statusColor }}>
           {statusIcon}
         </div>
         <h1 className="font-theme-data text-lg mb-2" style={{ color: 'var(--text)' }}>
@@ -113,10 +113,7 @@ function CallbackContent() {
             <button
               onClick={() => router.replace('/settings/')}
               className="px-4 py-2 font-theme-data text-xs rounded transition-colors cursor-pointer"
-              style={{
-                color: 'var(--text-muted)',
-                border: '1px solid var(--border)',
-              }}
+              style={{ color: 'var(--text-muted)', border: '1px solid var(--border)' }}
             >
               Paste key manually
             </button>
@@ -129,14 +126,16 @@ function CallbackContent() {
 
 export default function OpenRouterCallbackPage() {
   return (
-    <Suspense fallback={
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}
-      >
-        <span className="font-theme-data text-sm">Loading...</span>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div
+          className="min-h-screen flex items-center justify-center"
+          style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}
+        >
+          <span className="font-theme-data text-sm">Loading...</span>
+        </div>
+      }
+    >
       <CallbackContent />
     </Suspense>
   );

@@ -95,7 +95,7 @@ function withAuthHeaders(url: string, init: RequestInit): RequestInit {
 }
 
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -103,7 +103,7 @@ function delay(ms: number): Promise<void> {
  */
 export async function retryAsync<T>(
   fn: () => Promise<T>,
-  config: RetryConfig = {}
+  config: RetryConfig = {},
 ): Promise<RetryResult<T>> {
   const finalConfig = { ...DEFAULT_CONFIG, ...config };
   let lastError: Error | null = null;
@@ -111,12 +111,7 @@ export async function retryAsync<T>(
   for (let attempt = 1; attempt <= finalConfig.maxAttempts; attempt++) {
     try {
       const data = await fn();
-      return {
-        data,
-        error: null,
-        attempts: attempt,
-        success: true,
-      };
+      return { data, error: null, attempts: attempt, success: true };
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -128,7 +123,7 @@ export async function retryAsync<T>(
       // Exponential backoff: 1s → 2s → 4s → 8s → 10s (capped)
       const delayMs = Math.min(
         finalConfig.initialDelayMs * Math.pow(2, attempt - 1),
-        finalConfig.maxDelayMs
+        finalConfig.maxDelayMs,
       );
 
       finalConfig.onRetry(lastError, attempt, delayMs);
@@ -136,12 +131,7 @@ export async function retryAsync<T>(
     }
   }
 
-  return {
-    data: null,
-    error: lastError,
-    attempts: finalConfig.maxAttempts,
-    success: false,
-  };
+  return { data: null, error: lastError, attempts: finalConfig.maxAttempts, success: false };
 }
 
 /**
@@ -150,7 +140,7 @@ export async function retryAsync<T>(
 export async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
-  config: RetryConfig = {}
+  config: RetryConfig = {},
 ): Promise<Response> {
   const timeoutMs = config.timeoutMs || DEFAULT_CONFIG.timeoutMs;
   const internalController = new AbortController();
@@ -172,19 +162,16 @@ export async function fetchWithRetry(
     signal: internalController.signal,
   });
 
-  const result = await retryAsync(
-    async () => {
-      const response = await fetch(url, fetchOptions);
+  const result = await retryAsync(async () => {
+    const response = await fetch(url, fetchOptions);
 
-      // Throw on HTTP errors to trigger retry for server errors
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+    // Throw on HTTP errors to trigger retry for server errors
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
 
-      return response;
-    },
-    config
-  );
+    return response;
+  }, config);
 
   clearTimeout(timeoutId);
 
@@ -201,7 +188,7 @@ export async function fetchWithRetry(
 export async function fetchJsonWithRetry<T = unknown>(
   url: string,
   options: RequestInit = {},
-  config: RetryConfig = {}
+  config: RetryConfig = {},
 ): Promise<T> {
   const response = await fetchWithRetry(url, options, config);
   return response.json() as Promise<T>;

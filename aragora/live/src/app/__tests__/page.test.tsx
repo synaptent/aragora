@@ -5,11 +5,7 @@ import Home from '../(app)/HomePage';
 // Mock next/navigation
 const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: mockPush,
-    replace: jest.fn(),
-    prefetch: jest.fn(),
-  }),
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), prefetch: jest.fn() }),
 }));
 
 // Mock next/link
@@ -42,18 +38,24 @@ jest.mock('../(app)/page-imports', () => ({
     }
     return (
       <div data-testid="boot-sequence">
-        <button onClick={onComplete} data-testid="skip-boot">Skip</button>
+        <button onClick={onComplete} data-testid="skip-boot">
+          Skip
+        </button>
       </div>
     );
   },
   LandingPage: ({ onEnterDashboard }: { onEnterDashboard: () => void }) => (
     <div data-testid="landing-page">
-      <button onClick={onEnterDashboard} data-testid="enter-dashboard">Enter Dashboard</button>
+      <button onClick={onEnterDashboard} data-testid="enter-dashboard">
+        Enter Dashboard
+      </button>
     </div>
   ),
   CompareView: ({ onClose }: { onClose: () => void }) => (
     <div data-testid="compare-view">
-      <button onClick={onClose} data-testid="close-compare">Close</button>
+      <button onClick={onClose} data-testid="close-compare">
+        Close
+      </button>
     </div>
   ),
   DeepAuditView: () => <div data-testid="deep-audit-view" />,
@@ -166,11 +168,7 @@ const mockSetMode = jest.fn();
 const mockMarkOnboardingComplete = jest.fn();
 jest.mock('@/hooks/useDashboardPreferences', () => ({
   useDashboardPreferences: () => ({
-    preferences: {
-      mode: 'focus',
-      hasSeenOnboarding: true,
-      expandedSections: ['core-debate'],
-    },
+    preferences: { mode: 'focus', hasSeenOnboarding: true, expandedSections: ['core-debate'] },
     setMode: mockSetMode,
     isFocusMode: true,
     isLoaded: true,
@@ -239,7 +237,15 @@ jest.mock('@/components/PanelErrorBoundary', () => ({
 
 // Mock CollapsibleSection
 jest.mock('@/components/CollapsibleSection', () => ({
-  CollapsibleSection: ({ children, title, id }: { children: React.ReactNode; title: string; id: string }) => (
+  CollapsibleSection: ({
+    children,
+    title,
+    id,
+  }: {
+    children: React.ReactNode;
+    title: string;
+    id: string;
+  }) => (
     <div data-testid={`section-${id}`}>
       <h3>{title}</h3>
       {children}
@@ -251,8 +257,12 @@ jest.mock('@/components/CollapsibleSection', () => ({
 jest.mock('@/components/OnboardingWizard', () => ({
   OnboardingWizard: ({ onComplete, onSkip }: { onComplete: () => void; onSkip: () => void }) => (
     <div data-testid="onboarding-wizard">
-      <button onClick={onSkip} data-testid="skip-onboarding">Skip</button>
-      <button onClick={() => onComplete('researcher')} data-testid="complete-onboarding">Complete</button>
+      <button onClick={onSkip} data-testid="skip-onboarding">
+        Skip
+      </button>
+      <button onClick={() => onComplete('researcher')} data-testid="complete-onboarding">
+        Complete
+      </button>
     </div>
   ),
 }));
@@ -275,9 +285,7 @@ jest.mock('@/components/AgentPanel', () => ({
   AgentPanel: () => <div data-testid="agent-panel" />,
 }));
 
-jest.mock('@/components/AgentTabs', () => ({
-  AgentTabs: () => <div data-testid="agent-tabs" />,
-}));
+jest.mock('@/components/AgentTabs', () => ({ AgentTabs: () => <div data-testid="agent-tabs" /> }));
 
 jest.mock('@/components/RoundProgress', () => ({
   RoundProgress: () => <div data-testid="round-progress" />,
@@ -302,7 +310,9 @@ jest.mock('@/components/DebateBrowser', () => ({
 jest.mock('@/components/DebateExportModal', () => ({
   DebateExportModal: ({ onClose }: { onClose: () => void }) => (
     <div data-testid="debate-export-modal">
-      <button onClick={onClose} data-testid="close-export">Close</button>
+      <button onClick={onClose} data-testid="close-export">
+        Close
+      </button>
     </div>
   ),
 }));
@@ -315,9 +325,7 @@ jest.mock('@/components/DocumentUpload', () => ({
   DocumentUpload: () => <div data-testid="document-upload" />,
 }));
 
-jest.mock('@/components/StatusBar', () => ({
-  StatusBar: () => <div data-testid="status-bar" />,
-}));
+jest.mock('@/components/StatusBar', () => ({ StatusBar: () => <div data-testid="status-bar" /> }));
 
 // Mock DashboardHeader, QuickLinksBar, DashboardFooter
 jest.mock('../(app)/components', () => ({
@@ -335,9 +343,15 @@ const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -347,9 +361,15 @@ const sessionStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
     getItem: (key: string) => store[key] || null,
-    setItem: (key: string, value: string) => { store[key] = value; },
-    removeItem: (key: string) => { delete store[key]; },
-    clear: () => { store = {}; },
+    setItem: (key: string, value: string) => {
+      store[key] = value;
+    },
+    removeItem: (key: string) => {
+      delete store[key];
+    },
+    clear: () => {
+      store = {};
+    },
   };
 })();
 Object.defineProperty(window, 'sessionStorage', { value: sessionStorageMock });
@@ -361,10 +381,7 @@ describe.skip('Home Page', () => {
     jest.clearAllMocks();
     localStorageMock.clear();
     sessionStorageMock.clear();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({}),
-    });
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
   });
 
   afterEach(() => {
@@ -597,10 +614,7 @@ describe.skip('Home Page', () => {
     it('navigates to debate page when debate starts successfully', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve({
-          success: true,
-          debate_id: 'debate-123',
-        }),
+        json: () => Promise.resolve({ success: true, debate_id: 'debate-123' }),
       });
 
       renderWithProviders(<Home />);

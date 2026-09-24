@@ -48,7 +48,11 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
 
     // Check if debate is complete (has verdict/consensus event)
     const isComplete = events.some(
-      (e) => e.type === 'grounded_verdict' || e.type === 'verdict' || e.type === 'consensus' || e.type === 'debate_end'
+      (e) =>
+        e.type === 'grounded_verdict' ||
+        e.type === 'verdict' ||
+        e.type === 'consensus' ||
+        e.type === 'debate_end',
     );
 
     if (!isComplete) return;
@@ -76,7 +80,7 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
   const verdict = useMemo<Verdict | null>(() => {
     // Look for verdict or consensus events (prefer most recent)
     const verdictEvents = events.filter(
-      (e) => e.type === 'grounded_verdict' || e.type === 'verdict' || e.type === 'consensus'
+      (e) => e.type === 'grounded_verdict' || e.type === 'verdict' || e.type === 'consensus',
     );
 
     if (verdictEvents.length === 0) return null;
@@ -86,13 +90,15 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
     const data = latest.data as Record<string, unknown>;
 
     return {
-      recommendation: ((data.recommendation || data.answer || data.content || '') as string),
-      confidence: ((data.confidence ?? 0.5) as number),
-      grounding: ((data.grounding_score ?? data.evidence_grounding ?? 0) as number),
-      unanimousIssues: ((data.unanimous_issues || []) as string[]),
-      splitOpinions: ((data.split_opinions || []) as string[]),
-      riskAreas: ((data.risk_areas || []) as string[]),
-      citationCount: (Array.isArray(data.all_citations) ? (data.all_citations as unknown[]).length : ((data.citation_count || 0) as number)),
+      recommendation: (data.recommendation || data.answer || data.content || '') as string,
+      confidence: (data.confidence ?? 0.5) as number,
+      grounding: (data.grounding_score ?? data.evidence_grounding ?? 0) as number,
+      unanimousIssues: (data.unanimous_issues || []) as string[],
+      splitOpinions: (data.split_opinions || []) as string[],
+      riskAreas: (data.risk_areas || []) as string[],
+      citationCount: Array.isArray(data.all_citations)
+        ? (data.all_citations as unknown[]).length
+        : ((data.citation_count || 0) as number),
       crossExamination: data.cross_examination_notes as string | undefined,
       timestamp: latest.timestamp,
     };
@@ -106,15 +112,15 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
     verdict.confidence >= 0.8
       ? 'text-green-400'
       : verdict.confidence >= 0.6
-      ? 'text-yellow-400'
-      : 'text-red-400';
+        ? 'text-yellow-400'
+        : 'text-red-400';
 
   const groundingColor =
     verdict.grounding >= 0.7
       ? 'text-green-400'
       : verdict.grounding >= 0.5
-      ? 'text-yellow-400'
-      : 'text-orange-400';
+        ? 'text-yellow-400'
+        : 'text-orange-400';
 
   return (
     <div className="bg-gradient-to-br from-accent/10 to-purple-500/10 border-2 border-accent/50 rounded-lg overflow-hidden">
@@ -137,10 +143,13 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
       {events.filter((e) => e.type === 'hollow_consensus').length > 0 && (
         <div className="mx-4 mt-3 p-3 border border-acid-yellow/50 bg-acid-yellow/10 rounded">
           <div className="flex items-center gap-2">
-            <span className="text-[var(--acid-yellow)] font-theme-data text-sm font-bold">[!] HOLLOW CONSENSUS</span>
+            <span className="text-[var(--acid-yellow)] font-theme-data text-sm font-bold">
+              [!] HOLLOW CONSENSUS
+            </span>
           </div>
           <p className="text-xs font-theme-data text-[var(--acid-yellow)]/80 mt-1">
-            Agents may have converged superficially without genuine agreement. Review individual positions carefully.
+            Agents may have converged superficially without genuine agreement. Review individual
+            positions carefully.
           </p>
         </div>
       )}
@@ -152,7 +161,8 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
           <p className="agent-output text-text">
             {isExpanded
               ? verdict.recommendation
-              : verdict.recommendation.slice(0, 300) + (verdict.recommendation.length > 300 ? '...' : '')}
+              : verdict.recommendation.slice(0, 300) +
+                (verdict.recommendation.length > 300 ? '...' : '')}
           </p>
           {verdict.recommendation.length > 300 && (
             <button
@@ -183,9 +193,7 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
           {verdict.citationCount > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-text-muted">📚</span>
-              <span className="text-sm font-theme-data text-text">
-                {verdict.citationCount}
-              </span>
+              <span className="text-sm font-theme-data text-text">{verdict.citationCount}</span>
             </div>
           )}
         </div>
@@ -198,11 +206,14 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
               <span className="text-green-400 flex-shrink-0">✓</span>
               <div>
                 <span className="text-xs font-medium text-green-400">
-                  {verdict.unanimousIssues.length} Unanimous Issue{verdict.unanimousIssues.length !== 1 ? 's' : ''}
+                  {verdict.unanimousIssues.length} Unanimous Issue
+                  {verdict.unanimousIssues.length !== 1 ? 's' : ''}
                 </span>
                 <ul className="text-xs text-text-muted mt-0.5">
                   {verdict.unanimousIssues.slice(0, 2).map((issue, i) => (
-                    <li key={i} className="truncate">• {issue}</li>
+                    <li key={i} className="truncate">
+                      • {issue}
+                    </li>
                   ))}
                   {verdict.unanimousIssues.length > 2 && (
                     <li className="text-text-muted">+{verdict.unanimousIssues.length - 2} more</li>
@@ -218,11 +229,14 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
               <span className="text-yellow-400 flex-shrink-0">⚠</span>
               <div>
                 <span className="text-xs font-medium text-yellow-400">
-                  {verdict.splitOpinions.length} Split Opinion{verdict.splitOpinions.length !== 1 ? 's' : ''}
+                  {verdict.splitOpinions.length} Split Opinion
+                  {verdict.splitOpinions.length !== 1 ? 's' : ''}
                 </span>
                 <ul className="text-xs text-text-muted mt-0.5">
                   {verdict.splitOpinions.slice(0, 2).map((opinion, i) => (
-                    <li key={i} className="truncate">• {opinion}</li>
+                    <li key={i} className="truncate">
+                      • {opinion}
+                    </li>
                   ))}
                   {verdict.splitOpinions.length > 2 && (
                     <li className="text-text-muted">+{verdict.splitOpinions.length - 2} more</li>
@@ -242,7 +256,9 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
                 </span>
                 <ul className="text-xs text-text-muted mt-0.5">
                   {verdict.riskAreas.slice(0, 2).map((risk, i) => (
-                    <li key={i} className="truncate">• {risk}</li>
+                    <li key={i} className="truncate">
+                      • {risk}
+                    </li>
                   ))}
                   {verdict.riskAreas.length > 2 && (
                     <li className="text-text-muted">+{verdict.riskAreas.length - 2} more</li>
@@ -272,7 +288,9 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
             <h4 className="text-xs font-semibold uppercase tracking-wider text-accent mb-3 flex items-center gap-2">
               <span>📋</span>
               Summary
-              {summaryLoading && <span className="animate-pulse text-text-muted">(loading...)</span>}
+              {summaryLoading && (
+                <span className="animate-pulse text-text-muted">(loading...)</span>
+              )}
             </h4>
 
             {summary && (
@@ -306,7 +324,9 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
                       <span className="font-medium text-green-400">✓ Agreements:</span>
                       <ul className="mt-1 text-text-muted">
                         {summary.agreement_areas.slice(0, 2).map((area, i) => (
-                          <li key={i} className="truncate">• {area}</li>
+                          <li key={i} className="truncate">
+                            • {area}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -316,7 +336,9 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
                       <span className="font-medium text-yellow-400">⚠ Disagreements:</span>
                       <ul className="mt-1 text-text-muted">
                         {summary.disagreement_areas.slice(0, 2).map((area, i) => (
-                          <li key={i} className="truncate">• {area}</li>
+                          <li key={i} className="truncate">
+                            • {area}
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -344,7 +366,9 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
                     <span className="text-xs font-medium text-orange-400">⚠ Caveats:</span>
                     <ul className="mt-1">
                       {summary.caveats.map((caveat, i) => (
-                        <li key={i} className="text-xs text-orange-300/80">• {caveat}</li>
+                        <li key={i} className="text-xs text-orange-300/80">
+                          • {caveat}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -356,10 +380,15 @@ export function VerdictCard({ events, debateId, apiUrl }: VerdictCardProps) {
                   <span>{summary.rounds_used} rounds</span>
                   <span>{summary.duration_seconds.toFixed(1)}s</span>
                   {summary.consensus_strength !== 'none' && (
-                    <span className={
-                      summary.consensus_strength === 'strong' ? 'text-green-400' :
-                      summary.consensus_strength === 'medium' ? 'text-yellow-400' : 'text-text-muted'
-                    }>
+                    <span
+                      className={
+                        summary.consensus_strength === 'strong'
+                          ? 'text-green-400'
+                          : summary.consensus_strength === 'medium'
+                            ? 'text-yellow-400'
+                            : 'text-text-muted'
+                      }
+                    >
                       {summary.consensus_strength} consensus
                     </span>
                   )}
@@ -379,8 +408,8 @@ export function VerdictBadge({ confidence }: { confidence: number }) {
     confidence >= 0.8
       ? 'bg-green-500/20 text-green-400 border-green-500/30'
       : confidence >= 0.6
-      ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-      : 'bg-red-500/20 text-red-400 border-red-500/30';
+        ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+        : 'bg-red-500/20 text-red-400 border-red-500/30';
 
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border ${color}`}>

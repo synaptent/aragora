@@ -16,19 +16,8 @@ export type {
   NodePosition,
 } from './types';
 
-export {
-  BRANCH_COLORS,
-  getBranchColor,
-  getBranchBgColor,
-  getEdgeColor,
-} from './types';
+export { BRANCH_COLORS, getBranchColor, getBranchBgColor, getEdgeColor } from './types';
 
 // Components
-export {
-  GraphVisualization,
-  NodeDetailPanel,
-} from './GraphVisualization';
-export type {
-  GraphVisualizationProps,
-  NodeDetailPanelProps,
-} from './GraphVisualization';
+export { GraphVisualization, NodeDetailPanel } from './GraphVisualization';
+export type { GraphVisualizationProps, NodeDetailPanelProps } from './GraphVisualization';

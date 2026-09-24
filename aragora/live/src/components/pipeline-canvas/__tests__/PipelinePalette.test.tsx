@@ -18,7 +18,9 @@ describe('PipelinePalette', () => {
     expect(screen.getByText('Constraint')).toBeInTheDocument();
 
     // Exactly 7 items
-    const items = screen.getAllByText(/^(Concept|Cluster|Question|Insight|Evidence|Assumption|Constraint)$/);
+    const items = screen.getAllByText(
+      /^(Concept|Cluster|Question|Insight|Evidence|Assumption|Constraint)$/,
+    );
     expect(items).toHaveLength(7);
   });
 
@@ -33,7 +35,9 @@ describe('PipelinePalette', () => {
     expect(screen.getByText('Verification')).toBeInTheDocument();
 
     // Exactly 6 items
-    const items = screen.getAllByText(/^(Agent Task|Debate|Human Gate|Parallel Fan|Merge|Verification)$/);
+    const items = screen.getAllByText(
+      /^(Agent Task|Debate|Human Gate|Parallel Fan|Merge|Verification)$/,
+    );
     expect(items).toHaveLength(6);
   });
 
@@ -50,7 +54,7 @@ describe('PipelinePalette', () => {
 
     expect(setData).toHaveBeenCalledWith(
       'application/pipeline-node',
-      JSON.stringify({ stage: 'ideas', subtype: 'concept' })
+      JSON.stringify({ stage: 'ideas', subtype: 'concept' }),
     );
   });
 

@@ -19,7 +19,15 @@ test.describe('Settings Page', () => {
   });
 
   test('should display all tabs', async ({ page }) => {
-    const tabs = ['FEATURES', 'DEBATE', 'APPEARANCE', 'NOTIFICATIONS', 'API KEYS', 'INTEGRATIONS', 'ACCOUNT'];
+    const tabs = [
+      'FEATURES',
+      'DEBATE',
+      'APPEARANCE',
+      'NOTIFICATIONS',
+      'API KEYS',
+      'INTEGRATIONS',
+      'ACCOUNT',
+    ];
 
     for (const tab of tabs) {
       await expect(page.getByRole('tab', { name: new RegExp(tab, 'i') })).toBeVisible();
@@ -33,11 +41,21 @@ test.describe('Settings Page', () => {
 
     // Click Notifications tab
     await page.getByRole('tab', { name: /notifications/i }).click();
-    await expect(page.locator('h3').filter({ hasText: /notification/i }).first()).toBeVisible();
+    await expect(
+      page
+        .locator('h3')
+        .filter({ hasText: /notification/i })
+        .first(),
+    ).toBeVisible();
 
     // Click API Keys tab
     await page.getByRole('tab', { name: /api keys/i }).click();
-    await expect(page.locator('h3').filter({ hasText: /api key/i }).first()).toBeVisible();
+    await expect(
+      page
+        .locator('h3')
+        .filter({ hasText: /api key/i })
+        .first(),
+    ).toBeVisible();
   });
 });
 
@@ -81,20 +99,26 @@ test.describe('Settings - Features Tab', () => {
 
   test('should disable Supermemory toggle when unavailable', async ({ page, aragoraPage }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('aragora_tokens', JSON.stringify({
-        access_token: 'test-token',
-        refresh_token: 'test-refresh',
-        expires_at: new Date(Date.now() + 3600000).toISOString(),
-      }));
-      localStorage.setItem('aragora_user', JSON.stringify({
-        id: 'user-test-1',
-        email: 'test@aragora.ai',
-        name: 'Test User',
-        role: 'member',
-        org_id: null,
-        is_active: true,
-        created_at: new Date().toISOString(),
-      }));
+      localStorage.setItem(
+        'aragora_tokens',
+        JSON.stringify({
+          access_token: 'test-token',
+          refresh_token: 'test-refresh',
+          expires_at: new Date(Date.now() + 3600000).toISOString(),
+        }),
+      );
+      localStorage.setItem(
+        'aragora_user',
+        JSON.stringify({
+          id: 'user-test-1',
+          email: 'test@aragora.ai',
+          name: 'Test User',
+          role: 'member',
+          org_id: null,
+          is_active: true,
+          created_at: new Date().toISOString(),
+        }),
+      );
     });
 
     await mockApiResponse(page, '**/api/auth/me', {
@@ -178,9 +202,24 @@ test.describe('Settings - Appearance Tab', () => {
 
   test('should display theme options', async ({ page }) => {
     // Theme options are in labels with description text
-    await expect(page.locator('label').filter({ hasText: /dark.*theme/i }).first()).toBeVisible();
-    await expect(page.locator('label').filter({ hasText: /light.*theme/i }).first()).toBeVisible();
-    await expect(page.locator('label').filter({ hasText: /system.*preference/i }).first()).toBeVisible();
+    await expect(
+      page
+        .locator('label')
+        .filter({ hasText: /dark.*theme/i })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page
+        .locator('label')
+        .filter({ hasText: /light.*theme/i })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page
+        .locator('label')
+        .filter({ hasText: /system.*preference/i })
+        .first(),
+    ).toBeVisible();
   });
 
   test('should allow selecting theme', async ({ page }) => {
@@ -197,8 +236,14 @@ test.describe('Settings - Appearance Tab', () => {
     await expect(page.getByText(/compact mode/i)).toBeVisible();
     await expect(page.getByText(/show agent icons/i)).toBeVisible();
     // Auto-scroll might not exist, check for any display option
-    const hasAutoScroll = await page.getByText(/auto-scroll/i).isVisible().catch(() => false);
-    const hasMessageExpand = await page.getByText(/expand.*message/i).isVisible().catch(() => false);
+    const hasAutoScroll = await page
+      .getByText(/auto-scroll/i)
+      .isVisible()
+      .catch(() => false);
+    const hasMessageExpand = await page
+      .getByText(/expand.*message/i)
+      .isVisible()
+      .catch(() => false);
     expect(hasAutoScroll || hasMessageExpand || true).toBeTruthy();
   });
 });
@@ -218,24 +263,24 @@ test.describe('Settings - API Keys Tab', () => {
     const createdAt = new Date('2026-03-22T12:00:00.000Z').toISOString();
     const expiresAt = new Date('2027-03-22T12:00:00.000Z').toISOString();
 
-    await page.addInitScript(({ mockUser }) => {
-      localStorage.setItem('aragora_tokens', JSON.stringify({
-        access_token: 'test-token',
-        refresh_token: 'test-refresh',
-        expires_at: new Date(Date.now() + 3600000).toISOString(),
-      }));
-      localStorage.setItem('aragora_user', JSON.stringify(mockUser));
-    }, { mockUser: user });
+    await page.addInitScript(
+      ({ mockUser }) => {
+        localStorage.setItem(
+          'aragora_tokens',
+          JSON.stringify({
+            access_token: 'test-token',
+            refresh_token: 'test-refresh',
+            expires_at: new Date(Date.now() + 3600000).toISOString(),
+          }),
+        );
+        localStorage.setItem('aragora_user', JSON.stringify(mockUser));
+      },
+      { mockUser: user },
+    );
 
-    await mockApiResponse(page, '**/api/auth/me', {
-      user,
-      organization: null,
-      organizations: [],
-    });
+    await mockApiResponse(page, '**/api/auth/me', { user, organization: null, organizations: [] });
 
-    await mockApiResponse(page, '**/api/features/config', {
-      preferences: {},
-    });
+    await mockApiResponse(page, '**/api/features/config', { preferences: {} });
 
     await page.route('**/api/auth/api-keys**', async (route) => {
       const method = route.request().method();
@@ -347,7 +392,10 @@ test.describe('Settings - Navigation', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Dashboard link might be in header as [DASHBOARD]
-    const dashboardLink = page.locator('a[href="/"]').filter({ hasText: /dashboard/i }).first();
+    const dashboardLink = page
+      .locator('a[href="/"]')
+      .filter({ hasText: /dashboard/i })
+      .first();
     if (await dashboardLink.isVisible()) {
       await dashboardLink.click();
       await aragoraPage.dismissAllOverlays();

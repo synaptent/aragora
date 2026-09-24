@@ -98,7 +98,7 @@ export function ExpenseTracker({
   });
 
   // Filter expenses
-  const filteredExpenses = expenses.filter(expense => {
+  const filteredExpenses = expenses.filter((expense) => {
     if (statusFilter !== 'all' && expense.status !== statusFilter) return false;
     if (categoryFilter !== 'all' && expense.category !== categoryFilter) return false;
     if (searchQuery) {
@@ -121,24 +121,27 @@ export function ExpenseTracker({
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
 
-    const files = Array.from(e.dataTransfer.files);
-    const imageFiles = files.filter(f =>
-      f.type.startsWith('image/') || f.type === 'application/pdf'
-    );
+      const files = Array.from(e.dataTransfer.files);
+      const imageFiles = files.filter(
+        (f) => f.type.startsWith('image/') || f.type === 'application/pdf',
+      );
 
-    for (const file of imageFiles) {
-      if (onUploadReceipt) {
-        setUploadProgress(0);
-        await onUploadReceipt(file);
-        setUploadProgress(100);
-        setTimeout(() => setUploadProgress(null), 1000);
+      for (const file of imageFiles) {
+        if (onUploadReceipt) {
+          setUploadProgress(0);
+          await onUploadReceipt(file);
+          setUploadProgress(100);
+          setTimeout(() => setUploadProgress(null), 1000);
+        }
       }
-    }
-  }, [onUploadReceipt]);
+    },
+    [onUploadReceipt],
+  );
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -162,7 +165,10 @@ export function ExpenseTracker({
         paymentMethod: newExpense.paymentMethod,
         description: newExpense.description,
         isReimbursable: newExpense.isReimbursable,
-        tags: newExpense.tags.split(',').map(t => t.trim()).filter(Boolean),
+        tags: newExpense.tags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
       } as Partial<Expense>);
       setShowCreateModal(false);
       setNewExpense({
@@ -205,7 +211,7 @@ export function ExpenseTracker({
   };
 
   const selectAllVisible = () => {
-    setSelectedExpenses(new Set(filteredExpenses.map(e => e.id)));
+    setSelectedExpenses(new Set(filteredExpenses.map((e) => e.id)));
   };
 
   const clearSelection = () => {
@@ -214,19 +220,25 @@ export function ExpenseTracker({
 
   const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'synced': return 'text-green-400 bg-green-500/10';
-      case 'approved': return 'text-blue-400 bg-blue-500/10';
+      case 'synced':
+        return 'text-green-400 bg-green-500/10';
+      case 'approved':
+        return 'text-blue-400 bg-blue-500/10';
       case 'processed':
-      case 'categorized': return 'text-yellow-400 bg-yellow-500/10';
-      case 'pending': return 'text-orange-400 bg-orange-500/10';
+      case 'categorized':
+        return 'text-yellow-400 bg-yellow-500/10';
+      case 'pending':
+        return 'text-orange-400 bg-orange-500/10';
       case 'rejected':
-      case 'duplicate': return 'text-red-400 bg-red-500/10';
-      default: return 'text-[var(--text-muted)] bg-[var(--surface)]';
+      case 'duplicate':
+        return 'text-red-400 bg-red-500/10';
+      default:
+        return 'text-[var(--text-muted)] bg-[var(--surface)]';
     }
   };
 
   const getCategoryIcon = (category: string): string => {
-    return EXPENSE_CATEGORIES.find(c => c.value === category)?.icon || '📦';
+    return EXPENSE_CATEGORIES.find((c) => c.value === category)?.icon || '📦';
   };
 
   return (
@@ -243,7 +255,9 @@ export function ExpenseTracker({
             <button
               onClick={() => setViewMode('list')}
               className={`px-2 py-1 text-xs font-theme-data rounded transition-colors ${
-                viewMode === 'list' ? 'bg-[var(--acid-green)] text-black' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                viewMode === 'list'
+                  ? 'bg-[var(--acid-green)] text-black'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
               }`}
             >
               List
@@ -251,7 +265,9 @@ export function ExpenseTracker({
             <button
               onClick={() => setViewMode('grid')}
               className={`px-2 py-1 text-xs font-theme-data rounded transition-colors ${
-                viewMode === 'grid' ? 'bg-[var(--acid-green)] text-black' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                viewMode === 'grid'
+                  ? 'bg-[var(--acid-green)] text-black'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
               }`}
             >
               Grid
@@ -259,7 +275,9 @@ export function ExpenseTracker({
             <button
               onClick={() => setViewMode('stats')}
               className={`px-2 py-1 text-xs font-theme-data rounded transition-colors ${
-                viewMode === 'stats' ? 'bg-[var(--acid-green)] text-black' : 'text-[var(--text-muted)] hover:text-[var(--text)]'
+                viewMode === 'stats'
+                  ? 'bg-[var(--acid-green)] text-black'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text)]'
               }`}
             >
               Stats
@@ -303,9 +321,7 @@ export function ExpenseTracker({
             browse files
           </button>
         </p>
-        <p className="text-xs text-[var(--text-muted)] mt-1">
-          Supports PNG, JPG, and PDF
-        </p>
+        <p className="text-xs text-[var(--text-muted)] mt-1">Supports PNG, JPG, and PDF</p>
         {uploadProgress !== null && (
           <div className="mt-2">
             <div className="h-1 bg-[var(--border)] rounded-full overflow-hidden">
@@ -358,8 +374,10 @@ export function ExpenseTracker({
               className="px-2 py-1 bg-[var(--bg)] border border-[var(--border)] rounded text-sm font-theme-data text-[var(--text)]"
             >
               <option value="all">All</option>
-              {EXPENSE_CATEGORIES.map(cat => (
-                <option key={cat.value} value={cat.value}>{cat.label}</option>
+              {EXPENSE_CATEGORIES.map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
               ))}
             </select>
           </div>
@@ -368,9 +386,7 @@ export function ExpenseTracker({
         {/* Bulk Actions */}
         {selectedExpenses.size > 0 && (
           <div className="flex items-center gap-4 mt-4 pt-4 border-t border-[var(--border)]">
-            <span className="text-sm text-[var(--text)]">
-              {selectedExpenses.size} selected
-            </span>
+            <span className="text-sm text-[var(--text)]">{selectedExpenses.size} selected</span>
             <button
               onClick={handleBulkApprove}
               className="px-2 py-1 text-xs font-theme-data bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30"
@@ -466,20 +482,28 @@ export function ExpenseTracker({
                     onChange={(e) => setNewExpense({ ...newExpense, category: e.target.value })}
                     className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded font-theme-data text-sm text-[var(--text)] focus:border-[var(--acid-green)] focus:outline-none"
                   >
-                    {EXPENSE_CATEGORIES.map(cat => (
-                      <option key={cat.value} value={cat.value}>{cat.icon} {cat.label}</option>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.icon} {cat.label}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-[var(--text-muted)] mb-1">Payment Method</label>
+                  <label className="block text-xs text-[var(--text-muted)] mb-1">
+                    Payment Method
+                  </label>
                   <select
                     value={newExpense.paymentMethod}
-                    onChange={(e) => setNewExpense({ ...newExpense, paymentMethod: e.target.value })}
+                    onChange={(e) =>
+                      setNewExpense({ ...newExpense, paymentMethod: e.target.value })
+                    }
                     className="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded font-theme-data text-sm text-[var(--text)] focus:border-[var(--acid-green)] focus:outline-none"
                   >
-                    {PAYMENT_METHODS.map(pm => (
-                      <option key={pm.value} value={pm.value}>{pm.label}</option>
+                    {PAYMENT_METHODS.map((pm) => (
+                      <option key={pm.value} value={pm.value}>
+                        {pm.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -501,7 +525,9 @@ export function ExpenseTracker({
                   type="checkbox"
                   id="reimbursable"
                   checked={newExpense.isReimbursable}
-                  onChange={(e) => setNewExpense({ ...newExpense, isReimbursable: e.target.checked })}
+                  onChange={(e) =>
+                    setNewExpense({ ...newExpense, isReimbursable: e.target.checked })
+                  }
                   className="rounded"
                 />
                 <label htmlFor="reimbursable" className="text-sm text-[var(--text)]">
@@ -544,16 +570,22 @@ function StatsView({ stats }: { stats: ExpenseStats }) {
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
           <div className="text-xs text-[var(--text-muted)]">Total Amount</div>
-          <div className="text-2xl font-theme-data text-[var(--acid-green)]">${stats.totalAmount.toLocaleString()}</div>
+          <div className="text-2xl font-theme-data text-[var(--acid-green)]">
+            ${stats.totalAmount.toLocaleString()}
+          </div>
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
           <div className="text-xs text-[var(--text-muted)]">Pending Approval</div>
           <div className="text-2xl font-theme-data text-yellow-400">{stats.pendingCount}</div>
-          <div className="text-xs text-[var(--text-muted)]">${stats.pendingAmount.toLocaleString()}</div>
+          <div className="text-xs text-[var(--text-muted)]">
+            ${stats.pendingAmount.toLocaleString()}
+          </div>
         </div>
         <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4">
           <div className="text-xs text-[var(--text-muted)]">Average Expense</div>
-          <div className="text-2xl font-theme-data text-[var(--text)]">${stats.avgExpense.toLocaleString()}</div>
+          <div className="text-2xl font-theme-data text-[var(--text)]">
+            ${stats.avgExpense.toLocaleString()}
+          </div>
         </div>
       </div>
 
@@ -562,12 +594,16 @@ function StatsView({ stats }: { stats: ExpenseStats }) {
         <h3 className="text-sm font-bold text-[var(--text)] mb-4">By Category</h3>
         <div className="space-y-2">
           {Object.entries(stats.byCategory)
-            .sort(([,a], [,b]) => b - a)
+            .sort(([, a], [, b]) => b - a)
             .map(([category, amount]) => (
               <div key={category} className="flex items-center gap-2">
-                <span className="text-lg">{EXPENSE_CATEGORIES.find(c => c.value === category)?.icon || '📦'}</span>
+                <span className="text-lg">
+                  {EXPENSE_CATEGORIES.find((c) => c.value === category)?.icon || '📦'}
+                </span>
                 <span className="flex-1 text-sm text-[var(--text)]">{category}</span>
-                <span className="font-theme-data text-sm text-[var(--text)]">${amount.toLocaleString()}</span>
+                <span className="font-theme-data text-sm text-[var(--text)]">
+                  ${amount.toLocaleString()}
+                </span>
                 <div className="w-24 h-2 bg-[var(--border)] rounded-full overflow-hidden">
                   <div
                     className="h-full bg-[var(--acid-green)]"
@@ -587,7 +623,9 @@ function StatsView({ stats }: { stats: ExpenseStats }) {
             <div key={vendor.vendor} className="flex items-center gap-2">
               <span className="text-xs text-[var(--text-muted)] w-4">{index + 1}.</span>
               <span className="flex-1 text-sm text-[var(--text)]">{vendor.vendor}</span>
-              <span className="font-theme-data text-sm text-[var(--text)]">${vendor.total.toLocaleString()}</span>
+              <span className="font-theme-data text-sm text-[var(--text)]">
+                ${vendor.total.toLocaleString()}
+              </span>
             </div>
           ))}
         </div>
@@ -643,7 +681,7 @@ function ListView({
         </div>
       ) : (
         <div className="divide-y divide-[var(--border)]">
-          {expenses.map(expense => (
+          {expenses.map((expense) => (
             <div
               key={expense.id}
               className={`grid grid-cols-12 gap-4 p-3 hover:bg-[var(--bg)] transition-colors items-center ${
@@ -662,7 +700,9 @@ function ListView({
               <div className="col-span-2">
                 <div className="text-sm text-[var(--text)] truncate">{expense.vendorName}</div>
                 {expense.description && (
-                  <div className="text-xs text-[var(--text-muted)] truncate">{expense.description}</div>
+                  <div className="text-xs text-[var(--text-muted)] truncate">
+                    {expense.description}
+                  </div>
                 )}
               </div>
               <div className="col-span-2">
@@ -679,7 +719,9 @@ function ListView({
                 )}
               </div>
               <div className="col-span-2">
-                <span className={`px-2 py-1 text-xs font-theme-data rounded ${getStatusColor(expense.status)}`}>
+                <span
+                  className={`px-2 py-1 text-xs font-theme-data rounded ${getStatusColor(expense.status)}`}
+                >
                   {expense.status}
                 </span>
               </div>
@@ -725,7 +767,7 @@ function GridView({
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {expenses.map(expense => (
+      {expenses.map((expense) => (
         <div
           key={expense.id}
           className={`bg-[var(--surface)] border border-[var(--border)] rounded p-4 hover:border-[var(--acid-green)]/50 transition-colors cursor-pointer ${
@@ -735,7 +777,9 @@ function GridView({
         >
           <div className="flex items-start justify-between mb-2">
             <span className="text-2xl">{getCategoryIcon(expense.category)}</span>
-            <span className={`px-2 py-1 text-xs font-theme-data rounded ${getStatusColor(expense.status)}`}>
+            <span
+              className={`px-2 py-1 text-xs font-theme-data rounded ${getStatusColor(expense.status)}`}
+            >
               {expense.status}
             </span>
           </div>
@@ -748,8 +792,11 @@ function GridView({
           </div>
           {expense.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
-              {expense.tags.slice(0, 3).map(tag => (
-                <span key={tag} className="px-1 py-0.5 text-xs bg-[var(--bg)] rounded text-[var(--text-muted)]">
+              {expense.tags.slice(0, 3).map((tag) => (
+                <span
+                  key={tag}
+                  className="px-1 py-0.5 text-xs bg-[var(--bg)] rounded text-[var(--text-muted)]"
+                >
                   {tag}
                 </span>
               ))}

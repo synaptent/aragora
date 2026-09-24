@@ -62,7 +62,7 @@ export function useLocalHistory(apiBase: string = '') {
   });
 
   const fetchHistory = useCallback(async () => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
       const [summaryRes, cyclesRes, eventsRes, debatesRes] = await Promise.all([
@@ -88,7 +88,7 @@ export function useLocalHistory(apiBase: string = '') {
         debates: debatesData.debates || [],
       });
     } catch (e) {
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
         error: e instanceof Error ? e.message : 'Failed to fetch history',
@@ -101,8 +101,5 @@ export function useLocalHistory(apiBase: string = '') {
     fetchHistory();
   }, [fetchHistory]);
 
-  return {
-    ...state,
-    refresh: fetchHistory,
-  };
+  return { ...state, refresh: fetchHistory };
 }

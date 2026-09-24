@@ -32,9 +32,11 @@ function StatusBadge({ status, compact = false }: { status: AgentStatus; compact
   }
 
   return (
-    <span className={`px-1.5 py-0.5 text-[10px] font-theme-data uppercase rounded ${color} ${
-      status === 'thinking' || status === 'active' ? 'text-background' : 'text-text'
-    } ${animate ? 'animate-pulse' : ''}`}>
+    <span
+      className={`px-1.5 py-0.5 text-[10px] font-theme-data uppercase rounded ${color} ${
+        status === 'thinking' || status === 'active' ? 'text-background' : 'text-text'
+      } ${animate ? 'animate-pulse' : ''}`}
+    >
       {label}
     </span>
   );
@@ -94,21 +96,26 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
   const [autoScroll, setAutoScroll] = useState(true);
 
   // Fetch positions when viewing individual agent
-  const fetchPositions = useCallback(async (agentName: string) => {
-    setPositionsLoading(true);
-    try {
-      const response = await fetch(`${apiBase}/api/agent/${encodeURIComponent(agentName)}/positions`);
-      if (response.ok) {
-        const data = await response.json();
-        setPositions(data.positions || []);
+  const fetchPositions = useCallback(
+    async (agentName: string) => {
+      setPositionsLoading(true);
+      try {
+        const response = await fetch(
+          `${apiBase}/api/agent/${encodeURIComponent(agentName)}/positions`,
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setPositions(data.positions || []);
+        }
+      } catch (err) {
+        logger.error('Failed to fetch positions:', err);
+        setPositions([]);
+      } finally {
+        setPositionsLoading(false);
       }
-    } catch (err) {
-      logger.error('Failed to fetch positions:', err);
-      setPositions([]);
-    } finally {
-      setPositionsLoading(false);
-    }
-  }, [apiBase]);
+    },
+    [apiBase],
+  );
 
   // Fetch positions when agent selection changes
   useEffect(() => {
@@ -176,12 +183,7 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
         };
       }
 
-      agents[agentName].allMessages.push({
-        content,
-        round,
-        role,
-        timestamp: event.timestamp,
-      });
+      agents[agentName].allMessages.push({ content, round, role, timestamp: event.timestamp });
 
       // Update to latest message
       if (event.timestamp >= agents[agentName].timestamp) {
@@ -247,9 +249,8 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
   };
 
   const activeAgent = selectedAgent;
-  const currentAgent = selectedAgent !== ALL_AGENTS_TAB
-    ? agentData.find((a) => a.name === activeAgent)
-    : null;
+  const currentAgent =
+    selectedAgent !== ALL_AGENTS_TAB ? agentData.find((a) => a.name === activeAgent) : null;
 
   if (agentData.length === 0) {
     return (
@@ -304,14 +305,10 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
               <span className="flex items-center gap-2">
                 <StatusBadge status={agent.status} compact />
                 {agent.name}
-                {agent.round > 0 && (
-                  <span className="text-xs opacity-60">R{agent.round}</span>
-                )}
+                {agent.round > 0 && <span className="text-xs opacity-60">R{agent.round}</span>}
               </span>
               {isActive && (
-                <span
-                  className={`absolute bottom-0 left-0 right-0 h-0.5 ${colors.tab}`}
-                />
+                <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${colors.tab}`} />
               )}
             </button>
           );
@@ -357,23 +354,16 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
             className="flex-1 overflow-y-auto p-4 space-y-3"
           >
             {unifiedTimeline.length === 0 ? (
-              <div className="text-center text-text-muted py-8">
-                Waiting for agent responses...
-              </div>
+              <div className="text-center text-text-muted py-8">Waiting for agent responses...</div>
             ) : (
               unifiedTimeline.map((msg, idx) => {
                 const colors = getAgentColors(msg.agent);
                 const roleIcon = ROLE_ICONS[msg.role] || ROLE_ICONS.default;
                 return (
-                  <div
-                    key={idx}
-                    className={`${colors.bg} border ${colors.border} p-3 rounded`}
-                  >
+                  <div key={idx} className={`${colors.bg} border ${colors.border} p-3 rounded`}>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-sm">{roleIcon}</span>
-                      <span className={`font-medium text-sm ${colors.text}`}>
-                        {msg.agent}
-                      </span>
+                      <span className={`font-medium text-sm ${colors.text}`}>{msg.agent}</span>
                       <RoleBadge role={msg.role} cognitiveRole={msg.cognitiveRole} />
                       {msg.round > 0 && (
                         <span className="px-1.5 py-0.5 text-xs bg-surface rounded border border-border">
@@ -413,10 +403,15 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
               {currentAgent.confidence !== undefined && (
                 <span className="text-sm">
                   <span className="text-text-muted">Confidence:</span>{' '}
-                  <span className={`font-theme-data font-medium ${
-                    currentAgent.confidence >= 0.8 ? 'text-green-400' :
-                    currentAgent.confidence >= 0.6 ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
+                  <span
+                    className={`font-theme-data font-medium ${
+                      currentAgent.confidence >= 0.8
+                        ? 'text-green-400'
+                        : currentAgent.confidence >= 0.6
+                          ? 'text-yellow-400'
+                          : 'text-red-400'
+                    }`}
+                  >
                     {Math.round(currentAgent.confidence * 100)}%
                   </span>
                 </span>
@@ -462,18 +457,27 @@ export function AgentTabs({ events, apiBase = DEFAULT_API_BASE }: AgentTabsProps
                 {positionsLoading ? (
                   <div className="text-center text-text-muted py-4">Loading positions...</div>
                 ) : positions.length === 0 ? (
-                  <div className="text-center text-text-muted py-4">No recorded positions for this agent.</div>
+                  <div className="text-center text-text-muted py-4">
+                    No recorded positions for this agent.
+                  </div>
                 ) : (
                   positions.map((pos, idx) => (
-                    <div key={idx} className="p-3 bg-surface border border-border rounded-lg hover:border-purple-500/30 transition-colors">
+                    <div
+                      key={idx}
+                      className="p-3 bg-surface border border-border rounded-lg hover:border-purple-500/30 transition-colors"
+                    >
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-medium text-text text-sm">{pos.topic}</span>
                         <div className="flex items-center gap-2 text-xs">
-                          <span className={`px-2 py-0.5 rounded ${
-                            pos.confidence >= 0.8 ? 'bg-green-500/20 text-green-400' :
-                            pos.confidence >= 0.5 ? 'bg-yellow-500/20 text-yellow-400' :
-                            'bg-red-500/20 text-red-400'
-                          }`}>
+                          <span
+                            className={`px-2 py-0.5 rounded ${
+                              pos.confidence >= 0.8
+                                ? 'bg-green-500/20 text-green-400'
+                                : pos.confidence >= 0.5
+                                  ? 'bg-yellow-500/20 text-yellow-400'
+                                  : 'bg-red-500/20 text-red-400'
+                            }`}
+                          >
                             {Math.round(pos.confidence * 100)}% conf
                           </span>
                           {pos.evidence_count > 0 && (

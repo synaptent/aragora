@@ -84,8 +84,8 @@ class Aggregator:
     classifier: str
     scope_flag: str
     required_context: bool
-    # quality-smoke additionally gates its worker on `!github.event.pull_request.draft`,
-    # so on a *draft* PR an in-scope skip is legitimate there and nowhere else.
+    # Some workers additionally gate on `!github.event.pull_request.draft`,
+    # so an in-scope skip is legitimate for these gates on draft PRs only.
     defers_on_draft: bool = False
 
 
@@ -104,6 +104,15 @@ AGGREGATORS: tuple[Aggregator, ...] = (
         "changes",
         "quality",
         required_context=False,
+        defers_on_draft=True,
+    ),
+    Aggregator(
+        "test.yml",
+        "test-fast-gate",
+        "test-fast-gate-run",
+        "test-shard-scope",
+        "in_scope",
+        required_context=False,  # FUTURE required check, activated only after settlement.
         defers_on_draft=True,
     ),
 )
@@ -127,9 +136,8 @@ _EXPRESSION = re.compile(r"\$\{\{\s*(?P<body>[^}]+?)\s*\}\}")
 _RESULT_REF = re.compile(r"^needs\.(?P<job>[A-Za-z0-9_-]+)\.result$")
 _OUTPUT_REF = re.compile(r"^needs\.(?P<job>[A-Za-z0-9_-]+)\.outputs\.(?P<name>[A-Za-z0-9_-]+)$")
 # The one non-`needs` signal an aggregator may legitimately read: whether the PR is a
-# draft. Matching the whole `event_name == 'pull_request' && ....draft || 'false'`
-# idiom rather than the bare field keeps any *other* github-context read unsupported,
-# so a future aggregator cannot smuggle in an unsimulated input.
+# draft. Accept either the bare field (empty on non-PR runs) or the explicit
+# event-guarded form; all other github-context reads remain unsupported.
 _DRAFT_REF = re.compile(
     r"^github\.event_name == 'pull_request' &&\s*"
     r"github\.event\.pull_request\.draft \|\| 'false'$"
@@ -152,7 +160,9 @@ def _resolve(
     is_draft: str,
 ) -> str:
     """Resolve a single `${{ ... }}` body against the simulated run state."""
-    if _DRAFT_REF.match(" ".join(expression.split())):
+    if expression == "github.event.pull_request.draft" or _DRAFT_REF.match(
+        " ".join(expression.split())
+    ):
         assert spec.defers_on_draft, (
             f"{spec.workflow}::{spec.job} reads the draft flag but is not declared "
             "defers_on_draft — a gate that silently defers on drafts is a fail-open path."

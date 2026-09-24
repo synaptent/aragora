@@ -21,7 +21,9 @@ export function TrainingExportPanel() {
   const client = useAragoraClient();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'export' | 'formats' | 'history' | 'pricing'>('export');
+  const [activeTab, setActiveTab] = useState<'export' | 'formats' | 'history' | 'pricing'>(
+    'export',
+  );
 
   // Data state
   const [stats, setStats] = useState<ExportStats | null>(null);
@@ -87,7 +89,11 @@ export function TrainingExportPanel() {
   }, [fetchData]);
 
   // Simulate pipeline progress
-  const simulatePipelineProgress = (stage: PipelineStage, targetProgress: number, totalRecords: number) => {
+  const simulatePipelineProgress = (
+    stage: PipelineStage,
+    targetProgress: number,
+    totalRecords: number,
+  ) => {
     return new Promise<void>((resolve) => {
       const startProgress = pipelineStatus.progress;
       const increment = (targetProgress - startProgress) / 10;
@@ -142,15 +148,27 @@ export function TrainingExportPanel() {
       await simulatePipelineProgress('collecting', 25, limit);
 
       // Stage 2: Filtering
-      setPipelineStatus(prev => ({ ...prev, stage: 'filtering', message: 'Applying quality filters...' }));
+      setPipelineStatus((prev) => ({
+        ...prev,
+        stage: 'filtering',
+        message: 'Applying quality filters...',
+      }));
       await simulatePipelineProgress('filtering', 50, limit);
 
       // Stage 3: Transforming
-      setPipelineStatus(prev => ({ ...prev, stage: 'transforming', message: 'Transforming to export format...' }));
+      setPipelineStatus((prev) => ({
+        ...prev,
+        stage: 'transforming',
+        message: 'Transforming to export format...',
+      }));
       await simulatePipelineProgress('transforming', 75, limit);
 
       // Stage 4: Exporting (actual API call)
-      setPipelineStatus(prev => ({ ...prev, stage: 'exporting', message: 'Generating export file...' }));
+      setPipelineStatus((prev) => ({
+        ...prev,
+        stage: 'exporting',
+        message: 'Generating export file...',
+      }));
 
       let result: unknown;
 
@@ -295,9 +313,7 @@ export function TrainingExportPanel() {
           <span className="text-blue-400">&#x1F4BE;</span>
           Training Data Export
         </h2>
-        <p className="text-sm text-slate-400 mt-1">
-          Export debate data for model fine-tuning
-        </p>
+        <p className="text-sm text-slate-400 mt-1">Export debate data for model fine-tuning</p>
       </div>
 
       {/* Tabs */}
@@ -324,9 +340,7 @@ export function TrainingExportPanel() {
           <div className="space-y-6">
             {/* Export Type Selection */}
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Export Type
-              </label>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Export Type</label>
               <div className="grid grid-cols-3 gap-3">
                 {(['sft', 'dpo', 'gauntlet'] as const).map((type) => (
                   <button
@@ -444,7 +458,9 @@ export function TrainingExportPanel() {
                   </label>
                   <select
                     value={persona}
-                    onChange={(e) => setPersona(e.target.value as 'all' | 'gdpr' | 'hipaa' | 'ai_act')}
+                    onChange={(e) =>
+                      setPersona(e.target.value as 'all' | 'gdpr' | 'hipaa' | 'ai_act')
+                    }
                     className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white"
                   >
                     <option value="all">All Personas</option>
@@ -474,9 +490,7 @@ export function TrainingExportPanel() {
             {/* Common Options */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">
-                  Limit
-                </label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Limit</label>
                 <input
                   type="number"
                   min="1"
@@ -502,9 +516,7 @@ export function TrainingExportPanel() {
             </div>
 
             {/* Pipeline Progress (shown during export) */}
-            {isExporting && (
-              <PipelineProgress status={pipelineStatus} />
-            )}
+            {isExporting && <PipelineProgress status={pipelineStatus} />}
 
             {/* Data Preview (shown after export) */}
             {showPreview && previewData.length > 0 && !isExporting && (
@@ -540,9 +552,7 @@ export function TrainingExportPanel() {
               </div>
             )}
 
-            {error && (
-              <p className="text-red-400 text-sm">{error}</p>
-            )}
+            {error && <p className="text-red-400 text-sm">{error}</p>}
           </div>
         )}
 

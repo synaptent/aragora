@@ -42,22 +42,14 @@ interface SLAErrorRate {
 }
 
 interface StatusData {
-  status: string;          // operational | degraded | down | maintenance
+  status: string; // operational | degraded | down | maintenance
   status_detail: string;
   message: string;
   uptime_seconds: number;
   uptime_formatted: string;
   timestamp: string;
-  components_summary: {
-    total: number;
-    operational: number;
-    degraded: number;
-    down: number;
-  };
-  sla: {
-    latency: SLALatency;
-    error_rate: SLAErrorRate;
-  };
+  components_summary: { total: number; operational: number; degraded: number; down: number };
+  sla: { latency: SLALatency; error_rate: SLAErrorRate };
 }
 
 interface UptimePeriod {
@@ -231,9 +223,7 @@ export default function PublicStatusPage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <header className="text-center mb-8">
-          <h1 className="text-3xl font-theme-data font-bold text-white mb-2">
-            Aragora Status
-          </h1>
+          <h1 className="text-3xl font-theme-data font-bold text-white mb-2">Aragora Status</h1>
           <p className="text-slate-400 font-theme-data text-sm">
             Platform health and SLA monitoring
           </p>
@@ -250,11 +240,14 @@ export default function PublicStatusPage() {
             </div>
             <div className="text-right font-theme-data text-sm text-slate-400">
               {statusData && (
-                <div>Uptime: <span className="text-slate-200">{statusData.uptime_formatted}</span></div>
+                <div>
+                  Uptime: <span className="text-slate-200">{statusData.uptime_formatted}</span>
+                </div>
               )}
               {statusData && (
                 <div className="text-xs mt-1">
-                  {statusData.components_summary.operational}/{statusData.components_summary.total} operational
+                  {statusData.components_summary.operational}/{statusData.components_summary.total}{' '}
+                  operational
                 </div>
               )}
             </div>
@@ -277,7 +270,9 @@ export default function PublicStatusPage() {
                 <div key={c.id} className={`p-3 rounded-lg border ${cs.bg} ${cs.border}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <div className={`w-2 h-2 rounded-full ${cs.dot}`} />
-                    <span className="font-theme-data text-sm text-slate-200 truncate">{c.name}</span>
+                    <span className="font-theme-data text-sm text-slate-200 truncate">
+                      {c.name}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={`text-xs font-theme-data capitalize ${cs.text}`}>
@@ -290,7 +285,9 @@ export default function PublicStatusPage() {
                     )}
                   </div>
                   {c.message && (
-                    <div className="text-xs font-theme-data text-slate-500 mt-1 truncate">{c.message}</div>
+                    <div className="text-xs font-theme-data text-slate-500 mt-1 truncate">
+                      {c.message}
+                    </div>
                   )}
                 </div>
               );
@@ -305,12 +302,19 @@ export default function PublicStatusPage() {
             <div className="grid grid-cols-3 gap-4">
               {Object.entries(uptime.periods).map(([period, data]) => {
                 const pct = data.uptime_percent;
-                const color = pct >= 99.9 ? 'text-green-400' : pct >= 99.0 ? 'text-yellow-400' : 'text-red-400';
-                const barColor = pct >= 99.9 ? 'bg-green-400' : pct >= 99.0 ? 'bg-yellow-400' : 'bg-red-400';
+                const color =
+                  pct >= 99.9 ? 'text-green-400' : pct >= 99.0 ? 'text-yellow-400' : 'text-red-400';
+                const barColor =
+                  pct >= 99.9 ? 'bg-green-400' : pct >= 99.0 ? 'bg-yellow-400' : 'bg-red-400';
 
                 return (
-                  <div key={period} className="p-4 border border-slate-700 rounded-lg bg-slate-900/50 text-center">
-                    <div className="font-theme-data text-xs text-slate-500 mb-2 uppercase">{period}</div>
+                  <div
+                    key={period}
+                    className="p-4 border border-slate-700 rounded-lg bg-slate-900/50 text-center"
+                  >
+                    <div className="font-theme-data text-xs text-slate-500 mb-2 uppercase">
+                      {period}
+                    </div>
                     <div className={`font-theme-data text-2xl font-bold ${color}`}>
                       {pct.toFixed(2)}%
                     </div>
@@ -377,11 +381,15 @@ export default function PublicStatusPage() {
               </div>
               <div className="p-4 border border-slate-700 rounded-lg bg-slate-900/50">
                 <div className="font-theme-data text-xs text-slate-500 mb-1">Error Rate</div>
-                <div className={`font-theme-data text-lg ${
-                  statusData.sla.error_rate.error_rate <= 0.001 ? 'text-green-400' :
-                  statusData.sla.error_rate.error_rate <= 0.01 ? 'text-yellow-400' :
-                  'text-red-400'
-                }`}>
+                <div
+                  className={`font-theme-data text-lg ${
+                    statusData.sla.error_rate.error_rate <= 0.001
+                      ? 'text-green-400'
+                      : statusData.sla.error_rate.error_rate <= 0.01
+                        ? 'text-yellow-400'
+                        : 'text-red-400'
+                  }`}
+                >
                   {(statusData.sla.error_rate.error_rate * 100).toFixed(2)}%
                 </div>
               </div>
@@ -398,7 +406,10 @@ export default function PublicStatusPage() {
             {incidents.active.length > 0 ? (
               <div className="space-y-3 mb-6">
                 {incidents.active.map((inc) => (
-                  <div key={inc.id} className="p-4 border border-red-500/30 rounded-lg bg-red-500/5">
+                  <div
+                    key={inc.id}
+                    className="p-4 border border-red-500/30 rounded-lg bg-red-500/5"
+                  >
                     <div className="flex items-start justify-between mb-2">
                       <span className="font-theme-data text-slate-200 font-bold">{inc.title}</span>
                       <div className="flex gap-2">
@@ -436,7 +447,9 @@ export default function PublicStatusPage() {
             ) : (
               <div className="p-6 border border-green-500/20 rounded-lg bg-green-500/5 text-center mb-6">
                 <div className="text-green-400 font-theme-data text-sm">No active incidents</div>
-                <div className="text-slate-500 font-theme-data text-xs mt-1">All systems operating normally.</div>
+                <div className="text-slate-500 font-theme-data text-xs mt-1">
+                  All systems operating normally.
+                </div>
               </div>
             )}
 
@@ -446,7 +459,10 @@ export default function PublicStatusPage() {
                 <h3 className="font-theme-data text-sm text-slate-400 mb-3">Recent (7 days)</h3>
                 <div className="space-y-2">
                   {incidents.recent.map((inc) => (
-                    <div key={inc.id} className="p-3 border border-slate-700 rounded-lg bg-slate-900/50">
+                    <div
+                      key={inc.id}
+                      className="p-3 border border-slate-700 rounded-lg bg-slate-900/50"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="font-theme-data text-sm text-slate-300">{inc.title}</span>
                         <span className="px-2 py-0.5 text-xs font-theme-data border rounded border-green-500/30 text-green-400">
@@ -467,13 +483,15 @@ export default function PublicStatusPage() {
 
         {/* Footer */}
         <footer className="text-center font-theme-data text-xs text-slate-600 py-8 border-t border-slate-800 mt-8">
-          <p>
-            Last updated: {lastRefresh.toLocaleTimeString()} | Auto-refreshes every 30s
-          </p>
+          <p>Last updated: {lastRefresh.toLocaleTimeString()} | Auto-refreshes every 30s</p>
           <p className="mt-2">
-            <a href="/api/v1/status" className="text-blue-400 hover:text-blue-300">JSON API</a>
+            <a href="/api/v1/status" className="text-blue-400 hover:text-blue-300">
+              JSON API
+            </a>
             {' | '}
-            <a href="https://aragora.ai" className="text-blue-400 hover:text-blue-300">Aragora</a>
+            <a href="https://aragora.ai" className="text-blue-400 hover:text-blue-300">
+              Aragora
+            </a>
           </p>
         </footer>
       </div>

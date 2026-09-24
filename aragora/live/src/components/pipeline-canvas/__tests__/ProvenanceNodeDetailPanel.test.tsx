@@ -215,9 +215,7 @@ describe('ProvenanceNodeDetailPanel', () => {
 
   it('displays content hash', () => {
     render(<ProvenanceNodeDetailPanel {...defaultProps} />);
-    expect(
-      screen.getByText('abc123def456789012345678901234567890abcd'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('abc123def456789012345678901234567890abcd')).toBeInTheDocument();
   });
 
   it('shows node ID', () => {
@@ -252,11 +250,7 @@ describe('ProvenanceNodeDetailPanel', () => {
 
   it('shows "Back to Editor" only when editable', () => {
     const { rerender } = render(
-      <ProvenanceNodeDetailPanel
-        {...defaultProps}
-        isEditable={true}
-        onBackToEditor={jest.fn()}
-      />,
+      <ProvenanceNodeDetailPanel {...defaultProps} isEditable={true} onBackToEditor={jest.fn()} />,
     );
     expect(screen.getByText('Back to Editor')).toBeInTheDocument();
 
@@ -291,24 +285,14 @@ describe('ProvenanceNodeDetailPanel', () => {
   // -- Edge cases --
 
   it('renders with null nodeData gracefully', () => {
-    render(
-      <ProvenanceNodeDetailPanel
-        {...defaultProps}
-        nodeData={null}
-      />,
-    );
+    render(<ProvenanceNodeDetailPanel {...defaultProps} nodeData={null} />);
     expect(screen.getByTestId('provenance-detail-panel')).toBeInTheDocument();
     // Should still show label from nodeLabel prop (in header h3)
     expect(screen.getByTitle('Improve API Performance')).toBeInTheDocument();
   });
 
   it('renders with no provenance links', () => {
-    render(
-      <ProvenanceNodeDetailPanel
-        {...defaultProps}
-        provenance={[]}
-      />,
-    );
+    render(<ProvenanceNodeDetailPanel {...defaultProps} provenance={[]} />);
     expect(screen.getByTestId('provenance-detail-panel')).toBeInTheDocument();
     // No upstream/downstream sections
     expect(screen.queryByText('Derived From')).not.toBeInTheDocument();
@@ -316,12 +300,7 @@ describe('ProvenanceNodeDetailPanel', () => {
   });
 
   it('renders with no transitions', () => {
-    render(
-      <ProvenanceNodeDetailPanel
-        {...defaultProps}
-        transitions={[]}
-      />,
-    );
+    render(<ProvenanceNodeDetailPanel {...defaultProps} transitions={[]} />);
     expect(screen.getByTestId('provenance-detail-panel')).toBeInTheDocument();
     expect(screen.queryByText('Derivation Rationale')).not.toBeInTheDocument();
   });
@@ -348,11 +327,7 @@ describe('ProvenanceNodeDetailPanel', () => {
         nodeId="action-1"
         stage="actions"
         nodeLabel="Implement Rate Limiter"
-        nodeData={{
-          label: 'Implement Rate Limiter',
-          stepType: 'task',
-          contentHash: '',
-        }}
+        nodeData={{ label: 'Implement Rate Limiter', stepType: 'task', contentHash: '' }}
       />,
     );
     expect(screen.getByText('Task')).toBeInTheDocument();

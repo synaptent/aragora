@@ -96,13 +96,7 @@ function VerticalCard({
   );
 }
 
-function ToolEditor({
-  tool,
-  onToggle,
-}: {
-  tool: Tool;
-  onToggle: () => void;
-}) {
+function ToolEditor({ tool, onToggle }: { tool: Tool; onToggle: () => void }) {
   return (
     <div className="flex items-center justify-between py-2 px-3 border border-[var(--accent)]/10 bg-surface/20">
       <div className="flex-1">
@@ -146,12 +140,18 @@ function ComplianceEditor({
       <div className="flex items-center justify-between p-3">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[var(--acid-cyan)] font-theme-data text-xs">{framework.name}</span>
-            <span className={`px-1.5 py-0.5 font-theme-data text-[9px] ${levelColors[framework.level] || levelColors.optional}`}>
+            <span className="text-[var(--acid-cyan)] font-theme-data text-xs">
+              {framework.name}
+            </span>
+            <span
+              className={`px-1.5 py-0.5 font-theme-data text-[9px] ${levelColors[framework.level] || levelColors.optional}`}
+            >
               {framework.level?.toUpperCase()}
             </span>
           </div>
-          <p className="text-text-muted/60 font-theme-data text-[9px] mt-0.5">{framework.description}</p>
+          <p className="text-text-muted/60 font-theme-data text-[9px] mt-0.5">
+            {framework.description}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {framework.requirements?.length > 0 && (
@@ -179,7 +179,10 @@ function ComplianceEditor({
           <div className="text-text-muted/40 font-theme-data text-[9px] mb-1">REQUIREMENTS:</div>
           <ul className="space-y-0.5">
             {framework.requirements.map((req, i) => (
-              <li key={i} className="text-text-muted/60 font-theme-data text-[9px] flex items-start gap-1">
+              <li
+                key={i}
+                className="text-text-muted/60 font-theme-data text-[9px] flex items-start gap-1"
+              >
                 <span className="text-[var(--accent)]/50">-</span>
                 {req}
               </li>
@@ -251,7 +254,10 @@ export default function VerticalsAdminPage() {
   const [selectedConfig, setSelectedConfig] = useState<VerticalConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [saveMessage, setSaveMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchVerticals = useCallback(async () => {
@@ -268,43 +274,45 @@ export default function VerticalsAdminPage() {
     }
   }, [backendConfig.api]);
 
-  const fetchVerticalConfig = useCallback(async (verticalId: string) => {
-    try {
-      const [configRes, toolsRes, complianceRes] = await Promise.all([
-        fetch(`${backendConfig.api}/api/verticals/${verticalId}`),
-        fetch(`${backendConfig.api}/api/verticals/${verticalId}/tools`),
-        fetch(`${backendConfig.api}/api/verticals/${verticalId}/compliance`),
-      ]);
+  const fetchVerticalConfig = useCallback(
+    async (verticalId: string) => {
+      try {
+        const [configRes, toolsRes, complianceRes] = await Promise.all([
+          fetch(`${backendConfig.api}/api/verticals/${verticalId}`),
+          fetch(`${backendConfig.api}/api/verticals/${verticalId}/tools`),
+          fetch(`${backendConfig.api}/api/verticals/${verticalId}/compliance`),
+        ]);
 
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        let tools: Tool[] = [];
-        let compliance: ComplianceFramework[] = [];
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          let tools: Tool[] = [];
+          let compliance: ComplianceFramework[] = [];
 
-        if (toolsRes.ok) {
-          const toolsData = await toolsRes.json();
-          tools = (toolsData.tools || []).map((t: Tool) => ({ ...t, enabled: true }));
+          if (toolsRes.ok) {
+            const toolsData = await toolsRes.json();
+            tools = (toolsData.tools || []).map((t: Tool) => ({ ...t, enabled: true }));
+          }
+
+          if (complianceRes.ok) {
+            const complianceData = await complianceRes.json();
+            compliance = (complianceData.compliance_frameworks || []).map(
+              (f: ComplianceFramework) => ({ ...f, enabled: true }),
+            );
+          }
+
+          setSelectedConfig({
+            ...configData,
+            tools,
+            compliance_frameworks: compliance,
+            model_config: configData.model_config || { temperature: 0.7, max_tokens: 4096 },
+          });
         }
-
-        if (complianceRes.ok) {
-          const complianceData = await complianceRes.json();
-          compliance = (complianceData.compliance_frameworks || []).map((f: ComplianceFramework) => ({
-            ...f,
-            enabled: true,
-          }));
-        }
-
-        setSelectedConfig({
-          ...configData,
-          tools,
-          compliance_frameworks: compliance,
-          model_config: configData.model_config || { temperature: 0.7, max_tokens: 4096 },
-        });
+      } catch (error) {
+        logger.error('Failed to fetch vertical config:', error);
       }
-    } catch (error) {
-      logger.error('Failed to fetch vertical config:', error);
-    }
-  }, [backendConfig.api]);
+    },
+    [backendConfig.api],
+  );
 
   useEffect(() => {
     fetchVerticals();
@@ -368,10 +376,7 @@ export default function VerticalsAdminPage() {
         });
       }
     } catch {
-      setSaveMessage({
-        type: 'error',
-        text: 'Failed to save configuration',
-      });
+      setSaveMessage({ type: 'error', text: 'Failed to save configuration' });
     } finally {
       setIsSaving(false);
       setTimeout(() => setSaveMessage(null), 5000);
@@ -390,7 +395,8 @@ export default function VerticalsAdminPage() {
   });
 
   const enabledToolsCount = selectedConfig?.tools.filter((t) => t.enabled).length || 0;
-  const enabledComplianceCount = selectedConfig?.compliance_frameworks.filter((f) => f.enabled).length || 0;
+  const enabledComplianceCount =
+    selectedConfig?.compliance_frameworks.filter((f) => f.enabled).length || 0;
 
   return (
     <main className="min-h-screen bg-bg text-text">
@@ -398,11 +404,17 @@ export default function VerticalsAdminPage() {
       <header className="border-b border-[var(--accent)]/30 bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/" className="text-[var(--accent)] font-theme-data text-sm hover:opacity-80">
+            <Link
+              href="/"
+              className="text-[var(--accent)] font-theme-data text-sm hover:opacity-80"
+            >
               [ARAGORA]
             </Link>
             <span className="text-[var(--accent)]/30">/</span>
-            <Link href="/admin" className="text-[var(--acid-cyan)] font-theme-data text-sm hover:opacity-80">
+            <Link
+              href="/admin"
+              className="text-[var(--acid-cyan)] font-theme-data text-sm hover:opacity-80"
+            >
               ADMIN
             </Link>
             <span className="text-[var(--accent)]/30">/</span>
@@ -414,7 +426,9 @@ export default function VerticalsAdminPage() {
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         {/* Title */}
         <div className="text-center mb-8">
-          <h1 className="text-[var(--accent)] font-theme-data text-xl mb-2">VERTICALS CONFIGURATION</h1>
+          <h1 className="text-[var(--accent)] font-theme-data text-xl mb-2">
+            VERTICALS CONFIGURATION
+          </h1>
           <p className="text-text-muted font-theme-data text-xs">
             Configure industry vertical specialists, tools, and compliance frameworks
           </p>
@@ -435,7 +449,9 @@ export default function VerticalsAdminPage() {
 
         {isLoading ? (
           <div className="text-center py-12">
-            <span className="text-[var(--accent)] font-theme-data animate-pulse">LOADING VERTICALS...</span>
+            <span className="text-[var(--accent)] font-theme-data animate-pulse">
+              LOADING VERTICALS...
+            </span>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -522,7 +538,9 @@ export default function VerticalsAdminPage() {
                         />
                       ))}
                       {selectedConfig.tools.length === 0 && (
-                        <p className="text-text-muted font-theme-data text-xs">No tools configured</p>
+                        <p className="text-text-muted font-theme-data text-xs">
+                          No tools configured
+                        </p>
                       )}
                     </div>
                   </div>
@@ -531,7 +549,8 @@ export default function VerticalsAdminPage() {
                   <div className="border border-[var(--accent)]/30 bg-surface/30 p-4">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-[var(--accent)]/60 font-theme-data text-[10px] tracking-widest">
-                        COMPLIANCE ({enabledComplianceCount}/{selectedConfig.compliance_frameworks.length} enabled)
+                        COMPLIANCE ({enabledComplianceCount}/
+                        {selectedConfig.compliance_frameworks.length} enabled)
                       </h3>
                     </div>
                     <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -543,7 +562,9 @@ export default function VerticalsAdminPage() {
                         />
                       ))}
                       {selectedConfig.compliance_frameworks.length === 0 && (
-                        <p className="text-text-muted font-theme-data text-xs">No compliance frameworks</p>
+                        <p className="text-text-muted font-theme-data text-xs">
+                          No compliance frameworks
+                        </p>
                       )}
                     </div>
                   </div>

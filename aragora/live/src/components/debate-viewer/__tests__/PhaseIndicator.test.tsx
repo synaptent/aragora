@@ -31,9 +31,7 @@ describe('PhaseIndicator', () => {
     it('renders phase description', () => {
       render(<PhaseIndicator currentRound={0} />);
 
-      expect(
-        screen.getByText(/Gathering background information/)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Gathering background information/)).toBeInTheDocument();
     });
 
     it('renders progress bar by default', () => {

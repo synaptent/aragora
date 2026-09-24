@@ -9,10 +9,7 @@ interface DebateNodeProps {
   selected?: boolean;
 }
 
-export const DebateNode = memo(function DebateNode({
-  data,
-  selected,
-}: DebateNodeProps) {
+export const DebateNode = memo(function DebateNode({ data, selected }: DebateNodeProps) {
   return (
     <div
       className={`
@@ -35,14 +32,10 @@ export const DebateNode = memo(function DebateNode({
         </span>
       </div>
 
-      <div className="text-sm font-medium text-text mb-1 truncate">
-        {data.label}
-      </div>
+      <div className="text-sm font-medium text-text mb-1 truncate">{data.label}</div>
 
       {data.description && (
-        <div className="text-xs text-text-muted mb-2 line-clamp-2">
-          {data.description}
-        </div>
+        <div className="text-xs text-text-muted mb-2 line-clamp-2">{data.description}</div>
       )}
 
       <div className="flex flex-wrap gap-1 mb-2">

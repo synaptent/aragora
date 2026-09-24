@@ -9,12 +9,7 @@ interface SpamAnalysis {
   risk_level: 'safe' | 'low' | 'medium' | 'high' | 'critical';
   category: string;
   confidence: number;
-  signals: Array<{
-    name: string;
-    score: number;
-    weight: number;
-    details: string;
-  }>;
+  signals: Array<{ name: string; score: number; weight: number; details: string }>;
   reasons: string[];
 }
 
@@ -62,11 +57,7 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
   const [error, setError] = useState<string | null>(null);
 
   // Test email input
-  const [testEmail, setTestEmail] = useState({
-    sender: '',
-    subject: '',
-    body: '',
-  });
+  const [testEmail, setTestEmail] = useState({ sender: '', subject: '', body: '' });
 
   // Results
   const [spamResult, setSpamResult] = useState<SpamAnalysis | null>(null);
@@ -140,20 +131,23 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
     }
   }, [apiBase]);
 
-  const fetchThreadSummary = useCallback(async (threadId: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${apiBase}/api/inbox/threads/${threadId}/summary`);
-      if (!response.ok) throw new Error('Failed to fetch summary');
-      const data = await response.json();
-      setThreadSummary(data.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch summary');
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase]);
+  const fetchThreadSummary = useCallback(
+    async (threadId: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`${apiBase}/api/inbox/threads/${threadId}/summary`);
+        if (!response.ok) throw new Error('Failed to fetch summary');
+        const data = await response.json();
+        setThreadSummary(data.data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch summary');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiBase],
+  );
 
   useEffect(() => {
     if (expanded && activeTab === 'threads') {
@@ -163,32 +157,40 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
 
   const getRiskColor = (level: SpamAnalysis['risk_level']) => {
     switch (level) {
-      case 'critical': return 'text-red-500 border-red-500/50 bg-red-500/10';
-      case 'high': return 'text-orange-500 border-orange-500/50 bg-orange-500/10';
-      case 'medium': return 'text-yellow-500 border-yellow-500/50 bg-yellow-500/10';
-      case 'low': return 'text-blue-400 border-blue-400/50 bg-blue-400/10';
-      case 'safe': return 'text-[var(--accent)] border-[var(--accent)]/50 bg-[var(--accent)]/10';
-      default: return 'text-text-muted';
+      case 'critical':
+        return 'text-red-500 border-red-500/50 bg-red-500/10';
+      case 'high':
+        return 'text-orange-500 border-orange-500/50 bg-orange-500/10';
+      case 'medium':
+        return 'text-yellow-500 border-yellow-500/50 bg-yellow-500/10';
+      case 'low':
+        return 'text-blue-400 border-blue-400/50 bg-blue-400/10';
+      case 'safe':
+        return 'text-[var(--accent)] border-[var(--accent)]/50 bg-[var(--accent)]/10';
+      default:
+        return 'text-text-muted';
     }
   };
 
   const getUrgencyColor = (urgency: string) => {
     switch (urgency) {
-      case 'urgent': return 'text-red-500';
-      case 'high': return 'text-orange-500';
-      case 'normal': return 'text-text-muted';
-      case 'low': return 'text-[var(--accent)]';
-      default: return 'text-text-muted';
+      case 'urgent':
+        return 'text-red-500';
+      case 'high':
+        return 'text-orange-500';
+      case 'normal':
+        return 'text-text-muted';
+      case 'low':
+        return 'text-[var(--accent)]';
+      default:
+        return 'text-text-muted';
     }
   };
 
   return (
     <div className="panel" style={{ padding: 0 }}>
       {/* Header */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="panel-collapsible-header w-full"
-      >
+      <button onClick={() => setExpanded(!expanded)} className="panel-collapsible-header w-full">
         <div className="flex items-center gap-2">
           <span className="text-purple-400 font-theme-data text-sm">[INBOX INTEL]</span>
           <span className="text-text-muted text-xs">Spam detection & threading</span>
@@ -261,24 +263,31 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
             {activeTab === 'spam' && spamResult && (
               <div className="space-y-3">
                 {/* Verdict */}
-                <div className={`border p-3 text-center ${
-                  spamResult.is_spam
-                    ? 'border-red-500/50 bg-red-500/10'
-                    : 'border-[var(--accent)]/50 bg-[var(--accent)]/10'
-                }`}>
-                  <div className={`text-2xl font-theme-data font-bold ${
-                    spamResult.is_spam ? 'text-red-500' : 'text-[var(--accent)]'
-                  }`}>
+                <div
+                  className={`border p-3 text-center ${
+                    spamResult.is_spam
+                      ? 'border-red-500/50 bg-red-500/10'
+                      : 'border-[var(--accent)]/50 bg-[var(--accent)]/10'
+                  }`}
+                >
+                  <div
+                    className={`text-2xl font-theme-data font-bold ${
+                      spamResult.is_spam ? 'text-red-500' : 'text-[var(--accent)]'
+                    }`}
+                  >
                     {spamResult.is_spam ? 'SPAM DETECTED' : 'LIKELY SAFE'}
                   </div>
                   <div className="text-text-muted text-xs mt-1">
-                    Score: {(spamResult.spam_score * 100).toFixed(0)}% | Confidence: {(spamResult.confidence * 100).toFixed(0)}%
+                    Score: {(spamResult.spam_score * 100).toFixed(0)}% | Confidence:{' '}
+                    {(spamResult.confidence * 100).toFixed(0)}%
                   </div>
                 </div>
 
                 {/* Risk Level & Category */}
                 <div className="flex gap-2">
-                  <div className={`flex-1 border p-2 text-center ${getRiskColor(spamResult.risk_level)}`}>
+                  <div
+                    className={`flex-1 border p-2 text-center ${getRiskColor(spamResult.risk_level)}`}
+                  >
                     <div className="text-[10px] text-text-muted uppercase">Risk Level</div>
                     <div className="font-theme-data uppercase">{spamResult.risk_level}</div>
                   </div>
@@ -302,7 +311,9 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
                               style={{ width: `${signal.score * 100}%` }}
                             />
                           </div>
-                          <div className="w-8 text-right text-text-muted">{(signal.score * 100).toFixed(0)}%</div>
+                          <div className="w-8 text-right text-text-muted">
+                            {(signal.score * 100).toFixed(0)}%
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -314,7 +325,9 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
                   <div className="border border-warning/30 bg-warning/5 p-2 text-xs">
                     <div className="text-warning mb-1">Detected Patterns</div>
                     {spamResult.reasons.map((reason, i) => (
-                      <div key={i} className="text-text-muted">• {reason}</div>
+                      <div key={i} className="text-text-muted">
+                        • {reason}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -324,38 +337,51 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
             {activeTab === 'phishing' && phishingResult && (
               <div className="space-y-3">
                 {/* Verdict */}
-                <div className={`border p-3 text-center ${
-                  phishingResult.is_phishing
-                    ? 'border-red-500/50 bg-red-500/10'
-                    : 'border-[var(--accent)]/50 bg-[var(--accent)]/10'
-                }`}>
-                  <div className={`text-2xl font-theme-data font-bold ${
-                    phishingResult.is_phishing ? 'text-red-500' : 'text-[var(--accent)]'
-                  }`}>
+                <div
+                  className={`border p-3 text-center ${
+                    phishingResult.is_phishing
+                      ? 'border-red-500/50 bg-red-500/10'
+                      : 'border-[var(--accent)]/50 bg-[var(--accent)]/10'
+                  }`}
+                >
+                  <div
+                    className={`text-2xl font-theme-data font-bold ${
+                      phishingResult.is_phishing ? 'text-red-500' : 'text-[var(--accent)]'
+                    }`}
+                  >
                     {phishingResult.is_phishing ? 'PHISHING DETECTED' : 'NOT PHISHING'}
                   </div>
                   <div className="text-text-muted text-xs mt-1">
-                    Score: {(phishingResult.phishing_score * 100).toFixed(0)}% | Confidence: {(phishingResult.confidence * 100).toFixed(0)}%
+                    Score: {(phishingResult.phishing_score * 100).toFixed(0)}% | Confidence:{' '}
+                    {(phishingResult.confidence * 100).toFixed(0)}%
                   </div>
                 </div>
 
                 {/* Threat Indicators */}
                 <div className="grid grid-cols-2 gap-2">
-                  <div className={`border p-2 text-center ${
-                    phishingResult.credential_harvesting_detected
-                      ? 'border-red-500/50 bg-red-500/10 text-red-500'
-                      : 'border-[var(--accent)]/50 bg-[var(--accent)]/10 text-[var(--accent)]'
-                  }`}>
+                  <div
+                    className={`border p-2 text-center ${
+                      phishingResult.credential_harvesting_detected
+                        ? 'border-red-500/50 bg-red-500/10 text-red-500'
+                        : 'border-[var(--accent)]/50 bg-[var(--accent)]/10 text-[var(--accent)]'
+                    }`}
+                  >
                     <div className="text-[10px] uppercase">Credential Harvesting</div>
-                    <div className="font-theme-data">{phishingResult.credential_harvesting_detected ? 'DETECTED' : 'CLEAR'}</div>
+                    <div className="font-theme-data">
+                      {phishingResult.credential_harvesting_detected ? 'DETECTED' : 'CLEAR'}
+                    </div>
                   </div>
-                  <div className={`border p-2 text-center ${
-                    phishingResult.login_page_mimicry
-                      ? 'border-red-500/50 bg-red-500/10 text-red-500'
-                      : 'border-[var(--accent)]/50 bg-[var(--accent)]/10 text-[var(--accent)]'
-                  }`}>
+                  <div
+                    className={`border p-2 text-center ${
+                      phishingResult.login_page_mimicry
+                        ? 'border-red-500/50 bg-red-500/10 text-red-500'
+                        : 'border-[var(--accent)]/50 bg-[var(--accent)]/10 text-[var(--accent)]'
+                    }`}
+                  >
                     <div className="text-[10px] uppercase">Login Mimicry</div>
-                    <div className="font-theme-data">{phishingResult.login_page_mimicry ? 'DETECTED' : 'CLEAR'}</div>
+                    <div className="font-theme-data">
+                      {phishingResult.login_page_mimicry ? 'DETECTED' : 'CLEAR'}
+                    </div>
                   </div>
                 </div>
 
@@ -363,7 +389,9 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
                 {phishingResult.targeted_brand && (
                   <div className="border border-warning/50 bg-warning/10 p-2 text-xs">
                     <div className="text-warning">Impersonating Brand</div>
-                    <div className="font-theme-data text-warning text-lg uppercase">{phishingResult.targeted_brand}</div>
+                    <div className="font-theme-data text-warning text-lg uppercase">
+                      {phishingResult.targeted_brand}
+                    </div>
                   </div>
                 )}
 
@@ -372,15 +400,17 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
                   <div className="border border-text-muted/20 bg-surface p-2 text-xs">
                     <div className="text-text-muted mb-1">Phishing Indicators</div>
                     {phishingResult.indicators.map((indicator, i) => (
-                      <div key={i} className="text-warning/80">• {indicator}</div>
+                      <div key={i} className="text-warning/80">
+                        • {indicator}
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
             )}
 
-            {activeTab === 'threads' && (
-              threads.length > 0 ? (
+            {activeTab === 'threads' &&
+              (threads.length > 0 ? (
                 <div className="space-y-1">
                   {threads.map((thread) => (
                     <button
@@ -393,13 +423,20 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
                       className="w-full border border-purple-400/30 bg-surface p-2 text-xs text-left hover:border-purple-400/60 transition-colors"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-theme-data text-purple-400 truncate max-w-[70%]">{thread.subject}</span>
+                        <span className="font-theme-data text-purple-400 truncate max-w-[70%]">
+                          {thread.subject}
+                        </span>
                         <span className="text-text-muted">{thread.message_count} msgs</span>
                       </div>
                       <div className="flex items-center justify-between mt-1 text-text-muted/60">
-                        <span className="truncate max-w-[60%]">{thread.participants.slice(0, 2).join(', ')}{thread.participants.length > 2 ? '...' : ''}</span>
+                        <span className="truncate max-w-[60%]">
+                          {thread.participants.slice(0, 2).join(', ')}
+                          {thread.participants.length > 2 ? '...' : ''}
+                        </span>
                         {thread.unread_count > 0 && (
-                          <span className="bg-purple-400 text-bg text-[10px] px-1 rounded">{thread.unread_count} new</span>
+                          <span className="bg-purple-400 text-bg text-[10px] px-1 rounded">
+                            {thread.unread_count} new
+                          </span>
                         )}
                       </div>
                     </button>
@@ -409,18 +446,20 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
                 <div className="text-text-muted text-xs text-center py-4">
                   {loading ? 'Loading threads...' : 'No threads available'}
                 </div>
-              )
-            )}
+              ))}
 
-            {activeTab === 'summary' && (
-              threadSummary ? (
+            {activeTab === 'summary' &&
+              (threadSummary ? (
                 <div className="space-y-3">
                   {/* Thread Header */}
                   {selectedThread && (
                     <div className="border border-purple-400/30 bg-purple-400/10 p-2 text-xs">
-                      <div className="font-theme-data text-purple-400">{selectedThread.subject}</div>
+                      <div className="font-theme-data text-purple-400">
+                        {selectedThread.subject}
+                      </div>
                       <div className="text-text-muted mt-1">
-                        {selectedThread.message_count} messages | {selectedThread.participants.length} participants
+                        {selectedThread.message_count} messages |{' '}
+                        {selectedThread.participants.length} participants
                       </div>
                     </div>
                   )}
@@ -433,13 +472,17 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
 
                   {/* Urgency & Sentiment */}
                   <div className="flex gap-2">
-                    <div className={`flex-1 border border-text-muted/20 bg-surface p-2 text-center ${getUrgencyColor(threadSummary.urgency)}`}>
+                    <div
+                      className={`flex-1 border border-text-muted/20 bg-surface p-2 text-center ${getUrgencyColor(threadSummary.urgency)}`}
+                    >
                       <div className="text-[10px] text-text-muted uppercase">Urgency</div>
                       <div className="font-theme-data uppercase">{threadSummary.urgency}</div>
                     </div>
                     <div className="flex-1 border border-text-muted/20 bg-surface p-2 text-center">
                       <div className="text-[10px] text-text-muted uppercase">Sentiment</div>
-                      <div className="font-theme-data text-purple-400">{threadSummary.sentiment}</div>
+                      <div className="font-theme-data text-purple-400">
+                        {threadSummary.sentiment}
+                      </div>
                     </div>
                   </div>
 
@@ -448,7 +491,9 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
                     <div className="border border-[var(--acid-cyan)]/30 bg-[var(--acid-cyan)]/5 p-2 text-xs">
                       <div className="text-[var(--acid-cyan)] mb-1">Key Points</div>
                       {threadSummary.key_points.map((point, i) => (
-                        <div key={i} className="text-text-muted">• {point}</div>
+                        <div key={i} className="text-text-muted">
+                          • {point}
+                        </div>
                       ))}
                     </div>
                   )}
@@ -482,8 +527,7 @@ export function InboxIntelligencePanel({ apiBase }: InboxIntelligencePanelProps)
                 <div className="text-text-muted text-xs text-center py-4">
                   Select a thread to view summary
                 </div>
-              )
-            )}
+              ))}
 
             {/* Initial states */}
             {activeTab === 'spam' && !spamResult && !loading && (

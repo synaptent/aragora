@@ -29,12 +29,8 @@ describe('MetricsCards', () => {
   const createEvent = (
     type: string,
     data: Record<string, unknown> = {},
-    timestamp: number = mockTimestamp
-  ): StreamEvent => ({
-    type,
-    data,
-    timestamp,
-  });
+    timestamp: number = mockTimestamp,
+  ): StreamEvent => ({ type, data, timestamp });
 
   describe('Rendering', () => {
     it('renders all 6 metric labels', () => {
@@ -119,7 +115,7 @@ describe('MetricsCards', () => {
         <MetricsCards
           nomicState={createNomicState({ completed_tasks: 3, total_tasks: 5 })}
           events={[]}
-        />
+        />,
       );
 
       expect(screen.getByText('3/5')).toBeInTheDocument();
@@ -130,7 +126,7 @@ describe('MetricsCards', () => {
         <MetricsCards
           nomicState={createNomicState({ completed_tasks: 0, total_tasks: 0 })}
           events={[]}
-        />
+        />,
       );
 
       const dashValues = screen.getAllByText('-');
@@ -142,7 +138,7 @@ describe('MetricsCards', () => {
         <MetricsCards
           nomicState={createNomicState({ completed_tasks: 5, total_tasks: 5 })}
           events={[]}
-        />
+        />,
       );
 
       const tasksValue = screen.getByText('5/5');
@@ -154,7 +150,7 @@ describe('MetricsCards', () => {
         <MetricsCards
           nomicState={createNomicState({ completed_tasks: 2, total_tasks: 5 })}
           events={[]}
-        />
+        />,
       );
 
       const tasksValue = screen.getByText('2/5');
@@ -269,7 +265,7 @@ describe('MetricsCards', () => {
 
     it('shows OK when last_success is undefined', () => {
       render(
-        <MetricsCards nomicState={createNomicState({ last_success: undefined })} events={[]} />
+        <MetricsCards nomicState={createNomicState({ last_success: undefined })} events={[]} />,
       );
 
       expect(screen.getByText('OK')).toBeInTheDocument();

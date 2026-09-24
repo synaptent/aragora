@@ -11,13 +11,7 @@ import {
   selectIsOnboardingNeeded,
   SelectedTemplate,
 } from '@/store/onboardingStore';
-import {
-  WelcomeStep,
-  UseCaseStep,
-  OrganizationStep,
-  TemplateStep,
-  CompletionStep,
-} from './steps';
+import { WelcomeStep, UseCaseStep, OrganizationStep, TemplateStep, CompletionStep } from './steps';
 
 interface OnboardingFlowProps {
   onComplete?: () => void;
@@ -55,42 +49,45 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
   }, [completeOnboarding, onComplete, router]);
 
   // Handle use case selection
-  const handleUseCaseNext = useCallback((_useCase: string) => {
-    nextStep();
-  }, [nextStep]);
+  const handleUseCaseNext = useCallback(
+    (_useCase: string) => {
+      nextStep();
+    },
+    [nextStep],
+  );
 
   // Handle template selection and start debate
-  const handleTemplateNext = useCallback(async (template: SelectedTemplate) => {
-    setDebateStatus('creating');
+  const handleTemplateNext = useCallback(
+    async (template: SelectedTemplate) => {
+      setDebateStatus('creating');
 
-    try {
-      // Create first debate via API
-      const response = await fetch(`${apiBase}/api/v1/onboarding/first-debate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          template_id: template.id,
-          use_example: true,
-        }),
-      });
+      try {
+        // Create first debate via API
+        const response = await fetch(`${apiBase}/api/v1/onboarding/first-debate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ template_id: template.id, use_example: true }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        setFirstDebateId(data.debate_id);
-        setDebateStatus('running');
+        if (response.ok) {
+          const data = await response.json();
+          setFirstDebateId(data.debate_id);
+          setDebateStatus('running');
 
-        // Navigate to debate page
-        router.push(`/debate/${data.debate_id}`);
-      } else {
+          // Navigate to debate page
+          router.push(`/debate/${data.debate_id}`);
+        } else {
+          setDebateStatus('error');
+        }
+      } catch (error) {
+        logger.error('Failed to create first debate:', error);
         setDebateStatus('error');
       }
-    } catch (error) {
-      logger.error('Failed to create first debate:', error);
-      setDebateStatus('error');
-    }
 
-    nextStep();
-  }, [apiBase, nextStep, router, setFirstDebateId, setDebateStatus]);
+      nextStep();
+    },
+    [apiBase, nextStep, router, setFirstDebateId, setDebateStatus],
+  );
 
   // Don't render if onboarding not needed
   if (!needsOnboarding) return null;
@@ -98,46 +95,22 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
   const renderStep = () => {
     switch (currentStep) {
       case 'welcome':
-        return (
-          <WelcomeStep
-            onNext={nextStep}
-            onSkip={handleSkip}
-          />
-        );
+        return <WelcomeStep onNext={nextStep} onSkip={handleSkip} />;
       case 'organization':
-        return (
-          <UseCaseStep
-            onNext={handleUseCaseNext}
-            onBack={previousStep}
-          />
-        );
+        return <UseCaseStep onNext={handleUseCaseNext} onBack={previousStep} />;
       case 'team-invite':
-        return (
-          <OrganizationStep
-            onNext={nextStep}
-            onBack={previousStep}
-          />
-        );
+        return <OrganizationStep onNext={nextStep} onBack={previousStep} />;
       case 'template-select':
-        return (
-          <TemplateStep
-            onNext={handleTemplateNext}
-            onBack={previousStep}
-          />
-        );
+        return <TemplateStep onNext={handleTemplateNext} onBack={previousStep} />;
       case 'completion':
-        return (
-          <CompletionStep
-            onComplete={handleComplete}
-          />
-        );
+        return <CompletionStep onComplete={handleComplete} />;
       default:
         // For other steps, show a simple next/back UI
         return (
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-theme-data text-[var(--accent)] mb-2">
-                {currentStep.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                {currentStep.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
               </h2>
               <p className="font-theme-data text-text-muted text-sm">
                 Continue setting up your Aragora experience
@@ -201,8 +174,8 @@ export function OnboardingFlow({ onComplete, onSkip }: OnboardingFlowProps) {
                 idx === stepIndex
                   ? 'bg-[var(--accent)]'
                   : idx < stepIndex
-                  ? 'bg-[var(--accent)]/50'
-                  : 'bg-surface border border-[var(--accent)]/30'
+                    ? 'bg-[var(--accent)]/50'
+                    : 'bg-surface border border-[var(--accent)]/30'
               }`}
             />
           ))}
@@ -216,12 +189,7 @@ export function useOnboarding() {
   const { isComplete, isSkipped, resetOnboarding } = useOnboardingStore();
   const needsOnboarding = useOnboardingStore(selectIsOnboardingNeeded);
 
-  return {
-    showOnboarding: needsOnboarding,
-    isComplete,
-    isSkipped,
-    resetOnboarding,
-  };
+  return { showOnboarding: needsOnboarding, isComplete, isSkipped, resetOnboarding };
 }
 
 export default OnboardingFlow;

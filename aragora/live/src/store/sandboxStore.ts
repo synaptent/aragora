@@ -9,7 +9,8 @@ import { API_BASE_URL } from '@/config';
 // ============================================================================
 
 export type ExecutionMode = 'docker' | 'subprocess' | 'mock';
-export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout' | 'policy_denied';
+export type ExecutionStatus =
+  'pending' | 'running' | 'completed' | 'failed' | 'timeout' | 'policy_denied';
 export type Language = 'python' | 'javascript' | 'bash';
 
 export interface ExecutionResult {
@@ -50,7 +51,10 @@ export interface PoolStatus {
 }
 
 // Status styling
-export const STATUS_STYLES: Record<ExecutionStatus, { color: string; bgColor: string; label: string }> = {
+export const STATUS_STYLES: Record<
+  ExecutionStatus,
+  { color: string; bgColor: string; label: string }
+> = {
   pending: { color: 'text-gray-400', bgColor: 'bg-gray-500/10', label: 'PENDING' },
   running: { color: 'text-blue-400', bgColor: 'bg-blue-500/10', label: 'RUNNING' },
   completed: { color: 'text-green-400', bgColor: 'bg-green-500/10', label: 'COMPLETED' },
@@ -60,7 +64,10 @@ export const STATUS_STYLES: Record<ExecutionStatus, { color: string; bgColor: st
 };
 
 // Language config
-export const LANGUAGE_CONFIG: Record<Language, { label: string; extension: string; placeholder: string }> = {
+export const LANGUAGE_CONFIG: Record<
+  Language,
+  { label: string; extension: string; placeholder: string }
+> = {
   python: {
     label: 'Python',
     extension: '.py',
@@ -148,10 +155,7 @@ const API_URL = API_BASE_URL;
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
 
   if (!response.ok) {
@@ -218,14 +222,10 @@ export const useSandboxStore = create<SandboxState & SandboxActions>()(
 
       cancelExecution: async (executionId: string) => {
         try {
-          await fetchApi(`/api/sandbox/executions/${executionId}`, {
-            method: 'DELETE',
-          });
+          await fetchApi(`/api/sandbox/executions/${executionId}`, { method: 'DELETE' });
           set({ isExecuting: false });
         } catch (error) {
-          set({
-            executionError: error instanceof Error ? error.message : 'Failed to cancel',
-          });
+          set({ executionError: error instanceof Error ? error.message : 'Failed to cancel' });
         }
       },
 
@@ -277,6 +277,6 @@ export const useSandboxStore = create<SandboxState & SandboxActions>()(
         set(initialState);
       },
     }),
-    { name: 'sandbox-store' }
-  )
+    { name: 'sandbox-store' },
+  ),
 );

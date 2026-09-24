@@ -81,10 +81,7 @@ export function TeamAccessPanel({
     setInviteError(null);
 
     try {
-      await createInvite({
-        email: inviteEmail,
-        role: inviteRole,
-      });
+      await createInvite({ email: inviteEmail, role: inviteRole });
 
       // Also call the parent callback if provided
       onMemberAdd?.(inviteEmail, inviteRole);
@@ -148,24 +145,20 @@ export function TeamAccessPanel({
             {/* Info */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-theme-data font-bold text-text truncate">
-                  {member.name}
-                </span>
-                <span className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${getRoleColor(member.role)}`}>
+                <span className="font-theme-data font-bold text-text truncate">{member.name}</span>
+                <span
+                  className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${getRoleColor(member.role)}`}
+                >
                   {member.role}
                 </span>
               </div>
-              <div className="text-xs text-text-muted mt-0.5 truncate">
-                {member.email}
-              </div>
+              <div className="text-xs text-text-muted mt-0.5 truncate">{member.email}</div>
             </div>
 
             {/* Last Active */}
             <div className="text-right text-xs">
               <div className="text-text-muted">Last active</div>
-              <div className="font-theme-data text-text">
-                {formatLastActive(member.lastActive)}
-              </div>
+              <div className="font-theme-data text-text">{formatLastActive(member.lastActive)}</div>
             </div>
 
             {/* Actions */}
@@ -173,7 +166,9 @@ export function TeamAccessPanel({
               <div className="flex items-center gap-2">
                 <select
                   value={member.role}
-                  onChange={(e) => onRoleChange?.(member.id, e.target.value as WorkspaceMember['role'])}
+                  onChange={(e) =>
+                    onRoleChange?.(member.id, e.target.value as WorkspaceMember['role'])
+                  }
                   className="px-2 py-1 text-xs font-theme-data bg-surface border border-border rounded focus:outline-none focus:border-[var(--accent)]"
                 >
                   {ROLE_OPTIONS.map((option) => (
@@ -229,10 +224,10 @@ export function TeamAccessPanel({
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-theme-data text-text truncate">
-                      {invite.email}
-                    </span>
-                    <span className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${getRoleColor(invite.role)}`}>
+                    <span className="font-theme-data text-text truncate">{invite.email}</span>
+                    <span
+                      className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${getRoleColor(invite.role)}`}
+                    >
                       {invite.role}
                     </span>
                   </div>
@@ -275,12 +270,12 @@ export function TeamAccessPanel({
             { role: 'viewer', perms: ['View content', 'View analytics'] },
           ].map(({ role, perms }) => (
             <div key={role} className="flex items-start gap-3">
-              <span className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${getRoleColor(role as WorkspaceMember['role'])}`}>
+              <span
+                className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${getRoleColor(role as WorkspaceMember['role'])}`}
+              >
                 {role}
               </span>
-              <span className="text-xs text-text-muted">
-                {perms.join(' | ')}
-              </span>
+              <span className="text-xs text-text-muted">{perms.join(' | ')}</span>
             </div>
           ))}
         </div>
@@ -313,9 +308,7 @@ export function TeamAccessPanel({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-theme-data text-text-muted mb-1">
-                    ROLE
-                  </label>
+                  <label className="block text-xs font-theme-data text-text-muted mb-1">ROLE</label>
                   <div className="space-y-2">
                     {ROLE_OPTIONS.map((option) => (
                       <label

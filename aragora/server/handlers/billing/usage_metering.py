@@ -17,6 +17,7 @@ import math
 import unicodedata
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 from aragora.billing.models import SubscriptionTier
 
@@ -80,7 +81,7 @@ class UsageMeteringHandler(SecureHandler):
         self,
         path: str,
         query_params: dict,
-        handler,
+        handler: Any,
         method: str = "GET",
     ) -> HandlerResult | None:
         """Route usage metering requests to appropriate methods."""
@@ -130,17 +131,17 @@ class UsageMeteringHandler(SecureHandler):
 
         return error_response("Method not allowed", 405)
 
-    def _get_user_store(self):
+    def _get_user_store(self) -> Any:
         """Get user store from context."""
         return self.ctx.get("user_store")
 
-    def _get_usage_meter(self):
+    def _get_usage_meter(self) -> Any:
         """Get usage meter instance."""
         from aragora.services.usage_metering import get_usage_meter
 
         return get_usage_meter()
 
-    def _get_org_tier(self, org) -> str:
+    def _get_org_tier(self, org: Any) -> str:
         """Get organization tier as string."""
         if org is None:
             return "free"
@@ -152,9 +153,9 @@ class UsageMeteringHandler(SecureHandler):
     @require_permission("org:billing")
     async def _get_usage(
         self,
-        handler,
+        handler: Any,
         query_params: dict,
-        user=None,
+        user: Any = None,
     ) -> HandlerResult:
         """
         Get current usage for the authenticated user's organization.
@@ -224,9 +225,9 @@ class UsageMeteringHandler(SecureHandler):
     @require_permission("org:billing")
     async def _get_usage_breakdown(
         self,
-        handler,
+        handler: Any,
         query_params: dict,
-        user=None,
+        user: Any = None,
     ) -> HandlerResult:
         """
         Get detailed usage breakdown for billing.
@@ -301,9 +302,9 @@ class UsageMeteringHandler(SecureHandler):
     @require_permission("org:billing")
     async def _get_limits(
         self,
-        handler,
+        handler: Any,
         query_params: dict,
-        user=None,
+        user: Any = None,
     ) -> HandlerResult:
         """
         Get current usage limits and utilization percentages.
@@ -370,9 +371,9 @@ class UsageMeteringHandler(SecureHandler):
     @require_permission("org:billing")
     async def _get_quota_status(
         self,
-        handler,
+        handler: Any,
         query_params: dict,
-        user=None,
+        user: Any = None,
     ) -> HandlerResult:
         """
         Get current quota status using the unified QuotaManager.
@@ -446,9 +447,9 @@ class UsageMeteringHandler(SecureHandler):
     @require_permission("org:billing")
     async def _export_usage(
         self,
-        handler,
+        handler: Any,
         query_params: dict,
-        user=None,
+        user: Any = None,
     ) -> HandlerResult:
         """
         Export usage data as CSV.
@@ -594,9 +595,9 @@ class UsageMeteringHandler(SecureHandler):
     @require_permission("org:billing")
     async def _get_quota_usage(
         self,
-        handler,
+        handler: Any,
         query_params: dict,
-        user=None,
+        user: Any = None,
     ) -> HandlerResult:
         """Get quota usage summary across all resource types."""
         from aragora.server.middleware.tier_enforcement import get_quota_manager
@@ -639,9 +640,9 @@ class UsageMeteringHandler(SecureHandler):
     @require_permission("org:billing")
     async def _get_quota_for_resource(
         self,
-        handler,
+        handler: Any,
         resource: str,
-        user=None,
+        user: Any = None,
     ) -> HandlerResult:
         """Get detailed quota information for a specific resource type."""
         from aragora.server.middleware.tier_enforcement import get_quota_manager
@@ -691,8 +692,8 @@ class UsageMeteringHandler(SecureHandler):
     @require_permission("org:billing")
     async def _request_quota_increase(
         self,
-        handler,
-        user=None,
+        handler: Any,
+        user: Any = None,
     ) -> HandlerResult:
         """
         Submit a quota increase request for review.

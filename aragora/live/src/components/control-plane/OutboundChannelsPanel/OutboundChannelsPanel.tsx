@@ -4,7 +4,12 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { PanelTemplate } from '@/components/shared/PanelTemplate';
 import { useApi } from '@/hooks/useApi';
 import { useBackend } from '@/components/BackendSelector';
-import { ChannelCard, type OutboundChannel, type OutboundChannelType, type ChannelStatus } from './ChannelCard';
+import {
+  ChannelCard,
+  type OutboundChannel,
+  type OutboundChannelType,
+  type ChannelStatus,
+} from './ChannelCard';
 import { ChannelConfigModal } from './ChannelConfigModal';
 import { DeliveryLog, type DeliveryLogEntry } from './DeliveryLog';
 import { logger } from '@/utils/logger';
@@ -105,11 +110,7 @@ export function OutboundChannelsPanel({
       if (existing) {
         return existing;
       }
-      return {
-        ...available,
-        id: `${available.type}-new`,
-        status: 'inactive' as ChannelStatus,
-      };
+      return { ...available, id: `${available.type}-new`, status: 'inactive' as ChannelStatus };
     });
   }, [channels]);
 
@@ -124,7 +125,7 @@ export function OutboundChannelsPanel({
         (c) =>
           c.name.toLowerCase().includes(query) ||
           c.type.toLowerCase().includes(query) ||
-          c.description.toLowerCase().includes(query)
+          c.description.toLowerCase().includes(query),
       );
     }
 
@@ -151,8 +152,12 @@ export function OutboundChannelsPanel({
 
     try {
       const [channelsResponse, logResponse] = await Promise.all([
-        api.get('/api/outbound-channels').catch(() => ({ channels: [] })) as Promise<{ channels: OutboundChannel[] }>,
-        api.get('/api/outbound-channels/delivery-log').catch(() => ({ entries: [] })) as Promise<{ entries: DeliveryLogEntry[] }>,
+        api.get('/api/outbound-channels').catch(() => ({ channels: [] })) as Promise<{
+          channels: OutboundChannel[];
+        }>,
+        api.get('/api/outbound-channels/delivery-log').catch(() => ({ entries: [] })) as Promise<{
+          entries: DeliveryLogEntry[];
+        }>,
       ]);
 
       setChannels(channelsResponse.channels || []);
@@ -227,7 +232,8 @@ export function OutboundChannelsPanel({
           channel_type: 'slack',
           channel_name: 'Slack',
           recipient: '#decisions',
-          content_preview: 'Consensus reached: Implement rate limiting with token bucket algorithm...',
+          content_preview:
+            'Consensus reached: Implement rate limiting with token bucket algorithm...',
           status: 'delivered',
           sent_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
           delivered_at: new Date(Date.now() - 5 * 60 * 1000 + 234).toISOString(),
@@ -296,7 +302,7 @@ export function OutboundChannelsPanel({
       setSelectedChannel(channel);
       onSelectChannel?.(channel);
     },
-    [onSelectChannel]
+    [onSelectChannel],
   );
 
   // Handle configure
@@ -316,19 +322,22 @@ export function OutboundChannelsPanel({
         // Optimistic update fallback
         setChannels((prev) =>
           prev.map((c) =>
-            c.id === channel.id ? { ...c, enabled, status: enabled ? 'active' : 'inactive' } : c
-          )
+            c.id === channel.id ? { ...c, enabled, status: enabled ? 'active' : 'inactive' } : c,
+          ),
         );
       }
     },
-    [api, loadData]
+    [api, loadData],
   );
 
   // Handle test
   const handleTest = useCallback(
     async (channel: OutboundChannel) => {
       try {
-        const result = await api.post(`/api/outbound-channels/${channel.id}/test`) as { success: boolean; message?: string };
+        const result = (await api.post(`/api/outbound-channels/${channel.id}/test`)) as {
+          success: boolean;
+          message?: string;
+        };
         if (result.success) {
           alert('Test message sent successfully!');
         } else {
@@ -339,7 +348,7 @@ export function OutboundChannelsPanel({
         alert('Test failed. Please check your configuration.');
       }
     },
-    [api]
+    [api],
   );
 
   // Handle save config
@@ -348,16 +357,19 @@ export function OutboundChannelsPanel({
       await api.put(`/api/outbound-channels/${channelId}`, { config });
       loadData();
     },
-    [api, loadData]
+    [api, loadData],
   );
 
   // Handle test connection
   const handleTestConnection = useCallback(
     async (channelId: string, config: Record<string, unknown>) => {
-      const result = await api.post(`/api/outbound-channels/test`, { channel_id: channelId, config }) as { success: boolean };
+      const result = (await api.post(`/api/outbound-channels/test`, {
+        channel_id: channelId,
+        config,
+      })) as { success: boolean };
       return result.success;
     },
-    [api]
+    [api],
   );
 
   // Handle retry delivery
@@ -370,7 +382,7 @@ export function OutboundChannelsPanel({
         logger.error('Failed to retry delivery:', err);
       }
     },
-    [api, loadData]
+    [api, loadData],
   );
 
   // Filter counts
@@ -379,25 +391,31 @@ export function OutboundChannelsPanel({
       all: mergedChannels.length,
       active: mergedChannels.filter((c) => c.status === 'active').length,
       inactive: mergedChannels.filter((c) => c.status === 'inactive').length,
-      error: mergedChannels.filter((c) => c.status === 'error' || c.status === 'rate_limited').length,
+      error: mergedChannels.filter((c) => c.status === 'error' || c.status === 'rate_limited')
+        .length,
     }),
-    [mergedChannels]
+    [mergedChannels],
   );
 
   // Summary stats
   const summaryStats = useMemo(() => {
     const activeChannels = channels.filter((c) => c.enabled);
-    const totalSentToday = activeChannels.reduce((sum, c) => sum + (c.stats?.messages_sent_today || 0), 0);
+    const totalSentToday = activeChannels.reduce(
+      (sum, c) => sum + (c.stats?.messages_sent_today || 0),
+      0,
+    );
     const avgSuccessRate =
       activeChannels.length > 0
-        ? activeChannels.reduce((sum, c) => sum + (c.stats?.success_rate || 0), 0) / activeChannels.length
+        ? activeChannels.reduce((sum, c) => sum + (c.stats?.success_rate || 0), 0) /
+          activeChannels.length
         : 0;
 
     return {
       activeChannels: activeChannels.length,
       totalSentToday,
       avgSuccessRate: avgSuccessRate.toFixed(1),
-      pendingDeliveries: deliveryLog.filter((e) => e.status === 'pending' || e.status === 'sent').length,
+      pendingDeliveries: deliveryLog.filter((e) => e.status === 'pending' || e.status === 'sent')
+        .length,
     };
   }, [channels, deliveryLog]);
 
@@ -419,19 +437,27 @@ export function OutboundChannelsPanel({
       {/* Summary Stats */}
       <div className="grid grid-cols-4 gap-3 mb-4">
         <div className="bg-surface rounded p-3 text-center">
-          <div className="text-xl font-theme-data font-bold text-[var(--accent)]">{summaryStats.activeChannels}</div>
+          <div className="text-xl font-theme-data font-bold text-[var(--accent)]">
+            {summaryStats.activeChannels}
+          </div>
           <div className="text-xs text-text-muted">Active Channels</div>
         </div>
         <div className="bg-surface rounded p-3 text-center">
-          <div className="text-xl font-theme-data font-bold text-cyan-400">{summaryStats.totalSentToday}</div>
+          <div className="text-xl font-theme-data font-bold text-cyan-400">
+            {summaryStats.totalSentToday}
+          </div>
           <div className="text-xs text-text-muted">Sent Today</div>
         </div>
         <div className="bg-surface rounded p-3 text-center">
-          <div className="text-xl font-theme-data font-bold text-[var(--accent)]">{summaryStats.avgSuccessRate}%</div>
+          <div className="text-xl font-theme-data font-bold text-[var(--accent)]">
+            {summaryStats.avgSuccessRate}%
+          </div>
           <div className="text-xs text-text-muted">Success Rate</div>
         </div>
         <div className="bg-surface rounded p-3 text-center">
-          <div className="text-xl font-theme-data font-bold text-yellow-400">{summaryStats.pendingDeliveries}</div>
+          <div className="text-xl font-theme-data font-bold text-yellow-400">
+            {summaryStats.pendingDeliveries}
+          </div>
           <div className="text-xs text-text-muted">Pending</div>
         </div>
       </div>
@@ -443,7 +469,9 @@ export function OutboundChannelsPanel({
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 px-4 py-2 text-sm font-theme-data rounded transition-colors ${
-              activeTab === tab.id ? 'bg-[var(--accent)] text-bg' : 'text-text-muted hover:text-text'
+              activeTab === tab.id
+                ? 'bg-[var(--accent)] text-bg'
+                : 'text-text-muted hover:text-text'
             }`}
           >
             {tab.label}
@@ -470,7 +498,9 @@ export function OutboundChannelsPanel({
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1 text-xs font-theme-data rounded transition-colors ${
-                    filter === f ? 'bg-[var(--accent)] text-bg' : 'bg-surface text-text-muted hover:text-text'
+                    filter === f
+                      ? 'bg-[var(--accent)] text-bg'
+                      : 'bg-surface text-text-muted hover:text-text'
                   }`}
                 >
                   {f.charAt(0).toUpperCase() + f.slice(1)} ({filterCounts[f]})
@@ -527,7 +557,9 @@ export function OutboundChannelsPanel({
           <div className="grid grid-cols-2 gap-4 mt-6">
             <div className="bg-surface rounded p-4">
               <div className="text-3xl font-theme-data font-bold text-[var(--accent)] mb-1">
-                {channels.reduce((sum, c) => sum + (c.stats?.messages_sent_total || 0), 0).toLocaleString()}
+                {channels
+                  .reduce((sum, c) => sum + (c.stats?.messages_sent_total || 0), 0)
+                  .toLocaleString()}
               </div>
               <div className="text-sm text-text-muted">Total Messages Sent</div>
             </div>
@@ -535,7 +567,7 @@ export function OutboundChannelsPanel({
               <div className="text-3xl font-theme-data font-bold text-cyan-400 mb-1">
                 {Math.round(
                   channels.reduce((sum, c) => sum + (c.stats?.avg_delivery_time_ms || 0), 0) /
-                    Math.max(channels.filter((c) => c.stats).length, 1)
+                    Math.max(channels.filter((c) => c.stats).length, 1),
                 )}
                 ms
               </div>

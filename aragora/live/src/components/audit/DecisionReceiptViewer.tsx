@@ -92,10 +92,13 @@ export function DecisionReceiptViewer({
   className = '',
 }: DecisionReceiptViewerProps) {
   const [activeTab, setActiveTab] = useState<'findings' | 'dissent' | 'claims'>('findings');
-  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'verifying' | 'valid' | 'invalid'>('idle');
+  const [verificationStatus, setVerificationStatus] = useState<
+    'idle' | 'verifying' | 'valid' | 'invalid'
+  >('idle');
   const [expandedFinding, setExpandedFinding] = useState<string | null>(null);
 
-  const verdictConfig = VERDICT_CONFIG[receipt.verdict.toLowerCase()] || VERDICT_CONFIG.needs_review;
+  const verdictConfig =
+    VERDICT_CONFIG[receipt.verdict.toLowerCase()] || VERDICT_CONFIG.needs_review;
   const riskColor = RISK_COLORS[receipt.risk_level.toLowerCase()] || 'text-text-muted';
 
   const handleVerify = async () => {
@@ -130,7 +133,9 @@ export function DecisionReceiptViewer({
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[var(--accent)] font-theme-data text-sm">{verdictConfig.icon}</span>
+              <span className="text-[var(--accent)] font-theme-data text-sm">
+                {verdictConfig.icon}
+              </span>
               <h2 className="font-theme-data text-lg font-bold text-text">DECISION RECEIPT</h2>
             </div>
             <div className="text-xs font-theme-data text-text-muted">
@@ -297,12 +302,18 @@ export function DecisionReceiptViewer({
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${colors.text}`}>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-theme-data uppercase rounded ${colors.text}`}
+                            >
                               {finding.severity}
                             </span>
-                            <span className="text-xs text-text-muted font-theme-data">{finding.category}</span>
+                            <span className="text-xs text-text-muted font-theme-data">
+                              {finding.category}
+                            </span>
                             {finding.verified && (
-                              <span className="text-xs text-green-400 font-theme-data">[VERIFIED]</span>
+                              <span className="text-xs text-green-400 font-theme-data">
+                                [VERIFIED]
+                              </span>
                             )}
                           </div>
                           <h4 className="font-theme-data font-bold text-text">{finding.title}</h4>
@@ -314,7 +325,9 @@ export function DecisionReceiptViewer({
                           <p className="text-sm text-text-muted">{finding.description}</p>
                           {finding.mitigation && (
                             <div>
-                              <span className="text-xs font-theme-data text-[var(--accent)]">Mitigation:</span>
+                              <span className="text-xs font-theme-data text-[var(--accent)]">
+                                Mitigation:
+                              </span>
                               <p className="text-sm text-text ml-2">{finding.mitigation}</p>
                             </div>
                           )}
@@ -340,12 +353,11 @@ export function DecisionReceiptViewer({
               </div>
             ) : (
               receipt.dissenting_views.map((dissent, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 rounded border border-orange-800/30 bg-orange-900/20"
-                >
+                <div key={idx} className="p-3 rounded border border-orange-800/30 bg-orange-900/20">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-theme-data font-bold text-orange-400">{dissent.agent}</span>
+                    <span className="font-theme-data font-bold text-orange-400">
+                      {dissent.agent}
+                    </span>
                     <span className="text-xs font-theme-data text-text-muted">
                       Severity: {(dissent.severity * 100).toFixed(0)}%
                     </span>
@@ -363,7 +375,9 @@ export function DecisionReceiptViewer({
                   </ul>
                   {dissent.alternative && (
                     <div className="mt-2 pt-2 border-t border-border/30">
-                      <span className="text-xs font-theme-data text-[var(--acid-cyan)]">Alternative proposed:</span>
+                      <span className="text-xs font-theme-data text-[var(--acid-cyan)]">
+                        Alternative proposed:
+                      </span>
                       <p className="text-sm text-text mt-1">{dissent.alternative}</p>
                     </div>
                   )}
@@ -374,7 +388,9 @@ export function DecisionReceiptViewer({
             {/* Unresolved Tensions */}
             {receipt.unresolved_tensions.length > 0 && (
               <div className="mt-4 pt-4 border-t border-border">
-                <div className="text-xs font-theme-data text-text-muted mb-2">UNRESOLVED TENSIONS</div>
+                <div className="text-xs font-theme-data text-text-muted mb-2">
+                  UNRESOLVED TENSIONS
+                </div>
                 <ul className="space-y-2">
                   {receipt.unresolved_tensions.map((tension, idx) => (
                     <li key={idx} className="text-sm text-yellow-400 flex items-start gap-2">
@@ -414,7 +430,12 @@ export function DecisionReceiptViewer({
                       <div className="flex items-center gap-4 mt-1 text-xs text-text-muted font-theme-data">
                         <span>Method: {claim.method}</span>
                         {claim.proof_hash && (
-                          <span>Proof: <code className="text-[var(--acid-cyan)]">{claim.proof_hash.slice(0, 12)}...</code></span>
+                          <span>
+                            Proof:{' '}
+                            <code className="text-[var(--acid-cyan)]">
+                              {claim.proof_hash.slice(0, 12)}...
+                            </code>
+                          </span>
                         )}
                       </div>
                     </div>

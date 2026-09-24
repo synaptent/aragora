@@ -1,11 +1,19 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useMemo,
+  ReactNode,
+  useEffect,
+} from 'react';
 
 // Breakpoints matching Tailwind config
 const BREAKPOINTS = {
-  mobile: 640,   // sm
-  tablet: 1024,  // lg
+  mobile: 640, // sm
+  tablet: 1024, // lg
   desktop: 1280, // xl
 };
 
@@ -100,7 +108,7 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
   // Left sidebar actions
   const openLeftSidebar = useCallback(() => setLeftSidebarOpen(true), []);
   const closeLeftSidebar = useCallback(() => setLeftSidebarOpen(false), []);
-  const toggleLeftSidebar = useCallback(() => setLeftSidebarOpen(prev => !prev), []);
+  const toggleLeftSidebar = useCallback(() => setLeftSidebarOpen((prev) => !prev), []);
 
   const setLeftSidebarCollapsed = useCallback((collapsed: boolean) => {
     setLeftSidebarCollapsedState(collapsed);
@@ -119,7 +127,7 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleRightSidebar = useCallback(() => {
-    setRightSidebarOpen(prev => {
+    setRightSidebarOpen((prev) => {
       const newValue = !prev;
       localStorage.setItem(RIGHT_OPEN_KEY, String(newValue));
       return newValue;
@@ -150,38 +158,48 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
     };
   }, [isMobile, leftSidebarOpen]);
 
-  const value = useMemo<LayoutContextType>(() => ({
-    // Left sidebar
-    leftSidebarOpen,
-    leftSidebarCollapsed,
-    openLeftSidebar,
-    closeLeftSidebar,
-    toggleLeftSidebar,
-    setLeftSidebarCollapsed,
-    // Right sidebar
-    rightSidebarOpen,
-    openRightSidebar,
-    closeRightSidebar,
-    toggleRightSidebar,
-    // Responsive
-    isMobile,
-    isTablet,
-    isDesktop,
-    // Dimensions
-    leftSidebarWidth,
-    rightSidebarWidth,
-  }), [
-    leftSidebarOpen, leftSidebarCollapsed,
-    openLeftSidebar, closeLeftSidebar, toggleLeftSidebar, setLeftSidebarCollapsed,
-    rightSidebarOpen, openRightSidebar, closeRightSidebar, toggleRightSidebar,
-    isMobile, isTablet, isDesktop, leftSidebarWidth, rightSidebarWidth,
-  ]);
-
-  return (
-    <LayoutContext.Provider value={value}>
-      {children}
-    </LayoutContext.Provider>
+  const value = useMemo<LayoutContextType>(
+    () => ({
+      // Left sidebar
+      leftSidebarOpen,
+      leftSidebarCollapsed,
+      openLeftSidebar,
+      closeLeftSidebar,
+      toggleLeftSidebar,
+      setLeftSidebarCollapsed,
+      // Right sidebar
+      rightSidebarOpen,
+      openRightSidebar,
+      closeRightSidebar,
+      toggleRightSidebar,
+      // Responsive
+      isMobile,
+      isTablet,
+      isDesktop,
+      // Dimensions
+      leftSidebarWidth,
+      rightSidebarWidth,
+    }),
+    [
+      leftSidebarOpen,
+      leftSidebarCollapsed,
+      openLeftSidebar,
+      closeLeftSidebar,
+      toggleLeftSidebar,
+      setLeftSidebarCollapsed,
+      rightSidebarOpen,
+      openRightSidebar,
+      closeRightSidebar,
+      toggleRightSidebar,
+      isMobile,
+      isTablet,
+      isDesktop,
+      leftSidebarWidth,
+      rightSidebarWidth,
+    ],
   );
+
+  return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>;
 }
 
 export function useLayout() {

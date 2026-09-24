@@ -120,7 +120,12 @@ const analyticsItems: NavItem[] = [
   { label: 'Insights', href: '/insights', icon: '\u272A', minMode: 'standard' },
   { label: 'Outcomes', href: '/analytics/outcomes', icon: '\u2713', minMode: 'standard' },
   { label: 'Intelligence', href: '/intelligence', icon: '\u269B', minMode: 'standard' },
-  { label: 'System Intelligence', href: '/system-intelligence', icon: '\u2328', minMode: 'standard' },
+  {
+    label: 'System Intelligence',
+    href: '/system-intelligence',
+    icon: '\u2328',
+    minMode: 'standard',
+  },
   { label: 'Outcome Dashboard', href: '/outcome-dashboard', icon: '\u2611', minMode: 'standard' },
   { label: 'ELO Analytics', href: '/elo-analytics', icon: '\u2295', minMode: 'standard' },
   { label: 'Agent Evolution', href: '/agent-evolution', icon: '\u267E', minMode: 'advanced' },
@@ -225,7 +230,12 @@ const orchestrationItems: NavItem[] = [
 /* === MONITORING SECTION === Progressive disclosure group */
 const monitoringItems: NavItem[] = [
   { label: 'System Status', href: '/system-status', icon: '\u2665', minMode: 'advanced' },
-  { label: 'Data Classification', href: '/data-classification', icon: '\u2263', minMode: 'advanced' },
+  {
+    label: 'Data Classification',
+    href: '/data-classification',
+    icon: '\u2263',
+    minMode: 'advanced',
+  },
 ];
 
 /* === ADVANCED SECTION === Progressive disclosure group */
@@ -260,7 +270,12 @@ const adminNavItems: NavItem[] = [
   { label: 'Admin Evidence', href: '/admin/evidence', icon: '\u2690', adminOnly: true },
   { label: 'Forensic', href: '/admin/forensic', icon: '\u2623', adminOnly: true },
   { label: 'Admin Knowledge', href: '/admin/knowledge', icon: '?', adminOnly: true },
-  { label: 'Knowledge Velocity', href: '/admin/knowledge/velocity', icon: '\u21C8', adminOnly: true },
+  {
+    label: 'Knowledge Velocity',
+    href: '/admin/knowledge/velocity',
+    icon: '\u21C8',
+    adminOnly: true,
+  },
   { label: 'Admin Memory', href: '/admin/memory', icon: '=', adminOnly: true },
   { label: 'Nomic', href: '/admin/nomic', icon: '\u221E', adminOnly: true },
   { label: 'Personas', href: '/admin/personas', icon: '&', adminOnly: true },
@@ -300,15 +315,21 @@ export function Sidebar() {
     try {
       const saved = localStorage.getItem('aragora-mobile-sidebar-collapsed');
       if (saved) setCollapsedSections(new Set(JSON.parse(saved)));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const toggleSection = useCallback((key: string) => {
-    setCollapsedSections(prev => {
+    setCollapsedSections((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
-      try { localStorage.setItem('aragora-mobile-sidebar-collapsed', JSON.stringify([...next])); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('aragora-mobile-sidebar-collapsed', JSON.stringify([...next]));
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   }, []);
@@ -361,13 +382,18 @@ export function Sidebar() {
     close();
   };
 
-  const renderNavSection = (title: string, items: NavItem[], sectionMinMode?: ProgressiveMode, sectionKey?: string) => {
+  const renderNavSection = (
+    title: string,
+    items: NavItem[],
+    sectionMinMode?: ProgressiveMode,
+    sectionKey?: string,
+  ) => {
     // Don't show section at all if user's mode is below section minimum
     if (sectionMinMode && !isFeatureVisible(sectionMinMode)) {
       return null;
     }
 
-    const filteredItems = items.filter(item => {
+    const filteredItems = items.filter((item) => {
       if (item.requiresAuth && !isAuthenticated) return false;
       if (item.adminOnly && !isAdmin) return false;
       if (item.minMode && !isFeatureVisible(item.minMode)) return false;
@@ -410,7 +436,7 @@ export function Sidebar() {
         {/* Collapsible nav items */}
         {!isCollapsed && (
           <nav>
-            {filteredItems.map(item => (
+            {filteredItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -475,9 +501,7 @@ export function Sidebar() {
                 <div className="text-[var(--accent)] font-theme-data text-sm truncate">
                   {user?.email || 'User'}
                 </div>
-                <div className="text-[var(--accent)]/60 text-xs mt-1">
-                  {user?.role || 'member'}
-                </div>
+                <div className="text-[var(--accent)]/60 text-xs mt-1">{user?.role || 'member'}</div>
               </div>
               {renderNavSection('Account', authenticatedAccountItems)}
             </>
@@ -492,9 +516,19 @@ export function Sidebar() {
           </div>
 
           {/* === START === Use cases (not collapsible) */}
-          {renderNavSection('Start', showOnboarding
-            ? [{ label: 'Get Started', href: '/onboarding', icon: '>', minMode: 'simple' as ProgressiveMode }, ...startItems]
-            : startItems
+          {renderNavSection(
+            'Start',
+            showOnboarding
+              ? [
+                  {
+                    label: 'Get Started',
+                    href: '/onboarding',
+                    icon: '>',
+                    minMode: 'simple' as ProgressiveMode,
+                  },
+                  ...startItems,
+                ]
+              : startItems,
           )}
 
           {/* === PIPELINE === Idea-to-Execution stages (not collapsible) */}

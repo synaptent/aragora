@@ -17,11 +17,7 @@ export interface BeliefNode {
   is_crux: boolean;
   crux_score?: number;
   entropy?: number;
-  belief?: {
-    true_prob: number;
-    false_prob: number;
-    uncertain_prob: number;
-  };
+  belief?: { true_prob: number; false_prob: number; uncertain_prob: number };
 }
 
 export interface BeliefLink {
@@ -34,11 +30,7 @@ export interface BeliefLink {
 export interface BeliefNetworkGraph {
   nodes: BeliefNode[];
   links: BeliefLink[];
-  metadata: {
-    debate_id: string;
-    total_claims: number;
-    crux_count: number;
-  };
+  metadata: { debate_id: string; total_claims: number; crux_count: number };
 }
 
 export interface LoadBearingClaim {
@@ -96,10 +88,12 @@ export function useBeliefNetwork() {
           headers: {
             'Content-Type': 'application/json',
             ...(typeof window !== 'undefined' && localStorage.getItem('aragora_tokens')
-              ? { Authorization: `Bearer ${JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token || ''}` }
+              ? {
+                  Authorization: `Bearer ${JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token || ''}`,
+                }
               : {}),
           },
-        }
+        },
       );
       if (res.ok) {
         const data: BeliefNetworkGraph = await res.json();
@@ -129,10 +123,12 @@ export function useBeliefNetwork() {
           headers: {
             'Content-Type': 'application/json',
             ...(typeof window !== 'undefined' && localStorage.getItem('aragora_tokens')
-              ? { Authorization: `Bearer ${JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token || ''}` }
+              ? {
+                  Authorization: `Bearer ${JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token || ''}`,
+                }
               : {}),
           },
-        }
+        },
       );
       if (res.ok) {
         const data = await res.json();
@@ -158,10 +154,12 @@ export function useBeliefNetwork() {
           headers: {
             'Content-Type': 'application/json',
             ...(typeof window !== 'undefined' && localStorage.getItem('aragora_tokens')
-              ? { Authorization: `Bearer ${JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token || ''}` }
+              ? {
+                  Authorization: `Bearer ${JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token || ''}`,
+                }
               : {}),
           },
-        }
+        },
       );
       if (res.ok) {
         const data: CruxAnalysis = await res.json();
@@ -187,10 +185,12 @@ export function useBeliefNetwork() {
           headers: {
             'Content-Type': 'application/json',
             ...(typeof window !== 'undefined' && localStorage.getItem('aragora_tokens')
-              ? { Authorization: `Bearer ${JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token || ''}` }
+              ? {
+                  Authorization: `Bearer ${JSON.parse(localStorage.getItem('aragora_tokens') || '{}').access_token || ''}`,
+                }
               : {}),
           },
-        }
+        },
       );
       if (res.ok) {
         const data: ClaimSupport = await res.json();

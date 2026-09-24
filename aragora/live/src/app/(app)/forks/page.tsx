@@ -141,15 +141,17 @@ export default function ForksPage() {
               {'>'} FORK EXPLORER
             </h1>
             <p className="text-sm font-theme-data text-text-muted">
-              Browse counterfactual debate branches. Forks explore &quot;what if&quot;
-              scenarios by branching from existing debates with modified context.
+              Browse counterfactual debate branches. Forks explore &quot;what if&quot; scenarios by
+              branching from existing debates with modified context.
             </p>
           </div>
 
           {/* Error Message */}
           {error && (
             <div className="mb-6 p-4 border border-warning/30 bg-warning/10">
-              <p className="text-xs font-theme-data text-warning">{'>'} {error}</p>
+              <p className="text-xs font-theme-data text-warning">
+                {'>'} {error}
+              </p>
             </div>
           )}
 
@@ -158,7 +160,9 @@ export default function ForksPage() {
             {loading ? (
               <div className="p-8 text-center border border-[var(--accent)]/30 bg-surface/50">
                 <div className="w-6 h-6 border-2 border-[var(--accent)]/40 border-t-acid-green rounded-full animate-spin mx-auto" />
-                <p className="mt-2 text-xs font-theme-data text-text-muted">Loading fork trees...</p>
+                <p className="mt-2 text-xs font-theme-data text-text-muted">
+                  Loading fork trees...
+                </p>
               </div>
             ) : families.length === 0 ? (
               <div className="p-8 text-center border border-[var(--accent)]/30 bg-surface/50">
@@ -194,7 +198,9 @@ export default function ForksPage() {
                           </span>
                         </div>
                         <div className="mt-1 ml-4 flex items-center gap-3 text-xs font-theme-data text-text-muted">
-                          <span>{family.total_forks} fork{family.total_forks !== 1 ? 's' : ''}</span>
+                          <span>
+                            {family.total_forks} fork{family.total_forks !== 1 ? 's' : ''}
+                          </span>
                           <span>Latest: {formatDate(family.latest_fork_at)}</span>
                         </div>
                         {family.root_agents.length > 0 && (
@@ -220,7 +226,9 @@ export default function ForksPage() {
                         {/* Root node */}
                         <div className="flex items-center gap-2 text-xs font-theme-data">
                           <span className="text-[var(--accent)]">●</span>
-                          <span className="text-text">ROOT: {family.root_task.substring(0, 50)}...</span>
+                          <span className="text-text">
+                            ROOT: {family.root_task.substring(0, 50)}...
+                          </span>
                           <Link
                             href={`/debate/${family.root_id}`}
                             className="ml-auto text-[var(--acid-cyan)] hover:underline"
@@ -246,8 +254,8 @@ export default function ForksPage() {
                                     fork.status === 'completed'
                                       ? 'border-[var(--accent)]/50 text-[var(--accent)]'
                                       : fork.status === 'running'
-                                      ? 'border-[var(--acid-cyan)]/50 text-[var(--acid-cyan)]'
-                                      : 'border-text-muted/50 text-text-muted'
+                                        ? 'border-[var(--acid-cyan)]/50 text-[var(--acid-cyan)]'
+                                        : 'border-text-muted/50 text-text-muted'
                                   }`}
                                 >
                                   {fork.status}
@@ -259,7 +267,8 @@ export default function ForksPage() {
                                 </div>
                               )}
                               <div className="mt-1 text-text-muted">
-                                {fork.messages_inherited} messages inherited • {formatDate(fork.created_at)}
+                                {fork.messages_inherited} messages inherited •{' '}
+                                {formatDate(fork.created_at)}
                               </div>
                             </div>
                             <Link
@@ -288,23 +297,23 @@ export default function ForksPage() {
                 <div>
                   <div className="text-[var(--accent)] mb-1">WHAT ARE FORKS?</div>
                   <p>
-                    Forks are counterfactual branches of debates. They let you explore
-                    &quot;what if&quot; scenarios by taking a debate at a specific point and
-                    continuing with modified context or different assumptions.
+                    Forks are counterfactual branches of debates. They let you explore &quot;what
+                    if&quot; scenarios by taking a debate at a specific point and continuing with
+                    modified context or different assumptions.
                   </p>
                 </div>
                 <div>
                   <div className="text-[var(--accent)] mb-1">BRANCH POINTS</div>
                   <p>
-                    Each fork has a branch point - the round number where it diverges from
-                    the original debate. All messages before the branch point are inherited.
+                    Each fork has a branch point - the round number where it diverges from the
+                    original debate. All messages before the branch point are inherited.
                   </p>
                 </div>
                 <div>
                   <div className="text-[var(--accent)] mb-1">MODIFIED CONTEXT</div>
                   <p>
-                    When creating a fork, you can provide modified context that changes the
-                    premise or constraints. This lets agents explore alternative scenarios.
+                    When creating a fork, you can provide modified context that changes the premise
+                    or constraints. This lets agents explore alternative scenarios.
                   </p>
                 </div>
                 <div>

@@ -31,21 +31,37 @@ export function InputDetector({ text, onTemplateSelect }: InputDetectorProps) {
 
     // URL detection
     if (text.trim().match(/^https?:\/\//)) {
-      return { type: 'url', message: 'Detected URL - will extract ideas from content', icon: '\u{1F310}' };
+      return {
+        type: 'url',
+        message: 'Detected URL - will extract ideas from content',
+        icon: '\u{1F310}',
+      };
     }
 
     // Structured list detection
-    const lines = text.split('\n').filter(l => l.trim());
-    const bulletLines = lines.filter(l => /^\s*[-*\u2022\d.]+\s/.test(l));
+    const lines = text.split('\n').filter((l) => l.trim());
+    const bulletLines = lines.filter((l) => /^\s*[-*\u2022\d.]+\s/.test(l));
     if (bulletLines.length >= 3 && bulletLines.length / lines.length > 0.6) {
       // Check for template patterns
       const lower = text.toLowerCase();
       let template: Detection['template'];
-      if (lower.includes('code review') || lower.includes('pull request') || lower.includes('pr review')) {
+      if (
+        lower.includes('code review') ||
+        lower.includes('pull request') ||
+        lower.includes('pr review')
+      ) {
         template = { name: 'code_review', label: 'Code Review' };
-      } else if (lower.includes('security') || lower.includes('vulnerability') || lower.includes('pentest')) {
+      } else if (
+        lower.includes('security') ||
+        lower.includes('vulnerability') ||
+        lower.includes('pentest')
+      ) {
         template = { name: 'security_audit', label: 'Security Audit' };
-      } else if (lower.includes('incident') || lower.includes('postmortem') || lower.includes('outage')) {
+      } else if (
+        lower.includes('incident') ||
+        lower.includes('postmortem') ||
+        lower.includes('outage')
+      ) {
         template = { name: 'incident_analysis', label: 'Incident Analysis' };
       }
 
@@ -60,7 +76,11 @@ export function InputDetector({ text, onTemplateSelect }: InputDetectorProps) {
     // Free-form text
     if (lines.length >= 1) {
       const words = text.split(/\s+/).length;
-      return { type: 'freeform', message: `Free-form brain dump (${words} words)`, icon: '\u{1F4AD}' };
+      return {
+        type: 'freeform',
+        message: `Free-form brain dump (${words} words)`,
+        icon: '\u{1F4AD}',
+      };
     }
 
     return null;

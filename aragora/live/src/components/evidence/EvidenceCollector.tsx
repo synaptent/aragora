@@ -37,11 +37,7 @@ export function EvidenceCollector({
 
     try {
       const client = getClient();
-      const response = await client.evidence.collect({
-        task,
-        debate_id: debateId,
-        round,
-      });
+      const response = await client.evidence.collect({ task, debate_id: debateId, round });
 
       setResults(response.snippets);
       setKeywords(response.keywords);
@@ -51,7 +47,7 @@ export function EvidenceCollector({
       }
 
       // Auto-select all collected evidence
-      const newIds = new Set(response.snippets.map(s => s.id));
+      const newIds = new Set(response.snippets.map((s) => s.id));
       setSelectedIds(newIds);
       if (onEvidenceSelected) {
         onEvidenceSelected(Array.from(newIds));
@@ -63,23 +59,26 @@ export function EvidenceCollector({
     }
   }, [task, debateId, round, onEvidenceCollected, onEvidenceSelected]);
 
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      if (onEvidenceSelected) {
-        onEvidenceSelected(Array.from(next));
-      }
-      return next;
-    });
-  }, [onEvidenceSelected]);
+  const toggleSelection = useCallback(
+    (id: string) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        if (onEvidenceSelected) {
+          onEvidenceSelected(Array.from(next));
+        }
+        return next;
+      });
+    },
+    [onEvidenceSelected],
+  );
 
   const selectAll = useCallback(() => {
-    const all = new Set(results.map(r => r.id));
+    const all = new Set(results.map((r) => r.id));
     setSelectedIds(all);
     if (onEvidenceSelected) {
       onEvidenceSelected(Array.from(all));
@@ -110,9 +109,7 @@ export function EvidenceCollector({
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          <span className="font-medium text-gray-900 dark:text-gray-100">
-            Evidence Collection
-          </span>
+          <span className="font-medium text-gray-900 dark:text-gray-100">Evidence Collection</span>
           {results.length > 0 && (
             <span className="text-sm text-gray-500 dark:text-gray-400">
               ({selectedIds.size}/{results.length} selected)
@@ -120,9 +117,7 @@ export function EvidenceCollector({
           )}
         </div>
         {results.length > 0 && (
-          <span className="text-sm text-green-600 dark:text-green-400">
-            {results.length} items
-          </span>
+          <span className="text-sm text-green-600 dark:text-green-400">{results.length} items</span>
         )}
       </button>
 
@@ -147,8 +142,20 @@ export function EvidenceCollector({
               {collecting ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
                   </svg>
                   Collecting...
                 </span>

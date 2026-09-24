@@ -47,11 +47,7 @@ interface TeamResult {
   expected_cost: number;
   diversity_score: number;
   rationale: string;
-  plugins_used: {
-    scorer: string;
-    team_selector: string;
-    role_assigner: string;
-  };
+  plugins_used: { scorer: string; team_selector: string; role_assigner: string };
 }
 
 interface SelectionDashboardProps {
@@ -125,10 +121,7 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
       task_id: string;
     }>('/api/selection/score', {
       method: 'POST',
-      body: JSON.stringify({
-        task_description: scoreTask,
-        scorer: selectedScorer || undefined,
-      }),
+      body: JSON.stringify({ task_description: scoreTask, scorer: selectedScorer || undefined }),
     });
 
     if (scoreError) {
@@ -185,10 +178,7 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
       {error && (
         <div className="p-4 border border-red-500/30 bg-red-500/10 rounded text-red-400 text-sm font-theme-data">
           {error}
-          <button
-            onClick={() => setError(null)}
-            className="ml-4 text-red-500 hover:text-red-400"
-          >
+          <button onClick={() => setError(null)} className="ml-4 text-red-500 hover:text-red-400">
             [DISMISS]
           </button>
         </div>
@@ -196,7 +186,7 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-[var(--accent)]/30 pb-2">
-        {(['plugins', 'score', 'team'] as const).map(tab => (
+        {(['plugins', 'score', 'team'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -257,23 +247,27 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
             </p>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Task Description *</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Task Description *
+              </label>
               <textarea
                 value={scoreTask}
-                onChange={e => setScoreTask(e.target.value)}
+                onChange={(e) => setScoreTask(e.target.value)}
                 placeholder="Describe the task to find the best agents..."
                 className="w-full h-24 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Scorer Plugin</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Scorer Plugin
+              </label>
               <select
                 value={selectedScorer}
-                onChange={e => setSelectedScorer(e.target.value)}
+                onChange={(e) => setSelectedScorer(e.target.value)}
                 className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               >
-                {plugins.scorers.map(p => (
+                {plugins.scorers.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name} {p.name === defaults?.scorer ? '(default)' : ''}
                   </option>
@@ -305,10 +299,10 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
                         index === 0
                           ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/50'
                           : index === 1
-                          ? 'bg-gray-400/20 text-gray-400 border border-gray-400/50'
-                          : index === 2
-                          ? 'bg-orange-500/20 text-orange-600 border border-orange-500/50'
-                          : 'bg-surface text-text-muted border border-border'
+                            ? 'bg-gray-400/20 text-gray-400 border border-gray-400/50'
+                            : index === 2
+                              ? 'bg-orange-500/20 text-orange-600 border border-orange-500/50'
+                              : 'bg-surface text-text-muted border border-border'
                       }`}
                     >
                       {index + 1}
@@ -354,10 +348,12 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
             </p>
 
             <div>
-              <label className="block text-xs font-theme-data text-text-muted mb-1">Task Description *</label>
+              <label className="block text-xs font-theme-data text-text-muted mb-1">
+                Task Description *
+              </label>
               <textarea
                 value={teamTask}
-                onChange={e => setTeamTask(e.target.value)}
+                onChange={(e) => setTeamTask(e.target.value)}
                 placeholder="Describe the task to build a team..."
                 className="w-full h-24 p-3 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
               />
@@ -368,37 +364,47 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
                 <label className="block text-xs font-theme-data text-text-muted mb-1">Scorer</label>
                 <select
                   value={teamScorer}
-                  onChange={e => setTeamScorer(e.target.value)}
+                  onChange={(e) => setTeamScorer(e.target.value)}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 >
-                  {plugins.scorers.map(p => (
-                    <option key={p.name} value={p.name}>{p.name}</option>
+                  {plugins.scorers.map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Team Selector</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Team Selector
+                </label>
                 <select
                   value={teamSelector}
-                  onChange={e => setTeamSelector(e.target.value)}
+                  onChange={(e) => setTeamSelector(e.target.value)}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 >
-                  {plugins.team_selectors.map(p => (
-                    <option key={p.name} value={p.name}>{p.name}</option>
+                  {plugins.team_selectors.map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Role Assigner</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Role Assigner
+                </label>
                 <select
                   value={roleAssigner}
-                  onChange={e => setRoleAssigner(e.target.value)}
+                  onChange={(e) => setRoleAssigner(e.target.value)}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
                 >
-                  {plugins.role_assigners.map(p => (
-                    <option key={p.name} value={p.name}>{p.name}</option>
+                  {plugins.role_assigners.map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -406,11 +412,13 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Min Agents</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Min Agents
+                </label>
                 <input
                   type="number"
                   value={minAgents}
-                  onChange={e => setMinAgents(parseInt(e.target.value) || 2)}
+                  onChange={(e) => setMinAgents(parseInt(e.target.value) || 2)}
                   min={1}
                   max={10}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
@@ -418,11 +426,13 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
               </div>
 
               <div>
-                <label className="block text-xs font-theme-data text-text-muted mb-1">Max Agents</label>
+                <label className="block text-xs font-theme-data text-text-muted mb-1">
+                  Max Agents
+                </label>
                 <input
                   type="number"
                   value={maxAgents}
-                  onChange={e => setMaxAgents(parseInt(e.target.value) || 5)}
+                  onChange={(e) => setMaxAgents(parseInt(e.target.value) || 5)}
                   min={1}
                   max={10}
                   className="w-full p-2 bg-surface border border-[var(--accent)]/30 rounded font-theme-data text-sm focus:outline-none focus:border-[var(--accent)]"
@@ -432,12 +442,14 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
               <div>
                 <label className="block text-xs font-theme-data text-text-muted mb-1">
                   Quality Priority
-                  <span className="ml-1 text-[var(--accent)]">{(qualityPriority * 100).toFixed(0)}%</span>
+                  <span className="ml-1 text-[var(--accent)]">
+                    {(qualityPriority * 100).toFixed(0)}%
+                  </span>
                 </label>
                 <input
                   type="range"
                   value={qualityPriority}
-                  onChange={e => setQualityPriority(parseFloat(e.target.value))}
+                  onChange={(e) => setQualityPriority(parseFloat(e.target.value))}
                   min={0}
                   max={1}
                   step={0.1}
@@ -448,12 +460,14 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
               <div>
                 <label className="block text-xs font-theme-data text-text-muted mb-1">
                   Diversity Pref
-                  <span className="ml-1 text-[var(--accent)]">{(diversityPreference * 100).toFixed(0)}%</span>
+                  <span className="ml-1 text-[var(--accent)]">
+                    {(diversityPreference * 100).toFixed(0)}%
+                  </span>
                 </label>
                 <input
                   type="range"
                   value={diversityPreference}
-                  onChange={e => setDiversityPreference(parseFloat(e.target.value))}
+                  onChange={(e) => setDiversityPreference(parseFloat(e.target.value))}
                   min={0}
                   max={1}
                   step={0.1}
@@ -476,7 +490,9 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
             <div className="card p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-theme-data text-[var(--acid-cyan)]">Selected Team</h4>
-                <span className="text-xs font-theme-data text-text-muted">ID: {teamResult.team_id}</span>
+                <span className="text-xs font-theme-data text-text-muted">
+                  ID: {teamResult.team_id}
+                </span>
               </div>
 
               {/* Metrics */}
@@ -500,12 +516,14 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
 
               {/* Rationale */}
               <div className="p-3 bg-surface border border-[var(--accent)]/20 rounded">
-                <p className="text-xs font-theme-data text-text-muted italic">{teamResult.rationale}</p>
+                <p className="text-xs font-theme-data text-text-muted italic">
+                  {teamResult.rationale}
+                </p>
               </div>
 
               {/* Team Members */}
               <div className="space-y-2">
-                {teamResult.agents.map(agent => (
+                {teamResult.agents.map((agent) => (
                   <div
                     key={agent.name}
                     className="flex items-center gap-3 p-3 bg-surface border border-[var(--accent)]/20 rounded"
@@ -543,9 +561,22 @@ export function SelectionDashboard({ apiBase: _apiBase }: SelectionDashboardProp
 
               {/* Plugins Used */}
               <div className="flex gap-4 text-xs font-theme-data text-text-muted">
-                <span>Scorer: <span className="text-[var(--accent)]">{teamResult.plugins_used.scorer}</span></span>
-                <span>Selector: <span className="text-[var(--accent)]">{teamResult.plugins_used.team_selector}</span></span>
-                <span>Assigner: <span className="text-[var(--accent)]">{teamResult.plugins_used.role_assigner}</span></span>
+                <span>
+                  Scorer:{' '}
+                  <span className="text-[var(--accent)]">{teamResult.plugins_used.scorer}</span>
+                </span>
+                <span>
+                  Selector:{' '}
+                  <span className="text-[var(--accent)]">
+                    {teamResult.plugins_used.team_selector}
+                  </span>
+                </span>
+                <span>
+                  Assigner:{' '}
+                  <span className="text-[var(--accent)]">
+                    {teamResult.plugins_used.role_assigner}
+                  </span>
+                </span>
               </div>
             </div>
           )}
@@ -574,7 +605,7 @@ function PluginSection({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        {plugins.map(plugin => (
+        {plugins.map((plugin) => (
           <div
             key={plugin.name}
             className={`p-3 border rounded transition-colors ${
@@ -600,15 +631,7 @@ function PluginSection({
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color: string;
-}) {
+function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="p-3 bg-surface border border-[var(--accent)]/20 rounded text-center">
       <p className="text-xs font-theme-data text-text-muted">{label}</p>
@@ -631,7 +654,9 @@ function RoleBadge({ role }: { role: string }) {
   const style = roleStyles[role] || roleStyles.participant;
 
   return (
-    <span className={`px-2 py-1 text-xs font-theme-data rounded ${style.bg} ${style.text} uppercase`}>
+    <span
+      className={`px-2 py-1 text-xs font-theme-data rounded ${style.bg} ${style.text} uppercase`}
+    >
       {role.replace('_', ' ')}
     </span>
   );

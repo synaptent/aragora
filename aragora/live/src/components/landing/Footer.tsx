@@ -38,7 +38,10 @@ export function Footer() {
         </p>
 
         {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4" style={{ marginBottom: '48px' }}>
+        <div
+          className="flex flex-col sm:flex-row items-center justify-center gap-4"
+          style={{ marginBottom: '48px' }}
+        >
           <Link
             href="/playground"
             className="text-sm font-semibold transition-opacity hover:opacity-80 cursor-pointer inline-block"
@@ -91,11 +94,7 @@ export function Footer() {
         {/* Tagline */}
         <p
           className="text-xs"
-          style={{
-            color: 'var(--text-muted)',
-            opacity: 0.4,
-            fontFamily: 'var(--font-landing)',
-          }}
+          style={{ color: 'var(--text-muted)', opacity: 0.4, fontFamily: 'var(--font-landing)' }}
         >
           {isDark ? '> AI decisions you can trust.' : 'AI decisions you can trust.'}
         </p>

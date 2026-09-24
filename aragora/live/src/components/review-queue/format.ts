@@ -23,12 +23,11 @@ export function formatDecisionSeconds(value: number | null | undefined): string 
   return `${min}m${sec.toString().padStart(2, '0')}s`;
 }
 
-export function ciGlyph(ci: {
-  success: number;
-  failure: number;
-  pending: number;
-  total: number;
-}): { glyph: string; label: string; tone: 'ok' | 'warn' | 'fail' | 'neutral' } {
+export function ciGlyph(ci: { success: number; failure: number; pending: number; total: number }): {
+  glyph: string;
+  label: string;
+  tone: 'ok' | 'warn' | 'fail' | 'neutral';
+} {
   if (ci.total === 0) return { glyph: '·', label: 'no checks', tone: 'neutral' };
   if (ci.failure > 0) {
     return { glyph: '✗', label: `${ci.failure} failing / ${ci.total}`, tone: 'fail' };
@@ -98,7 +97,11 @@ export function tierBadge(
     case '3':
       return { label: 'T3', fullLabel: 'Tier 3 — semantic / persistence / API', tone: 'warn' };
     case '4':
-      return { label: 'T4', fullLabel: 'Tier 4 — secrets / deploy / merge authority', tone: 'fail' };
+      return {
+        label: 'T4',
+        fullLabel: 'Tier 4 — secrets / deploy / merge authority',
+        tone: 'fail',
+      };
     default:
       return { label: `T?`, fullLabel: `Tier ${value} (unknown)`, tone: 'neutral' };
   }

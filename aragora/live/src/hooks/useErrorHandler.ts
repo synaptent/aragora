@@ -28,12 +28,12 @@ interface UseErrorHandlerReturn {
   /** Handle async operations with error handling */
   handleAsync: <T>(
     fn: () => Promise<T>,
-    options?: ErrorHandlerOptions & { onSuccess?: (result: T) => void }
+    options?: ErrorHandlerOptions & { onSuccess?: (result: T) => void },
   ) => Promise<T | undefined>;
   /** Wrap a function with error handling */
   withErrorHandling: <T extends (...args: Parameters<T>) => Promise<ReturnType<T>>>(
     fn: T,
-    options?: ErrorHandlerOptions
+    options?: ErrorHandlerOptions,
   ) => (...args: Parameters<T>) => Promise<ReturnType<T> | undefined>;
   /** Last error (for UI display) */
   lastError: Error | null;
@@ -51,7 +51,7 @@ function classifyError(error: unknown): ErrorType {
 
     // Network errors
     if (
-      name === 'typeerror' && message.includes('fetch') ||
+      (name === 'typeerror' && message.includes('fetch')) ||
       message.includes('network') ||
       message.includes('connection') ||
       message.includes('cors') ||
@@ -92,11 +92,7 @@ function classifyError(error: unknown): ErrorType {
     }
 
     // Timeout
-    if (
-      name === 'aborterror' ||
-      message.includes('timeout') ||
-      message.includes('aborted')
-    ) {
+    if (name === 'aborterror' || message.includes('timeout') || message.includes('aborted')) {
       return 'timeout';
     }
   }
@@ -151,65 +147,74 @@ export function useErrorHandler(): UseErrorHandlerReturn {
   const { showError } = useToastContext();
   const lastErrorRef = useRef<Error | null>(null);
 
-  const handleError = useCallback((error: unknown, options: ErrorHandlerOptions = {}) => {
-    const {
-      showToast = true,
-      duration = 5000,
-      logToConsole = process.env.NODE_ENV === 'development',
-      customMessage,
-    } = options;
+  const handleError = useCallback(
+    (error: unknown, options: ErrorHandlerOptions = {}) => {
+      const {
+        showToast = true,
+        duration = 5000,
+        logToConsole = process.env.NODE_ENV === 'development',
+        customMessage,
+      } = options;
 
-    // Convert to Error if needed
-    const errorObj = error instanceof Error ? error : new Error(String(error));
-    lastErrorRef.current = errorObj;
+      // Convert to Error if needed
+      const errorObj = error instanceof Error ? error : new Error(String(error));
+      lastErrorRef.current = errorObj;
 
-    // Classify and get message
-    const errorType = classifyError(error);
-    const message = customMessage || getUserFriendlyMessage(error, errorType);
+      // Classify and get message
+      const errorType = classifyError(error);
+      const message = customMessage || getUserFriendlyMessage(error, errorType);
 
-    // Log to console
-    if (logToConsole) {
-      logger.error('[ErrorHandler]', {
-        type: errorType,
-        message: errorObj.message,
-        stack: errorObj.stack,
-        original: error,
-      });
-    }
+      // Log to console
+      if (logToConsole) {
+        logger.error('[ErrorHandler]', {
+          type: errorType,
+          message: errorObj.message,
+          stack: errorObj.stack,
+          original: error,
+        });
+      }
 
-    // Show toast
-    if (showToast) {
-      showError(message, duration);
-    }
-  }, [showError]);
+      // Show toast
+      if (showToast) {
+        showError(message, duration);
+      }
+    },
+    [showError],
+  );
 
-  const handleAsync = useCallback(async <T>(
-    fn: () => Promise<T>,
-    options: ErrorHandlerOptions & { onSuccess?: (result: T) => void } = {}
-  ): Promise<T | undefined> => {
-    try {
-      const result = await fn();
-      options.onSuccess?.(result);
-      return result;
-    } catch (error) {
-      handleError(error, options);
-      return undefined;
-    }
-  }, [handleError]);
-
-  const withErrorHandling = useCallback(<T extends (...args: Parameters<T>) => Promise<ReturnType<T>>>(
-    fn: T,
-    options: ErrorHandlerOptions = {}
-  ) => {
-    return async (...args: Parameters<T>): Promise<ReturnType<T> | undefined> => {
+  const handleAsync = useCallback(
+    async <T>(
+      fn: () => Promise<T>,
+      options: ErrorHandlerOptions & { onSuccess?: (result: T) => void } = {},
+    ): Promise<T | undefined> => {
       try {
-        return await fn(...args);
+        const result = await fn();
+        options.onSuccess?.(result);
+        return result;
       } catch (error) {
         handleError(error, options);
         return undefined;
       }
-    };
-  }, [handleError]);
+    },
+    [handleError],
+  );
+
+  const withErrorHandling = useCallback(
+    <T extends (...args: Parameters<T>) => Promise<ReturnType<T>>>(
+      fn: T,
+      options: ErrorHandlerOptions = {},
+    ) => {
+      return async (...args: Parameters<T>): Promise<ReturnType<T> | undefined> => {
+        try {
+          return await fn(...args);
+        } catch (error) {
+          handleError(error, options);
+          return undefined;
+        }
+      };
+    },
+    [handleError],
+  );
 
   const clearError = useCallback(() => {
     lastErrorRef.current = null;
@@ -219,7 +224,9 @@ export function useErrorHandler(): UseErrorHandlerReturn {
     handleError,
     handleAsync,
     withErrorHandling,
-    get lastError() { return lastErrorRef.current; },
+    get lastError() {
+      return lastErrorRef.current;
+    },
     clearError,
   };
 }

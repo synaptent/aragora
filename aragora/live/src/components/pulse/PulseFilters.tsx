@@ -38,7 +38,7 @@ export function PulseFilters({
     (value: string) => {
       onChange({ ...filters, search: value });
     },
-    [filters, onChange]
+    [filters, onChange],
   );
 
   const toggleSource = useCallback(
@@ -48,7 +48,7 @@ export function PulseFilters({
         : [...filters.sources, source];
       onChange({ ...filters, sources: newSources });
     },
-    [filters, onChange]
+    [filters, onChange],
   );
 
   const toggleCategory = useCallback(
@@ -58,31 +58,25 @@ export function PulseFilters({
         : [...filters.categories, category];
       onChange({ ...filters, categories: newCategories });
     },
-    [filters, onChange]
+    [filters, onChange],
   );
 
   const handleMinScoreChange = useCallback(
     (value: number) => {
       onChange({ ...filters, minScore: value });
     },
-    [filters, onChange]
+    [filters, onChange],
   );
 
   const handleTimeRangeChange = useCallback(
     (value: 'hour' | 'day' | 'week' | 'all') => {
       onChange({ ...filters, timeRange: value });
     },
-    [filters, onChange]
+    [filters, onChange],
   );
 
   const clearAllFilters = useCallback(() => {
-    onChange({
-      search: '',
-      sources: [],
-      categories: [],
-      minScore: 0,
-      timeRange: 'all',
-    });
+    onChange({ search: '', sources: [], categories: [], minScore: 0, timeRange: 'all' });
   }, [onChange]);
 
   const selectAllSources = useCallback(() => {
@@ -104,9 +98,7 @@ export function PulseFilters({
     <div className="bg-surface border border-border rounded-lg p-4 space-y-4">
       {/* Search */}
       <div>
-        <label className="block text-xs font-theme-data text-text-muted mb-2">
-          SEARCH TOPICS
-        </label>
+        <label className="block text-xs font-theme-data text-text-muted mb-2">SEARCH TOPICS</label>
         <input
           type="text"
           value={filters.search}
@@ -203,9 +195,7 @@ export function PulseFilters({
 
       {/* Time Range */}
       <div>
-        <label className="block text-xs font-theme-data text-text-muted mb-2">
-          TIME RANGE
-        </label>
+        <label className="block text-xs font-theme-data text-text-muted mb-2">TIME RANGE</label>
         <div className="flex gap-2">
           {(['hour', 'day', 'week', 'all'] as const).map((range) => (
             <button

@@ -99,7 +99,10 @@ export class WorkflowsAPI extends BaseAPI {
   /**
    * Update a workflow
    */
-  async update(workflowId: string, updates: Partial<WorkflowCreateRequest>): Promise<{ workflow: Workflow }> {
+  async update(
+    workflowId: string,
+    updates: Partial<WorkflowCreateRequest>,
+  ): Promise<{ workflow: Workflow }> {
     return this.http.patch(`/api/workflows/${workflowId}`, updates);
   }
 
@@ -113,7 +116,10 @@ export class WorkflowsAPI extends BaseAPI {
   /**
    * Execute a workflow
    */
-  async execute(workflowId: string, parameters?: Record<string, unknown>): Promise<{ execution: WorkflowExecution }> {
+  async execute(
+    workflowId: string,
+    parameters?: Record<string, unknown>,
+  ): Promise<{ execution: WorkflowExecution }> {
     return this.http.post(`/api/workflows/${workflowId}/execute`, { parameters });
   }
 
@@ -142,7 +148,9 @@ export class WorkflowsAPI extends BaseAPI {
    * List available workflow templates
    */
   async templates(category?: string): Promise<{ templates: WorkflowTemplate[] }> {
-    const path = category ? `/api/workflows/templates?category=${category}` : '/api/workflows/templates';
+    const path = category
+      ? `/api/workflows/templates?category=${category}`
+      : '/api/workflows/templates';
     return this.http.get(path);
   }
 
@@ -156,7 +164,10 @@ export class WorkflowsAPI extends BaseAPI {
   /**
    * Create workflow from template
    */
-  async fromTemplate(templateId: string, parameters: Record<string, unknown>): Promise<{ workflow: Workflow }> {
+  async fromTemplate(
+    templateId: string,
+    parameters: Record<string, unknown>,
+  ): Promise<{ workflow: Workflow }> {
     return this.http.post(`/api/workflows/templates/${templateId}/instantiate`, { parameters });
   }
 }

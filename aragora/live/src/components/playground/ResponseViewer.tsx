@@ -39,9 +39,7 @@ export function ResponseViewer({ status, data, error, duration, headers }: Respo
             {status}
           </span>
         )}
-        {error && (
-          <span className="text-sm font-theme-data font-bold text-red-400">ERROR</span>
-        )}
+        {error && <span className="text-sm font-theme-data font-bold text-red-400">ERROR</span>}
         <span className="text-xs font-theme-data text-[var(--text-muted)]">{duration}ms</span>
         <button
           onClick={() => setShowHeaders(!showHeaders)}

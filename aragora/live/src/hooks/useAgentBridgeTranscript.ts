@@ -22,7 +22,7 @@ export interface UseAgentBridgeTranscriptResult {
 
 export function useAgentBridgeTranscript(
   runId: string | null,
-  options: UseAgentBridgeTranscriptOptions = {}
+  options: UseAgentBridgeTranscriptOptions = {},
 ): UseAgentBridgeTranscriptResult {
   const { enabled = true, poll = false } = options;
   const endpoint = runId

@@ -97,7 +97,9 @@ test.describe('Real Login Tests', () => {
     expect(url).toContain('/auth/login');
 
     // Check for email input
-    const emailInput = page.locator('input[type="email"], input[name="email"], input[placeholder*="email" i]').first();
+    const emailInput = page
+      .locator('input[type="email"], input[name="email"], input[placeholder*="email" i]')
+      .first();
     await expect(emailInput).toBeVisible({ timeout: 10000 });
 
     // Check for password input
@@ -105,7 +107,11 @@ test.describe('Real Login Tests', () => {
     await expect(passwordInput).toBeVisible({ timeout: 10000 });
 
     // Check for submit button
-    const submitBtn = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")').first();
+    const submitBtn = page
+      .locator(
+        'button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")',
+      )
+      .first();
     await expect(submitBtn).toBeVisible({ timeout: 10000 });
 
     console.log('Login page verified - all form elements present');
@@ -116,7 +122,10 @@ test.describe('Real Login Tests', () => {
     const password = process.env.ARAGORA_TEST_PASSWORD;
 
     if (!email || !password) {
-      test.skip(!email || !password, 'ARAGORA_TEST_EMAIL and ARAGORA_TEST_PASSWORD environment variables required');
+      test.skip(
+        !email || !password,
+        'ARAGORA_TEST_EMAIL and ARAGORA_TEST_PASSWORD environment variables required',
+      );
       return;
     }
 
@@ -128,7 +137,9 @@ test.describe('Real Login Tests', () => {
     await page.waitForTimeout(2000);
 
     // Fill in email
-    const emailInput = page.locator('input[type="email"], input[name="email"], input[placeholder*="email" i]').first();
+    const emailInput = page
+      .locator('input[type="email"], input[name="email"], input[placeholder*="email" i]')
+      .first();
     await emailInput.waitFor({ state: 'visible', timeout: NAVIGATION_TIMEOUT });
     await emailInput.fill(email);
     console.log('Filled email');
@@ -140,10 +151,16 @@ test.describe('Real Login Tests', () => {
     console.log('Filled password');
 
     // Take screenshot before submit
-    await page.screenshot({ path: 'playwright-report-production/screenshots/login-before-submit.png' });
+    await page.screenshot({
+      path: 'playwright-report-production/screenshots/login-before-submit.png',
+    });
 
     // Find and click submit button
-    const submitBtn = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")').first();
+    const submitBtn = page
+      .locator(
+        'button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")',
+      )
+      .first();
     await submitBtn.waitFor({ state: 'visible', timeout: NAVIGATION_TIMEOUT });
     await submitBtn.click();
     console.log('Clicked submit button');
@@ -152,13 +169,17 @@ test.describe('Real Login Tests', () => {
     await page.waitForTimeout(5000);
 
     // Take screenshot after submit
-    await page.screenshot({ path: 'playwright-report-production/screenshots/login-after-submit.png' });
+    await page.screenshot({
+      path: 'playwright-report-production/screenshots/login-after-submit.png',
+    });
 
     const finalUrl = page.url();
     console.log(`Final URL: ${finalUrl}`);
 
     // Check for error messages
-    const errorMessage = page.locator('[role="alert"], .error, .error-message, [data-testid="error"]').first();
+    const errorMessage = page
+      .locator('[role="alert"], .error, .error-message, [data-testid="error"]')
+      .first();
     if (await errorMessage.isVisible({ timeout: 1000 }).catch(() => false)) {
       const errorText = await errorMessage.textContent();
       console.log(`Error message: ${errorText}`);
@@ -175,7 +196,7 @@ test.describe('Real Login Tests', () => {
       authenticated,
     ];
 
-    const success = loginSuccessIndicators.some(indicator => indicator);
+    const success = loginSuccessIndicators.some((indicator) => indicator);
 
     if (success) {
       console.log('Login successful!');
@@ -194,22 +215,31 @@ test.describe('Real Login Tests', () => {
     await page.waitForTimeout(2000);
 
     // Fill in invalid credentials
-    const emailInput = page.locator('input[type="email"], input[name="email"], input[placeholder*="email" i]').first();
+    const emailInput = page
+      .locator('input[type="email"], input[name="email"], input[placeholder*="email" i]')
+      .first();
     await emailInput.fill('invalid-test-email@example.com');
 
     const passwordInput = page.locator('input[type="password"], input[name="password"]').first();
     await passwordInput.fill('invalid-password-12345');
 
     // Submit
-    const submitBtn = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")').first();
+    const submitBtn = page
+      .locator(
+        'button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")',
+      )
+      .first();
     await submitBtn.click();
 
     await page.waitForTimeout(3000);
 
     // Should show error or still be on login page
     const stillOnLogin = page.url().includes('/auth/login');
-    const errorVisible = await page.locator('[role="alert"], .error, .error-message, [data-testid="error"]').first()
-      .isVisible({ timeout: 2000 }).catch(() => false);
+    const errorVisible = await page
+      .locator('[role="alert"], .error, .error-message, [data-testid="error"]')
+      .first()
+      .isVisible({ timeout: 2000 })
+      .catch(() => false);
 
     console.log(`Still on login page: ${stillOnLogin}`);
     console.log(`Error visible: ${errorVisible}`);
@@ -223,7 +253,10 @@ test.describe('Real Login Tests', () => {
     const googlePassword = process.env.GOOGLE_TEST_PASSWORD;
 
     if (!googleEmail || !googlePassword) {
-      test.skip(!googleEmail || !googlePassword, 'GOOGLE_TEST_EMAIL and GOOGLE_TEST_PASSWORD environment variables required');
+      test.skip(
+        !googleEmail || !googlePassword,
+        'GOOGLE_TEST_EMAIL and GOOGLE_TEST_PASSWORD environment variables required',
+      );
       return;
     }
 
@@ -235,11 +268,17 @@ test.describe('Real Login Tests', () => {
     await page.waitForTimeout(2000);
 
     // Find and click Google OAuth button
-    const googleBtn = page.locator('button:has-text("Google"), a:has-text("Google"), [data-provider="google"], button:has-text("Continue with Google")').first();
+    const googleBtn = page
+      .locator(
+        'button:has-text("Google"), a:has-text("Google"), [data-provider="google"], button:has-text("Continue with Google")',
+      )
+      .first();
     await googleBtn.waitFor({ state: 'visible', timeout: NAVIGATION_TIMEOUT });
 
     console.log('Found Google OAuth button');
-    await page.screenshot({ path: 'playwright-report-production/screenshots/google-oauth-before-click.png' });
+    await page.screenshot({
+      path: 'playwright-report-production/screenshots/google-oauth-before-click.png',
+    });
 
     // Click Google button - this will redirect to Google
     await googleBtn.click();
@@ -253,11 +292,15 @@ test.describe('Real Login Tests', () => {
     // Check if we're on Google's login page
     if (googleUrl.includes('accounts.google.com')) {
       console.log('Successfully redirected to Google login');
-      await page.screenshot({ path: 'playwright-report-production/screenshots/google-login-page.png' });
+      await page.screenshot({
+        path: 'playwright-report-production/screenshots/google-login-page.png',
+      });
 
       try {
         // Fill in Google email
-        const googleEmailInput = page.locator('input[type="email"], input[name="identifier"]').first();
+        const googleEmailInput = page
+          .locator('input[type="email"], input[name="identifier"]')
+          .first();
         await googleEmailInput.waitFor({ state: 'visible', timeout: NAVIGATION_TIMEOUT });
         await googleEmailInput.fill(googleEmail);
         console.log('Filled Google email');
@@ -270,7 +313,9 @@ test.describe('Real Login Tests', () => {
         await page.waitForTimeout(3000);
 
         // Fill in Google password
-        const googlePasswordInput = page.locator('input[type="password"], input[name="Passwd"]').first();
+        const googlePasswordInput = page
+          .locator('input[type="password"], input[name="Passwd"]')
+          .first();
         await googlePasswordInput.waitFor({ state: 'visible', timeout: NAVIGATION_TIMEOUT });
         await googlePasswordInput.fill(googlePassword);
         console.log('Filled Google password');
@@ -282,10 +327,14 @@ test.describe('Real Login Tests', () => {
 
         // Wait for OAuth flow to complete (may have consent screen)
         await page.waitForTimeout(5000);
-        await page.screenshot({ path: 'playwright-report-production/screenshots/google-after-signin.png' });
+        await page.screenshot({
+          path: 'playwright-report-production/screenshots/google-after-signin.png',
+        });
 
         // Check for consent screen
-        const consentBtn = page.locator('button:has-text("Allow"), button:has-text("Continue")').first();
+        const consentBtn = page
+          .locator('button:has-text("Allow"), button:has-text("Continue")')
+          .first();
         if (await consentBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
           console.log('Found consent screen, clicking Allow');
           await consentBtn.click();
@@ -297,7 +346,9 @@ test.describe('Real Login Tests', () => {
 
         const finalUrl = page.url();
         console.log(`Final URL: ${finalUrl}`);
-        await page.screenshot({ path: 'playwright-report-production/screenshots/google-oauth-complete.png' });
+        await page.screenshot({
+          path: 'playwright-report-production/screenshots/google-oauth-complete.png',
+        });
 
         // Verify we're back on Aragora and authenticated
         const authenticated = await isAuthenticated(page);
@@ -311,14 +362,17 @@ test.describe('Real Login Tests', () => {
 
           // Fail the test with descriptive error
           expect.soft(finalUrl).not.toContain('/auth/error');
-          console.log('DIAGNOSIS: OAuth authentication succeeded but backend database operation failed.');
+          console.log(
+            'DIAGNOSIS: OAuth authentication succeeded but backend database operation failed.',
+          );
           console.log('This is a production infrastructure issue, not a test failure.');
         }
 
         // Success if we're back on Aragora, authenticated, and not on error page
-        const success = finalUrl.includes('aragora.ai') &&
-                       !finalUrl.includes('/auth/error') &&
-                       (!finalUrl.includes('/auth/login') || authenticated);
+        const success =
+          finalUrl.includes('aragora.ai') &&
+          !finalUrl.includes('/auth/error') &&
+          (!finalUrl.includes('/auth/login') || authenticated);
 
         if (success) {
           console.log('Google OAuth login successful!');
@@ -329,7 +383,9 @@ test.describe('Real Login Tests', () => {
         expect(success).toBeTruthy();
       } catch (error) {
         console.log(`Google OAuth flow error: ${error}`);
-        await page.screenshot({ path: 'playwright-report-production/screenshots/google-oauth-error.png' });
+        await page.screenshot({
+          path: 'playwright-report-production/screenshots/google-oauth-error.png',
+        });
 
         // Check if it's a CAPTCHA or 2FA issue
         const pageContent = await page.content();
@@ -337,7 +393,10 @@ test.describe('Real Login Tests', () => {
           console.log('Google CAPTCHA detected - automated login blocked');
           test.skip(true, 'Google CAPTCHA detected - cannot automate');
         }
-        if (pageContent.includes('2-Step Verification') || pageContent.includes('Two-step verification')) {
+        if (
+          pageContent.includes('2-Step Verification') ||
+          pageContent.includes('Two-step verification')
+        ) {
           console.log('Google 2FA detected - need to handle 2FA');
           test.skip(true, 'Google 2FA detected - not supported in automated tests');
         }
@@ -350,7 +409,9 @@ test.describe('Real Login Tests', () => {
       expect(authenticated).toBeTruthy();
     } else {
       console.log(`Unexpected redirect URL: ${googleUrl}`);
-      await page.screenshot({ path: 'playwright-report-production/screenshots/unexpected-redirect.png' });
+      await page.screenshot({
+        path: 'playwright-report-production/screenshots/unexpected-redirect.png',
+      });
       // Don't fail - just log for debugging
     }
   });
@@ -370,13 +431,19 @@ test.describe('Real Login Tests', () => {
     await page.goto(ARAGORA_LOGIN_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
-    const emailInput = page.locator('input[type="email"], input[name="email"], input[placeholder*="email" i]').first();
+    const emailInput = page
+      .locator('input[type="email"], input[name="email"], input[placeholder*="email" i]')
+      .first();
     await emailInput.fill(email);
 
     const passwordInput = page.locator('input[type="password"], input[name="password"]').first();
     await passwordInput.fill(password);
 
-    const submitBtn = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")').first();
+    const submitBtn = page
+      .locator(
+        'button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")',
+      )
+      .first();
     await submitBtn.click();
 
     await page.waitForTimeout(5000);
@@ -416,13 +483,19 @@ test.describe('Real Login Tests', () => {
     await page.goto(ARAGORA_LOGIN_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
-    const emailInput = page.locator('input[type="email"], input[name="email"], input[placeholder*="email" i]').first();
+    const emailInput = page
+      .locator('input[type="email"], input[name="email"], input[placeholder*="email" i]')
+      .first();
     await emailInput.fill(email);
 
     const passwordInput = page.locator('input[type="password"], input[name="password"]').first();
     await passwordInput.fill(password);
 
-    const submitBtn = page.locator('button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")').first();
+    const submitBtn = page
+      .locator(
+        'button[type="submit"], button:has-text("Sign In"), button:has-text("Login"), button:has-text("Log In")',
+      )
+      .first();
     await submitBtn.click();
 
     await page.waitForTimeout(5000);
@@ -436,10 +509,16 @@ test.describe('Real Login Tests', () => {
     console.log('Logged in, now testing logout');
 
     // Find and click logout
-    const logoutBtn = page.locator('button:has-text("Sign Out"), button:has-text("Logout"), button:has-text("Log Out"), a:has-text("Logout")').first();
+    const logoutBtn = page
+      .locator(
+        'button:has-text("Sign Out"), button:has-text("Logout"), button:has-text("Log Out"), a:has-text("Logout")',
+      )
+      .first();
 
     // May need to open user menu first
-    const userMenu = page.locator('[data-testid="user-menu"], [aria-label="User menu"], .user-avatar, #user-dropdown').first();
+    const userMenu = page
+      .locator('[data-testid="user-menu"], [aria-label="User menu"], .user-avatar, #user-dropdown')
+      .first();
     if (await userMenu.isVisible({ timeout: 2000 }).catch(() => false)) {
       await userMenu.click();
       await page.waitForTimeout(1000);
@@ -456,7 +535,9 @@ test.describe('Real Login Tests', () => {
       console.log('Logout successful');
     } else {
       console.log('Logout button not found - may need different selector');
-      await page.screenshot({ path: 'playwright-report-production/screenshots/logout-button-not-found.png' });
+      await page.screenshot({
+        path: 'playwright-report-production/screenshots/logout-button-not-found.png',
+      });
     }
   });
 });
@@ -469,9 +550,30 @@ test.describe('OAuth Button Verification', () => {
     console.log('\n=== OAuth Provider Buttons ===');
 
     const providers = [
-      { name: 'Google', selectors: ['button:has-text("Google")', 'a:has-text("Google")', '[data-provider="google"]'] },
-      { name: 'GitHub', selectors: ['button:has-text("GitHub")', 'a:has-text("GitHub")', '[data-provider="github"]'] },
-      { name: 'Microsoft', selectors: ['button:has-text("Microsoft")', 'a:has-text("Microsoft")', '[data-provider="microsoft"]'] },
+      {
+        name: 'Google',
+        selectors: [
+          'button:has-text("Google")',
+          'a:has-text("Google")',
+          '[data-provider="google"]',
+        ],
+      },
+      {
+        name: 'GitHub',
+        selectors: [
+          'button:has-text("GitHub")',
+          'a:has-text("GitHub")',
+          '[data-provider="github"]',
+        ],
+      },
+      {
+        name: 'Microsoft',
+        selectors: [
+          'button:has-text("Microsoft")',
+          'a:has-text("Microsoft")',
+          '[data-provider="microsoft"]',
+        ],
+      },
     ];
 
     for (const provider of providers) {
@@ -490,7 +592,13 @@ test.describe('OAuth Button Verification', () => {
     let anyOAuthVisible = false;
     for (const provider of providers) {
       for (const selector of provider.selectors) {
-        if (await page.locator(selector).first().isVisible({ timeout: 1000 }).catch(() => false)) {
+        if (
+          await page
+            .locator(selector)
+            .first()
+            .isVisible({ timeout: 1000 })
+            .catch(() => false)
+        ) {
           anyOAuthVisible = true;
           break;
         }
@@ -505,9 +613,11 @@ test.describe('OAuth Button Verification', () => {
     await page.goto(ARAGORA_LOGIN_URL, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
-    const googleBtn = page.locator('button:has-text("Google"), a:has-text("Google"), [data-provider="google"]').first();
+    const googleBtn = page
+      .locator('button:has-text("Google"), a:has-text("Google"), [data-provider="google"]')
+      .first();
 
-    if (!await googleBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (!(await googleBtn.isVisible({ timeout: 3000 }).catch(() => false))) {
       test.skip(true, 'Google OAuth button not found');
       return;
     }

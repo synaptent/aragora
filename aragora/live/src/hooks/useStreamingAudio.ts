@@ -108,25 +108,31 @@ export function useStreamingAudio(): UseStreamingAudio {
     });
   }, [flushQueue]);
 
-  const appendChunk = useCallback((data: ArrayBuffer) => {
-    if (data.byteLength < 2) return; // Need at least tag + 1 byte
+  const appendChunk = useCallback(
+    (data: ArrayBuffer) => {
+      if (data.byteLength < 2) return; // Need at least tag + 1 byte
 
-    // Strip the 1-byte phase tag prefix
-    const raw = new Uint8Array(data);
-    const audioData = raw.slice(1);
-    // Convert to ArrayBuffer for SourceBuffer.appendBuffer() compatibility
-    const audioBuffer = audioData.buffer.slice(audioData.byteOffset, audioData.byteOffset + audioData.byteLength);
+      // Strip the 1-byte phase tag prefix
+      const raw = new Uint8Array(data);
+      const audioData = raw.slice(1);
+      // Convert to ArrayBuffer for SourceBuffer.appendBuffer() compatibility
+      const audioBuffer = audioData.buffer.slice(
+        audioData.byteOffset,
+        audioData.byteOffset + audioData.byteLength,
+      );
 
-    if (useMediaSource.current) {
-      ensureMediaSource();
-      endedRef.current = false;
-      queueRef.current.push(audioBuffer);
-      flushQueue();
-    } else {
-      // Fallback: accumulate chunks for blob playback
-      fallbackChunksRef.current.push(audioBuffer);
-    }
-  }, [ensureMediaSource, flushQueue]);
+      if (useMediaSource.current) {
+        ensureMediaSource();
+        endedRef.current = false;
+        queueRef.current.push(audioBuffer);
+        flushQueue();
+      } else {
+        // Fallback: accumulate chunks for blob playback
+        fallbackChunksRef.current.push(audioBuffer);
+      }
+    },
+    [ensureMediaSource, flushQueue],
+  );
 
   const endSegment = useCallback(() => {
     if (useMediaSource.current) {

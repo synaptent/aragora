@@ -47,12 +47,5 @@ export function SkipLink({ targetId, children = 'Skip to main content' }: SkipLi
  * <SkipLinkTarget id="main-content" />
  */
 export function SkipLinkTarget({ id }: { id: string }) {
-  return (
-    <span
-      id={id}
-      tabIndex={-1}
-      className="sr-only"
-      aria-hidden="true"
-    />
-  );
+  return <span id={id} tabIndex={-1} className="sr-only" aria-hidden="true" />;
 }

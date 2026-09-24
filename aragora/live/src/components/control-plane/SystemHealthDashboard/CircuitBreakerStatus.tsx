@@ -18,7 +18,10 @@ export interface CircuitBreakerStatusProps {
   loading?: boolean;
 }
 
-const STATE_CONFIG: Record<BreakerState, { color: string; text: string; label: string; description: string }> = {
+const STATE_CONFIG: Record<
+  BreakerState,
+  { color: string; text: string; label: string; description: string }
+> = {
   closed: {
     color: 'bg-success',
     text: 'text-success',
@@ -94,20 +97,13 @@ export function CircuitBreakerStatus({ breakers, loading = false }: CircuitBreak
           {breakers.map((breaker) => {
             const config = STATE_CONFIG[breaker.state];
             return (
-              <div
-                key={breaker.name}
-                className="bg-bg p-3 rounded"
-              >
+              <div key={breaker.name} className="bg-bg p-3 rounded">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${config.color}`} />
-                    <span className="text-sm font-theme-data text-text">
-                      {breaker.name}
-                    </span>
+                    <span className="text-sm font-theme-data text-text">{breaker.name}</span>
                   </div>
-                  <span className={`text-xs font-theme-data ${config.text}`}>
-                    {config.label}
-                  </span>
+                  <span className={`text-xs font-theme-data ${config.text}`}>{config.label}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs font-theme-data text-text-muted">
                   <span>

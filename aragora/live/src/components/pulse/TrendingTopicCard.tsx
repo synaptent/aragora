@@ -37,7 +37,11 @@ const SOURCE_COLORS: Record<string, { bg: string; text: string; border: string }
   twitter: { bg: 'bg-blue-500/10', text: 'text-blue-400', border: 'border-blue-500/30' },
   github: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30' },
   arxiv: { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/30' },
-  debate: { bg: 'bg-[var(--accent)]/10', text: 'text-[var(--accent)]', border: 'border-[var(--accent)]/30' },
+  debate: {
+    bg: 'bg-[var(--accent)]/10',
+    text: 'text-[var(--accent)]',
+    border: 'border-[var(--accent)]/30',
+  },
   default: { bg: 'bg-gray-500/10', text: 'text-gray-400', border: 'border-gray-500/30' },
 };
 
@@ -118,11 +122,15 @@ export function TrendingTopicCard({
           <span className="text-lg" title={topic.source}>
             {sourceIcon}
           </span>
-          <span className={`px-2 py-0.5 text-xs font-theme-data rounded border ${sourceColors.bg} ${sourceColors.text} ${sourceColors.border}`}>
+          <span
+            className={`px-2 py-0.5 text-xs font-theme-data rounded border ${sourceColors.bg} ${sourceColors.text} ${sourceColors.border}`}
+          >
             {topic.source.toUpperCase()}
           </span>
         </div>
-        <div className={`px-2 py-0.5 text-sm font-theme-data font-bold rounded ${getScoreBgColor(topic.score)} ${getScoreColor(topic.score)}`}>
+        <div
+          className={`px-2 py-0.5 text-sm font-theme-data font-bold rounded ${getScoreBgColor(topic.score)} ${getScoreColor(topic.score)}`}
+        >
           {Math.round(topic.score * 100)}%
         </div>
       </div>

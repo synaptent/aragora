@@ -45,7 +45,7 @@ export function AccessibleOverlay({
         onClose();
       }
     },
-    [onClose]
+    [onClose],
   );
 
   // Add escape key listener
@@ -63,7 +63,7 @@ export function AccessibleOverlay({
         onClose();
       }
     },
-    [onClose]
+    [onClose],
   );
 
   if (!isOpen) return null;

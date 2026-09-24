@@ -7,9 +7,10 @@ import { useEffect, useRef } from 'react';
  * Adds 'is-visible' class when element enters viewport.
  * Pair with .animate-on-scroll CSS class.
  */
-export function useScrollReveal<T extends HTMLElement>(
-  options?: { threshold?: number; rootMargin?: string }
-) {
+export function useScrollReveal<T extends HTMLElement>(options?: {
+  threshold?: number;
+  rootMargin?: string;
+}) {
   const ref = useRef<T>(null);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export function useScrollReveal<T extends HTMLElement>(
       {
         threshold: options?.threshold ?? 0.15,
         rootMargin: options?.rootMargin ?? '0px 0px -40px 0px',
-      }
+      },
     );
 
     observer.observe(el);

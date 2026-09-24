@@ -2,14 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { Scanlines, CRTVignette } from '@/components/MatrixRain';
-import {
-  useReviewQueue,
-  useReviewQueueStats,
-} from '@/hooks/useReviewQueue';
-import {
-  ReviewQueueList,
-  StatsHeader,
-} from '@/components/review-queue';
+import { useReviewQueue, useReviewQueueStats } from '@/hooks/useReviewQueue';
+import { ReviewQueueList, StatsHeader } from '@/components/review-queue';
 import { Mode3LiveBanner } from '@/components/review-queue/Mode3LiveBanner';
 
 /**
@@ -54,9 +48,7 @@ export default function ReviewQueuePage() {
       <div className="max-w-6xl mx-auto px-4 py-8 relative z-10">
         <div className="mb-8">
           <div className="flex items-baseline gap-3 mb-2">
-            <h1 className="text-xl font-theme-data font-bold text-[var(--accent)]">
-              Review queue
-            </h1>
+            <h1 className="text-xl font-theme-data font-bold text-[var(--accent)]">Review queue</h1>
             <span
               className="text-xs font-theme-data"
               style={{
@@ -75,65 +67,62 @@ export default function ReviewQueuePage() {
 
         <Mode3LiveBanner />
 
-      <StatsHeader
-        visible={visible}
-        total={total}
-        deferredCount={deferredCount}
-        stats={stats}
-        degraded={degraded}
-        reason={reason}
-      />
+        <StatsHeader
+          visible={visible}
+          total={total}
+          deferredCount={deferredCount}
+          stats={stats}
+          degraded={degraded}
+          reason={reason}
+        />
 
-      {error && (
-        <div
-          role="alert"
-          data-testid="review-queue-page-error"
-          className="mb-4 rounded-xl border px-4 py-3 text-sm"
-          style={{
-            borderColor: 'var(--crimson)',
-            backgroundColor: 'rgba(255, 0, 64, 0.08)',
-            color: 'var(--crimson)',
-          }}
-        >
-          Failed to load queue: {(error as Error).message || 'unknown error'}
-        </div>
-      )}
-
-      {isLoading ? (
-        <div
-          data-testid="review-queue-page-loading"
-          className="py-12 text-center text-sm"
-          style={{ color: 'var(--text-muted)' }}
-        >
-          loading queue…
-        </div>
-      ) : (
-        <ReviewQueueList prs={prs} onSettled={refetch} />
-      )}
-
-      {showCelebration && (
-        <div
-          role="status"
-          data-testid="review-queue-inbox-zero"
-          className="fixed bottom-6 right-6 z-30 rounded-xl border px-5 py-4 shadow-xl"
-          style={{
-            borderColor: 'var(--accent)',
-            backgroundColor: 'var(--surface-elevated)',
-            boxShadow: 'var(--shadow-floating)',
-            color: 'var(--text)',
-          }}
-        >
+        {error && (
           <div
-            className="font-theme-data text-base"
-            style={{ color: 'var(--accent)' }}
+            role="alert"
+            data-testid="review-queue-page-error"
+            className="mb-4 rounded-xl border px-4 py-3 text-sm"
+            style={{
+              borderColor: 'var(--crimson)',
+              backgroundColor: 'rgba(255, 0, 64, 0.08)',
+              color: 'var(--crimson)',
+            }}
           >
-            inbox zero 🎉
+            Failed to load queue: {(error as Error).message || 'unknown error'}
           </div>
-          <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-            Queue is clear. Streak: {stats?.streak ?? 0}.
+        )}
+
+        {isLoading ? (
+          <div
+            data-testid="review-queue-page-loading"
+            className="py-12 text-center text-sm"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            loading queue…
           </div>
-        </div>
-      )}
+        ) : (
+          <ReviewQueueList prs={prs} onSettled={refetch} />
+        )}
+
+        {showCelebration && (
+          <div
+            role="status"
+            data-testid="review-queue-inbox-zero"
+            className="fixed bottom-6 right-6 z-30 rounded-xl border px-5 py-4 shadow-xl"
+            style={{
+              borderColor: 'var(--accent)',
+              backgroundColor: 'var(--surface-elevated)',
+              boxShadow: 'var(--shadow-floating)',
+              color: 'var(--text)',
+            }}
+          >
+            <div className="font-theme-data text-base" style={{ color: 'var(--accent)' }}>
+              inbox zero 🎉
+            </div>
+            <div className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+              Queue is clear. Streak: {stats?.streak ?? 0}.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
