@@ -126,3 +126,30 @@ jobs:
         env:
           VERSION: ${{ github.event.inputs.version }}
         run: python3 scripts/verify_aragora_verify_publish.py --version "$VERSION" --json
+
+  receipt-first-hour:
+    needs: publish
+    # The version that was just published, exercised the way a stranger would:
+    # a throwaway virtualenv, `pip install` from the public index, a Decision
+    # Receipt and a verification of it. `needs: publish` puts this after that
+    # job's last step, `Verify public PyPI install`, which already retries for
+    # index propagation — so the pin below is installable by the time this runs.
+    runs-on: aragora
+    timeout-minutes: 15
+    permissions:
+      contents: read  # checkout only; the publish itself is already done
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify checkout integrity
+        uses: ./.github/actions/checkout-integrity
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: "3.11"
+
+      - name: Verify a receipt from the published packages
+        env:
+          VERIFY_SPEC: aragora-verify==${{ github.event.inputs.version }}
+        run: bash scripts/receipt_first_hour.sh "$VERIFY_SPEC"

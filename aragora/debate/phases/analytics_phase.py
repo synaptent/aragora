@@ -206,7 +206,7 @@ class AnalyticsPhase:
     def _record_metrics(self, ctx: DebateContext) -> None:
         """Record debate metrics for observability."""
         try:
-            from aragora.server.prometheus import record_debate_completed
+            from aragora.observability.prometheus import record_debate_completed
 
             result = ctx.result
             record_debate_completed(

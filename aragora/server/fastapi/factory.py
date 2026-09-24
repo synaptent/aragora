@@ -102,7 +102,7 @@ def _build_server_context(nomic_dir: Path | None = None) -> dict[str, Any]:
 
     This provides the same context as the legacy server for handler compatibility.
     """
-    from aragora.server.storage import DebateStorage
+    from aragora.storage.debate_storage import DebateStorage
 
     ctx: dict[str, Any] = {}
 

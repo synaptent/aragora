@@ -136,6 +136,7 @@ const DOC_MAP = {
   // =========================================================================
   // Guides
   // =========================================================================
+  'receipts/VERIFY_IN_60_SECONDS.md': 'guides/verify-in-60-seconds.md',
   'SDK_GUIDE.md': 'guides/sdk.md',
   'SDK_QUICKSTART.md': 'guides/sdk-quickstart.md',
   'guides/PYTHON_SDK_MIGRATION.md': 'guides/python-sdk-migration.md',

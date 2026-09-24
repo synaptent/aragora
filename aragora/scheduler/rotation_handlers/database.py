@@ -215,7 +215,7 @@ class DatabaseRotationHandler(RotationHandler):
 
             # Use Supabase Management API if available
             try:
-                from aragora.server.http_client_pool import get_http_pool
+                from aragora.observability.http_client_pool import get_http_pool
 
                 pool = get_http_pool()
                 async with pool.get_session("supabase") as client:
