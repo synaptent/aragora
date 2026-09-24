@@ -984,42 +984,6 @@
                 }
               }
             }
-          },
-          "500": {
-            "description": "Internal server error - Unexpected error occurred",
-            "headers": {
-              "X-Request-ID": {
-                "description": "Unique request identifier for tracing and debugging",
-                "schema": {
-                  "type": "string",
-                  "format": "uuid"
-                }
-              },
-              "X-Response-Time": {
-                "description": "Server processing time in milliseconds",
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "examples": {
-                  "internal_error": {
-                    "summary": "Internal server error",
-                    "value": {
-                      "error": "An unexpected error occurred",
-                      "code": "INTERNAL_ERROR",
-                      "trace_id": "req_abc123xyz",
-                      "support_url": "https://github.com/synaptent/aragora/issues"
-                    }
-                  }
-                }
-              }
-            }
           }
         },
         "x-aragora-stability": "stable"
@@ -31270,93 +31234,6 @@
         "deprecated": true,
         "x-aragora-stability": "deprecated",
         "operationId": "createGauntletReceiptsExportBundle"
-      }
-    },
-    "/api/gauntlet/receipts/{receipt_id}": {
-      "get": {
-        "tags": [
-          "Gauntlet"
-        ],
-        "summary": "Get decision receipt",
-        "description": "Get a specific decision receipt by ID.",
-        "parameters": [
-          {
-            "name": "receipt_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Unique identifier of the receipt"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Decision receipt details",
-            "headers": {
-              "X-Request-ID": {
-                "description": "Unique request identifier for tracing and debugging",
-                "schema": {
-                  "type": "string",
-                  "format": "uuid"
-                }
-              },
-              "X-Response-Time": {
-                "description": "Server processing time in milliseconds",
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DecisionReceipt"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found - The requested resource does not exist",
-            "headers": {
-              "X-Request-ID": {
-                "description": "Unique request identifier for tracing and debugging",
-                "schema": {
-                  "type": "string",
-                  "format": "uuid"
-                }
-              },
-              "X-Response-Time": {
-                "description": "Server processing time in milliseconds",
-                "schema": {
-                  "type": "integer"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                },
-                "examples": {
-                  "not_found": {
-                    "summary": "Resource not found",
-                    "value": {
-                      "error": "Debate not found",
-                      "code": "NOT_FOUND",
-                      "resource_type": "debate",
-                      "resource_id": "deb_abc123",
-                      "trace_id": "req_abc123xyz"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "deprecated": true,
-        "x-aragora-stability": "deprecated",
-        "operationId": "getGauntletReceiptsByreceiptid"
       }
     },
     "/api/gauntlet/receipts/{receipt_id}/export": {
@@ -248319,6 +248196,40 @@
         "x-aragora-stability": "stable"
       }
     },
+    "/api/v2/receipts/verify": {
+      "post": {
+        "summary": "Verify an ODR document",
+        "tags": [
+          "Receipts",
+          "Verification"
+        ],
+        "description": "Verify an Open Decision Receipt document supplied in the request body. Stateless and public: nothing is persisted and the document does not have to originate from this deployment. Signatures are checked against this deployment's configured ODR signing key, so a document signed by another issuer conforms structurally but reports a failing signature check.",
+        "operationId": "verify_odr_document",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification verdict returned (verified true or false)"
+          },
+          "400": {
+            "description": "Body is not a JSON object carrying odr_version"
+          },
+          "413": {
+            "description": "Request body exceeds 262144 bytes"
+          },
+          "429": {
+            "description": "Rate limit exceeded (60 requests per minute per client)"
+          }
+        }
+      }
+    },
     "/api/v2/receipts/{receipt_id}": {
       "get": {
         "tags": [
@@ -248518,8 +248429,9 @@
         ],
         "summary": "Export receipt",
         "operationId": "exportReceipt",
-        "description": "Export a receipt in the requested format.",
+        "description": "Export a receipt in the requested format. format=odr is public; every other format requires receipts:read.",
         "security": [
+          {},
           {
             "bearerAuth": []
           }
@@ -248533,6 +248445,22 @@
               "type": "string"
             },
             "description": "Unique identifier of the receipt"
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "description": "Export format; odr returns the Open Decision Receipt.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "odr_version",
+            "in": "query",
+            "description": "ODR profile version for format=odr: 0.1 or 0.2.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -248550,6 +248478,12 @@
                 "description": "Server processing time in milliseconds",
                 "schema": {
                   "type": "integer"
+                }
+              },
+              "X-ODR-Digest": {
+                "description": "JCS content digest of the exported ODR document: 64 lowercase hex characters. Sent for format=odr.",
+                "schema": {
+                  "type": "string"
                 }
               }
             },

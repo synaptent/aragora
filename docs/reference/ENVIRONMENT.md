@@ -1300,6 +1300,7 @@ See [BOT_INTEGRATIONS.md](../integrations/BOT_INTEGRATIONS.md) for detailed setu
 | `ARAGORA_ODR_SIGNING_KEY_SECRET` | Optional | AWS Secrets Manager SecretId holding the signing PEM; used when no key file is configured. An explicit loader secret-name argument overrides the file. | `aragora/odr-signing-key` |
 | `ARAGORA_ODR_SIGNING_KEY_STRICT_MODE` | Optional | Reject POSIX group/other-readable key files instead of warning when true (`true`, `1`, `yes`, `on`, case-insensitive). | `false` |
 | `ARAGORA_ODR_SIGNING_ISSUER` | Optional | `signatures[].issuer` written by `aragora receipt export --format odr --odr-version 0.2` and `scripts/emit_pr_receipt.py` on v0.2 documents (signer-committed, spec §6); empty means unset. Ignored for v0.1 documents, which keep the three-member entry. | `aragora` |
+| `ARAGORA_ENABLE_PUBLIC_ODR_EXPORT` | Optional | Serve `GET /api/v2/receipts/{id}/export?format=odr` to a caller carrying no authorization context on an authentication-enabled deployment (`true`, `1`, `yes`, `on`, case-insensitive). Default off: such a caller is answered `401 auth_required`. A caller that does carry a context still needs `receipts.read` either way, and an authentication-disabled deployment is unaffected. The public-receipts deployment sets it true. | `false` |
 
 ## Knowledge System
 
