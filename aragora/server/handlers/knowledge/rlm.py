@@ -1190,7 +1190,7 @@ class RLMContextHandler(BaseHandler):
                     }
                 )
 
-            async def collect_chunks():
+            async def collect_chunks() -> None:
                 if query:
                     search_level = str(level).upper() if level else "DETAILED"
                     results = await stream_query.search(query, level=search_level)
