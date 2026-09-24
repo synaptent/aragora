@@ -315,7 +315,7 @@ def iter_live_spectate_sse_frames(
     bridge: Any | None = None,
     allow_private: bool = True,
     storage: Any | None = None,
-):
+) -> Any:
     """Yield a live SSE stream with an initial buffered snapshot and heartbeats."""
     if bridge is None:
         from aragora.spectate.ws_bridge import get_spectate_bridge
