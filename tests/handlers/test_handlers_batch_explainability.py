@@ -11,7 +11,9 @@ Tests cover:
 import asyncio
 import json
 import pytest
+import threading
 import time
+import uuid
 from unittest.mock import Mock, patch, AsyncMock
 
 from aragora.server.handlers.explainability import (
@@ -19,6 +21,7 @@ from aragora.server.handlers.explainability import (
     BatchStatus,
     BatchJob,
     BatchDebateResult,
+    _get_batch_job,
     _save_batch_job,
 )
 from aragora.server.handlers.explainability_store import (
@@ -102,6 +105,32 @@ def clear_batch_jobs():
     store_module._batch_store = MemoryBatchJobStore()
     yield
     store_module._batch_store = None
+
+
+@pytest.fixture(autouse=True)
+def batch_workers(monkeypatch, _reset_batch_store, clear_batch_jobs):
+    """Track batch worker threads and join them before the store is reset.
+
+    Depending on the store fixtures makes this teardown run first, so a worker
+    can never save into the next test's store or lazily recreate the default
+    SQLite store in the shared data directory.
+    """
+    workers: list[threading.Thread] = []
+    start = ExplainabilityHandler._start_batch_processing
+
+    def tracked_start(self, job):
+        before = set(threading.enumerate())
+        start(self, job)
+        workers.extend(t for t in threading.enumerate() if t not in before)
+
+    monkeypatch.setattr(ExplainabilityHandler, "_start_batch_processing", tracked_start)
+    # Keep workers off the process-global debates database in the shared data dir.
+    monkeypatch.setattr("aragora.server.storage.get_debates_db", lambda: None)
+    yield workers
+    for worker in workers:
+        worker.join(timeout=10)
+    leaked = [worker.name for worker in workers if worker.is_alive()]
+    assert not leaked, f"batch workers outlived their test: {leaked}"
 
 
 # ============================================================================
@@ -281,6 +310,27 @@ class TestCreateBatchJob:
         assert worker_observation["initial_status"] is BatchStatus.PENDING
         assert status == 202
         assert response_body["status"] == "pending"
+
+    def test_create_batch_worker_finishes_within_the_test(
+        self, handler, mock_post_request, batch_workers
+    ):
+        debate_id = f"missing-{uuid.uuid4().hex}"
+        body = {"debate_ids": [debate_id]}
+        mock_post_request.rfile = Mock()
+        mock_post_request.rfile.read = Mock(return_value=json.dumps(body).encode())
+        mock_post_request.headers["Content-Length"] = len(json.dumps(body))
+
+        result = handler._handle_batch_create(mock_post_request)
+        response_body, status = parse_handler_result(result)
+
+        assert status == 202
+        assert len(batch_workers) == 1
+        batch_workers[0].join(timeout=10)
+        assert not batch_workers[0].is_alive()
+        job = _get_batch_job(response_body["batch_id"])
+        assert job is not None
+        assert job.status is BatchStatus.FAILED
+        assert [(r.debate_id, r.status) for r in job.results] == [(debate_id, "not_found")]
 
     def test_create_batch_empty_debate_ids(self, handler, mock_post_request):
         body = {"debate_ids": []}
