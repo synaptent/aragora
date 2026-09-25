@@ -11,6 +11,7 @@ from aragora.config.secrets import (
     SecretPresence,
     get_secret_manager,
     hydrate_env_from_secrets,
+    is_secret_presence_available,
     is_strict_mode,
 )
 
@@ -78,7 +79,7 @@ def cmd_secrets_health(args: argparse.Namespace) -> int:
         _print_presence_table(payload)
 
     if args.require_all and any(
-        presence.source in {"missing", "blocked_by_strict_mode"} for presence in presences
+        not is_secret_presence_available(presence) for presence in presences
     ):
         return 1
     return 0

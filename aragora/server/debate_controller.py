@@ -25,7 +25,11 @@ from aragora.config import (
     MAX_CONCURRENT_DEBATES,
     MAX_ROUNDS,
 )
-from aragora.config.secrets import get_secret_presence
+from aragora.config.secrets import (
+    get_secret,
+    get_secret_presence,
+    is_secret_presence_available,
+)
 from aragora.server.debate_factory import (
     DEFAULT_ENABLE_VERTICALS,
     DebateConfig,
@@ -818,7 +822,7 @@ class DebateController:
         import json
 
         # Check for API key first
-        if get_secret_presence("ANTHROPIC_API_KEY").source not in {"aws", "env"}:
+        if not is_secret_presence_available(get_secret_presence("ANTHROPIC_API_KEY")):
             logger.error("[quick_classify] ANTHROPIC_API_KEY not set - skipping classification")
             return _DEFAULT_CLASSIFICATION
 
@@ -827,7 +831,8 @@ class DebateController:
         try:
             from anthropic import AsyncAnthropic
 
-            client = AsyncAnthropic()
+            api_key = get_secret("ANTHROPIC_API_KEY")
+            client = AsyncAnthropic(api_key=api_key) if api_key else AsyncAnthropic()
             # Wrap API call with 5 second timeout
             response = await asyncio.wait_for(
                 client.messages.create(
