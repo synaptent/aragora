@@ -2,7 +2,7 @@
 Open Decision Receipt (ODR) exporter.
 
 Maps the native :class:`aragora.gauntlet.receipt_models.DecisionReceipt` onto
-ODR v0.1 or v0.2 (default v0.1 until aragora-verify 0.2.0 is published), defined in
+ODR v0.1 or v0.2 (default v0.2; v0.1 stays available on request), defined in
 ``docs/specs/OPEN_DECISION_RECEIPT.md`` and machine-validated by
 ``aragora/gauntlet/odr_schema.json`` (JSON Schema draft 2020-12).
 
@@ -39,7 +39,7 @@ from aragora.gauntlet.odr_jcs import jcs_canonicalize, odr_content_digest
 if TYPE_CHECKING:
     from aragora.gauntlet.receipt_models import DecisionReceipt
 
-ODR_DEFAULT_VERSION = "0.1"
+ODR_DEFAULT_VERSION = "0.2"
 ODR_VERSIONS = ("0.1", "0.2")
 ODR_PROFILE_URIS = {
     "0.1": "https://aragora.ai/specs/open-decision-receipt/v0.1",
@@ -299,7 +299,7 @@ def decision_receipt_to_odr(
 ) -> dict[str, Any]:
     """Map a :class:`DecisionReceipt` onto ODR v0.1 or v0.2.
 
-    Default v0.1 until aragora-verify 0.2.0 is published.
+    Default v0.2; v0.1 stays available on request.
 
     Args:
         receipt: The source receipt. Fields are copied, never invented.

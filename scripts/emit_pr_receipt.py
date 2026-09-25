@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--odr-version",
         choices=ODR_VERSIONS,
-        help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > default (0.1)",
+        help="ODR profile version: flag > ARAGORA_ODR_PROFILE_VERSION > default (0.2)",
     )
     args = parser.parse_args(argv)
     try:

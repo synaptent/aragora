@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "aragora-verify" / "src"))
 
 from aragora_verify import schema, verify  # noqa: E402
-from aragora.gauntlet.odr_export import decision_receipt_to_odr  # noqa: E402
+from aragora.gauntlet.odr_export import ODR_DEFAULT_VERSION, decision_receipt_to_odr  # noqa: E402
 from aragora.gauntlet.odr_verify import verify_odr_document  # noqa: E402
 from aragora.gauntlet.receipt_models import DecisionReceipt  # noqa: E402
 from aragora.gauntlet.odr_signing import sign_odr_receipt  # noqa: E402
@@ -32,10 +32,10 @@ def receipt():
     )
 
 
-def test_default_is_v01_and_matches_origin_shape():
+def test_requested_v01_keeps_the_v01_shape():
     source = receipt()
     source.settlement_metadata = {"repo": "o/r", "pr": 1, "odr": {"adjudication": {}}}
-    doc = decision_receipt_to_odr(source)
+    doc = decision_receipt_to_odr(source, odr_version="0.1")
     assert set(doc) == set(
         "odr_version profile receipt_id issued_at subject claim reasoning quorum "
         "confidence cruxes attestation routing signatures source".split()
@@ -46,11 +46,15 @@ def test_default_is_v01_and_matches_origin_shape():
     assert verify(doc).ok and verify_odr_document(doc).ok
 
 
-def test_requested_v02_changes_only_version_and_profile():
+def test_default_is_v02_and_v01_changes_only_version_and_profile():
     source = receipt()
     default = decision_receipt_to_odr(source)
-    requested = decision_receipt_to_odr(source, odr_version="0.2")
-    default.update(odr_version="0.2", profile="https://aragora.ai/specs/open-decision-receipt/v0.2")
+    assert ODR_DEFAULT_VERSION == default["odr_version"] == "0.2"
+    assert default == decision_receipt_to_odr(source, odr_version="0.2")
+    requested = decision_receipt_to_odr(source, odr_version="0.1")
+    requested.update(
+        odr_version="0.2", profile="https://aragora.ai/specs/open-decision-receipt/v0.2"
+    )
     assert requested == default
 
 

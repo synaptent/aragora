@@ -166,7 +166,7 @@ def test_acta_with_another_format_is_a_usage_error(
     assert not output.exists()
 
 
-@pytest.mark.parametrize("env,explicit", [(None, None), ("0.1", None), ("0.2", "0.1")])
+@pytest.mark.parametrize("env,explicit", [(None, "0.1"), ("0.1", None), ("0.2", "0.1")])
 def test_acta_requires_an_effective_v02_document(
     tmp_path, receipt, key_file, capsys, monkeypatch, env, explicit
 ):
@@ -188,9 +188,13 @@ def test_acta_requires_an_effective_v02_document(
     assert not (tmp_path / "x.odr.json").exists()
 
 
-def test_acta_env_var_supplies_the_effective_version(tmp_path, receipt, key_file, monkeypatch):
+@pytest.mark.parametrize("env", ["0.2", None])
+def test_acta_env_var_or_default_supplies_the_effective_version(
+    tmp_path, receipt, key_file, monkeypatch, env
+):
     monkeypatch.setenv(FILE_ENV, str(key_file))
-    monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", "0.2")
+    if env is not None:
+        monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", env)
     acta_path = tmp_path / "x.acta.json"
 
     _run(_export_argv(receipt, tmp_path, "--acta", str(acta_path)))

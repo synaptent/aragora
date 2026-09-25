@@ -233,7 +233,7 @@ def test_v02_bridge_findings_use_gate_reader():
     assert dissent["findings"][0]["text"] == "advisory from PASS"
     assert [f["blocking"] for f in dissent["findings"]] == [False, True]
     assert dissent["severity_max"] == "P1" and dissent["blocking"] is True
-    legacy = decision_receipt_to_odr(receipt)
+    legacy = decision_receipt_to_odr(receipt, odr_version="0.1")
     for key in ("present", "dissenting_agents", "views"):
         assert dissent[key] == legacy["quorum"]["dissent"][key]
     jsonschema.validate(doc, load_odr_schema())
@@ -280,7 +280,7 @@ def test_v02_bridge_dict_retains_observations_and_provenance():
         {"kind": "timeout", "family": "openai", "detail": "reviewer exceeded collection deadline"},
     ]
     assert "adjudication" not in doc
-    assert "observations" not in decision_receipt_to_odr(receipt)["reasoning"]
+    assert "observations" not in decision_receipt_to_odr(receipt, odr_version="0.1")["reasoning"]
     jsonschema.validate(doc, load_odr_schema())
 
 
@@ -299,7 +299,7 @@ def test_v02_bridge_adjudication_and_rule_preserve_source():
     # never a presence marker, so no "status" key may be injected.
     assert "status" not in doc["adjudication"]
     assert {"kind", "verdict", "reason"} <= set(doc["adjudication"])
-    assert "adjudication" not in decision_receipt_to_odr(receipt)
+    assert "adjudication" not in decision_receipt_to_odr(receipt, odr_version="0.1")
     assert doc["attestation"]["mechanism"]["policy_version"] == raw["policy_version"]
     assert doc["attestation"]["mechanism"]["action_reason"] == raw["action_reason"]
     jsonschema.validate(doc, load_odr_schema())

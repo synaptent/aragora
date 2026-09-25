@@ -9,12 +9,11 @@ network access to Aragora — verification is fully offline.
 
 This document is executable: every command below was run against the
 checked-in sample receipt in [`fixtures/`](fixtures/) and the outputs shown
-are real (originally verified 2026-07-02 with `aragora-verify` 0.1.0, Python
-3.11, `cryptography` 49.0, `jsonschema` 4.26; re-verified 2026-07-04 with the
-published `aragora-verify` 0.1.1 installed from PyPI into a clean venv —
-byte-for-byte identical output for this non-tampered fixture, since 0.1.1's
-added `key_id`-binding check only changes behavior on a relabeled/tampered
-signature; see the PyPI release note in §2 below).
+are real. The sample is an ODR v0.2 receipt, the emitter's default output from
+release 2.11.0; the output below was captured on 2026-09-25 with the published
+`aragora-verify` 0.2.0 installed from PyPI into a clean venv (Python 3.11).
+The earlier v0.1 sample was verified on 2026-07-02 with `aragora-verify` 0.1.0
+and re-verified on 2026-07-04 with 0.1.1.
 
 ---
 
@@ -26,7 +25,7 @@ which exact input, by which AI models, with what independence and dissent, at
 what confidence, and whether a human accepted the risk*.
 
 For exchange with outside parties the receipt is exported to the **Open
-Decision Receipt (ODR v0.1)** profile — a vendor-neutral JSON document
+Decision Receipt (ODR v0.2)** profile — a vendor-neutral JSON document
 normatively specified in
 [`docs/specs/OPEN_DECISION_RECEIPT.md`](../specs/OPEN_DECISION_RECEIPT.md).
 The members an auditor will inspect:
@@ -58,21 +57,20 @@ the public key that verifies it. The only tool needed is **`aragora-verify`**,
 a free, standalone, MIT-licensed verifier published on PyPI whose only
 dependency is the `cryptography` package.
 
-> PyPI release verified: `pip install -U 'aragora-verify>=0.1.1'` from a clean
-> venv (real PyPI, no local wheel) installed `aragora-verify-0.1.1` and verified
-> this fixture with all checks PASS on 2026-07-04. Version 0.1.1+ (published
-> 2026-07-04 03:28 UTC; verify live:
-> https://pypi.org/pypi/aragora-verify/json) binds each signature's recorded
-> `key_id` to the supplied key, so a relabeled signer fails as tampering.
-> Earlier 0.1.0 verification on 2026-07-02 covered content integrity and
-> signature validity but lacked that binding. CI additionally smoke-tests the
-> CLI against a wheel built from the in-repo
-> [`aragora-verify/`](../../aragora-verify/) source.
+> PyPI release verified: `pip install -U 'aragora-verify>=0.2.0'` from a clean
+> venv (real PyPI, no local wheel) installed `aragora-verify-0.2.0` and verified
+> this fixture with all checks PASS on 2026-09-25 (verify the release live:
+> https://pypi.org/pypi/aragora-verify/json). Version 0.2.0 is the first
+> release that accepts ODR v0.2 receipts such as this one; 0.1.x rejects them
+> at `schema_conformance`. Since 0.1.1 the verifier binds each signature's
+> recorded `key_id` to the supplied key, so a relabeled signer fails as
+> tampering. CI additionally smoke-tests the CLI against a wheel built from the
+> in-repo [`aragora-verify/`](../../aragora-verify/) source.
 
 ```bash
 # 1. Install the standalone verifier into a clean environment
 python3 -m venv odr-env && . odr-env/bin/activate
-pip install -U 'aragora-verify>=0.1.1'
+pip install -U 'aragora-verify>=0.2.0'
 
 # 2. Fetch the two fixture files (or copy them from a repo checkout)
 #    docs/compliance/fixtures/sample_decision_receipt.odr.json
@@ -93,18 +91,26 @@ Open Decision Receipt — VERIFIED
   odr_digest: sha-256:<64 hex digits>
 
   checks:
-    [PASS] schema_conformance: conforms to ODR v0.1 profile
+    [PASS] schema_conformance: conforms to ODR v0.2 profile
+    [PASS] quorum_consistency: supporting/dissenting agents all appear in participants
     [PASS] canonical_digest: sha-256:<64 hex digits>
     [PASS] signature: Ed25519 signature verified — sig[0] (key_id=ed25519-…): verified
-    [PASS] quorum_consistency: supporting/dissenting agents all appear in participants
     [----] chain_link: no --chain supplied
 
   weakening signals (do not fail verification):
     ! attestation: autonomous — no human accepted the risk for this decision
     ! confidence: present but uncalibrated (no calibration provenance)
 
-  => VERIFIED
+Dissent trail
+(no dissent recorded)
+  => VERIFIED (key_id=ed25519-…)
 ```
+
+The `Dissent trail` section lists per-finding dissent
+(`quorum.dissent.findings[]`, which merge-quorum review receipts carry). This
+sample records its dissent as `quorum.dissent.views` instead, so the section
+reads `(no dissent recorded)`; the dissenting agent and its view are still in
+the signed receipt.
 
 Add `--json` for a machine-readable result suitable for archiving in an audit
 file.
@@ -129,7 +135,7 @@ here is a demonstration key generated only for this walkthrough — see
 
 | Check | What a PASS proves |
 |---|---|
-| `schema_conformance` | The document is a structurally well-formed ODR v0.1 receipt: all thirteen required members present, absent markers well-formed, no smuggled or malformed blocks. |
+| `schema_conformance` | The document is a structurally well-formed ODR receipt of the version it declares (v0.1 or v0.2): all thirteen required members present, absent markers well-formed, no smuggled or malformed blocks. |
 | `canonical_digest` | The receipt's canonical content digest was recomputed deterministically: `SHA-256(JCS(document minus signatures))` per RFC 8785. This digest is the exact value the signature covers and is reproducible byte-for-byte by any independent implementation. |
 | `signature` | At least one Ed25519 detached signature over that digest verifies against the public key **you** supplied, **and** (0.1.1+) that signature's recorded `key_id` matches the id recomputed from your key — a relabeled `key_id` on an otherwise-valid signature FAILs as signer-label tampering. Together with `canonical_digest`, this proves the receipt was signed by the holder of the corresponding private key and that **no field outside `signatures` has been altered since signing** — verdict, reasoning, participants, dissent, confidence, timestamps, all of it. The `signatures` array itself is outside the signed digest; the `key_id` binding is what closes the signer-label spoofing gap there. |
 | `quorum_consistency` | Every agent named as supporting or dissenting is a disclosed participant. A mismatch is a malformed-receipt or tampering signal (spec §8), not a style issue. |

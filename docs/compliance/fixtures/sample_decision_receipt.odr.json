@@ -20,8 +20,8 @@
     "status": "absent"
   },
   "issued_at": "2026-07-02T12:00:00+00:00",
-  "odr_version": "0.1",
-  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "odr_version": "0.2",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.2",
   "quorum": {
     "dissent": {
       "dissenting_agents": [
@@ -77,8 +77,11 @@
   "signatures": [
     {
       "alg": "Ed25519",
-      "key_id": "ed25519-d0df676e9115d738",
-      "signature": "WL+VBpcc7dqK0M5EOY3jZKbx/fzYTpjI0ulM+c1nUsrczpNgk28ujGHm4RDTPOFGfKy/24j2Zjceih+0ydVDCw=="
+      "issuer": "aragora",
+      "key_id": "ed25519-a6dee77013ba3b9b",
+      "role": "emitter",
+      "signature": "QnWKzJ02hXSxc6e7cnTX2uXYnyeHT3iHLVPtw+uaf//QYAoDy9g5bRO68qBfqNfLgbVddKzF3cHXK6K5XjZFAw==",
+      "signed_at": "2026-09-25T05:56:43+00:00"
     }
   ],
   "source": {

@@ -5,7 +5,7 @@ Produces the three artifacts checked in under ``docs/compliance/fixtures/`` and
 referenced by ``docs/compliance/ODR_VERIFICATION_WALKTHROUGH.md``:
 
 * ``sample_decision_receipt.json``      -- the native ``DecisionReceipt`` record
-* ``sample_decision_receipt.odr.json``  -- the vendor-neutral ODR v0.1 export,
+* ``sample_decision_receipt.odr.json``  -- the vendor-neutral ODR v0.2 export,
                                            carrying one Ed25519 detached signature
 * ``odr_sample_signing_public_key.pem`` -- the public key that verifies it
 
@@ -40,6 +40,7 @@ from aragora.gauntlet.odr_export import (  # noqa: E402
     odr_content_digest,
 )
 from aragora.gauntlet.odr_signing import (  # noqa: E402
+    DEFAULT_SIGNING_ISSUER,
     generate_signing_key,
     public_key_pem,
     sign_odr_receipt,
@@ -220,7 +221,7 @@ def main() -> int:
     # Sign with a fresh demonstration key. The private half exists only in this
     # process; solely the public key is written out.
     private_key = generate_signing_key()
-    signed_odr = sign_odr_receipt(odr, private_key)
+    signed_odr = sign_odr_receipt(odr, private_key, issuer=DEFAULT_SIGNING_ISSUER)
     pubkey = public_key_pem(private_key)
 
     # Self-check: never emit a fixture that does not verify.

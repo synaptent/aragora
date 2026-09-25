@@ -23,8 +23,8 @@
     "status": "absent"
   },
   "issued_at": "2026-06-11T12:00:00+00:00",
-  "odr_version": "0.1",
-  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "odr_version": "0.2",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.2",
   "quorum": {
     "dissent": {
       "dissenting_agents": [
