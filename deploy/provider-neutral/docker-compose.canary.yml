@@ -1,0 +1,55 @@
+name: aragora-provider-neutral-canary
+
+x-aragora-common: &aragora-common
+  image: ${ARAGORA_IMAGE:?Set ARAGORA_IMAGE to an immutable @sha256 digest}
+  user: "${ARAGORA_RUNTIME_UID:-1000}:${ARAGORA_RUNTIME_GID:-1000}"
+  environment:
+    ARAGORA_ENV: production
+    ARAGORA_SECRETS_DIR: /run/secrets/aragora
+    ARAGORA_USE_SECRETS_MANAGER: "false"
+    ARAGORA_DB_BACKEND: postgres
+    ARAGORA_ALLOWED_ORIGINS: ${ARAGORA_ALLOWED_ORIGINS:?Set the canary origin}
+    ARAGORA_CANONICAL_STORE_PERSIST: "1"
+    ARAGORA_STORE_DIR: /app/data/.aragora_beads
+    ARAGORA_DB_WAIT_SECONDS: ${ARAGORA_DB_WAIT_SECONDS:-60}
+    SKIP_MIGRATIONS: "1"
+  volumes:
+    - ${ARAGORA_SECRETS_DIR_HOST:?Set an absolute protected secrets directory}:/run/secrets/aragora:ro
+    - aragora-canary-data:/app/data
+    - aragora-canary-logs:/app/logs
+  read_only: true
+  tmpfs:
+    - /tmp:mode=1777,size=256M
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+  networks:
+    - canary
+
+services:
+  migrate:
+    <<: *aragora-common
+    profiles: ["migrate"]
+    restart: "no"
+    command: ["python", "-m", "aragora.ops.provider_neutral_migrations"]
+
+  api:
+    <<: *aragora-common
+    ports:
+      - 127.0.0.1:${ARAGORA_CANARY_HTTP_PORT:-18080}:8080
+      - 127.0.0.1:${ARAGORA_CANARY_WS_PORT:-18765}:8765
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+
+networks:
+  canary:
+
+volumes:
+  aragora-canary-data:
+  aragora-canary-logs:
