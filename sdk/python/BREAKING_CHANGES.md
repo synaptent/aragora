@@ -6,6 +6,49 @@ This document tracks breaking changes specific to the Aragora Python SDK. For co
 
 ## Version 2.x
 
+### Unreleased (2026-09-21)
+
+#### Breaking Changes
+
+Contract-drift batch 4 removes nine operations on unserved routes, from both the
+synchronous and the asynchronous clients. Each route below was dispatched through
+the live `HANDLER_REGISTRY`: it either matches no handler at all, or reaches a
+selected handler whose verb method has no branch for the path and therefore
+returns no result. No server routes are removed. Several namespaces expose the
+same route, so one route can retire more than one method.
+
+Every replacement named in the Migration column was dispatched on the same server
+and answered with a resource-level, permission-level or validation-level result
+rather than a route-level 404 or `handler_no_result`. Where no such route exists
+the column says so instead of naming a method that is equally undispatched.
+
+This reverses the earlier decision, recorded under Unreleased (2026-09-03)
+below, to keep `media.upload_audio` because the audio handler declares
+`/api/v1/media/audio` without a POST branch. The branch is still unimplemented
+and the route answers `handler_no_result`, so the call remains undispatchable
+and is removed rather than held open indefinitely.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `index.get_index`, `vector_index.get_index` | `GET /api/v1/index/{name}` | `index.list_indexes()` and select by name |
+| `index.delete_index`, `vector_index.delete_index` | `DELETE /api/v1/index/{name}` | No replacement |
+| `podcast.get_episode`, `media.get_podcast_episode`, `audio.get_episode` | `GET /api/v1/podcast/episodes/{id}` | `podcast.list_episodes()` and select by episode ID |
+| `podcast.delete_episode` | `DELETE /api/v1/podcast/episodes/{id}` | No replacement |
+| `podcast.update_episode` | `PATCH /api/v1/podcast/episodes/{id}` | No replacement |
+| `checkpoints.list_for_debate` | `GET /api/v1/debates/{id}/checkpoints` | `checkpoints.list()` and filter by debate ID |
+| `checkpoints.create_for_debate` | `POST /api/v1/debates/{id}/checkpoint` | `checkpoints.pause_debate(debate_id)` |
+| `media.upload_audio` | `POST /api/v1/media/audio` | No replacement |
+| `organizations.create_tenant`, `tenants.create` | `POST /api/v1/tenants` | No replacement |
+
+One further method is removed for cross-SDK path closure rather than as a drift
+row. TypeScript loses `debates.addTags` and `debates.removeTags` in the same
+batch, and the cross-SDK parity gate compares paths rather than verbs, so the
+last Python reference to `/api/debates/{id}/tags` has to go with them:
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `debates.get_tags` | `GET /api/v1/debates/{id}/tags` | No read replacement; `debates.update(debate_id, tags=[...])` is the served tag write and its response returns the resulting list |
+
 ### Unreleased (2026-09-13)
 
 #### Breaking Changes

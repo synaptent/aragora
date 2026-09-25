@@ -161,10 +161,6 @@ class VectorIndexAPI:
         """List all available vector indexes."""
         return self._client.request("GET", "/api/v1/index")
 
-    def get_index(self, index_name: str) -> dict[str, Any]:
-        """Get details of a specific index."""
-        return self._client.request("GET", f"/api/v1/index/{index_name}")
-
     def create_index(
         self,
         name: str,
@@ -189,10 +185,6 @@ class VectorIndexAPI:
         if description is not None:
             data["description"] = description
         return self._client.request("POST", "/api/v1/index", json=data)
-
-    def delete_index(self, index_name: str) -> dict[str, Any]:
-        """Delete a vector index."""
-        return self._client.request("DELETE", f"/api/v1/index/{index_name}")
 
 
 class AsyncVectorIndexAPI:
@@ -252,10 +244,6 @@ class AsyncVectorIndexAPI:
         """List all available vector indexes."""
         return await self._client.request("GET", "/api/v1/index")
 
-    async def get_index(self, index_name: str) -> dict[str, Any]:
-        """Get details of a specific index."""
-        return await self._client.request("GET", f"/api/v1/index/{index_name}")
-
     async def create_index(
         self,
         name: str,
@@ -270,7 +258,3 @@ class AsyncVectorIndexAPI:
         if description is not None:
             data["description"] = description
         return await self._client.request("POST", "/api/v1/index", json=data)
-
-    async def delete_index(self, index_name: str) -> dict[str, Any]:
-        """Delete a vector index."""
-        return await self._client.request("DELETE", f"/api/v1/index/{index_name}")

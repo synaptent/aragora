@@ -6,6 +6,72 @@ This document tracks breaking changes specific to the Aragora TypeScript SDK. Fo
 
 ## Version 2.x
 
+### Unreleased (2026-09-21)
+
+#### Breaking Changes
+
+Contract-drift batch 4 removes 16 TypeScript operations on unserved routes absent
+from both OpenAPI documents. Every route below was dispatched through the live
+`HANDLER_REGISTRY`: each either matches no handler at all, or reaches a selected
+handler whose verb method has no branch for the path and therefore returns no
+result. `media.getPodcastEpisode` and `podcast.deleteEpisode` are removed together
+with the Python twins so the `/api/podcast/episodes/{id}` path leaves both SDKs at
+once; `debates.addTags` and `debates.removeTags` likewise pair with Python
+`debates.get_tags`. Routes below use normalized parameters.
+
+Every replacement named in the Migration column was dispatched on the same server
+and answered with a resource-level, permission-level or validation-level result
+rather than a route-level 404 or `handler_no_result`. Where no such route exists
+the column says so instead of naming a method that is equally undispatched.
+
+This reverses the earlier decision, recorded under Unreleased (2026-09-03)
+below, to keep `media.uploadAudio` because the audio handler declares
+`/api/v1/media/audio` without a POST branch. The branch is still unimplemented
+and the route answers `handler_no_result`, so the call remains undispatchable
+and is removed rather than held open indefinitely.
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `tasks.update` | `POST /api/v2/tasks/{id}` | No replacement; `tasks.get(taskId)` reads a task and `POST /api/v2/tasks/{id}/approve` approves one |
+| `policies.enable` | `POST /api/policies/{id}/enable` | Not `policies.toggle(policyId)`, which flips the current state. To enable idempotently, send `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}` with body `{ "enabled": true }`; no typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
+| `policies.disable` | `POST /api/policies/{id}/disable` | Not `policies.toggle(policyId)`, which flips the current state. To disable idempotently, send `POST /api/policies/{id}/toggle` or `PATCH /api/policies/{id}` with body `{ "enabled": false }`; no typed SDK call sends either (`toggle()` takes no body and `UpdatePolicyRequest` has no `enabled` field) |
+| `IndexAPI.getIndex` | `GET /api/v1/index/{name}` | `IndexAPI.listIndexes()` and select by name |
+| `IndexAPI.deleteIndex` | `DELETE /api/v1/index/{name}` | No replacement |
+| `debates.addTags` | `POST /api/v1/debates/{id}/tags` | `debates.update(debateId, { tags })` |
+| `debates.removeTags` | `DELETE /api/v1/debates/{id}/tags` | `debates.update(debateId, { tags })` with the desired list |
+| `checkpoints.listForDebate` | `GET /api/v1/debates/{id}/checkpoints` | `checkpoints.list({ debate_id })` |
+| `checkpoints.createForDebate` | `POST /api/v1/debates/{id}/checkpoint` | `checkpoints.pauseDebate(debateId)` |
+| `teams.getTenant` | `GET /api/v1/teams/tenants/{id}` | No replacement: `GET /api/v1/sme/teams/tenants/{id}` is served but answers 403 to every default role, because none holds its `sme:workspaces:read` permission, and no SDK method calls it |
+| `teams.setTenantEnabled` | `PATCH /api/v1/teams/tenants/{id}` | No replacement: `PATCH /api/v1/sme/teams/tenants/{id}` (body `is_active`) is served but answers 403 to every default role, because none holds its `sme:workspaces:write` permission, and no SDK method calls it |
+| `teams.getNotificationSettings` | `GET /api/v1/teams/tenants/{id}/channels/{id}/notifications` | No replacement |
+| `teams.updateNotificationSettings` | `PATCH /api/v1/teams/tenants/{id}/channels/{id}/notifications` | No replacement |
+| `media.uploadAudio` | `POST /api/v1/media/audio` | No replacement |
+| `media.getPodcastEpisode` | `GET /api/v1/podcast/episodes/{id}` | `media.listPodcastEpisodes()` and select by episode ID |
+| `organizations.createTenant` | `POST /api/v1/tenants` | No replacement |
+
+Two further TypeScript methods are removed for cross-SDK path closure rather than
+as drift rows, because the paths they hold would otherwise survive in TypeScript
+after Python loses them:
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `podcast.getEpisode` | `GET /api/v1/podcast/episodes/{id}` | `podcast.listEpisodes()` and select by episode ID |
+| `podcast.deleteEpisode` | `DELETE /api/v1/podcast/episodes/{id}` | No replacement |
+
+`POST /api/v1/tenants` reaches TypeScript through two further call sites that the
+namespace-scoped drift extractor does not see. They are removed as well, so the
+retired route leaves the SDK entirely rather than surviving behind a delegating
+wrapper:
+
+| Removed Method | Route | Migration |
+|----------------|-------|-----------|
+| `client.createTenant` | `POST /api/v1/tenants` | No replacement |
+| `tenants.create` | `POST /api/v1/tenants` | No replacement |
+
+The now-orphaned `CreateTenantRequest` interface exported from
+`src/namespaces/tenants.ts` is removed with them. The identically named type in
+`src/types.ts` is unchanged.
+
 ### Unreleased (2026-09-13)
 
 #### Breaking Changes
