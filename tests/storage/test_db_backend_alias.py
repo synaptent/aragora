@@ -158,13 +158,16 @@ def fake_postgres_modules(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(module, "POSTGRESQL_AVAILABLE", True)
 
 
-@pytest.mark.parametrize("spelling", ["postgres", "postgresql", "POSTGRES", "PostgreSQL"])
-def test_gauntlet_storage_env_alias_selects_postgres(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake_postgres_modules: None, spelling: str
+def test_gauntlet_storage_default_selects_postgres_when_url_is_set(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fake_postgres_modules: None
 ) -> None:
+    """GauntletStorage's default is URL-driven and never reads ARAGORA_DB_BACKEND.
+
+    The env alias path is ReceiptStore's (test_store_accepts_postgres_alias).
+    """
     from aragora.gauntlet.storage import GauntletStorage
 
-    monkeypatch.setenv("ARAGORA_DB_BACKEND", spelling)
+    monkeypatch.delenv("ARAGORA_DB_BACKEND", raising=False)
     storage = GauntletStorage(db_path=str(tmp_path / "gauntlet.db"))
     assert storage.backend_type == "postgresql"
     assert isinstance(storage._backend, FakePostgreSQLBackend)
