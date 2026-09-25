@@ -269,6 +269,12 @@ DEFAULT_ROUTE_PERMISSIONS = [
     RoutePermission(r"^/api/(?:v1/)?webhooks?$", "GET", "webhooks.read"),
     RoutePermission(r"^/api/(?:v1/)?webhooks?$", "POST", "webhooks.create"),
     RoutePermission(r"^/api/(?:v1/)?webhooks?/([^/]+)$", "DELETE", "webhooks.delete", 1),
+    # Internal durable webhook configuration alias (exact paths only)
+    RoutePermission(r"^/api/v1/webhook-configs$", "GET", "webhooks.read"),
+    RoutePermission(r"^/api/v1/webhook-configs$", "POST", "webhooks.create"),
+    RoutePermission(r"^/api/v1/webhook-configs/([^/]+)$", "GET", "webhooks.read", 1),
+    RoutePermission(r"^/api/v1/webhook-configs/([^/]+)$", "DELETE", "webhooks.delete", 1),
+    RoutePermission(r"^/api/v1/webhook-configs/([^/]+)$", "PATCH", "webhooks.update", 1),
     # Checkpoints
     RoutePermission(r"^/api/(?:v1/)?checkpoints?$", "GET", "checkpoints.read"),
     RoutePermission(r"^/api/(?:v1/)?checkpoints?$", "POST", "checkpoints.create"),

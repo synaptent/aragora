@@ -19,6 +19,7 @@ _REQUIRED_FILES = frozenset(
         "ARAGORA_JWT_SECRET",
         "ARAGORA_ENCRYPTION_KEY",
         "odr-signing-key.pem",
+        "canary-auth-token",
     }
 )
 _PROVIDER_FILES = frozenset(

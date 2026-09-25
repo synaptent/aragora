@@ -235,6 +235,16 @@ class TestRouteRegistration:
         assert WebhookHandler.can_handle("/api/v1/webhooks/wh-001") is True
         assert WebhookHandler.can_handle("/api/v1/webhooks/wh-001/test") is True
 
+    def test_can_handle_durable_canary_alias(self):
+        assert WebhookHandler.can_handle("/api/v1/webhook-configs") is True
+        assert WebhookHandler.can_handle("/api/v1/webhook-configs/wh-001") is True
+        assert WebhookHandler._normalize_path("/api/v1/webhook-configs/wh-001") == (
+            "/api/v1/webhooks/wh-001"
+        )
+        assert not any(
+            route.startswith("/api/v1/webhook-configs") for route in WebhookHandler.ROUTES
+        )
+
     def test_can_handle_rejects_non_webhook_path(self):
         assert WebhookHandler.can_handle("/api/v1/debates") is False
         assert WebhookHandler.can_handle("/api/v1/backups") is False
@@ -434,6 +444,35 @@ class TestRegisterWebhook:
         assert body["webhook"]["url"] == "https://example.com/hook"
         assert "secret" in body["webhook"]  # Secret shown on creation
         assert "message" in body
+
+    @pytest.mark.asyncio
+    @patch(
+        "aragora.server.handlers.webhook_management.validate_webhook_url",
+        return_value=(True, ""),
+    )
+    async def test_durable_alias_registers_canary_probe(self, mock_validate, handler):
+        self._mock_body(
+            handler,
+            {
+                "url": "https://example.com/canary-probe",
+                "events": ["canary_probe"],
+                "name": "Canary probe",
+            },
+        )
+
+        result = await handler.handle_post("/api/v1/webhook-configs", {}, _make_mock_http_handler())
+
+        status, body = _parse_result(result)
+        assert status == 201
+        assert body["webhook"]["url"] == "https://example.com/canary-probe"
+        webhook = handler._get_webhook_store().get(body["webhook"]["id"])
+        assert webhook is not None
+        assert webhook.url == "https://example.com/canary-probe"
+        assert webhook.events == ["canary_probe"]
+        assert webhook.name == "Canary probe"
+        mock_validate.assert_called_once_with(
+            "https://example.com/canary-probe", allow_localhost=False
+        )
 
     @pytest.mark.asyncio
     async def test_register_webhook_missing_url(self, handler):
