@@ -18,7 +18,14 @@ They pin the structural contract of ``aragora-merge-quorum.yml``:
   ``scripts/quorum_evidence_retrigger_select.sh``, checked out from the
   default branch: the newest completed non-draft head-bound evaluation,
   ordered by ``((run_started_at // created_at), run_id, run_attempt)``,
-  with comment bursts collapsing into a single rerun.
+  with comment bursts collapsing into a single rerun;
+* B1.1 (spec §"Settlement retrigger"): the ``status`` event for the
+  exact-head ``aragora/human-settlement`` commit status — posted by every
+  settlement route — drives a separate ``settlement-retrigger`` job that
+  resolves the open PR(s) at that commit and runs the SAME shared helper
+  in settlement mode, which re-verifies the head and the status before
+  the unchanged selection — replacing the manual post-settlement
+  ``gh run rerun`` without widening what a rerun can accept.
 
 The suite must FAIL against the pre-B1 workflow and PASS with the
 change (RED/GREEN proof captured in the implementing PR).
@@ -422,6 +429,7 @@ _GH_SHIM = """\
 set -euo pipefail
 args="$*"
 case "$args" in
+  *"/commits/"*"/status"*) cat "${GH_FIXTURES}/settlement_state.txt" ;;
   *"/pulls/"*) cat "${GH_FIXTURES}/pr.json" ;;
   *".total_count"*) cat "${GH_FIXTURES}/total_count.txt" ;;
   *"/actions/workflows/"*) cat "${GH_FIXTURES}/runs.jsonl" ;;
@@ -446,6 +454,9 @@ def _run(
     }
 
 
+PR_HEAD = "f" * 40
+
+
 def _run_select_script(
     tmp_path: Path,
     runs: list[dict[str, Any]],
@@ -454,11 +465,21 @@ def _run_select_script(
     pr_state: str = "open",
     pr_draft: bool = False,
     fresh_status: str = "completed",
+    mode: str | None = None,
+    settlement_head: str | None = None,
+    settlement_state: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     fixtures = tmp_path / "fixtures"
     fixtures.mkdir()
-    pr_json = {"state": pr_state, "draft": pr_draft, "head": {"sha": "f" * 40}}
+    pr_json = {"state": pr_state, "draft": pr_draft, "head": {"sha": PR_HEAD}}
     (fixtures / "pr.json").write_text(json.dumps(pr_json), encoding="utf-8")
+    if settlement_state is not None:
+        # The fake gh returns the helper's --jq projection of the combined
+        # status (the aragora/human-settlement state), pre-rendered like the
+        # other fixtures; "absent" renders the empty string the jq `// ""`
+        # fallback yields when no such context exists.
+        rendered = "" if settlement_state == "absent" else settlement_state
+        (fixtures / "settlement_state.txt").write_text(f"{rendered}\n", encoding="utf-8")
     (fixtures / "total_count.txt").write_text(f"{len(runs)}\n", encoding="utf-8")
     (fixtures / "runs.jsonl").write_text(
         "".join(json.dumps(run) + "\n" for run in runs), encoding="utf-8"
@@ -477,6 +498,11 @@ def _run_select_script(
     env["GH_FIXTURES"] = str(fixtures)
     env["GH_REPO"] = "synaptent/aragora"
     env["PR_NUMBER"] = "1234"
+    env["SETTLEMENT_STATUS_WAIT_SECONDS"] = "0"
+    if mode is not None:
+        env["RETRIGGER_MODE"] = mode
+    if settlement_head is not None:
+        env["SETTLEMENT_HEAD"] = settlement_head
     proc = subprocess.run(
         ["bash", str(SELECT_SCRIPT_PATH)],
         capture_output=True,
@@ -559,3 +585,267 @@ class TestSelectionBehavior:
         assert proc.returncode == 0, proc.stderr
         assert not rerun_log.exists(), "the burst loser must not issue a second rerun"
         assert "concurrent retrigger won" in proc.stdout
+
+
+_STALE_FAILED_RUN = [_run(300, "completed", "failure", "2026-08-16T10:05Z", "2026-08-16T10:06Z")]
+
+
+class TestSettlementRetriggerContract:
+    """B1.1 structural pins: the settlement signal is the commit status
+    event, handled by its own least-privileged job that delegates to the
+    shared helper; the comment surfaces are untouched by it."""
+
+    @pytest.fixture(scope="class")
+    def settlement_job(self, workflow: dict[str, Any]) -> dict[str, Any]:
+        jobs = workflow["jobs"]
+        assert "settlement-retrigger" in jobs, (
+            "workflow must define the B1.1 settlement-retrigger job "
+            "(docs/specs/QUORUM_EVIDENCE_RETRIGGER.md §Settlement retrigger)"
+        )
+        return jobs["settlement-retrigger"]
+
+    def test_status_event_is_a_trigger(self, triggers: dict[str, Any]) -> None:
+        """The settlement status must be able to re-trigger the workflow."""
+        assert "status" in triggers
+
+    def test_settlement_job_is_gated_to_the_settlement_success_status(
+        self, settlement_job: dict[str, Any]
+    ) -> None:
+        """Declarative guard: only aragora/human-settlement, only success —
+        every other commit status skips without scheduling a runner."""
+        condition = str(settlement_job.get("if", ""))
+        assert "github.event_name == 'status'" in condition
+        assert "github.event.context == 'aragora/human-settlement'" in condition
+        assert "github.event.state == 'success'" in condition
+
+    def test_settlement_context_matches_the_settle_tooling(self) -> None:
+        """The context the job listens for is the one both settlement routes post."""
+        settle = (REPO_ROOT / "scripts" / "settle_tier4_pr.py").read_text(encoding="utf-8")
+        assert 'HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"' in settle
+        review_queue = (REPO_ROOT / "aragora" / "cli" / "commands" / "review_queue.py").read_text(
+            encoding="utf-8"
+        )
+        assert 'HUMAN_SETTLEMENT_CONTEXT = "aragora/human-settlement"' in review_queue
+
+    def test_enforcing_job_excluded_from_status_events(self, enforcing_job: dict[str, Any]) -> None:
+        """A status event must never produce a default-branch-bound evaluation."""
+        assert "github.event_name != 'status'" in str(enforcing_job.get("if", ""))
+
+    def test_workflow_concurrency_group_keys_status_events_by_sha(
+        self, workflow: dict[str, Any]
+    ) -> None:
+        """Status events carry no PR number; without the sha fallback every
+        settlement would collide in one empty-suffixed group."""
+        assert "github.event.sha" in workflow["concurrency"]["group"]
+
+    def test_settlement_job_write_surface_is_exactly_actions(
+        self, settlement_job: dict[str, Any]
+    ) -> None:
+        permissions = settlement_job.get("permissions") or {}
+        writes = sorted(scope for scope, level in permissions.items() if level == "write")
+        assert writes == ["actions"]
+        assert permissions.get("contents") == "read"
+        assert permissions.get("statuses") is None, "the job must not be able to post statuses"
+
+    def test_settlement_job_concurrency_is_per_sha_and_cancels_in_progress(
+        self, settlement_job: dict[str, Any]
+    ) -> None:
+        concurrency = settlement_job.get("concurrency") or {}
+        assert "github.event.sha" in str(concurrency.get("group", ""))
+        assert concurrency.get("cancel-in-progress") is True
+
+    def test_settlement_job_checks_out_only_the_shared_helper(
+        self, settlement_job: dict[str, Any]
+    ) -> None:
+        checkouts = [
+            step
+            for step in settlement_job.get("steps", [])
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        ]
+        assert len(checkouts) == 1
+        with_block = checkouts[0].get("with") or {}
+        assert with_block.get("ref") == "${{ github.event.repository.default_branch }}"
+        assert str(with_block.get("sparse-checkout", "")).split() == [
+            "scripts/quorum_evidence_retrigger_select.sh"
+        ]
+        assert with_block.get("sparse-checkout-cone-mode") is False
+
+    def test_settlement_job_resolves_open_prs_at_the_settled_head_and_delegates(
+        self, settlement_job: dict[str, Any]
+    ) -> None:
+        """A status event names a commit; the job maps it to the open PR(s)
+        whose CURRENT head is that commit (read-only) and runs the shared
+        helper once per PR in settlement mode. No inline selection."""
+        script = _run_blocks(settlement_job)
+        assert "/pulls" in script and 'select(.state == "open"' in script
+        assert ".head.sha ==" in script, "only PRs whose current head is the settled sha"
+        assert script.count(SELECT_SCRIPT_INVOCATION) == 1
+        for token in ("sort_by(", "--paginate", "total_count", "gh run rerun", "run_started_at"):
+            assert token not in script, f"selection logic must stay in the helper ({token!r})"
+        helper_steps = [
+            step
+            for step in settlement_job.get("steps", [])
+            if SELECT_SCRIPT_INVOCATION in str(step.get("run", ""))
+        ]
+        env = helper_steps[0].get("env") or {}
+        assert env.get("RETRIGGER_MODE") == "settlement"
+        assert "github.event.sha" in str(env.get("SETTLED_SHA", ""))
+        assert "github.event.sha" not in script, "the event sha reaches the shell via env only"
+        assert 'SETTLEMENT_HEAD="$SETTLED_SHA"' in script
+
+    def test_comment_surfaces_carry_no_settlement_logic(
+        self, retrigger_scripts: dict[str, str]
+    ) -> None:
+        """The settlement signal is the status, never a comment shape: the
+        two comment-driven surfaces stay byte-for-byte evidence-only."""
+        for surface, script in retrigger_scripts.items():
+            assert "settlement" not in script.lower(), surface
+            assert "RETRIGGER_MODE" not in script, surface
+
+    def test_settlement_verification_lives_only_in_the_shared_helper(
+        self, select_script: str, workflow: dict[str, Any]
+    ) -> None:
+        """The status read is merge-authority logic: one copy, in the helper."""
+        assert 'select(.context == "aragora/human-settlement")' in select_script
+        assert "commits/${head_sha}/status" in select_script
+        assert '"$cited" != "$head_sha"' in select_script, "settlement must be exact-head"
+        for job_id in ("evidence-retrigger", "settlement-retrigger"):
+            script = _run_blocks(workflow["jobs"][job_id])
+            assert "select(.context" not in script, job_id
+            assert "/status" not in script.replace("/statuses", ""), job_id
+
+    def test_helper_rejects_unknown_modes(self, select_script: str) -> None:
+        assert "evidence|settlement) ;;" in select_script
+        assert "unknown RETRIGGER_MODE" in select_script
+
+
+class TestSettlementRetriggerBehavior:
+    """Run the real helper in settlement mode against the fixture-backed gh."""
+
+    def test_recorded_exact_head_settlement_reruns_the_stale_evaluation(
+        self, tmp_path: Path
+    ) -> None:
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=_STALE_FAILED_RUN,
+            ready_events=[],
+            mode="settlement",
+            settlement_head=PR_HEAD,
+            settlement_state="success",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert rerun_log.read_text(encoding="utf-8") == "run rerun 300 --repo synaptent/aragora\n"
+        assert "aragora/human-settlement=success verified" in proc.stdout
+
+    def test_cited_head_is_matched_case_insensitively(self, tmp_path: Path) -> None:
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=_STALE_FAILED_RUN,
+            ready_events=[],
+            mode="settlement",
+            settlement_head=PR_HEAD.upper(),
+            settlement_state="success",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert rerun_log.exists()
+
+    @pytest.mark.parametrize("settlement_state", ["pending", "failure", "absent"])
+    def test_settlement_comment_without_success_status_never_reruns(
+        self, tmp_path: Path, settlement_state: str
+    ) -> None:
+        """The comment alone proves nothing: only the statuses:write signal
+        that settle-only publishes on the exact head unlocks the rerun."""
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=_STALE_FAILED_RUN,
+            ready_events=[],
+            mode="settlement",
+            settlement_head=PR_HEAD,
+            settlement_state=settlement_state,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert not rerun_log.exists(), "no settlement status means no rerun"
+        assert "settlement not recorded; no-op" in proc.stdout
+
+    def test_settlement_for_another_head_is_a_no_op(self, tmp_path: Path) -> None:
+        """Settlement is exact-head: a comment citing a superseded head must
+        not refresh the gate for the current one, even if a status exists."""
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=_STALE_FAILED_RUN,
+            ready_events=[],
+            mode="settlement",
+            settlement_head="a" * 40,
+            settlement_state="success",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert not rerun_log.exists()
+        assert "not this head's settlement; no-op" in proc.stdout
+
+    @pytest.mark.parametrize("bad_head", ["", "5050f52d", "not-a-sha"])
+    def test_settlement_without_a_full_sha_is_a_no_op(self, tmp_path: Path, bad_head: str) -> None:
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=_STALE_FAILED_RUN,
+            ready_events=[],
+            mode="settlement",
+            settlement_head=bad_head,
+            settlement_state="success",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert not rerun_log.exists()
+        assert "requires a 40-hex SETTLEMENT_HEAD" in proc.stdout
+
+    def test_settlement_mode_still_defers_draft_prs(self, tmp_path: Path) -> None:
+        """Gate deferral runs before the settlement preconditions."""
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=_STALE_FAILED_RUN,
+            ready_events=[],
+            pr_draft=True,
+            mode="settlement",
+            settlement_head=PR_HEAD,
+            settlement_state="success",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert not rerun_log.exists()
+        assert "gate not active; no-op" in proc.stdout
+
+    def test_settlement_mode_does_not_rerun_a_green_evaluation(self, tmp_path: Path) -> None:
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=[_run(300, "completed", "success", "2026-08-16T10:05Z", "2026-08-16T10:06Z")],
+            ready_events=[],
+            mode="settlement",
+            settlement_head=PR_HEAD,
+            settlement_state="success",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert not rerun_log.exists()
+        assert "already succeeded — no-op" in proc.stdout
+
+    def test_evidence_mode_never_reads_the_settlement_status(self, tmp_path: Path) -> None:
+        """No combined_status fixture is written, so any status read would
+        make the fake gh fail: evidence mode must be byte-for-byte the
+        pre-B1.1 path."""
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=_STALE_FAILED_RUN,
+            ready_events=[],
+            mode="evidence",
+            settlement_head=PR_HEAD,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert rerun_log.exists()
+        assert "human-settlement" not in proc.stdout
+
+    def test_unknown_mode_is_a_warning_no_op(self, tmp_path: Path) -> None:
+        proc, rerun_log = _run_select_script(
+            tmp_path,
+            runs=_STALE_FAILED_RUN,
+            ready_events=[],
+            mode="bogus",
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert not rerun_log.exists()
+        assert "unknown RETRIGGER_MODE" in proc.stdout

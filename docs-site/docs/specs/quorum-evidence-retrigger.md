@@ -135,23 +135,81 @@ apart. Only the by-design different comment-shape guards (Guard 1
 here; the heading-marker plus head-SHA-citation pre-filter in the
 standalone helper) remain in the workflow files.
 
-### Comment-shape filter boundary (intentional)
+### Comment-shape filter boundary (intentional) and the settlement signal
 
-Both retrigger surfaces fire only on evidence-shaped comments: this
-job requires the comment's first markdown heading to name a known
-reviewer family (Guard 1), and the standalone helper workflow
-(`aragora-merge-quorum-retrigger.yml`) requires a known
+Both comment-driven retrigger surfaces fire only on evidence-shaped
+comments: this job requires the comment's first markdown heading to
+name a known reviewer family (Guard 1), and the standalone helper
+workflow (`aragora-merge-quorum-retrigger.yml`) requires a known
 reviewer-heading marker plus a 7+-hex head-SHA citation in the body.
-A Tier-4 human-settlement comment ("Tier-4 Human Settlement
-Authorization ...") is deliberately NOT evidence-shaped — it opens
-with no reviewer-family heading and carries no reviewer-heading
-marker — so posting it never auto-fires either surface, even though
-its operator author passes the author gates. This is a boundary, not
-a gap: the distinct post-settlement quorum execution required by
-Tier-4 chronology is produced by the sanctioned manual `gh run rerun`
-of the newest head-bound quorum run, which is the permanent
-post-settlement step in every Tier-4 settlement chronology (proven on
-PR #9770, 2026-08-16 UTC).
+Settlement comments are deliberately NOT evidence-shaped and never
+fire them. That boundary stays: comment text is not the settlement
+signal. The settlement signal is the commit status, below.
+
+#### Settlement retrigger (B1.1)
+
+*History.* The original B1 text made the manual `gh run rerun` the
+permanent post-settlement step. In practice that step is the one action
+in the Tier-4 chronology that only the operator can perform and that
+nothing schedules: on 2026-09-13/14 two operator-settled PRs (#10013,
+#10083) sat settled-but-blocked for roughly 23 hours purely waiting for
+it, and the same wait recurred on #10026 the next day. B1.1 removes the
+wait without changing what the gate accepts.
+
+*Signal.* Tier 3-4 settlement is recorded as the exact-head
+`aragora/human-settlement` commit status (`docs/governance/MERGE_GATE_RECONCILIATION.md`).
+Every settlement route posts it — `scripts/settle_tier4_pr.py
+--settle-only`, `aragora review-queue record-settlement
+--post-github-status`, and a manual `gh api` status post — and only a
+`statuses: write` principal can. GitHub emits a `status` event for it,
+so the workflow gains `on: status` and a `settlement-retrigger` job
+(name `quorum-settlement-retrigger`) that is declaratively gated to
+`github.event.context == 'aragora/human-settlement'` and
+`github.event.state == 'success'`; every other commit status skips
+without scheduling a runner. The enforcing job additionally excludes
+`status` events, exactly as it excludes `issue_comment`, and the
+workflow concurrency group falls back to `github.event.sha` so
+settlements do not collide in one empty-suffixed group.
+
+*Job.* The job checks out only the default-branch shared helper (the
+same sparse, default-branch pin as the comment surfaces), resolves the
+open PR(s) whose *current* head is the settled sha through the read-only
+commits-to-pulls API, and runs the helper once per PR with
+`RETRIGGER_MODE=settlement` and `SETTLEMENT_HEAD=<event sha>`. The event
+sha is GitHub-supplied, never comment- or author-controlled, and still
+reaches the shell only via `env:`.
+
+*Preconditions in the shared helper* (settlement mode), evaluated after
+the existing open/non-draft gate-deferral check and before the unchanged
+selection:
+
+1. `SETTLEMENT_HEAD` is a 40-hex sha equal to the PR's current head.
+   Settlement is exact-head by design; a status on a superseded head is
+   a no-op.
+2. The combined status of that exact head, **re-read from the API rather
+   than trusted from the event**, carries `aragora/human-settlement` =
+   `success` (a later non-success post for the same context supersedes
+   it). A short bounded read loop (`SETTLEMENT_STATUS_WAIT_SECONDS`,
+   tests set it to 0) tolerates eventual consistency. Absent, `pending`
+   or `failure`: no-op.
+
+Only then does the SAME newest-survivor selection run: an in-flight or
+green newest evaluation still no-ops, the same burst dedup applies, and
+the rerun is the same read-only re-evaluation. Evidence mode
+(`RETRIGGER_MODE` unset or `evidence`) never reads the status and is
+byte-for-byte the pre-B1.1 path; both comment surfaces stay evidence-only
+and never set settlement mode.
+
+*Why this does not widen the gate.* The unlock is the
+`aragora/human-settlement` status the enforcing evaluation already
+requires for Tier 3-4, posted only by a `statuses: write` principal.
+B1.1 therefore only moves the timing of a rerun the chronology already
+mandates immediately after settlement; it adds no acceptance path, no
+new write scope (the job's write surface is exactly `actions: write`,
+and it cannot post statuses), and no change to the enforcing job. The
+manual `gh run rerun` remains valid as the fallback (for example when a
+status is posted while the newest evaluation is still in flight and the
+helper's no-op is later superseded by a stale result).
 
 ### Permissions
 
@@ -186,6 +244,16 @@ idempotent (once a rerun is in flight, subsequent comments no-op
 because the latest run is no longer `completed`+non-success).
 Residual: bounded Actions minutes from short guard executions,
 proportional to comment rate on open non-draft PRs.
+
+**Forged or stale settlement signals (B1.1).** A comment can never
+reach the settlement path: it is driven only by the `status` event, and
+only a `statuses: write` principal can post the `aragora/human-settlement`
+context. A status on a superseded head is stopped by the helper's
+exact-head equality check; a status later overwritten by a non-success
+post is stopped by the helper re-reading the combined status instead of
+trusting the event; every other context or state skips declaratively.
+And in every case the only reachable action is the same read-only
+recount that any evidence-shaped comment could already request.
 
 **Spoofed headings.** A spoofed evidence heading can trigger a
 recount, never a pass. The rerun executes the same read-only
@@ -266,6 +334,20 @@ workflow with `yaml.safe_load` and pins:
   solely for the helper checkout);
 - the comment body enters only via `env:`, never inline in `run:`;
 - the guard step references the known-reviewer-family heading match;
+- (B1.1) `status` is a trigger; the `settlement-retrigger` job is
+  declaratively gated to the `aragora/human-settlement` context in
+  `success` state, carries exactly `actions: write`, cannot post
+  statuses, checks out only the default-branch helper, resolves open
+  PRs whose current head is the settled sha, and runs the helper once
+  per PR in settlement mode with the event sha passed via `env:`; the
+  enforcing job excludes `status` events; the workflow group keys
+  status events by sha; both comment surfaces carry no settlement
+  logic; the exact-head status read exists only in the helper; and
+  fixture tests prove settlement mode reruns exactly when the settled
+  sha is current AND the status is `success`, no-ops for
+  absent/pending/failure status, a foreign or partial head, a draft
+  PR, a green newest run, or an unknown mode, while evidence mode
+  never reads the status at all;
 - both surfaces delegate Guards 2–3 to the single default-branch
   shared helper with no inline selection copy left in either
   workflow; the helper carries the stale-run conditions and the
