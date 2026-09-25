@@ -221,6 +221,7 @@ anchoring are in-flight. See the [proof ladder](#proof-ladder).
 - [Quickstart](docs/quickstart.md) · [Cold Reviewer Guide](docs/COLD_REVIEWER_GUIDE.md) · [CLI Reference](docs/CLI_REFERENCE.md)
 - [Open Decision Receipt spec](docs/specs/OPEN_DECISION_RECEIPT.md) · [SDK Guide](docs/SDK_GUIDE.md) · [API Reference](docs/api/API_REFERENCE.md)
 - [Feature status](docs/STATUS.md) · [Enterprise features](docs/enterprise/ENTERPRISE_FEATURES.md) · [Architecture deep-dive](docs/EXTENDED_README.md)
+- [Handler testing guidance](aragora/server/handlers/README.md#typed-handler-characterization-suites) — source and integration validation for typed handlers
 - [Inspiration and credits](docs/reference/CREDITS.md)
 
 ## Security
@@ -235,6 +236,24 @@ local development uses a gitignored `.env`. See the
 
 Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed
 (see [LICENSE](LICENSE)).
+
+### Development
+
+Root Python package, from a source checkout with the `dev,test` extras installed
+(`pip install -e ".[dev,test]"`):
+
+| Task | Command |
+|------|---------|
+| Run the API server | `aragora serve --api-port 8080 --ws-port 8765` (or `make serve`) |
+| Build the wheel/sdist | `python -m build` (setuptools backend) |
+| Test | `make test-fast` (quick tier) · `make test` (full suite) |
+| Lint / format | `make lint` · `make format` |
+| Type check | `make typecheck` |
+| Readiness gate (all apps) | `make readiness-lint && make readiness-typecheck && make readiness-test` |
+
+The `readiness-*` targets fan out to every app in the repo and print
+`SKIP <app>: <reason>` when a toolchain is absent; see
+[docs/RATCHETS.md](docs/RATCHETS.md) for the baseline ratchets they run.
 
 ---
 

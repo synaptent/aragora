@@ -30,7 +30,7 @@ try:
     from aragora.rbac.decorators import require_permission
 except ImportError:  # pragma: no cover
 
-    def require_permission(*_a, **_kw):  # type: ignore[misc]
+    def require_permission(*_a: Any, **_kw: Any) -> Any:  # type: ignore[misc]
         def _noop(fn):  # type: ignore[no-untyped-def]
             return fn
 

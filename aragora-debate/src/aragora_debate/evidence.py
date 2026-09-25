@@ -404,7 +404,7 @@ class HollowConsensusDetector:
         }
         self.analyzer = EvidenceQualityAnalyzer()
 
-    def check(
+    def check(  # noqa: C901 - Preserve the ordered hollow-consensus threshold checks.
         self,
         responses: dict[str, str],
         convergence_similarity: float,

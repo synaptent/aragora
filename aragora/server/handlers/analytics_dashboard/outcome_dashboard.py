@@ -19,6 +19,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 
 from ..base import (
@@ -62,7 +63,7 @@ def _get_debate_analytics() -> Any:
     return get_debate_analytics()
 
 
-def _parse_period(period: str):
+def _parse_period(period: str) -> timedelta:
     """Lazy import _parse_period."""
     from aragora.analytics.outcome_analytics import _parse_period as _pp
 

@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from aragora.backup.manager import get_default_backup_source_path
+from aragora.backup.manager import BackupManager, get_default_backup_source_path
 from aragora.rbac.decorators import require_permission
 from aragora.server.handlers.base import (
     BaseHandler,
@@ -97,9 +97,9 @@ class BackupHandler(BaseHandler):
             factory_name="get_backup_manager",
             logger_context="Backup",
         )
-        self._manager = None  # Set by tests or lazy init
+        self._manager: BackupManager | None = None  # Set by tests or lazy init
 
-    def _get_manager(self):
+    def _get_manager(self) -> BackupManager | None:
         """Get or create backup manager (lazy initialization)."""
         if self._manager is None:
             self._manager = self._manager_factory.get()
@@ -216,6 +216,8 @@ class BackupHandler(BaseHandler):
             since = self._parse_timestamp(since_str)
 
         # Get backups from manager
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'list_backups'")
         backups = manager.list_backups(
             source_path=source_path,
             status=status,
@@ -244,6 +246,8 @@ class BackupHandler(BaseHandler):
     async def _get_backup(self, backup_id: str) -> HandlerResult:
         """Get a specific backup by ID."""
         manager = self._get_manager()
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'list_backups'")
         backups = manager.list_backups()
 
         # Find backup by ID
@@ -265,16 +269,15 @@ class BackupHandler(BaseHandler):
             metadata: Additional metadata to store
         """
         source_path = body.get("source_path")
-        validated_path = None
+        validated_path: Path | None = None
         if not source_path:
             default_source = get_default_backup_source_path()
             if not default_source.exists():
                 return error_response("Default backup source not found", 404)
             validated_path = default_source.resolve()
-
-        # SECURITY: Validate source_path to prevent path traversal attacks.
-        # Only allow paths within configured allowed directories.
-        if validated_path is None:
+        else:
+            # SECURITY: Validate source_path to prevent path traversal attacks.
+            # Only allow paths within configured allowed directories.
             for allowed_base in _ALLOWED_BACKUP_SOURCE_DIRS:
                 if not allowed_base.exists():
                     continue
@@ -315,6 +318,8 @@ class BackupHandler(BaseHandler):
         manager = self._get_manager()
 
         try:
+            if manager is None:
+                raise AttributeError("'NoneType' object has no attribute 'create_backup'")
             backup = manager.create_backup(
                 source_path=validated_path,
                 backup_type=backup_type,
@@ -341,6 +346,8 @@ class BackupHandler(BaseHandler):
         """Verify backup integrity with restore test."""
         manager = self._get_manager()
 
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'verify_backup'")
         result = manager.verify_backup(backup_id, test_restore=True)
 
         return json_response(
@@ -371,6 +378,10 @@ class BackupHandler(BaseHandler):
         """
         manager = self._get_manager()
 
+        if manager is None:
+            raise AttributeError(
+                "'NoneType' object has no attribute 'verify_restore_comprehensive'"
+            )
         result = manager.verify_restore_comprehensive(backup_id)
 
         return json_response(result.to_dict())
@@ -415,6 +426,8 @@ class BackupHandler(BaseHandler):
 
         try:
             # Dry run - doesn't actually restore
+            if manager is None:
+                raise AttributeError("'NoneType' object has no attribute 'restore_backup'")
             success = manager.restore_backup(
                 backup_id=backup_id,
                 target_path=str(validated_target),
@@ -441,6 +454,8 @@ class BackupHandler(BaseHandler):
     async def _delete_backup(self, backup_id: str) -> HandlerResult:
         """Delete a backup by ID."""
         manager = self._get_manager()
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'list_backups'")
         backups = manager.list_backups()
 
         # Find backup by ID
@@ -486,6 +501,8 @@ class BackupHandler(BaseHandler):
 
         manager = self._get_manager()
 
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'apply_retention_policy'")
         deleted_ids = manager.apply_retention_policy(dry_run=dry_run)
 
         return json_response(
@@ -505,6 +522,8 @@ class BackupHandler(BaseHandler):
     async def _get_stats(self) -> HandlerResult:
         """Get backup statistics."""
         manager = self._get_manager()
+        if manager is None:
+            raise AttributeError("'NoneType' object has no attribute 'list_backups'")
         backups = manager.list_backups()
 
         from aragora.backup.manager import BackupStatus

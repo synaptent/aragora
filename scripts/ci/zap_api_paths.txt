@@ -1,0 +1,42 @@
+# Anonymous passive API scan: 38 public-facing, parameter-free GET paths.
+# Public-facing does not mean unauthenticated access is allowed.
+# Demo-mode accounting expectations are per path; none may return 500.
+# Rule 100000 remains WARN so unexpected server errors are visible.
+/api/auth/oauth/providers
+/api/debates
+/api/health
+/api/v1/a2a/.well-known/agent.json
+/api/v1/a2a/agents
+/api/v1/a2a/openapi.json
+/api/v1/accounting/ap/discounts # Demo: 401, RBAC-protected, anonymous scan
+/api/v1/accounting/ap/forecast # Demo: 401, RBAC-protected, anonymous scan
+/api/v1/accounting/ap/invoices # Demo: 401, RBAC-protected, anonymous scan
+/api/v1/accounting/ar/aging # Demo: 401, RBAC-protected, anonymous scan
+/api/v1/accounting/ar/collections # Demo: 401, RBAC-protected, anonymous scan
+/api/v1/accounting/ar/invoices # Demo: 401, RBAC-protected, anonymous scan
+/api/v1/accounting/callback # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/connect # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/customers # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/expenses # Demo: 401, authentication required
+/api/v1/accounting/expenses/export # Demo: 401, authentication required
+/api/v1/accounting/expenses/pending # Demo: 401, authentication required
+/api/v1/accounting/expenses/stats # Demo: 401, authentication required
+/api/v1/accounting/gusto/callback # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/gusto/connect # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/gusto/employees # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/gusto/payrolls # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/gusto/status # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/invoices # Demo: 401, authentication required
+/api/v1/accounting/invoices/overdue # Demo: 401, authentication required
+/api/v1/accounting/invoices/pending # Demo: 401, authentication required
+/api/v1/accounting/invoices/stats # Demo: 401, authentication required
+/api/v1/accounting/invoices/status # Demo: 401, authentication required
+/api/v1/accounting/payments/scheduled # Demo: 401, authentication required
+/api/v1/accounting/reports # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/status # Demo: 503 not_configured, integration unavailable
+/api/v1/accounting/transactions # Demo: 503 not_configured, integration unavailable
+/api/v1/agents
+/api/v1/analytics/agents/trends
+/api/v1/debates
+/api/v1/health
+/healthz

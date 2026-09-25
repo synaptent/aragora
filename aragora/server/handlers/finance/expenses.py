@@ -1104,6 +1104,10 @@ class ExpenseHandler(BaseHandler):
         "/api/v1/accounting/expenses/export": ["GET"],
     }
 
+    # Contract discovery reads list-shaped metadata; the dynamic-ID canary
+    # cannot distinguish this collection from a broad prefix match.
+    GET_ROUTES = ["/api/v1/accounting/expenses"]
+
     # Dynamic routes with path params
     DYNAMIC_ROUTES = {
         "/api/v1/accounting/expenses/{expense_id}": ["GET", "PUT", "DELETE"],

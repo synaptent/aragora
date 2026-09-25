@@ -1,0 +1,159 @@
+name: DAST
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'aragora/server/**'
+      - 'docs/api/openapi.json'
+      - 'docs/api/openapi-dast.json'
+      - 'scripts/ci/trim_openapi.py'
+      - 'scripts/ci/zap_api_paths.txt'
+      - '.zap/rules.tsv'
+      - '.github/workflows/dast.yml'
+  schedule:
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dast-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Re-run the small smoke lane nightly too; never scan draft PRs.
+  dast-pr:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: '3.11'
+      - name: Install project
+        run: bash scripts/ci_install_project.sh --extras dev,test
+      - name: Check trimmed spec drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/ci/trim_openapi.py --input docs/api/openapi.json --paths scripts/ci/zap_api_paths.txt --output docs/api/openapi-dast.json --server http://localhost:8080
+          git diff --exit-code -- docs/api/openapi-dast.json
+      - name: Prepare ZAP rules
+        # cmd_options resolves rules.tsv relative to the mounted workspace.
+        run: cp .zap/rules.tsv rules.tsv
+      - name: Start demo backend
+        shell: bash
+        run: |
+          nohup aragora serve --demo --host 0.0.0.0 --api-port 8080 --ws-port 8765 > "$RUNNER_TEMP/dast-backend.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/dast-backend.pid"
+      - name: Wait for demo health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 30); do
+            status=$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://localhost:8080/healthz) || status=000
+            if [ "$status" = 200 ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Demo backend did not become healthy"
+          exit 1
+      - name: ZAP baseline
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: 'http://localhost:8080'
+          rules_file_name: '.zap/rules.tsv'
+          artifact_name: zap-baseline-report
+          cmd_options: '-m 1 -I -c rules.tsv'
+          allow_issue_writing: false
+          fail_action: false
+      - name: ZAP curated API
+        uses: zaproxy/action-api-scan@v0.10.0
+        with:
+          target: docs/api/openapi-dast.json
+          format: openapi
+          rules_file_name: '.zap/rules.tsv'
+          artifact_name: zap-api-report
+          cmd_options: '-S -I -T 3 -c rules.tsv'
+          allow_issue_writing: false
+          fail_action: false
+      - name: Stop demo backend
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/dast-backend.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/dast-backend.pid")" || true
+          fi
+      - name: Upload backend log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dast-smoke-backend-log
+          path: ${{ runner.temp }}/dast-backend.log
+          if-no-files-found: warn
+
+  dast-nightly:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: ./.github/actions/setup-python-safe
+        with:
+          python-version: '3.11'
+      - name: Install project
+        run: bash scripts/ci_install_project.sh --extras dev,test
+      - name: Prepare ZAP rules
+        run: cp .zap/rules.tsv rules.tsv
+      - name: Start demo backend
+        shell: bash
+        run: |
+          nohup aragora serve --demo --host 0.0.0.0 --api-port 8080 --ws-port 8765 > "$RUNNER_TEMP/dast-backend.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/dast-backend.pid"
+      - name: Wait for demo health
+        shell: bash
+        run: |
+          for attempt in $(seq 1 30); do
+            status=$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://localhost:8080/healthz) || status=000
+            if [ "$status" = 200 ]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Demo backend did not become healthy"
+          exit 1
+      - name: ZAP full active API
+        uses: zaproxy/action-api-scan@v0.10.0
+        with:
+          target: docs/api/openapi.json
+          format: openapi
+          rules_file_name: '.zap/rules.tsv'
+          artifact_name: zap-nightly-report
+          # Pin every server in the full spec to this disposable demo instance.
+          cmd_options: '-I -c rules.tsv -O http://localhost:8080'
+          allow_issue_writing: false
+          fail_action: false
+      - name: Stop demo backend
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/dast-backend.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/dast-backend.pid")" || true
+          fi
+      - name: Upload backend log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dast-nightly-backend-log
+          path: ${{ runner.temp }}/dast-backend.log
+          if-no-files-found: warn
