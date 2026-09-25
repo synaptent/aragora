@@ -386,7 +386,7 @@ Major sprint on production-grade multi-agent coordination, security hardening (e
 ### Infrastructure
 - **Documentation site**: Triggered GitHub Pages deployment for `docs.aragora.ai` (Docusaurus v3.7.0, 13K+ pages)
 - **SDK parity**: 10/10 contract parity tests passing
-- **aragora-debate package**: v0.2.0 built and validated via twine check
+- **aragora-debate package**: v0.2.0 built and validated via twine check (historical, current: 0.2.3)
 
 ### Overall Health Score: 9.7/10 (up from 9.6/10)
 
