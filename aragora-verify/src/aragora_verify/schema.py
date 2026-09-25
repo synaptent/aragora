@@ -104,12 +104,7 @@ def _check_dissent(errors: list[str], value: dict[str, Any]) -> None:
             _string_array(errors, f"quorum.dissent.{member}", value[member])
 
 
-def _check_quorum(errors: list[str], value: Any) -> None:
-    if _is_absent_marker(value):
-        return
-    if not isinstance(value, dict) or value.get("status") != "present":
-        errors.append("quorum: must be a present block or an absent marker")
-        return
+def _check_quorum_required_members(errors: list[str], value: dict[str, Any]) -> None:
     for field in (
         "method",
         "reached",
@@ -123,25 +118,42 @@ def _check_quorum(errors: list[str], value: Any) -> None:
     for field, expected in (("participants", list), ("dissent", dict)):
         if field in value and not isinstance(value[field], expected):
             errors.append(f"quorum.{field}: must be a {expected.__name__}")
+
+
+def _check_quorum_scalar_members(errors: list[str], value: dict[str, Any]) -> None:
     if "method" in value and not isinstance(value["method"], str):
         errors.append("quorum.method: must be a string")
     if "reached" in value and not isinstance(value["reached"], bool):
         errors.append("quorum.reached: must be a boolean")
     if "independence" in value and not isinstance(value["independence"], dict):
         errors.append("quorum.independence: must be an object")
+
+
+def _check_quorum_participants(errors: list[str], participants: Any) -> None:
+    if not isinstance(participants, list):
+        return
+    for i, p in enumerate(participants):
+        if (
+            not isinstance(p, dict)
+            or not isinstance(p.get("agent"), str)
+            or "model_family" not in p
+        ):
+            errors.append(f"quorum.participants[{i}]: requires agent and model_family")
+
+
+def _check_quorum(errors: list[str], value: Any) -> None:
+    if _is_absent_marker(value):
+        return
+    if not isinstance(value, dict) or value.get("status") != "present":
+        errors.append("quorum: must be a present block or an absent marker")
+        return
+    _check_quorum_required_members(errors, value)
+    _check_quorum_scalar_members(errors, value)
     if "supporting_agents" in value:
         _string_array(errors, "quorum.supporting_agents", value["supporting_agents"])
     if isinstance(value.get("dissent"), dict):
         _check_dissent(errors, value["dissent"])
-    participants = value.get("participants")
-    if isinstance(participants, list):
-        for i, p in enumerate(participants):
-            if (
-                not isinstance(p, dict)
-                or not isinstance(p.get("agent"), str)
-                or "model_family" not in p
-            ):
-                errors.append(f"quorum.participants[{i}]: requires agent and model_family")
+    _check_quorum_participants(errors, value.get("participants"))
 
 
 def _check_confidence(errors: list[str], value: Any) -> None:
@@ -157,7 +169,7 @@ def _check_confidence(errors: list[str], value: Any) -> None:
         errors.append("confidence.scale: must be 'unit_interval' when present")
 
 
-def _check_attestation(errors: list[str], value: Any) -> None:
+def _check_attestation(errors: list[str], value: Any) -> None:  # noqa: C901 - Mirror the ODR profile's attestation checks.
     if not isinstance(value, dict):
         errors.append("attestation: must be an object")
         return
@@ -222,6 +234,28 @@ _SIGNATURE_MEMBERS = frozenset(
 )
 
 
+def _check_signature_required_members(errors: list[str], i: int, sig: dict[str, Any]) -> None:
+    for key in sorted(sig.keys() - _SIGNATURE_MEMBERS):
+        errors.append(f"signatures[{i}].{key}: unknown member")
+    for field in ("alg", "key_id", "signature"):
+        if not isinstance(sig.get(field), str) or not sig.get(field):
+            errors.append(f"signatures[{i}].{field}: required non-empty string")
+    if sig.get("alg") not in (None, "Ed25519") and isinstance(sig.get("alg"), str):
+        errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined")
+
+
+def _check_signature_metadata(errors: list[str], i: int, sig: dict[str, Any]) -> None:
+    # Metadata is optional on both versions (one schema for both) but strictly
+    # typed when present; only a v0.2 signature commits it (spec §6).
+    if "issuer" in sig and (not isinstance(sig["issuer"], str) or not sig["issuer"]):
+        errors.append(f"signatures[{i}].issuer: must be a non-empty string")
+    if "role" in sig and sig["role"] not in _SIGNATURE_ROLES:
+        errors.append(f"signatures[{i}].role: must be one of {', '.join(_SIGNATURE_ROLES)}")
+    for key in ("signed_at", "expires_at"):
+        if key in sig and not isinstance(sig[key], str):
+            errors.append(f"signatures[{i}].{key}: must be a string")
+
+
 def _check_signatures(errors: list[str], value: Any) -> None:
     if not isinstance(value, list):
         errors.append("signatures: must be an array")
@@ -230,25 +264,11 @@ def _check_signatures(errors: list[str], value: Any) -> None:
         if not isinstance(sig, dict):
             errors.append(f"signatures[{i}]: must be an object")
             continue
-        for key in sorted(sig.keys() - _SIGNATURE_MEMBERS):
-            errors.append(f"signatures[{i}].{key}: unknown member")
-        for field in ("alg", "key_id", "signature"):
-            if not isinstance(sig.get(field), str) or not sig.get(field):
-                errors.append(f"signatures[{i}].{field}: required non-empty string")
-        if sig.get("alg") not in (None, "Ed25519") and isinstance(sig.get("alg"), str):
-            errors.append(f"signatures[{i}].alg: only 'Ed25519' is defined")
-        # Metadata is optional on both versions (one schema for both) but strictly
-        # typed when present; only a v0.2 signature commits it (spec §6).
-        if "issuer" in sig and (not isinstance(sig["issuer"], str) or not sig["issuer"]):
-            errors.append(f"signatures[{i}].issuer: must be a non-empty string")
-        if "role" in sig and sig["role"] not in _SIGNATURE_ROLES:
-            errors.append(f"signatures[{i}].role: must be one of {', '.join(_SIGNATURE_ROLES)}")
-        for key in ("signed_at", "expires_at"):
-            if key in sig and not isinstance(sig[key], str):
-                errors.append(f"signatures[{i}].{key}: must be a string")
+        _check_signature_required_members(errors, i, sig)
+        _check_signature_metadata(errors, i, sig)
 
 
-def validate_structure(doc: Any) -> list[str]:
+def validate_structure(doc: Any) -> list[str]:  # noqa: C901 - Preserve conformance check and diagnostic ordering.
     """Return a list of conformance errors; empty means the receipt is well-formed."""
     errors: list[str] = []
     if not isinstance(doc, dict):
@@ -311,128 +331,214 @@ def validate_structure(doc: Any) -> list[str]:
     return errors
 
 
-def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
-    """Validate only optional content extensions using their bundled schema definitions."""
+_EXTENSION_TYPES: dict[str, type | tuple[type, ...]] = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "boolean": bool,
+    "integer": (int, float),
+    "number": (int, float),
+    "null": type(None),
+}
 
-    def member(value: Any, spec: dict[str, Any], path: str, out: list[str] | None = None) -> None:
-        out = errors if out is None else out
-        if "$ref" in spec:
-            spec = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
-        if "oneOf" in spec:
-            # Every oneOf in the profile is <present block> | absent marker. A value
-            # shaped like a marker is checked AGAINST the marker branch rather than
-            # waved through, so a marker missing its reason is still rejected.
-            marker = isinstance(value, dict) and value.get("status") == "absent"
-            spec = spec["oneOf"][1 if marker and value.keys() <= {"status", "reason"} else 0]
-            if "$ref" in spec:
-                spec = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
-        types: dict[str, type | tuple[type, ...]] = {
-            "object": dict,
-            "array": list,
-            "string": str,
-            "boolean": bool,
-            "integer": (int, float),
-            "number": (int, float),
-            "null": type(None),
-        }
-        expected = spec.get("type", [])
-        expected = [expected] if isinstance(expected, str) else expected
-        if expected and not any(
-            isinstance(value, types[t])
-            and not (t in ("integer", "number") and isinstance(value, bool))
-            and not (t == "integer" and isinstance(value, float) and not value.is_integer())
-            for t in expected
-        ):
-            out.append(f"{path}: must have type {expected}")
-            return
-        if ("enum" in spec and value not in spec["enum"]) or (
-            "const" in spec and value != spec["const"]
-        ):
-            out.append(f"{path}: invalid value")
-        floor = spec.get("minLength", spec.get("minItems", 0))
-        if isinstance(value, (str, list)) and len(value) < floor:
-            out.append(f"{path}: shorter than the schema's minimum of {floor}")
-        elif isinstance(value, (int, float)) and not isinstance(value, bool):
-            if value < spec.get("minimum", value) or value > spec.get("maximum", value):
-                out.append(f"{path}: outside the schema's permitted range")
-        if isinstance(value, list) and "items" in spec:
-            for index, item in enumerate(value):
-                member(item, spec["items"], f"{path}[{index}]", out)
-        if isinstance(value, dict):
-            for name in spec.get("required", ()):
-                if name not in value:
-                    out.append(f"{path}: missing required member: {name}")
-        if isinstance(value, dict) and "properties" in spec:
-            for key, item in value.items():
-                if key in spec["properties"]:
-                    member(item, spec["properties"][key], f"{path}.{key}", out)
-                elif spec.get("additionalProperties") is False:
-                    out.append(f"{path}.{key}: unknown member")
+# Members the v0.1 profile does not define: rejected outright on a "0.1" document.
+_VERSION_SCOPED_PATHS: dict[str, tuple[str, ...]] = {
+    "": ("adjudication",),
+    "subject": ("repository", "pr_number", "head_sha", "base_sha"),
+    "reasoning": ("observations",),
+    "quorum": ("verdicts", "rule"),
+    "quorum.dissent": ("findings", "severity_max", "blocking"),
+}
 
-    # Members the v0.1 profile does not define: rejected outright on a "0.1" document.
-    version_scoped = {
-        "": ("adjudication",),
-        "subject": ("repository", "pr_number", "head_sha", "base_sha"),
-        "reasoning": ("observations",),
-        "quorum": ("verdicts", "rule"),
-        "quorum.dissent": ("findings", "severity_max", "blocking"),
-    }
-    # attestation.mechanism is additionalProperties: true, so its typed extras stay legal
-    # on every version and are only shape-checked.
-    paths = {
-        **version_scoped,
-        "attestation.mechanism": (
-            "policy_version",
-            "tier",
-            "tiered_gate",
-            "severity_gated",
-            "action",
-            "action_reason",
-            "record_ref",
-        ),
-    }
+# attestation.mechanism is additionalProperties: true, so its typed extras stay legal
+# on every version and are only shape-checked.
+_EXTENSION_PATHS: dict[str, tuple[str, ...]] = {
+    **_VERSION_SCOPED_PATHS,
+    "attestation.mechanism": (
+        "policy_version",
+        "tier",
+        "tiered_gate",
+        "severity_gated",
+        "action",
+        "action_reason",
+        "record_ref",
+    ),
+}
+
+
+def _extension_type_matches(value: Any, type_name: str) -> bool:
+    if not isinstance(value, _EXTENSION_TYPES[type_name]):
+        return False
+    if type_name in ("integer", "number") and isinstance(value, bool):
+        return False
+    return not (type_name == "integer" and isinstance(value, float) and not value.is_integer())
+
+
+def _deref(spec: dict[str, Any], schema: dict[str, Any]) -> dict[str, Any]:
+    if "$ref" not in spec:
+        return spec
+    target: dict[str, Any] = schema["$defs"][spec["$ref"].rsplit("/", 1)[1]]
+    return target
+
+
+def _resolve_spec(spec: dict[str, Any], value: Any, schema: dict[str, Any]) -> dict[str, Any]:
+    spec = _deref(spec, schema)
+    if "oneOf" not in spec:
+        return spec
+    # Every oneOf in the profile is <present block> | absent marker. A value shaped like a
+    # marker is checked AGAINST the marker branch rather than waved through, so a marker
+    # missing its reason is still rejected.
+    marker = isinstance(value, dict) and value.get("status") == "absent"
+    branch = 1 if marker and value.keys() <= {"status", "reason"} else 0
+    return _deref(spec["oneOf"][branch], schema)
+
+
+def _check_extension_type(errors: list[str], value: Any, spec: dict[str, Any], path: str) -> bool:
+    """Record a type mismatch; ``False`` means the type rules out every later check."""
+    expected = spec.get("type", [])
+    expected = [expected] if isinstance(expected, str) else expected
+    if expected and not any(_extension_type_matches(value, t) for t in expected):
+        errors.append(f"{path}: must have type {expected}")
+        return False
+    return True
+
+
+def _check_extension_value(errors: list[str], value: Any, spec: dict[str, Any], path: str) -> None:
+    """Apply the schema's enum/const, length-floor and numeric-range constraints."""
+    if ("enum" in spec and value not in spec["enum"]) or (
+        "const" in spec and value != spec["const"]
+    ):
+        errors.append(f"{path}: invalid value")
+    floor = spec.get("minLength", spec.get("minItems", 0))
+    if isinstance(value, (str, list)) and len(value) < floor:
+        errors.append(f"{path}: shorter than the schema's minimum of {floor}")
+    elif isinstance(value, (int, float)) and not isinstance(value, bool):
+        if value < spec.get("minimum", value) or value > spec.get("maximum", value):
+            errors.append(f"{path}: outside the schema's permitted range")
+
+
+def _check_extension_members(
+    errors: list[str],
+    value: dict[str, Any],
+    spec: dict[str, Any],
+    path: str,
+    schema: dict[str, Any],
+) -> None:
+    """Check a mapping's required members and walk the properties the schema types."""
+    for name in spec.get("required", ()):
+        if name not in value:
+            errors.append(f"{path}: missing required member: {name}")
+    if "properties" not in spec:
+        return
+    for key, item in value.items():
+        if key in spec["properties"]:
+            _validate_extension_member(
+                errors, item, spec["properties"][key], f"{path}.{key}", schema
+            )
+        elif spec.get("additionalProperties") is False:
+            errors.append(f"{path}.{key}: unknown member")
+
+
+def _validate_extension_member(
+    errors: list[str], value: Any, spec: dict[str, Any], path: str, schema: dict[str, Any]
+) -> None:
+    """Walk one schema-typed member, appending every conformance finding to ``errors``."""
+    spec = _resolve_spec(spec, value, schema)
+    if not _check_extension_type(errors, value, spec, path):
+        return
+    _check_extension_value(errors, value, spec, path)
+    if isinstance(value, list) and "items" in spec:
+        for index, item in enumerate(value):
+            _validate_extension_member(errors, item, spec["items"], f"{path}[{index}]", schema)
+    if isinstance(value, dict):
+        _check_extension_members(errors, value, spec, path, schema)
+
+
+def _resolve_extension_block(
+    doc: dict[str, Any], schema: dict[str, Any], path: str
+) -> tuple[Any, dict[str, Any]]:
+    """Walk a dotted extension path into the document and the schema branch that types it."""
+    value: Any = doc
+    spec = schema
+    for part in path.split(".") if path else []:
+        value = value.get(part, {}) if isinstance(value, dict) else {}
+        spec = spec["properties"][part]
+        # oneOf[0] is the present-block branch; the absent-marker $ref is oneOf[1].
+        spec = spec.get("oneOf", [spec])[0]
+    return value, spec
+
+
+def _validate_extension_block(
+    errors: list[str],
+    value: dict[str, Any],
+    spec: dict[str, Any],
+    path: str,
+    keys: tuple[str, ...],
+    schema: dict[str, Any],
+    v01: bool,
+) -> None:
+    """Check the declared members of one resolved extension block."""
+    if path and spec.get("additionalProperties") is False:
+        for key in sorted(value.keys() - spec["properties"].keys()):
+            errors.append(f"{path}.{key}: unknown member")
+    for key in keys:
+        if key not in value:
+            continue
+        member_path = f"{path}.{key}".lstrip(".")
+        if v01 and path in _VERSION_SCOPED_PATHS:
+            errors.append(f"{member_path}: not in profile 0.1")
+        else:
+            _validate_extension_member(
+                errors, value[key], spec["properties"][key], member_path, schema
+            )
+
+
+def _validate_scoped_paths(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
+    """Check every declared extension path, version-scoping the v0.2-only members."""
     v01 = doc.get("odr_version") == "0.1"
-    for path, keys in paths.items():
-        value, spec = doc, schema
-        for part in path.split(".") if path else []:
-            value = value.get(part, {}) if isinstance(value, dict) else {}
-            spec = spec["properties"][part]
-            # oneOf[0] is the present-block branch; the absent-marker $ref is oneOf[1].
-            spec = spec.get("oneOf", [spec])[0]
+    for path, keys in _EXTENSION_PATHS.items():
+        value, spec = _resolve_extension_block(doc, schema, path)
         if not isinstance(value, dict):
             continue
         # A strict absent marker carries nothing to check; a marker that also carries
         # members is neither branch of its oneOf, so those members are checked as present.
         if value.get("status") == "absent" and value.keys() <= {"status", "reason"}:
             continue
-        if path and spec.get("additionalProperties") is False:
-            for key in sorted(value.keys() - spec["properties"].keys()):
-                errors.append(f"{path}.{key}: unknown member")
-        for key in keys:
-            if key not in value:
-                continue
-            member_path = f"{path}.{key}".lstrip(".")
-            if v01 and path in version_scoped:
-                errors.append(f"{member_path}: not in profile 0.1")
-            else:
-                member(value[key], spec["properties"][key], member_path)
+        _validate_extension_block(errors, value, spec, path, keys, schema, v01)
 
-    # Backstop over every member the schema types. The hand-written checks above leave
-    # members such as ``source.system`` and ``quorum.independence.distinct_model_families``
-    # untyped, which made the verdict depend on whether the optional ``jsonschema`` extra
-    # was installed. A finding is kept only when nothing above already named that member
-    # or the block holding it, so a malformed member yields exactly one walker diagnostic.
+
+def _backstop_path(error: str) -> str:
+    """The member a backstop finding names, folding a missing-member detail into the path."""
+    path, _, detail = error.partition(":")
+    if detail.startswith(" missing required member: "):
+        return f"{path}.{detail.rsplit(': ', 1)[1]}"
+    return path
+
+
+def _apply_schema_backstop(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
+    """Type every member the schema types, keeping only findings nothing above already named.
+
+    The hand-written checks leave members such as ``source.system`` and
+    ``quorum.independence.distinct_model_families`` untyped, which made the verdict depend on
+    whether the optional ``jsonschema`` extra was installed. A finding is kept only when
+    nothing above already named that member or the block holding it, so a malformed member
+    yields exactly one walker diagnostic.
+    """
     found: list[str] = []
     for key, value in doc.items():
         if key in schema["properties"]:
-            member(value, schema["properties"][key], key, found)
+            _validate_extension_member(found, value, schema["properties"][key], key, schema)
     named = {error.partition(":")[0] for error in errors}
     for error in found:
-        path, _, detail = error.partition(":")
-        if detail.startswith(" missing required member: "):
-            path = f"{path}.{detail.rsplit(': ', 1)[1]}"
+        path = _backstop_path(error)
         if not any(path == name or path.startswith((f"{name}.", f"{name}[")) for name in named):
             errors.append(error)
+
+
+def _validate_extensions(errors: list[str], doc: dict[str, Any], schema: dict[str, Any]) -> None:
+    """Validate only optional content extensions using their bundled schema definitions."""
+    _validate_scoped_paths(errors, doc, schema)
+    _apply_schema_backstop(errors, doc, schema)
 
 
 _UNEXPECTED_MEMBERS = re.compile(
@@ -489,11 +595,11 @@ def _without_restated(schema_errors: list[str], errors: list[str]) -> list[str]:
 def _jsonschema_errors(doc: Any) -> list[str]:
     """Optional full draft-2020-12 validation when ``jsonschema`` is installed."""
     try:
-        import jsonschema  # type: ignore
+        import jsonschema
     except ImportError:
         return []
     try:
-        validator_cls = jsonschema.Draft202012Validator  # type: ignore[attr-defined]
+        validator_cls = jsonschema.Draft202012Validator
     except AttributeError:  # pragma: no cover - very old jsonschema
         return []
     validator = validator_cls(load_bundled_schema())

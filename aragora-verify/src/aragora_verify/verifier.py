@@ -43,7 +43,12 @@ import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .acta import verify_acta_projection
 from .jcs import jcs_canonicalize, odr_content_digest, odr_signature_message
@@ -126,7 +131,7 @@ class VerifyResult:
 # ---------------------------------------------------------------------------
 
 
-def _load_ed25519():  # noqa: ANN202 - lazy import keeps import errors actionable
+def _load_ed25519() -> tuple[type[Ed25519PublicKey], ModuleType, type[InvalidSignature]]:
     try:
         from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.primitives import serialization
@@ -139,9 +144,9 @@ def _load_ed25519():  # noqa: ANN202 - lazy import keeps import errors actionabl
     return Ed25519PublicKey, serialization, InvalidSignature
 
 
-def load_public_key(data: bytes):  # noqa: ANN201
+def load_public_key(data: bytes) -> Ed25519PublicKey:
     """Load an Ed25519 public key from PEM, DER, raw 32 bytes, or base64/hex text."""
-    Ed25519PublicKey, serialization, _ = _load_ed25519()
+    Ed25519PublicKey, serialization, _ = _load_ed25519()  # noqa: N806 - Lazy import retains the class name.
     key = None
     # PEM (wrap parse errors instead of leaking a traceback on hostile input).
     if b"-----BEGIN" in data:
@@ -176,7 +181,7 @@ def load_public_key(data: bytes):  # noqa: ANN201
     return key
 
 
-def compute_key_id(public_key) -> str:  # noqa: ANN001
+def compute_key_id(public_key: Ed25519PublicKey) -> str:
     """``ed25519-`` + first 16 hex of SHA-256(raw public key) — the #8225 key id."""
     _, serialization, _ = _load_ed25519()
     raw = public_key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
@@ -213,10 +218,10 @@ def _decode_signature(value: str) -> bytes | None:
 # ---------------------------------------------------------------------------
 
 
-def _check_signatures(
+def _check_signatures(  # noqa: C901 - Preserve signature outcome precedence and tamper diagnostics.
     doc: dict[str, Any],
     digest_hex: str,
-    public_key: Any,
+    public_key: Ed25519PublicKey | None,
     warnings: list[str],
     verified: list[dict[str, Any]],
 ) -> Check:
@@ -242,7 +247,8 @@ def _check_signatures(
             f"{len(signatures)} signature(s) present but no --pubkey supplied; authenticity NOT verified",
         )
 
-    _, _, InvalidSignature = _load_ed25519()
+    _, _, InvalidSignature = _load_ed25519()  # noqa: N806 - Lazy import retains the exception class name.
+    public_key = cast("Ed25519PublicKey", public_key)  # None paths returned above.
     odr_version = doc.get("odr_version")
     provided_key_id = compute_key_id(public_key)
     verified_any = False
@@ -333,60 +339,78 @@ def _check_quorum_consistency(doc: dict[str, Any]) -> Check:
     )
 
 
+def _verdicts_consistency_checks(quorum: dict[str, Any]) -> list[Check]:
+    participants = {p["agent"] for p in quorum["participants"]}
+    missing = sorted({v["issuer"] for v in quorum.get("verdicts", [])} - participants)
+    if not missing:
+        return []
+    return [
+        Check("verdicts_consistency", FAIL, "issuers not in participants: " + ", ".join(missing))
+    ]
+
+
+def _dissent_finding_checks(findings: list[dict[str, Any]]) -> list[Check]:
+    checks = []
+    for i, finding in enumerate(findings):
+        want = finding["severity"] in ("P0", "P1")
+        if finding["blocking"] != want:
+            detail = f"findings[{i}].blocking: expected {want!r} for {finding['severity']}"
+            checks.append(Check("dissent_consistency", FAIL, f"quorum.dissent.{detail}"))
+    return checks
+
+
+def _dissent_rollup_checks(dissent: dict[str, Any]) -> list[Check]:
+    severities = [f["severity"] for f in dissent["findings"]]
+    expected: dict[str, object] = {
+        "severity_max": min(severities, default=None),
+        "blocking": any(s in ("P0", "P1") for s in severities),
+    }
+    checks = []
+    for member, value in expected.items():
+        if member in dissent and dissent[member] != value:
+            checks.append(
+                Check(
+                    "dissent_consistency",
+                    FAIL,
+                    f"quorum.dissent.{member}: expected {value!r} from findings",
+                )
+            )
+    return checks
+
+
+def _quorum_rule_checks(quorum: dict[str, Any], dissent: dict[str, Any]) -> list[Check]:
+    rule = quorum.get("rule")
+    if not rule:
+        return []
+    # The recorded rule is a necessary bar; merge-quorum also requires posting.
+    families = set(rule["counted_families"])
+    reached = len(families) >= rule["required_signals"]
+    if rule["requires_western_frontier"]:
+        reached = reached and bool(families & {"claude", "openai"})
+    if dissent.get("present") or dissent.get("dissenting_agents"):
+        reached = False
+    if reached != quorum["reached"] and (quorum["reached"] or quorum["method"] != "merge-quorum"):
+        return [
+            Check(
+                "quorum_rule",
+                WARN,
+                f"quorum.reached: recorded {quorum['reached']}, rule implies {reached}",
+            )
+        ]
+    return []
+
+
 def _check_v02_consistency(doc: dict[str, Any]) -> list[Check]:
     """Cross-check recorded content, never infer gate dissent from findings."""
     quorum = doc["quorum"]
     if doc["odr_version"] != "0.2" or quorum.get("status") != "present":
         return []
-    checks = []
-    participants = {p["agent"] for p in quorum["participants"]}
-    missing = sorted({v["issuer"] for v in quorum.get("verdicts", [])} - participants)
-    if missing:
-        checks.append(
-            Check(
-                "verdicts_consistency", FAIL, "issuers not in participants: " + ", ".join(missing)
-            )
-        )
+    checks = _verdicts_consistency_checks(quorum)
     dissent = quorum["dissent"]
     if "findings" in dissent:
-        for i, finding in enumerate(dissent["findings"]):
-            want = finding["severity"] in ("P0", "P1")
-            if finding["blocking"] != want:
-                detail = f"findings[{i}].blocking: expected {want!r} for {finding['severity']}"
-                checks.append(Check("dissent_consistency", FAIL, f"quorum.dissent.{detail}"))
-        severities = [f["severity"] for f in dissent["findings"]]
-        expected = {
-            "severity_max": min(severities, default=None),
-            "blocking": any(s in ("P0", "P1") for s in severities),
-        }
-        for member, value in expected.items():
-            if member in dissent and dissent[member] != value:
-                checks.append(
-                    Check(
-                        "dissent_consistency",
-                        FAIL,
-                        f"quorum.dissent.{member}: expected {value!r} from findings",
-                    )
-                )
-    rule = quorum.get("rule")
-    if rule:
-        # The recorded rule is a necessary bar; merge-quorum also requires posting.
-        families = set(rule["counted_families"])
-        reached = len(families) >= rule["required_signals"]
-        if rule["requires_western_frontier"]:
-            reached = reached and bool(families & {"claude", "openai"})
-        if dissent.get("present") or dissent.get("dissenting_agents"):
-            reached = False
-        if reached != quorum["reached"] and (
-            quorum["reached"] or quorum["method"] != "merge-quorum"
-        ):
-            checks.append(
-                Check(
-                    "quorum_rule",
-                    WARN,
-                    f"quorum.reached: recorded {quorum['reached']}, rule implies {reached}",
-                )
-            )
+        checks.extend(_dissent_finding_checks(dissent["findings"]))
+        checks.extend(_dissent_rollup_checks(dissent))
+    checks.extend(_quorum_rule_checks(quorum, dissent))
     return checks
 
 
@@ -429,7 +453,9 @@ def _dissent_trail(doc: dict[str, Any]) -> list[str]:
     return trail
 
 
-def _check_chain(doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any]] | None) -> Check:
+def _check_chain(  # noqa: C901 - Keep continuity and digest anchoring checks ordered.
+    doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any]] | None
+) -> Check:
     if chain is None:
         return Check("chain_link", SKIP, "no --chain supplied")
     if not chain:
@@ -487,7 +513,7 @@ def _check_chain(doc: dict[str, Any], digest_hex: str, chain: list[dict[str, Any
     return Check("chain_link", PASS, "receipt anchored in chain (no prev-hash links to verify)")
 
 
-def _weakening_warnings(doc: dict[str, Any]) -> list[str]:
+def _weakening_warnings(doc: dict[str, Any]) -> list[str]:  # noqa: C901 - Keep independent ODR warning conditions together.
     warnings: list[str] = []
     attestation = doc.get("attestation")
     if isinstance(attestation, dict) and attestation.get("disposition") == "autonomous":

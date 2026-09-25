@@ -125,41 +125,11 @@ def _normalized_summary_number(summary: Mapping[str, object], field: str) -> flo
     return _finite_number(summary.get(field), f"normalized_summary.{field}")
 
 
-def _analysis_report(
-    report: Mapping[str, object],
+def _baseline_summaries(
+    raw_summaries: Sequence[object],
     *,
     phase: AnalysisPhase,
-    expected_count: int,
-) -> dict[str, object]:
-    if not isinstance(report, Mapping):
-        raise ValueError(f"{phase}_report must be an object")
-    if report.get("analysis_contract_version") != ANALYSIS_CONTRACT_VERSION:
-        raise ValueError(f"{phase}_report analysis contract version mismatch")
-    if report.get("scorer_contract_version") != SCORER_CONTRACT_VERSION:
-        raise ValueError(f"{phase}_report scorer contract version mismatch")
-    if report.get("phase") != phase:
-        raise ValueError(f"{phase}_report phase mismatch")
-
-    n = _integer(report.get("n"), f"{phase}_report.n", minimum=1)
-    if n != expected_count:
-        raise ValueError(f"{phase}_report.n must equal {expected_count}")
-    team_condition_id = _required_text(
-        report.get("team_condition_id"), f"{phase}_report.team_condition_id"
-    )
-    strongest_baseline_id = _required_text(
-        report.get("strongest_baseline_id"), f"{phase}_report.strongest_baseline_id"
-    )
-    verdict = report.get("verdict")
-    if verdict not in _ANALYSIS_VERDICTS:
-        raise ValueError(f"{phase}_report.verdict is not recognized")
-
-    raw_summaries = report.get("per_baseline")
-    if (
-        isinstance(raw_summaries, (str, bytes))
-        or not isinstance(raw_summaries, Sequence)
-        or not raw_summaries
-    ):
-        raise ValueError(f"{phase}_report.per_baseline must be a non-empty array")
+) -> tuple[list[dict[str, object]], set[str]]:
     summaries: list[dict[str, object]] = []
     condition_ids: set[str] = set()
     for index, raw_summary in enumerate(raw_summaries):
@@ -201,6 +171,45 @@ def _analysis_report(
         if not 0.0 <= p_value <= 1.0:
             raise ValueError(f"{prefix}.exact_sign_flip_p_value must be between 0 and 1")
         summaries.append(summary)
+    return summaries, condition_ids
+
+
+def _analysis_report(
+    report: Mapping[str, object],
+    *,
+    phase: AnalysisPhase,
+    expected_count: int,
+) -> dict[str, object]:
+    if not isinstance(report, Mapping):
+        raise ValueError(f"{phase}_report must be an object")
+    if report.get("analysis_contract_version") != ANALYSIS_CONTRACT_VERSION:
+        raise ValueError(f"{phase}_report analysis contract version mismatch")
+    if report.get("scorer_contract_version") != SCORER_CONTRACT_VERSION:
+        raise ValueError(f"{phase}_report scorer contract version mismatch")
+    if report.get("phase") != phase:
+        raise ValueError(f"{phase}_report phase mismatch")
+
+    n = _integer(report.get("n"), f"{phase}_report.n", minimum=1)
+    if n != expected_count:
+        raise ValueError(f"{phase}_report.n must equal {expected_count}")
+    team_condition_id = _required_text(
+        report.get("team_condition_id"), f"{phase}_report.team_condition_id"
+    )
+    strongest_baseline_id = _required_text(
+        report.get("strongest_baseline_id"), f"{phase}_report.strongest_baseline_id"
+    )
+    verdict = report.get("verdict")
+    if verdict not in _ANALYSIS_VERDICTS:
+        raise ValueError(f"{phase}_report.verdict is not recognized")
+
+    raw_summaries = report.get("per_baseline")
+    if (
+        isinstance(raw_summaries, (str, bytes))
+        or not isinstance(raw_summaries, Sequence)
+        or not raw_summaries
+    ):
+        raise ValueError(f"{phase}_report.per_baseline must be a non-empty array")
+    summaries, condition_ids = _baseline_summaries(raw_summaries, phase=phase)
     if strongest_baseline_id not in condition_ids:
         raise ValueError(f"{phase}_report strongest baseline is missing from per_baseline")
 
