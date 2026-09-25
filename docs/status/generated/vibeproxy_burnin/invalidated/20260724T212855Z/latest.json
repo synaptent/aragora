@@ -2,7 +2,7 @@
   "gates": {
     "clean_calls": {
       "met": false,
-      "observed": 8,
+      "observed": 5,
       "required": 100
     },
     "credential_errors": {
@@ -11,37 +11,36 @@
       "required_maximum": 0
     },
     "family_identity_errors": {
-      "met": true,
-      "observed": 0,
+      "met": false,
+      "observed": 3,
       "required_maximum": 0
     },
     "provider_families": {
       "families": [
         "claude",
-        "gemini",
-        "openai"
+        "gemini"
       ],
-      "met": true,
-      "observed": 3,
+      "met": false,
+      "observed": 2,
       "required": 3
     },
     "seven_day_span": {
       "met": false,
-      "observed": 0.102275,
+      "observed": 0.004147,
       "required": 7
     },
     "shadow_reviews": {
       "met": false,
-      "observed": 2,
+      "observed": 3,
       "required": 20
     }
   },
-  "generated_at": "2026-07-24T23:56:17.410632Z",
+  "generated_at": "2026-07-23T06:10:11.694370Z",
   "issue": 9409,
   "ready": false,
   "schema_version": "aragora.vibeproxy-burnin-proof.v1",
   "source_jsonl": "docs/status/generated/vibeproxy_burnin/calls.jsonl",
-  "source_last_record_hash": "179df1ac070a8aeee6861f2c5ea8e8b36cd93afd9c89a8ba5bc153e553a68139",
+  "source_last_record_hash": "7329970b4048d97b4edcc981569837762798f66402151fa88f2911d423f1c9b1",
   "total_records": 8,
   "transport_prerequisite_pr": 9483
 }
