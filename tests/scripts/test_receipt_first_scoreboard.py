@@ -457,12 +457,13 @@ def test_row8_first_hour_threshold_uses_target_commit_date(fake, capsys):
     fake.on(f"gh release view {tag}", out=json.dumps({"assets": assets, "targetCommitish": sha}))
     fake.on(f"gh api repos/synaptent/aragora/commits/{sha}", out="2026-10-01T10:00:00Z\n")
     run_row = {"databaseId": 7, "createdAt": "2026-10-01T11:00:00Z", "url": url}
+    run_row["event"] = "workflow_dispatch"
     fake.on("gh run list", out=json.dumps([run_row]))
     fake.on("gh api repos/synaptent/aragora/actions/runs/7/jobs", out="1\n")
     _, r = rows(capsys)
     assert r[8]["first_hour_since"] == "2026-10-01T10:00:00Z" and r[8]["first_hour_run_ok"] is True
     assert r[8]["first_hour_run_url"] == url and r[8]["status"] == "ok" and r[8]["now"] == 3
-    assert fake.matching("gh run list", "--json databaseId,createdAt,url")
+    assert fake.matching("gh run list", "--json databaseId,createdAt,url,event")
     _, md, _ = run(capsys, "--markdown")
     assert f"| 3 ({url}) |" in md
     fake.on(f"gh api repos/synaptent/aragora/commits/{sha}", rc=1, err="HTTP 404")
@@ -567,3 +568,37 @@ def test_check_guardrails_mypy_fails_closed(fake, capsys):
     fake.on("measure_import_graph.py", out="", rc=1, err="boom")
     assert sb.main(GUARD) == 1
     assert "guardrail measurement failed" in capsys.readouterr().err
+
+
+def test_row8_pull_request_runs_do_not_hide_a_green_first_hour_run(fake, capsys):
+    """receipt-first-hour is skipped on pull_request runs; three newer PR runs
+    must not push the green dispatch run out of the rows checked."""
+    tag, sha, url = "receipts-2026-10-01", "e" * 40, "https://github.com/synaptent/aragora/runs/9"
+    fake.on(
+        "gh release list", out=json.dumps([{"tagName": tag, "publishedAt": "2026-10-01T12:00:00Z"}])
+    )
+    assets = [{"name": f"pr{i}.odr.json"} for i in range(3)]
+    fake.on(f"gh release view {tag}", out=json.dumps({"assets": assets, "targetCommitish": sha}))
+    fake.on(f"gh api repos/synaptent/aragora/commits/{sha}", out="2026-10-01T10:00:00Z\n")
+    pr_runs = [
+        {
+            "databaseId": 20 + i,
+            "createdAt": f"2026-10-02T0{i}:00:00Z",
+            "url": "u",
+            "event": "pull_request",
+        }
+        for i in range(3)
+    ]
+    dispatch = {
+        "databaseId": 9,
+        "createdAt": "2026-10-01T11:00:00Z",
+        "url": url,
+        "event": "workflow_dispatch",
+    }
+    fake.on("gh run list", out=json.dumps([*pr_runs, dispatch]))
+    for i in range(3):
+        fake.on(f"gh api repos/synaptent/aragora/actions/runs/{20 + i}/jobs", out="0\n")
+    fake.on("gh api repos/synaptent/aragora/actions/runs/9/jobs", out="1\n")
+    _, r = rows(capsys)
+    assert r[8]["first_hour_run_url"] == url and r[8]["status"] == "ok"
+    assert fake.matching("gh api repos/synaptent/aragora/actions/runs/20/jobs") == []
