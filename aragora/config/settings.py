@@ -356,9 +356,12 @@ class DatabaseSettings(BaseSettings):
     @classmethod
     def validate_backend(cls, v: str) -> str:
         valid = {"sqlite", "postgresql", "postgres", "supabase", "auto"}
-        if v.lower() not in valid:
+        backend = v.lower()
+        if backend not in valid:
             raise ValueError(f"Database backend must be one of {valid}")
-        return v.lower()
+        # Deployments document "postgres"; store the canonical spelling so
+        # is_postgresql and other readers only have to compare one value.
+        return "postgresql" if backend == "postgres" else backend
 
     @property
     def nomic_path(self) -> Path:
