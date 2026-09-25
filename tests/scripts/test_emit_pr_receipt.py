@@ -19,8 +19,9 @@ from scripts.emit_pr_receipt import build_receipt, main, verify_receipt
 @pytest.mark.parametrize(
     "explicit,env,expected",
     [
-        (None, None, "0.1"),
-        (None, "", "0.1"),
+        (None, None, "0.2"),
+        (None, "", "0.2"),
+        (None, "0.1", "0.1"),
         (None, "0.2", "0.2"),
         ("0.2", "0.1", "0.2"),
         ("0.1", "0.2", "0.1"),

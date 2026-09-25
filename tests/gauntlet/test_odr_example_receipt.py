@@ -21,7 +21,9 @@ EXAMPLE = Path("docs/specs/examples/example-decision-receipt.odr.json")
 
 
 def test_example_matches_current_emitter_output():
-    expected = decision_receipt_to_odr(_full_receipt())
+    # The committed example is a v0.1 document (it must keep verifying under
+    # aragora-verify 0.1.x), so it is regenerated at an explicit 0.1, not the default.
+    expected = decision_receipt_to_odr(_full_receipt(), odr_version="0.1")
     actual = json.loads(EXAMPLE.read_text(encoding="utf-8"))
     assert actual == expected, "example receipt is stale; regenerate it"
 

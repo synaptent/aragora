@@ -1300,11 +1300,11 @@ See [BOT_INTEGRATIONS.md](../guides/bot-integrations) for detailed setup guides.
 
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
-| `ARAGORA_ODR_PROFILE_VERSION` | Optional | ODR export profile (`0.1` or `0.2`) for `aragora receipt export --format odr` and `scripts/emit_pr_receipt.py`. `--odr-version` overrides it; empty means unset; invalid values fail with usage exit 2 before writing. Default stays 0.1 until aragora-verify 0.2.0 is published. | `0.1` |
+| `ARAGORA_ODR_PROFILE_VERSION` | Optional | ODR export profile (`0.1` or `0.2`) for `aragora receipt export --format odr`, `scripts/emit_pr_receipt.py`, `aragora review --emit-odr` and the server's `GET /api/v2/receipts/\{id\}/export?format=odr`. `--odr-version` (or `?odr_version=`) overrides it; empty means unset; invalid values are rejected before anything is written. Default is 0.2 as of release 2.11.0; set `0.1` for consumers still on aragora-verify 0.1.x. | `0.1` |
 | `ARAGORA_ODR_SIGNING_KEY_FILE` | Optional | Path to a PKCS#8 Ed25519 private-key PEM; empty means unset; unusable files fail closed. POSIX group/other-writable files are rejected; readable files warn. | - |
 | `ARAGORA_ODR_SIGNING_KEY_SECRET` | Optional | AWS Secrets Manager SecretId holding the signing PEM; used when no key file is configured. An explicit loader secret-name argument overrides the file. | `aragora/odr-signing-key` |
 | `ARAGORA_ODR_SIGNING_KEY_STRICT_MODE` | Optional | Reject POSIX group/other-readable key files instead of warning when true (`true`, `1`, `yes`, `on`, case-insensitive). | `false` |
-| `ARAGORA_ODR_SIGNING_ISSUER` | Optional | `signatures[].issuer` written by `aragora receipt export --format odr --odr-version 0.2` and `scripts/emit_pr_receipt.py` on v0.2 documents (signer-committed, spec §6); empty means unset. Ignored for v0.1 documents, which keep the three-member entry. | `aragora` |
+| `ARAGORA_ODR_SIGNING_ISSUER` | Optional | `signatures[].issuer` written by `aragora receipt export --format odr` and `scripts/emit_pr_receipt.py` on v0.2 documents (the default; signer-committed, spec §6); empty means unset. Ignored for v0.1 documents, which keep the three-member entry. | `aragora` |
 | `ARAGORA_ENABLE_PUBLIC_ODR_EXPORT` | Optional | Serve `GET /api/v2/receipts/\{id\}/export?format=odr` to a caller carrying no authorization context on an authentication-enabled deployment (`true`, `1`, `yes`, `on`, case-insensitive). Default off: such a caller is answered `401 auth_required`. A caller that does carry a context still needs `receipts.read` either way, and an authentication-disabled deployment is unaffected. The public-receipts deployment sets it true. | `false` |
 
 ## Knowledge System
