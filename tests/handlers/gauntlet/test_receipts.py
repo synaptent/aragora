@@ -411,6 +411,9 @@ class TestGetReceiptAsyncSafety:
         """Slow sync storage should be offloaded from the async receipt path."""
 
         class _SlowStorage:
+            def get_inflight(self, gauntlet_id: str) -> None:
+                return None
+
             def get(self, gauntlet_id: str) -> dict[str, Any]:
                 time.sleep(0.2)
                 return {
