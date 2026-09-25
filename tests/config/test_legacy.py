@@ -366,6 +366,19 @@ class TestGetApiKey:
             assert get_api_key("OPENROUTER_API_KEY", required=False) == "env-key"
         assert "Critical secret 'OPENROUTER_API_KEY' loaded" not in caplog.text
 
+    def test_required_env_presence_falls_back_when_managed_getter_returns_none(self):
+        from aragora.config.legacy import get_api_key
+
+        with (
+            patch.dict(
+                os.environ,
+                {"ARAGORA_SECRETS_STRICT": "false", "OPENAI_API_KEY": "env-key"},
+                clear=True,
+            ),
+            patch("aragora.config.secrets.get_secret", return_value=None),
+        ):
+            assert get_api_key("OPENAI_API_KEY") == "env-key"
+
     def test_required_non_strict_env_key_keeps_security_warning(self, caplog):
         from aragora.config.legacy import get_api_key
 

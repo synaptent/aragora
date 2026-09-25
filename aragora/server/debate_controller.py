@@ -1863,7 +1863,7 @@ class DebateController:
 
                 if user_id and isinstance(flow_id, str):
                     try:
-                        from aragora.server.handlers.onboarding import _track_event
+                        from aragora.server.handlers.sme.onboarding import _track_event
 
                         _track_event(
                             "first_receipt_generated",

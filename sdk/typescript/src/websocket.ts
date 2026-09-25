@@ -21,9 +21,13 @@ import type {
   UserVoteEvent,
   WarningEvent,
 } from './types';
+import { ConnectionError } from './errors';
 
 // Keep Node fallback local to this file without requiring global @types/node.
 declare const require: (moduleName: string) => unknown;
+
+// Keep native transport provenance internal; parser errors use the same public event.
+const transportErrors = new WeakSet<Error>();
 
 export type WebSocketState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
 
@@ -148,6 +152,7 @@ export class AragoraWebSocket {
 
         this.ws!.onerror = (_event) => {
           const error = new Error('WebSocket error');
+          transportErrors.add(error);
           this.emit('error', error);
           if (this.state === 'connecting') {
             reject(error);
@@ -390,11 +395,21 @@ function getEventDebateId(event: WebSocketEvent): string | undefined {
   );
 }
 
+// Transient RFC WebSocket closes plus Aragora's application rate-limit close.
+const RETRYABLE_WEBSOCKET_CLOSE_CODES = new Set([1001, 1006, 1011, 1012, 1013, 4029]);
+// Fixed stream contract: allow a subsequent close to supply diagnostics, but never hang.
+const CLOSE_OBSERVATION_TIMEOUT_MS = 1000;
+
 /**
  * Create an async iterable stream for debate events.
  *
  * This provides a convenient way to consume debate events using async iteration.
- * The stream will automatically handle WebSocket connection, reconnection, and cleanup.
+ * The stream handles connection and cleanup, draining accepted events before ending.
+ * A disconnect without a server terminal event raises ConnectionError after draining;
+ * it does not imply debate completion or resume this iterator on reconnection.
+ * A native transport error allows up to 1,000 ms for authoritative close details.
+ * Without close details, the error has no close code and is not retryable. Parsing
+ * errors fail immediately. Repeated transport errors do not extend the window.
  *
  * @param config - Aragora configuration (baseUrl, apiKey, etc.)
  * @param options - Stream options including optional debateId filter
@@ -402,17 +417,19 @@ function getEventDebateId(event: WebSocketEvent): string | undefined {
  *
  * @example
  * ```typescript
- * import { streamDebate } from '@aragora/sdk';
+ * import { ConnectionError, streamDebate } from '@aragora/sdk';
  *
  * const config = { baseUrl: 'http://localhost:8080' };
  * const stream = streamDebate(config, { debateId: 'my-debate-id' });
  *
- * for await (const event of stream) {
- *   console.log(`${event.type}:`, event.data);
- *
- *   if (event.type === 'debate_end') {
- *     break;
+ * try {
+ *   for await (const event of stream) {
+ *     console.log(`${event.type}:`, event.data);
  *   }
+ * } catch (error) {
+ *   if (!(error instanceof ConnectionError)) throw error;
+ *   console.warn('Stream interrupted; debate completion is unknown', error.code);
+ *   // Retry eligibility does not guarantee replay. Do not restart blindly.
  * }
  * ```
  *
@@ -421,21 +438,50 @@ function getEventDebateId(event: WebSocketEvent): string | undefined {
  * // Stream all events (no filter)
  * const stream = streamDebate({ baseUrl: 'http://localhost:8080' });
  *
- * for await (const event of stream) {
- *   console.log(event);
- * }
+ * // Consume with the same try/catch shown above.
  * ```
  */
 export async function* streamDebate(
   config: AragoraConfig,
   options: StreamOptions = {}
 ): AsyncGenerator<WebSocketEvent, void, unknown> {
-  const ws = new AragoraWebSocket(config, options);
+  const ws = new AragoraWebSocket(config, { ...options, autoReconnect: false });
   const eventQueue: WebSocketEvent[] = [];
-  let resolveNext: ((event: WebSocketEvent) => void) | null = null;
-  let rejectNext: ((error: Error) => void) | null = null;
+  let wakeNext: (() => void) | null = null;
   let ended = false;
+  let terminalError: Error | null = null;
+  let closeObservationTimer: ReturnType<typeof setTimeout> | null = null;
+  let signalEnd: () => void;
+  const terminalSignal = new Promise<void>((resolve) => {
+    signalEnd = resolve;
+  });
   const { debateId } = options;
+
+  const clearCloseObservation = () => {
+    if (closeObservationTimer !== null) {
+      clearTimeout(closeObservationTimer);
+      closeObservationTimer = null;
+    }
+  };
+
+  const wake = () => {
+    if (ended) {
+      clearCloseObservation();
+      signalEnd();
+      // Let connect's onerror finish rejecting before disconnect changes its state.
+      // Cleanup must not depend on when a paused consumer requests another event.
+      queueMicrotask(() => {
+        try {
+          cleanup();
+        } catch {
+          terminalError ??= new ConnectionError('Failed to clean up WebSocket');
+        }
+      });
+    }
+    const notify = wakeNext;
+    wakeNext = null;
+    notify?.();
+  };
 
   // Filter events by debate ID if specified
   const shouldEmit = (event: WebSocketEvent): boolean => {
@@ -448,68 +494,94 @@ export async function* streamDebate(
 
   // Handle incoming messages
   const unsubMessage = ws.on('message', (event) => {
-    if (!shouldEmit(event)) {
+    if (ended || !shouldEmit(event)) {
       return;
     }
 
-    if (resolveNext) {
-      resolveNext(event);
-      resolveNext = null;
-    } else {
-      eventQueue.push(event);
-    }
+    eventQueue.push(event);
 
     // Check for terminal events
     if (event.type === 'debate_end' || event.type === 'error') {
       ended = true;
     }
+    wake();
   });
 
   // Handle errors
   const unsubError = ws.on('error', (error) => {
-    if (rejectNext) {
-      rejectNext(error);
-      rejectNext = null;
+    if (ended) return;
+    if (transportErrors.has(error)) {
+      if (closeObservationTimer === null) {
+        closeObservationTimer = setTimeout(() => {
+          if (ended) return;
+          terminalError = new ConnectionError(
+            'WebSocket stream failed without close details',
+            undefined, undefined, undefined, false
+          );
+          ended = true;
+          wake();
+        }, CLOSE_OBSERVATION_TIMEOUT_MS);
+      }
+      return;
     }
+    // Parser errors need no close callback and can contain raw frames. Never copy text.
+    terminalError = new ConnectionError(
+      'WebSocket stream failed', undefined, undefined, undefined, false
+    );
     ended = true;
+    wake();
   });
 
   // Handle disconnection
-  const unsubDisconnect = ws.on('disconnected', ({ code, reason }) => {
+  const unsubDisconnect = ws.on('disconnected', ({ code }) => {
+    if (ended) return;
+    terminalError = new ConnectionError(
+      'WebSocket disconnected before a terminal debate event',
+      `WS_CLOSE_${code}`,
+      undefined,
+      { code },
+      RETRYABLE_WEBSOCKET_CLOSE_CODES.has(code)
+    );
     ended = true;
-    if (resolveNext) {
-      // Create a synthetic end event
-      resolveNext({
-        type: 'debate_end',
-        debate_id: debateId,
-        timestamp: new Date().toISOString(),
-        data: { reason: 'connection_closed', code, close_reason: reason },
-      });
-      resolveNext = null;
-    }
+    wake();
   });
 
-  // Connect to the WebSocket
-  await ws.connect(debateId);
-
-  try {
-    while (!ended) {
-      if (eventQueue.length > 0) {
-        yield eventQueue.shift()!;
-      } else {
-        const event = await new Promise<WebSocketEvent>((resolve, reject) => {
-          resolveNext = resolve;
-          rejectNext = reject;
-        });
-        yield event;
-      }
-    }
-  } finally {
-    // Cleanup
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    clearCloseObservation();
     unsubMessage();
     unsubError();
     unsubDisconnect();
+    wakeNext = null;
     ws.disconnect();
+  };
+
+  try {
+    // Setup failures need the same cleanup as iterator termination.
+    // A close-before-open need not reject the low-level connection promise.
+    const connected = ws.connect(debateId).catch((error: unknown) => {
+      // The marked error already started close observation; connect rejection must
+      // not finalize the iterator before the authoritative close or bounded fallback.
+      if (error instanceof Error && transportErrors.has(error)) return terminalSignal;
+      throw error;
+    });
+    await Promise.race([connected, terminalSignal]);
+    while (true) {
+      if (eventQueue.length > 0) {
+        yield eventQueue.shift()!;
+      } else if (ended) {
+        if (terminalError) throw terminalError;
+        return;
+      } else {
+        await new Promise<void>((resolve) => {
+          wakeNext = resolve;
+        });
+      }
+    }
+  } finally {
+    cleanup();
   }
 }
 
@@ -528,11 +600,7 @@ export async function* streamDebate(
  * const config = { baseUrl: 'http://localhost:8080' };
  * const stream = streamDebateById(config, 'debate-123');
  *
- * for await (const event of stream) {
- *   if (event.type === 'agent_message') {
- *     console.log(`${event.data.agent}: ${event.data.content}`);
- *   }
- * }
+ * // Consume with streamDebate's try/catch example; interruptions throw here too.
  * ```
  */
 export function streamDebateById(

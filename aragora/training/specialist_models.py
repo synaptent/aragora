@@ -676,7 +676,7 @@ class SpecialistTrainingPipeline:
         self._registry.update_status(model_id, TrainingStatus.EXPORTING_DATA)
 
         # Import here to avoid circular imports
-        from aragora.server.storage import DebateStorage
+        from aragora.storage.debate_storage import DebateStorage
         from aragora.training.debate_exporter import DebateTrainingExporter, DebateTrainingConfig
 
         config = model.training_config

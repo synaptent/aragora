@@ -1,0 +1,132 @@
+{
+  "schema_version": "decision-quality-corpus/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "revision": "draft-software-development-tranche-2",
+  "frozen_at": "2026-08-30T03:52:00Z",
+  "cases": [
+    {
+      "case_id": "se-dev-k8s-dockershim-1-24",
+      "domain": "software_engineering",
+      "split": "development",
+      "title": "Kubernetes dockershim removal planning",
+      "decision_prompt": "A platform team operates Kubernetes clusters whose nodes rely on the in-tree dockershim integration. Choose the action that best protects the team's ability to adopt Kubernetes 1.24 while maintaining a supported container runtime.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Migrate before Kubernetes 1.24\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "migrate_runtime_before_1_24",
+      "options": [
+        {
+          "option_id": "migrate_runtime_before_1_24",
+          "label": "Migrate before Kubernetes 1.24",
+          "description": "Move nodes to a CRI-compatible runtime, or to a supported external Docker adapter, before adopting Kubernetes 1.24."
+        },
+        {
+          "option_id": "retain_in_tree_dockershim",
+          "label": "Retain the in-tree dockershim dependency",
+          "description": "Defer runtime migration and plan to keep using the in-tree dockershim integration through Kubernetes 1.24."
+        }
+      ],
+      "information_cutoff": "2022-01-08T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "k8s-dockershim-commitment-2022-01-07",
+          "title": "Kubernetes is Moving on From Dockershim: Commitments and Next Steps",
+          "url": "https://raw.githubusercontent.com/kubernetes/website/147fd1c21bb2838d0aca5cff6cb4a2c887c3f369/content/en/blog/_posts/2022/kubernetes-is-moving-on-from-dockershim.md",
+          "published_at": "2022-01-07T00:00:00Z",
+          "content_sha256": "b610d69a329e163828b5faa7c9fd1350b407aaf3aa3b0dcde75899ae6bd320a0"
+        }
+      ]
+    },
+    {
+      "case_id": "se-dev-pep703-acceptance",
+      "domain": "software_engineering",
+      "split": "development",
+      "title": "Prepare for optional no-GIL CPython",
+      "decision_prompt": "A CPython-dependent platform team must decide whether to reserve engineering capacity for free-threaded compatibility prototypes while PEP 703 is still a draft. Choose the action that best positions the platform if the proposal is accepted for CPython.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Defer until formal acceptance\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "defer_until_formal_acceptance",
+      "options": [
+        {
+          "option_id": "defer_until_formal_acceptance",
+          "label": "Defer until formal acceptance",
+          "description": "Do not reserve engineering capacity until the Steering Council formally accepts the proposal."
+        },
+        {
+          "option_id": "prepare_for_acceptance",
+          "label": "Prepare for acceptance",
+          "description": "Reserve bounded engineering capacity now for compatibility testing and a free-threaded prototype."
+        }
+      ],
+      "information_cutoff": "2023-05-12T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "pep703-draft-2023-05-11",
+          "title": "PEP 703 draft: Making the Global Interpreter Lock Optional in CPython",
+          "url": "https://raw.githubusercontent.com/python/peps/cf1649c9d2cae038d1d7e51db32c0ab1b912e2f6/pep-0703.rst",
+          "published_at": "2023-05-11T18:11:40Z",
+          "content_sha256": "60e7e8dd33c92bacef31470cf91cff5f93e3937ab385a58c2c36ce2961cadbd7"
+        }
+      ]
+    },
+    {
+      "case_id": "se-dev-node16-eol",
+      "domain": "software_engineering",
+      "split": "development",
+      "title": "Node.js 16 accelerated end-of-life response",
+      "decision_prompt": "A production service runs on Node.js 16 after the official release schedule moves its end-of-life date to September 2023. Choose the action that best preserves security support without depending on a later schedule extension.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Upgrade before the revised end-of-life date\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "upgrade_before_eol",
+      "options": [
+        {
+          "option_id": "defer_beyond_eol",
+          "label": "Defer beyond the revised end-of-life date",
+          "description": "Keep Node.js 16 in production beyond 2023-09-11 while expecting support or the schedule to be extended."
+        },
+        {
+          "option_id": "upgrade_before_eol",
+          "label": "Upgrade before the revised end-of-life date",
+          "description": "Move the service to a supported Node.js LTS line before 2023-09-11."
+        }
+      ],
+      "information_cutoff": "2022-06-16T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "node-release-schedule-2022-06-15",
+          "title": "Node.js release schedule with revised Node.js 16 end date",
+          "url": "https://raw.githubusercontent.com/nodejs/Release/e7851ec7281ffa0f71fcd849cce72dbbbe89f85d/schedule.json",
+          "published_at": "2022-06-15T19:37:05Z",
+          "content_sha256": "aa4742bc87b63d816aa962b6d2a164986be3c78973d6c8cf9c0444dc6e15f55b"
+        }
+      ]
+    },
+    {
+      "case_id": "se-dev-python312-distutils-removal",
+      "domain": "software_engineering",
+      "split": "development",
+      "title": "Migrate away from standard-library distutils",
+      "decision_prompt": "A Python build tool imports distutils from the standard library. PEP 632 has been accepted and describes removal in Python 3.12. Choose the action that best preserves compatibility with that release.",
+      "forecast_question": "Using only information available at the cutoff, forecast the probability that \"Retain the standard-library dependency\" is the outcome-aligned action at the stated horizon.",
+      "forecast_option_id": "retain_stdlib_distutils",
+      "options": [
+        {
+          "option_id": "migrate_before_python312",
+          "label": "Migrate before Python 3.12",
+          "description": "Replace standard-library distutils imports with maintained packaging interfaces before adopting Python 3.12."
+        },
+        {
+          "option_id": "retain_stdlib_distutils",
+          "label": "Retain the standard-library dependency",
+          "description": "Keep importing standard-library distutils and defer migration until after Python 3.12 ships."
+        }
+      ],
+      "information_cutoff": "2021-01-26T00:00:00Z",
+      "sources": [
+        {
+          "source_id": "pep632-accepted-2021-01-25",
+          "title": "PEP 632 accepted: Deprecate distutils module",
+          "url": "https://raw.githubusercontent.com/python/peps/0b7e157a540ccc553998d9e7a5911e1b709671fd/pep-0632.rst",
+          "published_at": "2021-01-25T17:44:41Z",
+          "content_sha256": "9114a72afaa11fe7a4dfa74a96e33e6e53bc03793d999acde32c7e6bf1c822cb"
+        }
+      ]
+    }
+  ]
+}

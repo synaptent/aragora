@@ -21,6 +21,8 @@ from aragora.agents.api_agents.openrouter import (
     LlamaAgent,
     MistralAgent,
 )
+from aragora.agents.api_agents.common import AgentAPIError, AgentStreamError
+from tests.utils.aiohttp_mocks import make_mock_client_session, make_mock_response
 
 
 class TestOpenRouterAgentInitialization:
@@ -100,29 +102,16 @@ class TestOpenRouterGenerate:
 
     @pytest.mark.asyncio
     async def test_api_error_handled(self, agent):
-        """Test API errors are handled (may raise or return error message)."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.headers = {}
-        mock_response.text = AsyncMock(return_value="Internal Server Error")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(return_value=False),
-            )
-        )
+        """Test a non-429 error status raises AgentAPIError without retry."""
+        mock_response = make_mock_response(status=500, text="Internal Server Error")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            try:
-                result = await agent.generate("Test prompt")
-                # If no exception, result should indicate error
-                assert "error" in result.lower() or result == ""
-            except Exception:
-                pass  # Expected - error raised
+            with pytest.raises(AgentAPIError, match="OpenRouter API error 500") as exc_info:
+                await agent.generate("Test prompt")
+        assert exc_info.value.status_code == 500
+        # Exactly one HTTP call: AgentAPIError is not in the decorator's retryable set.
+        assert mock_session.post.call_count == 1
 
     @pytest.mark.asyncio
     async def test_rate_limit_retry(self, agent):
@@ -258,33 +247,17 @@ class TestOpenRouterStreaming:
 
     @pytest.mark.asyncio
     async def test_streaming_error_response(self, agent):
-        """Test streaming with error response raises or returns error."""
-        mock_response = MagicMock()
-        mock_response.status = 500
-        mock_response.headers = {}
-        mock_response.text = AsyncMock(return_value="Server Error")
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-        mock_session.post = MagicMock(
-            return_value=MagicMock(
-                __aenter__=AsyncMock(return_value=mock_response),
-                __aexit__=AsyncMock(return_value=False),
-            )
-        )
+        """Test streaming with a non-429 error status raises AgentStreamError."""
+        mock_response = make_mock_response(status=500, text="Server Error")
+        mock_session = make_mock_client_session(mock_response)
 
         with patch("aiohttp.ClientSession", return_value=mock_session):
-            # Error may raise or return error message depending on decorator
-            chunks = []
-            try:
+            chunks: list[str] = []
+            with pytest.raises(AgentStreamError, match="OpenRouter streaming API error 500"):
                 async for chunk in agent.generate_stream("Test"):
                     chunks.append(chunk)
-                # If no exception, result should indicate error
-                result = "".join(chunks)
-                assert "error" in result.lower() or result == ""
-            except (RuntimeError, Exception):
-                pass  # Expected behavior - error raised
+            # The error is raised before any stream data is read, so nothing is yielded.
+            assert chunks == []
 
 
 class TestOpenRouterCritique:

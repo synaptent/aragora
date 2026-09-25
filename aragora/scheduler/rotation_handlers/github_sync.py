@@ -99,7 +99,7 @@ class GitHubSecretsSyncBackend:
         if not token:
             raise RuntimeError("No GitHub token available for secrets sync")
 
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         pool = get_http_pool()
         async with pool.get_session("github") as client:
@@ -142,7 +142,7 @@ class GitHubSecretsSyncBackend:
             encrypted_value = self._encrypt_secret(public_key_b64, value)
 
             # PUT the encrypted secret
-            from aragora.server.http_client_pool import get_http_pool
+            from aragora.observability.http_client_pool import get_http_pool
 
             pool = get_http_pool()
             async with pool.get_session("github") as client:

@@ -16,7 +16,7 @@ from typing import Any
 from collections.abc import Callable
 
 from aragora.config import MAX_EVENT_QUEUE_SIZE
-from aragora.server.stream.events import (
+from aragora.events.types import (
     AudienceMessage,
     StreamEvent,
     StreamEventType,

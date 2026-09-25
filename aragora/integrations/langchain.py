@@ -198,7 +198,7 @@ class AragoraTool(BaseTool):
         Returns:
             JSON string with debate result
         """
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         agents = agents or self.default_agents
         rounds = rounds or self.default_rounds
@@ -358,7 +358,7 @@ class AragoraRetriever(BaseRetriever):
 
     async def _fetch_documents(self, query: str) -> list[Document]:
         """Internal method to fetch documents from the API."""
-        from aragora.server.http_client_pool import get_http_pool
+        from aragora.observability.http_client_pool import get_http_pool
 
         headers = {
             "Content-Type": "application/json",

@@ -14,6 +14,7 @@ verifier is free.
 
 from __future__ import annotations
 
+from .acta import project_to_acta, verify_acta_projection
 from .jcs import jcs_canonicalize, odr_content_digest
 from .schema import ODR_PROFILE_URI, ODR_VERSION, validate_structure
 from .verifier import (
@@ -45,6 +46,8 @@ __all__ = [
     "validate_structure",
     "jcs_canonicalize",
     "odr_content_digest",
+    "project_to_acta",
+    "verify_acta_projection",
     "Check",
     "VerifyResult",
     "VerificationError",

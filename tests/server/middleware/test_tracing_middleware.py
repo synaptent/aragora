@@ -26,7 +26,12 @@ import pytest
 @pytest.fixture(autouse=True)
 def _reset_tracing_context():
     """Reset tracing context vars to prevent cross-test contamination."""
-    from aragora.server.middleware.tracing import _trace_id, _span_id, _parent_span_id, _span_stack
+    from aragora.observability.middleware.tracing import (
+        _trace_id,
+        _span_id,
+        _parent_span_id,
+        _span_stack,
+    )
 
     tokens = [
         _trace_id.set(None),
@@ -49,7 +54,7 @@ class TestIDGeneration:
 
     def test_generate_trace_id_is_32_hex_chars(self):
         """generate_trace_id returns a 32-character hex string."""
-        from aragora.server.middleware.tracing import generate_trace_id
+        from aragora.observability.middleware.tracing import generate_trace_id
 
         tid = generate_trace_id()
         assert len(tid) == 32
@@ -57,14 +62,14 @@ class TestIDGeneration:
 
     def test_generate_trace_id_unique(self):
         """Each call produces a unique trace ID."""
-        from aragora.server.middleware.tracing import generate_trace_id
+        from aragora.observability.middleware.tracing import generate_trace_id
 
         ids = {generate_trace_id() for _ in range(50)}
         assert len(ids) == 50
 
     def test_generate_span_id_is_16_hex_chars(self):
         """generate_span_id returns a 16-character hex string."""
-        from aragora.server.middleware.tracing import generate_span_id
+        from aragora.observability.middleware.tracing import generate_span_id
 
         sid = generate_span_id()
         assert len(sid) == 16
@@ -81,7 +86,7 @@ class TestContextVars:
 
     def test_get_trace_id_default_none(self):
         """get_trace_id returns None when no trace context is set."""
-        from aragora.server.middleware.tracing import get_trace_id
+        from aragora.observability.middleware.tracing import get_trace_id
 
         ctx = copy_context()
         result = ctx.run(get_trace_id)
@@ -89,7 +94,7 @@ class TestContextVars:
 
     def test_set_and_get_trace_id(self):
         """set_trace_id stores a value retrievable by get_trace_id."""
-        from aragora.server.middleware.tracing import get_trace_id, set_trace_id
+        from aragora.observability.middleware.tracing import get_trace_id, set_trace_id
 
         def _run():
             set_trace_id("abc123")
@@ -100,7 +105,7 @@ class TestContextVars:
 
     def test_set_and_get_span_id(self):
         """set_span_id stores a value retrievable by get_span_id."""
-        from aragora.server.middleware.tracing import get_span_id, set_span_id
+        from aragora.observability.middleware.tracing import get_span_id, set_span_id
 
         def _run():
             set_span_id("span999")
@@ -111,7 +116,7 @@ class TestContextVars:
 
     def test_get_parent_span_id_default_none(self):
         """get_parent_span_id returns None when unset."""
-        from aragora.server.middleware.tracing import get_parent_span_id
+        from aragora.observability.middleware.tracing import get_parent_span_id
 
         ctx = copy_context()
         assert ctx.run(get_parent_span_id) is None
@@ -126,7 +131,7 @@ class TestSpan:
     """Tests for the Span dataclass."""
 
     def _make_span(self, **kwargs):
-        from aragora.server.middleware.tracing import Span
+        from aragora.observability.middleware.tracing import Span
 
         defaults = {
             "trace_id": "t" * 32,
@@ -217,7 +222,7 @@ class TestTraceContext:
 
     def test_trace_context_creates_span(self):
         """trace_context yields a Span with correct operation name."""
-        from aragora.server.middleware.tracing import trace_context
+        from aragora.observability.middleware.tracing import trace_context
 
         def _run():
             with trace_context("my.operation") as span:
@@ -229,7 +234,7 @@ class TestTraceContext:
 
     def test_trace_context_finishes_span(self):
         """Span is finished after exiting the context manager."""
-        from aragora.server.middleware.tracing import trace_context
+        from aragora.observability.middleware.tracing import trace_context
 
         captured = {}
 
@@ -242,7 +247,7 @@ class TestTraceContext:
 
     def test_trace_context_propagates_trace_id(self):
         """Nested trace_context inherits the parent trace ID."""
-        from aragora.server.middleware.tracing import trace_context
+        from aragora.observability.middleware.tracing import trace_context
 
         def _run():
             with trace_context("parent") as parent_span:
@@ -255,7 +260,7 @@ class TestTraceContext:
 
     def test_trace_context_records_error(self):
         """trace_context records exceptions on the span and re-raises."""
-        from aragora.server.middleware.tracing import trace_context
+        from aragora.observability.middleware.tracing import trace_context
 
         captured = {}
 
@@ -271,7 +276,11 @@ class TestTraceContext:
 
     def test_trace_context_restores_context(self):
         """Context variables are restored after trace_context exits."""
-        from aragora.server.middleware.tracing import get_trace_id, set_trace_id, trace_context
+        from aragora.observability.middleware.tracing import (
+            get_trace_id,
+            set_trace_id,
+            trace_context,
+        )
 
         def _run():
             set_trace_id("original")
@@ -292,7 +301,7 @@ class TestTracedDecorator:
 
     def test_traced_sync_function(self):
         """@traced wraps a sync function and creates a span."""
-        from aragora.server.middleware.tracing import traced
+        from aragora.observability.middleware.tracing import traced
 
         @traced("sync.op")
         def my_func(x):
@@ -306,7 +315,7 @@ class TestTracedDecorator:
 
     def test_traced_async_function(self):
         """@traced wraps an async function and creates a span."""
-        from aragora.server.middleware.tracing import traced
+        from aragora.observability.middleware.tracing import traced
 
         @traced("async.op")
         async def my_async_func(x):
@@ -320,7 +329,7 @@ class TestTracedDecorator:
 
     def test_traced_defaults_to_function_name(self):
         """@traced() uses function name when no operation is given."""
-        from aragora.server.middleware.tracing import traced
+        from aragora.observability.middleware.tracing import traced
 
         @traced()
         def special_function():
@@ -338,13 +347,13 @@ class TestTracingMiddleware:
     """Tests for the TracingMiddleware class."""
 
     def _make_middleware(self, service_name="test-svc"):
-        from aragora.server.middleware.tracing import TracingMiddleware
+        from aragora.observability.middleware.tracing import TracingMiddleware
 
         return TracingMiddleware(service_name=service_name)
 
     def test_default_service_name(self):
         """Default service name is 'aragora'."""
-        from aragora.server.middleware.tracing import TracingMiddleware
+        from aragora.observability.middleware.tracing import TracingMiddleware
 
         mw = TracingMiddleware()
         assert mw.service_name == "aragora"
@@ -463,7 +472,7 @@ class TestWebSocketTracing:
 
     def test_trace_websocket_event_adds_trace_context(self):
         """trace_websocket_event adds _trace when trace context exists."""
-        from aragora.server.middleware.tracing import set_trace_id, trace_websocket_event
+        from aragora.observability.middleware.tracing import set_trace_id, trace_websocket_event
 
         def _run():
             set_trace_id("ws-trace-id")
@@ -475,7 +484,7 @@ class TestWebSocketTracing:
 
     def test_trace_websocket_event_no_context(self):
         """trace_websocket_event skips _trace when no trace context."""
-        from aragora.server.middleware.tracing import trace_websocket_event
+        from aragora.observability.middleware.tracing import trace_websocket_event
 
         def _run():
             data = trace_websocket_event("ping", {"seq": 1})
@@ -486,14 +495,14 @@ class TestWebSocketTracing:
 
     def test_extract_websocket_trace(self):
         """extract_websocket_trace retrieves trace_id from event data."""
-        from aragora.server.middleware.tracing import extract_websocket_trace
+        from aragora.observability.middleware.tracing import extract_websocket_trace
 
         data = {"_trace": {"trace_id": "extracted-id"}}
         assert extract_websocket_trace(data) == "extracted-id"
 
     def test_extract_websocket_trace_missing(self):
         """extract_websocket_trace returns None when no trace data."""
-        from aragora.server.middleware.tracing import extract_websocket_trace
+        from aragora.observability.middleware.tracing import extract_websocket_trace
 
         assert extract_websocket_trace({}) is None
 
@@ -508,7 +517,7 @@ class TestErrorTracing:
 
     def test_add_trace_to_error_with_context(self):
         """add_trace_to_error adds trace_id to error response."""
-        from aragora.server.middleware.tracing import add_trace_to_error, set_trace_id
+        from aragora.observability.middleware.tracing import add_trace_to_error, set_trace_id
 
         def _run():
             set_trace_id("err-trace-123")
@@ -520,7 +529,7 @@ class TestErrorTracing:
 
     def test_add_trace_to_error_without_context(self):
         """add_trace_to_error leaves response unchanged when no trace."""
-        from aragora.server.middleware.tracing import add_trace_to_error
+        from aragora.observability.middleware.tracing import add_trace_to_error
 
         def _run():
             resp = add_trace_to_error({"error": "oops"})
@@ -539,7 +548,7 @@ class TestInitShutdown:
 
     def test_init_tracing_returns_false_without_otel(self):
         """init_tracing returns False when otel_bridge is not importable."""
-        from aragora.server.middleware.tracing import init_tracing
+        from aragora.observability.middleware.tracing import init_tracing
 
         with patch(
             "aragora.server.middleware.tracing.init_tracing",
@@ -556,7 +565,7 @@ class TestInitShutdown:
 
     def test_shutdown_tracing_no_error_without_otel(self):
         """shutdown_tracing does not raise when otel_bridge is unavailable."""
-        from aragora.server.middleware.tracing import shutdown_tracing
+        from aragora.observability.middleware.tracing import shutdown_tracing
 
         with patch.dict(
             "sys.modules",
