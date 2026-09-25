@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: synaptent/aragora@44ac78ad311785ecaa91b3fe56c7c7c613af92d9
+      - uses: synaptent/aragora@1837e4b3cf26bd5f4a8acafded3e05475dcb0c6d
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
