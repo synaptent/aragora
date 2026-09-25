@@ -1,13 +1,14 @@
 """
-AWS Secrets Manager integration for Aragora.
+Secret custody integration for Aragora.
 
 This module provides secure secret management with multiple fallback strategies:
-1. AWS Secrets Manager (production)
-2. Environment variables (local development)
-3. Default values (for non-sensitive config)
+1. Protected files in a configured mounted directory
+2. AWS Secrets Manager (when explicitly or automatically enabled)
+3. Environment variables (local development)
+4. Default values (for non-sensitive config)
 
 Security Features:
-- Strict mode: Critical secrets MUST come from Secrets Manager in production
+- Strict mode: Critical secrets MUST come from approved managed custody in production
 - Audit logging for SOC 2 compliance
 - Automatic cache expiration
 - Thread-safe secret access
@@ -36,12 +37,16 @@ from __future__ import annotations
 import json
 import logging
 import os
+import stat
 import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, cast
 
 logger = logging.getLogger(__name__)
+
+_MAX_MOUNTED_SECRET_BYTES = 64 * 1024
+_AVAILABLE_SECRET_SOURCES = frozenset({"mounted_file", "aws", "managed_cache", "env"})
 
 
 def _mfa_prompt_allowed(*, isatty: bool, env: Mapping[str, str] | None = None) -> bool:
@@ -130,6 +135,7 @@ MANAGED_SECRETS = frozenset(
         "JWT_SECRET_KEY",
         "JWT_REFRESH_SECRET",
         "ARAGORA_JWT_SECRET",
+        "ARAGORA_API_TOKEN",
         # Encryption
         "ARAGORA_ENCRYPTION_KEY",
         # Audit signing
@@ -199,6 +205,7 @@ CRITICAL_SECRETS = frozenset(
         "JWT_SECRET_KEY",
         "JWT_REFRESH_SECRET",
         "ARAGORA_JWT_SECRET",
+        "ARAGORA_API_TOKEN",
         # Encryption - Compromise allows data decryption
         "ARAGORA_ENCRYPTION_KEY",
         "ARAGORA_AUDIT_SIGNING_KEY",
@@ -228,7 +235,7 @@ CRITICAL_SECRETS = frozenset(
 
 
 class SecretNotFoundError(Exception):
-    """Raised when a critical secret is not found in Secrets Manager."""
+    """Raised when a critical secret is not found in approved managed custody."""
 
     def __init__(self, name: str, message: str | None = None):
         self.name = name
@@ -236,11 +243,16 @@ class SecretNotFoundError(Exception):
             super().__init__(message)
         else:
             super().__init__(
-                f"Critical secret '{name}' not found in AWS Secrets Manager. "
-                f"In production, critical secrets must be stored in Secrets Manager, "
-                f"not environment variables. Configure AWS Secrets Manager or set "
+                f"Critical secret '{name}' not found in approved managed secret custody. "
+                f"In production, critical secrets must be stored in protected mounted "
+                f"files or AWS Secrets Manager, not environment variables. Configure "
+                f"ARAGORA_SECRETS_DIR or AWS Secrets Manager, or set "
                 f"ARAGORA_SECRETS_STRICT=false to disable strict mode (not recommended)."
             )
+
+
+class SecretSourceError(Exception):
+    """Raised when an explicitly configured managed-secret source is unsafe."""
 
 
 @dataclass(frozen=True)
@@ -252,13 +264,23 @@ class SecretPresence:
     critical: bool
     managed: bool
 
+    @property
+    def available(self) -> bool:
+        """Whether the secret is available from any allowed custody backend."""
+        return is_secret_presence_available(self)
+
+
+def is_secret_presence_available(presence: SecretPresence) -> bool:
+    """Interpret presence without enumerating custody backends in consumers."""
+    return presence.source in _AVAILABLE_SECRET_SOURCES
+
 
 def is_strict_mode() -> bool:
     """
     Check if strict secrets mode is enabled.
 
     Strict mode is enabled by default in production/staging environments.
-    In strict mode, critical secrets MUST come from AWS Secrets Manager,
+    In strict mode, critical secrets MUST come from approved managed custody,
     not environment variables.
 
     Returns:
@@ -272,7 +294,7 @@ def is_strict_mode() -> bool:
         return True
 
     # Default: strict in production/staging
-    env = (os.environ.get("ARAGORA_ENV") or "").lower()
+    env = (os.environ.get("ARAGORA_ENV") or os.environ.get("ARAGORA_ENVIRONMENT") or "").lower()
     return env in ("production", "prod", "staging", "stage")
 
 
@@ -284,6 +306,9 @@ def is_critical_secret(name: str) -> bool:
 @dataclass
 class SecretsConfig:
     """Configuration for secrets management."""
+
+    # Provider-neutral mounted-file settings
+    secrets_dir: str | None = None
 
     # AWS Secrets Manager settings
     aws_region: str = "us-east-1"
@@ -303,9 +328,9 @@ class SecretsConfig:
     def from_env(cls) -> SecretsConfig:
         """Load config from environment.
 
-        AWS Secrets Manager is opt-in for local/development runs to avoid
-        slow startup-time network probes. Production/staging and AWS-managed
-        runtimes still auto-enable it when the explicit flag is unset.
+        AWS Secrets Manager is opt-in unless the process is running in an
+        AWS-managed runtime. A production/staging environment name alone never
+        triggers an AWS probe.
 
         Set ARAGORA_USE_SECRETS_MANAGER=true to force-enable it anywhere, or
         false to disable it explicitly.
@@ -327,15 +352,17 @@ class SecretsConfig:
             except ValueError:
                 return default
 
+        secrets_dir = _env_text("ARAGORA_SECRETS_DIR") or None
         use_flag = _env_text("ARAGORA_USE_SECRETS_MANAGER")
         if use_flag:
             use_aws = use_flag.lower() in ("true", "1", "yes")
         else:
-            env_name = (_env_text("ARAGORA_ENV") or _env_text("ARAGORA_ENVIRONMENT")).lower()
-            running_in_aws = bool(
-                _env_text("AWS_EXECUTION_ENV") or _env_text("AWS_LAMBDA_FUNCTION_NAME")
+            use_aws = bool(_env_text("AWS_EXECUTION_ENV") or _env_text("AWS_LAMBDA_FUNCTION_NAME"))
+        if is_strict_mode() and not secrets_dir and not use_aws:
+            logger.warning(
+                "Strict secrets mode is enabled but no managed custody backend is configured. "
+                "Set ARAGORA_SECRETS_DIR or explicitly enable AWS Secrets Manager."
             )
-            use_aws = env_name in ("production", "prod", "staging", "stage") or running_in_aws
 
         primary_region = _env_text("AWS_REGION") or _env_text("AWS_DEFAULT_REGION") or "us-east-1"
         raw_regions = _env_text("ARAGORA_SECRET_REGIONS")
@@ -352,6 +379,7 @@ class SecretsConfig:
             if primary_region != "us-east-1":
                 regions.append("us-east-1")
         return cls(
+            secrets_dir=secrets_dir,
             aws_region=primary_region,
             aws_regions=regions,
             secret_name=_env_text("ARAGORA_SECRET_NAME", "aragora/production"),
@@ -369,9 +397,10 @@ class SecretManager:
     Manages secrets from multiple sources with fallback.
 
     Priority order:
-    1. AWS Secrets Manager (if enabled)
-    2. Environment variables
-    3. Default values (for non-sensitive config)
+    1. Protected mounted files (if configured)
+    2. AWS Secrets Manager (if enabled)
+    3. Environment variables
+    4. Default values (for non-sensitive config)
 
     Features:
     - Automatic cache expiration based on TTL
@@ -382,13 +411,179 @@ class SecretManager:
     def __init__(self, config: SecretsConfig | None = None):
         self.config = config or SecretsConfig.from_env()
         self._aws_clients: dict[str, Any] = {}
+        self._last_aws_load_succeeded = False
+        self._last_aws_load_transient_failure = False
+        self._last_aws_load_authoritative_failure = False
+        self._managed_sources_healthy = False
         self._cached_secrets: dict[str, str] = {}
+        self._cached_secret_sources: dict[str, str] = {}
         self._cache_timestamp: float = 0.0
         self._initialized = False
         self._lock = threading.Lock()
         self._access_log: list[dict[str, Any]] = []
         self._max_access_log_size = 1000
         self._warned_env_secrets: set[str] = set()
+
+    def _open_secrets_directory(self) -> int:
+        """Open and validate the configured directory without following symlinks."""
+        configured = self.config.secrets_dir
+        if not configured or not os.path.isabs(configured):
+            raise SecretSourceError("ARAGORA_SECRETS_DIR must be an absolute directory")
+        if (
+            os.name != "posix"
+            or not hasattr(os, "O_DIRECTORY")
+            or not hasattr(os, "O_NOFOLLOW")
+            or os.open not in os.supports_dir_fd
+        ):
+            raise SecretSourceError("ARAGORA_SECRETS_DIR requires POSIX descriptor safety")
+
+        flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0)
+        trusted_uids = {0, os.geteuid()}
+        components = [part for part in configured.split(os.path.sep) if part]
+        if not components:
+            raise SecretSourceError("ARAGORA_SECRETS_DIR must not identify the filesystem root")
+        if any(component in {".", ".."} for component in components):
+            raise SecretSourceError("ARAGORA_SECRETS_DIR must not contain dot components")
+        try:
+            current_fd = os.open(os.path.sep, flags)
+        except OSError as exc:
+            raise SecretSourceError("Filesystem root could not be opened safely") from exc
+        try:
+            for index, component in enumerate(components):
+                next_fd = os.open(component, flags | os.O_NOFOLLOW, dir_fd=current_fd)
+                try:
+                    component_stat = os.fstat(next_fd)
+                    component_mode = stat.S_IMODE(component_stat.st_mode)
+                    is_final = index == len(components) - 1
+                    if not stat.S_ISDIR(component_stat.st_mode):
+                        raise SecretSourceError("ARAGORA_SECRETS_DIR must identify a directory")
+                    if component_stat.st_uid not in trusted_uids:
+                        raise SecretSourceError(
+                            "ARAGORA_SECRETS_DIR components must have trusted ownership"
+                        )
+                    if component_mode & 0o022 and (is_final or not component_mode & stat.S_ISVTX):
+                        raise SecretSourceError(
+                            "ARAGORA_SECRETS_DIR components must not be writable by peers"
+                        )
+                except (OSError, SecretSourceError):
+                    os.close(next_fd)
+                    raise
+                os.close(current_fd)
+                current_fd = next_fd
+            return current_fd
+        except OSError as exc:
+            os.close(current_fd)
+            raise SecretSourceError(
+                "ARAGORA_SECRETS_DIR could not be opened without following symlinks"
+            ) from exc
+        except SecretSourceError:
+            os.close(current_fd)
+            raise
+
+    def _read_mounted_secret(self, directory_fd: int, name: str) -> str | None:
+        """Read one managed secret through a validated no-follow descriptor."""
+        if name not in MANAGED_SECRETS or os.path.basename(name) != name:
+            raise SecretSourceError("Refusing an unmanaged mounted-secret filename")
+
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_NONBLOCK", 0)
+        )
+        try:
+            fd = os.open(name, flags, dir_fd=directory_fd)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise SecretSourceError(f"Mounted secret '{name}' could not be opened safely") from exc
+
+        try:
+            file_stat = os.fstat(fd)
+            file_mode = stat.S_IMODE(file_stat.st_mode)
+            if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_nlink != 1:
+                raise SecretSourceError(f"Mounted secret '{name}' must be a single-link file")
+            if file_stat.st_uid not in {0, os.geteuid()}:
+                raise SecretSourceError(f"Mounted secret '{name}' must have trusted ownership")
+            if not file_mode & stat.S_IRUSR or file_mode & ~0o600:
+                raise SecretSourceError(
+                    f"Mounted secret '{name}' must use owner-readable, owner-only permissions"
+                )
+            if file_stat.st_size > _MAX_MOUNTED_SECRET_BYTES:
+                raise SecretSourceError(f"Mounted secret '{name}' exceeds the size limit")
+
+            payload = bytearray()
+            while len(payload) <= _MAX_MOUNTED_SECRET_BYTES:
+                chunk = os.read(fd, min(8192, _MAX_MOUNTED_SECRET_BYTES + 1 - len(payload)))
+                if not chunk:
+                    break
+                payload.extend(chunk)
+            if len(payload) > _MAX_MOUNTED_SECRET_BYTES:
+                raise SecretSourceError(f"Mounted secret '{name}' exceeds the size limit")
+            try:
+                value = bytes(payload).decode("utf-8").rstrip("\r\n")
+            except UnicodeDecodeError as exc:
+                raise SecretSourceError(f"Mounted secret '{name}' must contain UTF-8 text") from exc
+            if not value.strip():
+                raise SecretSourceError(f"Mounted secret '{name}' must not be empty")
+            return value
+        except OSError as exc:
+            raise SecretSourceError(f"Mounted secret '{name}' could not be read safely") from exc
+        finally:
+            os.close(fd)
+
+    def _load_from_mounted_directory(self) -> dict[str, str]:
+        """Load present managed filenames from the configured protected directory."""
+        if not self.config.secrets_dir:
+            return {}
+        directory_fd = self._open_secrets_directory()
+        try:
+            secrets = {
+                name: value
+                for name in MANAGED_SECRETS
+                if (value := self._read_mounted_secret(directory_fd, name)) is not None
+            }
+        finally:
+            os.close(directory_fd)
+        logger.info("Loaded %d secrets from protected mounted files", len(secrets))
+        return secrets
+
+    def _load_managed_sources(self) -> tuple[dict[str, str], dict[str, str]]:
+        """Load enabled sources and merge them in custody-precedence order."""
+        self._managed_sources_healthy = False
+        mounted_secrets = self._load_from_mounted_directory() if self.config.secrets_dir else {}
+        aws_secrets = self._load_from_aws() if self.config.use_aws else {}
+        if aws_secrets:
+            self._last_aws_load_succeeded = True
+        self._managed_sources_healthy = bool(self.config.secrets_dir or self.config.use_aws) and (
+            not self.config.use_aws or self._last_aws_load_succeeded
+        )
+        if (
+            self.config.use_aws
+            and self._last_aws_load_transient_failure
+            and not self._last_aws_load_succeeded
+            and not self._last_aws_load_authoritative_failure
+        ):
+            aws_secrets = {
+                name: value
+                for name, value in self._cached_secrets.items()
+                if self._cached_secret_sources.get(name) == "aws"
+            }
+            if aws_secrets:
+                logger.warning("Preserving last known AWS secret cache after refresh failure")
+        combined = {**aws_secrets, **mounted_secrets}
+        sources = {name: "aws" for name in aws_secrets}
+        sources.update({name: "mounted_file" for name in mounted_secrets})
+        return combined, sources
+
+    def _cached_entry(self, name: str) -> tuple[str | None, str]:
+        """Return one coherent value/source snapshot across concurrent refreshes."""
+        with self._lock:
+            value = self._cached_secrets.get(name)
+            source = self._cached_secret_sources.get(name)
+            if source is None:
+                source = "managed_cache"
+            return value, source
 
     def _is_cache_expired(self) -> bool:
         """Check if the secret cache has expired."""
@@ -406,7 +601,7 @@ class SecretManager:
         entry = {
             "timestamp": time.time(),
             "secret_name": secret_name,
-            "source": source,  # "aws", "env", "default"
+            "source": source,  # managed backend, env, default, or failure classification
             "success": success,
         }
         with self._lock:
@@ -500,6 +695,9 @@ class SecretManager:
 
     def _load_from_aws(self) -> dict[str, str]:
         """Load secrets from AWS Secrets Manager."""
+        self._last_aws_load_succeeded = False
+        self._last_aws_load_transient_failure = False
+        self._last_aws_load_authoritative_failure = False
         if not self.config.use_aws:
             return {}
 
@@ -514,13 +712,27 @@ class SecretManager:
                 continue
             try:
                 response = client.get_secret_value(SecretId=self.config.secret_name)
-                secret_string = response.get("SecretString", "{}")
-                secrets: dict[str, str] = json.loads(secret_string)
+                self._last_aws_load_authoritative_failure = True
+                secret_string = response.get("SecretString")
+                if not isinstance(secret_string, str):
+                    logger.error("AWS secret payload is not textual JSON (region=%s)", region)
+                    return {}
+                parsed = json.loads(secret_string)
+                if not isinstance(parsed, dict) or not all(
+                    isinstance(name, str) and isinstance(value, str)
+                    for name, value in parsed.items()
+                ):
+                    logger.error("AWS secret payload is not a string map (region=%s)", region)
+                    return {}
+                secrets: dict[str, str] = parsed
                 logger.info(
                     "Loaded %d secrets from AWS Secrets Manager (region=%s)",
                     len(secrets),
                     region,
                 )
+                self._last_aws_load_succeeded = True
+                self._last_aws_load_transient_failure = False
+                self._last_aws_load_authoritative_failure = False
                 return secrets
             except json.JSONDecodeError as e:
                 logger.error("Failed to parse secrets JSON from AWS (region=%s): %s", region, e)
@@ -531,6 +743,7 @@ class SecretManager:
                 if hasattr(e, "response"):
                     error_code = e.response.get("Error", {}).get("Code", "")
                     if error_code == "ResourceNotFoundException":
+                        self._last_aws_load_authoritative_failure = True
                         logger.warning(
                             "Secret '%s' not found in AWS (region=%s)",
                             self.config.secret_name,
@@ -540,16 +753,34 @@ class SecretManager:
                     if error_code == "AccessDeniedException":
                         logger.warning("Access denied to AWS Secrets Manager (region=%s)", region)
                         continue
+                    if error_code in {
+                        "InternalServiceError",
+                        "RequestTimeout",
+                        "ServiceUnavailable",
+                        "ThrottlingException",
+                    }:
+                        self._last_aws_load_transient_failure = True
                     logger.error(
                         "AWS Secrets Manager error (region=%s): %s: %s", region, error_code, e
                     )
                 else:
+                    self._last_aws_load_transient_failure = True
                     logger.error(
                         "AWS/botocore error (region=%s): %s: %s", region, type(e).__name__, e
                     )
                 continue
-            except (OSError, RuntimeError, ValueError, KeyError) as e:
-                # Catch remaining non-boto exceptions (e.g., config errors, network)
+            except OSError as e:
+                last_error = e
+                self._last_aws_load_transient_failure = True
+                logger.error(
+                    "Unexpected error loading secrets (region=%s): %s: %s",
+                    region,
+                    type(e).__name__,
+                    e,
+                )
+                continue
+            except (RuntimeError, ValueError, KeyError) as e:
+                # Catch remaining non-boto exceptions (e.g., config errors)
                 last_error = e
                 logger.error(
                     "Unexpected error loading secrets (region=%s): %s: %s",
@@ -564,10 +795,10 @@ class SecretManager:
         return {}
 
     def _initialize(self, force_refresh: bool = False) -> None:
-        """Initialize the secret manager (load from AWS if enabled).
+        """Initialize the secret manager and its enabled managed sources.
 
         Args:
-            force_refresh: Force reload from AWS even if cache is valid
+            force_refresh: Force reload from managed sources even if cache is valid
         """
         import time
 
@@ -575,13 +806,15 @@ class SecretManager:
             # First initialization
             if not self._initialized:
                 logger.debug(
-                    "Initializing SecretManager: use_aws=%s, secret_name=%s, regions=%s",
+                    "Initializing SecretManager: mounted_files=%s, use_aws=%s, "
+                    "secret_name=%s, regions=%s",
+                    bool(self.config.secrets_dir),
                     self.config.use_aws,
                     self.config.secret_name,
                     self.config.aws_regions,
                 )
-                if self.config.use_aws:
-                    self._cached_secrets = self._load_from_aws()
+                if self.config.secrets_dir or self.config.use_aws:
+                    self._cached_secrets, self._cached_secret_sources = self._load_managed_sources()
                     self._cache_timestamp = time.time()
                     if self._cached_secrets:
                         logger.info(
@@ -590,17 +823,15 @@ class SecretManager:
                             self.config.cache_ttl_seconds,
                         )
                     else:
-                        logger.warning(
-                            "Secrets cache initialized but EMPTY - AWS loading may have failed"
-                        )
+                        logger.warning("Managed secrets cache initialized but empty")
                 else:
-                    logger.debug("AWS Secrets Manager disabled, using environment variables only")
+                    logger.debug("Managed secret sources disabled; using environment variables")
                 self._initialized = True
                 return
 
-            # Already initialized - check if refresh needed (only for AWS)
-            if not self.config.use_aws:
-                return  # No AWS, no refresh needed
+            # Already initialized - check if an enabled managed source needs refresh.
+            if not (self.config.secrets_dir or self.config.use_aws):
+                return
 
             if self._cache_timestamp == 0.0 and not force_refresh:
                 # Some callers and tests preseed _cached_secrets and mark the
@@ -614,12 +845,12 @@ class SecretManager:
             if not needs_refresh:
                 return
 
-            self._cached_secrets = self._load_from_aws()
+            self._cached_secrets, self._cached_secret_sources = self._load_managed_sources()
             self._cache_timestamp = time.time()
             logger.debug("Secrets cache refreshed, TTL: %ss", self.config.cache_ttl_seconds)
 
     def refresh(self) -> None:
-        """Force refresh secrets from AWS (for manual rotation)."""
+        """Force refresh enabled managed sources after secret rotation."""
         self._initialize(force_refresh=True)
         logger.info("Secrets manually refreshed")
 
@@ -642,7 +873,7 @@ class SecretManager:
 
         Raises:
             SecretNotFoundError: If strict mode is enabled for a critical secret
-                and it's not found in AWS Secrets Manager
+                and it's not found in approved managed custody
         """
         self._initialize()
 
@@ -650,20 +881,14 @@ class SecretManager:
         use_strict = strict if strict is not None else is_strict_mode()
         is_critical = is_critical_secret(name)
 
-        # 1. Check AWS cache first
-        if name in self._cached_secrets:
-            self._log_access(name, "aws", True)
-            return self._cached_secrets[name]
+        # 1. Check the merged managed-source cache first.
+        managed_value, managed_source = self._cached_entry(name)
+        if managed_value is not None and managed_value.strip():
+            self._log_access(name, managed_source, True)
+            return managed_value
 
-        # Debug: Log cache miss for managed secrets
         if name in MANAGED_SECRETS:
-            cached_keys = list(self._cached_secrets.keys())[:10]  # First 10 for brevity
-            logger.debug(
-                "Secret '%s' not in AWS cache. Cache has %d secrets. Sample keys: %s",
-                name,
-                len(self._cached_secrets),
-                cached_keys,
-            )
+            logger.debug("Managed secret cache miss")
 
         # 2. Check environment variable
         env_value = os.environ.get(name)
@@ -674,12 +899,12 @@ class SecretManager:
                 # Log warning - env var exists but shouldn't be used
                 logger.warning(
                     "SECURITY: Critical secret '%s' found in environment variable "
-                    "but strict mode is enabled. This secret should be in AWS "
-                    "Secrets Manager. Ignoring env var value.",
+                    "but strict mode is enabled. This secret should be in approved "
+                    "managed custody. Ignoring env var value.",
                     name,
                 )
                 self._log_access(name, "env_blocked", False)
-            # Secret not in AWS - raise error
+            # Secret not in approved managed custody - raise error.
             self._log_access(name, "not_found_strict", False)
             raise SecretNotFoundError(name)
 
@@ -689,7 +914,7 @@ class SecretManager:
                 self._warned_env_secrets.add(name)
                 logger.warning(
                     "SECURITY: Critical secret '%s' loaded from environment variable. "
-                    "Consider migrating to AWS Secrets Manager for production use.",
+                    "Consider migrating to approved managed custody for production use.",
                     name,
                 )
             self._log_access(name, "env", True)
@@ -706,7 +931,9 @@ class SecretManager:
         """Return a presence-only secret source without exposing the value.
 
         Sources are:
+        - ``mounted_file``: available from a protected mounted file.
         - ``aws``: available from the current Secrets Manager cache.
+        - ``managed_cache``: available from a pre-seeded cache with unknown provenance.
         - ``env``: available from process environment and allowed by mode.
         - ``blocked_by_strict_mode``: present in env but strict mode forbids using it.
         - ``missing``: unavailable from both AWS cache and env.
@@ -715,11 +942,11 @@ class SecretManager:
 
         use_strict = strict if strict is not None else is_strict_mode()
         is_critical = is_critical_secret(name)
-        aws_value = self._cached_secrets.get(name)
+        managed_value, managed_source = self._cached_entry(name)
         env_value = os.environ.get(name)
 
-        if aws_value is not None and aws_value.strip():
-            source = "aws"
+        if managed_value is not None and managed_value.strip():
+            source = managed_source
         elif use_strict and is_critical and env_value is not None and env_value.strip():
             source = "blocked_by_strict_mode"
         elif env_value is not None and env_value.strip():
@@ -727,13 +954,14 @@ class SecretManager:
         else:
             source = "missing"
 
-        self._log_access(name, f"presence_{source}", source in {"aws", "env"})
-        return SecretPresence(
+        presence = SecretPresence(
             name=name,
             source=source,
             critical=is_critical,
             managed=name in MANAGED_SECRETS,
         )
+        self._log_access(name, f"presence_{source}", presence.available)
+        return presence
 
     def presence_report(
         self, names: list[str] | tuple[str, ...], strict: bool | None = None
@@ -751,10 +979,10 @@ class SecretManager:
 
         use_strict = strict if strict is not None else is_strict_mode()
         is_critical = is_critical_secret(name)
-        aws_value = self._cached_secrets.get(name)
-        if aws_value is not None:
-            usable = len(aws_value.strip()) >= min_length
-            self._log_access(name, "usable_aws", usable)
+        managed_value, managed_source = self._cached_entry(name)
+        if managed_value is not None:
+            usable = len(managed_value.strip()) >= min_length
+            self._log_access(name, f"usable_{managed_source}", usable)
             return usable
 
         env_value = os.environ.get(name)
@@ -858,7 +1086,7 @@ def get_secret(
     Get a secret value.
 
     This is the main entry point for getting secrets throughout the application.
-    Caching happens inside SecretManager (AWS secrets are loaded once on first access).
+    Caching happens inside SecretManager (managed secrets are loaded once on first access).
 
     Args:
         name: Secret name (e.g., "JWT_SECRET_KEY")
@@ -870,7 +1098,7 @@ def get_secret(
 
     Raises:
         SecretNotFoundError: If strict mode is enabled for a critical secret
-            and it's not found in AWS Secrets Manager
+            and it's not found in approved managed custody
 
     Example:
         jwt_secret = get_secret("JWT_SECRET_KEY")
@@ -908,7 +1136,7 @@ def hydrate_env_from_secrets(
     Load secrets into environment variables.
 
     This allows legacy code that reads os.getenv/os.environ to prefer
-    Secrets Manager values (when available), with .env as fallback.
+    managed-custody values (when available), with .env as fallback.
 
     Args:
         names: Optional list of secret names to hydrate. Defaults to MANAGED_SECRETS.
@@ -922,20 +1150,50 @@ def hydrate_env_from_secrets(
         manager = get_secret_manager()
         manager._initialize()
         target_names = names or list(MANAGED_SECRETS)
+        with manager._lock:
+            cached_secrets = dict(manager._cached_secrets)
+            cached_sources = dict(manager._cached_secret_sources)
+            clear_unmanaged_env = manager._managed_sources_healthy or (
+                manager.config.use_aws and manager._last_aws_load_authoritative_failure
+            )
+        use_strict = is_strict_mode()
         for name in target_names:
-            if not overwrite and os.environ.get(name):
+            if (
+                not overwrite
+                and os.environ.get(name)
+                and not (use_strict and is_critical_secret(name))
+            ):
                 continue
             value: str | None
-            if name in manager._cached_secrets:
-                value = manager._cached_secrets[name]
+            if name in cached_secrets and cached_secrets[name].strip():
+                value = cached_secrets[name]
+                source = cached_sources.get(name, "managed_cache")
+                manager._log_access(name, f"hydrate_{source}", True)
+            elif use_strict and is_critical_secret(name):
+                manager._log_access(name, "hydrate_env_blocked", False)
+                if name in os.environ and clear_unmanaged_env:
+                    logger.warning(
+                        "SECURITY: Removing critical secret '%s' from the process environment "
+                        "because strict managed custody is enabled.",
+                        name,
+                    )
+                    os.environ.pop(name, None)
+                elif name in os.environ:
+                    manager._log_access(name, "hydrate_env_retained_source_unhealthy", False)
+                    logger.warning(
+                        "SECURITY: Retaining previously hydrated critical secret '%s' because "
+                        "the configured managed source did not load successfully.",
+                        name,
+                    )
+                continue
             else:
-                # Use direct env lookup here to avoid noisy warning logs during
-                # best-effort bootstrap. Strict enforcement and local fallback
-                # warnings still happen when callers actively request a secret.
                 value = os.environ.get(name)
+                manager._log_access(name, "hydrate_env", bool(value))
             if value:
                 os.environ[name] = value
                 hydrated[name] = value
+    except SecretSourceError:
+        raise
     except (OSError, RuntimeError, ValueError):
         # Best-effort: don't block startup on secrets hydration.
         return hydrated
@@ -965,9 +1223,9 @@ def clear_secret_cache() -> None:
 
 
 def refresh_secrets() -> None:
-    """Force refresh secrets from AWS Secrets Manager.
+    """Force refresh secrets from enabled managed custody.
 
-    Call this after rotating secrets in AWS to ensure the application
+    Call this after rotating managed secrets to ensure the application
     picks up the new values immediately.
     """
     get_secret_manager().refresh()
