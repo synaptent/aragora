@@ -874,7 +874,11 @@ def _write_review_odr(
     demo: bool = False,
 ) -> Path:
     """Export review findings as an Open Decision Receipt."""
-    from aragora.gauntlet.odr_export import decision_receipt_to_odr, sign_odr_if_configured
+    from aragora.gauntlet.odr_export import (
+        decision_receipt_to_odr,
+        resolve_odr_version,
+        sign_odr_if_configured,
+    )
     from aragora.gauntlet.receipt_models import DecisionReceipt
 
     if demo:
@@ -892,7 +896,7 @@ def _write_review_odr(
         pr_url=pr_url,
         reviewer_agents=agents_used or None,
     )
-    odr = decision_receipt_to_odr(receipt)
+    odr = decision_receipt_to_odr(receipt, odr_version=resolve_odr_version(None))
     if not demo:
         # Never sign fabricated demo findings; demo receipts stay explicitly unsigned.
         odr = sign_odr_if_configured(odr)

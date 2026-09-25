@@ -16,7 +16,7 @@ Guide](../specs/independent-verifier-guide) and
 ```bash
 aragora quickstart --demo --no-browser --output r.json
 aragora receipt export r.json --format odr -o r.odr.json
-pip install -U 'aragora-verify>=0.1.1' && aragora-verify r.odr.json
+pip install -U 'aragora-verify>=0.2.0' && aragora-verify r.odr.json
 ```
 
 This runs a demo debate, exports the receipt to the portable ODR format, and

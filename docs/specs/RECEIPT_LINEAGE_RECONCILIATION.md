@@ -77,10 +77,12 @@ must be kept in lockstep:
    dependency, with its own real CLI entry point
    (`aragora-verify RECEIPT.odr.json [--pubkey KEY.pem] [--chain CHAIN.jsonl]`) for an
    external auditor who has never installed Aragora. `aragora-verify` is live on
-   PyPI; 0.1.1 is the latest published version, and 0.1.0 was first published
-   2026-06-29T23:32Z (GitHub release
+   PyPI; 0.2.0 (2026-09-25) is the latest published version, and 0.1.0 was first
+   published 2026-06-29T23:32Z (GitHub release
    [`aragora-verify-v0.1.0`](https://github.com/synaptent/aragora/releases/tag/aragora-verify-v0.1.0)).
-   Use `pip install "aragora-verify>=0.1.1"` for the public-index verifier today.
+   Use `pip install "aragora-verify>=0.2.0"` for the public-index verifier today:
+   0.2.0 is the first line that verifies ODR v0.2, the default export format from
+   release 2.11.0, and it keeps 0.1.1's signer `key_id` binding that 0.1.0 lacks.
    Self-verify rather than trust this sentence: `python3 -m pip index versions
    aragora-verify` or `curl -s https://pypi.org/pypi/aragora-verify/json`. To
    exercise this exact checkout instead of the published package, run

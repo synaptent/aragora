@@ -22,12 +22,14 @@ pip install aragora-verify
 ```
 
 `aragora-verify` is published on PyPI. For a new audit, install the current
-release line explicitly so you do not accidentally rely on the older 0.1.0
-package, which predates the signer-label / `key_id` binding documented in the
-verification walkthrough:
+release line explicitly: 0.2.0 is the first line that verifies ODR v0.2, the
+default export format from release 2.11.0 (0.1.x rejects v0.2 documents on
+`schema_conformance`), and like 0.1.1 it keeps the signer-label / `key_id`
+binding documented in the verification walkthrough, which the older 0.1.0
+package predates:
 
 ```bash
-pip install "aragora-verify>=0.1.1"
+pip install "aragora-verify>=0.2.0"
 ```
 
 Verify the published version yourself in one command rather than trusting this
@@ -35,7 +37,7 @@ sentence:
 
 ```bash
 curl -s https://pypi.org/pypi/aragora-verify/json | python3 -c "import sys,json; print(json.load(sys.stdin)['info']['version'])"
-# -> 0.1.1
+# -> 0.2.0
 ```
 
 > **Note on other docs in this repo.** Some existing docs (including this
@@ -46,10 +48,11 @@ curl -s https://pypi.org/pypi/aragora-verify/json | python3 -c "import sys,json;
 > those docs actually checked. The first release, `aragora-verify` 0.1.0, has
 > been live on PyPI since **2026-06-29** (GitHub release
 > [`aragora-verify-v0.1.0`](https://github.com/synaptent/aragora/releases/tag/aragora-verify-v0.1.0),
-> uploaded via Trusted Publishing). The current 0.1.1 line adds the
-> signer-label / `key_id` binding; if another doc says "pending" or assumes
-> 0.1.0 is the current verifier, re-run the one-line check above and prefer
-> `>=0.1.1` or the source checkout below for full protection.
+> uploaded via Trusted Publishing). The 0.1.1 line added the signer-label /
+> `key_id` binding, and the current 0.2.0 line keeps it and adds ODR v0.2
+> verification; if another doc says "pending" or assumes an older line is the
+> current verifier, re-run the one-line check above and prefer `>=0.2.0` or
+> the source checkout below for full protection.
 
 If you don't want to install anything system-wide, or you want to exercise
 this exact checkout (for example to test a local change before it is
@@ -155,10 +158,11 @@ declares `cryptography>=48.0.1`, matching the root `aragora` distribution's
 The verifier's public API uses stable Ed25519 verification and PEM loading, but
 the packaged wheel still brings in `cryptography`'s OpenSSL-backed distribution;
 the raised floor keeps isolated installs off affected wheels even when Aragora's
-root lockfile is absent. If you are auditing the currently published `0.1.1`
-PyPI line before the `0.2.0` release exists — `0.2.0` is the first published line
-that accepts ODR v0.2 documents — verify the installed wheel's metadata directly
-or run from this checkout so the raised floor is part of the package under test. The local metadata guard test covers the source tree; making
+root lockfile is absent. `0.2.0`, the first published line that accepts ODR v0.2
+documents, has been on PyPI since 2026-09-25 and its wheel metadata declares
+`cryptography>=48.0.1`. If you are auditing an older `0.1.x` install, which
+predates that floor, upgrade to `>=0.2.0` or run from this checkout so the raised
+floor is part of the package under test. The local metadata guard test covers the source tree; making
 that guard a required PR workflow is intentionally separate from this packaging
 repair and needs the normal workflow-change approval path.
 

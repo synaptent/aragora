@@ -51,5 +51,5 @@ jobs:
       - name: Verify the receipt offline (optional)
         if: steps.review.outputs.receipt-verified == 'true'
         run: |
-          pip install "aragora-verify>=0.1.1"
+          pip install "aragora-verify>=0.2.0"
           aragora-verify "${{ steps.review.outputs.receipt-path }}"

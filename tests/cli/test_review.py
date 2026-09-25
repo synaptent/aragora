@@ -845,6 +845,30 @@ class TestCmdReview:
         # Demo receipts must never pass for a real review's receipt.
         assert "[DEMO MODE]" in odr_text
 
+    def test_emit_odr_profile_follows_default_and_env_opt_out(
+        self, review_args, tmp_path, monkeypatch
+    ):
+        """--emit-odr writes the 0.2 default and honours ARAGORA_ODR_PROFILE_VERSION=0.1."""
+        review_args.demo = True
+        review_args.emit_odr = ""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        monkeypatch.delenv("ARAGORA_ODR_PROFILE_VERSION", raising=False)
+        default_dir = tmp_path / "default"
+        default_dir.mkdir()
+        review_args.output_dir = str(default_dir)
+        assert cmd_review(review_args) == 0
+        default_odr = json.loads((default_dir / "review.odr.json").read_text())
+        assert default_odr["odr_version"] == "0.2"
+
+        monkeypatch.setenv("ARAGORA_ODR_PROFILE_VERSION", "0.1")
+        opt_out_dir = tmp_path / "opt-out"
+        opt_out_dir.mkdir()
+        review_args.output_dir = str(opt_out_dir)
+        assert cmd_review(review_args) == 0
+        opt_out_odr = json.loads((opt_out_dir / "review.odr.json").read_text())
+        assert opt_out_odr["odr_version"] == "0.1"
+
     def test_real_review_emits_odr_to_explicit_path(self, review_args, tmp_path, monkeypatch):
         """A standard review can produce its portable receipt in one invocation."""
         diff_file = tmp_path / "test.diff"

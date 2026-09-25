@@ -1,6 +1,15 @@
 {
   "attestation": {
-    "disposition": "autonomous"
+    "disposition": "autonomous",
+    "mechanism": {
+      "action": "prepare",
+      "action_reason": "reviewer dissent present (grok); prepared evidence only",
+      "policy_version": 1,
+      "severity_gated": true,
+      "tier": 1,
+      "tiered_gate": false,
+      "type": "merge-quorum"
+    }
   },
   "claim": {
     "statement": "Merge synaptent/aragora#8667 @ aaaaaaaaaaaa",
@@ -23,14 +32,24 @@
     "status": "absent"
   },
   "issued_at": "2026-06-27T08:00:00+00:00",
-  "odr_version": "0.1",
-  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.1",
+  "odr_version": "0.2",
+  "profile": "https://aragora.ai/specs/open-decision-receipt/v0.2",
   "quorum": {
     "dissent": {
+      "blocking": true,
       "dissenting_agents": [
         "grok"
       ],
+      "findings": [
+        {
+          "blocking": true,
+          "issuer": "grok",
+          "severity": "P1",
+          "text": "correctness: off-by-one in the loop bound"
+        }
+      ],
       "present": true,
+      "severity_max": "P1",
       "views": [
         "grok: [P1] correctness: off-by-one in the loop bound"
       ]
@@ -63,8 +82,50 @@
       }
     ],
     "reached": false,
+    "rule": {
+      "counted_families": [
+        "claude",
+        "grok",
+        "openai"
+      ],
+      "required_signals": 2,
+      "requires_western_frontier": false,
+      "western_only_counted": false
+    },
     "status": "present",
-    "supporting_agents": []
+    "supporting_agents": [],
+    "verdicts": [
+      {
+        "blocking": false,
+        "counted": true,
+        "grounded": true,
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "issuer": "claude",
+        "model_family": "anthropic",
+        "model_id": "undisclosed",
+        "verdict": "pass"
+      },
+      {
+        "blocking": false,
+        "counted": true,
+        "grounded": true,
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "issuer": "openai",
+        "model_family": "openai",
+        "model_id": "undisclosed",
+        "verdict": "pass"
+      },
+      {
+        "blocking": true,
+        "counted": true,
+        "grounded": true,
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "issuer": "grok",
+        "model_family": "xai",
+        "model_id": "undisclosed",
+        "verdict": "changes_requested"
+      }
+    ]
   },
   "reasoning": {
     "status": "present",
@@ -88,7 +149,10 @@
       "status": "present",
       "value": "31c7851cd104503c7ed716b4a655ccf2e3eef3bd03d8e8d92b0912aff705518e"
     },
+    "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "identifier": "merge-quorum/synaptent/aragora#8667",
+    "pr_number": 8667,
+    "repository": "synaptent/aragora",
     "summary": "Merge synaptent/aragora#8667 @ aaaaaaaaaaaa"
   }
 }
