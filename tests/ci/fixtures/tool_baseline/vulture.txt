@@ -1,0 +1,8 @@
+other.py:4: unused function 'helper' (60% confidence)
+other.py:4: unused variable 'x' (100% confidence)
+pkg/mod.py:3: unused import 'yaml' (90% confidence)
+pkg/mod.py:6: unused function 'unused_function' (60% confidence)
+pkg/mod.py:7: unused variable 'unused_var' (60% confidence)
+pkg/mod.py:11: unused class 'UnusedClass' (60% confidence)
+pkg/mod.py:12: unused variable 'unused_attr' (60% confidence)
+pkg/mod.py:14: unused method 'unused_method' (60% confidence)

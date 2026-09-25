@@ -82,6 +82,14 @@ help:
 	@echo "Hygiene:"
 	@echo "  make sweep-stale-lanes       Dry-run lane-registry staleness sweeper"
 	@echo "  make sweep-stale-lanes-apply Apply expirations to stale active lane rows"
+	@echo ""
+	@echo "Readiness gate (per-app; put .venv/bin on PATH first):"
+	@echo "  make readiness-lint      Lint every app (root, debate, verify, live, docs, vscode, operator)"
+	@echo "  make readiness-typecheck Typecheck every app"
+	@echo "  make readiness-test      Run every app's fast test suite"
+	@echo "  make readiness-<kind>-<app>  One app only, e.g. readiness-test-live"
+	@echo "                    Absent toolchains print 'SKIP <app>: <reason>' and exit 0"
+	@echo "                    READINESS_BASE_REF=origin/main  READINESS_EXTRA_TESTS='tests/<area>'"
 
 # Setup
 install:
@@ -335,3 +343,193 @@ marketplace-list:
 marketplace-search:
 	@read -p "Search query: " query; \
 	python -m aragora.cli.main marketplace search "$$query"
+
+# ---------------------------------------------------------------------------
+# Readiness gate
+# ---------------------------------------------------------------------------
+# Three aggregators fan out to one target per app and kind:
+#   readiness-{lint,typecheck,test}-{root,debate,verify,live,docs,vscode,operator}
+# Contract for every per-app target:
+#   * runnable alone from any cwd (`make -C <repo> readiness-lint-live`);
+#     recipes `cd <app> && ...` rather than depending on the caller's cwd;
+#   * toolchain detected with `command -v` (plus node_modules presence);
+#     an absent toolchain prints `SKIP <app>: <reason>` and exits 0 so the
+#     aggregate stays usable on any machine;
+#   * a present-but-failing tool fails the target, and make names it
+#     (`*** [readiness-lint-root] Error 1`);
+#   * no hardcoded ports; nothing here starts a server;
+#   * prints `[readiness] <target> ok (<seconds>s)` on success.
+# Later milestones extend the per-app recipes in place and never rename them.
+# Ratchet invocations (`python scripts/ci/check_tool_baseline.py --tool <t>
+# --baseline scripts/baselines/<app>-<tool>[-<variant>].json -- <cmd>`) are
+# wired into readiness-lint-<app> from M2 onward; keep each `--baseline` path
+# on its own physical line so gate wiring stays greppable.
+# Heavy steps (`next build`, `docusaurus build`, size-limit, test-electron,
+# envtest, golangci-lint, docker build) are NEVER part of these aggregates.
+# The names `readiness-heavy-<app>` are reserved for them: readiness-heavy-live
+# (M5), readiness-heavy-docs (M7), readiness-heavy-vscode (M8),
+# readiness-heavy-operator (M9). They follow the same SKIP contract and are
+# run by CI, not by the milestone gate.
+
+# Base ref for the changed-file mypy gate (CI's PR-time typecheck command).
+READINESS_BASE_REF ?= origin/main
+# Extra pytest paths for readiness-test-root, e.g. READINESS_EXTRA_TESTS="tests/utils".
+READINESS_EXTRA_TESTS ?=
+# Known-red at mission-base (two `.nomic/` literals); M2 fixes the test and
+# removes this deselect so the gate is honestly green from M1 on.
+READINESS_ROOT_TEST_DESELECT := --deselect tests/config/test_db_path_resolution.py::test_guard_repo_clean_scan_paths
+
+READINESS_T0 = start=$$(date +%s)
+READINESS_DONE = echo "[readiness] $@ ok ($$(( $$(date +%s) - start ))s)"
+
+.PHONY: readiness-lint readiness-typecheck readiness-test
+.PHONY: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
+.PHONY: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
+.PHONY: readiness-test-root readiness-test-debate readiness-test-verify readiness-test-live readiness-test-docs readiness-test-vscode readiness-test-operator
+
+readiness-lint: readiness-lint-root readiness-lint-debate readiness-lint-verify readiness-lint-live readiness-lint-docs readiness-lint-vscode readiness-lint-operator
+readiness-typecheck: readiness-typecheck-root readiness-typecheck-debate readiness-typecheck-verify readiness-typecheck-live readiness-typecheck-docs readiness-typecheck-vscode readiness-typecheck-operator
+readiness-test: readiness-test-root readiness-test-debate readiness-test-verify readiness-test-live readiness-test-docs readiness-test-vscode readiness-test-operator
+
+# --- root (Python package `aragora/`, tests `tests/`, scripts) --------------
+readiness-lint-root:
+	@$(READINESS_T0); \
+	command -v ruff >/dev/null 2>&1 || { echo "SKIP root: ruff not found (put .venv/bin on PATH)"; exit 0; }; \
+	ruff check aragora tests scripts && \
+	ruff format --check aragora tests scripts && \
+	$(READINESS_DONE)
+
+readiness-typecheck-root:
+	@$(READINESS_T0); \
+	command -v mypy >/dev/null 2>&1 || { echo "SKIP root: mypy not found (put .venv/bin on PATH)"; exit 0; }; \
+	git rev-parse --verify -q "$(READINESS_BASE_REF)" >/dev/null || { echo "readiness-typecheck-root: base ref $(READINESS_BASE_REF) not found (set READINESS_BASE_REF)"; exit 1; }; \
+	files=$$(git diff --name-only --diff-filter=d "$(READINESS_BASE_REF)...HEAD" -- ':(glob)aragora/**/*.py' ':(glob)scripts/**/*.py'); \
+	if [ -z "$$files" ]; then echo "no changed python files ($(READINESS_BASE_REF)...HEAD)"; $(READINESS_DONE); exit 0; fi; \
+	echo "mypy $$(mypy --version | awk '{print $$2}') over $$(echo $$files | wc -w | tr -d ' ') changed file(s)"; \
+	mypy --ignore-missing-imports --follow-imports=skip --show-error-codes $$files && \
+	$(READINESS_DONE)
+
+readiness-test-root:
+	@$(READINESS_T0); \
+	command -v pytest >/dev/null 2>&1 || { echo "SKIP root: pytest not found (put .venv/bin on PATH)"; exit 0; }; \
+	pytest tests/ci tests/config tests/observability tests/telemetry $(READINESS_EXTRA_TESTS) -q -p no:randomly -n 4 --timeout=120 $(READINESS_ROOT_TEST_DESELECT) && \
+	$(READINESS_DONE)
+
+# --- debate (aragora-debate/, src layout) -----------------------------------
+# Until M3 adds a package-local [tool.ruff], ruff falls back to the root
+# config, which excludes aragora-debate*, so this check is vacuous but green.
+readiness-lint-debate:
+	@$(READINESS_T0); \
+	command -v ruff >/dev/null 2>&1 || { echo "SKIP debate: ruff not found (put .venv/bin on PATH)"; exit 0; }; \
+	cd aragora-debate && ruff check . && ruff format --check . && \
+	$(READINESS_DONE)
+
+readiness-typecheck-debate:
+	@echo "SKIP debate: strict mypy lands in M3 (non-strict mypy has 15 errors at mission-base)"
+
+readiness-test-debate:
+	@$(READINESS_T0); \
+	command -v pytest >/dev/null 2>&1 || { echo "SKIP debate: pytest not found (put .venv/bin on PATH)"; exit 0; }; \
+	cd aragora-debate && pytest tests -q -p no:randomly && \
+	$(READINESS_DONE)
+
+# --- verify (aragora-verify/, src layout, own [tool.ruff]) ------------------
+readiness-lint-verify:
+	@$(READINESS_T0); \
+	command -v ruff >/dev/null 2>&1 || { echo "SKIP verify: ruff not found (put .venv/bin on PATH)"; exit 0; }; \
+	cd aragora-verify && ruff check . && ruff format --check . && \
+	$(READINESS_DONE)
+
+readiness-typecheck-verify:
+	@$(READINESS_T0); \
+	command -v mypy >/dev/null 2>&1 || { echo "SKIP verify: mypy not found (put .venv/bin on PATH)"; exit 0; }; \
+	cd aragora-verify && mypy src --ignore-missing-imports && \
+	$(READINESS_DONE)
+
+readiness-test-verify:
+	@$(READINESS_T0); \
+	command -v pytest >/dev/null 2>&1 || { echo "SKIP verify: pytest not found (put .venv/bin on PATH)"; exit 0; }; \
+	cd aragora-verify && pytest tests -q -p no:randomly && \
+	$(READINESS_DONE)
+
+# --- live (aragora/live, Next.js) -------------------------------------------
+readiness-lint-live:
+	@$(READINESS_T0); \
+	command -v npx >/dev/null 2>&1 || { echo "SKIP live: npx not found"; exit 0; }; \
+	[ -d aragora/live/node_modules ] || { echo "SKIP live: node_modules missing (npm ci in aragora/live)"; exit 0; }; \
+	cd aragora/live && npx eslint . --max-warnings 0 && \
+	$(READINESS_DONE)
+
+readiness-typecheck-live:
+	@$(READINESS_T0); \
+	command -v npx >/dev/null 2>&1 || { echo "SKIP live: npx not found"; exit 0; }; \
+	[ -d aragora/live/node_modules ] || { echo "SKIP live: node_modules missing (npm ci in aragora/live)"; exit 0; }; \
+	cd aragora/live && npx tsc --noEmit -p tsconfig.json && \
+	$(READINESS_DONE)
+
+readiness-test-live:
+	@$(READINESS_T0); \
+	command -v npx >/dev/null 2>&1 || { echo "SKIP live: npx not found"; exit 0; }; \
+	[ -d aragora/live/node_modules ] || { echo "SKIP live: node_modules missing (npm ci in aragora/live)"; exit 0; }; \
+	cd aragora/live && npx jest --ci --silent --maxWorkers=4 && \
+	$(READINESS_DONE)
+
+# --- docs (docs-site, Docusaurus) -------------------------------------------
+# docs-site has no ESLint config, no tsconfig.json and no test suite until M7.
+readiness-lint-docs:
+	@echo "SKIP docs: no eslint config until M7"
+
+readiness-typecheck-docs:
+	@echo "SKIP docs: no tsconfig.json until M7"
+
+readiness-test-docs:
+	@echo "SKIP docs: no test suite until M7"
+
+# --- vscode (ide/vscode-aragora + webview-ui) -------------------------------
+# The extension root has no ESLint config until M8 (`npm run lint` exits 2),
+# so M1 lints only webview-ui, whose config is green today.
+readiness-lint-vscode:
+	@$(READINESS_T0); \
+	command -v npx >/dev/null 2>&1 || { echo "SKIP vscode: npx not found"; exit 0; }; \
+	[ -d ide/vscode-aragora/webview-ui/node_modules ] || { echo "SKIP vscode: webview-ui node_modules missing (npm ci in ide/vscode-aragora/webview-ui)"; exit 0; }; \
+	cd ide/vscode-aragora/webview-ui && npx eslint src --ext ts,tsx && \
+	$(READINESS_DONE)
+
+readiness-typecheck-vscode:
+	@$(READINESS_T0); \
+	command -v npx >/dev/null 2>&1 || { echo "SKIP vscode: npx not found"; exit 0; }; \
+	[ -d ide/vscode-aragora/node_modules ] || { echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; }; \
+	cd ide/vscode-aragora && npx tsc --noEmit -p . && \
+	$(READINESS_DONE)
+
+readiness-test-vscode:
+	@$(READINESS_T0); \
+	command -v npx >/dev/null 2>&1 || { echo "SKIP vscode: npx not found"; exit 0; }; \
+	[ -d ide/vscode-aragora/node_modules ] || { echo "SKIP vscode: node_modules missing (npm ci in ide/vscode-aragora)"; exit 0; }; \
+	cd ide/vscode-aragora && npx jest --ci && \
+	$(READINESS_DONE)
+
+# --- operator (aragora-operator, Go) ----------------------------------------
+# `gofmt -l` is advisory here: two files are unformatted at mission-base and
+# M9 owns the operator source; go vet is the gating step.
+readiness-lint-operator:
+	@$(READINESS_T0); \
+	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
+	command -v gofmt >/dev/null 2>&1 || { echo "SKIP operator: gofmt not found"; exit 0; }; \
+	cd aragora-operator && \
+	unformatted=$$(gofmt -l .) && \
+	{ [ -z "$$unformatted" ] || echo "gofmt (advisory until M9) would reformat: $$unformatted"; } && \
+	go vet ./... && \
+	$(READINESS_DONE)
+
+readiness-typecheck-operator:
+	@$(READINESS_T0); \
+	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
+	cd aragora-operator && go build ./... && \
+	$(READINESS_DONE)
+
+readiness-test-operator:
+	@$(READINESS_T0); \
+	command -v go >/dev/null 2>&1 || { echo "SKIP operator: go not found"; exit 0; }; \
+	cd aragora-operator && go test ./... -count=1 && \
+	$(READINESS_DONE)
