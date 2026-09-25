@@ -23,6 +23,7 @@ import pytest
 from aragora.gauntlet.odr_export import odr_content_digest
 from aragora.gauntlet.odr_signing import (
     DEFAULT_SIGNING_KEY_SECRET,
+    MOUNTED_SIGNING_KEY_FILENAME,
     ODR_SIGNATURE_ALG,
     SIGNING_KEY_SECRET_ENV,
     OdrSigningError,
@@ -90,6 +91,14 @@ def _pub_raw(public_key: Ed25519PublicKey) -> bytes:
         encoding=serialization.Encoding.Raw,
         format=serialization.PublicFormat.Raw,
     )
+
+
+def _private_pem(key) -> str:
+    return key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
 
 
 # ----------------------------------------------------------------------------
@@ -231,6 +240,103 @@ def test_public_key_pem_is_publishable_spki() -> None:
     assert "BEGIN PUBLIC KEY" in pem
     loaded = serialization.load_pem_public_key(pem.encode())
     assert isinstance(loaded, Ed25519PublicKey)
+
+
+def test_load_signing_key_from_mounted_custody(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    key = generate_signing_key()
+    key_path = tmp_path / MOUNTED_SIGNING_KEY_FILENAME
+    key_path.write_text(_private_pem(key), encoding="utf-8")
+    key_path.chmod(0o600)
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(tmp_path))
+    monkeypatch.delenv("ARAGORA_USE_SECRETS_MANAGER", raising=False)
+
+    loaded = load_signing_key_from_secrets()
+
+    assert compute_key_id(loaded.public_key()) == compute_key_id(key.public_key())
+
+
+def test_mounted_custody_precedes_explicit_aws(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    key = generate_signing_key()
+    key_path = tmp_path / MOUNTED_SIGNING_KEY_FILENAME
+    key_path.write_text(_private_pem(key), encoding="utf-8")
+    key_path.chmod(0o600)
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(tmp_path))
+    monkeypatch.setenv("ARAGORA_USE_SECRETS_MANAGER", "true")
+    monkeypatch.setattr(
+        "aragora.gauntlet.odr_signing._load_pem_secret_from_aws",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("AWS fallback used")),
+    )
+
+    loaded = load_signing_key_from_secrets()
+
+    assert compute_key_id(loaded.public_key()) == compute_key_id(key.public_key())
+
+
+def test_invalid_mounted_key_fails_before_aws_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    key_path = tmp_path / MOUNTED_SIGNING_KEY_FILENAME
+    key_path.write_text(_private_pem(generate_signing_key()), encoding="utf-8")
+    key_path.chmod(0o644)
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(tmp_path))
+    monkeypatch.setenv("ARAGORA_USE_SECRETS_MANAGER", "true")
+    called = {"value": False}
+
+    def unexpected_aws(*args, **kwargs):
+        called["value"] = True
+        raise AssertionError("AWS fallback used")
+
+    monkeypatch.setattr("aragora.gauntlet.odr_signing._load_pem_secret_from_aws", unexpected_aws)
+
+    with pytest.raises(OdrSigningError, match="custody validation"):
+        load_signing_key_from_secrets()
+
+    assert called["value"] is False
+
+
+def test_missing_mounted_key_does_not_fallback_to_aws(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(tmp_path))
+    monkeypatch.setenv("ARAGORA_USE_SECRETS_MANAGER", "true")
+    called = {"value": False}
+
+    def unexpected_aws(*args, **kwargs):
+        called["value"] = True
+        raise AssertionError("AWS fallback used")
+
+    monkeypatch.setattr("aragora.gauntlet.odr_signing._load_pem_secret_from_aws", unexpected_aws)
+
+    with pytest.raises(OdrSigningError, match="mounted ODR signing key is missing"):
+        load_signing_key_from_secrets()
+
+    assert called["value"] is False
+
+
+def test_invalid_mounted_pem_does_not_fallback_to_aws(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    key_path = tmp_path / MOUNTED_SIGNING_KEY_FILENAME
+    key_path.write_text("not a private key", encoding="utf-8")
+    key_path.chmod(0o600)
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(tmp_path))
+    monkeypatch.setenv("ARAGORA_USE_SECRETS_MANAGER", "true")
+    called = {"value": False}
+
+    def unexpected_aws(*args, **kwargs):
+        called["value"] = True
+        raise AssertionError("AWS fallback used")
+
+    monkeypatch.setattr("aragora.gauntlet.odr_signing._load_pem_secret_from_aws", unexpected_aws)
+
+    with pytest.raises(OdrSigningError, match="could not parse"):
+        load_signing_key_from_secrets()
+
+    assert called["value"] is False
 
 
 def test_load_signing_key_from_standalone_aws_secret(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -531,3 +637,45 @@ def test_round_trip_against_shipped_verifier() -> None:
     bad = verify(signed, public_key=other.public_key())
     bad_sig = next((c for c in bad.checks if c.name == "signature"), None)
     assert bad_sig is not None and bad_sig.status == "fail"
+
+
+def test_key_file_wins_over_mounted_custody_and_warns(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    mounted = generate_signing_key()
+    mounted_dir = tmp_path / "mounted"
+    mounted_dir.mkdir()
+    mounted_path = mounted_dir / MOUNTED_SIGNING_KEY_FILENAME
+    mounted_path.write_text(_private_pem(mounted), encoding="utf-8")
+    mounted_path.chmod(0o600)
+    file_key = generate_signing_key()
+    key_file = tmp_path / "odr-file-key.pem"
+    key_file.write_text(_private_pem(file_key), encoding="utf-8")
+    key_file.chmod(0o600)
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(mounted_dir))
+    monkeypatch.setenv("ARAGORA_ODR_SIGNING_KEY_FILE", str(key_file))
+    monkeypatch.delenv("ARAGORA_USE_SECRETS_MANAGER", raising=False)
+
+    with caplog.at_level("WARNING", logger="aragora.gauntlet.odr_signing"):
+        loaded = load_signing_key_from_secrets()
+
+    assert compute_key_id(loaded.public_key()) == compute_key_id(file_key.public_key())
+    assert "Both ARAGORA_ODR_SIGNING_KEY_FILE and ARAGORA_SECRETS_DIR are set" in caplog.text
+
+
+def test_key_file_is_used_when_mounted_directory_lacks_a_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    file_key = generate_signing_key()
+    key_file = tmp_path / "odr-file-key.pem"
+    key_file.write_text(_private_pem(file_key), encoding="utf-8")
+    key_file.chmod(0o600)
+    empty_dir = tmp_path / "empty-mount"
+    empty_dir.mkdir()
+    monkeypatch.setenv("ARAGORA_SECRETS_DIR", str(empty_dir))
+    monkeypatch.setenv("ARAGORA_ODR_SIGNING_KEY_FILE", str(key_file))
+    monkeypatch.delenv("ARAGORA_USE_SECRETS_MANAGER", raising=False)
+
+    loaded = load_signing_key_from_secrets()
+
+    assert compute_key_id(loaded.public_key()) == compute_key_id(file_key.public_key())
