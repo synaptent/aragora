@@ -1996,3 +1996,28 @@ class TestPaymentResult:
         assert d["provider"] == "authorize_net"
         assert d["status"] == "error"
         assert d["message"] is None
+
+
+class TestParsedBodyContract:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "handler_func",
+        [
+            handle_charge,
+            handle_authorize,
+            handle_capture,
+            handle_refund,
+            handle_void,
+            handle_authnet_webhook,
+        ],
+    )
+    async def test_missing_body_without_parser_error_fails_closed(self, handler_func):
+        request = create_mock_request(headers={"X-ANET-Signature": "sha512=test"})
+        with patch(
+            "aragora.server.handlers.payments.stripe.parse_json_body",
+            new_callable=AsyncMock,
+            return_value=(None, None),
+        ):
+            response = await handler_func(request)
+
+        assert _status(response) == 400
