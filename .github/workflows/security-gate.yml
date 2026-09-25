@@ -11,6 +11,11 @@ on:
       - 'aragora/**'
       - 'pyproject.toml'
       - 'uv.lock'
+      # uv workspace member manifests feed root uv.lock validity, so a
+      # member-only change must run the lockfile freshness check.
+      - 'aragora-debate/pyproject.toml'
+      - 'aragora-verify/pyproject.toml'
+      - 'sdk/python/pyproject.toml'
       - 'requirements*.txt'
       - 'scripts/pre_release_check.py'
       - 'scripts/run_pip_audit_gate.py'
