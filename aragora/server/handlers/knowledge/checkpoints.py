@@ -113,10 +113,8 @@ class KMCheckpointHandler(BaseHandler):
     # Uppercase ROUTES is required: BaseHandler.can_handle() and the registry
     # route index only read the ROUTES attribute, so the previous lowercase
     # ``routes`` left this entire handler unreachable through dispatch.
-    # NOTE: the bare /api/v1/km/checkpoints path is claimed (first-wins) by
-    # KnowledgeMoundHandler's ROUTES — a pre-existing collision this handler
-    # must not fight. Only the compare operation is routed here.
     ROUTES = [
+        "/api/v1/km/checkpoints",
         "/api/v1/km/checkpoints/compare",
     ]
 
@@ -160,6 +158,12 @@ class KMCheckpointHandler(BaseHandler):
         if stripped.startswith("/api/km/"):
             return "/api/v1" + stripped[len("/api") :]
         return raw
+
+    def can_handle(self, path: str) -> bool:
+        # Exact match only. BaseHandler.can_handle prefix-matches ROUTES, so the
+        # collection path would otherwise claim look-alike siblings and every
+        # /{name} detail path through the registry's can_handle fallback.
+        return self._request_path(path, None) in self.ROUTES
 
     def _check_auth(self, handler: Any) -> tuple[dict[str, Any] | None, HandlerResult | None]:
         """Check authentication for checkpoint operations.
