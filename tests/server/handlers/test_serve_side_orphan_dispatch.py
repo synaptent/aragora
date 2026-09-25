@@ -439,8 +439,9 @@ class TestKMCheckpointDispatch:
                 "_knowledge_mound_handler": KnowledgeMoundHandler({}),
             }
         )
-        assert index.get_handler("/api/v1/km/checkpoints") is not None
-        assert index.get_handler("/api/v1/km/checkpoints")[0] == "_km_checkpoint_handler"
+        owner = index.get_handler("/api/v1/km/checkpoints")
+        assert owner is not None
+        assert owner[0] == "_km_checkpoint_handler"
         with (
             patch.object(KMCheckpointHandler, "_get_checkpoint_store", return_value=store),
             patch(
