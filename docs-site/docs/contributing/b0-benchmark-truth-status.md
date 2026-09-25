@@ -5,9 +5,21 @@ description: B0 Benchmark Truth Status
 
 # B0 Benchmark Truth Status
 
-Last updated: 2026-08-19T15:19:55Z
+Last updated: 2026-09-04T13:28:39Z
 
 This is the repo-tracked recurring `TW-02` publication surface for the fixed benchmark corpus.
+
+## Snapshot History And Input Limits
+
+Counts describe the observations available to this snapshot, not a cumulative history. Zero current observations do not erase historical rescues and do not establish zero execution time. Missing elapsed observations must not be interpreted as measured zero-duration execution.
+
+Observation availability warning: raw inputs: `unavailable`; elapsed time: `unmeasured`; rescue history: `incomplete`; independent raw-input replay: `unmeasured`.
+
+Unavailable, incomplete, or unknown observations leave dependent values non-authoritative. Consult `observation_status` and `observation_limits` in the JSON where present; legacy snapshots without these markers do not establish input completeness. Empty rescue counts are not a verified absence of rescues.
+
+Snapshot-specific disclosure: this publication omits observations present in prior published snapshots. The `2026-09-01T13:38:29Z` rev-7 scorecard retains a `rescue_worker_crash` observation that is absent here: total ticks are `11 -> 10`, rescue-crash observations are `1 -> 0`, and mean/median elapsed seconds are `227.1/424.3 -> 0.0/0.0`. The prior observation remains part of the published historical record; this snapshot does not retract it.
+
+The original raw metrics/rescue inputs are unavailable for this snapshot, so independent raw-input replay remains unmeasured. An input reset or replacement has not been independently proven. The preserved JSON values are not evidence that the historical rescue did not occur or that execution took zero time.
 
 ## Corpus
 
@@ -27,8 +39,6 @@ This is the repo-tracked recurring `TW-02` publication surface for the fixed ben
 - Corpus-scoped scorecard pointer: `docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/latest.json`
 - Revision-scoped truth pointer: `docs/status/generated/benchmark_truth_artifacts/tw-01-bounded-execution-v1/rev-7/latest.json`
 - Revision-scoped scorecard pointer: `docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/latest.json`
-
-Bootstrap provenance note: this publication uses the tracked historical slice at `docs/benchmarks/evidence/tw-01-bounded-execution-v1/rev-7/bootstrap-metrics.jsonl`. The five proxy successes belong to the retained verified control cohort; the five in-progress failures predate issue-body normalization. This is reproducible bootstrap state, not fresh revision-7 autonomy proof. The first bounded post-merge recurrence must replace it.
 
 ## Truth Metrics
 
@@ -55,17 +65,22 @@ Bootstrap provenance note: this publication uses the tracked historical slice at
 
 | Metric | Value |
 | --- | --- |
-| Proxy no-rescue success rate | 50.0% |
+| Proxy no-rescue success rate | 0.0% |
 | Unique issues attempted | 10 |
-| Unique issues succeeded | 5 |
+| Unique issues succeeded | 0 |
 | Unique issues failed | 5 |
-| Unique issues neutral | 0 |
-| Total ticks | 15 |
+| Unique issues neutral | 5 |
+| Total ticks | 10 |
+
+Proxy note: neutral issue outcomes are current-corpus rows that were neither fresh success nor failure, such as `issue_already_resolved`.
+
+## Proxy Neutral Class Distribution
+
+- `issue_already_resolved`: 5
 
 ## Failure Class Distribution
 
 - `blocked_not_dispatch_bounded`: 5
-- `blocked_validation_target_missing`: 5
 
 ## Rescue Counts By Type
 
@@ -73,8 +88,8 @@ Bootstrap provenance note: this publication uses the tracked historical slice at
 
 ## Previous Published Artifact
 
-- Previous artifact path: `docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260819T145321Z.json`
-- Previous generated_at: `2026-08-19T14:53:21Z`
+- Previous artifact path: `docs/status/generated/benchmark_scorecards/tw-01-bounded-execution-v1/rev-7/scorecard-20260901T133829Z.json`
+- Previous generated_at: `2026-09-01T13:38:29Z`
 
 ## Deltas
 

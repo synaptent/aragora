@@ -13,6 +13,7 @@ __pycache__/
 .aragora_sessions.yaml
 .aragora_sessions.json
 .aragora_events/
+.aragora_ideas/
 .aragora_coordination/
 
 # Worktree session lock files (created by SessionStart hook, removed on Stop)

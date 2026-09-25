@@ -1,0 +1,5 @@
+# The full dataset (5.97 MB) exceeds the in-repo size rule; only the manifest,
+# the 200-record sample and summary.md are committed. Regenerate with
+#   python3 scripts/build_disagreement_atlas.py build --cache-dir <cache>
+# and verify against manifest.json. See README.md (Release asset).
+atlas-v1.jsonl

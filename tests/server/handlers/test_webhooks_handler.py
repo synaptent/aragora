@@ -1108,16 +1108,10 @@ class TestGetWebhookStore:
         """get_webhook_store should return the same instance."""
         import aragora.server.handlers.webhook_management as webhooks_module
 
-        # Reset the global store
-        webhooks_module._webhook_store = None
-
         store1 = webhooks_module.get_webhook_store()
         store2 = webhooks_module.get_webhook_store()
 
         assert store1 is store2
-
-        # Clean up
-        webhooks_module._webhook_store = None
 
 
 # ===========================================================================

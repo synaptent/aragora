@@ -1,0 +1,81 @@
+{
+  "schema_version": "decision-quality-outcomes/1.0",
+  "benchmark_id": "outcome-backed-decision-quality-v1",
+  "corpus_sha256": "503a5cc94a26fcd38f8c0bb264413ac82b2ae7a3489da8d22e6d646254702ed6",
+  "outcomes": [
+    {
+      "case_id": "science-holdout-osiris-rex-return-september-2023",
+      "resolved_at": "2023-09-24T00:00:00Z",
+      "correct_option_id": "retain_september_recovery_plan",
+      "resolution_summary": "The OSIRIS-REx sample-return capsule landed safely in Utah on 2023-09-24, making the retained September recovery plan the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "nasa-ntrs-osiris-rex-earth-return-performance-2024",
+          "title": "OSIRIS-REx Earth Return and Entry: Targeting Strategy and Maneuver Performance",
+          "url": "https://ntrs.nasa.gov/api/citations/20240000803/downloads/OREx_ER_Entry_Targeting_Strategy_and_Man_Perf_v3.pdf",
+          "published_at": "2024-02-01T00:00:00Z",
+          "content_sha256": "cfeee4f9b5c6c0431a76e5a6d012ef7f515d29318b57d4a3e8b3ffce4a11aecd"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "earth_return_targeting_accuracy",
+          "description": "Whether trajectory correction and navigation would place the capsule inside the atmospheric-entry corridor.",
+          "aliases": ["entry targeting", "trajectory accuracy"]
+        },
+        {
+          "crux_id": "capsule_release_execution",
+          "description": "Whether the spacecraft would release the sample capsule at the planned state while diverting the carrier safely past Earth.",
+          "aliases": ["sample capsule release", "spacecraft divert maneuver"]
+        },
+        {
+          "crux_id": "entry_descent_landing_system",
+          "description": "Whether the heat shield, parachutes, and landing sequence would perform through atmospheric entry and descent.",
+          "aliases": ["EDL performance", "parachute and heat shield"]
+        },
+        {
+          "crux_id": "recovery_and_curation_readiness",
+          "description": "Whether weather, range coordination, recovery teams, and clean-room handling would support immediate retrieval and curation.",
+          "aliases": ["Utah recovery readiness", "sample curation operations"]
+        }
+      ]
+    },
+    {
+      "case_id": "science-holdout-artemis-i-launch-september-2022",
+      "resolved_at": "2022-11-16T00:00:00Z",
+      "correct_option_id": "rebaseline_launch_beyond_september",
+      "resolution_summary": "Artemis I did not launch during August or September 2022; SLS and Orion launched on 2022-11-16, so rebaselining the primary launch plan beyond September was the outcome-aligned action.",
+      "authoritative_sources": [
+        {
+          "source_id": "nasa-artemis-i-liftoff-2022-11-16",
+          "title": "Liftoff! NASA's Artemis I Mega Rocket Launches Orion to Moon",
+          "url": "https://www.nasa.gov/news-release/liftoff-nasas-artemis-i-mega-rocket-launches-orion-to-moon/",
+          "published_at": "2022-11-16T00:00:00Z",
+          "content_sha256": "859da16fbf6c4783d4632c1e3fc214cb548f6fb03a89cb83c5cc4f4cb5b1e89e"
+        }
+      ],
+      "cruxes": [
+        {
+          "crux_id": "first_flight_integration_readiness",
+          "description": "Whether the first integrated SLS, Orion, and ground-systems stack would remain flight-ready through final countdown operations.",
+          "aliases": ["integrated stack readiness", "first-flight risk"]
+        },
+        {
+          "crux_id": "cryogenic_loading_and_engine_conditioning",
+          "description": "Whether propellant loading, thermal conditioning, and engine-start constraints could be satisfied during the available launch windows.",
+          "aliases": ["hydrogen loading", "engine conditioning"]
+        },
+        {
+          "crux_id": "weather_and_range_availability",
+          "description": "Whether weather, range, and pad constraints would leave a usable launch opportunity before the end of September.",
+          "aliases": ["launch weather", "range availability"]
+        },
+        {
+          "crux_id": "turnaround_between_attempts",
+          "description": "Whether teams could diagnose issues, service the vehicle, and recycle between attempts within the September horizon.",
+          "aliases": ["launch attempt turnaround", "pad recycle time"]
+        }
+      ]
+    }
+  ]
+}

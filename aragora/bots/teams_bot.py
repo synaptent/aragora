@@ -239,7 +239,7 @@ class AragoraTeamsBot:
 
             # Record vote
             try:
-                from aragora.server.storage import get_debates_db
+                from aragora.storage.debate_storage import get_debates_db
 
                 db = get_debates_db()
                 if db and hasattr(db, "record_vote"):

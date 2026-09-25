@@ -235,6 +235,8 @@ def get_api_key(*env_vars: str, required: bool = True) -> str | None:
                     if required:
                         raise
                     continue
+                if not value and presence.source == "env":
+                    value = os.getenv(var)
             if value and value.strip():
                 return value.strip()
         if required and is_strict_mode():

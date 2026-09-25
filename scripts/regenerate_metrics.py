@@ -287,7 +287,10 @@ def gather_metrics() -> MetricsSnapshot:
             key="rbac_permission_calls",
             label="@require_permission decorator calls",
             value=permission_calls,
-            command="git grep -E '@require_permission\\(' -- aragora | wc -l",
+            # The pathspec must stay restricted to .py files: the generator
+            # counts decorator calls, and non-.py hits (README/YAML prose
+            # mentions) would inflate a reproduction over all tracked files.
+            command="git grep -E '@require_permission\\(' -- 'aragora/*.py' | wc -l",
             source="aragora/",
         )
     )

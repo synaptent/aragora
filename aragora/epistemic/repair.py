@@ -21,10 +21,12 @@ import hashlib
 import json
 import os
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from aragora.epistemic.decay_monitor import DecaySignal
+
+UTC = timezone.utc
 
 RepairKind = Literal["report_only", "shadow_candidate", "pr_candidate"]
 

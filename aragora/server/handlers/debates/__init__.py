@@ -17,6 +17,11 @@ This package contains debate-related handlers split by domain:
 - interventions: Debate intervention controls (pause, nudge, challenge, evidence)
 - routing: Route dispatch and authentication helpers
 - search: Cross-debate search operations mixin
+
+Additional modules (import directly, without expanding eager package exports):
+- audience_suggestions, auditing, belief, breakpoints, composite
+- context_budget, critique, debate_intervention, debate_stats, deliberations
+- hybrid_debate_handler, moments, tournaments, uncertainty, visualization
 """
 
 from .analysis import AnalysisOperationsMixin

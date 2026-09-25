@@ -17,6 +17,9 @@ Package Structure:
 - models.py: Data models (Session, Action, Credential, etc.)
 - validation.py: Input validation functions
 - store.py: In-memory data store
+
+Additional modules (import directly, without expanding eager package exports):
+openclaw_gateway.
 """
 
 from aragora.server.handlers.openclaw.credentials import (

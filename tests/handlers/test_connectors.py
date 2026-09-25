@@ -1,4 +1,4 @@
-"""Tests for enterprise connectors handler (aragora/server/handlers/connectors.py).
+"""Tests for enterprise connectors handler (aragora/server/handlers/connectors/).
 
 Covers all handler functions:
 - handle_list_connectors       (GET /api/connectors)

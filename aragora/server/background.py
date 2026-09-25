@@ -167,7 +167,7 @@ def circuit_breaker_cleanup() -> None:
 def circuit_breaker_metrics_export() -> None:
     """Export circuit breaker states to Prometheus."""
     try:
-        from aragora.server.prometheus import export_circuit_breaker_metrics
+        from aragora.observability.prometheus import export_circuit_breaker_metrics
 
         export_circuit_breaker_metrics()
     except ImportError:
@@ -310,7 +310,7 @@ def snooze_processor_task() -> None:
             try:
                 import json
 
-                from aragora.server.handlers.email_services import (
+                from aragora.server.handlers.email.email_services import (
                     handle_process_due_snoozes,
                 )
 
@@ -711,7 +711,7 @@ def setup_default_tasks(
 
     # Initialize circuit breaker metrics integration
     try:
-        from aragora.server.prometheus import initialize_circuit_breaker_metrics
+        from aragora.observability.prometheus import initialize_circuit_breaker_metrics
 
         initialize_circuit_breaker_metrics()
     except ImportError:
