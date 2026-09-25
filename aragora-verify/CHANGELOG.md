@@ -4,7 +4,7 @@ All notable changes to `aragora-verify` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and the project uses semantic
 versioning.
 
-## [0.2.0] — 2026-09-18 (source; the PyPI upload is an operator-dispatched workflow run)
+## [0.2.0] — 2026-09-18 (source; published to PyPI 2026-09-25 by workflow run 36076010225)
 
 This is the first published `aragora-verify` line that accepts ODR **v0.2** documents:
 0.1.0 and 0.1.1 fail one on `schema_conformance`, which is why 0.2.0 has to reach PyPI

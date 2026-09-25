@@ -23,15 +23,14 @@ re-verified 2026-07-21):
 | Root platform | `aragora` | `pyproject.toml` | **2.10.0** | Latest on PyPI = 2.9.0 (2026-07-06); the 2.10.0 build ships when the operator tags `v2.10.0` and dispatches `publish-aragora.yml` |
 | Debate engine | `aragora-debate` | `aragora-debate/pyproject.toml` | **0.2.3** | Published; latest on PyPI = 0.2.3 |
 | Python SDK | `aragora-sdk` | `sdk/python/pyproject.toml` | **2.10.0** | Published; latest on PyPI = **2.8.0** (2026-02-25) — the repo's in-tree version has moved to 2.10.0 but that build has not been released to PyPI yet, so `pip install aragora-sdk` today gives you 2.8.0, not 2.10.0 |
-| Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.1.2** (unreleased) | Latest on PyPI = **0.1.1** (released 2026-07-04T03:28Z); main's 0.1.2 source metadata raises the cryptography floor to `>=48.0.1`, but that stronger published requirement awaits an operator-gated 0.1.2 release |
+| Verifier | `aragora-verify` | `aragora-verify/pyproject.toml` | **0.2.0** | Published; latest on PyPI = **0.2.0** (released 2026-09-25T00:08Z); its wheel metadata declares the `cryptography>=48.0.1` floor |
 
-<!-- FACT (live-verified 2026-07-21): aragora-verify 0.1.1 IS on PyPI (info.version=0.1.1). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
+<!-- FACT (live-verified 2026-09-25T07:56:05Z): aragora-verify 0.2.0 IS on PyPI (info.version=0.2.0). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
 
 `aragora-verify` is **live and installable from PyPI today**. The plain install
-currently provides published 0.1.1, while this checkout contains unreleased
-0.1.2. A pristine 2026-07-21 install resolved `cryptography==49.0.0`, but the
-0.1.1 wheel metadata still permits `cryptography>=41.0`; only a later 0.1.2
-publication will make the stronger `>=48.0.1` floor mandatory for PyPI users.
+currently provides published 0.2.0, the version this checkout declares, and the
+0.2.0 wheel metadata makes the `>=48.0.1` cryptography floor mandatory for PyPI
+users (the older 0.1.1 wheel only required `cryptography>=41.0`).
 Self-verify the published version anytime with the `curl` command above.
 
 ## Install path per audience
@@ -50,24 +49,27 @@ Python standard library plus `cryptography` (see the
 [Independent Verifier Guide](../specs/INDEPENDENT_VERIFIER_GUIDE.md) for the
 full exit-code contract and disambiguation from the in-tree `aragora verify`).
 
-**PyPI install (floor-pinned, recommended):** 0.1.1 adds the `key_id`-equality
-check that closes a signer-label-tampering gap present in 0.1.0 (a relabeled
-`key_id` on an otherwise-valid signature silently passes verification on
-0.1.0 but correctly fails it on 0.1.1). Until verifier 0.1.2 is published,
-pin both the verifier and cryptography floors so constrained environments get
-the tamper fix and the security floor already present on main:
+**PyPI install (floor-pinned, recommended):** 0.2.0 is the first published
+line that verifies ODR v0.2, the default export format from release 2.11.0
+(0.1.x rejects v0.2 documents on `schema_conformance`). It keeps 0.1.1's
+`key_id`-equality check that closes a signer-label-tampering gap present in
+0.1.0 (a relabeled `key_id` on an otherwise-valid signature silently passes
+verification on 0.1.0 but correctly fails it on 0.1.1 and later), and its
+metadata declares the `cryptography>=48.0.1` security floor. Pin both floors
+so constrained environments get v0.2 support, the tamper fix and the
+security floor:
 
-<!-- FACT (live-verified 2026-07-21): aragora-verify 0.1.1 IS on PyPI (info.version=0.1.1). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
+<!-- FACT (live-verified 2026-09-25T07:56:05Z): aragora-verify 0.2.0 IS on PyPI (info.version=0.2.0). Before "correcting" this to unreleased, re-run: curl -s https://pypi.org/pypi/aragora-verify/json | jq .info.version -->
 
 ```bash
-pip install -U "aragora-verify>=0.1.1" "cryptography>=48.0.1"
+pip install -U "aragora-verify>=0.2.0" "cryptography>=48.0.1"
 ```
 
-**Unpinned verifier (functional, but does not enforce the cryptography
-floor):** PyPI's latest currently resolves to verifier 0.1.1 and a pristine
-2026-07-21 install selected cryptography 49.0.0. Existing constraints may still
-select an older allowed cryptography release, so use the command above for the
-no-trust path:
+**Unpinned verifier (functional, but guarantees neither floor):** a fresh
+`pip install aragora-verify` currently resolves verifier 0.2.0, whose metadata
+carries the cryptography floor, but it leaves an already-installed 0.1.x in
+place, and existing constraints may still select an older verifier or
+cryptography release, so use the command above for the no-trust path:
 
 ```bash
 pip install aragora-verify

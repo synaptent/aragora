@@ -6,7 +6,7 @@ multi-model review in, a verifiable Decision Receipt out.**
 It coordinates heterogeneous models to adversarially review a change or a
 decision, preserves the dissent and provenance, stops truthfully when evidence
 is thin, and emits a portable receipt anyone can verify offline with the
-standalone verifier ([`pip install -U 'aragora-verify>=0.1.1'`](https://pypi.org/project/aragora-verify/)).
+standalone verifier ([`pip install -U 'aragora-verify>=0.2.0'`](https://pypi.org/project/aragora-verify/)).
 
 [![PyPI](https://img.shields.io/pypi/v/aragora)](https://pypi.org/project/aragora/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -18,7 +18,7 @@ standalone verifier ([`pip install -U 'aragora-verify>=0.1.1'`](https://pypi.org
 | I want to… | Command |
 |------------|---------|
 | Run the standalone debate engine | `pip install aragora-debate` |
-| Verify an Open Decision Receipt with the standalone verifier | `pip install -U 'aragora-verify>=0.1.1' && aragora-verify receipt.odr.json` |
+| Verify an Open Decision Receipt with the standalone verifier | `pip install -U 'aragora-verify>=0.2.0' && aragora-verify receipt.odr.json` |
 | Run the current PyPI zero-key receipt demo | `pip install -U 'aragora>=2.9.0' && aragora demo --offline --receipt aragora-demo-receipt.json && aragora receipt verify aragora-demo-receipt.json` |
 | Audit this source checkout's exact CLI | `python3 -m pip install -e . && aragora demo --offline --receipt aragora-demo-receipt.json && aragora receipt verify aragora-demo-receipt.json` |
 | Call the Aragora API from Python | `pip install aragora-sdk` |
@@ -78,7 +78,7 @@ an auditor, a customer — can then verify that receipt independently with the
 standalone `aragora-verify` verifier (no Aragora dependency):
 
 ```bash
-pip install -U 'aragora-verify>=0.1.1'
+pip install -U 'aragora-verify>=0.2.0'
 aragora-verify decision-receipt.odr.json
 
 # Add a public key when you need issuer authenticity, not just structure/digest:
@@ -88,9 +88,11 @@ aragora-verify decision-receipt.odr.json --pubkey signing-key.pem
 pip install ./aragora-verify
 ```
 
-> Use **0.1.1+** (`pip install -U 'aragora-verify>=0.1.1'`): it binds each
-> signature's recorded `key_id` to the key you supply, so a relabeled signer
-> fails as tampering. 0.1.0 lacks that binding — upgrade if you have it.
+> Use **0.2.0+** (`pip install -U 'aragora-verify>=0.2.0'`): 0.2.0 is the first
+> line that verifies ODR v0.2, the default export format from release 2.11.0
+> (0.1.x rejects v0.2 documents on `schema_conformance`). Like 0.1.1, it binds
+> each signature's recorded `key_id` to the key you supply, so a relabeled
+> signer fails as tampering. 0.1.0 lacks that binding — upgrade if you have it.
 
 See the [full Action setup guide](docs/GITHUB_ACTION_SETUP.md#emitting-a-verifiable-decision-receipt)
 for the receipt-specific inputs/outputs, secret-dependent limits (receipts are

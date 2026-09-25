@@ -177,7 +177,7 @@ jobs:
       - name: Verify the receipt offline (optional)
         if: steps.review.outputs.receipt-verified == 'true'
         run: |
-          pip install "aragora-verify>=0.1.1"
+          pip install "aragora-verify>=0.2.0"
           aragora-verify "${{ steps.review.outputs.receipt-path }}"
 ```
 
@@ -241,7 +241,7 @@ repository ships a real example built by the same merge-quorum pipeline
 (`aragora/swarm/quorum_receipt.py`):
 
 ```bash
-pip install "aragora-verify>=0.1.1"
+pip install "aragora-verify>=0.2.0"
 aragora-verify docs/specs/examples/example-merge-quorum-receipt.odr.json
 ```
 

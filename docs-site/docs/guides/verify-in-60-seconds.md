@@ -45,8 +45,9 @@ aragora-verify pr8822-clean.odr.json --pubkey aragora-odr-signing.pub.pem
 ```
 
 The install line has two halves on purpose. The first asks PyPI for
-`aragora-verify>=0.2.0`; if that version is not on PyPI yet, the second
-installs the identical wheel published as a release asset.
+`aragora-verify>=0.2.0`, which PyPI has served since 2026-09-25; the second is
+now only a fallback that runs if that PyPI install fails, and installs the
+identical wheel published as a release asset.
 
 Be precise about what that proves. The signature check tells you these exact
 bytes were signed by the holder of the published key, and it reaches that
@@ -55,8 +56,8 @@ open source (the [`aragora-verify` package](https://github.com/synaptent/aragora
 this repository), but on the second half of the install line it ships from the
 same release as the receipts and the key, so one compromised release could
 supply all three. For a verifier that does not share a distribution channel
-with the receipts, take the first half of the install line (PyPI, once 0.2.0 is
-published there) or build the package from source at a commit you pin yourself.
+with the receipts, take the first half of the install line (PyPI, where 0.2.0 is
+published) or build the package from source at a commit you pin yourself.
 The [Open Decision Receipt specification](../specs/open-decision-receipt)
 and the signed example documents beside it under `docs/specs/examples/`
 describe the format completely enough to write your own verifier instead.
