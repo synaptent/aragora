@@ -388,10 +388,10 @@ Migration safety features:
 | Package | Required Version | Notes |
 |---------|-----------------|-------|
 | Python | >=3.10 | 3.10, 3.11, 3.12, 3.13 supported |
-| fastapi | >=0.109.0,<1.0 | HTTP framework |
-| uvicorn | >=0.27.0,<1.0 | ASGI server |
-| pydantic | >=2.0,<3.0 | Data validation |
-| cryptography | >=46.0,<48.0 | AES-256-GCM encryption |
+| fastapi | >=0.139.0,<1.0 | HTTP framework (`gateway` / `all` extras) |
+| uvicorn | >=0.50.0,<1.0 | ASGI server (`gateway` / `all` extras) |
+| pydantic | >=2.13.4,<3.0 | Data validation |
+| cryptography | >=48.0.1,<51.0 | AES-256-GCM encryption |
 
 ### Optional Dependency Groups
 
