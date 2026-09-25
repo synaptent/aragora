@@ -3,7 +3,59 @@
 
 ## [Unreleased]
 
-_Post-v2.10.0 changes land here until the next stable tag._
+_Post-v2.11.0 changes land here until the next stable tag._
+
+
+## [2.11.0] - 2026-09-25
+
+_153 commits on `main` since the v2.10.0 release commit `be07ea5b` (#9977, 2026-09-04), counted at the release PR's base `e411aefbec`, grouped by conventional-commit type: fix 44, chore 33, feat 20, docs 14, test 13, refactor 9, ci 7 (the remaining 13 carry no conventional-commit prefix: Codex batch commits, two merge commits, three tracker-prefixed commits and one branch-named commit). v2.10.0 was merged but never tagged, so PyPI still serves 2.9.0 and a PyPI user upgrading to 2.11.0 also picks up every v2.10.0 change. This release carries the Receipt-First mission's M1 deliverables (ODR v0.2 schema and opt-in emitter, deterministic test vectors, `aragora-verify` 0.2.0, file-based signing keys) and M2 deliverables (non-counting advisory dissent summaries, the Disagreement Atlas pairwise summary and weekly dated releases, and this release), makes the receipt trust surface reachable without credentials (public ODR export and stateless verify endpoints, #10126), publishes the first verifiable PR receipts as the `receipts-2026-09-22` release, and completes the P4B handler decomposition (`handlers_flat_root` 187 → 16 by `scripts/ci/measure_import_graph.py`). No server routes are removed; the Python and TypeScript SDKs drop methods whose routes no server dispatched, the Python SDK caps automatic `Retry-After` waits at 60 s, and the TypeScript SDK no longer synthesizes `debate_end` on a premature socket close (all recorded in `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`). The ODR emitter default stays `0.1`. The version was fanned out by `scripts/check_version_alignment.py --fix` exactly as for v2.10.0. The release PR also removes the stale `docs/plans/2026-04-30b-round-briefing.md` (a round briefing whose PRs #6828, #6829, #6831, #6832 and its own #6833 all merged on 2026-04-30, no inbound references) because the docs page count sits at its ceiling and the new `docs/releases/v2.11.0.md` page must be net-zero._
+
+### Added
+- **ODR v0.2 is the default emitter output** (#10165), now that `aragora-verify` 0.2.0 is on PyPI (spec §9.5). v0.1 is still available with `--odr-version 0.1`, `?odr_version=0.1` or `ARAGORA_ODR_PROFILE_VERSION=0.1`.
+- **Signed receipts from the GitHub Action:** the optional `odr-signing-key` input, plus the `receipt-signed` and `receipt-key-id` outputs (#10163). The README pins the Action to a commit that has the input (#10168).
+- **ODR v0.2 (Receipt-First M1):** optional v0.2 review content with v0.1 compatibility (#9988); merge-quorum bridge for opt-in v0.2 emission (#10103); version-scoped v0.2 membership, adjudication shape and required sub-members (#10105); signer-committed signature metadata on 0.2 documents (#10106); v0.2 verifier consistency and signature policies in both verifiers (#10107); ACTA-02 projection and `receipt export --acta` (#10109); file-based signing keys that fail closed (#9984); ODR spec Draft v0.2 with the IETF draft mapping (#10116); 15 deterministic ODR test vectors with pinned verifier oracles (#10110).
+- **`aragora-verify` 0.2.0** (#10114): first line that accepts ODR v0.2 documents; its 0.2.0 verdict and rejection changes are stated in `aragora-verify/CHANGELOG.md` (#10122).
+- **Public receipt endpoints:** `GET /api/v2/receipts/{id}/export?format=odr` and stateless `POST /api/v2/receipts/verify` without credentials, with `export_odr`/`verify_document` (Python) and `exportOdr`/`verifyDocument` (TypeScript) SDK methods (#10126).
+- **Published receipts:** four signed ODR v0.2 PR receipts released as `receipts-2026-09-22` with the `docs/receipts/VERIFY_IN_60_SECONDS.md` tutorial (#10141); `scripts/receipt_first_hour.sh` first-hour receipt script from a clean venv (#10117) and its CI jobs in `metrics-drift` and `publish-aragora-verify` (#10118).
+- **Dissent visibility (M2):** non-counting advisory summaries of every family's verdict and severity-tagged findings (#10016), hardened (#10036).
+- **Disagreement Atlas (M2):** pairwise agreement summary, totals rows and regenerate block (#10048); navigable docs-site pages (#10050); weekly regeneration job with dated releases (#10051).
+- **Receipt-first scoreboard:** row 6 marker count, row 8 target-commit threshold and origin/main guardrail tolerance (#10043).
+- **Outcome-backed evaluation:** decision-corpus validation (#9878), report verdict contract (#9911), outcome-backed team receipts (#9924).
+- **Epistemic and reputation:** crux-finder counterfactual text per crux in `CruxSet` (DIC-15, #10006); repair-spec → follow-up bridge (DIC-22, #10054); three-axis stale-claim calibration policy (AGT-05, #10040); time-aware truth report (#9215).
+- **Review and deploy:** prepare-only audited Claude Code gateway runner (#10037); provider-neutral production origin for Hetzner (#9882, for #9391); supported disposal path for non-handoff outbox report artifacts (#9021).
+
+### Changed
+- **P4B handler decomposition:** batch 1 (42 moves + 3 retirements, #10000), batch 2 (41 moves, #10088), batch 3 (45 moves, #10104) and batch 4 (38 moves + `slack.py` retirement, #10113), all behind `MOVED_MODULES` shims; the unreachable flat `handlers/connectors.py` retired (#10137); design doc (#9995, #10001); follow-through in `.mypy-baseline` (#10143), `docs/METRICS.md` (#10140) and the Core Module Type Safety lint path (#10144).
+- **Import-cycle and server-import repairs:** legal-hold handler cycle removed (#10083); connectors package self-import cycle unmasked by #10137 broken (#10142); consumers re-pointed off eight deprecated server shims (#10136) and the HTTP pool shim (#10135); foundation/infra false positives cleared from the server-import sweep (#10133). At the release base `mutual_import_cycles` is 140 (138 at v2.10.0, ceiling 140) and `server_imported_by` is 28 (37 at v2.10.0).
+- **Contract-drift paydown:** cohort retirements batch 1 (59 items, #9979), batch 2 (51, #10013) and batch 3 (26, #10087); phantom agents/backups endpoint pairs removed from both SDKs (#9983) and the final tranche of phantom routes (#9987); the program-trajectory job is informational during paydown (#10026).
+- **Python SDK HTTP lifecycle:** automatic `Retry-After` waits bounded to 60 s, with HTTP-date semantics corrected and incomplete date forms rejected (#10056); exhausted timeouts and connection failures raise the typed `TimeoutError`/`ConnectionError` subclasses (#10063).
+- **TypeScript SDK HTTP lifecycle:** buffered stream events drained with truthful termination, so a close without a terminal event throws `ConnectionError` instead of a synthesized `debate_end` (#10014); successful responses are never replayed (#10066); HTTP deadlines retained through response consumption (#10068); body-timeout diagnostics distinguished (#10072).
+- **Gauntlet CLI exits:** unconditional PASS/APPROVED exits 0, conditional/review exits 2, rejection, unknown verdicts and non-completion exit 1 (#10100).
+- **Agent-name validation:** `SAFE_AGENT_PATTERN` allows dotted model versions (#10034) and rejects trailing newline/dot (#10076) and consecutive dots (#10098).
+- Receipt-First mission declared the successor execution gate in the canonical next-steps doc (#10024); capability `key_files` repointed to `integrations/` and `agents/` (#10111, #10132).
+
+### Fixed
+- **Receipt CLI:** `receipt list` prints full ids and gains `--json` (#9986); receipt export fails closed when format export fails (#10021); input errors (#10059) and export-destination failures (#10080) reported without tracebacks; receipt inspection validated before rendering (#10061).
+- **ODR verifiers:** every schema-stated member typed in both walkers (#10121); `aragora-verify` returns a verdict, not a traceback, on degenerate quorum members (#10119); the verifier publisher supports metadata 2.5 (#10150).
+- **Storage and migrations:** dialect-aware DDL and psycopg2 error handling (#10053); receipt table created before additive migrations (#10065); both documented `ARAGORA_DB_BACKEND` spellings accepted for the PostgreSQL stores (#10073); the image entrypoint invokes the real migrations CLI and `Dockerfile.backend` sets `PYTHONUSERBASE` (#9882), pinned by test (#10033).
+- **Packaging and Python 3.10:** `cryptography` declared in base dependencies and the Python 3.10 quickstart supported (#10010); Python 3.10 CLI startup compatibility restored (#9996).
+- **Examples:** Next.js (#10079), Remix (#10085) and SvelteKit (#10082) consumers aligned with the published SDK.
+- **Governance and automation:** protected-only Tier 4 settlement (#10084); advisory settlement kept reachable in the quorum job (#10039); issue admission blocked on unavailable queue checks (#10011); new-branch preflight pushes scoped to the base delta (#9914); TW03 fails closed on a missing rescue ledger (#9877); Claude Code 2.x accepted in the audited diagnostic runner (#10089); charter compliance checker reconstructs multiline imports (#10097); delegated CLI registrations discovered (#10096); RBAC coverage counted via OpenAPI (#8652).
+- 44 `fix:` commits in total (10 of them `fix(deps)`); see `git log --format='%s' be07ea5b..e411aefbec | grep -E '^fix[(:]'`.
+
+### Security
+- npm advisories patched: aragora-live postcss (#10055), Next.js and sharp (#10047), yaml and brace (#9940); high-severity webview dependencies (#9939); docs-site nanoid (#9941); `ide/vscode-aragora` brace-expansion (#10149, #10151), js-yaml override (#10148) and js-yaml/browserslist/qs/@babel/core (#10152); docs-site http-proxy-middleware/postcss/image-size/@babel/core (#10155).
+- `cryptography>=48.0.1,<51.0` is now a base dependency at the GHSA-537c-gmf6-5ccf floor (#10010).
+- 22 Dependabot `chore(deps)` bumps across `aragora/live`, `sdk/typescript`, `docs-site`, `ide/vscode-aragora`, `examples/remix` and `examples/nextjs-app-router`, plus anyio 4.14.2 (#10115) and the twine `<8.0` range (#9706) on the Python side.
+
+### CI
+- Weekly Atlas regeneration (#10051); receipt-first-hour jobs (#10118); import-cycle ratchet as a non-required `metrics-drift` check (#9949); Mac runner health poll runs and checks disk (#9654); 30-minute production probes parked until a canary exists (#10025); codecov-action 4 → 7 (#9688); 7 `ci:` commits in total.
+
+### Documentation
+- 14 `docs:` commits: README Action pin moved to current main (#10158), ODR spec Draft v0.2 (#10116), `aragora-verify` 0.2.0 changes (#10122), the 60-second receipt tutorial (#10141), P4B design (#9995, #10001), `settle_tier4_pr.py` modes (#10099), cache/CacheStats APIs (#10145, #10146), SDK tenants examples (#10139), trust-loop surfaces (#9980), Receipt-First gate (#10024), Atlas pages (#10050), METRICS regeneration (#10140). Release notes: `docs/releases/v2.11.0.md`.
+
+### Tests and refactors
+- 13 `test:` and 9 `refactor:` commits, including the ODR vectors (#10110), the committed-ceiling budget for blanket except-pass in tests (#10007), exact-assertion replacements for vacuous error-path tests (#10002, #10003, #10004, #10009), installed SDK HTTP lifecycle contracts (#10078), and the P4B and import refactors above.
 
 
 ## [2.10.0] - 2026-09-04
