@@ -197,6 +197,77 @@ def test_status_timeout_blocks_cleanup_as_dirty(
     assert mod._worktree_is_dirty(worktree) is True
 
 
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "dirty"),
+    [(0, "", False), (0, "?? untracked.txt\n", True), (1, "", True), (128, "", True)],
+)
+def test_status_result_requires_successful_clean_inspection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    returncode: int,
+    stdout: str,
+    dirty: bool,
+) -> None:
+    import safe_worktree_cleanup as mod
+
+    def fake_run(cmd, **kwargs):
+        assert cmd == ["git", "status", "--porcelain", "--untracked-files=all"]
+        assert kwargs["cwd"] == tmp_path
+        return subprocess.CompletedProcess(cmd, returncode, stdout, "fatal" if returncode else "")
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    assert mod._worktree_is_dirty(tmp_path) is dirty
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError("git missing"), PermissionError("denied")])
+def test_status_launch_failure_blocks_cleanup_as_dirty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: OSError
+) -> None:
+    import safe_worktree_cleanup as mod
+
+    def fake_run(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    assert mod._worktree_is_dirty(tmp_path) is True
+
+
+def test_corrupt_index_blocks_real_worktree_inspection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import safe_worktree_cleanup as mod
+
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    (tmp_path / ".git" / "index").write_bytes(b"invalid index")
+    status = subprocess.run(["git", "status", "--short"], cwd=tmp_path, capture_output=True)
+    assert status.returncode != 0
+    assert mod._worktree_is_dirty(tmp_path) is True
+
+    monkeypatch.setattr(
+        mod,
+        "_get_worktree_entry",
+        lambda *_args: mod.autopilot.WorktreeEntry(tmp_path, "codex/test"),
+    )
+    monkeypatch.setattr(mod.autopilot, "_has_active_session", lambda _path: False)
+    monkeypatch.setattr(mod, "_unique_commits_ahead_of_main", lambda *_args: (0, False))
+    monkeypatch.setattr(mod, "_lookup_open_prs", lambda *_args: ([], False))
+    inspection = mod.inspect_worktree(tmp_path, tmp_path)
+    assert inspection.dirty is True
+    assert "dirty_worktree" in inspection.blockers
+    assert mod.cleanup_safety(inspection)["removable"] is False
+
+
+def test_status_detects_untracked_files_despite_local_git_config(tmp_path: Path) -> None:
+    import safe_worktree_cleanup as mod
+
+    subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
+    subprocess.run(
+        ["git", "config", "--local", "status.showUntrackedFiles", "no"], cwd=tmp_path, check=True
+    )
+    (tmp_path / "recoverable.txt").write_text("local work\n")
+    assert mod._worktree_is_dirty(tmp_path) is True
+
+
 def test_remove_purges_residual_path_after_failed_git_remove(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
