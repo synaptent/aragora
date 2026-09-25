@@ -129,7 +129,12 @@ def main(argv: list[str] | None = None) -> int:
 
     verdict = odr.get("claim", {}).get("verdict", "")
     receipt_id = odr.get("receipt_id", "")
-    print(f"receipt {receipt_id} verdict={verdict} digest=sha-256:{digest} verified={verified}")
+    signatures = odr.get("signatures") or []
+    key_id = signatures[0].get("key_id", "") if signatures else ""
+    print(
+        f"receipt {receipt_id} verdict={verdict} digest=sha-256:{digest} verified={verified} "
+        f"signed={bool(signatures)}"
+    )
 
     if args.github_output is not None:
         with args.github_output.open("a", encoding="utf-8") as fh:
@@ -137,6 +142,8 @@ def main(argv: list[str] | None = None) -> int:
             _write_github_output(fh, "receipt_verdict", verdict)
             _write_github_output(fh, "receipt_digest", digest)
             _write_github_output(fh, "receipt_verified", "true" if verified else "false")
+            _write_github_output(fh, "receipt_signed", "true" if signatures else "false")
+            _write_github_output(fh, "receipt_key_id", key_id)
 
     if args.verify and not verified:
         print("receipt verification failed: jsonschema validation did not run", file=sys.stderr)

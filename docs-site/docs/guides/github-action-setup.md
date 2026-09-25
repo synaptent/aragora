@@ -98,6 +98,7 @@ fails the test).
 | `sarif-upload` | `false` | Upload the generated SARIF file to the GitHub Security tab (requires `output-format: 'sarif'`) |
 | `emit-receipt` | `false` | Emit a verifiable [Open Decision Receipt](../specs/open-decision-receipt) (ODR) for the review and upload it as a build artifact. See [Emitting a Verifiable Decision Receipt](#emitting-a-verifiable-decision-receipt) below. |
 | `receipt-reviewers` | `claude openai` | Space-separated model families for the receipt's merge-quorum pass. You must hold a reachable provider key for every family listed. |
+| `odr-signing-key` | `''` | PKCS#8 PEM Ed25519 private key that signs the emitted receipt; pass a repository secret. Without it the receipt is unsigned. See [Sign your receipts](#sign-your-receipts). |
 | `use-secrets-manager` | `false` | Hydrate provider API keys from AWS Secrets Manager instead of the `*-api-key` inputs. Requires AWS credentials in the job env. |
 | `aws-region` | `us-east-2` | AWS region for Secrets Manager, when `use-secrets-manager` is `true`. |
 
@@ -123,6 +124,8 @@ fails the test).
 | `receipt-verdict` | Receipt verdict (`PASS` / `CHANGES_REQUESTED`) |
 | `receipt-digest` | SHA-256 JCS content digest of the receipt -- the value signatures would cover |
 | `receipt-verified` | `'true'` only if the receipt passed schema + digest verification before this output was set |
+| `receipt-signed` | `'true'` when the receipt carries an Ed25519 signature (`odr-signing-key` was set) |
+| `receipt-key-id` | Key id of the receipt's signature, empty when unsigned; match it against your published public key |
 
 ### Strict Mode (Block PRs on Critical Issues)
 
@@ -204,40 +207,70 @@ the normal review and:
 2. Bridges that outcome into a native `DecisionReceipt` and exports it as an ODR
    document (`scripts/emit_pr_receipt.py`, calling
    `aragora.gauntlet.odr_export.decision_receipt_to_odr`).
-3. Re-validates the receipt's schema conformance and recomputes its canonical digest
+3. Signs the receipt when `odr-signing-key` is set. The key is written to a
+   runner-private file for this one command, so it never reaches the quorum step's
+   model CLIs, and the file is removed when the step ends.
+4. Re-validates the receipt's schema conformance and recomputes its canonical digest
    (`--verify`) before treating emission as successful.
-4. Appends a short receipt summary to the PR comment and writes the receipt to
+5. Appends a short receipt summary to the PR comment and writes the receipt to
    `./aragora-artifacts/decision-receipt.odr.json`, which the action's own final step
    uploads as part of the `aragora-review-<pr>` build artifact (the snippet above
    additionally re-uploads just the receipt, under its own artifact name, for
    convenience).
 
-Outputs: `receipt-path`, `receipt-verdict`, `receipt-digest`, `receipt-verified` (see
+Outputs: `receipt-path`, `receipt-verdict`, `receipt-digest`, `receipt-verified`,
+`receipt-signed`, `receipt-key-id` (see
 [Action Outputs](#action-outputs) above). Receipt emission is fail-closed once
 requested: if `emit-receipt: 'true'` and no verified receipt comes out, the action's
 own `Check receipt emission` step fails the job rather than silently skipping it.
 
 ### Secret-dependent limits
 
-- **Receipts are unsigned unless a signing key is wired in -- and this action does
-  not wire one in today.** The emit step never calls Aragora's Ed25519 signer
-  (`aragora.gauntlet.odr_signing.sign_odr_receipt`); it only exports and
-  schema/digest-validates the ODR. Every receipt this action produces has
-  `signatures: []`, so `aragora-verify` reports `[WARN] signature: receipt is
-  unsigned` (still exit `0` -- `schema_conformance` / `canonical_digest` /
-  `quorum_consistency` are the checks actually backing that exit code). This is
-  unrelated to `use-secrets-manager`; treat every receipt from this action as
-  structurally verified, not authenticated.
-- **`use-secrets-manager` / `aws-region` control *provider* keys, not the receipt.**
-  When `use-secrets-manager: 'true'`, the quorum step hydrates
-  `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / etc. from AWS Secrets Manager instead of
-  the `*-api-key` inputs. It has no effect on whether the receipt gets signed.
+- **Receipts are unsigned unless you pass `odr-signing-key`.** An unsigned receipt
+  still verifies (exit `0`) on schema conformance, quorum consistency and a digest
+  the verifier recomputes from the file it is given, so it cannot show that a copy
+  is unaltered or who produced it. `aragora-verify` reports `[WARN] signature:
+  receipt is unsigned`. Sign your receipts (below) for authenticity.
+- **`use-secrets-manager` / `aws-region` control *provider* keys.** When
+  `use-secrets-manager: 'true'`, the quorum step hydrates `ANTHROPIC_API_KEY` /
+  `OPENAI_API_KEY` / etc. from AWS Secrets Manager instead of the `*-api-key`
+  inputs.
 - **`receipt-reviewers` defaults to `'claude openai'`**, matching the review's own
   default agent families. Both need a reachable provider key (`ANTHROPIC_API_KEY`
   and `OPENAI_API_KEY`, as inputs or via Secrets Manager) -- if your repo only holds
   keys for other providers, override `receipt-reviewers` accordingly (e.g.
   `receipt-reviewers: 'gemini mistral'`), or the quorum step collects nothing and the
   job fails at `Check receipt emission`.
+
+### Sign your receipts
+
+Generate an Ed25519 key pair once, keep the private half as a repository secret, and
+publish the public half where verifiers can find it (for example, commit it to the
+repository):
+
+```bash
+openssl genpkey -algorithm ed25519 -out odr-signing-key.pem
+openssl pkey -in odr-signing-key.pem -pubout -out odr-signing-key.pub.pem
+gh secret set ARAGORA_ODR_SIGNING_KEY < odr-signing-key.pem
+```
+
+Then pass it to the action's `with:` block:
+
+```
+emit-receipt: 'true'
+odr-signing-key: ${{ secrets.ARAGORA_ODR_SIGNING_KEY }}
+```
+
+Anyone can now check a receipt offline against your published key. Any edit to the
+receipt, including its verdict, fails the `signature` check:
+
+```bash
+pip install "aragora-verify>=0.2.0"
+aragora-verify decision-receipt.odr.json --pubkey odr-signing-key.pub.pem
+```
+
+The `receipt-key-id` output and the PR comment name the key that signed the
+receipt. Keep `odr-signing-key.pem` itself out of the repository.
 
 ### Verify a receipt offline right now
 
