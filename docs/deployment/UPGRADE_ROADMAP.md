@@ -29,12 +29,10 @@ For detailed migration instructions, see:
 
 | Version | Release | End of Support | Status |
 |---------|---------|----------------|--------|
-| **v2.10.x** | 2026-09-04 | Active | **Current** |
+| **v2.11.x** | 2026-09-25 | Active | **Current** |
+| v2.10.x | 2026-09-04 | Active | Supported |
 | v2.9.x | 2026-04-25 | Active | Supported |
-| v2.8.x | 2026-02-25 | Active | Supported |
-| v2.7.x | 2026-02-15 | Active | Supported |
-| v2.6.x | 2026-02-03 | Active | Supported |
-| v2.5.x | 2026-02-01 | Active | Supported |
+| v2.5.x–v2.8.x | 2026-02-01–2026-02-25 | Active | Supported |
 | v2.0.x–v2.4.x | 2026-01-13–01-25 | Active | Supported |
 | v1.0.x | 2026-01-13 | 2026-06-01 | Deprecated |
 | v0.8.x | Pre-1.0 | 2026-03-01 | End of life |
@@ -49,28 +47,28 @@ For detailed migration instructions, see:
 
 ## Current Version
 
-**Aragora v2.10.0** (released 2026-09-04)
+**Aragora v2.11.0** (released 2026-09-25)
 
 ```python
 # Check your version
 from aragora.__version__ import __version__
-print(__version__)  # "2.10.0"
+print(__version__)  # "2.11.0"
 ```
 
 **Python support:** 3.10, 3.11, 3.12, 3.13
 
-**PyPI availability:** the `2.10.0` wheel ships when the operator pushes the `v2.10.0` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.9.0 and the exact-version commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
+**PyPI availability:** the `2.11.0` wheel ships when the operator pushes the `v2.11.0` tag and dispatches `publish-aragora.yml`; until then PyPI serves 2.9.0 and the exact-version commands below resolve nothing (see [INSTALL_MATRIX.md](../reference/INSTALL_MATRIX.md)).
 
 ---
 
 ## Upgrade Paths
 
-### v2.x.x -> v2.10.0 (Minor Upgrade)
+### v2.x.x -> v2.11.0 (Minor Upgrade)
 
-No API or SDK breaking changes between v2.x releases. One behavioral change: `DecisionReceipt` verdicts are never minted from zero evidence (#9306), so a pipeline that relied on an empty-evidence PASS now sees a non-passing verdict (see [Breaking Change Summary](#breaking-change-summary)). Standard upgrade:
+No server API breaking changes between v2.x releases. Behavioral changes are listed per release in the [Breaking Change Summary](#breaking-change-summary): v2.10.0 never mints a `DecisionReceipt` verdict from zero evidence (#9306), and v2.11.0 changes Gauntlet CLI exit codes, receipt-export authentication, agent-name validation and some SDK retry/stream behavior. v2.10.0 was never published to PyPI, so an upgrade from PyPI 2.9.0 picks up both sets. SDK consumers should also read `sdk/python/BREAKING_CHANGES.md` and `sdk/typescript/BREAKING_CHANGES.md`: both SDKs removed methods whose routes no server dispatched. Standard upgrade:
 
 ```bash
-pip install --upgrade aragora==2.10.0
+pip install --upgrade aragora==2.11.0
 ```
 
 Run database migrations if any are pending:
@@ -79,13 +77,13 @@ Run database migrations if any are pending:
 python -m aragora.migrations.runner migrate
 ```
 
-### v1.0.x -> v2.10.0 (Major Upgrade)
+### v1.0.x -> v2.11.0 (Major Upgrade)
 
 This upgrade requires API and SDK migration. Follow these steps in order:
 
 **Step 1: Update dependencies**
 ```bash
-pip install --upgrade aragora==2.10.0
+pip install --upgrade aragora==2.11.0
 ```
 
 **Step 2: Run database migrations**
@@ -152,7 +150,7 @@ ARAGORA_REQUIRE_DISTRIBUTED=true
 
 See [MIGRATION_V1_TO_V2.md](../status/MIGRATION_V1_TO_V2.md) for the complete migration guide.
 
-### v0.8.x -> v2.10.0 (Legacy Upgrade)
+### v0.8.x -> v2.11.0 (Legacy Upgrade)
 
 Upgrade to v1.0.0 first, then follow the v1 -> v2 path:
 
@@ -164,8 +162,8 @@ python -m aragora.migrations.runner migrate
 # Step 2: Verify v1 works
 pytest tests/ -v --timeout=60
 
-# Step 3: Upgrade to v2.10.0
-pip install aragora==2.10.0
+# Step 3: Upgrade to v2.11.0
+pip install aragora==2.11.0
 python -m aragora.migrations.runner migrate
 ```
 
@@ -202,7 +200,7 @@ Run through this checklist before any upgrade:
 
 ```bash
 # Create a full backup
-python -m aragora.backup.manager create --label "pre-upgrade-v2.10.0"
+python -m aragora.backup.manager create --label "pre-upgrade-v2.11.0"
 
 # Verify the backup
 python -m aragora.backup.manager verify --latest
@@ -277,7 +275,7 @@ Major version rollbacks require restoring from backup:
 systemctl stop aragora
 
 # 2. Restore from backup
-python -m aragora.backup.manager restore --label "pre-upgrade-v2.10.0"
+python -m aragora.backup.manager restore --label "pre-upgrade-v2.11.0"
 
 # 3. Downgrade the package
 pip install aragora==1.0.0
@@ -322,6 +320,21 @@ Migration safety features:
 ---
 
 ## Breaking Change Summary
+
+### v2.11.0 Behavioral Changes
+
+| Area | Change | Action Required |
+|------|--------|-----------------|
+| **Receipt export and verify** | `GET /api/v2/receipts/{id}/export?format=odr` is served without credentials and `POST /api/v2/receipts/verify` is a public, stateless verifier (413 above 262144 bytes); an unauthenticated export in any other format answers 401 `auth_required` instead of 500 (#10126) | Treat a receipt id as enough to fetch its ODR document; clients that handled the old 500 should handle 401 |
+| **Gauntlet CLI exits** | Unconditional PASS/APPROVED exits 0, conditional or review verdicts exit 2, rejection, unknown verdicts and non-completion exit 1 (#10100) | Scripts that assumed a binary exit must handle exit 2 |
+| **Receipt CLI** | `receipt export` fails closed and leaves an existing destination untouched when format conversion fails (#10021); `receipt list` prints full ids with adaptive column width and adds `--json` (#9986) | Parse `receipt list --json` instead of the table |
+| **Agent-name validation** | `SAFE_AGENT_PATTERN` accepts dots after the first character (#10034) and rejects a trailing dot or newline (#10076) and consecutive dots (#10098); the `SAFE_*` patterns anchor with `\Z` | Agent names ending in `.` or containing `..` now fail path validation (400) |
+| **Moved handler modules** | Flat `aragora.server.handlers.<name>` modules moved into subpackages resolve through `MOVED_MODULES` shims that emit `DeprecationWarning` (#10000, #10088, #10104, #10113); the unreachable flat `handlers/connectors.py` is deleted (#10137) | Import from the new subpackage paths, especially where warnings are errors |
+| **Python SDK** | Automatic waits honor only `Retry-After` hints of 0-60 s; a larger hint raises the original `RateLimitError` (#10056). Exhausted timeouts and connection failures raise `aragora_sdk.TimeoutError`/`ConnectionError`, still `AragoraError` subclasses (#10063) | Catch `RateLimitError` and schedule the retry yourself; exact-type checks must accept the subclasses |
+| **TypeScript SDK streaming** | A socket close without a genuine terminal event throws `ConnectionError` after buffered events drain, instead of synthesizing `debate_end` (#10014) | Wrap `for await` over debate streams in `try/catch` |
+| **Base dependencies** | `pip install aragora` now installs `cryptography>=48.0.1,<51.0` (#10010) | Environments that pin `cryptography` below 48.0.1 must raise the pin |
+| **Database backend** | `ARAGORA_DB_BACKEND=postgres` and `=postgresql` both select the PostgreSQL-backed stores (#10073); before, several stores accepted only one spelling and silently fell back to SQLite on the other. The backend image entrypoint now really applies migrations with `python -m aragora.migrations upgrade` against the selected DSN (#9882) | A store that ran on SQLite under the unrecognized spelling now opens PostgreSQL; make sure the DSN is set and migrate any SQLite data you need |
+| **ODR emitter default** | None: the default stays `0.1`; v0.2 is opt-in (`--odr-version 0.2` or `ARAGORA_ODR_PROFILE_VERSION=0.2`) | None |
 
 ### v2.10.0 Behavioral Changes
 
